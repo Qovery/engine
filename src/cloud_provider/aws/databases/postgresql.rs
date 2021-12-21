@@ -211,8 +211,8 @@ impl Service for PostgreSQL {
         Ok(context)
     }
 
-    fn selector(&self) -> String {
-        format!("app={}", self.sanitized_name())
+    fn selector(&self) -> Option<String> {
+        Some(format!("app={}", self.sanitized_name()))
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {
@@ -227,6 +227,10 @@ impl Service for PostgreSQL {
 impl Database for PostgreSQL {}
 
 impl Helm for PostgreSQL {
+    fn helm_selector(&self) -> Option<String> {
+        self.selector()
+    }
+
     fn helm_release_name(&self) -> String {
         crate::string::cut(format!("postgresql-{}", self.id()), 50)
     }

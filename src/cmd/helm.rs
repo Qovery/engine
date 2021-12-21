@@ -40,6 +40,7 @@ pub fn helm_exec_with_upgrade_history<P>(
     kubernetes_config: P,
     namespace: &str,
     release_name: &str,
+    selector: Option<String>,
     chart_root_dir: P,
     timeout: Timeout<u32>,
     envs: Vec<(&str, &str)>,
@@ -72,6 +73,7 @@ where
                 _ => vec![],
             },
             false,
+            selector,
         ),
     };
 

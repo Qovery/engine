@@ -219,8 +219,8 @@ pub trait Kubernetes: Listen {
                     e.message,
                 ))
             }
-            Ok(config_path) => match kubectl_get_crash_looping_pods::<dyn AsRef<Path>>(
-                Box::new(&config_path.0),
+            Ok(config_path) => match kubectl_get_crash_looping_pods(
+                &config_path.0,
                 namespace,
                 selector,
                 restarted_min_count,
@@ -228,21 +228,18 @@ pub trait Kubernetes: Listen {
             ) {
                 Ok(pods) => {
                     for pod in pods {
-                        match kubectl_exec_delete_pod::<dyn AsRef<Path>>(
-                            Box::new(&config_path.0),
+                        if let Err(e) = kubectl_exec_delete_pod(
+                            &config_path.0,
                             pod.metadata.namespace.as_str(),
                             pod.metadata.name.as_str(),
                             envs.clone(),
                         ) {
-                            Ok(..) => {}
-                            Err(e) => {
-                                return Err(EngineError::new(
-                                    EngineErrorCause::Internal,
-                                    self.engine_error_scope(),
-                                    self.context().execution_id(),
-                                    e.message,
-                                ))
-                            }
+                            return Err(EngineError::new(
+                                EngineErrorCause::Internal,
+                                self.engine_error_scope(),
+                                self.context().execution_id(),
+                                e.message,
+                            ));
                         }
                     }
                 }

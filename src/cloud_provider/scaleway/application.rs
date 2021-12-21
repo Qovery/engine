@@ -100,6 +100,10 @@ impl crate::cloud_provider::service::Application for Application {
 }
 
 impl Helm for Application {
+    fn helm_selector(&self) -> Option<String> {
+        self.selector()
+    }
+
     fn helm_release_name(&self) -> String {
         crate::string::cut(format!("application-{}-{}", self.name(), self.id()), 50)
     }
@@ -294,8 +298,8 @@ impl Service for Application {
         Ok(context)
     }
 
-    fn selector(&self) -> String {
-        format!("appId={}", self.id)
+    fn selector(&self) -> Option<String> {
+        Some(format!("appId={}", self.id))
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {

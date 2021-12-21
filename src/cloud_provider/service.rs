@@ -70,7 +70,7 @@ pub trait Service {
     }
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError>;
     // used to retrieve logs by using Kubernetes labels (selector)
-    fn selector(&self) -> String;
+    fn selector(&self) -> Option<String>;
     fn debug_logs(&self, deployment_target: &DeploymentTarget) -> Vec<String> {
         debug_logs(self, deployment_target)
     }
@@ -204,6 +204,7 @@ pub trait Terraform {
 }
 
 pub trait Helm {
+    fn helm_selector(&self) -> Option<String>;
     fn helm_release_name(&self) -> String;
     fn helm_chart_dir(&self) -> String;
     fn helm_chart_values_dir(&self) -> String;
@@ -396,6 +397,7 @@ where
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             helm_release_name.as_str(),
+            service.selector(),
             workspace_dir.as_str(),
             service.start_timeout(),
             kubernetes.cloud_provider().credentials_environment_variables(),
@@ -414,7 +416,7 @@ where
         crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
-            service.selector().as_str(),
+            service.selector().unwrap_or("".to_string()).as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     )?;
@@ -500,7 +502,7 @@ pub fn scale_down_application(
         kubernetes.cloud_provider().credentials_environment_variables(),
         environment.namespace(),
         scaling_kind,
-        service.selector().as_str(),
+        service.selector().unwrap_or("".to_string()).as_str(),
         replicas_count as u32,
     );
 
@@ -529,7 +531,11 @@ where
     let helm_release_name = service.helm_release_name();
 
     if is_error {
-        let _ = get_stateless_resource_information(kubernetes, environment, service.selector().as_str())?;
+        let _ = get_stateless_resource_information(
+            kubernetes,
+            environment,
+            service.selector().unwrap_or("".to_string()).as_str(),
+        )?;
     }
 
     // clean the resource
@@ -658,6 +664,7 @@ where
                 kubernetes_config_file_path.as_str(),
                 environment.namespace(),
                 service.helm_release_name().as_str(),
+                service.selector(),
                 workspace_dir.as_str(),
                 service.start_timeout(),
                 kubernetes.cloud_provider().credentials_environment_variables(),
@@ -680,7 +687,7 @@ where
         match crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
-            service.selector().as_str(),
+            service.selector().unwrap_or("".to_string()).as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         ) {
             Ok(Some(true)) => {}
@@ -979,7 +986,7 @@ pub fn get_stateless_resource_information_for_user<T>(
 where
     T: Service + ?Sized,
 {
-    let selector = service.selector();
+    let selector = service.selector().unwrap_or("".to_string());
     let kubernetes_config_file_path = kubernetes.config_file_path()?;
     let mut result = Vec::with_capacity(50);
 
@@ -994,7 +1001,7 @@ where
             kubernetes.cloud_provider().credentials_environment_variables(),
         ),
     )
-    .unwrap_or_else(|_| vec![format!("Unable to retrieve logs for pod: {}", selector)]);
+    .unwrap_or_else(|_| vec![format!("Unable to retrieve logs for pod with selector: {:?}", selector,)]);
 
     let _ = result.extend(logs);
 
