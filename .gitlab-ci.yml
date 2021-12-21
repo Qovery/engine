@@ -354,7 +354,7 @@ aws-self-hosted:
     - linter
     - build
   tags:
-    - vm-2cpu-4gmem-0g
+    - vm-2cpu-12gmem-0g
   when: always
   only:
     refs:
@@ -466,7 +466,7 @@ do-self-hosted:
     - linter
     - build
   tags:
-    - vm-2cpu-4gmem-0g
+    - vm-2cpu-12gmem-0g
   when: always
   only:
     refs:
