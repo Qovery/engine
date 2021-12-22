@@ -10,7 +10,7 @@ use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::structs::{
     Configmap, Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
     KubernetesPod, KubernetesPodStatusPhase, KubernetesPodStatusReason, KubernetesService, KubernetesVersion,
-    LabelsContent, PVC, SVC,
+    LabelsContent, PDB, PVC, SVC,
 };
 use crate::cmd::utilities::QoveryCommand;
 use crate::constants::KUBECONFIG;
@@ -944,6 +944,14 @@ where
             "--selector",
             selector,
         ],
+        _envs.clone(),
+        |_| {},
+        |_| {},
+    )?;
+
+    // deleting pdb in order to be able to upgrade kubernetes version
+    kubectl_exec_with_output(
+        vec!["-n", namespace, "delete", "pdb", "--selector", selector],
         _envs,
         |_| {},
         |_| {},
@@ -1036,14 +1044,14 @@ where
     P: AsRef<Path>,
 {
     let crash_looping_pods =
-        match kubectl_get_crash_looping_pods(&kubernetes_config, namespace, selector, None, envs.clone()) {
+        match kubectl_get_crash_looping_pods(Box::new(&kubernetes_config), namespace, selector, None, envs.clone()) {
             Ok(pods) => pods,
             Err(e) => return Err(e),
         };
 
     for crash_looping_pod in crash_looping_pods.iter() {
         if let Err(e) = kubectl_exec_delete_pod(
-            &kubernetes_config,
+            Box::new(&kubernetes_config),
             crash_looping_pod.metadata.namespace.as_str(),
             crash_looping_pod.metadata.name.as_str(),
             envs.clone(),
@@ -1064,8 +1072,8 @@ where
 /// * `selector`: selector to look for, if None, will look for anything.
 /// * `restarted_min_count`: minimum restart counts to be considered as crash looping. If None, default is 5.
 /// * `envs`: environment variables to be passed to kubectl.
-pub fn kubectl_get_crash_looping_pods<P>(
-    kubernetes_config: P,
+pub fn kubectl_get_crash_looping_pods<P: ?Sized>(
+    kubernetes_config: Box<P>,
     namespace: Option<&str>,
     selector: Option<&str>,
     restarted_min_count: Option<usize>,
@@ -1075,7 +1083,7 @@ where
     P: AsRef<Path>,
 {
     let restarted_min = restarted_min_count.unwrap_or(5usize);
-    let pods = kubectl_exec_get_pods(kubernetes_config, namespace, selector, envs)?;
+    let pods = kubectl_exec_get_pods(kubernetes_config.as_ref(), namespace, selector, envs)?;
 
     // Pod needs to have at least one container having backoff status (check 1)
     // AND at least a container with minimum restarts (asked in inputs) (check 2)
@@ -1084,7 +1092,7 @@ where
         .into_iter()
         .filter(|pod| {
             pod.status.container_statuses.as_ref().is_some()
-                && pod
+           && pod
                     .status
                     .conditions
                     .iter()
@@ -1108,8 +1116,8 @@ where
 /// * `pod_namespace`: pod's namespace.
 /// * `pod_name`: pod's name.
 /// * `envs`: environment variables to be passed to kubectl.
-pub fn kubectl_exec_delete_pod<P>(
-    kubernetes_config: P,
+pub fn kubectl_exec_delete_pod<P: ?Sized>(
+    kubernetes_config: Box<P>,
     pod_namespace: &str,
     pod_name: &str,
     envs: Vec<(&str, &str)>,
@@ -1117,23 +1125,27 @@ pub fn kubectl_exec_delete_pod<P>(
 where
     P: AsRef<Path>,
 {
-    let pod_to_be_deleted =
-        match kubectl_exec_get_pods(&kubernetes_config, Some(pod_namespace), Some(pod_name), envs.clone()) {
-            Ok(pods) => {
-                if pods.items.is_empty() {
-                    return Err(SimpleError::new(
-                        SimpleErrorKind::Other,
-                        Some(format!(
-                            "Cannot delete pod `{}` in namespace `{}`, pod is ot found.",
-                            pod_name, pod_namespace
-                        )),
-                    ));
-                }
-
-                pods.items[0].clone()
+    let pod_to_be_deleted = match kubectl_exec_get_pods(
+        kubernetes_config.as_ref(),
+        Some(pod_namespace),
+        Some(pod_name),
+        envs.clone(),
+    ) {
+        Ok(pods) => {
+            if pods.items.is_empty() {
+                return Err(SimpleError::new(
+                    SimpleErrorKind::Other,
+                    Some(format!(
+                        "Cannot delete pod `{}` in namespace `{}`, pod is not found.",
+                        pod_name, pod_namespace
+                    )),
+                ));
             }
-            Err(e) => return Err(e),
-        };
+
+            pods.items[0].clone()
+        }
+        Err(e) => return Err(e),
+    };
 
     kubectl_exec(
         vec![
@@ -1143,7 +1155,7 @@ where
             "-n",
             pod_to_be_deleted.metadata.namespace.as_str(),
         ],
-        &kubernetes_config,
+        kubernetes_config.as_ref(),
         envs,
     )?;
 
@@ -1192,4 +1204,15 @@ where
     };
 
     Ok(result)
+}
+
+pub fn kubernetes_get_all_pdbs<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<PDB, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    kubectl_exec::<P, PDB>(
+        vec!["get", "pdb", "--all-namespaces", "-o", "json"],
+        kubernetes_config,
+        envs,
+    )
 }

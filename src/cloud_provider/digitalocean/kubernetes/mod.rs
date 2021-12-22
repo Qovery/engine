@@ -18,7 +18,8 @@ use crate::cloud_provider::digitalocean::network::vpc::{
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, ChartSetValue, HelmChartNamespaces};
 use crate::cloud_provider::kubernetes::{
-    send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes, KubernetesUpgradeStatus, ProviderOptions,
+    is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
+    KubernetesUpgradeStatus, ProviderOptions,
 };
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
@@ -458,6 +459,29 @@ impl<'a> DOKS<'a> {
             )),
             self.context.execution_id(),
         ));
+
+        // upgrade cluster instead if required
+        match self.config_file() {
+            Ok(f) => match is_kubernetes_upgrade_required(
+                f.0,
+                &self.version,
+                self.cloud_provider.credentials_environment_variables(),
+            ) {
+                Ok(x) => {
+                    if x.required_upgrade_on.is_some() {
+                        return self.upgrade_with_status(x);
+                    }
+                    info!("Kubernetes cluster upgrade not required");
+                }
+                Err(e) => error!(
+                    "Error detected, upgrade won't occurs, but standard deployment. {:?}",
+                    e.message
+                ),
+            },
+            Err(_) => {
+                info!("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before");
+            }
+        };
 
         let temp_dir = self.get_temp_dir()?;
 
@@ -1159,7 +1183,7 @@ impl<'a> Kubernetes for DOKS<'a> {
         send_progress_on_long_task(self, Action::Create, || self.create_error())
     }
 
-    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
+    fn upgrade_with_status(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
         self.send_to_customer(
             format!(
@@ -1179,6 +1203,24 @@ impl<'a> Kubernetes for DOKS<'a> {
         // generate terraform files and copy them into temp dir
         let mut context = self.tera_context()?;
 
+        match self.delete_crashlooping_pods(
+            None,
+            None,
+            Some(10),
+            self.cloud_provider().credentials_environment_variables(),
+        ) {
+            Ok(..) => {}
+            Err(e) => {
+                error!(
+                    "Error while upgrading nodes for cluster {} with id {}. {}",
+                    self.name(),
+                    self.id(),
+                    e.message.clone().unwrap_or("Can't get error message".to_string()),
+                );
+                return Err(e);
+            }
+        };
+
         //
         // Upgrade nodes
         //
@@ -1186,10 +1228,25 @@ impl<'a> Kubernetes for DOKS<'a> {
         info!("{}", &message);
         self.send_to_customer(&message, &listeners_helper);
 
-        context.insert(
-            "doks_version",
-            format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
-        );
+        let upgrade_doks_version =  match get_do_latest_doks_slug_from_api(self.cloud_provider.token(), self.version()) {
+                    Ok(version) => match version {
+                        None => return Err(EngineError {
+                            cause: EngineErrorCause::Internal,
+                            scope: EngineErrorScope::Engine,
+                            execution_id: self.context.execution_id().to_string(),
+                            message: Some(format!("from the DigitalOcean API, no slug version match the required version ({}). This version is not supported anymore or not yet by DigitalOcean.", self.version()))
+                        }),
+                        Some(v) => v,
+                    }
+                    Err(e) => return Err(EngineError {
+                        cause: EngineErrorCause::Internal,
+                        scope: EngineErrorScope::Engine,
+                        execution_id: self.context.execution_id().to_string(),
+                        message: e.message,
+                    })
+                };
+
+        context.insert("doks_version", format!("{}", &upgrade_doks_version).as_str());
 
         let _ = cast_simple_error_to_engine_error(
             self.engine_error_scope(),

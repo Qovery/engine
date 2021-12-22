@@ -1345,6 +1345,21 @@ impl<'a> Kubernetes for EKS<'a> {
             }
         }
 
+        if let Err(e) = self.delete_crashlooping_pods(
+            None,
+            None,
+            Some(10),
+            self.cloud_provider().credentials_environment_variables(),
+        ) {
+            error!(
+                "Error while upgrading nodes for cluster {} with id {}. {}",
+                self.name(),
+                self.id(),
+                e.message.clone().unwrap_or("Can't get error message".to_string()),
+            );
+            return Err(e);
+        };
+
         //
         // Upgrade worker nodes
         //

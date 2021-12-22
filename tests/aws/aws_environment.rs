@@ -6,14 +6,15 @@ use self::test_utilities::utilities::{
 };
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::cmd::kubectl::kubernetes_get_all_pdbs;
 use qovery_engine::models::{Action, Clone2, EnvironmentAction, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
-use test_utilities::utilities::{context, init};
+use test_utilities::utilities::{context, init, kubernetes_config_path};
 use tracing::{span, Level};
 
 // TODO:
-//   - Tests that applications are always restarted when recieving a CREATE action
+//   - Tests that applications are always restarted when receiving a CREATE action
 //     see: https://github.com/Qovery/engine/pull/269
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -96,7 +97,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         );
 
         let ea = EnvironmentAction::Environment(environment.clone());
-        let selector = format!("appId={}", environment.applications[0].id);
+        let selector = format!("appId={}", environment.clone().applications[0].id);
 
         match environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone()) {
             TransactionResult::Ok => assert!(true),
@@ -139,6 +140,49 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
+        let kubernetes_config = kubernetes_config_path(
+            Kind::Aws,
+            "/tmp",
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_ACCESS_KEY_ID is not set")
+                .as_str(),
+            secrets.clone(),
+        );
+        let mut pdbs = kubernetes_get_all_pdbs(
+            kubernetes_config.as_ref().expect("Unable to get kubeconfig").clone(),
+            vec![
+                (
+                    "AWS_ACCESS_KEY_ID",
+                    secrets
+                        .AWS_ACCESS_KEY_ID
+                        .as_ref()
+                        .expect("AWS_ACCESS_KEY_ID is not set")
+                        .as_str(),
+                ),
+                (
+                    "AWS_SECRET_ACCESS_KEY",
+                    secrets
+                        .AWS_SECRET_ACCESS_KEY
+                        .as_ref()
+                        .expect("AWS_SECRET_ACCESS_KEY is not set")
+                        .as_str(),
+                ),
+                (
+                    "AWS_DEFAULT_REGION",
+                    secrets
+                        .AWS_DEFAULT_REGION
+                        .as_ref()
+                        .expect("AWS_DEFAULT_REGION is not set")
+                        .as_str(),
+                ),
+            ],
+        );
+        for pdb in pdbs.expect("Unable to get pdbs").items.expect("Unable to get pdbs") {
+            assert_eq!(pdb.metadata.name.contains(&environment.applications[0].name), false)
+        }
+
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
         match environment.deploy_environment(Kind::Aws, &ctx_resume, &ea, logger.clone()) {
@@ -160,6 +204,44 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         );
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
+
+        pdbs = kubernetes_get_all_pdbs(
+            kubernetes_config.as_ref().expect("Unable to get kubeconfig").clone(),
+            vec![
+                (
+                    "AWS_ACCESS_KEY_ID",
+                    secrets
+                        .AWS_ACCESS_KEY_ID
+                        .as_ref()
+                        .expect("AWS_ACCESS_KEY_ID is not set")
+                        .as_str(),
+                ),
+                (
+                    "AWS_SECRET_ACCESS_KEY",
+                    secrets
+                        .AWS_SECRET_ACCESS_KEY
+                        .as_ref()
+                        .expect("AWS_SECRET_ACCESS_KEY is not set")
+                        .as_str(),
+                ),
+                (
+                    "AWS_DEFAULT_REGION",
+                    secrets
+                        .AWS_DEFAULT_REGION
+                        .as_ref()
+                        .expect("AWS_DEFAULT_REGION is not set")
+                        .as_str(),
+                ),
+            ],
+        );
+        let mut filtered_pdb = false;
+        for pdb in pdbs.expect("Unable to get pdbs").items.expect("Unable to get pdbs") {
+            if pdb.metadata.name.contains(&environment.applications[0].name) {
+                filtered_pdb = true;
+                break;
+            }
+        }
+        assert!(filtered_pdb);
 
         // Cleanup
         match environment.delete_environment(Kind::Aws, &context_for_delete, &ea, logger) {
@@ -629,7 +711,7 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
-        // let mut contex_envs = generate_contexts_and_environments(3, test_utilities::aws::working_minimal_environment);
+        // let mut context_envs = generate_contexts_and_environments(3, test_utilities::aws::working_minimal_environment);
         let logger = logger();
         let context = context();
         let context_for_not_working = context.clone_not_same_execution_id();
@@ -933,8 +1015,8 @@ fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
     let context_failover_1 = context();
     let context_failover_2 = context_failover_1.clone_not_same_execution_id();
 
-    let context_first_fail_deployement_1 = context_failover_1.clone_not_same_execution_id();
-    let context_second_fail_deployement_2 = context_failover_1.clone_not_same_execution_id();
+    let context_first_fail_deployment_1 = context_failover_1.clone_not_same_execution_id();
+    let context_second_fail_deployment_2 = context_failover_1.clone_not_same_execution_id();
 
     let secrets = FuncTestsSecrets::new();
     let test_domain = secrets
@@ -952,7 +1034,7 @@ fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
         test_domain.as_str(),
     );
     let fail_app_1 = test_utilities::common::non_working_environment(
-        &context_first_fail_deployement_1,
+        &context_first_fail_deployment_1,
         secrets
             .AWS_TEST_ORGANIZATION_ID
             .as_ref()
@@ -970,7 +1052,7 @@ fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
         test_domain.as_str(),
     );
     let fail_app_2 = test_utilities::common::non_working_environment(
-        &context_second_fail_deployement_2,
+        &context_second_fail_deployment_2,
         secrets
             .AWS_TEST_ORGANIZATION_ID
             .as_ref()
@@ -1004,7 +1086,7 @@ fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
     delete_env.action = Action::Delete;
     let ea_delete = EnvironmentAction::Environment(delete_env.clone());
 
-    // first deployement
+    // first deployment
     let ea1 = EnvironmentAction::EnvironmentWithFailover(fail_app_1, failover_environment_1.clone());
     let ea2 = EnvironmentAction::EnvironmentWithFailover(fail_app_2, failover_environment_2.clone());
 

@@ -1415,7 +1415,6 @@ pub fn cluster_test(
             };
 
             // Delete
-            let _ = upgraded_kubernetes.version();
             if let Err(err) = delete_tx.delete_kubernetes(upgraded_kubernetes.as_ref()) {
                 panic!("{:?}", err)
             }

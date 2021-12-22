@@ -1,6 +1,6 @@
 use crate::cmd::structs::KubernetesPodStatusReason::Unknown;
 use semver::Version;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Deserialize, Clone, Eq, PartialEq)]
@@ -408,9 +408,43 @@ pub struct SVCSpec {
     pub svc_type: String,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PDB {
+    pub api_version: String,
+    pub items: Option<Vec<PDBItem>>,
+    pub kind: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PDBMetadata {
+    pub name: String,
+    pub namespace: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PDBItem {
+    pub api_version: String,
+    pub kind: String,
+    pub status: PDBStatus,
+    pub metadata: PDBMetadata,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PDBStatus {
+    pub current_healthy: i16,
+    pub desired_healthy: i16,
+    pub disruptions_allowed: i16,
+    pub expected_pods: i16,
+    pub observed_generation: i16,
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::cmd::structs::{KubernetesList, KubernetesPod, KubernetesPodStatusReason, PVC, SVC};
+    use crate::cmd::structs::{KubernetesList, KubernetesPod, KubernetesPodStatusReason, PDB, PVC, SVC};
 
     #[test]
     fn test_svc_deserialize() {
@@ -1466,5 +1500,190 @@ mod tests {
             pod_status.unwrap().items[0].status.conditions[0].reason,
             KubernetesPodStatusReason::Unknown(None)
         );
+    }
+
+    #[test]
+    fn test_pdb_deserialize() {
+        // setup:
+        let payload = r#"{
+    "apiVersion": "v1",
+    "items": [
+        {
+            "apiVersion": "policy/v1beta1",
+            "kind": "PodDisruptionBudget",
+            "metadata": {
+                "annotations": {
+                    "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"policy/v1beta1\",\"kind\":\"PodDisruptionBudget\",\"metadata\":{\"annotations\":{},\"labels\":{\"io.cilium/app\":\"operator\",\"k8s.scw.cloud/cni\":\"cilium\",\"k8s.scw.cloud/object\":\"PodDisruptionBudget\",\"k8s.scw.cloud/system\":\"cni\",\"name\":\"cilium-operator\"},\"name\":\"cilium-operator\",\"namespace\":\"kube-system\"},\"spec\":{\"maxUnavailable\":1,\"selector\":{\"matchLabels\":{\"io.cilium/app\":\"operator\",\"name\":\"cilium-operator\"}}}}\n"
+                },
+                "creationTimestamp": "2021-10-21T09:35:38Z",
+                "generation": 1,
+                "labels": {
+                    "io.cilium/app": "operator",
+                    "k8s.scw.cloud/cni": "cilium",
+                    "k8s.scw.cloud/object": "PodDisruptionBudget",
+                    "k8s.scw.cloud/system": "cni",
+                    "name": "cilium-operator"
+                },
+                "name": "cilium-operator",
+                "namespace": "kube-system",
+                "resourceVersion": "878978452",
+                "uid": "1941df75-a535-4138-9bf9-865cf69f5519"
+            },
+            "spec": {
+                "maxUnavailable": 1,
+                "selector": {
+                    "matchLabels": {
+                        "io.cilium/app": "operator",
+                        "name": "cilium-operator"
+                    }
+                }
+            },
+            "status": {
+                "currentHealthy": 1,
+                "desiredHealthy": 0,
+                "disruptionsAllowed": 1,
+                "expectedPods": 1,
+                "observedGeneration": 1
+            }
+        },
+        {
+            "apiVersion": "policy/v1beta1",
+            "kind": "PodDisruptionBudget",
+            "metadata": {
+                "annotations": {
+                    "meta.helm.sh/release-name": "qovery-engine",
+                    "meta.helm.sh/release-namespace": "qovery"
+                },
+                "creationTimestamp": "2021-11-29T13:10:34Z",
+                "generation": 1,
+                "labels": {
+                    "app.kubernetes.io/instance": "qovery-engine",
+                    "app.kubernetes.io/managed-by": "Helm",
+                    "app.kubernetes.io/name": "qovery-engine",
+                    "app.kubernetes.io/version": "0.1.0",
+                    "helm.sh/chart": "qovery-engine-0.1.0"
+                },
+                "name": "qovery-engine",
+                "namespace": "qovery",
+                "resourceVersion": "948768849",
+                "uid": "a2798d0b-7f66-469c-84de-2778ab39048a"
+            },
+            "spec": {
+                "minAvailable": "50%",
+                "selector": {
+                    "matchLabels": {
+                        "app.kubernetes.io/instance": "qovery-engine"
+                    }
+                }
+            },
+            "status": {
+                "currentHealthy": 2,
+                "desiredHealthy": 1,
+                "disruptionsAllowed": 1,
+                "expectedPods": 2,
+                "observedGeneration": 1
+            }
+        },
+        {
+            "apiVersion": "policy/v1beta1",
+            "kind": "PodDisruptionBudget",
+            "metadata": {
+                "annotations": {
+                    "meta.helm.sh/release-name": "application-z584b6585-z584b6585",
+                    "meta.helm.sh/release-namespace": "za2730025-z18650490"
+                },
+                "creationTimestamp": "2021-12-16T09:30:57Z",
+                "generation": 1,
+                "labels": {
+                    "app": "app-z584b6585",
+                    "app.kubernetes.io/managed-by": "Helm",
+                    "appId": "z584b6585",
+                    "envId": "z18650490",
+                    "ownerId": "FAKE"
+                },
+                "name": "app-z584b6585",
+                "namespace": "za2730025-z18650490",
+                "resourceVersion": "892065755",
+                "uid": "ec7c8f98-3cf2-4b77-b5c1-4e449a12be51"
+            },
+            "spec": {
+                "minAvailable": 1,
+                "selector": {
+                    "matchLabels": {
+                        "app": "app-z584b6585",
+                        "appId": "z584b6585",
+                        "envId": "z18650490",
+                        "ownerId": "FAKE"
+                    }
+                }
+            },
+            "status": {
+                "currentHealthy": 1,
+                "desiredHealthy": 1,
+                "disruptionsAllowed": 0,
+                "expectedPods": 1,
+                "observedGeneration": 1
+            }
+        },
+        {
+            "apiVersion": "policy/v1beta1",
+            "kind": "PodDisruptionBudget",
+            "metadata": {
+                "annotations": {
+                    "meta.helm.sh/release-name": "application-z3644afeb-z3644afeb",
+                    "meta.helm.sh/release-namespace": "zf5a85953-z1dc0c973"
+                },
+                "creationTimestamp": "2021-12-20T13:58:45Z",
+                "generation": 1,
+                "labels": {
+                    "app": "app-z3644afeb",
+                    "app.kubernetes.io/managed-by": "Helm",
+                    "appId": "z3644afeb",
+                    "envId": "z1dc0c973",
+                    "ownerId": "FAKE"
+                },
+                "name": "app-z3644afeb",
+                "namespace": "zf5a85953-z1dc0c973",
+                "resourceVersion": "959451320",
+                "uid": "7ea75ab3-4a1f-401e-a0e8-11203ae621e9"
+            },
+            "spec": {
+                "minAvailable": 1,
+                "selector": {
+                    "matchLabels": {
+                        "app": "app-z3644afeb",
+                        "appId": "z3644afeb",
+                        "envId": "z1dc0c973",
+                        "ownerId": "FAKE"
+                    }
+                }
+            },
+            "status": {
+                "currentHealthy": 0,
+                "desiredHealthy": 1,
+                "disruptionsAllowed": 0,
+                "expectedPods": 1,
+                "observedGeneration": 1
+            }
+        }
+    ],
+    "kind": "List",
+    "metadata": {
+        "resourceVersion": "",
+        "selfLink": ""
+    }
+}
+"#;
+
+        // execute:
+        let pdb = serde_json::from_str::<PDB>(payload);
+
+        // verify:
+        match pdb {
+            Ok(_) => assert!(true),
+            Err(e) => {
+                return assert!(false, "{}", e);
+            }
+        }
     }
 }

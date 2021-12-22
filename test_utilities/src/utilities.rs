@@ -480,7 +480,7 @@ fn curl_path(path: &str) -> bool {
     }
 }
 
-fn kubernetes_config_path(
+pub fn kubernetes_config_path(
     provider_kind: Kind,
     workspace_directory: &str,
     kubernetes_cluster_id: &str,
