@@ -815,7 +815,7 @@ pub fn get_chart_for_shell_agent(
                 },
                 ChartSetValue {
                     key: "environmentVariables.RUST_BACKTRACE".to_string(),
-                    value: "1".to_string()
+                    value: "full".to_string()
                 },
                 ChartSetValue {
                     key: "environmentVariables.RUST_LOG".to_string(),
