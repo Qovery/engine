@@ -743,6 +743,38 @@ where
     kubectl_exec::<P, KubernetesList<KubernetesPod>>(cmd_args, kubernetes_config, envs)
 }
 
+/// kubectl_exec_get_pod_by_name: allows to retrieve a pod by its name
+///
+/// # Arguments
+///
+/// * `kubernetes_config` - kubernetes config path
+/// * `namespace` - kubernetes namespace
+/// * `pod_name` - pod's name
+/// * `envs` - environment variables required for kubernetes connection
+pub fn kubectl_exec_get_pod_by_name<P>(
+    kubernetes_config: P,
+    namespace: Option<&str>,
+    pod_name: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<KubernetesPod, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let mut cmd_args = vec!["get", "pod", "-o", "json"];
+
+    match namespace {
+        Some(n) => {
+            cmd_args.push("-n");
+            cmd_args.push(n);
+        }
+        None => cmd_args.push("--all-namespaces"),
+    }
+
+    cmd_args.push(pod_name);
+
+    kubectl_exec::<P, KubernetesPod>(cmd_args, kubernetes_config, envs)
+}
+
 pub fn kubectl_exec_get_configmap<P>(
     kubernetes_config: P,
     namespace: &str,
@@ -1044,14 +1076,14 @@ where
     P: AsRef<Path>,
 {
     let crash_looping_pods =
-        match kubectl_get_crash_looping_pods(Box::new(&kubernetes_config), namespace, selector, None, envs.clone()) {
+        match kubectl_get_crash_looping_pods(&kubernetes_config, namespace, selector, None, envs.clone()) {
             Ok(pods) => pods,
             Err(e) => return Err(e),
         };
 
     for crash_looping_pod in crash_looping_pods.iter() {
         if let Err(e) = kubectl_exec_delete_pod(
-            Box::new(&kubernetes_config),
+            &kubernetes_config,
             crash_looping_pod.metadata.namespace.as_str(),
             crash_looping_pod.metadata.name.as_str(),
             envs.clone(),
@@ -1072,8 +1104,8 @@ where
 /// * `selector`: selector to look for, if None, will look for anything.
 /// * `restarted_min_count`: minimum restart counts to be considered as crash looping. If None, default is 5.
 /// * `envs`: environment variables to be passed to kubectl.
-pub fn kubectl_get_crash_looping_pods<P: ?Sized>(
-    kubernetes_config: Box<P>,
+pub fn kubectl_get_crash_looping_pods<P>(
+    kubernetes_config: P,
     namespace: Option<&str>,
     selector: Option<&str>,
     restarted_min_count: Option<usize>,
@@ -1083,29 +1115,30 @@ where
     P: AsRef<Path>,
 {
     let restarted_min = restarted_min_count.unwrap_or(5usize);
-    let pods = kubectl_exec_get_pods(kubernetes_config.as_ref(), namespace, selector, envs)?;
+    let pods = kubectl_exec_get_pods(kubernetes_config, namespace, selector, envs)?;
 
     // Pod needs to have at least one container having backoff status (check 1)
     // AND at least a container with minimum restarts (asked in inputs) (check 2)
-    Ok(pods
+    let crash_looping_pods = pods
         .items
         .into_iter()
         .filter(|pod| {
             pod.status.container_statuses.as_ref().is_some()
-           && pod
-                    .status
-                    .conditions
-                    .iter()
-                    .any(|c| c.reason == KubernetesPodStatusReason::BackOff) // check 1
                 && pod
                     .status
                     .container_statuses
                     .as_ref()
                     .expect("Cannot get container statuses")
-                    .iter()
-                    .any(|e| e.restart_count >= restarted_min) // check 2
+                    .into_iter()
+                    .any(|e| {
+                        e.state.waiting.as_ref().is_some()
+                        && e.state.waiting.as_ref().expect("cannot get container state").reason == KubernetesPodStatusReason::CrashLoopBackOff // check 1
+                        && e.restart_count >= restarted_min // check 2
+                    })
         })
-        .collect::<Vec<KubernetesPod>>())
+        .collect::<Vec<KubernetesPod>>();
+
+    Ok(crash_looping_pods)
 }
 
 /// kubectl_exec_delete_pod: allow to delete a k8s pod if exists.
@@ -1116,8 +1149,8 @@ where
 /// * `pod_namespace`: pod's namespace.
 /// * `pod_name`: pod's name.
 /// * `envs`: environment variables to be passed to kubectl.
-pub fn kubectl_exec_delete_pod<P: ?Sized>(
-    kubernetes_config: Box<P>,
+pub fn kubectl_exec_delete_pod<P>(
+    kubernetes_config: P,
     pod_namespace: &str,
     pod_name: &str,
     envs: Vec<(&str, &str)>,
@@ -1125,29 +1158,17 @@ pub fn kubectl_exec_delete_pod<P: ?Sized>(
 where
     P: AsRef<Path>,
 {
-    let pod_to_be_deleted = match kubectl_exec_get_pods(
-        kubernetes_config.as_ref(),
-        Some(pod_namespace),
-        Some(pod_name),
-        envs.clone(),
-    ) {
-        Ok(pods) => {
-            if pods.items.is_empty() {
-                return Err(SimpleError::new(
-                    SimpleErrorKind::Other,
-                    Some(format!(
-                        "Cannot delete pod `{}` in namespace `{}`, pod is not found.",
-                        pod_name, pod_namespace
-                    )),
-                ));
-            }
+    let pod_to_be_deleted =
+        match kubectl_exec_get_pod_by_name(&kubernetes_config, Some(pod_namespace), pod_name, envs.clone()) {
+            Ok(pod) => pod,
+            Err(e) => return Err(e),
+        };
 
-            pods.items[0].clone()
-        }
-        Err(e) => return Err(e),
-    };
+    let mut complete_envs = Vec::with_capacity(envs.len() + 1);
+    complete_envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    complete_envs.extend(envs);
 
-    kubectl_exec(
+    match kubectl_exec_with_output(
         vec![
             "delete",
             "pod",
@@ -1155,11 +1176,13 @@ where
             "-n",
             pod_to_be_deleted.metadata.namespace.as_str(),
         ],
-        kubernetes_config.as_ref(),
-        envs,
-    )?;
-
-    Ok(pod_to_be_deleted)
+        complete_envs,
+        |_| {},
+        |_| {},
+    ) {
+        Ok(_) => Ok(pod_to_be_deleted),
+        Err(e) => Err(e),
+    }
 }
 
 fn kubectl_exec<P, T>(args: Vec<&str>, kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<T, SimpleError>

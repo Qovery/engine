@@ -217,8 +217,8 @@ impl Service for Router {
         Ok(context)
     }
 
-    fn selector(&self) -> String {
-        format!("routerId={}", self.id)
+    fn selector(&self) -> Option<String> {
+        Some(format!("routerId={}", self.id))
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {
@@ -243,6 +243,10 @@ impl crate::cloud_provider::service::Router for Router {
 }
 
 impl Helm for Router {
+    fn helm_selector(&self) -> Option<String> {
+        self.selector()
+    }
+
     fn helm_release_name(&self) -> String {
         crate::string::cut(format!("router-{}", self.id()), 50)
     }
@@ -307,6 +311,7 @@ impl Create for Router {
                 kubernetes_config_file_path.as_str(),
                 environment.namespace(),
                 helm_release_name.as_str(),
+                self.selector(),
                 workspace_dir.as_str(),
                 self.start_timeout(),
                 kubernetes.cloud_provider().credentials_environment_variables(),

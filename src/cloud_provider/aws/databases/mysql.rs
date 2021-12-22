@@ -224,8 +224,8 @@ impl Service for MySQL {
         Ok(context)
     }
 
-    fn selector(&self) -> String {
-        format!("app={}", self.sanitized_name())
+    fn selector(&self) -> Option<String> {
+        Some(format!("app={}", self.sanitized_name()))
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {
@@ -240,6 +240,10 @@ impl Service for MySQL {
 impl Database for MySQL {}
 
 impl Helm for MySQL {
+    fn helm_selector(&self) -> Option<String> {
+        self.selector()
+    }
+
     fn helm_release_name(&self) -> String {
         crate::string::cut(format!("mysql-{}", self.id()), 50)
     }

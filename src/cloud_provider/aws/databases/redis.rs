@@ -224,8 +224,8 @@ impl Service for Redis {
         Ok(context)
     }
 
-    fn selector(&self) -> String {
-        format!("app={}", self.sanitized_name())
+    fn selector(&self) -> Option<String> {
+        Some(format!("app={}", self.sanitized_name()))
     }
 
     fn engine_error_scope(&self) -> EngineErrorScope {
@@ -240,6 +240,10 @@ impl Service for Redis {
 impl Database for Redis {}
 
 impl Helm for Redis {
+    fn helm_selector(&self) -> Option<String> {
+        self.selector()
+    }
+
     fn helm_release_name(&self) -> String {
         crate::string::cut(format!("redis-{}", self.id()), 50)
     }

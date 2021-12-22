@@ -131,7 +131,7 @@ pub enum KubernetesPodStatusReason {
     Failed,
     Killing,
     Preempting,
-    BackOff,
+    CrashLoopBackOff,
     ExceededGracePeriod,
 }
 
@@ -149,7 +149,7 @@ impl From<String> for KubernetesPodStatusReason {
             "failed" => KubernetesPodStatusReason::Failed,
             "killing" => KubernetesPodStatusReason::Killing,
             "preempting" => KubernetesPodStatusReason::Preempting,
-            "backoff" => KubernetesPodStatusReason::BackOff,
+            "crashloopbackoff" => KubernetesPodStatusReason::CrashLoopBackOff,
             "exceededgraceperiod" => KubernetesPodStatusReason::ExceededGracePeriod,
             _ => Unknown(match s.as_str() {
                 "" => None,
@@ -182,14 +182,15 @@ pub enum KubernetesPodStatusPhase {
 #[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodContainerStatus {
-    pub last_state: Option<KubernetesPodContainerStatusLastState>,
+    pub last_state: Option<KubernetesPodContainerStatusState>,
+    pub state: KubernetesPodContainerStatusState,
     pub ready: bool,
     pub restart_count: usize,
 }
 
 #[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct KubernetesPodContainerStatusLastState {
+pub struct KubernetesPodContainerStatusState {
     pub terminated: Option<ContainerStatusTerminated>,
     pub waiting: Option<ContainerStatusWaiting>,
 }
@@ -198,7 +199,8 @@ pub struct KubernetesPodContainerStatusLastState {
 #[serde(rename_all = "camelCase")]
 pub struct ContainerStatusWaiting {
     pub message: Option<String>,
-    pub reason: String,
+    #[serde(default)]
+    pub reason: KubernetesPodStatusReason,
 }
 
 #[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
@@ -206,7 +208,8 @@ pub struct ContainerStatusWaiting {
 pub struct ContainerStatusTerminated {
     pub exit_code: i16,
     pub message: Option<String>,
-    pub reason: String,
+    #[serde(default)]
+    pub reason: KubernetesPodStatusReason,
 }
 
 #[derive(Deserialize, Clone, Eq, PartialEq)]
@@ -1199,7 +1202,7 @@ mod tests {
             "lastProbeTime": null,
             "lastTransitionTime": "2021-03-15T15:41:56Z",
             "message": "0/5 nodes are available: 5 Insufficient memory.",
-            "reason": "BackOff",
+            "reason": "CrashLoopBackOff",
             "status": "False",
             "type": "PodScheduled"
           }
@@ -1222,7 +1225,7 @@ mod tests {
         assert_eq!(pod_status.items[0].status.conditions[0].status, "False");
         assert_eq!(
             pod_status.items[0].status.conditions[0].reason,
-            KubernetesPodStatusReason::BackOff
+            KubernetesPodStatusReason::CrashLoopBackOff
         );
 
         let payload = r#"{

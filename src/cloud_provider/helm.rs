@@ -82,6 +82,7 @@ pub struct ChartInfo {
     pub values_files: Vec<String>,
     pub yaml_files_content: Vec<ChartValuesGenerated>,
     pub parse_stderr_for_error: bool,
+    pub k8s_selector: Option<String>,
 }
 
 impl ChartInfo {
@@ -92,6 +93,7 @@ impl ChartInfo {
         timeout_in_seconds: i64,
         values_files: Vec<String>,
         parse_stderr_for_error: bool,
+        k8s_selector: Option<String>,
     ) -> Self {
         ChartInfo {
             name,
@@ -101,6 +103,7 @@ impl ChartInfo {
             timeout_in_seconds,
             values_files,
             parse_stderr_for_error,
+            k8s_selector,
             ..Default::default()
         }
     }
@@ -113,10 +116,6 @@ impl ChartInfo {
                 .unwrap_or_else(|| self.namespace.to_string()),
             _ => self.namespace.to_string(),
         }
-    }
-
-    pub fn get_selector_string(&self) -> String {
-        format!("app={}", self.name.to_lowercase())
     }
 }
 
@@ -138,6 +137,7 @@ impl Default for ChartInfo {
             values_files: Vec::new(),
             yaml_files_content: vec![],
             parse_stderr_for_error: true,
+            k8s_selector: None,
         }
     }
 }
@@ -162,6 +162,11 @@ pub trait HelmChart: Send {
         Ok(None)
     }
 
+    fn get_selector(&self) -> Option<String> {
+        let infos = self.get_chart_info();
+        infos.k8s_selector.clone()
+    }
+
     fn get_chart_info(&self) -> &ChartInfo;
 
     fn namespace(&self) -> String {
@@ -177,12 +182,14 @@ pub trait HelmChart: Send {
         let chart_infos = self.get_chart_info();
 
         // Cleaning any existing crash looping pod for this helm chart
-        kubectl_delete_crash_looping_pods(
-            &kubernetes_config,
-            Some(chart_infos.get_namespace_string().as_str()),
-            Some(chart_infos.get_selector_string().as_str()),
-            envs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect(),
-        )?;
+        if let Some(selector) = self.get_selector() {
+            kubectl_delete_crash_looping_pods(
+                &kubernetes_config,
+                Some(chart_infos.get_namespace_string().as_str()),
+                Some(selector.as_str()),
+                envs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect(),
+            )?;
+        }
 
         Ok(payload)
     }
@@ -402,12 +409,14 @@ impl HelmChart for CoreDNSConfigChart {
         let chart_infos = self.get_chart_info();
 
         // Cleaning any existing crash looping pod for this helm chart
-        kubectl_delete_crash_looping_pods(
-            &kubernetes_config,
-            Some(chart_infos.get_namespace_string().as_str()),
-            Some(chart_infos.get_selector_string().as_str()),
-            environment_variables.clone(),
-        )?;
+        if let Some(selector) = self.get_selector() {
+            kubectl_delete_crash_looping_pods(
+                &kubernetes_config,
+                Some(chart_infos.get_namespace_string().as_str()),
+                Some(selector.as_str()),
+                environment_variables.clone(),
+            )?;
+        }
 
         // calculate current configmap checksum
         let current_configmap_hash = match kubectl_exec_get_configmap(
@@ -815,11 +824,11 @@ pub fn get_chart_for_shell_agent(
                 },
                 ChartSetValue {
                     key: "environmentVariables.RUST_BACKTRACE".to_string(),
-                    value: "full".to_string()
+                    value: "full".to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.RUST_LOG".to_string(),
-                    value: "DEBUG".to_string()
+                    value: "DEBUG".to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.GRPC_SERVER".to_string(),
