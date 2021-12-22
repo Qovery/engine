@@ -819,7 +819,7 @@ pub fn get_chart_for_shell_agent(
                 },
                 ChartSetValue {
                     key: "environmentVariables.RUST_LOG".to_string(),
-                    value: "shell-agent=DEBUG".to_string()
+                    value: "DEBUG".to_string()
                 },
                 ChartSetValue {
                     key: "environmentVariables.GRPC_SERVER".to_string(),
