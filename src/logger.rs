@@ -219,13 +219,16 @@ mod tests {
 
             let details = tc.event.get_details();
             assert!(
-                logs_contain(format!(
-                    "provider=\"{}\"",
-                    match details.provider_kind() {
-                        Some(k) => k.to_string().as_str(),
-                        None => "",
-                    }
-                )),
+                logs_contain(
+                    format!(
+                        "provider=\"{}\"",
+                        match details.provider_kind() {
+                            Some(k) => k.to_string(),
+                            None => "".to_string(),
+                        }
+                    )
+                    .as_str()
+                ),
                 "{}",
                 tc.description
             );
@@ -235,8 +238,8 @@ mod tests {
                     format!(
                         "region=\"{}\"",
                         match details.region() {
-                            Some(r) => r.as_str(),
-                            None => "",
+                            Some(r) => r.to_string(),
+                            None => "".to_string(),
                         }
                     )
                     .as_str()
