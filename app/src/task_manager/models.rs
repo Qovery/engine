@@ -237,7 +237,7 @@ impl Kubernetes {
                 cloud_provider.as_any().downcast_ref::<AWS>().unwrap(),
                 dns_provider,
                 serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(self.options.clone())
-                    .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
+                    .expect("JSON Options payload is not the expected one"),
                 self.nodes_groups.clone(),
             ) {
                 Ok(res) => Ok(Box::new(res)),

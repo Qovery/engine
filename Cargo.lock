@@ -19,9 +19,9 @@ checksum = "ee2a4ec343196209d6594e19543ae87a39f96d5534d7174822a3ad825dd6ed7e"
 
 [[package]]
 name = "aho-corasick"
-version = "0.7.15"
+version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7404febffaa47dac81aa44dba71523c9d069b1bdc50a77db41195149e17f68e5"
+checksum = "1e37cfd5e7657ada45f742d6e99ca5788580b5c529dc78faf11ece6dc702656f"
 dependencies = [
  "memchr",
 ]
@@ -456,6 +456,26 @@ name = "const_fn"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c478836e029dcef17fb47c89023448c64f781a046e0300e257ad8225ae59afab"
+
+[[package]]
+name = "const_format"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22bc6cd49b0ec407b680c3e380182b6ac63b73991cb7602de350352fc309b614"
+dependencies = [
+ "const_format_proc_macros",
+]
+
+[[package]]
+name = "const_format_proc_macros"
+version = "0.2.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef196d5d972878a48da7decb7686eded338b4858fbabeed513d63a7c98b2b82d"
+dependencies = [
+ "proc-macro2 1.0.27",
+ "quote 1.0.7",
+ "unicode-xid 0.2.1",
+]
 
 [[package]]
 name = "cookie"
@@ -1248,7 +1268,7 @@ dependencies = [
  "log",
  "openssl-probe",
  "openssl-sys",
- "url 2.2.1",
+ "url 2.2.2",
 ]
 
 [[package]]
@@ -1359,7 +1379,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "url 2.2.1",
+ "url 2.2.2",
 ]
 
 [[package]]
@@ -2576,7 +2596,7 @@ dependencies = [
  "idna 0.2.0",
  "lazy_static",
  "regex",
- "url 2.2.1",
+ "url 2.2.2",
 ]
 
 [[package]]
@@ -2597,6 +2617,7 @@ dependencies = [
  "lazy_static",
  "maplit",
  "rand 0.8.3",
+ "regex",
  "reqwest 0.11.3",
  "retry",
  "rusoto_core",
@@ -2619,12 +2640,14 @@ dependencies = [
  "tempfile",
  "tera",
  "test-utilities",
+ "thiserror",
  "timeout-readwrite",
  "tokio 1.10.0",
  "tracing",
  "tracing-subscriber",
  "tracing-test",
  "trust-dns-resolver",
+ "url 2.2.2",
  "uuid 0.8.2",
  "walkdir",
 ]
@@ -2955,14 +2978,13 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.4.2"
+version = "1.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38cf2c13ed4745de91a5eb834e11c00bcc3709e773173b2ce4c56c9fbde04b9c"
+checksum = "d07a8629359eb56f1e2fb1652bb04212c072a87ba68546a04065d525673ac461"
 dependencies = [
  "aho-corasick",
  "memchr",
  "regex-syntax",
- "thread_local",
 ]
 
 [[package]]
@@ -2977,9 +2999,9 @@ dependencies = [
 
 [[package]]
 name = "regex-syntax"
-version = "0.6.21"
+version = "0.6.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b181ba2dcf07aaccad5448e8ead58db5b742cf85dfe035e2227f137a539a189"
+checksum = "f497285884f3fcff424ffc933e56d7cbca511def0c9831a7f9b5f6153e3cc89b"
 
 [[package]]
 name = "remove_dir_all"
@@ -3052,7 +3074,7 @@ dependencies = [
  "serde_urlencoded 0.6.1",
  "tokio 0.2.22",
  "tokio-tls",
- "url 2.2.1",
+ "url 2.2.2",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -3088,7 +3110,7 @@ dependencies = [
  "serde_urlencoded 0.7.0",
  "tokio 1.10.0",
  "tokio-native-tls",
- "url 2.2.1",
+ "url 2.2.2",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -3372,7 +3394,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "url 2.2.1",
+ "url 2.2.2",
 ]
 
 [[package]]
@@ -3526,7 +3548,7 @@ dependencies = [
  "dtoa",
  "itoa",
  "serde",
- "url 2.2.1",
+ "url 2.2.2",
 ]
 
 [[package]]
@@ -3871,6 +3893,7 @@ dependencies = [
  "base64 0.13.0",
  "bstr",
  "chrono",
+ "const_format",
  "curl",
  "digitalocean",
  "dirs",
@@ -3894,18 +3917,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.21"
+version = "1.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "318234ffa22e0920fe9a40d7b8369b5f649d490980cf7aadcf1eb91594869b42"
+checksum = "854babe52e4df1653706b98fcfc05843010039b406875930a70e4d9644e5c417"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.21"
+version = "1.0.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cae2447b6282786c3493999f40a9be2a6ad20cb8bd268b0a0dbf5a065535c0ab"
+checksum = "aa32fd3f627f367fe16f893e2597ae3c05020f8bba2666a4e6ea73d377e5714b"
 dependencies = [
  "proc-macro2 1.0.27",
  "quote 1.0.7",
@@ -4402,7 +4425,7 @@ dependencies = [
  "thiserror",
  "tinyvec 1.2.0",
  "tokio 1.10.0",
- "url 2.2.1",
+ "url 2.2.2",
 ]
 
 [[package]]
@@ -4455,7 +4478,7 @@ dependencies = [
  "log",
  "rand 0.8.3",
  "sha-1 0.9.2",
- "url 2.2.1",
+ "url 2.2.2",
  "utf-8",
 ]
 
@@ -4594,9 +4617,9 @@ dependencies = [
 
 [[package]]
 name = "url"
-version = "2.2.1"
+version = "2.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ccd964113622c8e9322cfac19eb1004a07e636c545f325da085d5cdde6f1f8b"
+checksum = "a507c383b2d33b5fc35d1861e77e6b383d158b2da5e14fe51b83dfedf6fd578c"
 dependencies = [
  "form_urlencoded",
  "idna 0.2.0",

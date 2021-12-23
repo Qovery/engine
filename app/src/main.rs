@@ -194,14 +194,15 @@ pub fn main() -> io::Result<()> {
     };
 
     let std_logger = StdIoLogger::new();
-    let logger = CompositeLogger::new(vec![
-        Box::new(std_logger.clone()),
-        Box::new(NatsLogger::new(
+    let mut loggers: Vec<Box<dyn Logger>> = vec![Box::new(std_logger.clone())];
+    if env::var("DEPLOY_FROM_FILE").is_ok() {
+        loggers.push(Box::new(NatsLogger::new(
             std_logger,
             Connection::new("engine_logs", nats_server.as_str(), nats_credentials.clone())
                 .expect("cannot create NATS connection for engine logs"),
-        )),
-    ]);
+        )));
+    };
+    let logger = CompositeLogger::new(loggers);
 
     info!("engine id: {}", engine_id.as_str());
     info!(
