@@ -56,7 +56,7 @@ spec:
             {{ if eq .Values.cloudProvider "aws" }}
             {{ if .Values.awsFeatures.awsRegions }}
             - --aws-regions
-            - "{{ join "," .Values.enabledFeatures.awsRegions }}"
+            - "{{ join "," .Values.awsFeatures.awsRegions }}"
             {{ end }}
             {{ if eq .Values.awsFeatures.rds true}}
             - --enable-rds
