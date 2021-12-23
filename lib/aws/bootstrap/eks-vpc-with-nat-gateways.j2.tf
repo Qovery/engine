@@ -87,6 +87,13 @@ resource "aws_route_table" "eks_cluster" {
     gateway_id = aws_internet_gateway.eks_cluster.id
   }
 
+  {% for route in vpc_custom_routing_table %}
+  route {
+    cidr_block = "{{ route.destination }}"
+    gateway_id = "{{ route.target }}"
+  }
+  {% endfor %}
+
   tags = local.tags_eks_vpc_public
 }
 

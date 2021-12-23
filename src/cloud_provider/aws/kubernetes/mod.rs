@@ -54,6 +54,13 @@ pub enum VpcQoveryNetworkMode {
     WithoutNatGateways,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VpcCustomRoutingTable {
+    description: String,
+    destination: String,
+    target: String,
+}
+
 impl fmt::Display for VpcQoveryNetworkMode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
@@ -81,6 +88,7 @@ pub struct Options {
     pub vpc_qovery_network_mode: VpcQoveryNetworkMode,
     pub vpc_cidr_block: String,
     pub eks_cidr_subnet: String,
+    pub vpc_custom_routing_table: Vec<VpcCustomRoutingTable>,
     pub eks_access_cidr_blocks: Vec<String>,
     pub rds_cidr_subnet: String,
     pub documentdb_cidr_subnet: String,
@@ -416,6 +424,7 @@ impl<'a> EKS<'a> {
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
         context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
         context.insert("vpc_cidr_block", &vpc_cidr_block);
+        context.insert("vpc_custom_routing_table", &self.options.vpc_custom_routing_table);
         context.insert("s3_kubeconfig_bucket", &self.kubeconfig_bucket_name());
 
         // AWS - EKS
