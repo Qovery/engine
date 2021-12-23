@@ -195,7 +195,7 @@ pub fn main() -> io::Result<()> {
 
     let std_logger = StdIoLogger::new();
     let mut loggers: Vec<Box<dyn Logger>> = vec![Box::new(std_logger.clone())];
-    if env::var("DEPLOY_FROM_FILE").is_ok() {
+    if env::var("DEPLOY_FROM_FILE").is_err() {
         loggers.push(Box::new(NatsLogger::new(
             std_logger,
             Connection::new("engine_logs", nats_server.as_str(), nats_credentials.clone())
