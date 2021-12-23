@@ -16,6 +16,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
+use crate::events::{ToTransmitter, Transmitter};
 use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, DatabaseKind, Listen, Listener, Listeners};
 use ::function_name::named;
@@ -82,6 +83,16 @@ impl MySQL {
 impl StatefulService for MySQL {
     fn is_managed_service(&self) -> bool {
         self.options.mode == MANAGED
+    }
+}
+
+impl ToTransmitter for MySQL {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::Database(
+            self.id().to_string(),
+            self.service_type().to_string(),
+            self.name().to_string(),
+        )
     }
 }
 

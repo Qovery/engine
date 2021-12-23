@@ -24,7 +24,7 @@ use crate::error::{
     SimpleError, SimpleErrorKind,
 };
 use crate::errors::EngineError;
-use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::logger::{LogLevel, Logger};
 use crate::models::{
     Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, QoveryIdentifier, ToHelmString,
@@ -147,11 +147,11 @@ impl<'a> Kapsule<'a> {
             if let Err(e) = ScwInstancesType::from_str(node_group.instance_type.as_str()) {
                 let err = EngineError::new_unsupported_instance_type(
                     EventDetails::new(
-                        cloud_provider.kind(),
+                        Some(cloud_provider.kind()),
                         QoveryIdentifier::new(context.organization_id().to_string()),
                         QoveryIdentifier::new(context.cluster_id().to_string()),
                         QoveryIdentifier::new(context.execution_id().to_string()),
-                        zone.region_str().to_string(),
+                        Some(zone.region_str().to_string()),
                         Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
                         Transmitter::Kubernetes(id, name),
                     ),
@@ -370,13 +370,14 @@ impl<'a> Kapsule<'a> {
 
     fn create(&self) -> Result<(), LegacyEngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
 
         // TODO(DEV-1061): remove legacy logger
         let message = format!("Preparing SCW {} cluster deployment with id {}", self.name(), self.id());
         self.send_to_customer(message.as_str(), &listeners_helper);
         self.logger.log(
             LogLevel::Info,
-            EngineEvent::Deploying(self.get_event_details(), EventMessage::new(message.to_string(), None)),
+            EngineEvent::Deploying(event_details.clone(), EventMessage::new(message.to_string(), None)),
         );
 
         // upgrade cluster instead if required
@@ -394,7 +395,7 @@ impl<'a> Kapsule<'a> {
                     self.logger.log(
                         LogLevel::Info,
                         EngineEvent::Deploying(
-                            self.get_event_details(),
+                            event_details.clone(),
                             EventMessage::new("Kubernetes cluster upgrade not required".to_string(), None),
                         ),
                     );
@@ -406,7 +407,7 @@ impl<'a> Kapsule<'a> {
             },
             Err(_) => self.logger.log(
                 LogLevel::Info,
-                EngineEvent::Deploying(self.get_event_details(), EventMessage::new("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string(), None)),
+                EngineEvent::Deploying(event_details.clone(), EventMessage::new("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string(), None)),
             ),
         };
 
@@ -572,14 +573,13 @@ impl<'a> Kapsule<'a> {
     }
 
     fn create_error(&self) -> Result<(), LegacyEngineError> {
-        let kubeconfig_file = match self.get_kubeconfig_file() {
-            Ok(x) => x.0,
+        let kubeconfig = match self.get_kubeconfig_file() {
+            Ok((path, _)) => path,
             Err(e) => {
                 error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
-                return Err(e);
+                return Err(e.to_legacy_engine_error());
             }
         };
-        let kubeconfig = PathBuf::from(&kubeconfig_file);
         let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
         warn!("SCW.create_error() called for {}", self.name());
         match kubectl_exec_get_events(kubeconfig, None, environment_variables) {
@@ -672,7 +672,10 @@ impl<'a> Kapsule<'a> {
             });
         }
 
-        let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
+        let kubernetes_config_file_path = match self.get_kubeconfig_file_path() {
+            Ok(p) => p,
+            Err(e) => return Err(e.to_legacy_engine_error()),
+        };
 
         // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
         if self.options.qovery_engine_location == EngineLocation::ClientSide {
@@ -825,7 +828,7 @@ impl<'a> Kapsule<'a> {
             Err(e) => {
                 warn!(
                     "skipping Kubernetes uninstall because it can't be reached. {:?}",
-                    e.message
+                    e.message(),
                 );
                 skip_kubernetes_step = true;
                 "".to_string()
@@ -1349,13 +1352,14 @@ impl<'a> Kubernetes for Kapsule<'a> {
 
     #[named]
     fn deploy_environment(&self, environment: &Environment) -> Result<(), LegacyEngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
         );
-        kubernetes::deploy_environment(self, environment)
+        kubernetes::deploy_environment(self, environment, event_details)
     }
 
     #[named]

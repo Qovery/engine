@@ -278,23 +278,52 @@ impl EngineError {
         requested_cpu: f32,
         free_cpu: f32,
     ) -> EngineError {
-        let mut message = vec!["There is not enough resources on the cluster:"];
+        let mut message = vec!["There is not enough resources on the cluster:".to_string()];
 
         if free_cpu > requested_cpu {
-            message.push(format!("{} CPU requested and only {} CPU available", free_cpu, requested_cpu).as_str());
+            message.push(format!(
+                "{} CPU requested and only {} CPU available",
+                free_cpu, requested_cpu
+            ));
         }
 
         if requested_ram_in_mib > free_ram_in_mib {
-            message.push(
-                format!(
-                    "{}mib RAM requested and only {}mib RAM  available",
-                    requested_ram_in_mib, free_ram_in_mib
-                )
-                .as_str(),
-            );
+            message.push(format!(
+                "{}mib RAM requested and only {}mib RAM  available",
+                requested_ram_in_mib, free_ram_in_mib
+            ));
         }
 
         let message = message.join("\n");
+
+        EngineError::new(
+            event_details,
+            NotEnoughResourcesToDeployEnvironment,
+            message.to_string(),
+            message.to_string(),
+            None,
+            None,
+            None,
+            Some("Consider to add one more node or upgrade your nodes configuration. If not possible, pause or delete unused environments.".to_string()),
+        )
+    }
+
+    /// Creates new error for cannot deploy because there are not enough free pods available on the cluster.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `requested_pods`: How many pods are requested.
+    /// * `free_pods`: How many pods qre free.
+    pub fn new_cannot_deploy_not_enough_free_pods_available(
+        event_details: EventDetails,
+        requested_pods: u32,
+        free_pods: u32,
+    ) -> EngineError {
+        let message = format!(
+            "There is not enough free Pods (free {} VS {} required) on the cluster.",
+            free_pods, requested_pods,
+        );
 
         EngineError::new(
             event_details,

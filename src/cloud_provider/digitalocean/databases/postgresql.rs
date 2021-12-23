@@ -10,6 +10,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorScope};
+use crate::events::{ToTransmitter, Transmitter};
 use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
@@ -76,6 +77,16 @@ impl PostgreSQL {
 impl StatefulService for PostgreSQL {
     fn is_managed_service(&self) -> bool {
         self.options.mode == MANAGED
+    }
+}
+
+impl ToTransmitter for PostgreSQL {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::Database(
+            self.id().to_string(),
+            self.service_type().to_string(),
+            self.name().to_string(),
+        )
     }
 }
 

@@ -29,7 +29,7 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
 
         let logger = logger();
         let context = context();
-        let engine = DO::docker_cr_engine(&context, logger);
+        let engine = DO::docker_cr_engine(&context, logger.clone());
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
@@ -54,6 +54,7 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
             &cloudflare,
             nodes,
             DO::kubernetes_cluster_options(secrets, Option::from(cluster_name.to_string())),
+            logger.as_ref(),
         )
         .unwrap();
 
@@ -90,7 +91,7 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
 
         let logger = logger();
         let context = context();
-        let engine = DO::docker_cr_engine(&context, logger);
+        let engine = DO::docker_cr_engine(&context, logger.clone());
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
 
@@ -115,6 +116,7 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
             &cloudflare,
             nodes,
             DO::kubernetes_cluster_options(secrets, Option::from(cluster_name.to_string())),
+            logger.as_ref(),
         )
         .unwrap();
 

@@ -15,6 +15,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorScope, StringError};
+use crate::events::{ToTransmitter, Transmitter};
 use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
@@ -233,6 +234,16 @@ impl Service for MongoDB {
 }
 
 impl Database for MongoDB {}
+
+impl ToTransmitter for MongoDB {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::Database(
+            self.id().to_string(),
+            self.service_type().to_string(),
+            self.name().to_string(),
+        )
+    }
+}
 
 impl Helm for MongoDB {
     fn helm_selector(&self) -> Option<String> {

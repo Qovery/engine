@@ -1,5 +1,4 @@
 use std::any::Any;
-use std::error::Error;
 use std::fs::File;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -26,16 +25,14 @@ use crate::cmd::kubectl::{
 };
 use crate::dns_provider::DnsProvider;
 use crate::error::SimpleErrorKind::Other;
-use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind,
-};
+use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind};
 use crate::errors::EngineError as NewEngineError;
-use crate::events::{EngineEvent, EventDetails, Stage, Transmitter};
+use crate::events::{EngineEvent, EventDetails, GeneralStep, Stage, Transmitter};
 use crate::fs::workspace_directory;
 use crate::logger::{LogLevel, Logger};
 use crate::models::ProgressLevel::Info;
 use crate::models::{
-    Action, Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier, StringPath,
+    Action, Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier,
 };
 use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
@@ -68,19 +65,20 @@ pub trait Kubernetes: Listen {
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         let context = self.context();
         EventDetails::new(
-            self.cloud_provider().kind(),
+            Some(self.cloud_provider().kind()),
             QoveryIdentifier::from(context.organization_id().to_string()),
             QoveryIdentifier::from(context.cluster_id().to_string()),
             QoveryIdentifier::from(context.execution_id().to_string()),
-            self.region().to_string(),
+            Some(self.region().to_string()),
             stage,
             Transmitter::Kubernetes(self.id().to_string(), self.name().to_string()),
         )
     }
 
-    fn get_kubeconfig_file(&self, stage: Stage) -> Result<(StringPath, File), NewEngineError> {
+    fn get_kubeconfig_file(&self) -> Result<(String, File), NewEngineError> {
         let bucket_name = format!("qovery-kubeconfigs-{}", self.id());
         let object_key = format!("{}.yaml", self.id());
+        let stage = Stage::General(GeneralStep::RetrieveClusterConfig);
 
         let (string_path, file) = match self
             .config_file_store()
@@ -126,13 +124,14 @@ pub trait Kubernetes: Listen {
         Ok((string_path, file))
     }
 
-    fn get_kubeconfig_file_path(&self, stage: Stage) -> Result<String, NewEngineError> {
-        let (path, _) = self.get_kubeconfig_file(stage)?;
+    fn get_kubeconfig_file_path(&self) -> Result<String, NewEngineError> {
+        let (path, _) = self.get_kubeconfig_file()?;
         Ok(path)
     }
 
-    fn resources(&self, _environment: &Environment, stage: Stage) -> Result<Resources, NewEngineError> {
+    fn resources(&self, _environment: &Environment) -> Result<Resources, NewEngineError> {
         let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
+        let stage = Stage::General(GeneralStep::RetrieveClusterResources);
 
         let nodes = match crate::cmd::kubectl::kubectl_exec_get_node(
             kubernetes_config_file_path,
@@ -183,7 +182,7 @@ pub trait Kubernetes: Listen {
     fn upgrade(&self) -> Result<(), EngineError> {
         let kubeconfig = match self.get_kubeconfig_file() {
             Ok(f) => f.0,
-            Err(e) => return Err(e),
+            Err(e) => return Err(e.to_legacy_engine_error()),
         };
 
         let err = |e: SimpleError| -> EngineError {
@@ -261,18 +260,6 @@ pub trait Kubernetes: Listen {
         .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))
     }
 
-    fn get_kubeconfig(&self) -> Result<StringPath, EngineError> {
-        let path = match self.get_kubeconfig_file() {
-            Ok(f) => f.0,
-            Err(e) => {
-                error!("Can't perform a Kubernetes upgrade, can't locate kubeconfig");
-                return Err(e);
-            }
-        };
-
-        return Ok(path);
-    }
-
     fn delete_crashlooping_pods(
         &self,
         namespace: Option<&str>,
@@ -280,17 +267,10 @@ pub trait Kubernetes: Listen {
         restarted_min_count: Option<usize>,
         envs: Vec<(&str, &str)>,
     ) -> Result<(), EngineError> {
-        match self.config_file() {
-            Err(e) => {
-                return Err(EngineError::new(
-                    EngineErrorCause::Internal,
-                    self.engine_error_scope(),
-                    self.context().execution_id(),
-                    e.message,
-                ))
-            }
-            Ok(config_path) => match kubectl_get_crash_looping_pods(
-                &config_path.0,
+        match self.get_kubeconfig_file() {
+            Err(e) => return Err(e.to_legacy_engine_error()),
+            Ok((config_path, _)) => match kubectl_get_crash_looping_pods(
+                &config_path,
                 namespace,
                 selector,
                 restarted_min_count,
@@ -299,7 +279,7 @@ pub trait Kubernetes: Listen {
                 Ok(pods) => {
                     for pod in pods {
                         if let Err(e) = kubectl_exec_delete_pod(
-                            &config_path.0,
+                            &config_path,
                             pod.metadata.namespace.as_str(),
                             pod.metadata.name.as_str(),
                             envs.clone(),
@@ -354,7 +334,11 @@ pub struct Resources {
 
 /// common function to deploy a complete environment through Kubernetes and the different
 /// managed services.
-pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment) -> Result<(), EngineError> {
+pub fn deploy_environment(
+    kubernetes: &dyn Kubernetes,
+    environment: &Environment,
+    event_details: EventDetails,
+) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
     let stateful_deployment_target = match kubernetes.kind() {
@@ -373,9 +357,17 @@ pub fn deploy_environment(kubernetes: &dyn Kubernetes, environment: &Environment
     };
 
     // do not deploy if there is not enough resources
-    let resources = kubernetes.resources(environment, stage)?;
+    let resources = match kubernetes.resources(environment) {
+        Ok(r) => r,
+        Err(e) => return Err(e.to_legacy_engine_error()),
+    };
     let required_resources = environment.required_resources();
-    let _ = check_kubernetes_has_enough_resources_to_deploy_environment(resources, required_resources, environment)?;
+
+    if let Err(e) =
+        check_kubernetes_has_enough_resources_to_deploy_environment(resources, required_resources, event_details)
+    {
+        return Err(e.to_legacy_engine_error());
+    }
 
     // create all stateful services (database)
     for service in &environment.stateful_services {
@@ -669,7 +661,10 @@ pub fn delete_environment(kubernetes: &dyn Kubernetes, environment: &Environment
 
     // do not catch potential error - to confirm
     let _ = kubectl::kubectl_exec_delete_namespace(
-        kubernetes.get_kubeconfig_file_path()?,
+        match kubernetes.get_kubeconfig_file_path() {
+            Ok(p) => p,
+            Err(e) => return Err(e.to_legacy_engine_error()),
+        },
         &environment.namespace(),
         kubernetes.cloud_provider().credentials_environment_variables(),
     );
@@ -689,7 +684,7 @@ pub fn check_kubernetes_has_enough_resources_to_deploy_environment(
     {
         // not enough resources CPU or RAM
         return Err(NewEngineError::new_cannot_deploy_not_enough_resources_available(
-            event_details.clone,
+            event_details.clone(),
             environment_resources.ram_in_mib,
             resources.free_ram_in_mib,
             environment_resources.cpu,
@@ -699,14 +694,11 @@ pub fn check_kubernetes_has_enough_resources_to_deploy_environment(
 
     if environment_resources.pods > resources.free_pods {
         // not enough free pods on the cluster
-        let message = format!(
-            "There is not enough free Pods ({} required) on the Kubernetes cluster '{}'. \
-                Consider to add one more node or upgrade your nodes configuration.",
+        return Err(NewEngineError::new_cannot_deploy_not_enough_free_pods_available(
+            event_details,
             environment_resources.pods,
-            kubernetes.name(),
-        );
-
-        return Err(kubernetes.engine_error(cause, message));
+            resources.free_pods,
+        ));
     }
 
     Ok(())

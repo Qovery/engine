@@ -23,6 +23,9 @@ impl From<errors::SimpleError> for SimpleError {
 pub enum Tag {
     Unknown,
     UnsupportedInstanceType,
+    CannotRetrieveClusterConfigFile,
+    CannotGetClusterNodes,
+    NotEnoughResourcesToDeployEnvironment,
 }
 
 impl From<errors::Tag> for Tag {
@@ -30,6 +33,9 @@ impl From<errors::Tag> for Tag {
         match tag {
             errors::Tag::Unknown => Tag::Unknown,
             errors::Tag::UnsupportedInstanceType => Tag::UnsupportedInstanceType,
+            errors::Tag::CannotRetrieveClusterConfigFile => Tag::CannotRetrieveClusterConfigFile,
+            errors::Tag::CannotGetClusterNodes => Tag::CannotGetClusterNodes,
+            errors::Tag::NotEnoughResourcesToDeployEnvironment => Tag::NotEnoughResourcesToDeployEnvironment,
         }
     }
 }

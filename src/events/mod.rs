@@ -100,8 +100,10 @@ impl Display for EventMessage {
 }
 
 #[derive(Debug, Clone)]
-/// Stage: represents an engine event stage, can be Infrastructure or Environment.
+/// Stage: represents an engine event stage, can be General, Infrastructure or Environment.
 pub enum Stage {
+    /// GeneralStep: general stage in the engine, usually used across all stages.
+    General(GeneralStep),
     /// Infrastructure: infrastructure stage in the engine (clusters operations).
     Infrastructure(InfrastructureStep),
     /// Environment: environment stage in the engine (applications operations).
@@ -114,6 +116,7 @@ impl Stage {
         match &self {
             Stage::Infrastructure(step) => step.to_string(),
             Stage::Environment(step) => step.to_string(),
+            Stage::General(step) => step.to_string(),
         }
     }
 }
@@ -126,7 +129,30 @@ impl Display for Stage {
             match &self {
                 Stage::Infrastructure(_) => "infrastructure",
                 Stage::Environment(_) => "environment",
+                Stage::General(_) => "general",
             },
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
+/// GeneralStep: represents an engine general step usually shared across all engine stages
+pub enum GeneralStep {
+    /// RetrieveClusterConfig: retrieving cluster configuration
+    RetrieveClusterConfig,
+    /// RetrieveClusterResources: retrieving cluster resources
+    RetrieveClusterResources,
+}
+
+impl Display for GeneralStep {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match &self {
+                GeneralStep::RetrieveClusterConfig => "retrieve-cluster-config",
+                GeneralStep::RetrieveClusterResources => "retrieve-cluster-resources",
+            }
         )
     }
 }
@@ -168,6 +194,8 @@ impl Display for InfrastructureStep {
 #[derive(Debug, Clone)]
 /// EnvironmentStep: represents an engine environment step.
 pub enum EnvironmentStep {
+    /// LoadConfiguration: first step in environment, aiming to load all configuration (from Terraform, etc).
+    LoadConfiguration,
     /// Build: building an application (docker or build packs).
     Build,
     /// Deploy: deploy an environment (application to kubernetes).
@@ -180,6 +208,10 @@ pub enum EnvironmentStep {
     Update,
     /// Delete: delete an environment.
     Delete,
+    /// ScaleDown: scale up an environment.
+    ScaleUp,
+    /// ScaleDown: scale down an environment.
+    ScaleDown,
 }
 
 impl Display for EnvironmentStep {
@@ -194,9 +226,16 @@ impl Display for EnvironmentStep {
                 EnvironmentStep::Delete => "delete",
                 EnvironmentStep::Pause => "pause",
                 EnvironmentStep::Resume => "resume",
+                EnvironmentStep::LoadConfiguration => "load-configuration",
+                EnvironmentStep::ScaleUp => "scale-up",
+                EnvironmentStep::ScaleDown => "scale-down",
             },
         )
     }
+}
+
+pub trait ToTransmitter {
+    fn to_transmitter(&self) -> Transmitter;
 }
 
 /// TransmitterId: represents a transmitter unique identifier.
@@ -204,7 +243,7 @@ type TransmitterId = String;
 /// TransmitterName: represents a transmitter name.
 type TransmitterName = String;
 /// TransmitterType: represents a transmitter type.
-type TransmitterType = String;
+type TransmitterType = String; // TODO(benjaminch): makes it a real enum / type
 
 #[derive(Debug, Clone)]
 /// Transmitter: represents the event's source caller (transmitter).
@@ -258,16 +297,16 @@ type Region = String;
 #[derive(Debug, Clone)]
 /// EventDetails: represents an event details, carrying all useful data such as Qovery identifiers, transmitter, stage etc.
 pub struct EventDetails {
-    /// provider_kind: cloud provider name
-    provider_kind: Kind,
+    /// provider_kind: cloud provider name. an be set to None if not linked to any provider kind.
+    provider_kind: Option<Kind>,
     /// organisation_id: Qovery organisation identifier.
     organisation_id: QoveryIdentifier,
     /// cluster_id: Qovery cluster identifier.
     cluster_id: QoveryIdentifier,
     /// execution_id: Qovery execution identifier.
     execution_id: QoveryIdentifier,
-    /// region: event's region (cloud provider specific region).
-    region: Region, // TODO(benjaminch): find a way to make Region a real struct type
+    /// region: event's region (cloud provider specific region). Can be set to None if not applicable in the case of an application for example.
+    region: Option<Region>, // TODO(benjaminch): find a way to make Region a real struct type
     /// stage: stage in which this event has been triggered.
     stage: Stage,
     /// transmitter: source triggering the event.
@@ -287,11 +326,11 @@ impl EventDetails {
     /// * `stage`: Event's stage in which this event has been triggered.
     /// * `transmitter`: Event's source transmitter.
     pub fn new(
-        provider_kind: Kind,
+        provider_kind: Option<Kind>,
         organisation_id: QoveryIdentifier,
         cluster_id: QoveryIdentifier,
         execution_id: QoveryIdentifier,
-        region: Region,
+        region: Option<Region>,
         stage: Stage,
         transmitter: Transmitter,
     ) -> Self {
@@ -307,8 +346,8 @@ impl EventDetails {
     }
 
     /// Returns event's provider name.
-    pub fn provider_kind(&self) -> &Kind {
-        &self.provider_kind
+    pub fn provider_kind(&self) -> Option<Kind> {
+        self.provider_kind.clone()
     }
 
     /// Returns event's Qovery organisation identifier.
@@ -327,8 +366,8 @@ impl EventDetails {
     }
 
     /// Returns event's region (cloud provider region).
-    pub fn region(&self) -> &Region {
-        &self.region
+    pub fn region(&self) -> Option<Region> {
+        self.region.clone()
     }
 
     /// Returns event's stage in which the event has been triggered.

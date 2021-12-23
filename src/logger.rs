@@ -47,7 +47,16 @@ impl Logger for StdIoLogger {
             organization_id = event_details.organisation_id().short(),
             cluster_id = event_details.cluster_id().short(),
             execution_id = event_details.execution_id().short(),
-            provider = event_details.provider_kind().to_string().as_str(),
+            provider = match event_details.provider_kind() {
+                Some(kind) => kind.to_string(),
+                None => "".to_string(),
+            }
+            .as_str(),
+            region = match event_details.region() {
+                Some(region) => region,
+                None => "".to_string(),
+            }
+            .as_str(),
             stage = stage.to_string().as_str(),
             step = stage.sub_step_name().as_str(),
             transmitter = event_details.transmitter().to_string().as_str(),
@@ -107,11 +116,11 @@ mod tests {
                 log_level: LogLevel::Error,
                 event: EngineEvent::Error(EngineError::new_unknown(
                     EventDetails::new(
-                        Kind::Scw,
+                        Some(Kind::Scw),
                         orga_id.clone(),
                         cluster_id.clone(),
                         execution_id.clone(),
-                        Region::Paris.as_str().to_string(),
+                        Some(Region::Paris.as_str().to_string()),
                         Stage::Infrastructure(InfrastructureStep::Create),
                         Transmitter::Kubernetes(cluster_id.to_string(), cluster_name.to_string()),
                     ),
@@ -128,11 +137,11 @@ mod tests {
                 log_level: LogLevel::Info,
                 event: EngineEvent::Deploying(
                     EventDetails::new(
-                        Kind::Scw,
+                        Some(Kind::Scw),
                         orga_id.clone(),
                         cluster_id.clone(),
                         execution_id.clone(),
-                        Region::Paris.as_str().to_string(),
+                        Some(Region::Paris.as_str().to_string()),
                         Stage::Infrastructure(InfrastructureStep::Create),
                         Transmitter::Kubernetes(cluster_id.to_string(), cluster_name.to_string()),
                     ),
@@ -144,11 +153,11 @@ mod tests {
                 log_level: LogLevel::Debug,
                 event: EngineEvent::Pausing(
                     EventDetails::new(
-                        Kind::Scw,
+                        Some(Kind::Scw),
                         orga_id.clone(),
                         cluster_id.clone(),
                         execution_id.clone(),
-                        Region::Paris.as_str().to_string(),
+                        Some(Region::Paris.as_str().to_string()),
                         Stage::Environment(EnvironmentStep::Pause),
                         Transmitter::Application(app_id.to_string(), app_name.to_string()),
                     ),
@@ -160,11 +169,11 @@ mod tests {
                 log_level: LogLevel::Warning,
                 event: EngineEvent::Pausing(
                     EventDetails::new(
-                        Kind::Scw,
+                        Some(Kind::Scw),
                         orga_id.clone(),
                         cluster_id.clone(),
                         execution_id.clone(),
-                        Region::Paris.as_str().to_string(),
+                        Some(Region::Paris.as_str().to_string()),
                         Stage::Environment(EnvironmentStep::Delete),
                         Transmitter::Application(app_id.to_string(), app_name.to_string()),
                     ),
@@ -210,7 +219,28 @@ mod tests {
 
             let details = tc.event.get_details();
             assert!(
-                logs_contain(format!("provider=\"{}\"", details.provider_kind().to_string()).as_str()),
+                logs_contain(format!(
+                    "provider=\"{}\"",
+                    match details.provider_kind() {
+                        Some(k) => k.to_string().as_str(),
+                        None => "",
+                    }
+                )),
+                "{}",
+                tc.description
+            );
+
+            assert!(
+                logs_contain(
+                    format!(
+                        "region=\"{}\"",
+                        match details.region() {
+                            Some(r) => r.as_str(),
+                            None => "",
+                        }
+                    )
+                    .as_str()
+                ),
                 "{}",
                 tc.description
             );
