@@ -169,6 +169,7 @@ impl Cluster<AWS, Options> for AWS {
             vpc_qovery_network_mode: VpcQoveryNetworkMode::WithoutNatGateways,
             vpc_cidr_block: "10.0.0.0/16".to_string(),
             eks_cidr_subnet: "20".to_string(),
+            vpc_custom_routing_table: vec![],
             eks_access_cidr_blocks: secrets
                 .EKS_ACCESS_CIDR_BLOCKS
                 .unwrap()
