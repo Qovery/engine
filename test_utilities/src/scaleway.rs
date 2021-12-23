@@ -21,7 +21,7 @@ use tracing::error;
 
 pub const SCW_TEST_ZONE: Zone = Zone::Paris2;
 pub const SCW_KUBERNETES_MAJOR_VERSION: u8 = 1;
-pub const SCW_KUBERNETES_MINOR_VERSION: u8 = 18;
+pub const SCW_KUBERNETES_MINOR_VERSION: u8 = 19;
 pub const SCW_KUBERNETES_VERSION: &'static str =
     formatcp!("{}.{}", SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION);
 pub const SCW_MANAGED_DATABASE_INSTANCE_TYPE: &str = "db-dev-s";
