@@ -1,5 +1,4 @@
 use std::env;
-use std::fs::copy;
 
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
@@ -36,7 +35,6 @@ use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_mana
 use crate::dns_provider::DnsProvider;
 use crate::error::EngineErrorCause::Internal;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError};
-use crate::fs::workspace_directory;
 use crate::models::{
     Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
     ProgressScope, ToHelmString,
@@ -49,7 +47,7 @@ use ::function_name::named;
 use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::OperationResult;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 
 pub mod cidr;
