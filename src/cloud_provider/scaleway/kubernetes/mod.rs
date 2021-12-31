@@ -1074,15 +1074,6 @@ impl<'a> Kapsule<'a> {
             ));
         }
 
-        if let Err(e) = self.object_storage.delete_bucket(self.logs_bucket_name().as_str()) {
-            return Err(LegacyEngineError::new(
-                EngineErrorCause::Internal,
-                self.engine_error_scope(),
-                self.context().execution_id(),
-                e.message,
-            ));
-        }
-
         Ok(())
     }
 

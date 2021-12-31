@@ -1111,15 +1111,6 @@ impl<'a> DOKS<'a> {
             ));
         }
 
-        if let Err(e) = self.spaces.empty_bucket(self.logs_bucket_name().as_str()) {
-            return Err(EngineError::new(
-                EngineErrorCause::Internal,
-                self.engine_error_scope(),
-                self.context().execution_id(),
-                e.message,
-            ));
-        }
-
         Ok(())
     }
 
