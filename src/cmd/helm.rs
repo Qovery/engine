@@ -7,7 +7,7 @@ use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, CommonChart};
 use crate::cloud_provider::service::ServiceType;
 use crate::cmd::helm::HelmLockErrors::{IncorrectFormatDate, NotYetExpired, ParsingError};
 use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_get_secrets};
-use crate::cmd::structs::{HelmChart, HelmHistoryRow, HelmListItem, Item, KubernetesList};
+use crate::cmd::structs::{HelmChart, HelmHistoryRow, HelmListItem, Secrets};
 use crate::cmd::utilities::QoveryCommand;
 use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::{DateTime, Duration, Utc};
@@ -407,7 +407,7 @@ pub struct HelmLockError {
 }
 
 /// Get helm secret name containing the lock
-pub fn helm_get_secret_lock_name(secrets_items: &KubernetesList<Item>, timeout: i64) -> Result<String, HelmLockError> {
+pub fn helm_get_secret_lock_name(secrets_items: &Secrets, timeout: i64) -> Result<String, HelmLockError> {
     match secrets_items.items.last() {
         None => Err(HelmLockError {
             kind: ParsingError,
@@ -868,7 +868,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::cmd::helm::helm_get_secret_lock_name;
-    use crate::cmd::structs::{Item, KubernetesList};
+    use crate::cmd::structs::Secrets;
     use chrono::{DateTime, NaiveDateTime, Utc};
 
     #[test]
@@ -880,48 +880,22 @@ mod tests {
         {
             "apiVersion": "v1",
             "data": {
-                "release": "SDRzSUFBQUFBQUFDLzZSWWFYT2pPTGYrS3k3dTE4UU5PSFRIcm5vL0dEb0dPVFlaT3pFQ1RVOTFTWUlBdGdRMG00UDc5bisvSmNCYmIzUG5uVXFsclBWc2VwNmpJNzVLQ2VhQk5KRm9tZ2QrVWtnM1VweThwdExrcS9RYTUwWDUyUTh5bGphQkwwMGtWVmFWVy9uOXJYcjNJbzhubWp5UlB3enZGZlc5ZkQrKy80Q2tHNG5oZjdqQkQxaFF0a3ZiVGtIek9DdmpOSkVtRWtpS0VqTTJvQ25QeENMcFJpcEtYRmFGTkpHS0tndnlJdkFEWC9wMkk5RUk1NlV3bUFjbDluR0pSZnZhcTF1YUpxOXhLTjFJZFpBWG5RSjVxQXpsSDlST0IxYkErS0NWT1hoTjg4RmpSWUk4Q2NwQWhBWm5zWE1TVUt2dFNPWmNpcFJ1cExMSmhHcWNaU3ltdUpYNzdVWmlLZDFKazZSaTdFWXFBNTR4TEVSTy9qeVplaHA4OXprS21IQndXR1pNR05pNkpBV2pvbjRNczFsZzZSSGhxOUEzSXdaTUxTSndFeExWNi90MjZybHplUkdtWHhZalpXd2s1WWZGczc1REVHV0ViMExBN1pweVowZVNaZW1wNHdweGxpeDRLeU1HaGpKK1hXVWZna1lPa2Vsd3ozVUszNWhXS3pXS2FMS3FYdmlzUk0vVHl1R3p3b2ZPb2R2bi9PRnpwNkdjN2RDemZnK3NkZU5EYlFzK2VnZGc3VVBmbW1mRXNSWEVVUllZMDNqeERNSlhWMzRNUmtVSlRLZENoajUrWGFXUHZXOGZLWGNpMzl5RVhtZHo1TU0zR1poSUllYWJCcXlaNHNHM0RISEdrS0ZIMUpxR3BMWHA3dEZSTjBLWFFyamQ3WGRYb2IxZGhsNXIrekwwdUxQMVhPZUFudlVEVVJVR0hrckY0MDVEdUNNamQ5bkwwVG1HVG9Hc1plaTVjd2JNdDR4QUppTW9ZbjB2NHB2UlpwcDZ5YTZMOWNQNmFkUG9sUWVWakhBYTBwSE92R1pYR1R2R2dUVm54SFFpcW02T3NyZEUxV1FQc29vMitoYWJzOFkzMnIwTW1Fd0dscDhSY3g5NmZCUDZydDM1MStoUjUvdis1T2RqUEw0Nkl3dzFCb3o1bG96bURKbmFZUUh0bW5DVW9VYmpQbndydW4wZ1hMZ25MR1Fvdmp6RE5yYXRIUzhqeEdneXo1QzVPWitSb1VFUHZpbklYVllvY1FwaS91c3pMMFJNenZMWFhRdytwbU5ncmhuaU00VllxM0N4NjNHODYvQzlZQ2dpbHNOb28vM2FWcE54WU5vMVNkWVJodHJoSk52UW5oRjhZNTVyczZPOEMvOStuRE4wbVNaTzVUVlRkZGwwL21Hb3ZQZ1FjZXlHSVlqbEdGaW5lREppMmV5aXY2ZWNWYjdwaFNCMkRvdG41d0RpYWJYaFRvSGc3SUNldGFmT3B0NjJMbDRLNGNzV3I2MXV6c3JOeU9HSXN6dGdnQkxFK3ZuTW9iYTcwczFYL3o4K2RSdytZckhMSCtJTVZWYVR1TVdhUWxWbkI4eTVCcXgxS3ZEYVk3VHc0SndSNHg5aHI5OTdoYnVmeHVYNzNITHNPMmZiN2dXWHFQa1dlZW9tQkhFUkEyUCtDdUovbjJ1SXFwUkV2UXVKT1lzUmZEc1ljVnFmMXdzc3NnbzlUMk5QSFRjSXJpdmFLSUxESEVOYUhmZUFlRnFLUGRoMEN2S3NIYkF4N256L21JYkJxQWd4MUxiRWNuYS9rdE9mU3d5TXU2T3RmN3VIcWdKTHRreEc4MlY3TnRieWNuL0hBMFA3MkoyQnBsTkxoOGlkSHpBY1Z5MTIrR3hQRFMzMzRaeFJyakhmRkhtQTFZdVdVM1pHMUx2M3dDby8vRnJHUHFTdVUvdFgzRHZHTnhONXVjSWpKMGJ1dkVMdVduQTJJODI0OUtBV0lkWFpMZUJjZTRyMUQwRnp4WXNYNU01VkRLKzRkTUozMjIvU3g4M0pkL0JmbmR2UFk2Zjh6dTZXcDUyOWVrYTRYZmh3L1N2Y2Q1eU9wNytQczhvcU9scEhoTnZzSjNIbzhzTnZZckFhelpubnJsblAwLzRPR2ZPK2Z6akYwWnh0UFhXc2tLUy92MXliL2NOWU5UNW5XN1E1eWxrLzlmNlYzMkh0ZEVmOHVHZFZlU2Q3citxUjdtNDNvcitMNmZVOUZ1OHU3NEtUcnl0b2I4bklxWHlqUDROZjUrY0wzZk56Ky9KT1RHeEdFNVI1cXFON3FsMzdVSlA3R3VsbmVML095K0YvL2lOOXUvbEpUZGNWb0J4bnc0WmZGSFZZWlJYNm1JYXJ2aGg3Z2JPOUFBNTJMc25vdlJsY1liNDUyM251T25vSzA3QXYvTjZMQzY4djZCNUJYMURRa1M2UzVYdGdpaUpuVTlJUk8vaW1VeHJ4OUVTYVZvWXhEUkVzRHdzK0t6MDNxd21maldpamJZa3ExNTQ2THFrNXJoRFU1S2RZUHgyTWtBRU1QWCt5bHFYbjZ2dW5XRzhCdmhEZzJXZG4reDVhdXppR2J3TGs5OTIrYWZXMDNSeUFWVHdLM2QyL0xpN3ltcmIybjhaU0JHZUZiNGFYWTFkRUFxWmQrSzR0SXhkVXhCeHZQYmdQTWJ3clBiamUwVmlMYUNLS0o3YTNqKzBybmRNUVdIb3RDajFSS0NCb0s1UnZ2cHQzOW5TMGJoQ2NsYjN0Unp1NEI5OEszNHdhTW5JU2JPZ1ppWlVJbWV0bXdXY05OUjlDN0U3VnZuMXAvL2hTRHJYbU5ZR09qRTFIb2MzMC9kUExnN0xjcDJjOUpxcHA0a2VVcjhKRlBLMlJ1OTR1Um5ORzFYSGh4MXBMMGt0NW5qcmJZbk1UTGcvVFM1MEZVY2Y3SzczY0tZZzYyMTJPRVhNY0lYTWVFWE5XZVdvZkIwdnVmMXZTTkI3VWt1dmlYNGtJbnlVSXJsOEZMbHJ3ZDlob0U1cm9mMy9XeUowM1pEUS9uSFNiZHVTcEVRTWZsMmNici94dWsrNFhvcklLR0NBRThYUjNRZjdUaGVLcTY0b3E0d2E1ZGswc3dadGxTOVR2L1RpVFZwRDByeHVweHF3U2I3Q3ZFc2NKRGdQL3MzZ0FULzc4NitaeTRITWVGQ2tUNzBZeDllMUdLbWdVY0h4OHk3M0c3UG9kTjR3Q3h1TXdTZlBnekhQUTZDdlBYY3ZpY3FHTkxwTkd6NUNxMVZRVS9HckVTS3pIUG1RRk1sbUZHbjN2UVR2M29NOW9jL2NJR24yRFRYWUFscTFRUzY5cHNoYnRGTUczQXBoK1FWUVFFamlUUFZVa1UxcDBqNCtaakYzRWdLVkh2aGxlejV1ekNrM1RMVEExaHRTWjNGN3FSclJ2K2VwRzR2RXh3dTQ2QmNaRHRvajFQd2gvMDRESUJjLzYvdWdEc0hSR1k3MFFSZUFpVEt2MXpIN2RqTloxeTZOR1B4Vlh6czUrQWVZNkUveGVjRC96amZ2dTEyUUo0ZU1HcmRMS1M3Sm1zZTkrTWZRcmtXdU1XRXRSSTlaR3ljWFl3ZWQzdFJFdlJiNHNpYkRibkVlZVdpclUwTnRjUS9mcGwwVmlqK2cwL2JMZzh3aTMvWFhaOWNjTmh2VHhNV2xqQ2oxM25wR1Jjd0FQN0dIdExoOFhpZDRRTldQZWFQVzRFSThiK0ZBYmNWcjVwcktuZlB6RmlEV1ZxbmFOekUzZEpYcUJodjdMd2c4Z2t0S1VENHRJK2cyWUpHWFkva2sza2pLVWgvSlFrWVJFanBQNE5TaEthU0xkM3Q1K1N2NW44SnhXT1EwbWcrdXZHZTkrY2J0OFNuWng0azhHUmp1NHhObW41UHpkWWpLb2xVL0o4VXZKNUZNeUdBamNubVFmQjRvTUM0MjdpZ1MzUlZPVUFSY3pESk9BRmUydXdTRFlGVVBNOFNGTjhMNFkwcFMvb3luUDBpUkl5aXR4ZzhIdXZyakZXZGFMYTRkUDJvMDBEd1NISm9QLzdSWVBKOXBvOExWcnQycnlQTTJMY3o4S01DdWpjMzkzK2tBem9Ld3F5aUFmc3BSaU5vaVRXK3o3K1JEbkdSN0UyZnV1Y1NGNU1NaFN2eGpFU1JIUUtnOHVKNnFzS1BNQTg4dXhWOHhZR2VWcEZVWS9sMzFlL08zY3pQS1VCMlVVVk1WZ01sYTAwWG5tTmMzM09QY0h3OEc3b0tUdk9tUU14VkdlMTFCTW8yQXdrczhqTEUyemN5OFBXSXI5eTFuc0U4eHdRbnQzZWtzNk1GNUY5anF1M3lzNkc5ZURkTkJEOUNUMjhtT2FjaU9kUUNOTnBBdlVTTi8rTHdBQS8vOFpyL0YvWWhRQUFBPT0="
+                "release": "coucou"
             },
             "kind": "Secret",
             "metadata": {
-                "creationTimestamp": "2021-06-24T09:50:08Z",
+                "creationTimestamp": "2021-09-02T23:20:36Z",
                 "labels": {
-                    "modifiedAt": "1624529703",
-                    "name": "coredns",
+                    "modifiedAt": "1632324195",
+                    "name": "cert-manager",
                     "owner": "helm",
                     "status": "superseded",
                     "version": "1"
                 },
-                "annotations": {},
-                "name": "sh.helm.release.v1.coredns.v1",
-                "namespace": "kube-system",
-                "resourceVersion": "562542",
-                "selfLink": "/api/v1/namespaces/kube-system/secrets/sh.helm.release.v1.coredns.v1",
-                "uid": "a635e9ea-f793-4369-918a-7d644e85988b"
-            },
-            "type": "helm.sh/release.v1"
-        },
-        {
-            "apiVersion": "v1",
-            "data": {
-                "release": "SDRzSUFBQUFBQUFDLzZSWWEzT2JPcmYrS3g3TzE4VGxFdExZTSs4SFEyT1FZNU50SjBhZzNUMGRTUkRBbG9CeXNZTjcrdC9QQ0lndmJkTjk5cnNuazdHdTY2Ym5XVnJpbTVSaUhrcGppV1pGR0tTbGRDVWw2VXNtamI5SkwwbFJWbCtDTUdkWkV3YlNXRkpsVmJtV2I2L1ZtMmQ1Tk5ibHNmeHhlS2VvdC9MZDZPNGprcTRraHQvZG9LaGo3WGFzNk1NYjVWYlhkVVcvRXh1Q2tJVlZ1N1R0bExSSThpckpVbWtzcmZPb3dFRTRvQm5QeFNMcFNpb3JYTldsTkphT0tyNWZTVFRHUlNYTTVXR0ZBMXhoMGI3MDZacG02VXNTU1ZmU0xpektUcnc4VklieVQwb25BenRrZk5ES0hMeGt4ZUNoSm1HUmhsVW9Bb1B6eEQwSzJLbnRTTzZlaTVTdXBLckpoV3FjNXl5aHVKWDcvVXBpR2QxSzQ3Um03RXFxUXA0ekxFU08venlhZWh6ODhDVU9XUjRXNWJES21UQ3dkVWtLdFhMM0VPWFQwRFppd3BkUllNVU1XSHBNNERvaXF0LzNuY3ozWnZJOHlyN09OV1ZrcHRYSCtaT3hSUkRsaEs4andKMGQ1ZTZXcEl2S1YwYzE0aXlkODFaR0FreGw5TExNUDRhTkhDSEw1YjdubG9FNXFaZHFITk4wV1QvemFZV2VKclhMcDJVQTNVTzN6LzBqNEc1RE9kdWlKK01PMktzbWdQb0dmUElQd041SGdUM0xpZXNvaUtNOE5DZkovQWxFTDU3OEVHcGxCU3kzUnFZeGVsbG1ENzF2bnloMzQ4QmFSMzVuY3h6QVZ4bFlTQ0hXcXc3c3FlTEQxeHh4eHBCcHhOU2VSS1MxNmViQlZkZENsMEs0MCszM2xwR3pXVVIrYS9zaThybTc4VDMzZ0o2TUExRVZCdTRyeGVkdVE3Z3JJMi9SeXpFNGhtNko3RVhrZXpNR3JOZWNRQ1lqS0dKOUorS2IwMmFTK2VtMmkvWDk2bkhkR0xVUGxaeHdHbEhOWUg2enJjMHQ0OENlTVdLNU1WWFhiN0kzUk5WbEg3S2FOc1lHVzlNbU1OdTlERmhNQm5hUUUyc2YrWHdkQlo3VCtkY1ljZWY3L3VqblF6SzZPQ01NZFFiTTJZWm9NNFlzL1RDSHpvNXdsS05HNXdGOExidDlJSnA3Unl6a0tEay93emEyclIzUEdtSTBuZVhJV3AvT3lOU2hEMThWNUMxcWxMb2xzZjcxbVpjaUppZjVxeTRHbjdJUnNGWU04YWxDN0dVMDMvWTQzbmI0bmpNVUU5dGx0TkhmdDlWaUhGak9qcVNyR0VQOWNKUnQ2azhJdmpMZmM5aWJ2RFAvZnA0ekRabW1idTAzRTNYUmRQNWhxRHdIRUhIc1JSRkk1QVRZeDNneVlqdnNyTCtubk5XQjVVY2djUS96Si9jQWtrbTk1bTZKNFBTQW52VEh6cWJldGk1ZUN1R0xGcSt0YnM2cXRlWnl4TmtOTUVFRkV1TjA1bERmWHVqbXkvOGZuem9PdjJHeHl4L2lERlcySTBtTE5ZV3E3aFpZTXgzWXEwemd0Y2RvNmNNWkkrWS93bDYvOXdKM3Y0ekxqN25scmUrZWJMc1RYS0xXYSt5cjZ3Z2taUUxNMlF0SS9uMnVJYXBTRWZVbUl0WTBRZkQxWUNiWjdyUmVZSkhWNkdtUytPcW9RWEJWMDBZUkhPWVkwdnB0RDBnbWxkaURMYmNrVC9vQm02UE85MDlaRkdwbGhLRytJYmE3ZlU5T2Z5NEpNRy9lYlAzYlBWUVZXSEprb3MwVzdkbllpL1A5SFE5TS9WTjNCcnBCYlFNaWIzYkFjRlMzMk9IVFBUWDFJb0F6UnJuT0FrdmtBYmFidDV4eWNxTGUzQUs3K3ZpK2pIMUVQWGNYWEhEdkxiNjV5TXMxMXR3RWViTWFlU3ZCMlp3MG84cUhlb3hVZHp1SE0vMHhNVDZHelFVdm5wRTNVekc4NE5JUjMyMi95UjdXUjkvQmYzVnV2NDZkOGp1N1c1NTI5aG81NFU0WndOVjd1Tzg0blV4K0gyZVYxVlJieFlRNzdCZHg2UExEYjJLdzFHYk05MWFzNTJsL2g0eDQzejhjNDJoTk43NDZVa2phMzErZXcvNWhySnFBc3cxYXY4bFpQZmIrVlQ5ZzdYaEgvTHhuV2Z0SGV5L3FrZTV1TitPL2krbmxQWlpzeisrQ282OUw2R3lJNXRhQjJaL0IrL241VFBmczFENi9FMU9IMFJUbHZ1b2F2dXJzQXFqTGZZMzBLN3hmNXVYb1AvK1J2bC85b3FickNsQ084MkhEejRvNnJMSWFmY3FpWlYrTVBjUHBYZ0FIdStkazlGOU5yckRBbW01OWJ4VS9SbG5VRjM2MzRzTHJDN29IMEJjVVZETkVzcndGbGloeTFoWFYyQ0d3M01wTUprZlN0RExNU1lSZ2RaanphZVY3K1k3d3FVWWJmVU5VZWVlcm80cGFveHBCWFg1TWpPUEJDQm5BTklwSGUxSDVuckYvVEl3VzRITUJubjErc3UrK3RZdGorQ3BBZnRmdG05U1BtL1VCMk9XRDBOMzlHK0lpMzlIVy91TllodUMwREt6b2ZPeUNTTUJ5eXNCelpPU0JtbGlqalEvM0VZWTNsUTlYVzVyb01VMUY4Y1Qyemx2N1F1Y2tBcmF4RTRXZUtCUVFkQlRLMXovTXUzdXFyUm9FcDFWdis1c2QzSWV2WldERkRkSGNGSnRHVGhJbFJ0YXFtZk5wUTYzN0NIc1R0VytmMno4NmwwUHQyWTVBVjhhV3E5Qm1jdnY0Zks4czl0bEpqNFYyTkExaXlwZlJQSm5za0xmYXpMVVpvK3FvREJLOUplbTVQRitkYnJDMWpoYUh5Ym5Pa3Fpai9ZVmU3cFpFblc3UHg0ZzFpcEUxaTRrMXJYMjFqNE10OTc4dGFSb2Y2dWxsOGEvRWhFOVRCRmN2QWhjdCtEdHN0QWxOOUg4OGErVE5HcUxORGtmZGxoUDdhc3pBcDhYSnhndS8yNlQ3bGFpc0JpYUlRRExabnBIL2VLRjQ2cXFteXFoQm5yTWp0dUROb2lYcWozNmNTQ3RJK3RlVnRNT3NGbSt3YnhMSEtZN0M0SXQ0L283Ly9PdnFmT0JMRVpZWkUrOUdNZlg5U2lwcEhITDg5cFo3U2RqbE8yNFloNHduVVpvVjRZbm5vREdXdnJlU3hlVkNHME1talpFalZkOVJVZkNyTVNPSmtRU1FsY2hpTldxTXZRK2R3b2NCbzgzTkEyaU1OYmJZQWRpT1FtMWpSOU9WYUdjSXZwYkFDa3FpZ29qQXFleXJJcG5Tc250OFRHWHNJUVpzSXc2czZITGVtdFpva20yQXBUT2tUdVgyVWpmamZjdFhMeGFQRHcxN3F3eVk5L2s4TWY0Zy9GVUhJaGM4R2ZzM0g0QnRNSm9ZcFNnQzUxRldyNmJPeTFwYjdWb2VOY2F4dUhLM3pqT3dWcm5nOTV3SGVXRGVkYjhXU3drZk5XaVoxWDZhTi9OOTk0dGhVSXRjWXlaNmhocXhOazdQeGc0QnY5bVp5VUxreTRvSXU2MVo3S3VWUWsyanpUVjBuMzJkcDQ1R0o5blhPWi9GdU8ydnFxNC9hakNrRHc5cEcxUG9lN09jYU80QjNMUDdsYmQ0bUtkR1E5U2MrZHJ5WVM0ZU4vQitaeVpaSFZqS252TFJWelBSVmFvNk8yU3RkMTJpRjJqb3Z5ejhCQ0lweS9pd2pLWGZnRWxTaHUyZmRDVXBRM2tvRHhWSlNPUTRUVjdDc3BMRzB2WDE5ZWYwZndaUFdWM1FjRHk0L0pyeDRaM2I1WE82VGRKZ1BERGJ3UVhPUDZlbjd4Ymp3VTc1bkw1OUtSbC9UZ2NEZ2R1ajdMZUJNc2RDNDdZbTRYWFpsRlhJeFF6REpHUmx1MnN3Q0xmbEVITjh5Rks4TDRjMDR4OW94dk1zRGRQcVF0eGdzTDBycjNHZTkrTGE0YU4yTXl0Q3dhSHg0SCs3eGNPeHJnMitkZTFXVFZGa1JYbnF4eUZtVlh6cWI0OGZhQWFVMVdVVkZrT1dVY3dHU1hxTmc2QVk0aUxIZ3lTLzdScG5rZ2VEUEF2S1FaS1dJYTJMOEh5aXpzdXFDREUvSDN2QmpGVnhrZFZSL0d2WnA4WGZUODI4eUhoWXhXRmREc1lqUmRkT015OVpzY2RGTUJnT1BvUVYvZEFoWXlpTzhyU0dZaHFIQTAwK2piQXN5MCs5SW1RWkRzNW5jVUF3d3ludDNla3Q2Y0I0RWRuTHVQNm82R1JjRDlKQkQ5R2oyUE9QYWJkWDBoRTAwbGc2UTQzMC9mOENBQUQvL3pheFIzbGdGQUFB"
-            },
-            "kind": "Secret",
-            "metadata": {
-                "creationTimestamp": "2021-06-24T12:36:16Z",
-                "labels": {
-                    "modifiedAt": "1624538178",
-                    "name": "coredns",
-                    "owner": "helm",
-                    "status": "deployed",
-                    "version": "2"
-                },
-                "annotations": {},
-                "name": "sh.helm.release.v1.coredns.v2",
-                "namespace": "kube-system",
-                "resourceVersion": "603757",
-                "selfLink": "/api/v1/namespaces/kube-system/secrets/sh.helm.release.v1.coredns.v6",
-                "uid": "b71dfb0d-8c4e-4592-8155-322bde8d402f"
+                "name": "sh.helm.release.v1.cert-manager.v1",
+                "namespace": "cert-manager",
+                "resourceVersion": "7287406",
+                "uid": "173b76c4-4f48-4544-8928-64a9b8b376d5"
             },
             "type": "helm.sh/release.v1"
         }
@@ -933,16 +907,16 @@ mod tests {
     }
 }
         "#;
-        let mut secrets = serde_json::from_str::<KubernetesList<Item>>(json_content).unwrap();
+        let mut secrets = serde_json::from_str::<Secrets>(json_content).unwrap();
 
         // expired lock should be ok
         let res = helm_get_secret_lock_name(&secrets, 300).unwrap();
-        assert_eq!(res, "sh.helm.release.v1.coredns.v2".to_string());
+        assert_eq!(res, "sh.helm.release.v1.cert-manager.v1".to_string());
 
         // lock is not expired yet
         let time_in_future = NaiveDateTime::from_timestamp(Utc::now().timestamp() + 30, 0);
         let time_in_future_datetime_format: DateTime<Utc> = DateTime::from_utc(time_in_future, Utc);
-        secrets.items[1].metadata.creation_timestamp = time_in_future_datetime_format.to_rfc3339();
+        secrets.items[0].metadata.creation_timestamp = time_in_future_datetime_format.to_rfc3339();
         let res = helm_get_secret_lock_name(&secrets, 300);
         assert_eq!(
             res.unwrap_err().message,

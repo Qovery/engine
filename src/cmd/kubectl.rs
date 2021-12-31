@@ -10,7 +10,7 @@ use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::structs::{
     Configmap, Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
     KubernetesPod, KubernetesPodStatusPhase, KubernetesPodStatusReason, KubernetesService, KubernetesVersion,
-    LabelsContent, PDB, PVC, SVC,
+    LabelsContent, Secrets, PDB, PVC, SVC,
 };
 use crate::cmd::utilities::QoveryCommand;
 use crate::constants::KUBECONFIG;
@@ -236,11 +236,11 @@ pub fn kubectl_exec_get_secrets<P>(
     namespace: &str,
     selector: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<KubernetesList<Item>, SimpleError>
+) -> Result<Secrets, SimpleError>
 where
     P: AsRef<Path>,
 {
-    kubectl_exec::<P, KubernetesList<Item>>(
+    kubectl_exec::<P, Secrets>(
         vec![
             "get",
             "secrets",

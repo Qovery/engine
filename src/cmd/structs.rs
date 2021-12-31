@@ -22,6 +22,39 @@ pub struct LabelsContent {
 
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Secrets {
+    pub api_version: String,
+    pub kind: String,
+    pub metadata: SecretsMetadata,
+    pub items: Vec<SecretItem>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecretsMetadata {
+    pub resource_version: String,
+    pub self_link: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecretItem {
+    pub api_version: String,
+    pub kind: String,
+    pub metadata: SecretMetadata,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecretMetadata {
+    pub creation_timestamp: String,
+    pub name: String,
+    pub resource_version: String,
+    pub uid: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Item {
     pub api_version: String,
     pub kind: String,
