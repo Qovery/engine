@@ -88,7 +88,7 @@ impl Spaces {
         Ok(())
     }
 
-    fn empty_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
+    pub fn empty_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
         if let Err(message) = Spaces::is_bucket_name_valid(bucket_name) {
             let message = format!(
                 "While trying to delete object-storage bucket, name `{}` is invalid: {}",
