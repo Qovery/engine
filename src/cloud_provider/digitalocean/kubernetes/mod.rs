@@ -605,8 +605,6 @@ impl<'a> DOKS<'a> {
             return Err(e);
         }
 
-        // push new config file to object storage folder
-
         // kubernetes helm deployments on the cluster
         let kubeconfig_file = match self.config_file() {
             Ok(x) => x.0,
@@ -1101,7 +1099,7 @@ impl<'a> DOKS<'a> {
             }
         }
 
-        info!("Delete Qovery managed object storage buckets");
+        info!("Empty Qovery managed object storage buckets");
         if let Err(e) = self.spaces.empty_bucket(self.kubeconfig_bucket_name().as_str()) {
             return Err(EngineError::new(
                 EngineErrorCause::Internal,
