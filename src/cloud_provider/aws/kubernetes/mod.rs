@@ -93,7 +93,6 @@ pub struct Options {
     pub eks_cidr_subnet: String,
     pub vpc_custom_routing_table: Vec<VpcCustomRoutingTable>,
     pub eks_access_cidr_blocks: Vec<String>,
-    pub eks_worker_node_disk_size: String,
     pub rds_cidr_subnet: String,
     pub documentdb_cidr_subnet: String,
     pub elasticache_cidr_subnet: String,
