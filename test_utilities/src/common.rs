@@ -1146,6 +1146,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     dns_provider,
                     AWS::kubernetes_cluster_options(secrets.clone(), None),
                     AWS::kubernetes_nodes(),
+                    logger,
                 )
                 .unwrap(),
             );
@@ -1174,6 +1175,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     dns_provider,
                     DO::kubernetes_nodes(),
                     DO::kubernetes_cluster_options(secrets.clone(), Option::from(cluster_id.to_string())),
+                    logger,
                 )
                 .unwrap(),
             );
@@ -1243,6 +1245,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     dns_provider,
                     options,
                     AWS::kubernetes_nodes(),
+                    logger,
                 )
                 .unwrap(),
             );
@@ -1260,6 +1263,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     dns_provider,
                     DO::kubernetes_nodes(),
                     DO::kubernetes_cluster_options(secrets, Option::from(cluster_name)),
+                    logger,
                 )
                 .unwrap(),
             );

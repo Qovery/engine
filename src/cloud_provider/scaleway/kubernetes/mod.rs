@@ -24,7 +24,7 @@ use crate::error::{
     SimpleError, SimpleErrorKind,
 };
 use crate::errors::EngineError;
-use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::logger::{LogLevel, Logger};
 use crate::models::{
     Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, QoveryIdentifier, ToHelmString,
@@ -147,11 +147,11 @@ impl<'a> Kapsule<'a> {
             if let Err(e) = ScwInstancesType::from_str(node_group.instance_type.as_str()) {
                 let err = EngineError::new_unsupported_instance_type(
                     EventDetails::new(
-                        cloud_provider.kind(),
+                        Some(cloud_provider.kind()),
                         QoveryIdentifier::new(context.organization_id().to_string()),
                         QoveryIdentifier::new(context.cluster_id().to_string()),
                         QoveryIdentifier::new(context.execution_id().to_string()),
-                        zone.region_str().to_string(),
+                        Some(zone.region_str().to_string()),
                         Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
                         Transmitter::Kubernetes(id, name),
                     ),
@@ -369,17 +369,8 @@ impl<'a> Kapsule<'a> {
     }
 
     fn create(&self) -> Result<(), LegacyEngineError> {
-        let event_details = EventDetails::new(
-            self.cloud_provider.kind(),
-            QoveryIdentifier::from(self.context.organization_id().to_string()),
-            QoveryIdentifier::from(self.context.cluster_id().to_string()),
-            QoveryIdentifier::from(self.context.execution_id().to_string()),
-            self.region().to_string(),
-            Stage::Infrastructure(InfrastructureStep::Create),
-            Transmitter::Kubernetes(self.id().to_string(), self.name().to_string()),
-        );
-
         let listeners_helper = ListenersHelper::new(&self.listeners);
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
 
         // TODO(DEV-1061): remove legacy logger
         let message = format!("Preparing SCW {} cluster deployment with id {}", self.name(), self.id());
@@ -390,7 +381,7 @@ impl<'a> Kapsule<'a> {
         );
 
         // upgrade cluster instead if required
-        match self.config_file() {
+        match self.get_kubeconfig_file() {
             Ok(f) => match is_kubernetes_upgrade_required(
                 f.0,
                 &self.version,
@@ -522,7 +513,7 @@ impl<'a> Kapsule<'a> {
         }
 
         // kubernetes helm deployments on the cluster
-        let kubeconfig = PathBuf::from(self.config_file().expect("expected to get a kubeconfig file").0);
+        let kubeconfig = PathBuf::from(self.get_kubeconfig_file().expect("expected to get a kubeconfig file").0);
         let credentials_environment_variables: Vec<(String, String)> = self
             .cloud_provider
             .credentials_environment_variables()
@@ -582,14 +573,13 @@ impl<'a> Kapsule<'a> {
     }
 
     fn create_error(&self) -> Result<(), LegacyEngineError> {
-        let kubeconfig_file = match self.config_file() {
-            Ok(x) => x.0,
+        let kubeconfig = match self.get_kubeconfig_file() {
+            Ok((path, _)) => path,
             Err(e) => {
                 error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
-                return Err(e);
+                return Err(e.to_legacy_engine_error());
             }
         };
-        let kubeconfig = PathBuf::from(&kubeconfig_file);
         let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
         warn!("SCW.create_error() called for {}", self.name());
         match kubectl_exec_get_events(kubeconfig, None, environment_variables) {
@@ -682,7 +672,10 @@ impl<'a> Kapsule<'a> {
             });
         }
 
-        let kubernetes_config_file_path = self.config_file_path()?;
+        let kubernetes_config_file_path = match self.get_kubeconfig_file_path() {
+            Ok(p) => p,
+            Err(e) => return Err(e.to_legacy_engine_error()),
+        };
 
         // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
         if self.options.qovery_engine_location == EngineLocation::ClientSide {
@@ -830,12 +823,12 @@ impl<'a> Kapsule<'a> {
             ),
         )?;
 
-        let kubernetes_config_file_path = match self.config_file_path() {
+        let kubernetes_config_file_path = match self.get_kubeconfig_file_path() {
             Ok(x) => x,
             Err(e) => {
                 warn!(
                     "skipping Kubernetes uninstall because it can't be reached. {:?}",
-                    e.message
+                    e.message(),
                 );
                 skip_kubernetes_step = true;
                 "".to_string()
@@ -1137,11 +1130,15 @@ impl<'a> Kubernetes for Kapsule<'a> {
         self.dns_provider
     }
 
+    fn logger(&self) -> &dyn Logger {
+        self.logger
+    }
+
     fn config_file_store(&self) -> &dyn ObjectStorage {
         &self.object_storage
     }
 
-    fn is_valid(&self) -> Result<(), LegacyEngineError> {
+    fn is_valid(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
@@ -1355,13 +1352,14 @@ impl<'a> Kubernetes for Kapsule<'a> {
 
     #[named]
     fn deploy_environment(&self, environment: &Environment) -> Result<(), LegacyEngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
         );
-        kubernetes::deploy_environment(self, environment)
+        kubernetes::deploy_environment(self, environment, event_details)
     }
 
     #[named]

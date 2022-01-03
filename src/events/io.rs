@@ -97,6 +97,7 @@ impl From<events::EventMessage> for EventMessage {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Stage {
+    General(GeneralStep),
     Infrastructure(InfrastructureStep),
     Environment(EnvironmentStep),
 }
@@ -104,8 +105,25 @@ pub enum Stage {
 impl From<events::Stage> for Stage {
     fn from(stage: events::Stage) -> Self {
         match stage {
+            events::Stage::General(step) => Stage::General(GeneralStep::from(step)),
             events::Stage::Infrastructure(step) => Stage::Infrastructure(InfrastructureStep::from(step)),
             events::Stage::Environment(step) => Stage::Environment(EnvironmentStep::from(step)),
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GeneralStep {
+    RetrieveClusterConfig,
+    RetrieveClusterResources,
+}
+
+impl From<events::GeneralStep> for GeneralStep {
+    fn from(step: events::GeneralStep) -> Self {
+        match step {
+            events::GeneralStep::RetrieveClusterConfig => GeneralStep::RetrieveClusterConfig,
+            events::GeneralStep::RetrieveClusterResources => GeneralStep::RetrieveClusterResources,
         }
     }
 }
@@ -143,6 +161,9 @@ pub enum EnvironmentStep {
     Resume,
     Update,
     Delete,
+    LoadConfiguration,
+    ScaleUp,
+    ScaleDown,
 }
 
 impl From<events::EnvironmentStep> for EnvironmentStep {
@@ -154,6 +175,9 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
             events::EnvironmentStep::Delete => EnvironmentStep::Delete,
             events::EnvironmentStep::Pause => EnvironmentStep::Pause,
             events::EnvironmentStep::Resume => EnvironmentStep::Resume,
+            events::EnvironmentStep::LoadConfiguration => EnvironmentStep::LoadConfiguration,
+            events::EnvironmentStep::ScaleUp => EnvironmentStep::ScaleUp,
+            events::EnvironmentStep::ScaleDown => EnvironmentStep::ScaleDown,
         }
     }
 }
@@ -229,19 +253,23 @@ impl From<events::Transmitter> for Transmitter {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub struct EventDetails {
-    provider_kind: Kind,
+    provider_kind: Option<Kind>,
     organisation_id: String,
     cluster_id: String,
     execution_id: String,
-    region: String,
+    region: Option<String>,
     stage: Stage,
     transmitter: Transmitter,
 }
 
 impl From<events::EventDetails> for EventDetails {
     fn from(details: events::EventDetails) -> Self {
+        let provider_kind = match details.provider_kind {
+            Some(kind) => Some(Kind::from(kind)),
+            None => None,
+        };
         EventDetails {
-            provider_kind: Kind::from(details.provider_kind),
+            provider_kind,
             organisation_id: details.organisation_id.to_string(),
             cluster_id: details.cluster_id.to_string(),
             execution_id: details.execution_id.to_string(),

@@ -7,6 +7,7 @@ use crate::cloud_provider::service::{Application, Service};
 use crate::container_registry::PushResult;
 use crate::engine::Engine;
 use crate::error::EngineError;
+use crate::errors::EngineError as NewEngineError;
 use crate::models::{
     Action, Environment, EnvironmentAction, EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel,
     ProgressScope,
@@ -27,7 +28,7 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    pub fn create_kubernetes(&mut self, kubernetes: &'a dyn Kubernetes) -> Result<(), EngineError> {
+    pub fn create_kubernetes(&mut self, kubernetes: &'a dyn Kubernetes) -> Result<(), NewEngineError> {
         match kubernetes.is_valid() {
             Ok(_) => {
                 self.steps.push(Step::CreateKubernetes(kubernetes));
@@ -37,7 +38,7 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    pub fn pause_kubernetes(&mut self, kubernetes: &'a dyn Kubernetes) -> Result<(), EngineError> {
+    pub fn pause_kubernetes(&mut self, kubernetes: &'a dyn Kubernetes) -> Result<(), NewEngineError> {
         match kubernetes.is_valid() {
             Ok(_) => {
                 self.steps.push(Step::PauseKubernetes(kubernetes));
@@ -47,7 +48,7 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    pub fn delete_kubernetes(&mut self, kubernetes: &'a dyn Kubernetes) -> Result<(), EngineError> {
+    pub fn delete_kubernetes(&mut self, kubernetes: &'a dyn Kubernetes) -> Result<(), NewEngineError> {
         match kubernetes.is_valid() {
             Ok(_) => {
                 self.steps.push(Step::DeleteKubernetes(kubernetes));

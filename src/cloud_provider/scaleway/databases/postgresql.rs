@@ -12,6 +12,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, StringError};
+use crate::events::{ToTransmitter, Transmitter};
 use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
@@ -119,6 +120,16 @@ impl StatefulService for PostgreSQL {
     }
 }
 
+impl ToTransmitter for PostgreSQL {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::Database(
+            self.id().to_string(),
+            self.service_type().to_string(),
+            self.name().to_string(),
+        )
+    }
+}
+
 impl Service for PostgreSQL {
     fn context(&self) -> &Context {
         &self.context
@@ -187,7 +198,12 @@ impl Service for PostgreSQL {
         let mut context = default_tera_context(self, kubernetes, environment);
 
         // we need the kubernetes config file to store tfstates file in kube secrets
-        let kube_config_file_path = kubernetes.config_file_path()?;
+        let kube_config_file_path = match kubernetes.get_kubeconfig_file_path() {
+            Ok(path) => path,
+            Err(e) => {
+                return Err(e.to_legacy_engine_error());
+            }
+        };
         context.insert("kubeconfig_path", &kube_config_file_path);
 
         kubectl::kubectl_exec_create_namespace_without_labels(
