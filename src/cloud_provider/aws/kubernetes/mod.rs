@@ -297,8 +297,8 @@ impl<'a> EKS<'a> {
         let eks_access_cidr_blocks = format_ips(&self.options.eks_access_cidr_blocks);
 
         // TODO : use core when feature will be available
-        let mut eks_worker_node_disk_size = self.options.eks_worker_node_disk_size.clone();
-        eks_worker_node_disk_size = match &self.context.is_test_cluster() {
+        // let eks_worker_node_disk_size = self.options.eks_worker_node_disk_size.clone();
+        let eks_worker_node_disk_size = match &self.context.is_test_cluster() {
             true => "100",
             false => "20",
         }

@@ -179,6 +179,7 @@ impl Cluster<AWS, Options> for AWS {
                 .split(",")
                 .map(|c| c.to_string())
                 .collect(),
+            eks_worker_node_disk_size: "20".to_string(),
             rds_cidr_subnet: "23".to_string(),
             documentdb_cidr_subnet: "23".to_string(),
             elasticache_cidr_subnet: "23".to_string(),
