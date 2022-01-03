@@ -5,22 +5,20 @@ use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
+use crate::errors::CommandError;
 use tera::Error as TeraError;
 use tera::{Context, Tera};
 use walkdir::WalkDir;
 
-use crate::error::{SimpleError, SimpleErrorKind};
-
-pub fn generate_and_copy_all_files_into_dir<S, P>(from_dir: S, to_dir: P, context: &Context) -> Result<(), SimpleError>
+pub fn generate_and_copy_all_files_into_dir<S, P>(from_dir: S, to_dir: P, context: Context) -> Result<(), CommandError>
 where
     S: AsRef<Path>,
     P: AsRef<Path>,
 {
     // generate j2 templates
-    let rendered_templates = match generate_j2_template_files(from_dir.as_ref(), context) {
+    let rendered_templates = match generate_j2_template_files(from_dir.as_ref(), context.clone()) {
         Ok(rt) => rt,
         Err(e) => {
-            error!("{:?}", &e);
             let error_msg = match e.kind {
                 tera::ErrorKind::TemplateNotFound(x) => format!("template not found: {}", x),
                 tera::ErrorKind::Msg(x) => format!("tera error: {}", x),
@@ -46,9 +44,7 @@ where
                 tera::ErrorKind::Utf8Conversion { .. } => "utf-8 conversion issue".to_string(),
             };
 
-            error!("{}", context.clone().into_json());
-            error!("{}", error_msg.as_str());
-            return Err(SimpleError::new(SimpleErrorKind::Other, Some(error_msg)));
+            return Err(CommandError::new(context.into_json().to_string(), Some(error_msg)));
         }
     };
 
@@ -61,18 +57,18 @@ where
     Ok(())
 }
 
-pub fn copy_non_template_files<S, P>(from: S, to: P) -> Result<(), SimpleError>
+pub fn copy_non_template_files<S, P>(from: S, to: P) -> Result<(), CommandError>
 where
     S: AsRef<Path>,
     P: AsRef<Path>,
 {
     match crate::fs::copy_files(from.as_ref(), to.as_ref(), true) {
-        Err(err) => Err(SimpleError::from(err)),
+        Err(err) => Err(CommandError::new(err.to_string(), None)),
         Ok(x) => Ok(x),
     }
 }
 
-pub fn generate_j2_template_files<P>(root_dir: P, context: &Context) -> Result<Vec<RenderedTemplate>, TeraError>
+pub fn generate_j2_template_files<P>(root_dir: P, context: Context) -> Result<Vec<RenderedTemplate>, TeraError>
 where
     P: AsRef<Path>,
 {
@@ -101,7 +97,7 @@ where
         let j2_root_path: String = j2_path_split.as_slice()[..j2_path_split.len() - 1].join("/");
         let file_name = j2_file_name.replace(".j2", "");
 
-        let content = tera.render(&j2_path[1..], context)?;
+        let content = tera.render(&j2_path[1..], &context)?;
 
         results.push(RenderedTemplate::new(j2_root_path, file_name, content));
     }
@@ -109,7 +105,7 @@ where
     Ok(results)
 }
 
-pub fn write_rendered_templates(rendered_templates: &[RenderedTemplate], into: &Path) -> Result<(), SimpleError> {
+pub fn write_rendered_templates(rendered_templates: &[RenderedTemplate], into: &Path) -> Result<(), CommandError> {
     for rt in rendered_templates {
         let dest = format!("{}/{}", into.to_str().unwrap(), rt.path_and_file_name());
 
@@ -124,10 +120,11 @@ pub fn write_rendered_templates(rendered_templates: &[RenderedTemplate], into: &
         let _ = fs::remove_file(dest.as_str());
 
         // create an empty file
-        let mut f = fs::File::create(&dest)?;
+        let mut f = fs::File::create(&dest).map_err(|e| CommandError::new(e.to_string(), None))?;
 
         // write rendered template into the new file
-        f.write_all(rt.content.as_bytes())?;
+        f.write_all(rt.content.as_bytes())
+            .map_err(|e| CommandError::new(e.to_string(), None))?;
 
         // perform specific action based on the extension
         let extension = Path::new(&dest).extension().and_then(OsStr::to_str);

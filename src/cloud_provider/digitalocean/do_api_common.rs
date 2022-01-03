@@ -2,7 +2,7 @@ use std::fmt;
 
 use reqwest::StatusCode;
 
-use crate::error::{SimpleError, SimpleErrorKind};
+use crate::errors::CommandError;
 use crate::utilities::get_header_with_bearer;
 
 pub const DIGITAL_OCEAN_API_URL: &str = "https://api.digitalocean.com";
@@ -28,25 +28,36 @@ impl DoApiType {
     }
 }
 
-pub fn do_get_from_api(token: &str, api_type: DoApiType, url_api: String) -> Result<String, SimpleError> {
+pub fn do_get_from_api(token: &str, api_type: DoApiType, url_api: String) -> Result<String, CommandError> {
     let headers = get_header_with_bearer(token);
     let res = reqwest::blocking::Client::new().get(url_api).headers(headers).send();
 
     match res {
-        Ok(response) => match response.status() {
-            StatusCode::OK => Ok(response.text().unwrap()),
-            StatusCode::UNAUTHORIZED => Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some(format!("could not get {} information, ensure your DigitalOcean token is valid. {:?}", api_type, response)),
-            )),
-            _ => Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some(format!("unknown status code received from Digital Ocean Kubernetes API while retrieving {} information. {:?}", api_type, response)),
-            )),
-        },
-        Err(_) => Err(SimpleError::new(
-            SimpleErrorKind::Other,
-            Some(format!("unable to get a response from Digital Ocean {} API", api_type)),
-        )),
+        Ok(response) => {
+            match response.status() {
+                StatusCode::OK => Ok(response.text().expect("Cannot get response text")),
+                StatusCode::UNAUTHORIZED => {
+                    let message_safe = format!(
+                        "Could not get {} information, ensure your DigitalOcean token is valid.",
+                        api_type
+                    );
+                    return Err(CommandError::new(
+                        format!("{}, response: {:?}", message_safe.to_string(), response),
+                        Some(message_safe.to_string()),
+                    ));
+                }
+                _ => {
+                    let message_safe = format!("Unknown status code received from Digital Ocean Kubernetes API while retrieving {} information.", api_type);
+                    return Err(CommandError::new(
+                        format!("{}, response: {:?}", message_safe.to_string(), response),
+                        Some(message_safe.to_string()),
+                    ));
+                }
+            }
+        }
+        Err(_) => Err(CommandError::new_from_safe_message(format!(
+            "Unable to get a response from Digital Ocean {} API",
+            api_type
+        ))),
     }
 }

@@ -117,6 +117,7 @@ impl From<events::Stage> for Stage {
 pub enum GeneralStep {
     RetrieveClusterConfig,
     RetrieveClusterResources,
+    ValidateSystemRequirements,
 }
 
 impl From<events::GeneralStep> for GeneralStep {
@@ -124,6 +125,7 @@ impl From<events::GeneralStep> for GeneralStep {
         match step {
             events::GeneralStep::RetrieveClusterConfig => GeneralStep::RetrieveClusterConfig,
             events::GeneralStep::RetrieveClusterResources => GeneralStep::RetrieveClusterResources,
+            events::GeneralStep::ValidateSystemRequirements => GeneralStep::ValidateSystemRequirements,
         }
     }
 }
@@ -135,6 +137,7 @@ pub enum InfrastructureStep {
     Create,
     Pause,
     Resume,
+    Downgrade,
     Upgrade,
     Delete,
 }
@@ -148,6 +151,7 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
             events::InfrastructureStep::Upgrade => InfrastructureStep::Upgrade,
             events::InfrastructureStep::Delete => InfrastructureStep::Delete,
             events::InfrastructureStep::Resume => InfrastructureStep::Resume,
+            events::InfrastructureStep::Downgrade => InfrastructureStep::Downgrade,
         }
     }
 }

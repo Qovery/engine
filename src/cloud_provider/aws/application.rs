@@ -15,7 +15,7 @@ use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
 use crate::error::EngineErrorCause::Internal;
 use crate::error::{EngineError, EngineErrorScope};
-use crate::events::{ToTransmitter, Transmitter};
+use crate::events::{EnvironmentStep, Stage, ToTransmitter, Transmitter};
 use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper, Port};
 use ::function_name::named;
 
@@ -368,6 +368,7 @@ impl Pause for Application {
 impl Delete for Application {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -376,7 +377,7 @@ impl Delete for Application {
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
-            delete_stateless_service(target, self, false)
+            delete_stateless_service(target, self, false, event_details.clone())
         })
     }
 
@@ -386,6 +387,7 @@ impl Delete for Application {
 
     #[named]
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -394,7 +396,7 @@ impl Delete for Application {
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
-            delete_stateless_service(target, self, true)
+            delete_stateless_service(target, self, true, event_details.clone())
         })
     }
 }

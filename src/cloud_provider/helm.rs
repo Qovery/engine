@@ -10,7 +10,7 @@ use crate::cmd::kubectl::{
     kubectl_exec_rollout_restart_deployment, kubectl_exec_with_output,
 };
 use crate::cmd::structs::HelmHistoryRow;
-use crate::error::{SimpleError, SimpleErrorKind};
+use crate::errors::CommandError;
 use crate::utilities::calculate_hash;
 use semver::Version;
 use std::collections::HashMap;
@@ -143,20 +143,18 @@ impl Default for ChartInfo {
 }
 
 pub trait HelmChart: Send {
-    fn check_prerequisites(&self) -> Result<Option<ChartPayload>, SimpleError> {
+    fn check_prerequisites(&self) -> Result<Option<ChartPayload>, CommandError> {
         let chart = self.get_chart_info();
         for file in chart.values_files.iter() {
-            match fs::metadata(file) {
-                Ok(_) => {}
-                Err(e) => {
-                    return Err(SimpleError {
-                        kind: SimpleErrorKind::Other,
-                        message: Some(format!(
-                            "Can't access helm chart override file {} for chart {}. {:?}",
-                            file, chart.name, e
-                        )),
-                    })
-                }
+            if let Err(e) = fs::metadata(file) {
+                let safe_message = format!(
+                    "Can't access helm chart override file `{}` for chart `{}`",
+                    file, chart.name,
+                );
+                return Err(CommandError::new(
+                    format!("{}, error: {:?}", safe_message, e),
+                    Some(safe_message),
+                ));
             }
         }
         Ok(None)
@@ -178,7 +176,7 @@ pub trait HelmChart: Send {
         kubernetes_config: &Path,
         envs: &[(String, String)],
         payload: Option<ChartPayload>,
-    ) -> Result<Option<ChartPayload>, SimpleError> {
+    ) -> Result<Option<ChartPayload>, CommandError> {
         let chart_infos = self.get_chart_info();
 
         // Cleaning any existing crash looping pod for this helm chart
@@ -194,17 +192,14 @@ pub trait HelmChart: Send {
         Ok(payload)
     }
 
-    fn run(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<Option<ChartPayload>, SimpleError> {
+    fn run(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<Option<ChartPayload>, CommandError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         let payload = self.check_prerequisites()?;
         let payload = self.pre_exec(&kubernetes_config, &envs, payload)?;
         let payload = match self.exec(&kubernetes_config, &envs, payload.clone()) {
             Ok(payload) => payload,
             Err(e) => {
-                error!(
-                    "Error while deploying chart: {:?}",
-                    e.message.clone().expect("no error message provided")
-                );
+                error!("Error while deploying chart: {}", e.message());
                 self.on_deploy_failure(&kubernetes_config, &envs, payload)?;
                 return Err(e);
             }
@@ -218,7 +213,7 @@ pub trait HelmChart: Send {
         kubernetes_config: &Path,
         envs: &[(String, String)],
         payload: Option<ChartPayload>,
-    ) -> Result<Option<ChartPayload>, SimpleError> {
+    ) -> Result<Option<ChartPayload>, CommandError> {
         let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         let chart_info = self.get_chart_info();
         match chart_info.action {
@@ -230,7 +225,7 @@ pub trait HelmChart: Send {
                 ) {
                     warn!(
                         "error while trying to destroy chart if breaking change is detected: {:?}",
-                        e.message
+                        e.message()
                     );
                 }
 
@@ -262,7 +257,7 @@ pub trait HelmChart: Send {
         _kubernetes_config: &Path,
         _envs: &[(String, String)],
         payload: Option<ChartPayload>,
-    ) -> Result<Option<ChartPayload>, SimpleError> {
+    ) -> Result<Option<ChartPayload>, CommandError> {
         Ok(payload)
     }
 
@@ -271,7 +266,7 @@ pub trait HelmChart: Send {
         kubernetes_config: &Path,
         envs: &[(String, String)],
         payload: Option<ChartPayload>,
-    ) -> Result<Option<ChartPayload>, SimpleError> {
+    ) -> Result<Option<ChartPayload>, CommandError> {
         // print events for future investigation
         let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         match kubectl_exec_get_events(
@@ -293,7 +288,7 @@ fn deploy_parallel_charts(
     kubernetes_config: &Path,
     envs: &[(String, String)],
     charts: Vec<Box<dyn HelmChart>>,
-) -> Result<(), SimpleError> {
+) -> Result<(), CommandError> {
     let mut handles = vec![];
 
     for chart in charts.into_iter() {
@@ -310,16 +305,17 @@ fn deploy_parallel_charts(
 
     for handle in handles {
         match handle.join() {
-            Ok(helm_run_ret) => match helm_run_ret {
-                Ok(_) => {}
-                Err(e) => return Err(e),
-            },
+            Ok(helm_run_ret) => {
+                if let Err(e) = helm_run_ret {
+                    return Err(e);
+                }
+            }
             Err(e) => {
-                error!("{:?}", e);
-                return Err(SimpleError {
-                    kind: SimpleErrorKind::Other,
-                    message: Some("thread panicked during parallel charts deployments".to_string()),
-                });
+                let safe_message = "Thread panicked during parallel charts deployments.";
+                return Err(CommandError::new(
+                    format!("{}, error: {:?}", safe_message.to_string(), e),
+                    Some(safe_message.to_string()),
+                ));
             }
         }
     }
@@ -332,7 +328,7 @@ pub fn deploy_charts_levels(
     envs: &Vec<(String, String)>,
     charts: Vec<Vec<Box<dyn HelmChart>>>,
     dry_run: bool,
-) -> Result<(), SimpleError> {
+) -> Result<(), CommandError> {
     // first show diff
     for level in &charts {
         for chart in level {
@@ -352,9 +348,8 @@ pub fn deploy_charts_levels(
         return Ok(());
     }
     for level in charts.into_iter() {
-        match deploy_parallel_charts(&kubernetes_config, &envs, level) {
-            Ok(_) => {}
-            Err(e) => return Err(e),
+        if let Err(e) = deploy_parallel_charts(&kubernetes_config, &envs, level) {
+            return Err(e);
         }
     }
 
@@ -401,7 +396,7 @@ impl HelmChart for CoreDNSConfigChart {
         kubernetes_config: &Path,
         envs: &[(String, String)],
         _payload: Option<ChartPayload>,
-    ) -> Result<Option<ChartPayload>, SimpleError> {
+    ) -> Result<Option<ChartPayload>, CommandError> {
         let kind = "configmap";
         let mut environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         environment_variables.push(("KUBECONFIG", kubernetes_config.to_str().unwrap()));
@@ -427,10 +422,9 @@ impl HelmChart for CoreDNSConfigChart {
         ) {
             Ok(cm) => {
                 if cm.data.corefile.is_none() {
-                    return Err(SimpleError {
-                        kind: SimpleErrorKind::Other,
-                        message: Some("Corefile data structure is not found in CoreDNS configmap".to_string()),
-                    });
+                    return Err(CommandError::new_from_safe_message(
+                        "Corefile data structure is not found in CoreDNS configmap".to_string(),
+                    ));
                 };
                 calculate_hash(&cm.data.corefile.unwrap())
             }
@@ -442,7 +436,7 @@ impl HelmChart for CoreDNSConfigChart {
 
         // set labels and annotations to give helm ownership
         info!("setting annotations and labels on {}/{}", &kind, &self.chart_info.name);
-        let steps = || -> Result<(), SimpleError> {
+        let steps = || -> Result<(), CommandError> {
             kubectl_exec_with_output(
                 vec![
                     "-n",
@@ -494,28 +488,22 @@ impl HelmChart for CoreDNSConfigChart {
         Ok(Some(payload))
     }
 
-    fn run(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<Option<ChartPayload>, SimpleError> {
+    fn run(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<Option<ChartPayload>, CommandError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         self.check_prerequisites()?;
         let payload = match self.pre_exec(&kubernetes_config, &envs, None) {
             Ok(p) => match p {
                 None => {
-                    return Err(SimpleError {
-                        kind: SimpleErrorKind::Other,
-                        message: Some(
-                            "CoreDNS configmap checksum couldn't be get, can't deploy CoreDNS chart".to_string(),
-                        ),
-                    })
+                    return Err(CommandError::new_from_safe_message(
+                        "CoreDNS configmap checksum couldn't be get, can't deploy CoreDNS chart".to_string(),
+                    ))
                 }
                 Some(p) => p,
             },
             Err(e) => return Err(e),
         };
         if let Err(e) = self.exec(&kubernetes_config, &envs, None) {
-            error!(
-                "Error while deploying chart: {:?}",
-                e.message.clone().expect("no message provided")
-            );
+            error!("Error while deploying chart: {:?}", e.message());
             self.on_deploy_failure(&kubernetes_config, &envs, None)?;
             return Err(e);
         };
@@ -528,7 +516,7 @@ impl HelmChart for CoreDNSConfigChart {
         kubernetes_config: &Path,
         envs: &[(String, String)],
         payload: Option<ChartPayload>,
-    ) -> Result<Option<ChartPayload>, SimpleError> {
+    ) -> Result<Option<ChartPayload>, CommandError> {
         let mut environment_variables = Vec::new();
         for env in envs {
             environment_variables.push((env.0.as_str(), env.1.as_str()));
@@ -537,17 +525,15 @@ impl HelmChart for CoreDNSConfigChart {
         // detect configmap data change
         let previous_configmap_checksum = match &payload {
             None => {
-                return Err(SimpleError {
-                    kind: SimpleErrorKind::Other,
-                    message: Some("missing payload, can't check coredns update".to_string()),
-                })
+                return Err(CommandError::new_from_safe_message(
+                    "Missing payload, can't check coredns update".to_string(),
+                ))
             }
             Some(x) => match x.data.get("checksum") {
                 None => {
-                    return Err(SimpleError {
-                        kind: SimpleErrorKind::Other,
-                        message: Some("missing configmap checksum, can't check coredns diff".to_string()),
-                    })
+                    return Err(CommandError::new_from_safe_message(
+                        "Missing configmap checksum, can't check coredns diff".to_string(),
+                    ))
                 }
                 Some(c) => c.clone(),
             },
@@ -560,10 +546,9 @@ impl HelmChart for CoreDNSConfigChart {
         ) {
             Ok(cm) => {
                 if cm.data.corefile.is_none() {
-                    return Err(SimpleError {
-                        kind: SimpleErrorKind::Other,
-                        message: Some("Corefile data structure is not found in CoreDNS configmap".to_string()),
-                    });
+                    return Err(CommandError::new_from_safe_message(
+                        "Corefile data structure is not found in CoreDNS configmap".to_string(),
+                    ));
                 };
                 calculate_hash(&cm.data.corefile.unwrap()).to_string()
             }
@@ -603,7 +588,7 @@ impl HelmChart for PrometheusOperatorConfigChart {
         kubernetes_config: &Path,
         envs: &[(String, String)],
         payload: Option<ChartPayload>,
-    ) -> Result<Option<ChartPayload>, SimpleError> {
+    ) -> Result<Option<ChartPayload>, CommandError> {
         let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         let chart_info = self.get_chart_info();
         match chart_info.action {
@@ -614,8 +599,8 @@ impl HelmChart for PrometheusOperatorConfigChart {
                     chart_info,
                 ) {
                     warn!(
-                        "error while trying to destroy chart if breaking change is detected: {:?}",
-                        e.message
+                        "error while trying to destroy chart if breaking change is detected: {}",
+                        e.message()
                     );
                 }
 
@@ -654,105 +639,7 @@ impl HelmChart for PrometheusOperatorConfigChart {
     }
 }
 
-// Qovery Portal
-
-// #[derive(Default)]
-// pub struct QoveryPortalChart {
-//     pub chart_info: ChartInfo,
-// }
-//
-// impl HelmChart for QoveryPortalChart {
-//     fn get_chart_info(&self) -> &ChartInfo {
-//         &self.chart_info
-//     }
-//
-//     fn pre_exec(
-//         &self,
-//         kubernetes_config: &Path,
-//         envs: &[(String, String)],
-//         _payload: Option<ChartPayload>,
-//     ) -> Result<Option<ChartPayload>, SimpleError> {
-//         let mut environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
-//         let cluster_default_ingress_loadbalancer_address = match kubectl_exec_get_external_ingress_hostname(
-//             &kubernetes_config,
-//             &get_chart_namespace(HelmChartNamespaces::NginxIngress), // todo: would be better to get it directly from the chart itself
-//             "app=nginx-ingress,component=controller",
-//             environment_variables,
-//         ) {
-//             Ok(x) => {
-//                 if x.is_some() {
-//                     x.unwrap()
-//                 } else {
-//                     return Err(SimpleError {
-//                         kind: SimpleErrorKind::Other,
-//                         message: Some(format!(
-//                             "No default Nginx ingress was found, can't deploy Qovery portal. {:?}",
-//                             e.message
-//                         )),
-//                     });
-//                 }
-//             }
-//             Err(e) => {
-//                 return Err(SimpleError {
-//                     kind: SimpleErrorKind::Other,
-//                     message: Some(format!(
-//                         "Error while trying to get default Nginx ingress to deploy Qovery portal. {:?}",
-//                         e.message
-//                     )),
-//                 })
-//             }
-//         };
-//         let mut configmap_hash = HashMap::new();
-//         configmap_hash.insert(
-//             "loadbalancer_address".to_string(),
-//             cluster_default_ingress_loadbalancer_address,
-//         );
-//         let payload = ChartPayload { data: configmap_hash };
-//
-//         Ok(Some(payload))
-//     }
-//
-//     fn exec(
-//         &self,
-//         kubernetes_config: &Path,
-//         envs: &[(String, String)],
-//         payload: Option<ChartPayload>,
-//     ) -> Result<Option<ChartPayload>, SimpleError> {
-//         if payload.is_none() {
-//             return Err(SimpleError {
-//                 kind: SimpleErrorKind::Other,
-//                 message: Some("payload is missing for qovery-portal chart".to_string()),
-//             });
-//         }
-//         let external_dns_target = match payload.unwrap().data.get("loadbalancer_address") {
-//             None => {
-//                 return Err(SimpleError {
-//                     kind: SimpleErrorKind::Other,
-//                     message: Some("loadbalancer_address payload is missing, can't deploy qovery portal".to_string()),
-//                 })
-//             }
-//             Some(x) => x.into_string(),
-//         };
-//
-//         let environment_variables = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
-//         let mut chart = self.chart_info.clone();
-//         chart.values.push(ChartSetValue {
-//             key: "externalDnsTarget".to_string(),
-//             value: external_dns_target,
-//         });
-//
-//         match self.get_chart_info().action {
-//             HelmAction::Deploy => helm_exec_upgrade_with_chart_info(kubernetes_config, &environment_variables, &chart)?,
-//             HelmAction::Destroy => {
-//                 helm_exec_uninstall_with_chart_info(kubernetes_config, &environment_variables, &chart)?
-//             }
-//             HelmAction::Skip => {}
-//         }
-//         Ok(payload)
-//     }
-// }
-
-pub fn get_latest_successful_deployment(helm_history_list: &[HelmHistoryRow]) -> Result<HelmHistoryRow, SimpleError> {
+pub fn get_latest_successful_deployment(helm_history_list: &[HelmHistoryRow]) -> Result<HelmHistoryRow, CommandError> {
     let mut helm_history_reversed = helm_history_list.to_owned();
     helm_history_reversed.reverse();
 
@@ -762,13 +649,10 @@ pub fn get_latest_successful_deployment(helm_history_list: &[HelmHistoryRow]) ->
         }
     }
 
-    Err(SimpleError {
-        kind: SimpleErrorKind::Other,
-        message: Some(format!(
-            "no succeed revision found for chart {}",
-            helm_history_reversed[0].chart
-        )),
-    })
+    Err(CommandError::new_from_safe_message(format!(
+        "No succeed revision found for chart `{}`",
+        helm_history_reversed[0].chart
+    )))
 }
 
 pub fn get_engine_helm_action_from_location(location: &EngineLocation) -> HelmAction {
@@ -791,23 +675,13 @@ pub struct ShellAgentContext<'a> {
 pub fn get_chart_for_shell_agent(
     context: ShellAgentContext,
     chart_path: impl Fn(&str) -> String,
-) -> Result<CommonChart, SimpleError> {
-    let shell_agent_version: QoveryShellAgent = match get_qovery_app_version(
+) -> Result<CommonChart, CommandError> {
+    let shell_agent_version: QoveryShellAgent = get_qovery_app_version(
         QoveryAppName::ShellAgent,
         context.api_token,
         context.api_url,
         context.cluster_id,
-    ) {
-        Ok(x) => x,
-        Err(e) => {
-            let msg = format!("Qovery shell agent version couldn't be retrieved. {}", e);
-            error!("{}", &msg);
-            return Err(SimpleError {
-                kind: SimpleErrorKind::Other,
-                message: Some(msg),
-            });
-        }
-    };
+    )?;
     let shell_agent = CommonChart {
         chart_info: ChartInfo {
             name: "shell-agent".to_string(),

@@ -6,7 +6,7 @@ use crate::cloud_provider::helm::{
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::cmd::kubectl::{kubectl_delete_crash_looping_pods, kubectl_exec_get_daemonset, kubectl_exec_with_output};
-use crate::error::{SimpleError, SimpleErrorKind};
+use crate::errors::CommandError;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -62,14 +62,16 @@ pub fn aws_helm_charts(
     chart_prefix_path: Option<&str>,
     kubernetes_config: &Path,
     envs: &[(String, String)],
-) -> Result<Vec<Vec<Box<dyn HelmChart>>>, SimpleError> {
-    info!("preparing chart configuration to be deployed");
-
+) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     let content_file = match File::open(&qovery_terraform_config_file) {
         Ok(x) => x,
-        Err(e) => return Err(SimpleError{ kind: SimpleErrorKind::Other, message: Some(
-            format!("Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?. {:?}", e)
-        )}),
+        Err(e) => {
+            let message_safe = "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?";
+            return Err(CommandError::new(
+                format!("{}, error: {:?}", message_safe.to_string(), e),
+                Some(message_safe.to_string()),
+            ));
+        }
     };
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
@@ -77,14 +79,14 @@ pub fn aws_helm_charts(
     let qovery_terraform_config: AwsQoveryTerraformConfig = match serde_json::from_reader(reader) {
         Ok(config) => config,
         Err(e) => {
-            error!(
-                "error while parsing terraform config file {}: {:?}",
-                &qovery_terraform_config_file, &e
+            let message_safe = format!(
+                "Error while parsing terraform config file {}",
+                qovery_terraform_config_file
             );
-            return Err(SimpleError {
-                kind: SimpleErrorKind::Other,
-                message: Some(format!("{:?}", e)),
-            });
+            return Err(CommandError::new(
+                format!("{}, error: {:?}", message_safe.to_string(), e),
+                Some(message_safe.to_string()),
+            ));
         }
     };
 
@@ -968,22 +970,13 @@ datasources:
     };
     let shell_agent = get_chart_for_shell_agent(shell_context, chart_path)?;
 
-    let qovery_agent_version: QoveryAgent = match get_qovery_app_version(
+    let qovery_agent_version: QoveryAgent = get_qovery_app_version(
         QoveryAppName::Agent,
         &chart_config_prerequisites.infra_options.agent_version_controller_token,
         &chart_config_prerequisites.infra_options.qovery_api_url,
         &chart_config_prerequisites.cluster_id,
-    ) {
-        Ok(x) => x,
-        Err(e) => {
-            let msg = format!("Qovery agent version couldn't be retrieved. {}", e);
-            error!("{}", &msg);
-            return Err(SimpleError {
-                kind: SimpleErrorKind::Other,
-                message: Some(msg),
-            });
-        }
-    };
+    )?;
+
     let mut qovery_agent = CommonChart {
         chart_info: ChartInfo {
             name: "qovery-agent".to_string(),
@@ -1042,6 +1035,7 @@ datasources:
             ..Default::default()
         },
     };
+
     if chart_config_prerequisites.ff_log_history_enabled {
         qovery_agent.chart_info.values.push(ChartSetValue {
             key: "environmentVariables.FEATURES".to_string(),
@@ -1049,22 +1043,13 @@ datasources:
         })
     }
 
-    let qovery_engine_version: QoveryEngine = match get_qovery_app_version(
+    let qovery_engine_version: QoveryEngine = get_qovery_app_version(
         QoveryAppName::Engine,
         &chart_config_prerequisites.infra_options.engine_version_controller_token,
         &chart_config_prerequisites.infra_options.qovery_api_url,
         &chart_config_prerequisites.cluster_id,
-    ) {
-        Ok(x) => x,
-        Err(e) => {
-            let msg = format!("Qovery engine version couldn't be retrieved. {}", e);
-            error!("{}", &msg);
-            return Err(SimpleError {
-                kind: SimpleErrorKind::Other,
-                message: Some(msg),
-            });
-        }
-    };
+    )?;
+
     let qovery_engine = CommonChart {
         chart_info: ChartInfo {
             name: "qovery-engine".to_string(),
@@ -1235,7 +1220,7 @@ impl HelmChart for AwsVpcCniChart {
         kubernetes_config: &Path,
         envs: &[(String, String)],
         _payload: Option<ChartPayload>,
-    ) -> Result<Option<ChartPayload>, SimpleError> {
+    ) -> Result<Option<ChartPayload>, CommandError> {
         let kinds = vec!["daemonSet", "clusterRole", "clusterRoleBinding", "serviceAccount"];
         let mut environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         environment_variables.push(("KUBECONFIG", kubernetes_config.to_str().unwrap()));
@@ -1254,72 +1239,77 @@ impl HelmChart for AwsVpcCniChart {
 
         match self.enable_cni_managed_by_helm(kubernetes_config, envs) {
             true => {
-                info!("Enabling AWS CNI support by Helm");
-
                 for kind in kinds {
-                    info!("setting annotations and labels on {}/aws-node", &kind);
-                    let steps = || -> Result<(), SimpleError> {
+                    // Setting annotations and labels on kind/aws-node
+                    let steps = || -> Result<(), CommandError> {
+                        let tag = format!("meta.helm.sh/release-name={}", self.chart_info.name);
+                        let args = vec![
+                            "-n",
+                            "kube-system",
+                            "annotate",
+                            "--overwrite",
+                            kind,
+                            "aws-node",
+                            tag.as_str(),
+                        ];
+                        let mut stdout = "".to_string();
+                        let mut stderr = "".to_string();
+
                         kubectl_exec_with_output(
-                            vec![
-                                "-n",
-                                "kube-system",
-                                "annotate",
-                                "--overwrite",
-                                kind,
-                                "aws-node",
-                                format!("meta.helm.sh/release-name={}", self.chart_info.name).as_str(),
-                            ],
+                            args.clone(),
                             environment_variables.clone(),
-                            |_| {},
-                            |_| {},
+                            |out| stdout = out.to_string(),
+                            |out| stderr = out.to_string(),
                         )?;
+
+                        let args = vec![
+                            "-n",
+                            "kube-system",
+                            "annotate",
+                            "--overwrite",
+                            kind,
+                            "aws-node",
+                            "meta.helm.sh/release-namespace=kube-system",
+                        ];
+                        let mut stdout = "".to_string();
+                        let mut stderr = "".to_string();
+
                         kubectl_exec_with_output(
-                            vec![
-                                "-n",
-                                "kube-system",
-                                "annotate",
-                                "--overwrite",
-                                kind,
-                                "aws-node",
-                                "meta.helm.sh/release-namespace=kube-system",
-                            ],
+                            args.clone(),
                             environment_variables.clone(),
-                            |_| {},
-                            |_| {},
+                            |out| stdout = out.to_string(),
+                            |out| stderr = out.to_string(),
                         )?;
+
+                        let args = vec![
+                            "-n",
+                            "kube-system",
+                            "label",
+                            "--overwrite",
+                            kind,
+                            "aws-node",
+                            "app.kubernetes.io/managed-by=Helm",
+                        ];
+                        let mut stdout = "".to_string();
+                        let mut stderr = "".to_string();
+
                         kubectl_exec_with_output(
-                            vec![
-                                "-n",
-                                "kube-system",
-                                "label",
-                                "--overwrite",
-                                kind,
-                                "aws-node",
-                                "app.kubernetes.io/managed-by=Helm",
-                            ],
+                            args.clone(),
                             environment_variables.clone(),
-                            |_| {},
-                            |_| {},
+                            |out| stdout = out.to_string(),
+                            |out| stderr = out.to_string(),
                         )?;
+
                         Ok(())
                     };
 
-                    if let Err(e) = steps() {
-                        return Err(SimpleError {
-                            kind: SimpleErrorKind::Other,
-                            message: Some(format!(
-                                "error while adding annotations for AWS VPC CNI. {:?}",
-                                e.message
-                            )),
-                        });
-                    }
+                    steps()?;
                 }
 
-                info!("AWS CNI successfully deployed");
                 // sleep in order to be sure the daemonset is updated
                 sleep(Duration::from_secs(30))
             }
-            false => info!("AWS CNI is already supported by Helm, nothing to do"),
+            false => {} // AWS CNI is already supported by Helm, nothing to do
         };
 
         Ok(None)
@@ -1327,12 +1317,12 @@ impl HelmChart for AwsVpcCniChart {
 }
 
 impl AwsVpcCniChart {
-    // this is required to know if we need to keep old annotation/labels values or not
+    /// this is required to know if we need to keep old annotation/labels values or not
     fn is_cni_old_installed_version(
         &self,
         kubernetes_config: &Path,
         envs: &[(String, String)],
-    ) -> Result<bool, SimpleError> {
+    ) -> Result<bool, CommandError> {
         let environment_variables = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
 
         match kubectl_exec_get_daemonset(
@@ -1342,32 +1332,27 @@ impl AwsVpcCniChart {
             None,
             environment_variables,
         ) {
-            Ok(x) => {
-                if x.spec.is_none() {
-                    return Err(SimpleError {
-                        kind: SimpleErrorKind::Other,
-                        message: Some(format!(
-                            "spec was not found in json output while looking at daemonset {}",
-                            &self.chart_info.name
-                        )),
-                    });
+            Ok(x) => match x.spec {
+                None => {
+                    return Err(CommandError::new_from_safe_message(format!(
+                        "Spec was not found in json output while looking at daemonset {}",
+                        &self.chart_info.name
+                    )))
                 }
-
-                match x.spec.unwrap().selector.match_labels.k8s_app {
+                Some(spec) => match spec.selector.match_labels.k8s_app {
                     Some(x) if x == "aws-node" => Ok(true),
                     _ => Ok(false),
-                }
-            }
+                },
+            },
             Err(e) => {
-                let msg = format!(
-                    "error while getting daemonset info for chart {}, won't deploy CNI chart. {:?}",
-                    &self.chart_info.name, e
+                let message_safe = format!(
+                    "Error while getting daemonset info for chart {}, won't deploy CNI chart.",
+                    &self.chart_info.name
                 );
-                error!("{}", &msg);
-                Err(SimpleError {
-                    kind: SimpleErrorKind::Other,
-                    message: Some(msg),
-                })
+                Err(CommandError::new(
+                    format!("{}, error: {:?}", message_safe, e),
+                    Some(message_safe),
+                ))
             }
         }
     }

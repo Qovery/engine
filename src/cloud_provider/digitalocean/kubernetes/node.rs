@@ -1,4 +1,5 @@
 use crate::cloud_provider::kubernetes::InstanceType;
+use crate::errors::CommandError;
 use core::fmt;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -58,9 +59,9 @@ impl fmt::Display for DoInstancesType {
 }
 
 impl FromStr for DoInstancesType {
-    type Err = ();
+    type Err = CommandError;
 
-    fn from_str(s: &str) -> Result<DoInstancesType, ()> {
+    fn from_str(s: &str) -> Result<DoInstancesType, CommandError> {
         match s {
             "s-1vcpu-1gb" => Ok(DoInstancesType::S1vcpu1gb),
             "s-1vcpu-2gb" => Ok(DoInstancesType::S1vcpu2gb),
@@ -69,7 +70,10 @@ impl FromStr for DoInstancesType {
             "s-4vcpu-8gb" => Ok(DoInstancesType::S4vcpu8gb),
             "s-6vcpu-16gb" => Ok(DoInstancesType::S6vcpu16gb),
             "s-8vcpu-32gb" => Ok(DoInstancesType::S8vcpu32gb),
-            _ => Err(()),
+            _ => {
+                let message = format!("`{}` instance type is not supported", s);
+                return Err(CommandError::new(message.clone(), Some(message)));
+            }
         }
     }
 }

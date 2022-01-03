@@ -92,7 +92,6 @@ fn test_build_cache() {
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
-        let logger = logger();
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
