@@ -852,7 +852,7 @@ datasources:
         chart_info: ChartInfo {
             name: "pleco".to_string(),
             path: chart_path("common/charts/pleco"),
-            values_files: vec![chart_path("chart_values/pleco.yaml")],
+            values_files: vec![chart_path("chart_values/pleco-aws.yaml")],
             values: vec![
                 ChartSetValue {
                     key: "environmentVariables.AWS_ACCESS_KEY_ID".to_string(),

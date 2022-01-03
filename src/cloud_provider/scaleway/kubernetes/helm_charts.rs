@@ -643,7 +643,7 @@ datasources:
         chart_info: ChartInfo {
             name: "pleco".to_string(),
             path: chart_path("common/charts/pleco"),
-            values_files: vec![chart_path("chart_values/pleco.yaml")],
+            values_files: vec![chart_path("chart_values/pleco-scw.yaml")],
             values: vec![
                 ChartSetValue {
                     key: "environmentVariables.SCW_ACCESS_KEY".to_string(),
