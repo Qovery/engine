@@ -30,11 +30,9 @@ impl Subject {
 
         Subject {
             name: format!(
-                "engine.logs.{}.{}.{}.{}",
+                "engine.logs.{}.{}",
                 event_details.organisation_id().to_string().to_lowercase(),
-                event_details.provider_kind().to_string().to_lowercase(),
-                event_details.region().to_lowercase(),
-                event_details.stage().to_string().to_lowercase()
+                event_details.cluster_id().to_string().to_lowercase(),
             ),
         }
     }
