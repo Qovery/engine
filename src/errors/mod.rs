@@ -3,6 +3,7 @@ pub mod io;
 extern crate url;
 
 use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
+use crate::errors::Tag::NotEnoughResourcesToDeployEnvironment;
 use crate::events::EventDetails;
 use url::Url;
 
@@ -43,6 +44,12 @@ pub enum Tag {
     Unknown,
     /// UnsupportedInstanceType: represents an unsupported instance type for the given cloud provider.
     UnsupportedInstanceType,
+    /// CannotRetrieveKubernetesConfigFile: represents an error while trying to retrieve Kubernetes config file.
+    CannotRetrieveClusterConfigFile,
+    /// CannotGetClusterNodes: represents an error while trying to get cluster's nodes.
+    CannotGetClusterNodes,
+    /// NotEnoughResourcesToDeployEnvironment: represents an error when trying to deploy an environment but there are not enough resources available on the cluster.
+    NotEnoughResourcesToDeployEnvironment,
 }
 
 #[derive(Clone, Debug)]
@@ -212,6 +219,121 @@ impl EngineError {
             Some(raw_message),
             None, // TODO(documentation): Create a page entry to details this error
             Some("Selected instance type is not supported, please check provider's documentation.".to_string()),
+        )
+    }
+
+    /// Creates new error for cluster configuration file couldn't be retrieved.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_message`: Error raw message such as command input / output which may contains unsafe text such as plain passwords / tokens.
+    pub fn new_cannot_retrieve_cluster_config_file(event_details: EventDetails, raw_message: String) -> EngineError {
+        let message = "Cannot retrieve Kubernetes instance type is not supported";
+        EngineError::new(
+            event_details,
+            Tag::CannotRetrieveClusterConfigFile,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_message.clone()),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for Kubernetes cannot get nodes.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_message`: Error raw message such as command input / output which may contains unsafe text such as plain passwords / tokens.
+    pub fn new_cannot_get_cluster_nodes(event_details: EventDetails, raw_message: String) -> EngineError {
+        let message = "Cannot get Kubernetes nodes";
+        EngineError::new(
+            event_details,
+            Tag::CannotRetrieveClusterConfigFile,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_message.clone()),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for cannot deploy because there are not enough available resources on the cluster.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `requested_ram_in_mib`: How much RAM in mib is requested.
+    /// * `free_ram_in_mib`: How much RAM in mib is free.
+    /// * `requested_cpu`: How much CPU is requested.
+    /// * `free_cpu`: How much CPU is free.
+    pub fn new_cannot_deploy_not_enough_resources_available(
+        event_details: EventDetails,
+        requested_ram_in_mib: u32,
+        free_ram_in_mib: u32,
+        requested_cpu: f32,
+        free_cpu: f32,
+    ) -> EngineError {
+        let mut message = vec!["There is not enough resources on the cluster:".to_string()];
+
+        if free_cpu > requested_cpu {
+            message.push(format!(
+                "{} CPU requested and only {} CPU available",
+                free_cpu, requested_cpu
+            ));
+        }
+
+        if requested_ram_in_mib > free_ram_in_mib {
+            message.push(format!(
+                "{}mib RAM requested and only {}mib RAM  available",
+                requested_ram_in_mib, free_ram_in_mib
+            ));
+        }
+
+        let message = message.join("\n");
+
+        EngineError::new(
+            event_details,
+            NotEnoughResourcesToDeployEnvironment,
+            message.to_string(),
+            message.to_string(),
+            None,
+            None,
+            None,
+            Some("Consider to add one more node or upgrade your nodes configuration. If not possible, pause or delete unused environments.".to_string()),
+        )
+    }
+
+    /// Creates new error for cannot deploy because there are not enough free pods available on the cluster.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `requested_pods`: How many pods are requested.
+    /// * `free_pods`: How many pods qre free.
+    pub fn new_cannot_deploy_not_enough_free_pods_available(
+        event_details: EventDetails,
+        requested_pods: u32,
+        free_pods: u32,
+    ) -> EngineError {
+        let message = format!(
+            "There is not enough free Pods (free {} VS {} required) on the cluster.",
+            free_pods, requested_pods,
+        );
+
+        EngineError::new(
+            event_details,
+            NotEnoughResourcesToDeployEnvironment,
+            message.to_string(),
+            message.to_string(),
+            None,
+            None,
+            None,
+            Some("Consider to add one more node or upgrade your nodes configuration. If not possible, pause or delete unused environments.".to_string()),
         )
     }
 }

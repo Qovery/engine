@@ -35,6 +35,9 @@ use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_mana
 use crate::dns_provider::DnsProvider;
 use crate::error::EngineErrorCause::Internal;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError};
+use crate::errors::EngineError as NewEngineError;
+use crate::events::{EnvironmentStep, Stage};
+use crate::logger::Logger;
 use crate::models::{
     Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
     ProgressScope, ToHelmString,
@@ -47,7 +50,7 @@ use ::function_name::named;
 use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::OperationResult;
-use std::path::PathBuf;
+use std::path::Path;
 use std::str::FromStr;
 
 pub mod cidr;
@@ -96,6 +99,7 @@ pub struct DOKS<'a> {
     template_directory: String,
     options: DoksOptions,
     listeners: Listeners,
+    logger: &'a dyn Logger,
 }
 
 impl<'a> DOKS<'a> {
@@ -110,6 +114,7 @@ impl<'a> DOKS<'a> {
         dns_provider: &'a dyn DnsProvider,
         nodes_groups: Vec<NodeGroups>,
         options: DoksOptions,
+        logger: &'a dyn Logger,
     ) -> Result<Self, EngineError> {
         let template_directory = format!("{}/digitalocean/bootstrap", context.lib_root_dir());
 
@@ -151,6 +156,7 @@ impl<'a> DOKS<'a> {
             options,
             nodes_groups,
             template_directory,
+            logger,
             listeners: cloud_provider.listeners().clone(), // copy listeners from CloudProvider
         })
     }
@@ -461,9 +467,9 @@ impl<'a> DOKS<'a> {
         ));
 
         // upgrade cluster instead if required
-        match self.config_file() {
-            Ok(f) => match is_kubernetes_upgrade_required(
-                f.0,
+        match self.get_kubeconfig_file_path() {
+            Ok(p) => match is_kubernetes_upgrade_required(
+                p.as_str(),
                 &self.version,
                 self.cloud_provider.credentials_environment_variables(),
             ) {
@@ -606,14 +612,14 @@ impl<'a> DOKS<'a> {
         }
 
         // kubernetes helm deployments on the cluster
-        let kubeconfig_file = match self.config_file() {
-            Ok(x) => x.0,
+        let kubeconfig_path = match self.get_kubeconfig_file_path() {
+            Ok(path) => path,
             Err(e) => {
                 error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
-                return Err(e);
+                return Err(e.to_legacy_engine_error());
             }
         };
-        let kubeconfig = PathBuf::from(&kubeconfig_file);
+        let kubeconfig = Path::new(&kubeconfig_path);
         let credentials_environment_variables: Vec<(String, String)> = self
             .cloud_provider
             .credentials_environment_variables()
@@ -791,14 +797,13 @@ impl<'a> DOKS<'a> {
     }
 
     fn create_error(&self) -> Result<(), EngineError> {
-        let kubeconfig_file = match self.config_file() {
-            Ok(x) => x.0,
+        let kubeconfig = match self.get_kubeconfig_file() {
+            Ok((path, _)) => path,
             Err(e) => {
                 error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
-                return Err(e);
+                return Err(e.to_legacy_engine_error());
             }
         };
-        let kubeconfig = PathBuf::from(&kubeconfig_file);
         let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
         warn!("DOKS.create_error() called for {}", self.name());
         match kubectl_exec_get_events(kubeconfig, None, environment_variables) {
@@ -870,12 +875,12 @@ impl<'a> DOKS<'a> {
             ),
         )?;
 
-        let kubernetes_config_file_path = match self.config_file_path() {
+        let kubernetes_config_file_path = match self.get_kubeconfig_file_path() {
             Ok(x) => x,
             Err(e) => {
                 warn!(
                     "skipping Kubernetes uninstall because it can't be reached. {:?}",
-                    e.message
+                    e.message(),
                 );
                 skip_kubernetes_step = true;
                 "".to_string()
@@ -1162,11 +1167,15 @@ impl<'a> Kubernetes for DOKS<'a> {
         self.dns_provider
     }
 
+    fn logger(&self) -> &dyn Logger {
+        self.logger
+    }
+
     fn config_file_store(&self) -> &dyn ObjectStorage {
         &self.spaces
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), NewEngineError> {
         Ok(())
     }
 
@@ -1395,13 +1404,14 @@ impl<'a> Kubernetes for DOKS<'a> {
 
     #[named]
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
         );
-        kubernetes::deploy_environment(self, environment)
+        kubernetes::deploy_environment(self, environment, event_details)
     }
 
     #[named]

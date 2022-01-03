@@ -17,12 +17,14 @@ use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_scale_replica
 use crate::cmd::structs::LabelsContent;
 use crate::error::{cast_simple_error_to_engine_error, StringError};
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
+use crate::events::{EventDetails, Stage, ToTransmitter};
 use crate::models::ProgressLevel::Info;
 use crate::models::{
     Context, DatabaseMode, Listen, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+    QoveryIdentifier,
 };
 
-pub trait Service {
+pub trait Service: ToTransmitter {
     fn context(&self) -> &Context;
     fn service_type(&self) -> ServiceType;
     fn id(&self) -> &str;
@@ -44,6 +46,18 @@ pub trait Service {
             format!("{}/{}", dir_root, self.name()),
         )
         .unwrap()
+    }
+    fn get_event_details(&self, stage: Stage) -> EventDetails {
+        let context = self.context();
+        EventDetails::new(
+            None,
+            QoveryIdentifier::from(context.organization_id().to_string()),
+            QoveryIdentifier::from(context.cluster_id().to_string()),
+            QoveryIdentifier::from(context.execution_id().to_string()),
+            None,
+            stage,
+            self.to_transmitter(),
+        )
     }
     fn version(&self) -> String;
     fn action(&self) -> &Action;
@@ -242,6 +256,17 @@ pub enum DatabaseType<'a> {
     Redis(&'a DatabaseOptions),
 }
 
+impl<'a> ToString for DatabaseType<'a> {
+    fn to_string(&self) -> String {
+        match self {
+            DatabaseType::PostgreSQL(_) => "PostgreSQL".to_string(),
+            DatabaseType::MongoDB(_) => "MongoDB".to_string(),
+            DatabaseType::MySQL(_) => "MySQL".to_string(),
+            DatabaseType::Redis(_) => "Redis".to_string(),
+        }
+    }
+}
+
 #[derive(Eq, PartialEq)]
 pub enum ServiceType<'a> {
     Application,
@@ -250,17 +275,18 @@ pub enum ServiceType<'a> {
 }
 
 impl<'a> ServiceType<'a> {
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> String {
         match self {
-            ServiceType::Application => "Application",
-            ServiceType::Database(db_type) => match db_type {
-                DatabaseType::PostgreSQL(_) => "PostgreSQL database",
-                DatabaseType::MongoDB(_) => "MongoDB database",
-                DatabaseType::MySQL(_) => "MySQL database",
-                DatabaseType::Redis(_) => "Redis database",
-            },
-            ServiceType::Router => "Router",
+            ServiceType::Application => "Application".to_string(),
+            ServiceType::Database(db_type) => format!("{} database", db_type.to_string()),
+            ServiceType::Router => "Router".to_string(),
         }
+    }
+}
+
+impl<'a> ToString for ServiceType<'a> {
+    fn to_string(&self) -> String {
+        self.name().to_string()
     }
 }
 
@@ -366,7 +392,10 @@ where
     )?;
 
     let helm_release_name = service.helm_release_name();
-    let kubernetes_config_file_path = kubernetes.config_file_path()?;
+    let kubernetes_config_file_path = match kubernetes.get_kubeconfig_file_path() {
+        Ok(path) => path,
+        Err(e) => return Err(e.to_legacy_engine_error()),
+    };
 
     // define labels to add to namespace
     let namespace_labels = service.context().resource_expiration_in_seconds().map(|_| {
@@ -432,8 +461,11 @@ where
 {
     let kubernetes = target.kubernetes;
     let environment = target.environment;
-    let kubernetes_config_file_path = kubernetes.config_file_path()?;
     let helm_release_name = service.helm_release_name();
+    let kubernetes_config_file_path = match kubernetes.get_kubeconfig_file_path() {
+        Ok(path) => path,
+        Err(e) => return Err(e.to_legacy_engine_error()),
+    };
 
     let history_rows = cast_simple_error_to_engine_error(
         service.engine_error_scope(),
@@ -474,8 +506,13 @@ pub fn scale_down_database(
 
     let kubernetes = target.kubernetes;
     let environment = target.environment;
+    let kubernetes_config_file_path = match kubernetes.get_kubeconfig_file_path() {
+        Ok(path) => path,
+        Err(e) => return Err(e.to_legacy_engine_error()),
+    };
+
     let scaledown_ret = kubectl_exec_scale_replicas_by_selector(
-        kubernetes.config_file_path()?,
+        kubernetes_config_file_path,
         kubernetes.cloud_provider().credentials_environment_variables(),
         environment.namespace(),
         Statefulset,
@@ -498,8 +535,13 @@ pub fn scale_down_application(
 ) -> Result<(), EngineError> {
     let kubernetes = target.kubernetes;
     let environment = target.environment;
+    let kubernetes_config_file_path = match kubernetes.get_kubeconfig_file_path() {
+        Ok(path) => path,
+        Err(e) => return Err(e.to_legacy_engine_error()),
+    };
+
     let scaledown_ret = kubectl_exec_scale_replicas_by_selector(
-        kubernetes.config_file_path()?,
+        kubernetes_config_file_path,
         kubernetes.cloud_provider().credentials_environment_variables(),
         environment.namespace(),
         scaling_kind,
@@ -552,6 +594,7 @@ where
     let workspace_dir = service.workspace_directory();
     let kubernetes = target.kubernetes;
     let environment = target.environment;
+
     if service.is_managed_service() {
         info!(
             "deploy {} with name {} on {}",
@@ -611,7 +654,10 @@ where
         );
 
         let context = service.tera_context(target)?;
-        let kubernetes_config_file_path = kubernetes.config_file_path()?;
+        let kubernetes_config_file_path = match kubernetes.get_kubeconfig_file_path() {
+            Ok(path) => path,
+            Err(e) => return Err(e.to_legacy_engine_error()),
+        };
 
         // default chart
         let _ = cast_simple_error_to_engine_error(
@@ -650,7 +696,7 @@ where
             service.engine_error_scope(),
             service.context().execution_id(),
             crate::cmd::kubectl::kubectl_exec_create_namespace(
-                kubernetes_config_file_path.as_str(),
+                kubernetes_config_file_path.to_string(),
                 environment.namespace(),
                 namespace_labels,
                 kubernetes.cloud_provider().credentials_environment_variables(),
@@ -662,11 +708,11 @@ where
             service.engine_error_scope(),
             service.context().execution_id(),
             crate::cmd::helm::helm_exec_with_upgrade_history(
-                kubernetes_config_file_path.as_str(),
+                kubernetes_config_file_path.to_string(),
                 environment.namespace(),
                 service.helm_release_name().as_str(),
                 service.selector(),
-                workspace_dir.as_str(),
+                workspace_dir.to_string(),
                 service.start_timeout(),
                 kubernetes.cloud_provider().credentials_environment_variables(),
                 service.service_type(),
@@ -686,7 +732,7 @@ where
 
         // check app status
         match crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
-            kubernetes_config_file_path.as_str(),
+            &kubernetes_config_file_path,
             environment.namespace(),
             service.selector().unwrap_or("".to_string()).as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
@@ -847,9 +893,12 @@ fn delete_terraform_tfstate_secret(
     namespace: &str,
     secret_name: &str,
 ) -> Result<(), EngineError> {
-    let config_file_path = kubernetes.config_file_path()?;
+    let config_file_path = match kubernetes.get_kubeconfig_file_path() {
+        Ok(path) => path,
+        Err(e) => return Err(e.to_legacy_engine_error()),
+    };
 
-    //create the namespace to insert the tfstate in secrets
+    // create the namespace to insert the tfstate in secrets
     let _ = kubectl_exec_delete_secret(
         config_file_path,
         namespace,
@@ -988,15 +1037,18 @@ where
     T: Service + ?Sized,
 {
     let selector = service.selector().unwrap_or("".to_string());
-    let kubernetes_config_file_path = kubernetes.config_file_path()?;
     let mut result = Vec::with_capacity(50);
+    let kubernetes_config_file_path = match kubernetes.get_kubeconfig_file_path() {
+        Ok(path) => path,
+        Err(e) => return Err(e.to_legacy_engine_error()),
+    };
 
     // get logs
     let logs = cast_simple_error_to_engine_error(
         kubernetes.engine_error_scope(),
         kubernetes.context().execution_id(),
         crate::cmd::kubectl::kubectl_exec_logs(
-            kubernetes_config_file_path.as_str(),
+            kubernetes_config_file_path.to_string(),
             environment.namespace(),
             selector.as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
@@ -1011,7 +1063,7 @@ where
         kubernetes.engine_error_scope(),
         kubernetes.context().execution_id(),
         crate::cmd::kubectl::kubectl_exec_get_pods(
-            kubernetes_config_file_path.as_str(),
+            kubernetes_config_file_path.to_string(),
             Some(environment.namespace()),
             Some(selector.as_str()),
             kubernetes.cloud_provider().credentials_environment_variables(),
@@ -1054,7 +1106,7 @@ where
         kubernetes.engine_error_scope(),
         kubernetes.context().execution_id(),
         crate::cmd::kubectl::kubectl_exec_get_json_events(
-            kubernetes_config_file_path.as_str(),
+            &kubernetes_config_file_path,
             environment.namespace(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         ),
@@ -1084,14 +1136,17 @@ pub fn get_stateless_resource_information(
     environment: &Environment,
     selector: &str,
 ) -> Result<(Describe, Logs), EngineError> {
-    let kubernetes_config_file_path = kubernetes.config_file_path()?;
+    let kubernetes_config_file_path = match kubernetes.get_kubeconfig_file_path() {
+        Ok(path) => path,
+        Err(e) => return Err(e.to_legacy_engine_error()),
+    };
 
     // exec describe pod...
     let describe = match cast_simple_error_to_engine_error(
         kubernetes.engine_error_scope(),
         kubernetes.context().execution_id(),
         crate::cmd::kubectl::kubectl_exec_describe_pod(
-            kubernetes_config_file_path.as_str(),
+            kubernetes_config_file_path.to_string(),
             environment.namespace(),
             selector,
             kubernetes.cloud_provider().credentials_environment_variables(),
@@ -1112,7 +1167,7 @@ pub fn get_stateless_resource_information(
         kubernetes.engine_error_scope(),
         kubernetes.context().execution_id(),
         crate::cmd::kubectl::kubectl_exec_logs(
-            kubernetes_config_file_path.as_str(),
+            kubernetes_config_file_path.to_string(),
             environment.namespace(),
             selector,
             kubernetes.cloud_provider().credentials_environment_variables(),
@@ -1136,7 +1191,10 @@ pub fn helm_uninstall_release(
     environment: &Environment,
     helm_release_name: &str,
 ) -> Result<(), EngineError> {
-    let kubernetes_config_file_path = kubernetes.config_file_path()?;
+    let kubernetes_config_file_path = match kubernetes.get_kubeconfig_file_path() {
+        Ok(p) => p,
+        Err(e) => return Err(e.to_legacy_engine_error()),
+    };
 
     let history_rows = cast_simple_error_to_engine_error(
         kubernetes.engine_error_scope(),

@@ -15,6 +15,7 @@ use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
 use crate::error::EngineErrorCause::Internal;
 use crate::error::{EngineError, EngineErrorScope};
+use crate::events::{ToTransmitter, Transmitter};
 use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper, Port};
 use ::function_name::named;
 
@@ -119,6 +120,12 @@ impl Helm for Application {
 }
 
 impl StatelessService for Application {}
+
+impl ToTransmitter for Application {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::Application(self.id.to_string(), self.name.to_string())
+    }
+}
 
 impl Service for Application {
     fn context(&self) -> &Context {

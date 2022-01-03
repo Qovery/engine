@@ -9,6 +9,7 @@ use crate::cloud_provider::utilities::{check_cname_for, print_action, sanitize_n
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
+use crate::events::{ToTransmitter, Transmitter};
 use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
 
@@ -240,6 +241,12 @@ impl Listen for Router {
 
 impl StatelessService for Router {}
 
+impl ToTransmitter for Router {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::Router(self.id().to_string(), self.name().to_string())
+    }
+}
+
 impl Create for Router {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -255,7 +262,10 @@ impl Create for Router {
         let workspace_dir = self.workspace_directory();
         let helm_release_name = self.helm_release_name();
 
-        let kubernetes_config_file_path = kubernetes.config_file_path()?;
+        let kubernetes_config_file_path = match kubernetes.get_kubeconfig_file_path() {
+            Ok(p) => p,
+            Err(e) => return Err(e.to_legacy_engine_error()),
+        };
 
         // respect order - getting the context here and not before is mandatory
         // the nginx-ingress must be available to get the external dns target if necessary
