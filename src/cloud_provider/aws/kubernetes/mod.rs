@@ -93,6 +93,7 @@ pub struct Options {
     pub eks_cidr_subnet: String,
     pub vpc_custom_routing_table: Vec<VpcCustomRoutingTable>,
     pub eks_access_cidr_blocks: Vec<String>,
+    pub eks_worker_node_disk_size: String,
     pub rds_cidr_subnet: String,
     pub documentdb_cidr_subnet: String,
     pub elasticache_cidr_subnet: String,
@@ -295,6 +296,14 @@ impl<'a> EKS<'a> {
 
         let eks_access_cidr_blocks = format_ips(&self.options.eks_access_cidr_blocks);
 
+        // TODO : use core when feature will be available
+        let mut eks_worker_node_disk_size = self.options.eks_worker_node_disk_size.clone();
+        eks_worker_node_disk_size = match &self.context.is_test_cluster() {
+            true => "100",
+            false => "20",
+        }
+        .to_string();
+
         let qovery_api_url = self.options.qovery_api_url.clone();
         let rds_cidr_subnet = self.options.rds_cidr_subnet.clone();
         let documentdb_cidr_subnet = self.options.documentdb_cidr_subnet.clone();
@@ -446,6 +455,7 @@ impl<'a> EKS<'a> {
         context.insert("eks_workers_version", &self.version());
         context.insert("eks_cloudwatch_log_group", &eks_cloudwatch_log_group);
         context.insert("eks_access_cidr_blocks", &eks_access_cidr_blocks);
+        context.insert("eks_worker_node_disk_size", &eks_worker_node_disk_size);
 
         // AWS - RDS
         context.insert("rds_cidr_subnet", &rds_cidr_subnet);
