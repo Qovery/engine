@@ -112,8 +112,10 @@ impl Cluster<AWS, Options> for AWS {
     }
 
     fn kubernetes_nodes() -> Vec<NodeGroups> {
-        vec![NodeGroups::new("groupeks0".to_string(), 5, 10, "t3a.large".to_string())
-            .expect("Problem while setup EKS nodes")]
+        vec![
+            NodeGroups::new("groupeks0".to_string(), 5, 10, "t3a.large".to_string(), 100)
+                .expect("Problem while setup EKS nodes"),
+        ]
     }
 
     fn kubernetes_cluster_options(secrets: FuncTestsSecrets, _cluster_name: Option<String>) -> Options {

@@ -1065,7 +1065,13 @@ pub trait InstanceType {
 }
 
 impl NodeGroups {
-    pub fn new(group_name: String, min_nodes: i32, max_nodes: i32, instance_type: String) -> Result<Self, SimpleError> {
+    pub fn new(
+        group_name: String,
+        min_nodes: i32,
+        max_nodes: i32,
+        instance_type: String,
+        disk_size: i32,
+    ) -> Result<Self, SimpleError> {
         if min_nodes > max_nodes {
             return Err(SimpleError {
                 kind: SimpleErrorKind::Other,
@@ -1081,6 +1087,7 @@ impl NodeGroups {
             min_nodes,
             max_nodes,
             instance_type,
+            disk_size,
         })
     }
 }

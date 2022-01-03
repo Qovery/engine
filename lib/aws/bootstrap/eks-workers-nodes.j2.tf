@@ -7,7 +7,7 @@ resource "aws_eks_node_group" "eks_cluster_workers_{{ loop.index }}" {
   subnet_ids             = flatten([aws_subnet.eks_zone_a[*].id, aws_subnet.eks_zone_b[*].id, aws_subnet.eks_zone_c[*].id])
   instance_types   = ["{{ eks_worker_node.instance_type }}"]
   ami_type         = "AL2_x86_64"
-  disk_size = "{{ eks_worker_node_disk_size }}"
+  disk_size = "{{ eks_worker_node.disk_size }}"
 
   tags = merge(
   local.tags_eks,
