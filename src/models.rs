@@ -6,7 +6,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 
-use crate::build_platform::{Build, BuildOptions, GitRepository, Image};
+use crate::build_platform::{Build, BuildOptions, Credentials, GitRepository, Image, SshKey};
 use crate::cloud_provider::aws::databases::mongodb::MongoDB;
 use crate::cloud_provider::aws::databases::mysql::MySQL;
 use crate::cloud_provider::aws::databases::postgresql::PostgreSQL;
@@ -15,7 +15,6 @@ use crate::cloud_provider::service::{DatabaseOptions, StatefulService, Stateless
 use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
-use crate::git::Credentials;
 use itertools::Itertools;
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -375,6 +374,40 @@ impl Application {
     }
 
     pub fn to_build(&self) -> Build {
+        // Retrieve ssh keys from env variables
+        const ENV_GIT_PREFIX: &str = "GIT_SSH_KEY";
+        let env_ssh_keys: Vec<(String, String)> = self
+            .environment_vars
+            .iter()
+            .filter_map(|(name, value)| {
+                if name.starts_with(ENV_GIT_PREFIX) {
+                    Some((name.clone(), value.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Get passphrase and public key if provided by the user
+        let mut ssh_keys: Vec<SshKey> = Vec::with_capacity(env_ssh_keys.len());
+        for (ssh_key_name, private_key) in env_ssh_keys {
+            let passphrase = self
+                .environment_vars
+                .get(&ssh_key_name.replace(ENV_GIT_PREFIX, "GIT_SSH_PASSPHRASE"))
+                .map(|val| val.clone());
+
+            let public_key = self
+                .environment_vars
+                .get(&ssh_key_name.replace(ENV_GIT_PREFIX, "GIT_SSH_PUBLIC_KEY"))
+                .map(|val| val.clone());
+
+            ssh_keys.push(SshKey {
+                private_key,
+                passphrase,
+                public_key,
+            });
+        }
+
         Build {
             git_repository: GitRepository {
                 url: self.git_url.clone(),
@@ -382,6 +415,7 @@ impl Application {
                     login: credentials.login.clone(),
                     password: credentials.access_token.clone(),
                 }),
+                ssh_keys,
                 commit_id: self.commit_id.clone(),
                 dockerfile_path: self.dockerfile_path.clone(),
                 root_path: self.root_path.clone(),
