@@ -2,9 +2,10 @@ use std::path::Path;
 use std::{env, fs};
 
 use chrono::Duration;
+use git2::{Cred, CredentialType};
 use sysinfo::{Disk, DiskExt, SystemExt};
 
-use crate::build_platform::{Build, BuildPlatform, BuildResult, Image, Kind};
+use crate::build_platform::{Build, BuildPlatform, BuildResult, Credentials, Image, Kind};
 use crate::cmd::utilities::QoveryCommand;
 use crate::error::{EngineError, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::fs::workspace_directory;
@@ -315,45 +316,41 @@ impl BuildPlatform for LocalDocker {
         )
         .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
+        // Clone git repository
         info!(
             "cloning repository: {} to {}",
             build.git_repository.url, repository_root_path
         );
-        let git_clone = git::clone(
-            build.git_repository.url.as_str(),
-            &repository_root_path,
-            &build.git_repository.credentials,
-        );
+        let get_credentials = || {
+            let mut creds: Vec<(CredentialType, Cred)> = Vec::with_capacity(build.git_repository.ssh_keys.len() + 1);
+            for ssh_key in build.git_repository.ssh_keys.iter() {
+                let public_key = ssh_key.public_key.as_ref().map(|x| x.as_str());
+                let passphrase = ssh_key.passphrase.as_ref().map(|x| x.as_str());
+                if let Ok(cred) = Cred::ssh_key_from_memory("git", public_key, &ssh_key.private_key, passphrase) {
+                    creds.push((CredentialType::SSH_MEMORY, cred));
+                }
+            }
 
-        if let Err(err) = git_clone {
+            if let Some(Credentials { login, password }) = &build.git_repository.credentials {
+                creds.push((
+                    CredentialType::USER_PASS_PLAINTEXT,
+                    Cred::userpass_plaintext(&login, &password).unwrap(),
+                ));
+            }
+            creds
+        };
+
+        if let Err(clone_error) = git::clone_at_commit(
+            &build.git_repository.url,
+            &build.git_repository.commit_id,
+            &repository_root_path,
+            &get_credentials,
+        ) {
             let message = format!(
                 "Error while cloning repository {}. Error: {:?}",
-                &build.git_repository.url, err
+                &build.git_repository.url, clone_error
             );
             error!("{}", message);
-            return Err(self.engine_error(EngineErrorCause::Internal, message));
-        }
-
-        // git checkout to given commit
-        let repo = git_clone.unwrap();
-        let commit_id = &build.git_repository.commit_id;
-        if let Err(err) = git::checkout(&repo, commit_id) {
-            let message = format!(
-                "Error while git checkout repository {} with commit id {}. Error: {:?}",
-                &build.git_repository.url, commit_id, err
-            );
-            error!("{}", message);
-            return Err(self.engine_error(EngineErrorCause::Internal, message));
-        }
-
-        // git checkout submodules
-        if let Err(err) = git::checkout_submodules(&repo) {
-            let message = format!(
-                "Error while checkout submodules from repository {}. Error: {:?}",
-                &build.git_repository.url, err
-            );
-            error!("{}", message);
-
             return Err(self.engine_error(EngineErrorCause::Internal, message));
         }
 
