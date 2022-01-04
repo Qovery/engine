@@ -204,8 +204,8 @@ pub struct Application {
     pub max_instances: u32,
     pub start_timeout_in_seconds: u32,
     pub storage: Vec<Storage>,
-    // Key is a String, Value is a base64 encoded String
-    // Use BTreeMap to get Hash trait which is not available on HashMap
+    /// Key is a String, Value is a base64 encoded String
+    /// Use BTreeMap to get Hash trait which is not available on HashMap
     pub environment_vars: BTreeMap<String, String>,
 }
 
@@ -546,6 +546,10 @@ pub struct Router {
     pub action: Action,
     pub default_domain: String,
     pub public_port: u16,
+    #[serde(default)]
+    /// sticky_sessions_enabled: enables sticky session for the request to come to the same
+    /// pod replica that was responding to the request before
+    pub sticky_sessions_enabled: bool,
     pub custom_domains: Vec<CustomDomain>,
     pub routes: Vec<Route>,
 }
@@ -586,6 +590,7 @@ impl Router {
                     self.default_domain.as_str(),
                     custom_domains,
                     routes,
+                    self.sticky_sessions_enabled,
                     listeners,
                 ));
                 Some(router)
@@ -600,6 +605,7 @@ impl Router {
                         self.default_domain.as_str(),
                         custom_domains,
                         routes,
+                        self.sticky_sessions_enabled,
                         listeners,
                     ));
                 Some(router)
@@ -613,6 +619,7 @@ impl Router {
                     self.default_domain.as_str(),
                     custom_domains,
                     routes,
+                    self.sticky_sessions_enabled,
                     listeners,
                 ));
                 Some(router)

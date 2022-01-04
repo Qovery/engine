@@ -27,8 +27,17 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
         let span = span!(Level::INFO, "utility", name = test_name);
         let _enter = span.enter();
 
+        let organization_id = secrets
+            .SCALEWAY_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_ORGANIZATION_ID");
+        let cluster_id = secrets
+            .SCALEWAY_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_CLUSTER_ID");
+
         let logger = logger();
-        let context = context();
+        let context = context(organization_id.as_str(), cluster_id.as_str());
         let engine = Scaleway::docker_cr_engine(&context, logger.clone());
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
@@ -36,11 +45,6 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
         let scw_cluster = Scaleway::cloud_provider(&context);
         let nodes = Scaleway::kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context, ClusterDomain::Default);
-
-        let cluster_id = secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID");
 
         let kubernetes = Kapsule::new(
             context.clone(),
@@ -88,8 +92,17 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
         let span = span!(Level::INFO, "utility", name = test_name);
         let _enter = span.enter();
 
+        let organization_id = secrets
+            .SCALEWAY_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_ORGANIZATION_ID");
+        let cluster_id = secrets
+            .SCALEWAY_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_CLUSTER_ID");
+
         let logger = logger();
-        let context = context();
+        let context = context(organization_id.as_str(), cluster_id.as_str());
         let engine = Scaleway::docker_cr_engine(&context, logger.clone());
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
@@ -97,11 +110,6 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
         let scw_cluster = Scaleway::cloud_provider(&context);
         let nodes = Scaleway::kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context, ClusterDomain::Default);
-
-        let cluster_id = secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID is not set");
 
         let kubernetes = Kapsule::new(
             context.clone(),

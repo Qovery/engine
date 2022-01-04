@@ -11,7 +11,7 @@ const TEST_REGION: Region = Region::Amsterdam3;
 #[test]
 fn test_delete_bucket_hard_delete_strategy() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
 
     let spaces = Spaces::new(
@@ -42,7 +42,7 @@ fn test_delete_bucket_hard_delete_strategy() {
 #[test]
 fn test_delete_bucket_empty_strategy() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
 
     let spaces = Spaces::new(
@@ -78,7 +78,7 @@ fn test_delete_bucket_empty_strategy() {
 #[test]
 fn test_create_bucket() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
 
     let spaces = Spaces::new(
@@ -109,7 +109,7 @@ fn test_create_bucket() {
 #[test]
 fn test_recreate_bucket() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
 
     let spaces = Spaces::new(
@@ -147,7 +147,7 @@ fn test_recreate_bucket() {
 #[test]
 fn test_put_file() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
 
     let spaces = Spaces::new(
@@ -193,7 +193,7 @@ fn test_put_file() {
 #[test]
 fn test_get_file() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
 
     let spaces = Spaces::new(

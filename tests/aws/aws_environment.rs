@@ -1,6 +1,6 @@
 extern crate test_utilities;
 
-use self::test_utilities::common::Infrastructure;
+use self::test_utilities::common::{routers_sessions_are_sticky, Infrastructure};
 use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods, get_pvc, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
@@ -28,16 +28,22 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .AWS_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("AWS_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
@@ -79,16 +85,22 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .AWS_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("AWS_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -106,14 +118,10 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         };
 
         let ret = get_pods(
+            context.clone(),
             Kind::Aws,
             environment.clone(),
             selector.as_str(),
-            secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -127,29 +135,16 @@ fn deploy_a_working_environment_and_pause_it_eks() {
 
         // Check that we have actually 0 pods running for this app
         let ret = get_pods(
+            context.clone(),
             Kind::Aws,
             environment.clone(),
             selector.as_str(),
-            secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
-        let kubernetes_config = kubernetes_config_path(
-            Kind::Aws,
-            "/tmp",
-            secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_ACCESS_KEY_ID is not set")
-                .as_str(),
-            secrets.clone(),
-        );
+        let kubernetes_config = kubernetes_config_path(context.clone(), Kind::Aws, "/tmp", secrets.clone());
         let mut pdbs = kubernetes_get_all_pdbs(
             kubernetes_config.as_ref().expect("Unable to get kubeconfig").clone(),
             vec![
@@ -192,14 +187,10 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         };
 
         let ret = get_pods(
+            context.clone(),
             Kind::Aws,
             environment.clone(),
             selector.as_str(),
-            secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -264,17 +255,23 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-
-        let mut environment = test_utilities::common::non_working_environment(
-            &context,
+        let context = context(
             secrets
                 .AWS_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("AWS_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+
+        let mut environment = test_utilities::common::non_working_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
@@ -316,16 +313,22 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .AWS_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("AWS_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
+        let context_for_deletion = context.clone_not_same_execution_id();
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
@@ -385,16 +388,22 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .AWS_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("AWS_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
+        let context_for_deletion = context.clone_not_same_execution_id();
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
@@ -454,16 +463,22 @@ fn deploy_a_working_environment_with_domain() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .AWS_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("AWS_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
+        let context_for_deletion = context.clone_not_same_execution_id();
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
@@ -503,18 +518,24 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
-        let logger = logger();
-        let context = context();
-        let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let logger = logger();
+        let context = context(
             secrets
                 .AWS_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("AWS_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
+        let context_for_deletion = context.clone_not_same_execution_id();
+
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -551,16 +572,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match get_pvc(
-            Kind::Aws,
-            secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
-            environment.clone(),
-            secrets.clone(),
-        ) {
+        match get_pvc(context.clone(), Kind::Aws, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
@@ -590,19 +602,25 @@ fn redeploy_same_app_with_ebs() {
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
-        let logger = logger();
-        let context = context();
-        let context_bis = context.clone_not_same_execution_id();
-        let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let logger = logger();
+        let context = context(
             secrets
                 .AWS_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("AWS_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
+        let context_bis = context.clone_not_same_execution_id();
+        let context_for_deletion = context.clone_not_same_execution_id();
+
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -642,16 +660,7 @@ fn redeploy_same_app_with_ebs() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match get_pvc(
-            Kind::Aws,
-            secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
-            environment.clone(),
-            secrets.clone(),
-        ) {
+        match get_pvc(context.clone(), Kind::Aws, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
@@ -661,12 +670,8 @@ fn redeploy_same_app_with_ebs() {
 
         let app_name = format!("{}-0", &environment_check1.applications[0].name);
         let (_, number) = is_pod_restarted_env(
+            context.clone(),
             Kind::Aws,
-            secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
             environment_check1,
             app_name.clone().as_str(),
             secrets.clone(),
@@ -679,12 +684,8 @@ fn redeploy_same_app_with_ebs() {
         };
 
         let (_, number2) = is_pod_restarted_env(
+            context.clone(),
             Kind::Aws,
-            secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
             environment_check2,
             app_name.as_str(),
             secrets.clone(),
@@ -711,21 +712,26 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
-        // let mut context_envs = generate_contexts_and_environments(3, test_utilities::aws::working_minimal_environment);
         let logger = logger();
-        let context = context();
-        let context_for_not_working = context.clone_not_same_execution_id();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-
-        // env part generation
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .AWS_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("AWS_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
+        let context_for_not_working = context.clone_not_same_execution_id();
+        let context_for_delete = context.clone_not_same_execution_id();
+
+        // env part generation
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
@@ -793,15 +799,21 @@ fn deploy_ok_fail_fail_ok_environment() {
 
         // working env
         let logger = logger();
-        let context = context();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .AWS_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("AWS_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
@@ -896,16 +908,22 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
-        let logger = logger();
-        let context = context();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::non_working_environment(
-            &context,
+        let logger = logger();
+        let context = context(
             secrets
                 .AWS_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("AWS_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
+        let environment = test_utilities::common::non_working_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
@@ -946,43 +964,31 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
         let _enter = span.enter();
 
         // context for non working environment
-        let logger = logger();
-        let context = context();
         let secrets = FuncTestsSecrets::new();
+        let logger = logger();
+        let context = context(
+            secrets
+                .AWS_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("AWS_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
         let test_domain = secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment = test_utilities::common::non_working_environment(
-            &context,
-            secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
-            test_domain.as_str(),
-        );
-        let failover_environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
-            test_domain.as_str(),
-        );
+        let environment = test_utilities::common::non_working_environment(&context, test_domain.as_str());
+        let failover_environment = test_utilities::common::working_minimal_environment(&context, test_domain.as_str());
         // context for deletion
         let context_deletion = context.clone_not_same_execution_id();
-        let mut delete_env = test_utilities::common::working_minimal_environment(
-            &context_deletion,
-            secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
-            test_domain.as_str(),
-        );
+        let mut delete_env =
+            test_utilities::common::working_minimal_environment(&context_deletion, test_domain.as_str());
         delete_env.action = Action::Delete;
         let ea_delete = EnvironmentAction::Environment(delete_env.clone());
         let ea = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment.clone());
@@ -1010,56 +1016,39 @@ fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
     init();
 
     let logger = logger();
+    let secrets = FuncTestsSecrets::new();
 
     // context for non working environment
-    let context_failover_1 = context();
+    let context_failover_1 = context(
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
+        secrets
+            .AWS_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("AWS_TEST_CLUSTER_ID is not set")
+            .as_str(),
+    );
     let context_failover_2 = context_failover_1.clone_not_same_execution_id();
 
     let context_first_fail_deployment_1 = context_failover_1.clone_not_same_execution_id();
     let context_second_fail_deployment_2 = context_failover_1.clone_not_same_execution_id();
 
-    let secrets = FuncTestsSecrets::new();
     let test_domain = secrets
         .DEFAULT_TEST_DOMAIN
         .as_ref()
         .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-    let failover_environment_1 = test_utilities::common::echo_app_environment(
-        &context_failover_1,
-        secrets
-            .AWS_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("AWS_TEST_ORGANIZATION_ID is not set")
-            .as_str(),
-        test_domain.as_str(),
-    );
-    let fail_app_1 = test_utilities::common::non_working_environment(
-        &context_first_fail_deployment_1,
-        secrets
-            .AWS_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("AWS_TEST_ORGANIZATION_ID is not set")
-            .as_str(),
-        test_domain.as_str(),
-    );
-    let mut failover_environment_2 = test_utilities::common::echo_app_environment(
-        &context_failover_2,
-        secrets
-            .AWS_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("AWS_TEST_ORGANIZATION_ID is not set")
-            .as_str(),
-        test_domain.as_str(),
-    );
-    let fail_app_2 = test_utilities::common::non_working_environment(
-        &context_second_fail_deployment_2,
-        secrets
-            .AWS_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("AWS_TEST_ORGANIZATION_ID is not set")
-            .as_str(),
-        test_domain.as_str(),
-    );
+    let failover_environment_1 =
+        test_utilities::common::echo_app_environment(&context_failover_1, test_domain.as_str());
+    let fail_app_1 =
+        test_utilities::common::non_working_environment(&context_first_fail_deployment_1, test_domain.as_str());
+    let mut failover_environment_2 =
+        test_utilities::common::echo_app_environment(&context_failover_2, test_domain.as_str());
+    let fail_app_2 =
+        test_utilities::common::non_working_environment(&context_second_fail_deployment_2, test_domain.as_str());
 
     failover_environment_2.applications = failover_environment_2
         .applications
@@ -1074,15 +1063,7 @@ fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
 
     // context for deletion
     let context_deletion = context_failover_1.clone_not_same_execution_id();
-    let mut delete_env = test_utilities::common::echo_app_environment(
-        &context_deletion,
-        secrets
-            .AWS_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("AWS_TEST_ORGANIZATION_ID is not set")
-            .as_str(),
-        test_domain.as_str(),
-    );
+    let mut delete_env = test_utilities::common::echo_app_environment(&context_deletion, test_domain.as_str());
     delete_env.action = Action::Delete;
     let ea_delete = EnvironmentAction::Environment(delete_env.clone());
 
@@ -1120,43 +1101,31 @@ fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
-        let logger = logger();
-        let context = context();
         let secrets = FuncTestsSecrets::new();
+        let logger = logger();
+        let context = context(
+            secrets
+                .AWS_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("AWS_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
         let test_domain = secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment = test_utilities::common::non_working_environment(
-            &context,
-            secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
-            test_domain.as_str(),
-        );
-        let failover_environment = test_utilities::common::non_working_environment(
-            &context,
-            secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
-            test_domain.as_str(),
-        );
+        let environment = test_utilities::common::non_working_environment(&context, test_domain.as_str());
+        let failover_environment = test_utilities::common::non_working_environment(&context, test_domain.as_str());
 
         let context_for_deletion = context.clone_not_same_execution_id();
-        let mut delete_env = test_utilities::common::non_working_environment(
-            &context_for_deletion,
-            secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
-            test_domain.as_str(),
-        );
+        let mut delete_env =
+            test_utilities::common::non_working_environment(&context_for_deletion, test_domain.as_str());
         delete_env.action = Action::Delete;
         // environment action initialize
         let ea_delete = EnvironmentAction::Environment(delete_env.clone());
@@ -1174,5 +1143,66 @@ fn deploy_a_non_working_environment_with_a_non_working_failover_on_aws_eks() {
         };
 
         return test_name.to_string();
+    })
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn aws_eks_deploy_a_working_environment_with_sticky_session() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context(
+            secrets
+                .AWS_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("AWS_TEST_ORGANIZATION_ID in secrets")
+                .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set in secrets")
+                .as_str(),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+        let environment = test_utilities::common::environment_only_http_server_router_with_sticky_session(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let env_action = EnvironmentAction::Environment(environment.clone());
+        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
+
+        match environment.deploy_environment(Kind::Aws, &context, &env_action, logger.clone()) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        // checking cookie is properly set on the app
+        assert!(routers_sessions_are_sticky(environment.routers.clone()));
+
+        match environment_for_delete.delete_environment(Kind::Aws, &context_for_delete, &env_action_for_delete, logger)
+        {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        test_name.to_string()
     })
 }

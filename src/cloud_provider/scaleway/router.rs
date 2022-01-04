@@ -20,6 +20,7 @@ pub struct Router {
     name: String,
     default_domain: String,
     custom_domains: Vec<CustomDomain>,
+    sticky_sessions_enabled: bool,
     routes: Vec<Route>,
     listeners: Listeners,
 }
@@ -33,6 +34,7 @@ impl Router {
         default_domain: &str,
         custom_domains: Vec<CustomDomain>,
         routes: Vec<Route>,
+        sticky_sessions_enabled: bool,
         listeners: Listeners,
     ) -> Router {
         Router {
@@ -42,6 +44,7 @@ impl Router {
             action,
             default_domain: default_domain.to_string(),
             custom_domains,
+            sticky_sessions_enabled,
             routes,
             listeners,
         }
@@ -178,6 +181,9 @@ impl Service for Router {
             false => "https://acme-v02.api.letsencrypt.org/directory",
         };
         context.insert("spec_acme_server", lets_encrypt_url);
+
+        // Nginx
+        context.insert("sticky_sessions_enabled", &self.sticky_sessions_enabled);
 
         Ok(context)
     }

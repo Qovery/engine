@@ -185,7 +185,6 @@ pub enum ClusterTestType {
 
 pub fn environment_3_apps_3_routers_3_databases(
     context: &Context,
-    organization_id: &str,
     test_domain: &str,
     database_instance_type: &str,
     database_disk_type: &str,
@@ -230,7 +229,7 @@ pub fn environment_3_apps_3_routers_3_databases(
         id: generate_id(),
         owner_id: generate_id(),
         project_id: generate_id(),
-        organization_id: organization_id.to_string(),
+        organization_id: context.organization_id().to_string(),
         action: Action::Create,
         applications: vec![
             Application {
@@ -379,37 +378,40 @@ pub fn environment_3_apps_3_routers_3_databases(
                 id: generate_id(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}", generate_id(), test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/app1".to_string(),
                     application_name: app_name_1.clone(),
                 }],
+                sticky_sessions_enabled: false,
             },
             Router {
                 id: generate_id(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}", generate_id(), test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/app2".to_string(),
                     application_name: app_name_2.clone(),
                 }],
+                sticky_sessions_enabled: false,
             },
             Router {
                 id: generate_id(),
                 name: "third-router".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}", generate_id(), test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/app3".to_string(),
                     application_name: app_name_3.clone(),
                 }],
+                sticky_sessions_enabled: false,
             },
         ],
         databases: vec![
@@ -484,19 +486,24 @@ pub fn environment_3_apps_3_routers_3_databases(
     }
 }
 
-pub fn working_minimal_environment(context: &Context, organization_id: &str, test_domain: &str) -> Environment {
+pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Environment {
     let suffix = generate_id();
     let application_id = generate_id();
     let application_name = format!("{}-{}", "simple-app".to_string(), &suffix);
     let router_id = generate_id();
     let router_name = "main".to_string();
-    let application_domain = format!("{}.{}", application_id, test_domain);
+    let application_domain = format!(
+        "{}.{}.{}",
+        application_id,
+        context.cluster_id().to_string(),
+        test_domain
+    );
     Environment {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
         owner_id: generate_id(),
         project_id: generate_id(),
-        organization_id: organization_id.to_string(),
+        organization_id: context.organization_id().to_string(),
         action: Action::Create,
         applications: vec![Application {
             id: application_id,
@@ -542,15 +549,26 @@ pub fn working_minimal_environment(context: &Context, organization_id: &str, tes
                 path: "/".to_string(),
                 application_name: format!("{}-{}", "simple-app".to_string(), &suffix),
             }],
+            sticky_sessions_enabled: false,
         }],
         databases: vec![],
         clone_from_environment_id: None,
     }
 }
 
+pub fn environment_only_http_server_router_with_sticky_session(context: &Context, test_domain: &str) -> Environment {
+    let mut env = environment_only_http_server_router(context, test_domain.clone());
+
+    for mut router in &mut env.routers {
+        router.sticky_sessions_enabled = true;
+    }
+
+    env.clone()
+}
+
 pub fn environnement_2_app_2_routers_1_psql(
     context: &Context,
-    organization_id: &str,
+
     test_domain: &str,
     database_instance_type: &str,
     database_disk_type: &str,
@@ -573,7 +591,7 @@ pub fn environnement_2_app_2_routers_1_psql(
         id: generate_id(),
         owner_id: generate_id(),
         project_id: generate_id(),
-        organization_id: organization_id.to_string(),
+        organization_id: context.organization_id().to_string(),
         action: Action::Create,
         databases: vec![Database {
             kind: DatabaseKind::Postgresql,
@@ -696,33 +714,35 @@ pub fn environnement_2_app_2_routers_1_psql(
                 id: generate_id(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}", generate_id(), &test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/".to_string(),
                     application_name: application_name1.to_string(),
                 }],
+                sticky_sessions_enabled: false,
             },
             Router {
                 id: generate_id(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}", generate_id(), &test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/coco".to_string(),
                     application_name: application_name2.to_string(),
                 }],
+                sticky_sessions_enabled: false,
             },
         ],
         clone_from_environment_id: None,
     }
 }
 
-pub fn non_working_environment(context: &Context, organization_id: &str, test_domain: &str) -> Environment {
-    let mut environment = working_minimal_environment(context, organization_id, test_domain);
+pub fn non_working_environment(context: &Context, test_domain: &str) -> Environment {
+    let mut environment = working_minimal_environment(context, test_domain);
 
     environment.applications = environment
         .applications
@@ -740,14 +760,14 @@ pub fn non_working_environment(context: &Context, organization_id: &str, test_do
 
 // echo app environment is an environment that contains http-echo container (forked from hashicorp)
 // ECHO_TEXT var will be the content of the application root path
-pub fn echo_app_environment(context: &Context, organization_id: &str, test_domain: &str) -> Environment {
+pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment {
     let suffix = generate_id();
     Environment {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
         owner_id: generate_id(),
         project_id: generate_id(),
-        organization_id: organization_id.to_string(),
+        organization_id: context.organization_id().to_string(),
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
@@ -789,27 +809,28 @@ pub fn echo_app_environment(context: &Context, organization_id: &str, test_domai
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: format!("{}.{}", generate_id(), test_domain),
+            default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
                 application_name: format!("{}-{}", "echo-app".to_string(), &suffix),
             }],
+            sticky_sessions_enabled: false,
         }],
         databases: vec![],
         clone_from_environment_id: None,
     }
 }
 
-pub fn environment_only_http_server(context: &Context, organization_id: &str) -> Environment {
+pub fn environment_only_http_server(context: &Context) -> Environment {
     let suffix = generate_id();
     Environment {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
         owner_id: generate_id(),
         project_id: generate_id(),
-        organization_id: organization_id.to_string(),
+        organization_id: context.organization_id().to_string(),
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
@@ -851,14 +872,14 @@ pub fn environment_only_http_server(context: &Context, organization_id: &str) ->
     }
 }
 
-pub fn environment_only_http_server_router(context: &Context, organization_id: &str, test_domain: &str) -> Environment {
+pub fn environment_only_http_server_router(context: &Context, test_domain: &str) -> Environment {
     let suffix = generate_id();
     Environment {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
         owner_id: generate_id(),
         project_id: generate_id(),
-        organization_id: organization_id.to_string(),
+        organization_id: context.organization_id().to_string(),
         action: Action::Create,
         applications: vec![Application {
             id: generate_id(),
@@ -898,17 +919,44 @@ pub fn environment_only_http_server_router(context: &Context, organization_id: &
             id: generate_id(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: format!("{}.{}", generate_id(), test_domain),
+            default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
                 application_name: format!("{}-{}", "mini-http".to_string(), &suffix),
             }],
+            sticky_sessions_enabled: false,
         }],
         databases: vec![],
         clone_from_environment_id: None,
     }
+}
+
+/// Test if stick session are activated on given routers via cookie.
+pub fn routers_sessions_are_sticky(routers: Vec<Router>) -> bool {
+    for router in routers.iter() {
+        for route in router.routes.iter() {
+            let http_request_result =
+                reqwest::blocking::get(format!("https://{}{}", router.default_domain, route.path));
+
+            if let Err(_) = http_request_result {
+                return false;
+            }
+
+            let http_response = http_request_result.expect("cannot retrieve HTTP request result");
+
+            return match http_response.headers().get("Set-Cookie") {
+                None => false,
+                Some(value) => match value.to_str() {
+                    Err(_) => false,
+                    Ok(s) => s.contains("INGRESSCOOKIE_QOVERY=") && s.contains("Max-Age=85400"),
+                },
+            };
+        }
+    }
+
+    true
 }
 
 pub fn test_db(
@@ -1018,26 +1066,11 @@ pub fn test_db(
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     }
 
-    let kube_cluster_id = match provider_kind {
-        Kind::Aws => secrets
-            .AWS_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("AWS_TEST_CLUSTER_ID is not set"),
-        Kind::Do => secrets
-            .DIGITAL_OCEAN_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
-        Kind::Scw => secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID is not set"),
-    };
-
     match database_mode.clone() {
         DatabaseMode::CONTAINER => {
             match get_pvc(
+                context.clone(),
                 provider_kind.clone(),
-                kube_cluster_id.as_str(),
                 environment.clone(),
                 secrets.clone(),
             ) {
@@ -1049,8 +1082,8 @@ pub fn test_db(
             };
 
             match get_svc(
+                context.clone(),
                 provider_kind.clone(),
-                kube_cluster_id.as_str(),
                 environment.clone(),
                 secrets.clone(),
             ) {
@@ -1074,12 +1107,7 @@ pub fn test_db(
             };
         }
         DatabaseMode::MANAGED => {
-            match get_svc(
-                provider_kind.clone(),
-                kube_cluster_id.as_str(),
-                environment.clone(),
-                secrets.clone(),
-            ) {
+            match get_svc(context, provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(svc) => {
                     let service = svc
                         .items
@@ -1126,16 +1154,12 @@ pub fn get_environment_test_kubernetes<'a>(
 
     match provider_kind {
         Kind::Aws => {
-            let cluster_id = secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_KUBE_TEST_CLUSTER_ID is not set");
             k = Box::new(
                 EKS::new(
                     context.clone(),
-                    cluster_id.as_str(),
+                    context.cluster_id(),
                     uuid::Uuid::new_v4(),
-                    format!("qovery-{}", cluster_id.as_str()).as_str(),
+                    format!("qovery-{}", context.cluster_id()).as_str(),
                     AWS_KUBERNETES_VERSION,
                     secrets
                         .AWS_DEFAULT_REGION
@@ -1152,16 +1176,12 @@ pub fn get_environment_test_kubernetes<'a>(
             );
         }
         Kind::Do => {
-            let cluster_id = secrets
-                .DIGITAL_OCEAN_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set");
             k = Box::new(
                 DOKS::new(
                     context.clone(),
-                    cluster_id.to_string(),
+                    context.cluster_id().to_string(),
                     uuid::Uuid::new_v4(),
-                    format!("qovery-{}", cluster_id),
+                    format!("qovery-{}", context.cluster_id()),
                     DO_KUBERNETES_VERSION.to_string(),
                     Region::from_str(
                         secrets
@@ -1174,23 +1194,19 @@ pub fn get_environment_test_kubernetes<'a>(
                     cloud_provider,
                     dns_provider,
                     DO::kubernetes_nodes(),
-                    DO::kubernetes_cluster_options(secrets.clone(), Option::from(cluster_id.to_string())),
+                    DO::kubernetes_cluster_options(secrets.clone(), Option::from(context.cluster_id().to_string())),
                     logger,
                 )
                 .unwrap(),
             );
         }
         Kind::Scw => {
-            let cluster_id = secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID is not set");
             k = Box::new(
                 Kapsule::new(
                     context.clone(),
-                    cluster_id.to_string(),
+                    context.cluster_id().to_string(),
                     uuid::Uuid::new_v4(),
-                    format!("qovery-{}", cluster_id),
+                    format!("qovery-{}", context.cluster_id()),
                     SCW_KUBERNETES_VERSION.to_string(),
                     Zone::from_str(
                         secrets

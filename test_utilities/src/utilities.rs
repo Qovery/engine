@@ -56,12 +56,7 @@ use qovery_engine::object_storage::ObjectStorage;
 use qovery_engine::runtime::block_on;
 use time::Instant;
 
-pub fn context() -> Context {
-    // TODO(benjaminch): Migrate this
-    context_full("id-for-test", "name-for-test")
-}
-
-pub fn context_full(organization_id: &str, cluster_id: &str) -> Context {
+pub fn context(organization_id: &str, cluster_id: &str) -> Context {
     let organization_id = organization_id.to_string();
     let cluster_id = cluster_id.to_string();
     let execution_id = execution_id();
@@ -481,16 +476,17 @@ fn curl_path(path: &str) -> bool {
 }
 
 pub fn kubernetes_config_path(
+    context: Context,
     provider_kind: Kind,
     workspace_directory: &str,
-    kubernetes_cluster_id: &str,
     secrets: FuncTestsSecrets,
 ) -> Result<String, SimpleError> {
-    let kubernetes_config_bucket_name = format!("qovery-kubeconfigs-{}", kubernetes_cluster_id);
-    let kubernetes_config_object_key = format!("{}.yaml", kubernetes_cluster_id);
-    let kubernetes_config_file_path = format!("{}/kubernetes_config_{}", workspace_directory, kubernetes_cluster_id);
+    let kubernetes_config_bucket_name = format!("qovery-kubeconfigs-{}", context.cluster_id());
+    let kubernetes_config_object_key = format!("{}.yaml", context.cluster_id());
+    let kubernetes_config_file_path = format!("{}/kubernetes_config_{}", workspace_directory, context.cluster_id());
 
     let _ = get_kubernetes_config_file(
+        context,
         provider_kind,
         kubernetes_config_bucket_name,
         kubernetes_config_object_key,
@@ -502,6 +498,7 @@ pub fn kubernetes_config_path(
 }
 
 fn get_kubernetes_config_file<P>(
+    context: Context,
     provider_kind: Kind,
     kubernetes_config_bucket_name: String,
     kubernetes_config_object_key: String,
@@ -540,7 +537,7 @@ where
                 match Region::from_str(region_raw.as_str()) {
                     Ok(region) => {
                         let spaces = Spaces::new(
-                            context(),
+                            context.clone(),
                             "fake".to_string(),
                             "fake".to_string(),
                             secrets
@@ -792,8 +789,8 @@ fn aws_s3_get_object(
 }
 
 pub fn is_pod_restarted_env(
+    context: Context,
     provider_kind: Kind,
-    kube_cluster_id: &str,
     environment_check: Environment,
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
@@ -804,7 +801,7 @@ pub fn is_pod_restarted_env(
         &environment_check.id.clone(),
     );
 
-    let kubernetes_config = kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
+    let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
     match kubernetes_config {
         Ok(path) => {
@@ -827,10 +824,10 @@ pub fn is_pod_restarted_env(
 }
 
 pub fn get_pods(
+    context: Context,
     provider_kind: Kind,
     environment_check: Environment,
     pod_to_check: &str,
-    kube_cluster_id: &str,
     secrets: FuncTestsSecrets,
 ) -> Result<KubernetesList<KubernetesPod>, SimpleError> {
     let namespace_name = format!(
@@ -839,7 +836,7 @@ pub fn get_pods(
         &environment_check.id.clone(),
     );
 
-    let kubernetes_config = kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
+    let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
     cmd::kubectl::kubectl_exec_get_pods(
         kubernetes_config.unwrap().as_str(),
@@ -900,8 +897,8 @@ pub fn generate_cluster_id(region: &str) -> String {
 }
 
 pub fn get_pvc(
+    context: Context,
     provider_kind: Kind,
-    kube_cluster_id: &str,
     environment_check: Environment,
     secrets: FuncTestsSecrets,
 ) -> Result<PVC, SimpleError> {
@@ -911,7 +908,7 @@ pub fn get_pvc(
         &environment_check.id.clone(),
     );
 
-    let kubernetes_config = kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
+    let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
     match kubernetes_config {
         Ok(path) => {
@@ -929,8 +926,8 @@ pub fn get_pvc(
 }
 
 pub fn get_svc(
+    context: Context,
     provider_kind: Kind,
-    kube_cluster_id: &str,
     environment_check: Environment,
     secrets: FuncTestsSecrets,
 ) -> Result<SVC, SimpleError> {
@@ -940,7 +937,7 @@ pub fn get_svc(
         &environment_check.id.clone(),
     );
 
-    let kubernetes_config = kubernetes_config_path(provider_kind.clone(), "/tmp", kube_cluster_id, secrets.clone());
+    let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
     match kubernetes_config {
         Ok(path) => {

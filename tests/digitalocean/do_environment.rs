@@ -1,5 +1,6 @@
 extern crate test_utilities;
 
+use self::test_utilities::common::routers_sessions_are_sticky;
 use self::test_utilities::digitalocean::{clean_environments, DO_TEST_REGION};
 use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods, get_pvc, init, is_pod_restarted_env, logger, FuncTestsSecrets,
@@ -27,16 +28,21 @@ fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
-        let logger = logger();
-        let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let logger = logger();
+        let context = context(
             secrets
                 .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -84,16 +90,21 @@ fn digitalocean_doks_deploy_a_not_working_environment_with_no_router() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-
-        let mut environment = test_utilities::common::non_working_environment(
-            &context,
+        let context = context(
             secrets
                 .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+
+        let mut environment = test_utilities::common::non_working_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -140,15 +151,20 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -166,13 +182,10 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         };
 
         let ret = get_pods(
+            context.clone(),
             Kind::Do,
             environment.clone(),
             selector.as_str(),
-            secrets
-                .DIGITAL_OCEAN_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -186,13 +199,10 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
 
         // Check that we have actually 0 pods running for this app
         let ret = get_pods(
+            context.clone(),
             Kind::Do,
             environment.clone(),
             selector.clone().as_str(),
-            secrets
-                .DIGITAL_OCEAN_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -207,13 +217,10 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         };
 
         let ret = get_pods(
+            context.clone(),
             Kind::Do,
             environment.clone(),
             selector.as_str(),
-            secrets
-                .DIGITAL_OCEAN_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -246,15 +253,20 @@ fn digitalocean_doks_build_with_buildpacks_and_deploy_a_working_environment() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -319,15 +331,20 @@ fn digitalocean_doks_deploy_a_working_environment_with_domain() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -373,16 +390,21 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
+        let context_for_deletion = context.clone_not_same_execution_id();
+
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -419,15 +441,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match get_pvc(
-            Kind::Do,
-            secrets
-                .DIGITAL_OCEAN_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
-            environment.clone(),
-            secrets.clone(),
-        ) {
+        match get_pvc(context.clone(), Kind::Do, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
@@ -461,17 +475,22 @@ fn digitalocean_doks_redeploy_same_app() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_bis = context.clone_not_same_execution_id();
-        let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
+        let context_bis = context.clone_not_same_execution_id();
+        let context_for_deletion = context.clone_not_same_execution_id();
+
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -512,15 +531,7 @@ fn digitalocean_doks_redeploy_same_app() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match get_pvc(
-            Kind::Do,
-            secrets
-                .DIGITAL_OCEAN_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
-            environment.clone(),
-            secrets.clone(),
-        ) {
+        match get_pvc(context.clone(), Kind::Do, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
@@ -530,11 +541,8 @@ fn digitalocean_doks_redeploy_same_app() {
 
         let app_name = format!("{}-0", &environment_check1.applications[0].name);
         let (_, number) = is_pod_restarted_env(
+            context.clone(),
             Kind::Do,
-            secrets
-                .DIGITAL_OCEAN_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
             environment_check1,
             app_name.clone().as_str(),
             secrets.clone(),
@@ -547,11 +555,8 @@ fn digitalocean_doks_redeploy_same_app() {
         };
 
         let (_, number2) = is_pod_restarted_env(
+            context.clone(),
             Kind::Do,
-            secrets
-                .DIGITAL_OCEAN_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
             environment_check2,
             app_name.as_str(),
             secrets.clone(),
@@ -586,18 +591,23 @@ fn digitalocean_doks_deploy_a_not_working_environment_and_then_working_environme
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_not_working = context.clone_not_same_execution_id();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-
-        // env part generation
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
+        let context_for_not_working = context.clone_not_same_execution_id();
+        let context_for_delete = context.clone_not_same_execution_id();
+
+        // env part generation
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -668,16 +678,21 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
         let _enter = span.enter();
 
         let logger = logger();
+        let secrets = FuncTestsSecrets::new();
 
         // working env
-        let context = context();
-        let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -778,14 +793,19 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_no_failover() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::non_working_environment(
-            &context,
+        let context = context(
             secrets
                 .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
+        let environment = test_utilities::common::non_working_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -834,40 +854,29 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_a_working_failover() 
         let logger = logger();
 
         // context for non working environment
-        let context = context();
         let secrets = FuncTestsSecrets::new();
+        let context = context(
+            secrets
+                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
         let test_domain = secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment = test_utilities::common::non_working_environment(
-            &context,
-            secrets
-                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
-            test_domain.as_str(),
-        );
-        let failover_environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
-            test_domain.as_str(),
-        );
+        let environment = test_utilities::common::non_working_environment(&context, test_domain.as_str());
+        let failover_environment = test_utilities::common::working_minimal_environment(&context, test_domain.as_str());
 
         // context for deletion
         let context_deletion = context.clone_not_same_execution_id();
-        let mut delete_env = test_utilities::common::working_minimal_environment(
-            &context_deletion,
-            secrets
-                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
-            test_domain.as_str(),
-        );
+        let mut delete_env =
+            test_utilities::common::working_minimal_environment(&context_deletion, test_domain.as_str());
         delete_env.action = Action::Delete;
 
         let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
@@ -910,39 +919,28 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_a_non_working_failove
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
         let secrets = FuncTestsSecrets::new();
+        let context = context(
+            secrets
+                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
         let test_domain = secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment = test_utilities::common::non_working_environment(
-            &context,
-            secrets
-                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
-            test_domain.as_str(),
-        );
-        let failover_environment = test_utilities::common::non_working_environment(
-            &context,
-            secrets
-                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
-            test_domain.as_str(),
-        );
+        let environment = test_utilities::common::non_working_environment(&context, test_domain.as_str());
+        let failover_environment = test_utilities::common::non_working_environment(&context, test_domain.as_str());
 
         let context_for_deletion = context.clone_not_same_execution_id();
-        let mut delete_env = test_utilities::common::non_working_environment(
-            &context_for_deletion,
-            secrets
-                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
-            test_domain.as_str(),
-        );
+        let mut delete_env =
+            test_utilities::common::non_working_environment(&context_for_deletion, test_domain.as_str());
         delete_env.action = Action::Delete;
 
         // environment action initialize
@@ -967,6 +965,70 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_a_non_working_failove
             secrets.clone(),
             DO_TEST_REGION,
         ) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[named]
+#[test]
+fn digitalocean_doks_deploy_a_working_environment_with_sticky_session() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context(
+            secrets
+                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID in secrets")
+                .as_str(),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set in secrets")
+                .as_str(),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+        let environment = test_utilities::common::environment_only_http_server_router_with_sticky_session(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let env_action = EnvironmentAction::Environment(environment.clone());
+        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
+
+        match environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone()) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        // checking cookie is properly set on the app
+        assert!(routers_sessions_are_sticky(environment.routers.clone()));
+
+        match environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 

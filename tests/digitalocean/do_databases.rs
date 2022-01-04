@@ -36,15 +36,20 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::environment_3_apps_3_routers_3_databases(
-            &context,
+        let context = context(
             secrets
                 .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
+        let context_for_deletion = context.clone_not_same_execution_id();
+        let environment = test_utilities::common::environment_3_apps_3_routers_3_databases(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -93,15 +98,20 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
-            &context,
+        let context = context(
             secrets
                 .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
+        let context_for_deletion = context.clone_not_same_execution_id();
+        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
+            &context,
             secrets
                 .clone()
                 .DEFAULT_TEST_DOMAIN
@@ -132,13 +142,10 @@ fn deploy_an_environment_with_db_and_pause_it() {
         // Check that we have actually 0 pods running for this db
         let app_name = format!("postgresql{}-0", environment.databases[0].name);
         let ret = get_pods(
+            context.clone(),
             ProviderKind::Do,
             environment.clone(),
             app_name.clone().as_str(),
-            secrets
-                .DIGITAL_OCEAN_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -171,10 +178,19 @@ fn postgresql_failover_dev_environment_with_all_options() {
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
-        let logger = logger();
-        let context = context();
-        let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
+        let logger = logger();
+        let context = context(
+            secrets
+                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
+        let context_for_deletion = context.clone_not_same_execution_id();
         let test_domain = secrets
             .clone()
             .DEFAULT_TEST_DOMAIN
@@ -182,10 +198,6 @@ fn postgresql_failover_dev_environment_with_all_options() {
 
         let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context,
-            secrets
-                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
             test_domain.as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
@@ -212,10 +224,6 @@ fn postgresql_failover_dev_environment_with_all_options() {
             .collect::<Vec<qovery_engine::models::Application>>();
         let mut environment_delete = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context_for_deletion,
-            secrets
-                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
             test_domain.as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
@@ -237,11 +245,8 @@ fn postgresql_failover_dev_environment_with_all_options() {
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let database_name = format!("postgresql-{}-0", &environment_check.databases[0].name);
         match is_pod_restarted_env(
+            context.clone(),
             ProviderKind::Do,
-            secrets
-                .DIGITAL_OCEAN_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
             environment_check.clone(),
             database_name.as_str(),
             secrets.clone(),
@@ -256,11 +261,8 @@ fn postgresql_failover_dev_environment_with_all_options() {
         };
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY EVEN IF FAIL
         match is_pod_restarted_env(
+            context.clone(),
             ProviderKind::Do,
-            secrets
-                .DIGITAL_OCEAN_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
             environment_check.clone(),
             database_name.as_str(),
             secrets.clone(),
@@ -297,8 +299,17 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
         let secrets = FuncTestsSecrets::new();
+        let context = context(
+            secrets
+                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
         let context_for_deletion = context.clone_not_same_execution_id();
         let test_domain = secrets
             .DEFAULT_TEST_DOMAIN
@@ -307,10 +318,6 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 
         let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context,
-            secrets
-                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
             test_domain.as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
@@ -319,10 +326,6 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         //let env_to_check = environment.clone();
         let mut environment_delete = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context_for_deletion,
-            secrets
-                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
             test_domain.as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
@@ -380,16 +383,21 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context();
+        let context = context(
+            secrets
+                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
         let context_for_redeploy = context.clone_not_same_execution_id();
         let context_for_delete = context.clone_not_same_execution_id();
 
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
-            secrets
-                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
             secrets
                 .clone()
                 .DEFAULT_TEST_DOMAIN
@@ -490,11 +498,8 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let database_name = format!("postgresql-{}-0", &environment_check.databases[0].name);
         match is_pod_restarted_env(
+            context.clone(),
             ProviderKind::Do,
-            secrets
-                .DIGITAL_OCEAN_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
             environment_check,
             database_name.as_str(),
             secrets.clone(),
@@ -554,14 +559,20 @@ fn test_postgresql_configuration(
 #[named]
 #[test]
 fn private_postgresql_v10_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -576,14 +587,20 @@ fn private_postgresql_v10_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn public_postgresql_v10_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -598,14 +615,20 @@ fn public_postgresql_v10_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn private_postgresql_v11_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -620,14 +643,20 @@ fn private_postgresql_v11_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn public_postgresql_v11_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -641,14 +670,20 @@ fn public_postgresql_v11_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn private_postgresql_v12_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -662,14 +697,20 @@ fn private_postgresql_v12_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn public_postgresql_v12_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -683,14 +724,20 @@ fn public_postgresql_v12_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn private_postgresql_v13_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -704,14 +751,20 @@ fn private_postgresql_v13_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn public_postgresql_v13_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -757,14 +810,20 @@ fn test_mongodb_configuration(
 #[named]
 #[test]
 fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -779,14 +838,20 @@ fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn public_mongodb_v3_6_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -801,14 +866,20 @@ fn public_mongodb_v3_6_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn private_mongodb_v4_0_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -823,14 +894,20 @@ fn private_mongodb_v4_0_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn public_mongodb_v4_0_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -845,14 +922,20 @@ fn public_mongodb_v4_0_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -866,14 +949,20 @@ fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn public_mongodb_v4_2_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -887,14 +976,20 @@ fn public_mongodb_v4_2_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -908,14 +1003,20 @@ fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -961,14 +1062,20 @@ fn test_mysql_configuration(
 #[named]
 #[test]
 fn private_mysql_v5_7_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -983,14 +1090,20 @@ fn private_mysql_v5_7_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn public_mysql_v5_7_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1005,14 +1118,20 @@ fn public_mysql_v5_7_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn private_mysql_v8_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1026,14 +1145,20 @@ fn private_mysql_v8_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn public_mysql_v8_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1081,14 +1206,20 @@ fn test_redis_configuration(
 #[named]
 #[test]
 fn private_redis_v5_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1103,14 +1234,20 @@ fn private_redis_v5_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn public_redis_v5_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1125,14 +1262,20 @@ fn public_redis_v5_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn private_redis_v6_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -1146,14 +1289,20 @@ fn private_redis_v6_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn public_redis_v6_deploy_a_working_dev_environment() {
-    let context = context();
     let secrets = FuncTestsSecrets::new();
-    let environment = working_minimal_environment(
-        &context,
+    let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
