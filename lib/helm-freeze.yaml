@@ -42,7 +42,7 @@ charts:
     repo_name: grafana
     version: 2.6.0
   - name: promtail
-    repo_name: loki
+    repo_name: grafana
     version: 0.24.0
     comment: https://github.com/grafana/loki/tree/master/production/helm
     # Chart is frozen due to custom modification see https://github.com/Qovery/engine/pull/293
@@ -68,7 +68,7 @@ charts:
     dest: services
     no_sync: true
   - name: pleco
-    version: 0.9.29
+    version: 0.9.33
     repo_name: pleco
   - name: do-k8s-token-rotate
     version: 0.1.3

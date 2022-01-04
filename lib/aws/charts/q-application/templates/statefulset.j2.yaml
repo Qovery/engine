@@ -104,7 +104,7 @@ spec:
     spec:
       accessModes:
         - ReadWriteOnce
-      storageClassName: aws-ebs-{{ s.storage_type }}-{{ s.snapshot_retention_in_days }}
+      storageClassName: aws-ebs-{{ s.storage_type }}-0
       dataSource:
         name: {{ s.id }}
         kind: PersistentVolumeClaim
@@ -123,7 +123,7 @@ spec:
     spec:
       accessModes:
         - ReadWriteOnce
-      storageClassName: aws-ebs-{{ s.storage_type }}-{{ s.snapshot_retention_in_days }}
+      storageClassName: aws-ebs-{{ s.storage_type }}-0
       resources:
         requests:
           storage: {{ s.size_in_gib }}Gi
