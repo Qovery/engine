@@ -68,7 +68,7 @@ pub struct NodeGroups {
     pub min_nodes: i32,
     pub max_nodes: i32,
     pub instance_type: String,
-    pub disk_size: i32,
+    pub disk_size_gb: i32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -77,5 +77,5 @@ pub struct NodeGroupsFormat {
     pub min_nodes: String,
     pub max_nodes: String,
     pub instance_type: String,
-    pub disk_size: String,
+    pub disk_size_gb: String,
 }

@@ -86,7 +86,7 @@ mod tests {
                 min_nodes: 2,
                 max_nodes: 2,
                 instance_type: "t2.large".to_string(),
-                disk_size: 20
+                disk_size_gb: 20
             }
         );
     }

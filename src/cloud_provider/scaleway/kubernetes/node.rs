@@ -107,7 +107,7 @@ mod tests {
                     min_nodes: 2,
                     max_nodes: 2,
                     instance_type: "dev1-l".to_string(),
-                    disk_size: 20
+                    disk_size_gb: 20
                 }
             );
         }
