@@ -935,28 +935,37 @@ pub fn environment_only_http_server_router(context: &Context, test_domain: &str)
 
 /// Test if stick session are activated on given routers via cookie.
 pub fn routers_sessions_are_sticky(routers: Vec<Router>) -> bool {
+    let mut is_ok = true;
+    let http_client = reqwest::blocking::Client::builder()
+        .danger_accept_invalid_certs(true) // this test ignores certificate validity (not its purpose)
+        .build()
+        .expect("Cannot build reqwest client");
+
     for router in routers.iter() {
         for route in router.routes.iter() {
-            let http_request_result =
-                reqwest::blocking::get(format!("https://{}{}", router.default_domain, route.path));
+            let http_request_result = http_client
+                .get(format!("https://{}{}", router.default_domain, route.path))
+                .send();
 
-            if let Err(_) = http_request_result {
+            if http_request_result.is_err() {
                 return false;
             }
 
             let http_response = http_request_result.expect("cannot retrieve HTTP request result");
 
-            return match http_response.headers().get("Set-Cookie") {
+            is_ok &= match http_response.headers().get("Set-Cookie") {
                 None => false,
                 Some(value) => match value.to_str() {
                     Err(_) => false,
-                    Ok(s) => s.contains("INGRESSCOOKIE_QOVERY=") && s.contains("Max-Age=85400"),
+                    Ok(s) => {
+                        return s.contains("INGRESSCOOKIE_QOVERY=") && s.contains("Max-Age=85400");
+                    }
                 },
             };
         }
     }
 
-    true
+    is_ok
 }
 
 pub fn test_db(

@@ -1193,7 +1193,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        // checking cookie is properly set on the app
+        // checking if cookie is properly set on the app
         assert!(routers_sessions_are_sticky(environment.routers.clone()));
 
         match environment_for_delete.delete_environment(Kind::Aws, &context_for_delete, &env_action_for_delete, logger)
