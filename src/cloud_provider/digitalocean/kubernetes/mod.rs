@@ -28,6 +28,7 @@ use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd::helm::{helm_exec_upgrade_with_chart_info, helm_upgrade_diff_with_chart_info};
 use crate::cmd::kubectl::{
     do_kubectl_exec_get_loadbalancer_id, kubectl_exec_get_all_namespaces, kubectl_exec_get_events,
+    kubectl_exec_get_node,
 };
 use crate::cmd::structs::HelmChart;
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
@@ -702,6 +703,7 @@ impl<'a> DOKS<'a> {
                 &credentials_environment_variables,
                 helm_charts_to_deploy,
                 self.context.is_dry_run_deploy(),
+                self.nodes_groups.first().expect("No node in nodes group").max_nodes as usize,
             ),
         )?;
 

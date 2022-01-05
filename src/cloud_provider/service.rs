@@ -432,6 +432,7 @@ where
             service.start_timeout(),
             kubernetes.cloud_provider().credentials_environment_variables(),
             service.service_type(),
+            None,
         ),
     )?;
 
@@ -716,6 +717,7 @@ where
                 service.start_timeout(),
                 kubernetes.cloud_provider().credentials_environment_variables(),
                 service.service_type(),
+                None,
             ),
         )?;
 

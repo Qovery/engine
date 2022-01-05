@@ -25,7 +25,7 @@ use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
 use crate::cmd::kubectl::{
-    kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events,
+    kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events, kubectl_exec_get_node,
     kubectl_exec_scale_replicas, ScalingKind,
 };
 use crate::cmd::structs::HelmChart;
@@ -684,6 +684,7 @@ impl<'a> EKS<'a> {
                 &credentials_environment_variables,
                 helm_charts_to_deploy,
                 self.context.is_dry_run_deploy(),
+                self.nodes_groups.first().expect("No node in nodes group").max_nodes as usize,
             ),
         )
     }

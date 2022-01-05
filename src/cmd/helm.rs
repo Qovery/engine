@@ -45,6 +45,7 @@ pub fn helm_exec_with_upgrade_history<P>(
     timeout: Timeout<u32>,
     envs: Vec<(&str, &str)>,
     service_type: ServiceType,
+    max_nodes: Option<usize>,
 ) -> Result<Option<HelmHistoryRow>, SimpleError>
 where
     P: AsRef<Path>,
@@ -85,6 +86,7 @@ where
         &environment_variables,
         vec![vec![Box::new(current_chart)]],
         false,
+        max_nodes,
     )?;
 
     // list helm history

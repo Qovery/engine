@@ -14,7 +14,9 @@ use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, 
 use crate::cloud_provider::scaleway::kubernetes::node::ScwInstancesType;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::{kubernetes, CloudProvider};
-use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
+use crate::cmd::kubectl::{
+    kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events, kubectl_exec_get_node,
+};
 use crate::cmd::structs::HelmChart;
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
@@ -568,6 +570,7 @@ impl<'a> Kapsule<'a> {
                 &credentials_environment_variables,
                 helm_charts_to_deploy,
                 self.context.is_dry_run_deploy(),
+                self.nodes_groups.first().expect("No node in nodes group").max_nodes as usize,
             ),
         )
     }

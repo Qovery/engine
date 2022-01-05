@@ -7,7 +7,7 @@ use crate::cmd::helm::{
 };
 use crate::cmd::kubectl::{
     kubectl_delete_crash_looping_pods, kubectl_exec_delete_crd, kubectl_exec_get_configmap, kubectl_exec_get_events,
-    kubectl_exec_rollout_restart_deployment, kubectl_exec_with_output,
+    kubectl_exec_get_node, kubectl_exec_rollout_restart_deployment, kubectl_exec_with_output,
 };
 use crate::cmd::structs::HelmHistoryRow;
 use crate::error::{SimpleError, SimpleErrorKind};
@@ -332,8 +332,35 @@ pub fn deploy_charts_levels(
     envs: &Vec<(String, String)>,
     charts: Vec<Vec<Box<dyn HelmChart>>>,
     dry_run: bool,
+    max_nodes: Option<usize>,
 ) -> Result<(), SimpleError> {
-    // first show diff
+    // first, check if enough nodes are available
+    let kubectl_envs = envs
+        .into_iter()
+        .map(|env| (env.clone().0.as_str(), env.clone().1.as_str()))
+        .collect();
+
+    if max_nodes.is_some() {
+        match kubectl_exec_get_node(&kubeconfig, kubectl_envs) {
+            Err(e) => {
+                error!("Can't get nodes for helm deployments");
+                return Err(e);
+            }
+            Ok(nodes) => match nodes.items.len() < max_nodes.unwrap() {
+                true => Ok(()),
+                false => {
+                    error!(format!(
+                        "Not enough nodes to perform Helm deployments. {}/{} used.",
+                        nodes_used,
+                        max_nodes.unwrap(),
+                    ));
+                    return Err(e);
+                }
+            },
+        }
+    }
+
+    // second show diff
     for level in &charts {
         for chart in level {
             let chart_info = chart.get_chart_info();
