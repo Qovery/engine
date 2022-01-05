@@ -982,10 +982,14 @@ pub fn test_db(
     let database_password = generate_id();
     let db_kind_str = db_kind.name().to_string();
     let database_host = format!(
-        "{}-{}.{}",
+        "{}-{}.{}.{}",
         db_kind_str.clone(),
         generate_id(),
-        secrets.clone().DEFAULT_TEST_DOMAIN.unwrap()
+        context.cluster_id(),
+        secrets
+            .clone()
+            .DEFAULT_TEST_DOMAIN
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
     );
     let dyn_db_fqdn = match is_public.clone() {
         true => database_host.clone(),

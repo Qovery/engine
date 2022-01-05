@@ -3271,7 +3271,7 @@ dependencies = [
  "passwords",
  "qovery-engine",
  "rand 0.7.3",
- "reqwest 0.10.8",
+ "reqwest 0.11.3",
  "retry",
  "scaleway_api_rs",
  "serde",
