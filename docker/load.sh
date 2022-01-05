@@ -104,7 +104,7 @@ function install() { ## Make symlinks to install binaries in default PATH
 
 function post_install() { ## Perform post installation (plugins, etc...)
   # install helm diff
-  /usr/bin/helm plugin install https://github.com/databus23/helm-diff
+  /usr/bin/helm plugin install --version v3.1.3 https://github.com/databus23/helm-diff
 }
 
 case $1 in
