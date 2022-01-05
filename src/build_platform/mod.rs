@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::git::Credentials;
 use crate::models::{Context, Listen};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
@@ -46,9 +45,21 @@ pub struct EnvironmentVariable {
     pub value: String,
 }
 
+pub struct Credentials {
+    pub login: String,
+    pub password: String,
+}
+
+pub struct SshKey {
+    pub private_key: String,
+    pub passphrase: Option<String>,
+    pub public_key: Option<String>,
+}
+
 pub struct GitRepository {
     pub url: String,
     pub credentials: Option<Credentials>,
+    pub ssh_keys: Vec<SshKey>,
     pub commit_id: String,
     pub dockerfile_path: Option<String>,
     pub root_path: String,
