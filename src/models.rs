@@ -391,15 +391,28 @@ impl Application {
         // Get passphrase and public key if provided by the user
         let mut ssh_keys: Vec<SshKey> = Vec::with_capacity(env_ssh_keys.len());
         for (ssh_key_name, private_key) in env_ssh_keys {
+            let private_key = if let Ok(Ok(private_key)) = base64::decode(private_key).map(String::from_utf8) {
+                private_key
+            } else {
+                error!("Invalid base64 environment variable for {}", ssh_key_name);
+                continue;
+            };
+
             let passphrase = self
                 .environment_vars
                 .get(&ssh_key_name.replace(ENV_GIT_PREFIX, "GIT_SSH_PASSPHRASE"))
-                .map(|val| val.clone());
+                .map(|val| base64::decode(val).ok())
+                .flatten()
+                .map(|str| String::from_utf8(str).ok())
+                .flatten();
 
             let public_key = self
                 .environment_vars
                 .get(&ssh_key_name.replace(ENV_GIT_PREFIX, "GIT_SSH_PUBLIC_KEY"))
-                .map(|val| val.clone());
+                .map(|val| base64::decode(val).ok())
+                .flatten()
+                .map(|str| String::from_utf8(str).ok())
+                .flatten();
 
             ssh_keys.push(SshKey {
                 private_key,

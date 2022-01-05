@@ -26,7 +26,11 @@ fn authentication_callback<'a>(
             let (cred_type, credential) = match auth_methods.pop() {
                 Some(cred) => cred,
                 None => {
-                    let mut error = Error::from_str("Invalid authentication: Exhausted all available auth method");
+                    let msg = format!(
+                        "Invalid authentication: Exhausted all available auth method to fetch repository {}",
+                        remote_url
+                    );
+                    let mut error = Error::from_str(msg.as_str());
                     error.set_code(Auth);
                     return Err(error);
                 }
