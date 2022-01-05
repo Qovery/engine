@@ -337,28 +337,32 @@ pub fn deploy_charts_levels(
     // first, check if enough nodes are available
     let kubectl_envs = envs
         .into_iter()
-        .map(|env| (env.clone().0.as_str(), env.clone().1.as_str()))
+        .map(|(key, value)| (key.as_str(), value.as_str()))
         .collect();
 
     if max_nodes.is_some() {
-        match kubectl_exec_get_node(&kubeconfig, kubectl_envs) {
+        match kubectl_exec_get_node(kubernetes_config, kubectl_envs) {
             Err(e) => {
-                error!("Can't get nodes for helm deployments");
+                error!("Can't get nodes for Helm deployments");
                 return Err(e);
             }
             Ok(nodes) => match nodes.items.len() < max_nodes.unwrap() {
-                true => Ok(()),
+                true => {}
                 false => {
-                    error!(format!(
-                        "Not enough nodes to perform Helm deployments. {}/{} used.",
-                        nodes_used,
+                    let msg = format!(
+                        "Can't deploy Helm charts. There isn't enough available nodes to allow Helm deployments. {}/{} used.",
+                        nodes.items.len(),
                         max_nodes.unwrap(),
-                    ));
-                    return Err(e);
+                    );
+                    error!("{}", msg.clone());
+                    return Err(SimpleError {
+                        kind: SimpleErrorKind::Other,
+                        message: Some(msg.clone()),
+                    });
                 }
             },
-        }
-    }
+        };
+    };
 
     // second show diff
     for level in &charts {
