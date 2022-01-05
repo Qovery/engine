@@ -733,7 +733,7 @@ datasources:
         chart_info: ChartInfo {
             name: "pleco".to_string(),
             path: chart_path("common/charts/pleco"),
-            values_files: vec![chart_path("chart_values/pleco.yaml")],
+            values_files: vec![chart_path("chart_values/pleco-do.yaml")],
             values: vec![
                 ChartSetValue {
                     key: "environmentVariables.DO_API_TOKEN".to_string(),
