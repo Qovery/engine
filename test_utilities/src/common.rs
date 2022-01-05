@@ -957,9 +957,7 @@ pub fn routers_sessions_are_sticky(routers: Vec<Router>) -> bool {
                 None => false,
                 Some(value) => match value.to_str() {
                     Err(_) => false,
-                    Ok(s) => {
-                        return s.contains("INGRESSCOOKIE_QOVERY=") && s.contains("Max-Age=85400");
-                    }
+                    Ok(s) => s.contains("INGRESSCOOKIE_QOVERY=") && s.contains("Max-Age=85400"),
                 },
             };
         }
