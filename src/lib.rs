@@ -27,3 +27,4 @@ mod template;
 pub mod transaction;
 mod unit_conversion;
 pub mod utilities;
+pub mod docker;
