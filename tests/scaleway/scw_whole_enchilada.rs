@@ -9,7 +9,7 @@ use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, g
 #[cfg(feature = "test-scw-whole-enchilada")]
 #[named]
 #[test]
-fn create_upgrade_and_destroy_kapsule_cluster_with_env_in_par_2() {
+fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
     let logger = logger();
     let context = context();
     let zone = Zone::Paris2;

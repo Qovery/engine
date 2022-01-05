@@ -99,7 +99,7 @@ impl Cluster<DO, DoksOptions> for DO {
 
     fn kubernetes_nodes() -> Vec<NodeGroups> {
         vec![
-            NodeGroups::new("groupdoks0".to_string(), 5, 10, "s-4vcpu-8gb".to_string())
+            NodeGroups::new("groupdoks0".to_string(), 5, 10, "s-4vcpu-8gb".to_string(), 0)
                 .expect("Problem while setup DOKS nodes"),
         ]
     }
