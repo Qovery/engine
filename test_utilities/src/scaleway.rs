@@ -121,7 +121,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
 
     fn kubernetes_nodes() -> Vec<NodeGroups> {
         // Note: Dev1M is a bit too small to handle engine + local docker, hence using Dev1L
-        vec![NodeGroups::new("groupscw0".to_string(), 5, 10, "dev1-l".to_string())
+        vec![NodeGroups::new("groupscw0".to_string(), 5, 10, "dev1-l".to_string(), 0)
             .expect("Problem while setup SCW nodes")]
     }
 

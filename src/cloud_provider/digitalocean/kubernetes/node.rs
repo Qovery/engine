@@ -80,17 +80,18 @@ mod tests {
 
     #[test]
     fn test_groups_nodes() {
-        assert!(NodeGroups::new("".to_string(), 2, 1, "s-2vcpu-4gb".to_string()).is_err());
-        assert!(NodeGroups::new("".to_string(), 2, 2, "s-2vcpu-4gb".to_string()).is_ok());
-        assert!(NodeGroups::new("".to_string(), 2, 3, "s-2vcpu-4gb".to_string()).is_ok());
+        assert!(NodeGroups::new("".to_string(), 2, 1, "s-2vcpu-4gb".to_string(), 20).is_err());
+        assert!(NodeGroups::new("".to_string(), 2, 2, "s-2vcpu-4gb".to_string(), 20).is_ok());
+        assert!(NodeGroups::new("".to_string(), 2, 3, "s-2vcpu-4gb".to_string(), 20).is_ok());
 
         assert_eq!(
-            NodeGroups::new("".to_string(), 2, 2, "s-2vcpu-4gb".to_string()).unwrap(),
+            NodeGroups::new("".to_string(), 2, 2, "s-2vcpu-4gb".to_string(), 20).unwrap(),
             NodeGroups {
                 name: "".to_string(),
                 min_nodes: 2,
                 max_nodes: 2,
-                instance_type: "s-2vcpu-4gb".to_string()
+                instance_type: "s-2vcpu-4gb".to_string(),
+                disk_size_in_gib: 20
             }
         );
     }
