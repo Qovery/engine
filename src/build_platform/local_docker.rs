@@ -321,12 +321,12 @@ impl BuildPlatform for LocalDocker {
             "cloning repository: {} to {}",
             build.git_repository.url, repository_root_path
         );
-        let get_credentials = || {
+        let get_credentials = |user: &str| {
             let mut creds: Vec<(CredentialType, Cred)> = Vec::with_capacity(build.git_repository.ssh_keys.len() + 1);
             for ssh_key in build.git_repository.ssh_keys.iter() {
                 let public_key = ssh_key.public_key.as_ref().map(|x| x.as_str());
                 let passphrase = ssh_key.passphrase.as_ref().map(|x| x.as_str());
-                if let Ok(cred) = Cred::ssh_key_from_memory("git", public_key, &ssh_key.private_key, passphrase) {
+                if let Ok(cred) = Cred::ssh_key_from_memory(user, public_key, &ssh_key.private_key, passphrase) {
                     creds.push((CredentialType::SSH_MEMORY, cred));
                 }
             }
