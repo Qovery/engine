@@ -13,13 +13,12 @@ use std::str::Utf8Error;
 /// ```
 ///
 /// will return a vector of "foo" and "bar" stings
-pub fn extract_dockerfile_args(
-    dockerfile_content: Vec<u8>,
-) -> Result<HashSet<String>, Utf8Error> {
+pub fn extract_dockerfile_args(dockerfile_content: Vec<u8>) -> Result<HashSet<String>, Utf8Error> {
     let lines = std::str::from_utf8(dockerfile_content.as_slice())?;
     let lines = lines.lines();
 
-    let used_args = lines.into_iter()
+    let used_args = lines
+        .into_iter()
         .filter(|line| line.to_uppercase().trim().starts_with("ARG"))
         .map(|line| {
             let x = line.split_whitespace().collect::<Vec<&str>>();
@@ -98,24 +97,23 @@ mod tests {
         let res = extract_dockerfile_args(dockerfile.to_vec());
         assert_eq!(res.unwrap().len(), 4);
 
-        let matched_vars = match_used_env_var_args(vec![
-            "foo".to_string(),
-            "bar".to_string(),
-            "toto".to_string(),
-            "x".to_string(),
-        ], dockerfile.to_vec());
+        let matched_vars = match_used_env_var_args(
+            vec![
+                "foo".to_string(),
+                "bar".to_string(),
+                "toto".to_string(),
+                "x".to_string(),
+            ],
+            dockerfile.to_vec(),
+        );
 
         assert_eq!(matched_vars.unwrap().len(), 4);
 
-        let matched_vars = match_used_env_var_args(vec![
-            "toto".to_string(),
-            "x".to_string(),
-        ], dockerfile.to_vec());
+        let matched_vars = match_used_env_var_args(vec!["toto".to_string(), "x".to_string()], dockerfile.to_vec());
 
         assert_eq!(matched_vars.unwrap().len(), 2);
 
-        let matched_vars = match_used_env_var_args(vec![],
-                                                   dockerfile.to_vec());
+        let matched_vars = match_used_env_var_args(vec![], dockerfile.to_vec());
 
         assert_eq!(matched_vars.unwrap().len(), 0);
 
@@ -126,12 +124,15 @@ mod tests {
         RUN ls -lh
         ";
 
-        let matched_vars = match_used_env_var_args(vec![
-            "foo".to_string(),
-            "bar".to_string(),
-            "toto".to_string(),
-            "x".to_string(),
-        ], dockerfile.to_vec());
+        let matched_vars = match_used_env_var_args(
+            vec![
+                "foo".to_string(),
+                "bar".to_string(),
+                "toto".to_string(),
+                "x".to_string(),
+            ],
+            dockerfile.to_vec(),
+        );
 
         assert_eq!(matched_vars.unwrap().len(), 0);
     }

@@ -1,11 +1,10 @@
-use std::{env, fs};
 use std::path::Path;
+use std::{env, fs};
 
 use chrono::Duration;
 use git2::{Cred, CredentialType};
 use sysinfo::{Disk, DiskExt, SystemExt};
 
-use crate::{docker, git};
 use crate::build_platform::{Build, BuildPlatform, BuildResult, Credentials, Image, Kind};
 use crate::cmd::utilities::QoveryCommand;
 use crate::error::{EngineError, EngineErrorCause, SimpleError, SimpleErrorKind};
@@ -13,6 +12,7 @@ use crate::fs::workspace_directory;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
+use crate::{docker, git};
 
 const BUILD_DURATION_TIMEOUT_MIN: i64 = 30;
 
@@ -59,10 +59,7 @@ impl LocalDocker {
     }
 
     /// Read Dockerfile content from location path and return an array of bytes
-    fn get_dockerfile_content(
-        &self,
-        dockerfile_path: &str,
-    ) -> Result<Vec<u8>, EngineError> {
+    fn get_dockerfile_content(&self, dockerfile_path: &str) -> Result<Vec<u8>, EngineError> {
         match fs::read(dockerfile_path) {
             Ok(bytes) => Ok(bytes),
             Err(err) => {
@@ -342,7 +339,7 @@ impl BuildPlatform for LocalDocker {
             self.context.execution_id(),
             format!("build/{}", build.image.name.as_str()),
         )
-            .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         // Clone git repository
         info!(
