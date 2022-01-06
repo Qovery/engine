@@ -4,6 +4,7 @@ use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::models::{Context, Listen};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
+pub mod docker;
 pub mod local_docker;
 
 pub trait BuildPlatform: Listen {

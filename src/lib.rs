@@ -11,7 +11,6 @@ pub mod container_registry;
 mod crypto;
 mod deletion_utilities;
 pub mod dns_provider;
-pub mod docker;
 pub mod engine;
 pub mod error;
 pub mod errors;

@@ -5,14 +5,14 @@ use chrono::Duration;
 use git2::{Cred, CredentialType};
 use sysinfo::{Disk, DiskExt, SystemExt};
 
-use crate::build_platform::{Build, BuildPlatform, BuildResult, Credentials, Image, Kind};
+use crate::build_platform::{docker, Build, BuildPlatform, BuildResult, Credentials, Image, Kind};
 use crate::cmd::utilities::QoveryCommand;
 use crate::error::{EngineError, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::fs::workspace_directory;
+use crate::git;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
-use crate::{docker, git};
 
 const BUILD_DURATION_TIMEOUT_MIN: i64 = 30;
 
@@ -64,8 +64,7 @@ impl LocalDocker {
             Ok(bytes) => Ok(bytes),
             Err(err) => {
                 let error_msg = format!("Can't read Dockerfile '{}'", dockerfile_path);
-                error!("{:?}", error_msg);
-                error!("{:?}", err);
+                error!("{}, error: {:?}", error_msg, err);
                 Err(self.engine_error(EngineErrorCause::Internal, error_msg))
             }
         }
@@ -102,8 +101,7 @@ impl LocalDocker {
             Ok(env_var_args) => env_var_args,
             Err(err) => {
                 let error_msg = format!("Can't extract env vars from Dockerfile '{}'", dockerfile_complete_path);
-                error!("{:?}", error_msg);
-                error!("{:?}", err);
+                error!("{}, error: {:?}", error_msg, err);
                 return Err(self.engine_error(EngineErrorCause::Internal, error_msg));
             }
         };
