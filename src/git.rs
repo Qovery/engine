@@ -237,6 +237,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_git_submodule_with_ssh_key() {
         // Unique Key only valid for the submodule and in read access only
         // https://github.com/Qovery/dumb-logger/settings/keys
