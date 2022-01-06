@@ -10,14 +10,17 @@ use url::Url;
 // If auth is denied, it up to us to return a new credential to try different auth method
 // or an error to specify that we have exhausted everything we are able to provide
 fn authentication_callback<'a>(
-    get_credentials: &'a impl Fn() -> Vec<(CredentialType, Cred)>,
+    get_credentials: &'a impl Fn(&str) -> Vec<(CredentialType, Cred)>,
 ) -> impl FnMut(&str, Option<&str>, CredentialType) -> Result<Cred, Error> + 'a {
     let mut current_credentials: (String, Vec<(CredentialType, Cred)>) = ("".into(), vec![]);
 
-    return move |remote_url, _username_from_url, allowed_types| {
+    return move |remote_url, username_from_url, allowed_types| {
         // If we have changed remote, reset our available auth methods
         if remote_url != current_credentials.0 {
-            current_credentials = (remote_url.to_string(), get_credentials());
+            current_credentials = (
+                remote_url.to_string(),
+                get_credentials(username_from_url.unwrap_or("git")),
+            );
         }
         let auth_methods = &mut current_credentials.1;
 
@@ -66,7 +69,7 @@ fn checkout(repo: &Repository, commit_id: &str) -> Result<(), Error> {
 fn clone<P>(
     repository_url: &str,
     into_dir: P,
-    get_credentials: &impl Fn() -> Vec<(CredentialType, Cred)>,
+    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
 ) -> Result<Repository, Error>
 where
     P: AsRef<Path>,
@@ -96,7 +99,7 @@ pub fn clone_at_commit<P>(
     repository_url: &str,
     commit_id: &str,
     into_dir: P,
-    get_credentials: &impl Fn() -> Vec<(CredentialType, Cred)>,
+    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
 ) -> Result<Repository, Error>
 where
     P: AsRef<Path>,
@@ -148,11 +151,11 @@ mod tests {
     #[test]
     fn test_git_clone_repository() {
         // We only allow https:// at the moment
-        let repo = clone("git@github.com:Qovery/engine.git", "/tmp", &|| vec![]);
+        let repo = clone("git@github.com:Qovery/engine.git", "/tmp", &|_| vec![]);
         assert!(matches!(repo, Err(e) if e.message().contains("Invalid repository")));
 
         // Repository must be empty
-        let repo = clone("https://github.com/Qovery/engine-testing.git", "/tmp", &|| vec![]);
+        let repo = clone("https://github.com/Qovery/engine-testing.git", "/tmp", &|_| vec![]);
         assert!(matches!(repo, Err(e) if e.message().contains("'/tmp' exists and is not an empty directory")));
 
         // Working case
@@ -163,7 +166,7 @@ mod tests {
             let repo = clone(
                 "https://github.com/Qovery/engine-testing.git",
                 clone_dir.path,
-                &|| vec![],
+                &|_| vec![],
             );
             assert!(matches!(repo, Ok(_repo)));
         }
@@ -173,7 +176,7 @@ mod tests {
             let clone_dir = DirectoryToDelete {
                 path: "/tmp/engine_test_clone",
             };
-            let get_credentials = || {
+            let get_credentials = |_: &str| {
                 vec![(
                     CredentialType::USER_PASS_PLAINTEXT,
                     Cred::userpass_plaintext("FAKE", "FAKE").unwrap(),
@@ -217,7 +220,7 @@ mod tests {
         let repo = clone(
             "https://github.com/Qovery/engine-testing.git",
             clone_dir.path,
-            &|| vec![],
+            &|_| vec![],
         )
         .unwrap();
 
@@ -324,19 +327,19 @@ RmSmoA==
         let clone_dir = DirectoryToDelete {
             path: "/tmp/engine_test_submodule",
         };
-        let get_credentials = || {
+        let get_credentials = |user: &str| {
             vec![
                 (
                     CredentialType::SSH_MEMORY,
-                    Cred::ssh_key_from_memory("git", None, invalid_ssh_key, Some("toto")).unwrap(),
+                    Cred::ssh_key_from_memory(user, None, invalid_ssh_key, Some("toto")).unwrap(),
                 ),
                 (
                     CredentialType::SSH_MEMORY,
-                    Cred::ssh_key_from_memory("git", None, &ssh_key, None).unwrap(),
+                    Cred::ssh_key_from_memory(user, None, &ssh_key, None).unwrap(),
                 ),
                 (
                     CredentialType::SSH_MEMORY,
-                    Cred::ssh_key_from_memory("git", None, invalid_ssh_key, Some("toto")).unwrap(),
+                    Cred::ssh_key_from_memory(user, None, invalid_ssh_key, Some("toto")).unwrap(),
                 ),
             ]
         };
