@@ -5,7 +5,7 @@ use chrono::Duration;
 use git2::{Cred, CredentialType};
 use sysinfo::{Disk, DiskExt, SystemExt};
 
-use crate::build_platform::{Build, BuildPlatform, BuildResult, Credentials, Image, Kind};
+use crate::build_platform::{docker, Build, BuildPlatform, BuildResult, Credentials, Image, Kind};
 use crate::cmd::utilities::QoveryCommand;
 use crate::error::{EngineError, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::fs::workspace_directory;
@@ -58,6 +58,18 @@ impl LocalDocker {
         }
     }
 
+    /// Read Dockerfile content from location path and return an array of bytes
+    fn get_dockerfile_content(&self, dockerfile_path: &str) -> Result<Vec<u8>, EngineError> {
+        match fs::read(dockerfile_path) {
+            Ok(bytes) => Ok(bytes),
+            Err(err) => {
+                let error_msg = format!("Can't read Dockerfile '{}'", dockerfile_path);
+                error!("{}, error: {:?}", error_msg, err);
+                Err(self.engine_error(EngineErrorCause::Internal, error_msg))
+            }
+        }
+    }
+
     fn build_image_with_docker(
         &self,
         build: Build,
@@ -84,13 +96,24 @@ impl LocalDocker {
 
         docker_args.extend(vec!["-f", dockerfile_complete_path, "-t", name_with_tag.as_str()]);
 
+        let dockerfile_content = self.get_dockerfile_content(dockerfile_complete_path)?;
+        let env_var_args = match docker::match_used_env_var_args(env_var_args, dockerfile_content) {
+            Ok(env_var_args) => env_var_args,
+            Err(err) => {
+                let error_msg = format!("Can't extract env vars from Dockerfile '{}'", dockerfile_complete_path);
+                error!("{}, error: {:?}", error_msg, err);
+                return Err(self.engine_error(EngineErrorCause::Internal, error_msg));
+            }
+        };
+
         let mut docker_args = if env_var_args.is_empty() {
             docker_args
         } else {
             let mut build_args = vec![];
-            env_var_args.iter().for_each(|x| {
+
+            env_var_args.iter().for_each(|arg_value| {
                 build_args.push("--build-arg");
-                build_args.push(x.as_str());
+                build_args.push(arg_value.as_str());
             });
 
             docker_args.extend(build_args);
@@ -191,9 +214,9 @@ impl LocalDocker {
 
             buildpacks_args.push("-B");
             buildpacks_args.push(builder_name);
-            if let Some(buildpack_language) = &build.git_repository.buildpack_language {
+            if let Some(buildpacks_language) = &build.git_repository.buildpack_language {
                 buildpacks_args.push("-b");
-                buildpacks_args.push(buildpack_language.as_str());
+                buildpacks_args.push(buildpacks_language.as_str());
             }
 
             // Just a fallback for now to help our bot loving users deploy their apps
