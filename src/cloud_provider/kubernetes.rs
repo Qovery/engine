@@ -732,7 +732,7 @@ pub fn check_kubernetes_has_enough_resources_to_deploy_environment(
     Ok(())
 }
 
-/// check that there is enough nodes before any charts deployment
+/// check that there is enough nodes before any charts deployment.
 pub fn check_kubernetes_has_enough_nodes_to_deploy<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
@@ -746,7 +746,7 @@ where
             error!("Can't get nodes before services deployments");
             Err(e)
         }
-        Ok(nodes) => match nodes.items.len() < max_nodes * 80 / 100 {
+        Ok(nodes) => match nodes.items.len() < (max_nodes * 80 / 100) {
             true => Ok(()),
             false => {
                 let msg = format!(
