@@ -1414,7 +1414,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     fn max_nodes(&self) -> usize {
-        self.nodes_groups.first()?.max_nodes as usize
+        self.nodes_groups.first().expect("No node group").max_nodes as usize
     }
 }
 

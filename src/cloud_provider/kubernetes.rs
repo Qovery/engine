@@ -311,19 +311,19 @@ pub trait Kubernetes: Listen {
 
     fn check_nodes_availability(&self) -> Result<(), EngineError> {
         if let Err(e) = check_kubernetes_has_enough_nodes_to_deploy(
-            self.get_kubeconfig_file_path()?,
+            self.get_kubeconfig_file_path().expect("Unable to get kubeconfig path"),
             self.cloud_provider().credentials_environment_variables(),
             self.max_nodes(),
         ) {
-            Err(EngineError::new(
+            return Err(EngineError::new(
                 EngineErrorCause::Internal,
                 self.engine_error_scope(),
                 self.context().execution_id(),
                 e.message,
-            ))
+            ));
         }
 
-        Ok(())
+        return Ok(());
     }
 }
 
