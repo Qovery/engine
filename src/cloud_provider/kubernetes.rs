@@ -306,6 +306,25 @@ pub trait Kubernetes: Listen {
 
         Ok(())
     }
+
+    fn max_nodes(&self) -> usize;
+
+    fn check_nodes_availability(&self) -> Result<(), EngineError> {
+        if let Err(e) = check_kubernetes_has_enough_nodes_to_deploy(
+            self.get_kubeconfig_file_path()?,
+            self.cloud_provider().credentials_environment_variables(),
+            self.max_nodes(),
+        ) {
+            Err(EngineError::new(
+                EngineErrorCause::Internal,
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                e.message,
+            ))
+        }
+
+        Ok(())
+    }
 }
 
 pub trait KubernetesNode {
@@ -362,6 +381,15 @@ pub fn deploy_environment(
         Err(e) => return Err(e.to_legacy_engine_error()),
     };
     let required_resources = environment.required_resources();
+
+    if let Err(e) = kubernetes.check_nodes_availability() {
+        return Err(EngineError::new(
+            EngineErrorCause::Internal,
+            kubernetes.engine_error_scope(),
+            kubernetes.context().execution_id(),
+            e.message,
+        ));
+    }
 
     if let Err(e) =
         check_kubernetes_has_enough_resources_to_deploy_environment(resources, required_resources, event_details)
@@ -702,6 +730,38 @@ pub fn check_kubernetes_has_enough_resources_to_deploy_environment(
     }
 
     Ok(())
+}
+
+/// check that there is enough nodes before any charts deployment
+pub fn check_kubernetes_has_enough_nodes_to_deploy<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    max_nodes: usize,
+) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    return match kubectl_exec_get_node(kubernetes_config, envs) {
+        Err(e) => {
+            error!("Can't get nodes before services deployments");
+            Err(e)
+        }
+        Ok(nodes) => match nodes.items.len() < max_nodes * 80 / 100 {
+            true => Ok(()),
+            false => {
+                let msg = format!(
+                    "Can't deploy services. There isn't enough available nodes to allow deployments. {}/{} used.",
+                    nodes.items.len(),
+                    max_nodes,
+                );
+                error!("{}", msg.clone());
+                Err(SimpleError {
+                    kind: SimpleErrorKind::Other,
+                    message: Some(msg.clone()),
+                })
+            }
+        },
+    };
 }
 
 pub fn uninstall_cert_manager<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<(), SimpleError>

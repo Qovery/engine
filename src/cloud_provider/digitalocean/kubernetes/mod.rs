@@ -620,6 +620,11 @@ impl<'a> DOKS<'a> {
             }
         };
         let kubeconfig = Path::new(&kubeconfig_path);
+
+        if let Err(e) = self.check_nodes_availability() {
+            return Err(e);
+        }
+
         let credentials_environment_variables: Vec<(String, String)> = self
             .cloud_provider
             .credentials_environment_variables()
@@ -1467,6 +1472,10 @@ impl<'a> Kubernetes for DOKS<'a> {
             self.name(),
         );
         Ok(())
+    }
+
+    fn max_nodes(&self) -> usize {
+        self.nodes_groups.first()?.max_nodes as usize
     }
 }
 

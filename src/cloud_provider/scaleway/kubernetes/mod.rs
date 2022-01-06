@@ -514,6 +514,11 @@ impl<'a> Kapsule<'a> {
 
         // kubernetes helm deployments on the cluster
         let kubeconfig = PathBuf::from(self.get_kubeconfig_file().expect("expected to get a kubeconfig file").0);
+
+        if let Err(e) = self.check_nodes_availability() {
+            return Err(e);
+        }
+
         let credentials_environment_variables: Vec<(String, String)> = self
             .cloud_provider
             .credentials_environment_variables()
@@ -1406,6 +1411,10 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.name(),
         );
         Ok(())
+    }
+
+    fn max_nodes(&self) -> usize {
+        self.nodes_groups.first()?.max_nodes as usize
     }
 }
 
