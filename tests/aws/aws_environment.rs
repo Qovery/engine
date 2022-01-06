@@ -422,8 +422,8 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
                 }];
-                app.commit_id = "4f35f4ab3e98426c5a3eaa91e788ff8ab466f19a".to_string();
-                app.branch = "buildpack-process".to_string();
+                app.commit_id = "f59237d603829636138e2f22a0549e33b5dd6e1f".to_string();
+                app.branch = "simple-node-app".to_string();
                 app.dockerfile_path = None;
                 app
             })
