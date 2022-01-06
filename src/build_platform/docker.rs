@@ -19,7 +19,7 @@ pub fn extract_dockerfile_args(dockerfile_content: Vec<u8>) -> Result<HashSet<St
 
     let used_args = lines
         .into_iter()
-        .filter(|line| line.to_uppercase().starts_with("ARG "))
+        .filter(|line| line.to_uppercase().trim().starts_with("ARG "))
         .map(|line| {
             let x = line.split_whitespace().collect::<Vec<&str>>();
             x.get(1).unwrap_or(&"").to_string()
@@ -59,7 +59,7 @@ mod tests {
 
         ARG foo
         ARG bar=value
-         ARG toto
+        ARG toto
 
         COPY . .
         ARGUMENT fake
@@ -88,7 +88,7 @@ mod tests {
 
         ARG foo
         ARG bar=value
-         ARG toto
+        ARG toto
 
         COPY . .
         ARGUMENT fake
