@@ -1,5 +1,6 @@
 extern crate test_utilities;
 
+use self::test_utilities::common::routers_sessions_are_sticky;
 use self::test_utilities::scaleway::{clean_environments, SCW_TEST_ZONE};
 use self::test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_pvc, init, is_pod_restarted_env, logger, FuncTestsSecrets,
@@ -27,16 +28,22 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("SCALEWAY_TEST_ORGANIZATION_ID")
                 .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID")
+                .as_str(),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -85,17 +92,23 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-
-        let mut environment = test_utilities::common::non_working_environment(
-            &context,
+        let context = context(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("SCALEWAY_TEST_ORGANIZATION_ID")
                 .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID")
+                .as_str(),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+
+        let mut environment = test_utilities::common::non_working_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -143,16 +156,22 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("SCALEWAY_TEST_ORGANIZATION_ID")
                 .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID")
+                .as_str(),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -170,14 +189,10 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         };
 
         let ret = get_pods(
+            context.clone(),
             Kind::Scw,
             environment.clone(),
             selector.as_str(),
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID is not set")
-                .as_str(),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -191,14 +206,10 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
 
         // Check that we have actually 0 pods running for this app
         let ret = get_pods(
+            context.clone(),
             Kind::Scw,
             environment.clone(),
             selector.as_str(),
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID is not set")
-                .as_str(),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -213,14 +224,10 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         };
 
         let ret = get_pods(
+            context.clone(),
             Kind::Scw,
             environment.clone(),
             selector.as_str(),
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID is not set")
-                .as_str(),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -253,16 +260,22 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("SCALEWAY_TEST_ORGANIZATION_ID")
                 .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID")
+                .as_str(),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -328,16 +341,22 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("SCALEWAY_TEST_ORGANIZATION_ID")
                 .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID")
+                .as_str(),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -382,18 +401,24 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
         let span = span!(Level::INFO, "test", name = test_name,);
         let _enter = span.enter();
 
-        let logger = logger();
-        let context = context();
-        let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let logger = logger();
+        let context = context(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("SCALEWAY_TEST_ORGANIZATION_ID")
                 .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID")
+                .as_str(),
+        );
+        let context_for_deletion = context.clone_not_same_execution_id();
+
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -430,16 +455,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match get_pvc(
-            Kind::Scw,
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID is not set")
-                .as_str(),
-            environment.clone(),
-            secrets.clone(),
-        ) {
+        match get_pvc(context.clone(), Kind::Scw, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
@@ -464,7 +480,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-fn deploy_a_working_environment_and_pause_it_k() {
+fn deploy_a_working_environment_and_pause_it() {
     let test_name = function_name!();
     engine_run_test(|| {
         init();
@@ -472,16 +488,22 @@ fn deploy_a_working_environment_and_pause_it_k() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_ID
                 .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID is not set")
+                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
                 .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID")
+                .as_str(),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -499,14 +521,10 @@ fn deploy_a_working_environment_and_pause_it_k() {
         };
 
         let ret = get_pods(
+            context.clone(),
             Kind::Scw,
             environment.clone(),
             selector.as_str(),
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID is not set")
-                .as_str(),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -520,14 +538,10 @@ fn deploy_a_working_environment_and_pause_it_k() {
 
         // Check that we have actually 0 pods running for this app
         let ret = get_pods(
+            context.clone(),
             Kind::Scw,
             environment.clone(),
             selector.as_str(),
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID is not set")
-                .as_str(),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -542,14 +556,10 @@ fn deploy_a_working_environment_and_pause_it_k() {
         };
 
         let ret = get_pods(
+            context.clone(),
             Kind::Scw,
             environment.clone(),
             selector.as_str(),
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID is not set")
-                .as_str(),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -577,18 +587,24 @@ fn scaleway_kapsule_redeploy_same_app() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_bis = context.clone_not_same_execution_id();
-        let context_for_deletion = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("SCALEWAY_TEST_ORGANIZATION_ID")
                 .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID")
+                .as_str(),
+        );
+        let context_bis = context.clone_not_same_execution_id();
+        let context_for_deletion = context.clone_not_same_execution_id();
+
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .clone()
                 .DEFAULT_TEST_DOMAIN
@@ -630,16 +646,7 @@ fn scaleway_kapsule_redeploy_same_app() {
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
 
-        match get_pvc(
-            Kind::Scw,
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID is not set")
-                .as_str(),
-            environment.clone(),
-            secrets.clone(),
-        ) {
+        match get_pvc(context.clone(), Kind::Scw, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
@@ -649,12 +656,8 @@ fn scaleway_kapsule_redeploy_same_app() {
 
         let app_name = format!("{}-0", &environment_check1.applications[0].name);
         let (_, number) = is_pod_restarted_env(
+            context.clone(),
             Kind::Scw,
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID is not set")
-                .as_str(),
             environment_check1,
             app_name.clone().as_str(),
             secrets.clone(),
@@ -667,12 +670,8 @@ fn scaleway_kapsule_redeploy_same_app() {
         };
 
         let (_, number2) = is_pod_restarted_env(
+            context.clone(),
             Kind::Scw,
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID is not set")
-                .as_str(),
             environment_check2,
             app_name.as_str(),
             secrets.clone(),
@@ -707,19 +706,25 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
-        let context_for_not_working = context.clone_not_same_execution_id();
-        let context_for_delete = context.clone_not_same_execution_id();
         let secrets = FuncTestsSecrets::new();
-
-        // env part generation
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("SCALEWAY_TEST_ORGANIZATION_ID")
                 .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID")
+                .as_str(),
+        );
+        let context_for_not_working = context.clone_not_same_execution_id();
+        let context_for_delete = context.clone_not_same_execution_id();
+
+        // env part generation
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -792,15 +797,22 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
         let logger = logger();
 
         // working env
-        let context = context();
+
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
+        let context = context(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("SCALEWAY_TEST_ORGANIZATION_ID")
                 .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID")
+                .as_str(),
+        );
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -901,15 +913,22 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
+
         let secrets = FuncTestsSecrets::new();
-        let environment = test_utilities::common::non_working_environment(
-            &context,
+        let context = context(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_ID
                 .as_ref()
                 .expect("SCALEWAY_TEST_ORGANIZATION_ID")
                 .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID")
+                .as_str(),
+        );
+        let environment = test_utilities::common::non_working_environment(
+            &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
@@ -958,43 +977,32 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_working_failover() {
         let logger = logger();
 
         // context for non working environment
-        let context = context();
+
         let secrets = FuncTestsSecrets::new();
+        let context = context(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
+                .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID")
+                .as_str(),
+        );
         let test_domain = secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment = test_utilities::common::non_working_environment(
-            &context,
-            secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
-            test_domain.as_str(),
-        );
-        let failover_environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
-            test_domain.as_str(),
-        );
+        let environment = test_utilities::common::non_working_environment(&context, test_domain.as_str());
+        let failover_environment = test_utilities::common::working_minimal_environment(&context, test_domain.as_str());
 
         // context for deletion
         let context_deletion = context.clone_not_same_execution_id();
-        let mut delete_env = test_utilities::common::working_minimal_environment(
-            &context_deletion,
-            secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
-            test_domain.as_str(),
-        );
+        let mut delete_env =
+            test_utilities::common::working_minimal_environment(&context_deletion, test_domain.as_str());
         delete_env.action = Action::Delete;
 
         let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
@@ -1037,42 +1045,31 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_non_working_failover
         let _enter = span.enter();
 
         let logger = logger();
-        let context = context();
+
         let secrets = FuncTestsSecrets::new();
+        let context = context(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
+                .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID")
+                .as_str(),
+        );
         let test_domain = secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment = test_utilities::common::non_working_environment(
-            &context,
-            secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
-            test_domain.as_str(),
-        );
-        let failover_environment = test_utilities::common::non_working_environment(
-            &context,
-            secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
-            test_domain.as_str(),
-        );
+        let environment = test_utilities::common::non_working_environment(&context, test_domain.as_str());
+        let failover_environment = test_utilities::common::non_working_environment(&context, test_domain.as_str());
 
         let context_for_deletion = context.clone_not_same_execution_id();
-        let mut delete_env = test_utilities::common::non_working_environment(
-            &context_for_deletion,
-            secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
-            test_domain.as_str(),
-        );
+        let mut delete_env =
+            test_utilities::common::non_working_environment(&context_for_deletion, test_domain.as_str());
         delete_env.action = Action::Delete;
 
         // environment action initialize
@@ -1097,6 +1094,71 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_a_non_working_failover
             secrets.clone(),
             SCW_TEST_ZONE,
         ) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_ORGANIZATION_ID is not set in secrets")
+                .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID is not set in secrets")
+                .as_str(),
+        );
+        let context_for_delete = context.clone_not_same_execution_id();
+        let environment = test_utilities::common::environment_only_http_server_router_with_sticky_session(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let env_action = EnvironmentAction::Environment(environment.clone());
+        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
+
+        match environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone()) {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        // checking cookie is properly set on the app
+        assert!(routers_sessions_are_sticky(environment.routers.clone()));
+
+        match environment_for_delete.delete_environment(Kind::Scw, &context_for_delete, &env_action_for_delete, logger)
+        {
+            TransactionResult::Ok => assert!(true),
+            TransactionResult::Rollback(_) => assert!(false),
+            TransactionResult::UnrecoverableError(_, _) => assert!(false),
+        };
+
+        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 

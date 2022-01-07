@@ -11,11 +11,11 @@ use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, g
 #[test]
 fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
     let logger = logger();
-    let context = context();
     let zone = Zone::Paris2;
-    let secrets = FuncTestsSecrets::new();
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(zone.as_str());
+    let context = context(organization_id.as_str(), cluster_id.as_str());
+    let secrets = FuncTestsSecrets::new();
     let cluster_domain = format!(
         "{}.{}",
         cluster_id.as_str(),
@@ -26,11 +26,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
             .as_str()
     );
 
-    let environment = test_utilities::common::working_minimal_environment(
-        &context,
-        organization_id.as_str(),
-        cluster_domain.as_str(),
-    );
+    let environment = test_utilities::common::working_minimal_environment(&context, cluster_domain.as_str());
     let env_action = EnvironmentAction::Environment(environment.clone());
 
     engine_run_test(|| {

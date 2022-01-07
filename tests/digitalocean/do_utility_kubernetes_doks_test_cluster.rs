@@ -27,8 +27,18 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
         let span = span!(Level::INFO, "utility", name = test_name);
         let _enter = span.enter();
 
+        let organization_id = secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set");
+        let cluster_id = secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set");
+        let cluster_name = format!("qovery-{}", cluster_id.clone());
+
         let logger = logger();
-        let context = context();
+        let context = context(organization_id.as_str(), cluster_id.as_str());
         let engine = DO::docker_cr_engine(&context, logger.clone());
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
@@ -36,12 +46,6 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
         let do_cluster = DO::cloud_provider(&context);
         let nodes = DO::kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context, ClusterDomain::Default);
-
-        let cluster_id = secrets
-            .DIGITAL_OCEAN_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set");
-        let cluster_name = format!("qovery-{}", cluster_id.clone());
 
         let kubernetes = DOKS::new(
             context.clone(),
@@ -89,8 +93,18 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
         let span = span!(Level::INFO, "utility", name = test_name);
         let _enter = span.enter();
 
+        let organization_id = secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set");
+        let cluster_id = secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set");
+        let cluster_name = format!("qovery-{}", cluster_id.clone());
+
         let logger = logger();
-        let context = context();
+        let context = context(organization_id.as_str(), cluster_id.as_str());
         let engine = DO::docker_cr_engine(&context, logger.clone());
         let session = engine.session().unwrap();
         let mut tx = session.transaction();
@@ -98,12 +112,6 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
         let do_cluster = DO::cloud_provider(&context);
         let nodes = DO::kubernetes_nodes();
         let cloudflare = dns_provider_cloudflare(&context, ClusterDomain::Default);
-
-        let cluster_id = secrets
-            .DIGITAL_OCEAN_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set");
-        let cluster_name = format!("qovery-{}", cluster_id);
 
         let kubernetes = DOKS::new(
             context.clone(),
