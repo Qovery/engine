@@ -13,6 +13,7 @@ concurrency:
 jobs:
   security_audit:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v1
       - uses: actions-rs/audit-check@v1
