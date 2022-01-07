@@ -99,6 +99,7 @@ unit-tests-mr:
 all-self-hosted-mr:
   stage: tests
   retry: 0
+  timeout: 3 hours
   script:
     - ./helper.sh all_self_hosted
   only:
@@ -126,6 +127,7 @@ all-self-hosted-mr:
 all-managed-services-mr:
   stage: tests
   retry: 0
+  timeout: 3 hours
   script:
     - ./helper.sh all_managed_services
   only:
@@ -153,6 +155,7 @@ all-managed-services-mr:
 test-all-mr:
   stage: tests
   retry: 0
+  timeout: 5 hours
   script:
     - ./helper.sh test_all
   only:
@@ -264,6 +267,7 @@ unit-tests:
 aws-whole-enchilada:
   stage: tests
   retry: 0
+  timeout: 3 hours
   script:
     - ./helper.sh aws_whole_enchilada
   dependencies:
@@ -292,6 +296,7 @@ aws-whole-enchilada:
 aws-infra:
   stage: tests
   retry: 0
+  timeout: 3 hours
   script:
     - ./helper.sh aws_infra
   dependencies:
@@ -320,6 +325,7 @@ aws-infra:
 aws-managed-services:
   stage: tests
   retry: 0
+  timeout: 3 hours
   script:
     - ./helper.sh aws_managed_services
   dependencies:
@@ -348,6 +354,7 @@ aws-managed-services:
 aws-self-hosted:
   stage: tests
   retry: 0
+  timeout: 3 hours
   script:
     - ./helper.sh aws_self_hosted
   dependencies:
@@ -376,6 +383,7 @@ aws-self-hosted:
 do-whole-enchilada:
   stage: tests
   retry: 0
+  timeout: 3 hours
   script:
     - ./helper.sh do_whole_enchilada
   dependencies:
@@ -404,6 +412,7 @@ do-whole-enchilada:
 do-infra:
   stage: tests
   retry: 0
+  timeout: 3 hours
   script:
     - ./helper.sh do_infra
   dependencies:
@@ -432,6 +441,7 @@ do-infra:
 do-managed-services:
   stage: tests
   retry: 0
+  timeout: 3 hours
   script:
     - ./helper.sh do_managed_services
   dependencies:
@@ -460,6 +470,7 @@ do-managed-services:
 do-self-hosted:
   stage: tests
   retry: 0
+  timeout: 3 hours
   script:
     - ./helper.sh do_self_hosted
   dependencies:
@@ -516,6 +527,7 @@ scw-whole-enchilada:
 scw-infra:
   stage: tests
   retry: 0
+  timeout: 3 hours
   script:
     - ./helper.sh scw_infra
   dependencies:
@@ -544,6 +556,7 @@ scw-infra:
 scw-managed-services:
   stage: tests
   retry: 0
+  timeout: 3 hours
   script:
     - ./helper.sh scw_managed_services
   dependencies:
@@ -572,6 +585,7 @@ scw-managed-services:
 scw-self-hosted:
   stage: tests
   retry: 0
+  timeout: 3 hours
   script:
     - ./helper.sh scw_self_hosted
   dependencies:
