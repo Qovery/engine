@@ -24,6 +24,16 @@ metadata:
     ingress.kubernetes.io/ssl-redirect: "true"
     #nginx.ingress.kubernetes.io/enable-cors: "true"
     #nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,x-csrftoken"
+    {%- if sticky_sessions_enabled == true %}
+    # https://kubernetes.github.io/ingress-nginx/examples/affinity/cookie/
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
+    nginx.ingress.kubernetes.io/session-cookie-secure: "true"
+    nginx.ingress.kubernetes.io/session-cookie-name: "INGRESSCOOKIE_QOVERY"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "85400" # 1 day
+    nginx.ingress.kubernetes.io/session-cookie-expires: "85400" # 1 day
+    nginx.ingress.kubernetes.io/session-cookie-samesite: "Lax"
+    {%- endif %}
 spec:
   tls:
     {%- if custom_domains|length > 0 %}

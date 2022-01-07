@@ -11,7 +11,7 @@ use tempfile::NamedTempFile;
 #[test]
 fn test_delete_bucket_hard_delete_strategy() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
@@ -46,7 +46,7 @@ fn test_delete_bucket_hard_delete_strategy() {
 #[test]
 fn test_delete_bucket_empty_strategy() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
@@ -86,7 +86,7 @@ fn test_delete_bucket_empty_strategy() {
 #[test]
 fn test_create_bucket() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
@@ -122,7 +122,7 @@ fn test_create_bucket() {
 #[test]
 fn test_recreate_bucket() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
@@ -164,7 +164,7 @@ fn test_recreate_bucket() {
 #[test]
 fn test_put_file() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
@@ -216,7 +216,7 @@ fn test_put_file() {
 #[test]
 fn test_get_file() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());

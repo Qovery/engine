@@ -10,11 +10,11 @@ use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, g
 #[named]
 #[test]
 fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
-    let context = context();
-    let secrets = FuncTestsSecrets::new();
     let region = "eu-west-3";
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(region);
+    let context = context(organization_id.as_str(), cluster_id.as_str());
+    let secrets = FuncTestsSecrets::new();
     let cluster_domain = format!(
         "{}.{}",
         cluster_id.as_str(),
@@ -25,11 +25,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             .as_str()
     );
 
-    let environment = test_utilities::common::working_minimal_environment(
-        &context,
-        organization_id.as_str(),
-        cluster_domain.as_str(),
-    );
+    let environment = test_utilities::common::working_minimal_environment(&context, cluster_domain.as_str());
     let env_action = EnvironmentAction::Environment(environment.clone());
 
     engine_run_test(|| {

@@ -29,7 +29,7 @@ fn test_delete_image() {
 #[test]
 fn test_get_registry_namespace() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
     let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
@@ -87,7 +87,7 @@ fn test_get_registry_namespace() {
 #[test]
 fn test_create_registry_namespace() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
     let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
@@ -138,7 +138,7 @@ fn test_create_registry_namespace() {
 #[test]
 fn test_delete_registry_namespace() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
     let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
@@ -184,7 +184,7 @@ fn test_delete_registry_namespace() {
 #[test]
 fn test_get_or_create_registry_namespace() {
     // setup:
-    let context = context();
+    let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
     let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
