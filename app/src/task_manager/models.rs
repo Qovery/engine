@@ -4,6 +4,7 @@ use serde_json::Value;
 
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::aws::kubernetes::EKS;
+use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
@@ -144,6 +145,7 @@ pub struct CloudProvider {
     pub kind: qovery_engine::cloud_provider::Kind,
     pub id: String,
     pub name: String,
+    pub zones: Vec<String>,
     pub options: Options,
     pub kubernetes: Kubernetes,
     pub terraform_state_credentials: TerraformStateCredentials,
@@ -171,6 +173,7 @@ impl CloudProvider {
                 self.name.as_str(),
                 self.options.access_key_id.as_ref()?.as_str(),
                 self.options.secret_access_key.as_ref()?.as_str(),
+                self.zones.clone(),
                 terraform_state_credentials,
             ))),
             qovery_engine::cloud_provider::Kind::Do => Some(Box::new(DO::new(
@@ -233,7 +236,8 @@ impl Kubernetes {
                 self.long_id,
                 self.name.as_str(),
                 self.version.as_str(),
-                self.region.as_str(),
+                AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
+                cloud_provider.zones(),
                 cloud_provider.as_any().downcast_ref::<AWS>().unwrap(),
                 dns_provider,
                 serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(self.options.clone())
@@ -250,7 +254,7 @@ impl Kubernetes {
                 self.long_id,
                 self.name.clone(),
                 self.version.clone(),
-                qovery_engine::cloud_provider::digitalocean::application::Region::from_str(self.region.as_str())
+                qovery_engine::cloud_provider::digitalocean::application::DoRegion::from_str(self.region.as_str())
                     .unwrap(),
                 cloud_provider.as_any().downcast_ref::<DO>().unwrap(),
                 dns_provider,
@@ -270,7 +274,7 @@ impl Kubernetes {
                 self.long_id,
                 self.name.clone(),
                 self.version.clone(),
-                qovery_engine::cloud_provider::scaleway::application::Zone::from_str(self.region.as_str()).expect(
+                qovery_engine::cloud_provider::scaleway::application::ScwZone::from_str(self.region.as_str()).expect(
                     format!(
                         "cannot parse `{}`, it doesn't seem to be a valid SCW zone",
                         self.region.as_str()
@@ -334,7 +338,7 @@ impl ContainerRegistry {
                 self.name.as_str(),
                 self.options.scaleway_secret_key.as_ref()?.as_str(),
                 self.options.scaleway_project_id.as_ref()?.as_str(),
-                qovery_engine::cloud_provider::scaleway::application::Zone::from_str(
+                qovery_engine::cloud_provider::scaleway::application::ScwZone::from_str(
                     self.options.region.as_ref()?.as_str(),
                 )
                 .expect(
