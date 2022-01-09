@@ -8,11 +8,12 @@ resource "scaleway_k8s_pool" "kubernetes_cluster_workers_{{ loop.index }}" {
   zone          = var.zone
 
   # use Scaleway built-in cluster autoscaler
-  autoscaling   = {{ scw_ks_pool_autoscale }}
-  autohealing   = true
-  size          = "{{ scw_ks_worker_node.min_nodes }}"
-  min_size      = "{{ scw_ks_worker_node.min_nodes }}"
-  max_size      = "{{ scw_ks_worker_node.max_nodes }}"
+  autoscaling         = {{ scw_ks_pool_autoscale }}
+  autohealing         = true
+  size                = "{{ scw_ks_worker_node.min_nodes }}"
+  min_size            = "{{ scw_ks_worker_node.min_nodes }}"
+  max_size            = "{{ scw_ks_worker_node.max_nodes }}"
+  wait_for_pool_ready = true
 
   depends_on    = [
     scaleway_k8s_cluster.kubernetes_cluster,
