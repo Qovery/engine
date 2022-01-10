@@ -10,7 +10,7 @@ use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::structs::{
     Configmap, Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
     KubernetesPod, KubernetesPodStatusPhase, KubernetesPodStatusReason, KubernetesService, KubernetesVersion,
-    LabelsContent, Secrets, PDB, PVC, SVC,
+    LabelsContent, Namespace, Secrets, PDB, PVC, SVC,
 };
 use crate::cmd::utilities::QoveryCommand;
 use crate::constants::KUBECONFIG;
@@ -489,7 +489,7 @@ where
     P: AsRef<Path>,
 {
     let result =
-        kubectl_exec::<P, KubernetesList<Item>>(vec!["get", "namespaces", "-o", "json"], kubernetes_config, envs);
+        kubectl_exec::<P, KubernetesList<Namespace>>(vec!["get", "namespaces", "-o", "json"], kubernetes_config, envs);
 
     let mut to_return: Vec<String> = Vec::new();
 
@@ -840,7 +840,7 @@ pub fn kubectl_delete_objects_in_all_namespaces<P>(
 where
     P: AsRef<Path>,
 {
-    let result = kubectl_exec::<P, KubernetesList<Item>>(
+    let result = kubectl_exec::<P, KubernetesList<Namespace>>(
         vec!["delete", &object.to_string(), "--all-namespaces", "--all"],
         kubernetes_config,
         envs,

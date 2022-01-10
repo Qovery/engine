@@ -72,6 +72,23 @@ pub struct ItemMetadata {
     pub annotations: HashMap<String, String>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Namespace {
+    pub api_version: String,
+    pub kind: String,
+    pub metadata: NamespaceMetadata,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NamespaceMetadata {
+    pub creation_timestamp: String,
+    pub name: String,
+    pub resource_version: String,
+    pub uid: String,
+}
+
 #[derive(Deserialize)]
 pub struct Configmap {
     pub data: ConfigmapData,
