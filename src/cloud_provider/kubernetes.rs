@@ -893,11 +893,11 @@ where
             Err(e) => OperationResult::Retry(e),
             Ok(nodes) => {
                 for node in nodes.items.iter() {
-                    if !node.status.node_info.kubelet_version.contains(target_version.as_str()) {
-                        info!("There is still not upgraded nodes. Upgrading...");
+                    if !node.status.node_info.kubelet_version.contains(&target_version[..4]) {
+                        info!("There are still not upgraded nodes. Upgrading...");
                         return OperationResult::Retry(SimpleError::new(
                             SimpleErrorKind::Other,
-                            Some("There is still not upgraded nodes."),
+                            Some("There are still not upgraded nodes."),
                         ));
                     }
                 }
