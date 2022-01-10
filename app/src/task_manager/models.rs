@@ -237,7 +237,7 @@ impl Kubernetes {
                 self.name.as_str(),
                 self.version.as_str(),
                 AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
-                cloud_provider.zones(),
+                cloud_provider.zones().clone(),
                 cloud_provider.as_any().downcast_ref::<AWS>().unwrap(),
                 dns_provider,
                 serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(self.options.clone())
