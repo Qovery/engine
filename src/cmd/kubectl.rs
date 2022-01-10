@@ -840,7 +840,7 @@ pub fn kubectl_delete_objects_in_all_namespaces<P>(
 where
     P: AsRef<Path>,
 {
-    let result = kubectl_exec::<P, KubernetesList<Namespace>>(
+    let result = kubectl_exec::<P, KubernetesList<Item>>(
         vec!["delete", &object.to_string(), "--all-namespaces", "--all"],
         kubernetes_config,
         envs,

@@ -876,7 +876,7 @@ pub fn generate_cluster_id(region: &str) -> String {
             };
 
             // flag such name to ease deletion later on
-            current_name = format!("{}", current_name);
+            current_name = format!("fixed-{}", current_name);
 
             // avoid out of bounds issue
             if current_name.chars().count() < shrink_size {
