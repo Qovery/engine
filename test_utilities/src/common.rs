@@ -16,8 +16,8 @@ use crate::cloudflare::dns_provider_cloudflare;
 use crate::digitalocean::DO_KUBERNETES_VERSION;
 use crate::scaleway::SCW_KUBERNETES_VERSION;
 use crate::utilities::{
-    db_disk_type, db_infos, db_instance_type, generate_cluster_id, generate_id, generate_password, get_pvc, get_svc,
-    get_svc_name, init, FuncTestsSecrets,
+    db_disk_type, db_instance_type, generate_cluster_id, generate_id, generate_password, get_db_infos, get_pvc,
+    get_svc, get_svc_name, init, FuncTestsSecrets,
 };
 use base64;
 use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
@@ -44,6 +44,11 @@ use tracing::{span, Level};
 pub enum ClusterDomain {
     Default,
     Custom(String),
+}
+
+pub enum DbTestType {
+    Classic,
+    WithAccessSwitch,
 }
 
 pub trait Cluster<T, U> {
@@ -978,6 +983,7 @@ pub fn test_db(
     provider_kind: Kind,
     database_mode: DatabaseMode,
     is_public: bool,
+    test_type: DbTestType,
 ) -> String {
     init();
 
@@ -1007,7 +1013,7 @@ pub fn test_db(
         },
     };
 
-    let db_infos = db_infos(
+    let db_infos = get_db_infos(
         db_kind.clone(),
         database_mode.clone(),
         database_username.clone(),
@@ -1078,7 +1084,129 @@ pub fn test_db(
         TransactionResult::UnrecoverableError(_, _) => assert!(false),
     }
 
-    match database_mode.clone() {
+    db_unit_tests(
+        database_mode.clone(),
+        context.clone(),
+        provider_kind.clone(),
+        environment.clone(),
+        secrets.clone(),
+        storage_size.clone(),
+        db_kind.clone(),
+        is_public.clone(),
+        app_id.clone(),
+        database_host.clone(),
+    );
+
+    match test_type {
+        DbTestType::Classic => {}
+        DbTestType::WithAccessSwitch => {
+            let dyn_db_fqdn = match !is_public.clone() {
+                true => database_host.clone(),
+                false => match database_mode.clone() {
+                    DatabaseMode::MANAGED => format!("{}-dns", app_id.clone()),
+                    DatabaseMode::CONTAINER => get_svc_name(db_kind.clone(), provider_kind.clone()).to_string(),
+                },
+            };
+
+            let db_infos = get_db_infos(
+                db_kind.clone(),
+                database_mode.clone(),
+                database_username.clone(),
+                database_password.clone(),
+                dyn_db_fqdn.clone(),
+            );
+
+            let db = Database {
+                kind: db_kind.clone(),
+                action: Action::Create,
+                id: app_id.clone(),
+                name: database_db_name.clone(),
+                version: version.to_string(),
+                fqdn_id: format!("{}-{}", db_kind_str.clone(), generate_id()),
+                fqdn: database_host.clone(),
+                port: database_port.clone(),
+                username: database_username.clone(),
+                password: database_password.clone(),
+                total_cpus: "100m".to_string(),
+                total_ram_in_mib: 512,
+                disk_size_in_gib: storage_size.clone(),
+                database_instance_type: db_instance_type.to_string(),
+                database_disk_type: db_disk_type.to_string(),
+                encrypt_disk: true,
+                activate_high_availability: false,
+                activate_backups: false,
+                publicly_accessible: !is_public.clone(),
+                mode: database_mode.clone(),
+            };
+
+            environment.databases = vec![db.clone()];
+
+            environment.applications = environment
+                .applications
+                .into_iter()
+                .map(|mut app| {
+                    app.branch = app_name.clone();
+                    app.commit_id = db_infos.app_commit.clone();
+                    app.ports = vec![Port {
+                        id: "zdf7d6aad".to_string(),
+                        long_id: Default::default(),
+                        port: 1234,
+                        public_port: Some(1234),
+                        name: None,
+                        publicly_accessible: true,
+                        protocol: Protocol::HTTP,
+                    }];
+                    app.dockerfile_path = Some(format!("Dockerfile-{}", version));
+                    app.environment_vars = db_infos.app_env_vars.clone();
+                    app
+                })
+                .collect::<Vec<qovery_engine::models::Application>>();
+
+            let ea_switch = EnvironmentAction::Environment(environment.clone());
+
+            match environment.deploy_environment(provider_kind.clone(), &context, &ea_switch, logger.clone()) {
+                TransactionResult::Ok => assert!(true),
+                TransactionResult::Rollback(_) => assert!(false),
+                TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            }
+
+            db_unit_tests(
+                database_mode.clone(),
+                context.clone(),
+                provider_kind.clone(),
+                environment.clone(),
+                secrets.clone(),
+                storage_size.clone(),
+                db_kind.clone(),
+                is_public.clone(),
+                app_id.clone(),
+                database_host.clone(),
+            );
+        }
+    };
+
+    match environment_delete.delete_environment(provider_kind.clone(), &context_for_delete, &ea_delete, logger) {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    }
+
+    return test_name.to_string();
+}
+
+fn db_unit_tests(
+    database_mode: DatabaseMode,
+    context: Context,
+    provider_kind: Kind,
+    environment: Environment,
+    secrets: FuncTestsSecrets,
+    storage_size: u32,
+    db_kind: DatabaseKind,
+    is_public: bool,
+    app_id: String,
+    database_host: String,
+) {
+    match database_mode {
         DatabaseMode::CONTAINER => {
             match get_pvc(
                 context.clone(),
@@ -1144,14 +1272,6 @@ pub fn test_db(
             };
         }
     }
-
-    match environment_delete.delete_environment(provider_kind.clone(), &context_for_delete, &ea_delete, logger) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    }
-
-    return test_name.to_string();
 }
 
 pub fn get_environment_test_kubernetes<'a>(

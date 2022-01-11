@@ -11,7 +11,7 @@ use test_utilities::utilities::{
 };
 
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
-use test_utilities::common::{test_db, working_minimal_environment, Infrastructure};
+use test_utilities::common::{test_db, working_minimal_environment, DbTestType, Infrastructure};
 use test_utilities::digitalocean::{
     clean_environments, DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE,
     DO_SELF_HOSTED_DATABASE_DISK_TYPE, DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE, DO_TEST_REGION,
@@ -523,6 +523,47 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
     })
 }
 
+#[cfg(feature = "test-do-self-hosted")]
+#[named]
+#[test]
+fn switch_postgresql_access_self_hosted() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    engine_run_test(|| {
+        test_db(
+            context,
+            logger(),
+            environment,
+            secrets,
+            "13",
+            function_name!(),
+            DatabaseKind::Postgresql,
+            Kind::Do,
+            DatabaseMode::CONTAINER,
+            true,
+            DbTestType::WithAccessSwitch,
+        )
+    })
+}
+
 /**
  **
  ** PostgreSQL tests
@@ -550,6 +591,7 @@ fn test_postgresql_configuration(
             Kind::Do,
             database_mode,
             is_public,
+            DbTestType::Classic,
         )
     })
 }
@@ -801,6 +843,7 @@ fn test_mongodb_configuration(
             Kind::Do,
             database_mode,
             is_public,
+            DbTestType::Classic,
         )
     })
 }
@@ -1053,6 +1096,7 @@ fn test_mysql_configuration(
             Kind::Do,
             database_mode,
             is_public,
+            DbTestType::Classic,
         )
     })
 }
@@ -1197,6 +1241,7 @@ fn test_redis_configuration(
             Kind::Do,
             database_mode,
             is_public,
+            DbTestType::Classic,
         )
     })
 }

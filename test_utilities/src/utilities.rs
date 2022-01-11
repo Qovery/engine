@@ -977,7 +977,7 @@ pub struct DBInfos {
     pub app_env_vars: BTreeMap<String, String>,
 }
 
-pub fn db_infos(
+pub fn get_db_infos(
     db_kind: DatabaseKind,
     database_mode: DatabaseMode,
     database_username: String,

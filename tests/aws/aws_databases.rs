@@ -13,7 +13,7 @@ use self::test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
-use test_utilities::common::{test_db, Infrastructure};
+use test_utilities::common::{test_db, working_minimal_environment, DbTestType, Infrastructure};
 
 /**
 **
@@ -484,6 +484,92 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
     })
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn switch_postgresql_access_self_hosted() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
+        secrets
+            .AWS_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("AWS_TEST_CLUSTER_ID is not set")
+            .as_str(),
+    );
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        secrets
+            .clone()
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    engine_run_test(|| {
+        test_db(
+            context,
+            logger(),
+            environment,
+            secrets,
+            "13",
+            function_name!(),
+            DatabaseKind::Postgresql,
+            Kind::Aws,
+            DatabaseMode::CONTAINER,
+            true,
+            DbTestType::WithAccessSwitch,
+        )
+    })
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn switch_postgresql_access_managed() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
+        secrets
+            .AWS_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("AWS_TEST_CLUSTER_ID is not set")
+            .as_str(),
+    );
+    let environment = test_utilities::common::working_minimal_environment(
+        &context,
+        secrets
+            .clone()
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    engine_run_test(|| {
+        test_db(
+            context,
+            logger(),
+            environment,
+            secrets,
+            "13",
+            function_name!(),
+            DatabaseKind::Postgresql,
+            Kind::Aws,
+            DatabaseMode::MANAGED,
+            true,
+            DbTestType::WithAccessSwitch,
+        )
+    })
+}
+
 /**
 **
 ** PostgreSQL tests
@@ -511,6 +597,7 @@ fn test_postgresql_configuration(
             Kind::Aws,
             database_mode,
             is_public,
+            DbTestType::Classic,
         )
     })
 }
@@ -1004,6 +1091,7 @@ fn test_mongodb_configuration(
             Kind::Aws,
             database_mode,
             is_public,
+            DbTestType::Classic,
         )
     })
 }
@@ -1385,6 +1473,7 @@ fn test_mysql_configuration(
             Kind::Aws,
             database_mode,
             is_public,
+            DbTestType::Classic,
         )
     })
 }
@@ -1650,6 +1739,7 @@ fn test_redis_configuration(
             Kind::Aws,
             database_mode,
             is_public,
+            DbTestType::Classic,
         )
     })
 }
