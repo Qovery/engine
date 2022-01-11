@@ -1240,11 +1240,26 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.context.execution_id(),
             terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
         ) {
-            Ok(_) => {
-                let message = format!("Kubernetes {} nodes have been successfully upgraded", self.name());
-                info!("{}", &message);
-                self.send_to_customer(&message, &listeners_helper);
-            }
+            Ok(_) => match self.check_workers_on_upgrade(kubernetes_upgrade_status.requested_version.to_string()) {
+                Ok(_) => {
+                    let message = format!("Kubernetes {} nodes have been successfully upgraded", self.name());
+                    info!("{}", &message);
+                    self.send_to_customer(&message, &listeners_helper);
+                }
+                Err(e) => {
+                    error!(
+                        "Error while upgrading nodes for cluster {} with id {}.",
+                        self.name(),
+                        self.id()
+                    );
+                    return Err(LegacyEngineError {
+                        cause: EngineErrorCause::Internal,
+                        scope: EngineErrorScope::Engine,
+                        execution_id: self.context.execution_id().to_string(),
+                        message: e.message,
+                    });
+                }
+            },
             Err(e) => {
                 error!(
                     "Error while upgrading nodes for cluster {} with id {}.",

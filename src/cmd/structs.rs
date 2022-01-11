@@ -72,6 +72,23 @@ pub struct ItemMetadata {
     pub annotations: HashMap<String, String>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Namespace {
+    pub api_version: String,
+    pub kind: String,
+    pub metadata: NamespaceMetadata,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NamespaceMetadata {
+    pub creation_timestamp: String,
+    pub name: String,
+    pub resource_version: String,
+    pub uid: String,
+}
+
 #[derive(Deserialize)]
 pub struct Configmap {
     pub data: ConfigmapData,
@@ -504,7 +521,6 @@ mod tests {
                 "name": "app-z164e3ad8",
                 "namespace": "z9b830e28-ze23976e2",
                 "resourceVersion": "6801889",
-                "selfLink": "/api/v1/namespaces/z9b830e28-ze23976e2/services/app-z164e3ad8",
                 "uid": "c165f1b0-b372-449e-9ffa-ed2f06fee7c3"
             },
             "spec": {

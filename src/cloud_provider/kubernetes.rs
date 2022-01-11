@@ -8,7 +8,7 @@ use std::sync::mpsc::TryRecvError;
 use std::thread;
 use std::time::Duration;
 
-use retry::delay::Fibonacci;
+use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
@@ -212,6 +212,19 @@ pub trait Kubernetes: Listen {
                 Err(e) => Err(err(e)),
             },
         }
+    }
+
+    fn check_workers_on_upgrade(&self, targeted_version: String) -> Result<(), SimpleError>
+    where
+        Self: Sized,
+    {
+        send_progress_on_long_task(self, Action::Create, || {
+            check_workers_upgrade_status(
+                self.get_kubeconfig_file_path().expect("Unable to get Kubeconfig"),
+                self.cloud_provider().credentials_environment_variables(),
+                targeted_version.clone(),
+            )
+        })
     }
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError>;
     fn on_upgrade(&self) -> Result<(), EngineError>;
@@ -867,6 +880,39 @@ where
             })
         }
     }
+}
+
+pub fn check_workers_upgrade_status<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    target_version: String,
+) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let result = retry::retry(Fixed::from_millis(10000).take(360), || {
+        match kubectl_exec_get_node(kubernetes_config.as_ref(), envs.clone()) {
+            Err(e) => OperationResult::Retry(e),
+            Ok(nodes) => {
+                for node in nodes.items.iter() {
+                    if !node.status.node_info.kubelet_version.contains(&target_version[..4]) {
+                        info!("There are still not upgraded nodes. Upgrading...");
+                        return OperationResult::Retry(SimpleError::new(
+                            SimpleErrorKind::Other,
+                            Some("There are still not upgraded nodes."),
+                        ));
+                    }
+                }
+                return OperationResult::Ok(());
+            }
+        }
+    });
+
+    return match result {
+        Ok(_) => Ok(()),
+        Err(Operation { error, .. }) => Err(error),
+        Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+    };
 }
 
 #[derive(Debug, PartialEq)]

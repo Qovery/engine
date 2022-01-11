@@ -10,7 +10,7 @@ use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::structs::{
     Configmap, Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
     KubernetesPod, KubernetesPodStatusPhase, KubernetesPodStatusReason, KubernetesService, KubernetesVersion,
-    LabelsContent, Secrets, PDB, PVC, SVC,
+    LabelsContent, Namespace, Secrets, PDB, PVC, SVC,
 };
 use crate::cmd::utilities::QoveryCommand;
 use crate::constants::KUBECONFIG;
@@ -489,7 +489,7 @@ where
     P: AsRef<Path>,
 {
     let result =
-        kubectl_exec::<P, KubernetesList<Item>>(vec!["get", "namespaces", "-o", "json"], kubernetes_config, envs);
+        kubectl_exec::<P, KubernetesList<Namespace>>(vec!["get", "namespaces", "-o", "json"], kubernetes_config, envs);
 
     let mut to_return: Vec<String> = Vec::new();
 
