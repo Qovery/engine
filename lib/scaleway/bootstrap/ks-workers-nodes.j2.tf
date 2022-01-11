@@ -14,10 +14,6 @@ resource "scaleway_k8s_pool" "kubernetes_cluster_workers_{{ loop.index }}" {
   min_size      = "{{ scw_ks_worker_node.min_nodes }}"
   max_size      = "{{ scw_ks_worker_node.max_nodes }}"
 
-  upgrade_policy {
-        max_surge = "{{ scw_ks_worker_node.max_nodes }}"
-  }
-
   depends_on    = [
     scaleway_k8s_cluster.kubernetes_cluster,
   ]
