@@ -112,7 +112,7 @@ impl Infrastructure for Environment {
             k.as_ref(),
             &environment_action,
             DeploymentOption {
-                force_build: true,
+                force_build: false,
                 force_push: true,
             },
         );
@@ -1025,7 +1025,7 @@ pub fn test_db(
     let storage_size = 10;
     let db_disk_type = db_disk_type(provider_kind.clone(), database_mode.clone());
     let db_instance_type = db_instance_type(provider_kind.clone(), db_kind.clone(), database_mode.clone());
-    let db = Database {
+    let mut db = Database {
         kind: db_kind.clone(),
         action: Action::Create,
         id: app_id.clone(),
@@ -1100,7 +1100,7 @@ pub fn test_db(
     match test_type {
         DbTestType::Classic => {}
         DbTestType::WithAccessSwitch => {
-            let dyn_db_fqdn = match !is_public.clone() {
+            let revert_dyn_db_fqdn = match !is_public.clone() {
                 true => database_host.clone(),
                 false => match database_mode.clone() {
                     DatabaseMode::MANAGED => format!("{}-dns", app_id.clone()),
@@ -1108,56 +1108,21 @@ pub fn test_db(
                 },
             };
 
-            let db_infos = get_db_infos(
+            let revert_db_infos = get_db_infos(
                 db_kind.clone(),
                 database_mode.clone(),
                 database_username.clone(),
                 database_password.clone(),
-                dyn_db_fqdn.clone(),
+                revert_dyn_db_fqdn.clone(),
             );
 
-            let db = Database {
-                kind: db_kind.clone(),
-                action: Action::Create,
-                id: app_id.clone(),
-                name: database_db_name.clone(),
-                version: version.to_string(),
-                fqdn_id: format!("{}-{}", db_kind_str.clone(), generate_id()),
-                fqdn: database_host.clone(),
-                port: database_port.clone(),
-                username: database_username.clone(),
-                password: database_password.clone(),
-                total_cpus: "100m".to_string(),
-                total_ram_in_mib: 512,
-                disk_size_in_gib: storage_size.clone(),
-                database_instance_type: db_instance_type.to_string(),
-                database_disk_type: db_disk_type.to_string(),
-                encrypt_disk: true,
-                activate_high_availability: false,
-                activate_backups: false,
-                publicly_accessible: !is_public.clone(),
-                mode: database_mode.clone(),
-            };
-
-            environment.databases = vec![db.clone()];
+            db.publicly_accessible = !db.publicly_accessible;
 
             environment.applications = environment
                 .applications
                 .into_iter()
                 .map(|mut app| {
-                    app.branch = app_name.clone();
-                    app.commit_id = db_infos.app_commit.clone();
-                    app.ports = vec![Port {
-                        id: "zdf7d6aad".to_string(),
-                        long_id: Default::default(),
-                        port: 1234,
-                        public_port: Some(1234),
-                        name: None,
-                        publicly_accessible: true,
-                        protocol: Protocol::HTTP,
-                    }];
-                    app.dockerfile_path = Some(format!("Dockerfile-{}", version));
-                    app.environment_vars = db_infos.app_env_vars.clone();
+                    app.environment_vars = revert_db_infos.app_env_vars.clone();
                     app
                 })
                 .collect::<Vec<qovery_engine::models::Application>>();
@@ -1165,6 +1130,38 @@ pub fn test_db(
             let ea_switch = EnvironmentAction::Environment(environment.clone());
 
             match environment.deploy_environment(provider_kind.clone(), &context, &ea_switch, logger.clone()) {
+                TransactionResult::Ok => assert!(true),
+                TransactionResult::Rollback(_) => assert!(false),
+                TransactionResult::UnrecoverableError(_, _) => assert!(false),
+            }
+
+            db_unit_tests(
+                database_mode.clone(),
+                context.clone(),
+                provider_kind.clone(),
+                environment.clone(),
+                secrets.clone(),
+                storage_size.clone(),
+                db_kind.clone(),
+                !is_public.clone(),
+                app_id.clone(),
+                database_host.clone(),
+            );
+
+            db.publicly_accessible = !db.publicly_accessible;
+
+            environment.applications = environment
+                .applications
+                .into_iter()
+                .map(|mut app| {
+                    app.environment_vars = db_infos.app_env_vars.clone();
+                    app
+                })
+                .collect::<Vec<qovery_engine::models::Application>>();
+
+            let ea_back = EnvironmentAction::Environment(environment.clone());
+
+            match environment.deploy_environment(provider_kind.clone(), &context, &ea_back, logger.clone()) {
                 TransactionResult::Ok => assert!(true),
                 TransactionResult::Rollback(_) => assert!(false),
                 TransactionResult::UnrecoverableError(_, _) => assert!(false),

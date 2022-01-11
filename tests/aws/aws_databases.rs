@@ -13,7 +13,7 @@ use self::test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
-use test_utilities::common::{test_db, working_minimal_environment, DbTestType, Infrastructure};
+use test_utilities::common::{test_db, DbTestType, Infrastructure};
 
 /**
 **
