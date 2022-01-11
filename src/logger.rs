@@ -79,7 +79,7 @@ impl Logger for StdIoLogger {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cloud_provider::scaleway::application::Region;
+    use crate::cloud_provider::scaleway::application::ScwRegion;
     use crate::cloud_provider::Kind;
     use crate::errors::EngineError;
     use crate::events::{EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
@@ -120,7 +120,7 @@ mod tests {
                         orga_id.clone(),
                         cluster_id.clone(),
                         execution_id.clone(),
-                        Some(Region::Paris.as_str().to_string()),
+                        Some(ScwRegion::Paris.as_str().to_string()),
                         Stage::Infrastructure(InfrastructureStep::Create),
                         Transmitter::Kubernetes(cluster_id.to_string(), cluster_name.to_string()),
                     ),
@@ -141,7 +141,7 @@ mod tests {
                         orga_id.clone(),
                         cluster_id.clone(),
                         execution_id.clone(),
-                        Some(Region::Paris.as_str().to_string()),
+                        Some(ScwRegion::Paris.as_str().to_string()),
                         Stage::Infrastructure(InfrastructureStep::Create),
                         Transmitter::Kubernetes(cluster_id.to_string(), cluster_name.to_string()),
                     ),
@@ -157,7 +157,7 @@ mod tests {
                         orga_id.clone(),
                         cluster_id.clone(),
                         execution_id.clone(),
-                        Some(Region::Paris.as_str().to_string()),
+                        Some(ScwRegion::Paris.as_str().to_string()),
                         Stage::Environment(EnvironmentStep::Pause),
                         Transmitter::Application(app_id.to_string(), app_name.to_string()),
                     ),
@@ -173,7 +173,7 @@ mod tests {
                         orga_id.clone(),
                         cluster_id.clone(),
                         execution_id.clone(),
-                        Some(Region::Paris.as_str().to_string()),
+                        Some(ScwRegion::Paris.as_str().to_string()),
                         Stage::Environment(EnvironmentStep::Delete),
                         Transmitter::Application(app_id.to_string(), app_name.to_string()),
                     ),

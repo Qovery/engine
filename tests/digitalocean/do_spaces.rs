@@ -1,11 +1,11 @@
-use qovery_engine::cloud_provider::digitalocean::application::Region;
+use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use qovery_engine::object_storage::ObjectStorage;
 use tempfile::NamedTempFile;
 use test_utilities::utilities::{context, generate_id, FuncTestsSecrets};
 
 #[allow(dead_code)]
-const TEST_REGION: Region = Region::Amsterdam3;
+const TEST_REGION: DoRegion = DoRegion::Amsterdam3;
 
 #[cfg(feature = "test-do-infra")]
 #[test]

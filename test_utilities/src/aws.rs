@@ -1,7 +1,9 @@
 extern crate serde;
 extern crate serde_derive;
+
 use const_format::formatcp;
 use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
+use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
@@ -11,6 +13,7 @@ use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::engine::Engine;
 use qovery_engine::logger::Logger;
 use qovery_engine::models::Context;
+use std::str::FromStr;
 use tracing::error;
 
 use crate::cloudflare::dns_provider_cloudflare;
@@ -81,6 +84,8 @@ impl Cluster<AWS, Options> for AWS {
 
     fn cloud_provider(context: &Context) -> Box<AWS> {
         let secrets = FuncTestsSecrets::new();
+        let aws_region =
+            AwsRegion::from_str(secrets.AWS_DEFAULT_REGION.unwrap().as_str()).expect("AWS region not supported");
         Box::new(AWS::new(
             context.clone(),
             "u8nb94c7fwxzr2jt",
@@ -99,6 +104,7 @@ impl Cluster<AWS, Options> for AWS {
                 .AWS_SECRET_ACCESS_KEY
                 .expect("AWS_SECRET_ACCESS_KEY is not set")
                 .as_str(),
+            aws_region.get_zones_to_string(),
             TerraformStateCredentials {
                 access_key_id: secrets
                     .TERRAFORM_AWS_ACCESS_KEY_ID

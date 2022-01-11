@@ -1,6 +1,6 @@
 extern crate scaleway_api_rs;
 
-use crate::cloud_provider::scaleway::application::Zone;
+use crate::cloud_provider::scaleway::application::ScwZone;
 
 use crate::build_platform::Image;
 use crate::container_registry::docker::{docker_login, docker_manifest_inspect, docker_tag_and_push_image};
@@ -22,7 +22,7 @@ pub struct ScalewayCR {
     default_project_id: String,
     login: String,
     secret_token: String,
-    zone: Zone,
+    zone: ScwZone,
     listeners: Listeners,
 }
 
@@ -33,7 +33,7 @@ impl ScalewayCR {
         name: &str,
         secret_token: &str,
         default_project_id: &str,
-        zone: Zone,
+        zone: ScwZone,
     ) -> ScalewayCR {
         ScalewayCR {
             context,

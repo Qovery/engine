@@ -4,7 +4,7 @@ use crate::cloud_provider::helm::{
     ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
-use crate::cloud_provider::scaleway::application::{Region, Zone};
+use crate::cloud_provider::scaleway::application::{ScwRegion, ScwZone};
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use crate::error::{SimpleError, SimpleErrorKind};
 use semver::Version;
@@ -23,8 +23,8 @@ pub struct ChartsConfigPrerequisites {
     pub organization_long_id: uuid::Uuid,
     pub cluster_id: String,
     pub cluster_long_id: uuid::Uuid,
-    pub zone: Zone,
-    pub region: Region,
+    pub zone: ScwZone,
+    pub region: ScwRegion,
     pub cluster_name: String,
     pub cloud_provider: String,
     pub test_cluster: bool,
@@ -53,7 +53,7 @@ impl ChartsConfigPrerequisites {
         organization_long_id: uuid::Uuid,
         cluster_id: String,
         cluster_long_id: uuid::Uuid,
-        zone: Zone,
+        zone: ScwZone,
         cluster_name: String,
         cloud_provider: String,
         test_cluster: bool,

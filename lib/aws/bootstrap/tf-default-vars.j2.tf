@@ -44,6 +44,12 @@ variable "test_cluster" {
 
 # AWS specific
 
+variable "aws_availability_zones" {
+  description = "AWS availability zones"
+  default = {{ aws_availability_zones }}
+  type = list(string)
+}
+
 variable "vpc_cidr_block" {
   description = "VPC CIDR block"
   default = "{{ vpc_cidr_block }}"

@@ -6,13 +6,13 @@ use self::test_utilities::utilities::{
 };
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
-use qovery_engine::cloud_provider::scaleway::application::Zone;
+use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::Kind;
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 
 #[cfg(feature = "test-scw-infra")]
 fn create_and_destroy_kapsule_cluster(
-    zone: Zone,
+    zone: ScwZone,
     secrets: FuncTestsSecrets,
     test_type: ClusterTestType,
     major_boot_version: u8,
@@ -27,6 +27,7 @@ fn create_and_destroy_kapsule_cluster(
             context(generate_id().as_str(), generate_cluster_id(zone.as_str()).as_str()),
             logger(),
             zone.as_str(),
+            None,
             secrets,
             test_type,
             major_boot_version,
@@ -43,7 +44,7 @@ fn create_and_destroy_kapsule_cluster(
 #[ignore]
 #[test]
 fn create_and_destroy_kapsule_cluster_par_1() {
-    let zone = Zone::Paris1;
+    let zone = ScwZone::Paris1;
     let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
@@ -60,7 +61,7 @@ fn create_and_destroy_kapsule_cluster_par_1() {
 #[named]
 #[test]
 fn create_and_destroy_kapsule_cluster_par_2() {
-    let zone = Zone::Paris2;
+    let zone = ScwZone::Paris2;
     let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
@@ -77,7 +78,7 @@ fn create_and_destroy_kapsule_cluster_par_2() {
 #[named]
 #[test]
 fn create_pause_and_destroy_kapsule_cluster_ams_1() {
-    let zone = Zone::Amsterdam1;
+    let zone = ScwZone::Amsterdam1;
     let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
@@ -94,7 +95,7 @@ fn create_pause_and_destroy_kapsule_cluster_ams_1() {
 #[named]
 #[test]
 fn create_and_destroy_kapsule_cluster_war_1() {
-    let zone = Zone::Warsaw1;
+    let zone = ScwZone::Warsaw1;
     let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
@@ -113,7 +114,7 @@ fn create_and_destroy_kapsule_cluster_war_1() {
 #[named]
 #[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_par_1() {
-    let zone = Zone::Paris1;
+    let zone = ScwZone::Paris1;
     let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
@@ -132,7 +133,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_par_1() {
 #[named]
 #[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_par_2() {
-    let zone = Zone::Paris2;
+    let zone = ScwZone::Paris2;
     let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
@@ -151,7 +152,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_par_2() {
 #[named]
 #[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_ams_1() {
-    let zone = Zone::Amsterdam1;
+    let zone = ScwZone::Amsterdam1;
     let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
@@ -170,7 +171,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_ams_1() {
 #[named]
 #[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_war_1() {
-    let zone = Zone::Warsaw1;
+    let zone = ScwZone::Warsaw1;
     let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,

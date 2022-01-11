@@ -322,7 +322,7 @@ pub fn default_tera_context(
     context.insert("project_id", environment.project_id.as_str());
     context.insert("organization_id", environment.organization_id.as_str());
     context.insert("environment_id", environment.id.as_str());
-    context.insert("region", kubernetes.region());
+    context.insert("region", kubernetes.region().as_str());
     context.insert("zone", kubernetes.zone());
     context.insert("name", service.name());
     context.insert("sanitized_name", &service.sanitized_name());

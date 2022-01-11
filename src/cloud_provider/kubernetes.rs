@@ -13,6 +13,7 @@ use retry::Error::Operation;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 
+use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::{Environment, EnvironmentResources};
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::service::CheckAction;
@@ -54,8 +55,9 @@ pub trait Kubernetes: Listen {
     }
 
     fn version(&self) -> &str;
-    fn region(&self) -> &str;
+    fn region(&self) -> String;
     fn zone(&self) -> &str;
+    fn aws_zones(&self) -> Option<Vec<AwsZones>>;
     fn cloud_provider(&self) -> &dyn CloudProvider;
     fn dns_provider(&self) -> &dyn DnsProvider;
     fn logger(&self) -> &dyn Logger;

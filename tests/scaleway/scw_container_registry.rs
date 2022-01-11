@@ -2,13 +2,13 @@ extern crate test_utilities;
 
 use self::test_utilities::utilities::{context, FuncTestsSecrets};
 use qovery_engine::build_platform::Image;
-use qovery_engine::cloud_provider::scaleway::application::Zone;
+use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use tracing::debug;
 use uuid::Uuid;
 
-fn zones_to_test() -> Vec<Zone> {
-    vec![Zone::Paris1, Zone::Paris2, Zone::Amsterdam1, Zone::Warsaw1]
+fn zones_to_test() -> Vec<ScwZone> {
+    vec![ScwZone::Paris1, ScwZone::Paris2, ScwZone::Amsterdam1, ScwZone::Warsaw1]
 }
 
 #[cfg(feature = "test-scw-infra")]

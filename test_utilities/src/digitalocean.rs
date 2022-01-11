@@ -13,7 +13,7 @@ use qovery_engine::models::{Context, Environment};
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::common::{Cluster, ClusterDomain};
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
-use qovery_engine::cloud_provider::digitalocean::application::Region;
+use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::logger::Logger;
 
@@ -22,7 +22,7 @@ pub const DO_KUBERNETES_MINOR_VERSION: u8 = 20;
 pub const DO_KUBERNETES_VERSION: &'static str =
     formatcp!("{}.{}", DO_KUBERNETES_MAJOR_VERSION, DO_KUBERNETES_MINOR_VERSION);
 pub const DOCR_ID: &str = "registry-the-one-and-unique";
-pub const DO_TEST_REGION: Region = Region::Amsterdam3;
+pub const DO_TEST_REGION: DoRegion = DoRegion::Amsterdam3;
 pub const DO_MANAGED_DATABASE_INSTANCE_TYPE: &str = "";
 pub const DO_MANAGED_DATABASE_DISK_TYPE: &str = "";
 pub const DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE: &str = "";
@@ -131,7 +131,7 @@ pub fn clean_environments(
     context: &Context,
     environments: Vec<Environment>,
     secrets: FuncTestsSecrets,
-    _region: Region,
+    _region: DoRegion,
 ) -> Result<(), EngineError> {
     let do_cr = DOCR::new(
         context.clone(),
