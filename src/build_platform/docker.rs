@@ -43,14 +43,16 @@ pub fn match_used_env_var_args(
     let used_args = extract_dockerfile_args(dockerfile_content)?;
 
     // match env var args and dockerfile env vargs
-    let env_var_arg_keys = env_var_args.iter()
+    let env_var_arg_keys = env_var_args
+        .iter()
         .map(|env_var| {
             let x = env_var.split("=").collect::<Vec<&str>>();
             x.get(0).unwrap_or(&"").to_string()
         })
         .collect::<HashSet<String>>();
 
-    Ok(env_var_arg_keys.intersection(&used_args)
+    Ok(env_var_arg_keys
+        .intersection(&used_args)
         .map(|arg| arg.clone())
         .collect::<Vec<String>>())
 }
@@ -118,7 +120,10 @@ mod tests {
 
         assert_eq!(matched_vars.unwrap().len(), 4);
 
-        let matched_vars = match_used_env_var_args(vec!["toto=abcdvalue".to_string(), "x=abcdvalue".to_string()], dockerfile.to_vec());
+        let matched_vars = match_used_env_var_args(
+            vec!["toto=abcdvalue".to_string(), "x=abcdvalue".to_string()],
+            dockerfile.to_vec(),
+        );
 
         assert_eq!(matched_vars.unwrap().len(), 2);
 
@@ -188,7 +193,8 @@ mod tests {
 
         assert_eq!(matched_vars.unwrap().len(), 3);
 
-        let matched_vars = match_used_env_var_args(vec!["PRISMIC_REPO_NAME=abcdvalue".to_string()], dockerfile.to_vec());
+        let matched_vars =
+            match_used_env_var_args(vec!["PRISMIC_REPO_NAME=abcdvalue".to_string()], dockerfile.to_vec());
 
         assert_eq!(matched_vars.unwrap().len(), 1);
 
