@@ -1229,7 +1229,7 @@ impl<'a> Kubernetes for DOKS<'a> {
         match self.delete_crashlooping_pods(
             None,
             None,
-            Some(10),
+            Some(3),
             self.cloud_provider().credentials_environment_variables(),
         ) {
             Ok(..) => {}
