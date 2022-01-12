@@ -46,8 +46,8 @@ pub fn match_used_env_var_args(
     let env_var_arg_keys = env_var_args
         .iter()
         .map(|env_var| {
-            let x = env_var.split("=").collect::<Vec<&str>>();
-            x.get(0).unwrap_or(&"").to_string()
+            let x = env_var.split("=").next();
+            x.unwrap_or(&"").to_string()
         })
         .collect::<HashSet<String>>();
 
