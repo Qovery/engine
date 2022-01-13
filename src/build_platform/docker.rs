@@ -45,15 +45,20 @@ pub fn match_used_env_var_args(
     // match env var args and dockerfile env vargs
     let env_var_arg_keys = env_var_args
         .iter()
-        .map(|env_var| {
-            let x = env_var.split("=").next();
-            x.unwrap_or(&"").to_string()
-        })
+        .map(|env_var| env_var.split("=").next().unwrap_or(&"").to_string())
         .collect::<HashSet<String>>();
 
-    Ok(env_var_arg_keys
+    let matched_env_args_keys = env_var_arg_keys
         .intersection(&used_args)
         .map(|arg| arg.clone())
+        .collect::<HashSet<String>>();
+
+    Ok(env_var_args
+        .into_iter()
+        .filter(|env_var_arg| {
+            let env_var_arg_key = env_var_arg.split("=").next().unwrap_or("");
+            matched_env_args_keys.contains(env_var_arg_key)
+        })
         .collect::<Vec<String>>())
 }
 
@@ -108,15 +113,16 @@ mod tests {
         let res = extract_dockerfile_args(dockerfile.to_vec());
         assert_eq!(res.unwrap().len(), 4);
 
-        let matched_vars = match_used_env_var_args(
-            vec![
-                "foo=abcdvalue".to_string(),
-                "bar=abcdvalue".to_string(),
-                "toto=abcdvalue".to_string(),
-                "x=abcdvalue".to_string(),
-            ],
-            dockerfile.to_vec(),
-        );
+        let env_var_args_to_match = vec![
+            "foo=abcdvalue".to_string(),
+            "bar=abcdvalue".to_string(),
+            "toto=abcdvalue".to_string(),
+            "x=abcdvalue".to_string(),
+        ];
+
+        let matched_vars = match_used_env_var_args(env_var_args_to_match.clone(), dockerfile.to_vec());
+
+        assert_eq!(matched_vars.clone().unwrap(), env_var_args_to_match.clone());
 
         assert_eq!(matched_vars.unwrap().len(), 4);
 
@@ -138,15 +144,7 @@ mod tests {
         RUN ls -lh
         ";
 
-        let matched_vars = match_used_env_var_args(
-            vec![
-                "foo=abcdvalue".to_string(),
-                "bar=abcdvalue".to_string(),
-                "toto=abcdvalue".to_string(),
-                "x=abcdvalue".to_string(),
-            ],
-            dockerfile.to_vec(),
-        );
+        let matched_vars = match_used_env_var_args(env_var_args_to_match.clone(), dockerfile.to_vec());
 
         assert_eq!(matched_vars.unwrap().len(), 0);
     }
