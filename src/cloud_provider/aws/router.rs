@@ -382,7 +382,6 @@ impl Create for Router {
 }
 
 impl Pause for Router {
-    #[named]
     fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         info!("AWS.router.on_pause() called for {}, doing nothing", self.name());
         Ok(())
