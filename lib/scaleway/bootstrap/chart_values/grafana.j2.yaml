@@ -3,13 +3,15 @@ deploymentStrategy:
 
 persistence:
   type: pvc
-  enabled: true
+  enabled: false
   storageClassName: scw-sbv-ssd-0
   accessModes:
     - ReadWriteOnce
   size: 1Gi
   finalizers:
     - kubernetes.io/pvc-protection
+  inMemory:
+    enabled: true
 
 adminUser: "{{ grafana_admin_user }}"
 adminPassword: "{{ grafana_admin_password }}"
