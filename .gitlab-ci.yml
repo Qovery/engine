@@ -69,6 +69,18 @@ build-mr:
     - merge_requests
   interruptible: true
 
+release-image-mr:
+  stage: build
+  retry: 1
+  script:
+    - ./helper.sh new_release
+  tags:
+    - bm-7cpu-4gmem-0g
+  when: manual
+  only:
+  - merge_requests
+  interruptible: true
+
 unit-tests-mr:
   stage: tests
   retry: 0
