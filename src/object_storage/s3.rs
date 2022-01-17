@@ -4,7 +4,7 @@ use crate::cmd::utilities::QoveryCommand;
 use retry::delay::Fibonacci;
 use retry::{Error, OperationResult};
 
-use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
+use crate::constants::{AWS_ACCESS_KEY_ID, AWS_DEFAULT_REGION, AWS_SECRET_ACCESS_KEY};
 use crate::error::SimpleErrorKind::Other;
 use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, SimpleError};
 use crate::models::{Context, StringPath};
@@ -16,16 +16,25 @@ pub struct S3 {
     name: String,
     access_key_id: String,
     secret_access_key: String,
+    region: String,
 }
 
 impl S3 {
-    pub fn new(context: Context, id: String, name: String, access_key_id: String, secret_access_key: String) -> Self {
+    pub fn new(
+        context: Context,
+        id: String,
+        name: String,
+        access_key_id: String,
+        secret_access_key: String,
+        region: String,
+    ) -> Self {
         S3 {
             context,
             id,
             name,
             access_key_id,
             secret_access_key,
+            region,
         }
     }
 
@@ -33,6 +42,7 @@ impl S3 {
         vec![
             (AWS_ACCESS_KEY_ID, self.access_key_id.as_str()),
             (AWS_SECRET_ACCESS_KEY, self.secret_access_key.as_str()),
+            (AWS_DEFAULT_REGION, self.region.as_str()),
         ]
     }
 }
@@ -69,7 +79,7 @@ impl ObjectStorage for S3 {
             self.engine_error_scope(),
             self.context().execution_id(),
             cmd.exec()
-                .map_err(|err| SimpleError::new(Other, Some(format!("{}", err)))),
+                .map_err(|err| SimpleError::new(Other, Some(format!("{:?}", err)))),
         )
     }
 
@@ -89,7 +99,7 @@ impl ObjectStorage for S3 {
             self.engine_error_scope(),
             self.context().execution_id(),
             cmd.exec()
-                .map_err(|err| SimpleError::new(Other, Some(format!("{}", err)))),
+                .map_err(|err| SimpleError::new(Other, Some(format!("{:?}", err)))),
         )
     }
 
@@ -103,6 +113,7 @@ impl ObjectStorage for S3 {
 
         let s3_url = format!("s3://{}/{}", bucket_name, object_key);
         let file_path = format!("{}/{}/{}", workspace_directory, bucket_name, object_key);
+        let file_path_wt_filename = format!("{}/{}/", workspace_directory, bucket_name);
 
         if use_cache {
             // does config file already exists?
@@ -127,7 +138,7 @@ impl ObjectStorage for S3 {
                 self.engine_error_scope(),
                 self.context().execution_id(),
                 cmd.exec()
-                    .map_err(|err| SimpleError::new(Other, Some(format!("{}", err)))),
+                    .map_err(|err| SimpleError::new(Other, Some(format!("{:?}", err)))),
             );
 
             match result {
@@ -142,8 +153,51 @@ impl ObjectStorage for S3 {
             }
         });
 
+        match result {
+            Ok(_) => {
+                match File::open(file_path.as_str()) {
+                    Ok(file) => return Ok((file_path, file)),
+                    Err(err) => {
+                        error!("{}", &err);
+                        //Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err)))
+                    }
+                }
+            }
+            Err(err) => error!("{:?}", err),
+        };
+
+        // need to do this dirty trick because of different S3 management between regions
+        let mut cmd = QoveryCommand::new(
+            "aws",
+            &vec!["s3", "cp", s3_url.as_str(), file_path_wt_filename.as_str()],
+            &self.credentials_environment_variables(),
+        );
+        let result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
+            // we choose to use the AWS CLI instead of Rusoto S3 due to reliability problems we faced.
+            let result = cast_simple_error_to_engine_error(
+                self.engine_error_scope(),
+                self.context().execution_id(),
+                cmd.exec()
+                    .map_err(|err| SimpleError::new(Other, Some(format!("{:?}", err)))),
+            );
+
+            match result {
+                Ok(_) => OperationResult::Ok(()),
+                Err(err) => {
+                    debug!("{:?}", err);
+
+                    warn!(
+                        "Can't download object without filename '{}'. Let's retry...",
+                        object_key
+                    );
+
+                    OperationResult::Retry(err)
+                }
+            }
+        });
+
         let file = match result {
-            Ok(_) => File::open(file_path.as_str()),
+            Ok(_) => File::open(file_path_wt_filename.as_str()),
             Err(err) => {
                 return match err {
                     Error::Operation { error, .. } => Err(error),
@@ -153,8 +207,11 @@ impl ObjectStorage for S3 {
         };
 
         match file {
-            Ok(file) => Ok((file_path, file)),
-            Err(err) => Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err))),
+            Ok(file) => return Ok((file_path_wt_filename, file)),
+            Err(err) => {
+                error!("{}", &err);
+                Err(self.engine_error(EngineErrorCause::Internal, format!("{:?}", err)))
+            }
         }
     }
 
