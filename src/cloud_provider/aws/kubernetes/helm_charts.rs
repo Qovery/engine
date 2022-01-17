@@ -574,6 +574,7 @@ pub fn aws_helm_charts(
         chart_info: ChartInfo {
             name: "metrics-server".to_string(),
             path: chart_path("common/charts/metrics-server"),
+            values_files: vec![chart_path("chart_values/metrics-server.yaml")],
             values: vec![
                 ChartSetValue {
                     key: "resources.limits.cpu".to_string(),
