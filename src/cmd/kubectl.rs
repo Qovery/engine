@@ -10,7 +10,7 @@ use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::structs::{
     Configmap, Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
     KubernetesPod, KubernetesPodStatusPhase, KubernetesPodStatusReason, KubernetesService, KubernetesVersion,
-    LabelsContent, Namespace, Secrets, PDB, PVC, SVC,
+    LabelsContent, Namespace, Secrets, HPA, PDB, PVC, SVC,
 };
 use crate::cmd::utilities::QoveryCommand;
 use crate::constants::KUBECONFIG;
@@ -1235,6 +1235,17 @@ where
 {
     kubectl_exec::<P, PDB>(
         vec!["get", "pdb", "--all-namespaces", "-o", "json"],
+        kubernetes_config,
+        envs,
+    )
+}
+
+pub fn kubernetes_get_all_hpas<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<HPA, SimpleError>
+where
+    P: AsRef<Path>,
+{
+    kubectl_exec::<P, HPA>(
+        vec!["get", "hpa", "--all-namespaces", "-o", "json"],
         kubernetes_config,
         envs,
     )
