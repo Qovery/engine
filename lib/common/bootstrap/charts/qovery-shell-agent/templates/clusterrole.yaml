@@ -19,5 +19,7 @@ rules:
     resources:
       - pods/exec
     verbs:
+      - get
+      - list
       - create
 {{- end }}
