@@ -191,6 +191,9 @@ impl<'a> EKS<'a> {
             "default-s3".to_string(),
             cloud_provider.access_key_id().clone(),
             cloud_provider.secret_access_key().clone(),
+            region.clone(),
+            true,
+            context.resource_expiration_in_seconds(),
         );
 
         Ok(EKS {

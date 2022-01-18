@@ -41,6 +41,11 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use tracing::{span, Level};
 
+pub enum RegionActivationStatus {
+    Deactivated,
+    Activated,
+}
+
 pub enum ClusterDomain {
     Default,
     Custom(String),
