@@ -33,7 +33,7 @@ use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
 use qovery_engine::cmd::kubectl::kubernetes_get_all_hpas;
-use qovery_engine::cmd::structs::{SVCItem, HPA};
+use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::engine::Engine;
 use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::logger::Logger;
