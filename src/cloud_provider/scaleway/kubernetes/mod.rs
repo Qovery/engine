@@ -450,26 +450,7 @@ impl<'a> Kapsule<'a> {
             self.context.execution_id(),
             terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
         ) {
-            Ok(_) => match self.check_workers_on_create() {
-                Ok(_) => {
-                    let message = format!("Kubernetes {} nodes have been successfully upgraded", self.name());
-                    info!("{}", &message);
-                    self.send_to_customer(&message, &listeners_helper);
-                }
-                Err(e) => {
-                    error!(
-                        "Error while deploying cluster {} with Terraform with id {}.",
-                        self.name(),
-                        self.id()
-                    );
-                    return Err(LegacyEngineError {
-                        cause: EngineErrorCause::Internal,
-                        scope: EngineErrorScope::Engine,
-                        execution_id: self.context.execution_id().to_string(),
-                        message: e.message,
-                    });
-                }
-            },
+            Ok(_) => {}
             Err(e) => {
                 format!(
                     "Error while deploying cluster {} with Terraform with id {}.",
@@ -531,6 +512,27 @@ impl<'a> Kapsule<'a> {
             error!("{}. {:?}", message, e);
             return Err(e);
         }
+
+        match self.check_workers_on_create() {
+            Ok(_) => {
+                let message = format!("Kubernetes {} nodes have been successfully created", self.name());
+                info!("{}", &message);
+                self.send_to_customer(&message, &listeners_helper);
+            }
+            Err(e) => {
+                error!(
+                    "Error while deploying cluster {} with Terraform with id {}.",
+                    self.name(),
+                    self.id()
+                );
+                return Err(LegacyEngineError {
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Engine,
+                    execution_id: self.context.execution_id().to_string(),
+                    message: e.message,
+                });
+            }
+        };
 
         // kubernetes helm deployments on the cluster
         let kubeconfig = PathBuf::from(self.get_kubeconfig_file().expect("expected to get a kubeconfig file").0);
