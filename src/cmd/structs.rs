@@ -286,6 +286,7 @@ pub struct KubernetesNodeStatus {
     pub allocatable: KubernetesNodeStatusResources,
     pub capacity: KubernetesNodeStatusResources,
     pub node_info: KubernetesNodeInfo,
+    pub conditions: Vec<KubernetesNodeCondition>,
 }
 
 #[derive(Deserialize, Clone, Eq, PartialEq)]
@@ -301,6 +302,14 @@ pub struct KubernetesNodeStatusResources {
 pub struct KubernetesNodeInfo {
     pub kube_proxy_version: String,
     pub kubelet_version: String,
+}
+
+#[derive(Deserialize, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesNodeCondition {
+    #[serde(rename = "type")]
+    pub condition_type: String,
+    pub status: String,
 }
 
 #[derive(Deserialize, Clone, Eq, PartialEq)]
