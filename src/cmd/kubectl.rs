@@ -1229,24 +1229,44 @@ where
     Ok(result)
 }
 
-pub fn kubernetes_get_all_pdbs<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<PDB, SimpleError>
+pub fn kubernetes_get_all_pdbs<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: Option<&str>,
+) -> Result<PDB, SimpleError>
 where
     P: AsRef<Path>,
 {
-    kubectl_exec::<P, PDB>(
-        vec!["get", "pdb", "--all-namespaces", "-o", "json"],
-        kubernetes_config,
-        envs,
-    )
+    let mut cmd_args = vec!["get", "pdb", "-o", "json"];
+
+    match namespace {
+        Some(n) => {
+            cmd_args.push("-n");
+            cmd_args.push(n);
+        }
+        None => cmd_args.push("--all-namespaces"),
+    }
+
+    kubectl_exec::<P, PDB>(cmd_args, kubernetes_config, envs)
 }
 
-pub fn kubernetes_get_all_hpas<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<HPA, SimpleError>
+pub fn kubernetes_get_all_hpas<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: Option<&str>,
+) -> Result<HPA, SimpleError>
 where
     P: AsRef<Path>,
 {
-    kubectl_exec::<P, HPA>(
-        vec!["get", "hpa", "--all-namespaces", "-o", "json"],
-        kubernetes_config,
-        envs,
-    )
+    let mut cmd_args = vec!["get", "hpa", "-o", "json"];
+
+    match namespace {
+        Some(n) => {
+            cmd_args.push("-n");
+            cmd_args.push(n);
+        }
+        None => cmd_args.push("--all-namespaces"),
+    }
+
+    kubectl_exec::<P, HPA>(cmd_args, kubernetes_config, envs)
 }
