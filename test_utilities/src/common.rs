@@ -1393,14 +1393,14 @@ pub fn cluster_test(
     );
 
     // Deploy
-    // if let Err(err) = deploy_tx.create_kubernetes(kubernetes.as_ref()) {
-    //     panic!("{:?}", err)
-    // }
-    // let _ = match deploy_tx.commit() {
-    //     TransactionResult::Ok => assert!(true),
-    //     TransactionResult::Rollback(_) => assert!(false),
-    //     TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    // };
+    if let Err(err) = deploy_tx.create_kubernetes(kubernetes.as_ref()) {
+        panic!("{:?}", err)
+    }
+    let _ = match deploy_tx.commit() {
+        TransactionResult::Ok => assert!(true),
+        TransactionResult::Rollback(_) => assert!(false),
+        TransactionResult::UnrecoverableError(_, _) => assert!(false),
+    };
 
     // Deploy env if any
     if let Some(env) = environment_to_deploy {
@@ -1549,25 +1549,23 @@ pub fn metrics_server_test<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> 
 where
     P: AsRef<Path>,
 {
-    let result = kubernetes_get_all_hpas(kubernetes_config, envs);
+    let result = kubernetes_get_all_hpas(kubernetes_config, envs, None);
 
     match result {
         Ok(hpas) => {
             for hpa in hpas.items.expect("No hpa item").into_iter() {
-                if hpa.metadata.annotations.is_some() {
-                    if hpa
-                        .metadata
-                        .annotations
-                        .unwrap()
-                        .conditions
-                        .expect("No hpa condition")
-                        .contains("FailedGetResourceMetric")
-                    {
-                        return Err(SimpleError {
-                            kind: SimpleErrorKind::Other,
-                            message: Some("Metrics server doesn't work".to_string()),
-                        });
-                    }
+                if !hpa
+                    .metadata
+                    .annotations
+                    .expect("No hpa annotation.")
+                    .conditions
+                    .expect("No hpa condition.")
+                    .contains("ValidMetricFound")
+                {
+                    return Err(SimpleError {
+                        kind: SimpleErrorKind::Other,
+                        message: Some("Metrics server doesn't work".to_string()),
+                    });
                 }
             }
             Ok(())
