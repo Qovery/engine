@@ -924,7 +924,7 @@ where
     return match result {
         Ok(_) => match check_workers_status(kubernetes_config.as_ref(), envs.clone()) {
             Ok(_) => Ok(()),
-            Err(e) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+            Err(e) => Err(e),
         },
         Err(Operation { error, .. }) => Err(error),
         Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
