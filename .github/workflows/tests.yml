@@ -49,7 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: Run selected functional tests
-        timeout-minutes: 120
+        timeout-minutes: 180
         env:
           GITLAB_PROJECT_ID: ${{ secrets.GITLAB_PROJECT_ID }}
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
@@ -68,7 +68,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: Only validate PR if all tests have been requested
-        timeout-minutes: 120
+        timeout-minutes: 180
         env:
           GITLAB_PROJECT_ID: ${{ secrets.GITLAB_PROJECT_ID }}
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
