@@ -349,6 +349,7 @@ environmentVariables.VAULT_ADDR="$CI_VAULT_ADDR",\
 environmentVariables.VAULT_ROLE_ID="$CI_VAULT_ENGINE_PROD_ROLE_ID",\
 environmentVariables.VAULT_SECRET_ID="$CI_VAULT_ENGINE_PROD_SECRET_ID",\
 buildContainer.enable="true",\
+volumes.qoveryWorkspace.size="50Gi"\,
 metrics.enable="true",\
 autoscaler.enabled="false",\
 autoscaler.min_replicas="15",\
