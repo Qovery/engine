@@ -130,7 +130,7 @@ impl Default for ChartInfo {
             atomic: true,
             force_upgrade: false,
             last_breaking_version_requiring_restart: None,
-            timeout_in_seconds: 180,
+            timeout_in_seconds: 300,
             dry_run: false,
             wait: true,
             values: Vec::new(),
