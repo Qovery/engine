@@ -1,6 +1,7 @@
 use reqwest::header;
 use reqwest::header::{HeaderMap, HeaderValue};
 use std::collections::hash_map::DefaultHasher;
+use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 
 // generate the right header for digital ocean with token
@@ -15,4 +16,44 @@ pub fn calculate_hash<T: Hash>(t: &T) -> u64 {
     let mut s = DefaultHasher::new();
     t.hash(&mut s);
     s.finish()
+}
+
+pub enum BuildImageMode<'a> {
+    Buildpacks {
+        root_path: &'a String,
+        commit_id: &'a String,
+    },
+    Dockerfile {
+        dockerfile_path: &'a String,
+        environment_variables: &'a BTreeMap<String, String>,
+        commit_id: &'a String,
+    },
+}
+
+pub fn get_image_tag(
+    root_path: &String,
+    dockerfile_path: &Option<String>,
+    environment_variables: &BTreeMap<String, String>,
+    commit_id: &String,
+) -> String {
+    // Image tag == hash(root_path) + commit_id truncate to 127 char
+    // https://github.com/distribution/distribution/blob/6affafd1f030087d88f88841bf66a8abe2bf4d24/reference/regexp.go#L41
+    let mut hasher = DefaultHasher::new();
+
+    // If any of those variables changes, we'll get a new hash value, what results in a new image
+    // build and avoids using cache. It is important to build a new image, as those variables may
+    // affect the build result even if user didn't change his code.
+    root_path.hash(&mut hasher);
+
+    if dockerfile_path.is_some() {
+        // only use when a Dockerfile is used to prevent build cache miss every single time
+        // we redeploy an app with a env var changed with Buildpacks.
+        dockerfile_path.hash(&mut hasher);
+        environment_variables.hash(&mut hasher);
+    }
+
+    let mut tag = format!("{}-{}", hasher.finish(), commit_id);
+    tag.truncate(127);
+
+    tag
 }

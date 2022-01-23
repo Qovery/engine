@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::build_platform::Image;
 use crate::cmd::utilities::QoveryCommand;
 use crate::container_registry::docker::docker_tag_and_push_image;
-use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
+use crate::container_registry::{ContainerRegistry, EngineError, Kind, PullResult, PushResult};
 use crate::error::{cast_simple_error_to_engine_error, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
@@ -303,6 +303,12 @@ impl ContainerRegistry for DOCR {
                 false
             }
         }
+    }
+
+    fn pull(&self, image: &Image) -> Result<PullResult, EngineError> {
+        // TODO implement
+        let image = image.clone();
+        Ok(PullResult { image })
     }
 
     // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/

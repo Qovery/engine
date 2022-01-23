@@ -4,7 +4,7 @@ use crate::cloud_provider::scaleway::application::ScwZone;
 
 use crate::build_platform::Image;
 use crate::container_registry::docker::{docker_login, docker_manifest_inspect, docker_tag_and_push_image};
-use crate::container_registry::{ContainerRegistry, Kind, PushResult};
+use crate::container_registry::{ContainerRegistry, Kind, PullResult, PushResult};
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
@@ -359,6 +359,12 @@ impl ContainerRegistry for ScalewayCR {
             registry_url,
         )
         .is_some()
+    }
+
+    fn pull(&self, image: &Image) -> Result<PullResult, EngineError> {
+        // TODO implement
+        let image = image.clone();
+        Ok(PullResult { image })
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {

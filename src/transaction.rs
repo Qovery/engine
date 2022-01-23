@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::thread;
 
-use crate::build_platform::BuildResult;
+use crate::build_platform::{BuildResult, CacheResult};
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{Application, Service};
 use crate::container_registry::PushResult;
@@ -134,6 +134,48 @@ impl<'a> Transaction<'a> {
         Ok(())
     }
 
+    fn _load_build_app_cache(&self, app: &crate::models::Application) -> Result<(), EngineError> {
+        // do load build cache before building app
+        let _ = match self.engine.build_platform().has_cache(app.to_build()) {
+            Ok(CacheResult::Hit) => {
+                info!("cache hit for app {}", app.name.as_str());
+            }
+            Ok(CacheResult::Miss(parent_build)) => {
+                info!("cache miss for app {}", app.name.as_str());
+
+                let container_registry = self.engine.container_registry();
+
+                // pull image from container registry
+                // FIXME: if one day we use something else than LocalDocker to build image
+                // FIXME: we'll need to send the result of the pull to the implementation of Build
+                let _ = match container_registry.pull(&parent_build.image) {
+                    Ok(pull_result) => pull_result,
+                    Err(err) => {
+                        warn!(
+                            "{}",
+                            err.message.clone().unwrap_or(format!(
+                                "something goes wrong while pulling image from {:?} container registry",
+                                container_registry.kind()
+                            ))
+                        );
+                        return Err(err);
+                    }
+                };
+            }
+            Err(err) => {
+                warn!(
+                    "load build app {} cache error: {}",
+                    app.name.as_str(),
+                    err.message.clone().unwrap_or("<no message>".to_string())
+                );
+
+                return Err(err);
+            }
+        };
+
+        Ok(())
+    }
+
     fn _build_applications(
         &self,
         environment: &Environment,
@@ -151,6 +193,9 @@ impl<'a> Transaction<'a> {
                 let image = app.to_image();
                 let build_result = if option.force_build || !self.engine.container_registry().does_image_exists(&image)
                 {
+                    // If an error occurred we can skip it. It's not critical.
+                    let _ = self._load_build_app_cache(app);
+
                     // only if the build is forced OR if the image does not exist in the registry
                     self.engine.build_platform().build(app.to_build(), option.force_build)
                 } else {

@@ -11,7 +11,7 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 use crate::build_platform::Image;
 use crate::cmd::utilities::QoveryCommand;
 use crate::container_registry::docker::docker_tag_and_push_image;
-use crate::container_registry::{ContainerRegistry, Kind, PushResult};
+use crate::container_registry::{ContainerRegistry, Kind, PullResult, PushResult};
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
@@ -263,6 +263,82 @@ impl ECR {
 
         self.create_repository(image)
     }
+
+    fn get_credentials(&self) -> Result<ECRCredentials, EngineError> {
+        let r = block_on(
+            self.ecr_client()
+                .get_authorization_token(GetAuthorizationTokenRequest::default()),
+        );
+
+        let (access_token, password, endpoint_url) = match r {
+            Ok(t) => match t.authorization_data {
+                Some(authorization_data) => {
+                    let ad = authorization_data.first().unwrap();
+                    let b64_token = ad.authorization_token.as_ref().unwrap();
+
+                    let decoded_token = base64::decode(b64_token).unwrap();
+                    let token = std::str::from_utf8(decoded_token.as_slice()).unwrap();
+
+                    let s_token: Vec<&str> = token.split(':').collect::<Vec<_>>();
+
+                    (
+                        s_token.first().unwrap().to_string(),
+                        s_token.get(1).unwrap().to_string(),
+                        ad.clone().proxy_endpoint.unwrap(),
+                    )
+                }
+                None => {
+                    return Err(self.engine_error(
+                        EngineErrorCause::Internal,
+                        format!(
+                            "failed to retrieve credentials and endpoint URL from ECR {}",
+                            self.name_with_id(),
+                        ),
+                    ));
+                }
+            },
+            _ => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!(
+                        "failed to retrieve credentials and endpoint URL from ECR {}",
+                        self.name_with_id(),
+                    ),
+                ));
+            }
+        };
+
+        Ok(ECRCredentials::new(access_token, password, endpoint_url))
+    }
+
+    fn exec_docker_login(&self) -> Result<(), EngineError> {
+        let credentials = self.get_credentials()?;
+
+        let mut cmd = QoveryCommand::new(
+            "docker",
+            &vec![
+                "login",
+                "-u",
+                credentials.access_token.as_str(),
+                "-p",
+                credentials.password.as_str(),
+                credentials.endpoint_url.as_str(),
+            ],
+            &self.docker_envs(),
+        );
+
+        if let Err(_) = cmd.exec() {
+            return Err(self.engine_error(
+                EngineErrorCause::User(
+                    "Your ECR account seems to be no longer valid (bad Credentials). \
+                Please contact your Organization administrator to fix or change the Credentials.",
+                ),
+                format!("failed to login to ECR {}", self.name_with_id()),
+            ));
+        };
+
+        Ok(())
+    }
 }
 
 impl ContainerRegistry for ECR {
@@ -319,49 +395,14 @@ impl ContainerRegistry for ECR {
         self.get_image(image).is_some()
     }
 
+    fn pull(&self, image: &Image) -> Result<PullResult, EngineError> {
+        let _ = self.exec_docker_login()?;
+
+        todo!()
+    }
+
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
-        let r = block_on(
-            self.ecr_client()
-                .get_authorization_token(GetAuthorizationTokenRequest::default()),
-        );
-
-        let (access_token, password, endpoint_url) = match r {
-            Ok(t) => match t.authorization_data {
-                Some(authorization_data) => {
-                    let ad = authorization_data.first().unwrap();
-                    let b64_token = ad.authorization_token.as_ref().unwrap();
-
-                    let decoded_token = base64::decode(b64_token).unwrap();
-                    let token = std::str::from_utf8(decoded_token.as_slice()).unwrap();
-
-                    let s_token: Vec<&str> = token.split(':').collect::<Vec<_>>();
-
-                    (
-                        s_token.first().unwrap().to_string(),
-                        s_token.get(1).unwrap().to_string(),
-                        ad.clone().proxy_endpoint.unwrap(),
-                    )
-                }
-                None => {
-                    return Err(self.engine_error(
-                        EngineErrorCause::Internal,
-                        format!(
-                            "failed to retrieve credentials and endpoint URL from ECR {}",
-                            self.name_with_id(),
-                        ),
-                    ));
-                }
-            },
-            _ => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!(
-                        "failed to retrieve credentials and endpoint URL from ECR {}",
-                        self.name_with_id(),
-                    ),
-                ));
-            }
-        };
+        let _ = self.exec_docker_login()?;
 
         let repository = match if force_push {
             self.create_repository(image)
@@ -379,29 +420,6 @@ impl ContainerRegistry for ECR {
                     ),
                 ));
             }
-        };
-
-        let mut cmd = QoveryCommand::new(
-            "docker",
-            &vec![
-                "login",
-                "-u",
-                access_token.as_str(),
-                "-p",
-                password.as_str(),
-                endpoint_url.as_str(),
-            ],
-            &self.docker_envs(),
-        );
-
-        if let Err(_) = cmd.exec() {
-            return Err(self.engine_error(
-                EngineErrorCause::User(
-                    "Your ECR account seems to be no longer valid (bad Credentials). \
-                Please contact your Organization administrator to fix or change the Credentials.",
-                ),
-                format!("failed to login to ECR {}", self.name_with_id()),
-            ));
         };
 
         let dest = format!("{}:{}", repository.repository_uri.unwrap(), image.tag.as_str());
@@ -466,5 +484,21 @@ impl Listen for ECR {
 
     fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
+    }
+}
+
+struct ECRCredentials {
+    access_token: String,
+    password: String,
+    endpoint_url: String,
+}
+
+impl ECRCredentials {
+    fn new(access_token: String, password: String, endpoint_url: String) -> Self {
+        ECRCredentials {
+            access_token,
+            password,
+            endpoint_url,
+        }
     }
 }

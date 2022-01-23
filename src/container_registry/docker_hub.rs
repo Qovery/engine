@@ -5,7 +5,7 @@ use reqwest::StatusCode;
 use crate::build_platform::Image;
 use crate::cmd::utilities::QoveryCommand;
 use crate::container_registry::docker::docker_tag_and_push_image;
-use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
+use crate::container_registry::{ContainerRegistry, EngineError, Kind, PullResult, PushResult};
 use crate::error::EngineErrorCause;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
@@ -98,6 +98,12 @@ impl ContainerRegistry for DockerHub {
                 false
             }
         }
+    }
+
+    fn pull(&self, image: &Image) -> Result<PullResult, EngineError> {
+        // TODO implement
+        let image = image.clone();
+        Ok(PullResult { image })
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {

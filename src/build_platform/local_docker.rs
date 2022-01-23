@@ -5,7 +5,7 @@ use chrono::Duration;
 use git2::{Cred, CredentialType};
 use sysinfo::{Disk, DiskExt, SystemExt};
 
-use crate::build_platform::{docker, Build, BuildPlatform, BuildResult, Credentials, Image, Kind};
+use crate::build_platform::{docker, Build, BuildPlatform, BuildResult, CacheResult, Credentials, Image, Kind};
 use crate::cmd::utilities::QoveryCommand;
 use crate::error::{EngineError, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::fs::workspace_directory;
@@ -48,6 +48,7 @@ impl LocalDocker {
             &vec!["image", "inspect", image.name_with_tag().as_str()],
             &self.get_docker_host_envs(),
         );
+
         Ok(matches!(cmd.exec(), Ok(_)))
     }
 
@@ -259,7 +260,7 @@ impl LocalDocker {
                         ));
                     },
                 )
-                .map_err(|err| SimpleError::new(SimpleErrorKind::Other, Some(format!("{}", err))));
+                .map_err(|err| SimpleError::new(SimpleErrorKind::Other, Some(format!("{:?}", err))));
 
             if exit_status.is_ok() {
                 // quit now if the builder successfully build the app
@@ -285,6 +286,15 @@ impl LocalDocker {
                 ))
             }
         }
+    }
+
+    fn get_repository_root_path(&self, build: &Build) -> Result<String, EngineError> {
+        workspace_directory(
+            self.context.workspace_root_dir(),
+            self.context.execution_id(),
+            format!("build/{}", build.image.name.as_str()),
+        )
+        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))
     }
 }
 
@@ -317,6 +327,30 @@ impl BuildPlatform for LocalDocker {
         Ok(())
     }
 
+    fn has_cache(&self, build: Build) -> Result<CacheResult, EngineError> {
+        info!("LocalDocker.warm_cache() called for {}", self.name());
+
+        // Check if a local cache layers for the container image exists.
+        let repository_root_path = self.get_repository_root_path(&build)?;
+
+        let parent_build = build
+            .to_parent_build(repository_root_path)
+            .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+
+        // check if local layers exist
+        let name_with_tag = &parent_build.image.name_with_tag();
+        let mut cmd = QoveryCommand::new("docker", &["images", "-q", name_with_tag], &[]);
+
+        let mut result = CacheResult::Miss(parent_build);
+        let _ = cmd.exec_with_timeout(
+            Duration::minutes(1), // `docker images` command can be slow with tons of images - it's probably not indexed
+            |_| result = CacheResult::Hit, // if a line is returned, then the image is locally present
+            |r_err| error!("Error executing docker command {}", r_err),
+        );
+
+        Ok(result)
+    }
+
     fn build(&self, build: Build, force_build: bool) -> Result<BuildResult, EngineError> {
         info!("LocalDocker.build() called for {}", self.name());
 
@@ -331,19 +365,13 @@ impl BuildPlatform for LocalDocker {
             return Ok(BuildResult { build });
         }
 
-        // git clone
-        let repository_root_path = workspace_directory(
-            self.context.workspace_root_dir(),
-            self.context.execution_id(),
-            format!("build/{}", build.image.name.as_str()),
-        )
-        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+        let repository_root_path = self.get_repository_root_path(&build)?;
 
-        // Clone git repository
         info!(
             "cloning repository: {} to {}",
             build.git_repository.url, repository_root_path
         );
+
         let get_credentials = |user: &str| {
             let mut creds: Vec<(CredentialType, Cred)> = Vec::with_capacity(build.git_repository.ssh_keys.len() + 1);
             for ssh_key in build.git_repository.ssh_keys.iter() {
@@ -360,9 +388,17 @@ impl BuildPlatform for LocalDocker {
                     Cred::userpass_plaintext(&login, &password).unwrap(),
                 ));
             }
+
             creds
         };
 
+        if Path::new(repository_root_path.as_str()).exists() {
+            // remove folder before cloning it again
+            // FIXME: reuse this folder and checkout the right commit
+            let _ = fs::remove_dir_all(repository_root_path.as_str());
+        }
+
+        // git clone
         if let Err(clone_error) = git::clone_at_commit(
             &build.git_repository.url,
             &build.git_repository.commit_id,
