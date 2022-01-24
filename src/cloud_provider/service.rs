@@ -69,16 +69,12 @@ pub trait Service: ToTransmitter {
     fn min_instances(&self) -> u32;
     fn max_instances(&self) -> u32;
     fn publicly_accessible(&self) -> bool;
-    fn fqdn<'a>(&self, target: &DeploymentTarget, fqdn: &'a String, is_managed: bool) -> String {
+    fn fqdn<'a>(&self, fqdn: &'a String, is_managed: bool) -> String {
         match &self.publicly_accessible() {
             true => fqdn.to_string(),
             false => match is_managed {
-                true => format!("{}-dns.{}.svc.cluster.local", self.id(), target.environment.namespace()),
-                false => format!(
-                    "{}.{}.svc.cluster.local",
-                    self.sanitized_name(),
-                    target.environment.namespace()
-                ),
+                true => format!("{}-dns", self.id()),
+                false => format!("{}", self.sanitized_name()),
             },
         }
     }

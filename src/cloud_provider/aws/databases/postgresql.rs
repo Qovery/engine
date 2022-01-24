@@ -115,9 +115,9 @@ impl Service for PostgreSQL {
 
     fn sanitized_name(&self) -> String {
         // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
-        let prefix = "postgresql";
+        let suffix = "postgresql";
         let max_size = 63 - 3; // max RDS - k8s statefulset chars
-        managed_db_name_sanitizer(max_size, prefix, self.name())
+        managed_db_name_sanitizer(max_size, suffix, self.id())
     }
 
     fn version(&self) -> String {
@@ -193,10 +193,8 @@ impl Service for PostgreSQL {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert(
-            "fqdn",
-            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
-        );
+        context.insert("fqdn", self.fqdn(&self.fqdn, self.is_managed_service()).as_str());
+        context.insert("sanitized_name", self.sanitized_name().as_str());
         context.insert("database_name", self.sanitized_name().as_str());
         context.insert("database_db_name", self.name());
         context.insert("database_login", self.options.login.as_str());

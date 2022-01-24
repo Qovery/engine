@@ -104,9 +104,9 @@ impl Service for MongoDB {
 
     fn sanitized_name(&self) -> String {
         // https://docs.aws.amazon.com/documentdb/latest/developerguide/limits.html#limits-naming_constraints
-        let prefix = "mongodb";
-        let max_size = 60 - prefix.len(); // 63 (max DocumentDB) - 3 (k8s statefulset chars)
-        let mut new_name = format!("{}{}", prefix, self.name().replace("_", "").replace("-", ""));
+        let suffix = "mongodb";
+        let max_size = 60 - suffix.len(); // 63 (max DocumentDB) - 3 (k8s statefulset chars)
+        let mut new_name = format!("{}-{}", self.id(), suffix);
         if new_name.chars().count() > max_size {
             new_name = new_name[..max_size].to_string();
         }
@@ -187,10 +187,8 @@ impl Service for MongoDB {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert(
-            "fqdn",
-            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
-        );
+        context.insert("fqdn", self.fqdn(&self.fqdn, self.is_managed_service()).as_str());
+        context.insert("sanitized_name", self.sanitized_name().as_str());
         context.insert("database_db_name", self.name.as_str());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());

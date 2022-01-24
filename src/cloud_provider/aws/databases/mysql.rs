@@ -115,9 +115,9 @@ impl Service for MySQL {
 
     fn sanitized_name(&self) -> String {
         // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
-        let prefix = "mysql";
+        let suffix = "mysql";
         let max_size = 63 - 3; // max RDS - k8s statefulset chars
-        managed_db_name_sanitizer(max_size, prefix, self.name())
+        managed_db_name_sanitizer(max_size, suffix, self.id())
     }
 
     fn version(&self) -> String {
@@ -208,10 +208,8 @@ impl Service for MySQL {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert(
-            "fqdn",
-            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
-        );
+        context.insert("fqdn", self.fqdn(&self.fqdn, self.is_managed_service()).as_str());
+        context.insert("sanitized_name", self.sanitized_name().as_str());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
         context.insert("database_port", &self.private_port());

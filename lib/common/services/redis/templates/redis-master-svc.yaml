@@ -2,7 +2,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ template "redis.fullname" . }}-master
+  name: {{ template "redis.fullname" . }}
   namespace: {{ .Release.Namespace | quote }}
   labels:
     app: {{ template "redis.name" . }}

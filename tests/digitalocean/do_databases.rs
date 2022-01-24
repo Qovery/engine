@@ -57,7 +57,6 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
                 .as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
-            Kind::Do,
         );
 
         let mut environment_delete = environment.clone();
@@ -119,7 +118,6 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
-            Kind::Do,
         );
 
         let mut environment_delete = environment.clone();
@@ -201,7 +199,6 @@ fn postgresql_failover_dev_environment_with_all_options() {
             test_domain.as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
-            Kind::Do,
         );
         let environment_check = environment.clone();
         let mut environment_never_up = environment.clone();
@@ -227,7 +224,6 @@ fn postgresql_failover_dev_environment_with_all_options() {
             test_domain.as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
-            Kind::Do,
         );
 
         environment_delete.action = Action::Delete;
@@ -321,7 +317,6 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             test_domain.as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
-            Kind::Do,
         );
         //let env_to_check = environment.clone();
         let mut environment_delete = test_utilities::common::environnement_2_app_2_routers_1_psql(
@@ -329,7 +324,6 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             test_domain.as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
-            Kind::Do,
         );
 
         environment_delete.action = Action::Delete;
@@ -406,8 +400,9 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         );
         let database_mode = CONTAINER;
 
+        let db_id = generate_id();
         let app_name = format!("postgresql-app-{}", generate_id());
-        let database_host = get_svc_name(DatabaseKind::Postgresql, Kind::Do).to_string();
+        let database_host = get_svc_name(DatabaseKind::Postgresql, db_id.clone()).to_string();
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
@@ -415,7 +410,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
             action: Action::Create,
-            id: generate_id(),
+            id: db_id.clone(),
             name: database_db_name.clone(),
             version: "11.8.0".to_string(),
             fqdn_id: "postgresql-".to_string() + generate_id().as_str(),

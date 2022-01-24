@@ -112,15 +112,15 @@ impl Service for Redis {
 
     fn sanitized_name(&self) -> String {
         // https://aws.amazon.com/about-aws/whats-new/2019/08/elasticache_supports_50_chars_cluster_name
-        let prefix = "redis";
-        let max_size = 47 - prefix.len(); // 50 (max Elasticache ) - 3 (k8s statefulset chars)
-        let mut new_name = self.name().replace("_", "").replace("-", "");
+        let suffix = "redis";
+        let max_size = 47 - suffix.len(); // 50 (max Elasticache ) - 3 (k8s statefulset chars)
+        let mut new_name = self.id().to_string();
 
         if new_name.chars().count() > max_size {
             new_name = new_name[..max_size].to_string();
         }
 
-        format!("{}{}", prefix, new_name)
+        format!("{}-{}", new_name, suffix)
     }
 
     fn version(&self) -> String {
@@ -209,10 +209,8 @@ impl Service for Redis {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert(
-            "fqdn",
-            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
-        );
+        context.insert("fqdn", self.fqdn(&self.fqdn, self.is_managed_service()).as_str());
+        context.insert("sanitized_name", self.sanitized_name().as_str());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
         context.insert("database_port", &self.private_port());
