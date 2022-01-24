@@ -946,10 +946,10 @@ where
 
                 for condition in conditions.iter() {
                     if condition.condition_type == "Ready" && condition.status != "True" {
-                        info!("There are still not updated nodes. Updating...");
+                        info!("There are still not ready worker nodes. Waiting all nodes to be ready...");
                         return OperationResult::Retry(SimpleError::new(
                             SimpleErrorKind::Other,
-                            Some("There are still not updated nodes."),
+                            Some("There are still not ready worker nodes."),
                         ));
                     }
                 }
