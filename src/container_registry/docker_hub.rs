@@ -100,10 +100,9 @@ impl ContainerRegistry for DockerHub {
         }
     }
 
-    fn pull(&self, image: &Image) -> Result<PullResult, EngineError> {
+    fn pull(&self, _image: &Image) -> Result<PullResult, EngineError> {
         // TODO implement
-        let image = image.clone();
-        Ok(PullResult { image })
+        Ok(PullResult::None)
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {

@@ -305,10 +305,9 @@ impl ContainerRegistry for DOCR {
         }
     }
 
-    fn pull(&self, image: &Image) -> Result<PullResult, EngineError> {
+    fn pull(&self, _image: &Image) -> Result<PullResult, EngineError> {
         // TODO implement
-        let image = image.clone();
-        Ok(PullResult { image })
+        Ok(PullResult::None)
     }
 
     // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/
