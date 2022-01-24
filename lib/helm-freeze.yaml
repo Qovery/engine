@@ -8,6 +8,7 @@ charts:
   - name: grafana
     version: 6.16.10
     repo_name: grafana
+    no_sync: true
     comment: |
       Dashboard have been set into it as the chart suggest but it's a problem with helm-freeze
       Need to look if we can move them out of this repo
@@ -34,7 +35,7 @@ charts:
     version: 9.10.4
   - name: metrics-server
     repo_name: bitnami
-    version: 5.9.2
+    version: 5.10.13
   - name: kube-state-metrics
     repo_name: prometheus-community
     version: 3.4.2

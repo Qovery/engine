@@ -32,12 +32,15 @@ use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
+use qovery_engine::cmd::kubectl::kubernetes_get_all_hpas;
 use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::engine::Engine;
+use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::logger::Logger;
 use qovery_engine::models::DatabaseMode::CONTAINER;
 use qovery_engine::transaction::DeploymentOption;
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::str::FromStr;
 use tracing::{span, Level};
 
@@ -1414,6 +1417,15 @@ pub fn cluster_test(
         };
     }
 
+    if let Err(err) = metrics_server_test(
+        kubernetes
+            .get_kubeconfig_file_path()
+            .expect("Unable to get config file path"),
+        kubernetes.cloud_provider().credentials_environment_variables(),
+    ) {
+        panic!("{:?}", err)
+    }
+
     match test_type {
         ClusterTestType::Classic => {}
         ClusterTestType::WithPause => {
@@ -1439,6 +1451,15 @@ pub fn cluster_test(
                 TransactionResult::Rollback(_) => assert!(false),
                 TransactionResult::UnrecoverableError(_, _) => assert!(false),
             };
+
+            if let Err(err) = metrics_server_test(
+                kubernetes
+                    .get_kubeconfig_file_path()
+                    .expect("Unable to get config file path"),
+                kubernetes.cloud_provider().credentials_environment_variables(),
+            ) {
+                panic!("{:?}", err)
+            }
         }
         ClusterTestType::WithUpgrade => {
             let upgrade_to_version = format!("{}.{}", major_boot_version, minor_boot_version.clone() + 1);
@@ -1468,6 +1489,19 @@ pub fn cluster_test(
                 TransactionResult::Rollback(_) => assert!(false),
                 TransactionResult::UnrecoverableError(_, _) => assert!(false),
             };
+
+            if let Err(err) = metrics_server_test(
+                upgraded_kubernetes
+                    .as_ref()
+                    .get_kubeconfig_file_path()
+                    .expect("Unable to get config file path"),
+                upgraded_kubernetes
+                    .as_ref()
+                    .cloud_provider()
+                    .credentials_environment_variables(),
+            ) {
+                panic!("{:?}", err)
+            }
 
             // Delete
             if let Err(err) = delete_tx.delete_kubernetes(upgraded_kubernetes.as_ref()) {
@@ -1509,4 +1543,33 @@ pub fn cluster_test(
     };
 
     test_name.to_string()
+}
+
+pub fn metrics_server_test<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let result = kubernetes_get_all_hpas(kubernetes_config, envs, None);
+
+    match result {
+        Ok(hpas) => {
+            for hpa in hpas.items.expect("No hpa item").into_iter() {
+                if !hpa
+                    .metadata
+                    .annotations
+                    .expect("No hpa annotation.")
+                    .conditions
+                    .expect("No hpa condition.")
+                    .contains("ValidMetricFound")
+                {
+                    return Err(SimpleError {
+                        kind: SimpleErrorKind::Other,
+                        message: Some("Metrics server doesn't work".to_string()),
+                    });
+                }
+            }
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
 }

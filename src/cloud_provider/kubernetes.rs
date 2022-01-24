@@ -863,7 +863,7 @@ pub fn is_kubernetes_upgradable<P>(kubernetes_config: P, envs: Vec<(&str, &str)>
 where
     P: AsRef<Path>,
 {
-    match kubernetes_get_all_pdbs(kubernetes_config, envs) {
+    match kubernetes_get_all_pdbs(kubernetes_config, envs, None) {
         Ok(pdbs) => match pdbs.items.is_some() {
             false => Ok(()),
             true => {

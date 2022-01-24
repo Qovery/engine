@@ -504,6 +504,35 @@ pub struct PDBStatus {
     pub observed_generation: i16,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HPA {
+    pub api_version: String,
+    pub items: Option<Vec<HPAItem>>,
+    pub kind: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HPAItem {
+    pub api_version: String,
+    pub kind: String,
+    pub metadata: HPAMetadata,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HPAMetadata {
+    pub annotations: Option<HPAAnnotationCondition>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HPAAnnotationCondition {
+    #[serde(rename = "autoscaling.alpha.kubernetes.io/conditions")]
+    pub conditions: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::cmd::structs::{KubernetesList, KubernetesPod, KubernetesPodStatusReason, PDB, PVC, SVC};
