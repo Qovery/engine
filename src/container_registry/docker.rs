@@ -191,3 +191,55 @@ pub fn docker_tag_and_push_image(
         }
     }
 }
+
+pub fn docker_pull_image(
+    container_registry_kind: Kind,
+    docker_envs: Vec<(&str, &str)>,
+    dest: String,
+) -> Result<(), SimpleError> {
+    let registry_provider = match container_registry_kind {
+        Kind::DockerHub => "DockerHub",
+        Kind::Ecr => "AWS ECR",
+        Kind::Docr => "DigitalOcean Registry",
+        Kind::ScalewayCr => "Scaleway Registry",
+    };
+
+    let mut cmd = QoveryCommand::new("docker", &vec!["pull", dest.as_str()], &docker_envs);
+    match retry::retry(Fibonacci::from_millis(5000).take(5), || {
+        match cmd.exec_with_timeout(
+            Duration::minutes(10),
+            |line| info!("{}", line),
+            |line| error!("{}", line),
+        ) {
+            Ok(_) => OperationResult::Ok(()),
+            Err(e) => {
+                warn!(
+                    "failed to pull image from {} registry {}, {:?} retrying...",
+                    registry_provider,
+                    dest.as_str(),
+                    e,
+                );
+                OperationResult::Retry(e)
+            }
+        }
+    }) {
+        Err(Operation { error, .. }) => Err(SimpleError::new(SimpleErrorKind::Other, Some(error.to_string()))),
+        Err(e) => Err(SimpleError::new(
+            SimpleErrorKind::Other,
+            Some(format!(
+                "unknown error while trying to pull image {} from {} registry. {:?}",
+                dest.as_str(),
+                registry_provider,
+                e,
+            )),
+        )),
+        _ => {
+            info!(
+                "image {} has successfully been pulled from {} registry",
+                dest.as_str(),
+                registry_provider,
+            );
+            Ok(())
+        }
+    }
+}

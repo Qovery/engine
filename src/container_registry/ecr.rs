@@ -10,7 +10,7 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use crate::build_platform::Image;
 use crate::cmd::utilities::QoveryCommand;
-use crate::container_registry::docker::docker_tag_and_push_image;
+use crate::container_registry::docker::{docker_pull_image, docker_tag_and_push_image};
 use crate::container_registry::{ContainerRegistry, Kind, PullResult, PushResult};
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{
@@ -132,6 +132,24 @@ impl ECR {
                 EngineErrorCause::Internal,
                 e.message
                     .unwrap_or_else(|| "unknown error occurring during docker push".to_string()),
+            )),
+        }
+    }
+
+    fn pull_image(&self, dest: String, image: &Image) -> Result<PullResult, EngineError> {
+        // READ https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-pull-ecr-image.html
+        // docker pull aws_account_id.dkr.ecr.us-west-2.amazonaws.com/amazonlinux:latest
+
+        match docker_pull_image(self.kind(), self.docker_envs(), dest.clone()) {
+            Ok(_) => {
+                let mut image = image.clone();
+                image.registry_url = Some(dest);
+                Ok(PullResult::Some(image))
+            }
+            Err(e) => Err(self.engine_error(
+                EngineErrorCause::Internal,
+                e.message
+                    .unwrap_or_else(|| "unknown error occurring during docker pull".to_string()),
             )),
         }
     }
@@ -396,9 +414,56 @@ impl ContainerRegistry for ECR {
     }
 
     fn pull(&self, image: &Image) -> Result<PullResult, EngineError> {
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        if !self.does_image_exists(image) {
+            let info_message = format!("image {:?} does not exist in ECR {} repository", image, self.name());
+            info!("{}", info_message.as_str());
+
+            listeners_helper.deployment_in_progress(ProgressInfo::new(
+                ProgressScope::Application {
+                    id: image.application_id.clone(),
+                },
+                ProgressLevel::Info,
+                Some(info_message),
+                self.context.execution_id(),
+            ));
+
+            return Ok(PullResult::None);
+        }
+
+        let info_message = format!("pull image {:?} from ECR {} repository", image, self.name());
+        info!("{}", info_message.as_str());
+
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
+            ProgressScope::Application {
+                id: image.application_id.clone(),
+            },
+            ProgressLevel::Info,
+            Some(info_message),
+            self.context.execution_id(),
+        ));
+
         let _ = self.exec_docker_login()?;
 
-        todo!()
+        let repository = match self.get_or_create_repository(image) {
+            Ok(r) => r,
+            _ => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    format!(
+                        "failed to create ECR repository for {} with image {:?}",
+                        self.name_with_id(),
+                        image,
+                    ),
+                ));
+            }
+        };
+
+        let dest = format!("{}:{}", repository.repository_uri.unwrap(), image.tag.as_str());
+
+        // pull image
+        self.pull_image(dest, image)
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {

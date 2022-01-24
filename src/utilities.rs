@@ -1,8 +1,9 @@
-use reqwest::header;
-use reqwest::header::{HeaderMap, HeaderValue};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
+
+use reqwest::header;
+use reqwest::header::{HeaderMap, HeaderValue};
 
 // generate the right header for digital ocean with token
 pub fn get_header_with_bearer(token: &str) -> HeaderMap<HeaderValue> {
@@ -16,18 +17,6 @@ pub fn calculate_hash<T: Hash>(t: &T) -> u64 {
     let mut s = DefaultHasher::new();
     t.hash(&mut s);
     s.finish()
-}
-
-pub enum BuildImageMode<'a> {
-    Buildpacks {
-        root_path: &'a String,
-        commit_id: &'a String,
-    },
-    Dockerfile {
-        dockerfile_path: &'a String,
-        environment_variables: &'a BTreeMap<String, String>,
-        commit_id: &'a String,
-    },
 }
 
 pub fn get_image_tag(

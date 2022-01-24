@@ -44,8 +44,9 @@ pub struct PushResult {
     pub image: Image,
 }
 
-pub struct PullResult {
-    pub image: Image,
+pub enum PullResult {
+    Some(Image),
+    None,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]

@@ -328,7 +328,7 @@ impl BuildPlatform for LocalDocker {
     }
 
     fn has_cache(&self, build: Build) -> Result<CacheResult, EngineError> {
-        info!("LocalDocker.warm_cache() called for {}", self.name());
+        info!("LocalDocker.has_cache() called for {}", self.name());
 
         // Check if a local cache layers for the container image exists.
         let repository_root_path = self.get_repository_root_path(&build)?;
