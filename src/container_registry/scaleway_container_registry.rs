@@ -2,6 +2,7 @@ extern crate scaleway_api_rs;
 
 use crate::cloud_provider::scaleway::application::ScwZone;
 
+use self::scaleway_api_rs::models::scaleway_registry_v1_namespace::Status;
 use crate::build_platform::Image;
 use crate::container_registry::docker::{docker_login, docker_manifest_inspect, docker_tag_and_push_image};
 use crate::container_registry::{ContainerRegistry, Kind, PushResult};
@@ -90,9 +91,13 @@ impl ScalewayCR {
         };
 
         // We consider every registry namespace names are unique
-        if let Some(registry) = scaleway_registry_namespaces {
-            if !registry.is_empty() {
-                return Some(registry.into_iter().next().unwrap());
+        if let Some(registries) = scaleway_registry_namespaces {
+            if let Some(registry) = registries
+                .into_iter()
+                .filter(|r| r.status == Some(Status::Ready))
+                .next()
+            {
+                return Some(registry);
             }
         }
 
