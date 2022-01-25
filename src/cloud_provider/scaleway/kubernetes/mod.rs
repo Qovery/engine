@@ -1,6 +1,7 @@
 mod helm_charts;
 pub mod node;
 
+use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{
@@ -9,7 +10,7 @@ use crate::cloud_provider::kubernetes::{
 };
 use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
-use crate::cloud_provider::scaleway::application::Zone;
+use crate::cloud_provider::scaleway::application::ScwZone;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::scaleway::kubernetes::node::ScwInstancesType;
 use crate::cloud_provider::utilities::print_action;
@@ -116,7 +117,7 @@ pub struct Kapsule<'a> {
     long_id: uuid::Uuid,
     name: String,
     version: String,
-    zone: Zone,
+    zone: ScwZone,
     cloud_provider: &'a dyn CloudProvider,
     dns_provider: &'a dyn DnsProvider,
     object_storage: ScalewayOS,
@@ -134,7 +135,7 @@ impl<'a> Kapsule<'a> {
         long_id: uuid::Uuid,
         name: String,
         version: String,
-        zone: Zone,
+        zone: ScwZone,
         cloud_provider: &'a dyn CloudProvider,
         dns_provider: &'a dyn DnsProvider,
         nodes_groups: Vec<NodeGroups>,
@@ -511,6 +512,27 @@ impl<'a> Kapsule<'a> {
             error!("{}. {:?}", message, e);
             return Err(e);
         }
+
+        match self.check_workers_on_create() {
+            Ok(_) => {
+                let message = format!("Kubernetes {} nodes have been successfully created", self.name());
+                info!("{}", &message);
+                self.send_to_customer(&message, &listeners_helper);
+            }
+            Err(e) => {
+                error!(
+                    "Error while deploying cluster {} with Terraform with id {}.",
+                    self.name(),
+                    self.id()
+                );
+                return Err(LegacyEngineError {
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Engine,
+                    execution_id: self.context.execution_id().to_string(),
+                    message: e.message,
+                });
+            }
+        };
 
         // kubernetes helm deployments on the cluster
         let kubeconfig = PathBuf::from(self.get_kubeconfig_file().expect("expected to get a kubeconfig file").0);
@@ -1105,12 +1127,16 @@ impl<'a> Kubernetes for Kapsule<'a> {
         self.version.as_str()
     }
 
-    fn region(&self) -> &str {
+    fn region(&self) -> String {
         self.zone.region_str()
     }
 
     fn zone(&self) -> &str {
         self.zone.as_str()
+    }
+
+    fn aws_zones(&self) -> Option<Vec<AwsZones>> {
+        None
     }
 
     fn cloud_provider(&self) -> &dyn CloudProvider {
@@ -1178,7 +1204,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
         match self.delete_crashlooping_pods(
             None,
             None,
-            Some(10),
+            Some(3),
             self.cloud_provider().credentials_environment_variables(),
         ) {
             Ok(..) => {}
@@ -1235,11 +1261,26 @@ impl<'a> Kubernetes for Kapsule<'a> {
             self.context.execution_id(),
             terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
         ) {
-            Ok(_) => {
-                let message = format!("Kubernetes {} nodes have been successfully upgraded", self.name());
-                info!("{}", &message);
-                self.send_to_customer(&message, &listeners_helper);
-            }
+            Ok(_) => match self.check_workers_on_upgrade(kubernetes_upgrade_status.requested_version.to_string()) {
+                Ok(_) => {
+                    let message = format!("Kubernetes {} nodes have been successfully upgraded", self.name());
+                    info!("{}", &message);
+                    self.send_to_customer(&message, &listeners_helper);
+                }
+                Err(e) => {
+                    error!(
+                        "Error while upgrading nodes for cluster {} with id {}.",
+                        self.name(),
+                        self.id()
+                    );
+                    return Err(LegacyEngineError {
+                        cause: EngineErrorCause::Internal,
+                        scope: EngineErrorScope::Engine,
+                        execution_id: self.context.execution_id().to_string(),
+                        message: e.message,
+                    });
+                }
+            },
             Err(e) => {
                 error!(
                     "Error while upgrading nodes for cluster {} with id {}.",

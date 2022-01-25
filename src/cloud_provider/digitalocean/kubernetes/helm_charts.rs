@@ -428,15 +428,8 @@ pub fn do_helm_charts(
         chart_info: ChartInfo {
             name: "metrics-server".to_string(),
             path: chart_path("common/charts/metrics-server"),
+            values_files: vec![chart_path("chart_values/metrics-server.yaml")],
             values: vec![
-                ChartSetValue {
-                    key: "extraArgs.kubelet-preferred-address-types".to_string(),
-                    value: "InternalIP".to_string(),
-                },
-                ChartSetValue {
-                    key: "apiService.create".to_string(),
-                    value: "true".to_string(),
-                },
                 ChartSetValue {
                     key: "resources.limits.cpu".to_string(),
                     value: "250m".to_string(),

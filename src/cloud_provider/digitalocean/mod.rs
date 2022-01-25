@@ -115,6 +115,10 @@ impl CloudProvider for DO {
         }
     }
 
+    fn zones(&self) -> &Vec<String> {
+        todo!()
+    }
+
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {
         vec![(DIGITAL_OCEAN_TOKEN, self.token.as_str())]
     }

@@ -1,4 +1,4 @@
-{%- if is_private_port %}
+{%- if (ports is defined) and ports %}
 apiVersion: v1
 kind: Service
 metadata:
@@ -23,4 +23,4 @@ spec:
     appId: {{ id }}
     app: {{ sanitized_name }}
     envId: {{ environment_id }}
-{% endif %}
+{%- endif %}

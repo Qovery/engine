@@ -8,11 +8,12 @@ use std::sync::mpsc::TryRecvError;
 use std::thread;
 use std::time::Duration;
 
-use retry::delay::Fibonacci;
+use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 
+use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::{Environment, EnvironmentResources};
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::service::CheckAction;
@@ -23,6 +24,7 @@ use crate::cmd::kubectl::{
     kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_delete_pod,
     kubectl_exec_get_node, kubectl_exec_version, kubectl_get_crash_looping_pods, kubernetes_get_all_pdbs,
 };
+use crate::cmd::structs::KubernetesNodeCondition;
 use crate::dns_provider::DnsProvider;
 use crate::error::SimpleErrorKind::Other;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind};
@@ -54,8 +56,9 @@ pub trait Kubernetes: Listen {
     }
 
     fn version(&self) -> &str;
-    fn region(&self) -> &str;
+    fn region(&self) -> String;
     fn zone(&self) -> &str;
+    fn aws_zones(&self) -> Option<Vec<AwsZones>>;
     fn cloud_provider(&self) -> &dyn CloudProvider;
     fn dns_provider(&self) -> &dyn DnsProvider;
     fn logger(&self) -> &dyn Logger;
@@ -210,6 +213,31 @@ pub trait Kubernetes: Listen {
                 Err(e) => Err(err(e)),
             },
         }
+    }
+
+    fn check_workers_on_upgrade(&self, targeted_version: String) -> Result<(), SimpleError>
+    where
+        Self: Sized,
+    {
+        send_progress_on_long_task(self, Action::Create, || {
+            check_workers_upgrade_status(
+                self.get_kubeconfig_file_path().expect("Unable to get Kubeconfig"),
+                self.cloud_provider().credentials_environment_variables(),
+                targeted_version.clone(),
+            )
+        })
+    }
+
+    fn check_workers_on_create(&self) -> Result<(), SimpleError>
+    where
+        Self: Sized,
+    {
+        send_progress_on_long_task(self, Action::Create, || {
+            check_workers_status(
+                self.get_kubeconfig_file_path().expect("Unable to get Kubeconfig"),
+                self.cloud_provider().credentials_environment_variables(),
+            )
+        })
     }
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError>;
     fn on_upgrade(&self) -> Result<(), EngineError>;
@@ -835,7 +863,7 @@ pub fn is_kubernetes_upgradable<P>(kubernetes_config: P, envs: Vec<(&str, &str)>
 where
     P: AsRef<Path>,
 {
-    match kubernetes_get_all_pdbs(kubernetes_config, envs) {
+    match kubernetes_get_all_pdbs(kubernetes_config, envs, None) {
         Ok(pdbs) => match pdbs.items.is_some() {
             false => Ok(()),
             true => {
@@ -865,6 +893,76 @@ where
             })
         }
     }
+}
+
+pub fn check_workers_upgrade_status<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    target_version: String,
+) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let result = retry::retry(Fixed::from_millis(10000).take(360), || {
+        match kubectl_exec_get_node(kubernetes_config.as_ref(), envs.clone()) {
+            Err(e) => OperationResult::Retry(e),
+            Ok(nodes) => {
+                for node in nodes.items.iter() {
+                    if !node.status.node_info.kubelet_version.contains(&target_version[..4]) {
+                        info!("There are still not upgraded nodes. Upgrading...");
+                        return OperationResult::Retry(SimpleError::new(
+                            SimpleErrorKind::Other,
+                            Some("There are still not upgraded nodes."),
+                        ));
+                    }
+                }
+                return OperationResult::Ok(());
+            }
+        }
+    });
+
+    return match result {
+        Ok(_) => match check_workers_status(kubernetes_config.as_ref(), envs.clone()) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        },
+        Err(Operation { error, .. }) => Err(error),
+        Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+    };
+}
+
+pub fn check_workers_status<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let result = retry::retry(Fixed::from_millis(10000).take(360), || {
+        match kubectl_exec_get_node(kubernetes_config.as_ref(), envs.clone()) {
+            Err(e) => OperationResult::Retry(e),
+            Ok(nodes) => {
+                let mut conditions: Vec<KubernetesNodeCondition> = Vec::new();
+                for node in nodes.items.into_iter() {
+                    conditions.extend(node.status.conditions.into_iter());
+                }
+
+                for condition in conditions.iter() {
+                    if condition.condition_type == "Ready" && condition.status != "True" {
+                        info!("All worker nodes are not ready yet, waiting...");
+                        return OperationResult::Retry(SimpleError::new(
+                            SimpleErrorKind::Other,
+                            Some("There are still not ready worker nodes."),
+                        ));
+                    }
+                }
+                return OperationResult::Ok(());
+            }
+        }
+    });
+
+    return match result {
+        Ok(_) => Ok(()),
+        Err(Operation { error, .. }) => Err(error),
+        Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+    };
 }
 
 #[derive(Debug, PartialEq)]

@@ -21,22 +21,26 @@ use crate::utilities::{
 };
 use base64;
 use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
+use qovery_engine::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::digitalocean::application::Region;
+use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 use qovery_engine::cloud_provider::models::NodeGroups;
-use qovery_engine::cloud_provider::scaleway::application::Zone;
+use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
+use qovery_engine::cmd::kubectl::kubernetes_get_all_hpas;
 use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::engine::Engine;
+use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::logger::Logger;
 use qovery_engine::models::DatabaseMode::CONTAINER;
 use qovery_engine::transaction::DeploymentOption;
 use std::collections::BTreeMap;
+use std::path::Path;
 use std::str::FromStr;
 use tracing::{span, Level};
 
@@ -1165,6 +1169,12 @@ pub fn get_environment_test_kubernetes<'a>(
 
     match provider_kind {
         Kind::Aws => {
+            let region = secrets
+                .AWS_DEFAULT_REGION
+                .as_ref()
+                .expect("AWS_DEFAULT_REGION is not set")
+                .as_str();
+            let aws_region = AwsRegion::from_str(region).expect("wrong AWS region name, please ensure it's correct");
             k = Box::new(
                 EKS::new(
                     context.clone(),
@@ -1172,11 +1182,8 @@ pub fn get_environment_test_kubernetes<'a>(
                     uuid::Uuid::new_v4(),
                     format!("qovery-{}", context.cluster_id()).as_str(),
                     AWS_KUBERNETES_VERSION,
-                    secrets
-                        .AWS_DEFAULT_REGION
-                        .as_ref()
-                        .expect("AWS_DEFAULT_REGION is not set")
-                        .as_str(),
+                    aws_region.clone(),
+                    aws_region.get_zones_to_string(),
                     cloud_provider,
                     dns_provider,
                     AWS::kubernetes_cluster_options(secrets.clone(), None),
@@ -1194,7 +1201,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     uuid::Uuid::new_v4(),
                     format!("qovery-{}", context.cluster_id()),
                     DO_KUBERNETES_VERSION.to_string(),
-                    Region::from_str(
+                    DoRegion::from_str(
                         secrets
                             .clone()
                             .DIGITAL_OCEAN_DEFAULT_REGION
@@ -1219,7 +1226,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     uuid::Uuid::new_v4(),
                     format!("qovery-{}", context.cluster_id()),
                     SCW_KUBERNETES_VERSION.to_string(),
-                    Zone::from_str(
+                    ScwZone::from_str(
                         secrets
                             .clone()
                             .SCALEWAY_DEFAULT_REGION
@@ -1249,6 +1256,7 @@ pub fn get_cluster_test_kubernetes<'a>(
     cluster_name: String,
     boot_version: String,
     localisation: &str,
+    aws_zones: Option<Vec<AwsZones>>,
     cloud_provider: &'a dyn CloudProvider,
     dns_provider: &'a dyn DnsProvider,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
@@ -1259,7 +1267,9 @@ pub fn get_cluster_test_kubernetes<'a>(
     match provider_kind {
         Kind::Aws => {
             let mut options = AWS::kubernetes_cluster_options(secrets, None);
+            let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
             options.vpc_qovery_network_mode = vpc_network_mode.unwrap();
+            let aws_zones = aws_zones.unwrap().into_iter().map(|zone| zone.to_string()).collect();
             k = Box::new(
                 EKS::new(
                     context.clone(),
@@ -1267,7 +1277,8 @@ pub fn get_cluster_test_kubernetes<'a>(
                     uuid::Uuid::new_v4(),
                     cluster_name.as_str(),
                     boot_version.as_str(),
-                    localisation.clone(),
+                    aws_region.clone(),
+                    aws_zones,
                     cloud_provider,
                     dns_provider,
                     options,
@@ -1285,7 +1296,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     uuid::Uuid::new_v4(),
                     cluster_name.clone(),
                     boot_version,
-                    Region::from_str(localisation.clone()).expect("Unknown region set for DOKS"),
+                    DoRegion::from_str(localisation.clone()).expect("Unknown region set for DOKS"),
                     cloud_provider,
                     dns_provider,
                     DO::kubernetes_nodes(),
@@ -1303,7 +1314,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     uuid::Uuid::new_v4(),
                     cluster_name.clone(),
                     boot_version,
-                    Zone::from_str(localisation.clone()).expect("Unknown zone set for Kapsule"),
+                    ScwZone::from_str(localisation.clone()).expect("Unknown zone set for Kapsule"),
                     cloud_provider,
                     dns_provider,
                     Scaleway::kubernetes_nodes(),
@@ -1324,6 +1335,7 @@ pub fn cluster_test(
     context: Context,
     logger: Box<dyn Logger>,
     localisation: &str,
+    aws_zones: Option<Vec<AwsZones>>,
     secrets: FuncTestsSecrets,
     test_type: ClusterTestType,
     major_boot_version: u8,
@@ -1357,6 +1369,14 @@ pub fn cluster_test(
         Kind::Do => DO::cloud_provider(&context),
         Kind::Scw => Scaleway::cloud_provider(&context),
     };
+
+    let mut aws_zones_string: Vec<String> = Vec::with_capacity(3);
+    if aws_zones.is_some() {
+        for zone in aws_zones.clone().unwrap() {
+            aws_zones_string.push(zone.to_string())
+        }
+    };
+
     let kubernetes = get_cluster_test_kubernetes(
         provider_kind.clone(),
         secrets.clone(),
@@ -1365,6 +1385,7 @@ pub fn cluster_test(
         cluster_name.clone(),
         boot_version.clone(),
         localisation.clone(),
+        aws_zones.clone(),
         cp.as_ref(),
         &dns_provider,
         vpc_network_mode.clone(),
@@ -1396,6 +1417,15 @@ pub fn cluster_test(
         };
     }
 
+    if let Err(err) = metrics_server_test(
+        kubernetes
+            .get_kubeconfig_file_path()
+            .expect("Unable to get config file path"),
+        kubernetes.cloud_provider().credentials_environment_variables(),
+    ) {
+        panic!("{:?}", err)
+    }
+
     match test_type {
         ClusterTestType::Classic => {}
         ClusterTestType::WithPause => {
@@ -1421,6 +1451,15 @@ pub fn cluster_test(
                 TransactionResult::Rollback(_) => assert!(false),
                 TransactionResult::UnrecoverableError(_, _) => assert!(false),
             };
+
+            if let Err(err) = metrics_server_test(
+                kubernetes
+                    .get_kubeconfig_file_path()
+                    .expect("Unable to get config file path"),
+                kubernetes.cloud_provider().credentials_environment_variables(),
+            ) {
+                panic!("{:?}", err)
+            }
         }
         ClusterTestType::WithUpgrade => {
             let upgrade_to_version = format!("{}.{}", major_boot_version, minor_boot_version.clone() + 1);
@@ -1432,6 +1471,7 @@ pub fn cluster_test(
                 cluster_name.clone(),
                 upgrade_to_version.clone(),
                 localisation.clone(),
+                aws_zones,
                 cp.as_ref(),
                 &dns_provider,
                 vpc_network_mode.clone(),
@@ -1449,6 +1489,19 @@ pub fn cluster_test(
                 TransactionResult::Rollback(_) => assert!(false),
                 TransactionResult::UnrecoverableError(_, _) => assert!(false),
             };
+
+            if let Err(err) = metrics_server_test(
+                upgraded_kubernetes
+                    .as_ref()
+                    .get_kubeconfig_file_path()
+                    .expect("Unable to get config file path"),
+                upgraded_kubernetes
+                    .as_ref()
+                    .cloud_provider()
+                    .credentials_environment_variables(),
+            ) {
+                panic!("{:?}", err)
+            }
 
             // Delete
             if let Err(err) = delete_tx.delete_kubernetes(upgraded_kubernetes.as_ref()) {
@@ -1490,4 +1543,33 @@ pub fn cluster_test(
     };
 
     test_name.to_string()
+}
+
+pub fn metrics_server_test<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<(), SimpleError>
+where
+    P: AsRef<Path>,
+{
+    let result = kubernetes_get_all_hpas(kubernetes_config, envs, None);
+
+    match result {
+        Ok(hpas) => {
+            for hpa in hpas.items.expect("No hpa item").into_iter() {
+                if !hpa
+                    .metadata
+                    .annotations
+                    .expect("No hpa annotation.")
+                    .conditions
+                    .expect("No hpa condition.")
+                    .contains("ValidMetricFound")
+                {
+                    return Err(SimpleError {
+                        kind: SimpleErrorKind::Other,
+                        message: Some("Metrics server doesn't work".to_string()),
+                    });
+                }
+            }
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
 }

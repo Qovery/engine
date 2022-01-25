@@ -6,13 +6,13 @@ use std::str::FromStr;
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
 use retry::OperationResult;
-use rusoto_core::Region;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::kubernetes::helm_charts::{aws_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
+use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::deploy_charts_levels;
 use crate::cloud_provider::kubernetes::{
@@ -40,7 +40,9 @@ use crate::error::{
 use crate::errors::EngineError as NewEngineError;
 use crate::events::{EnvironmentStep, Stage};
 use crate::logger::Logger;
-use crate::models::{Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ToHelmString};
+use crate::models::{
+    Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ToHelmString, ToTerraformString,
+};
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
@@ -123,7 +125,8 @@ pub struct EKS<'a> {
     long_id: uuid::Uuid,
     name: String,
     version: String,
-    region: Region,
+    region: AwsRegion,
+    zones: Vec<AwsZones>,
     cloud_provider: &'a dyn CloudProvider,
     dns_provider: &'a dyn DnsProvider,
     s3: S3,
@@ -141,7 +144,8 @@ impl<'a> EKS<'a> {
         long_id: uuid::Uuid,
         name: &str,
         version: &str,
-        region: &str,
+        region: AwsRegion,
+        zones: Vec<String>,
         cloud_provider: &'a dyn CloudProvider,
         dns_provider: &'a dyn DnsProvider,
         options: Options,
@@ -149,6 +153,21 @@ impl<'a> EKS<'a> {
         logger: &'a dyn Logger,
     ) -> Result<Self, EngineError> {
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
+
+        let mut aws_zones: Vec<AwsZones> = Vec::with_capacity(3);
+        for zone in zones {
+            match AwsZones::from_string(zone.to_string()) {
+                Ok(x) => aws_zones.push(x),
+                Err(e) => {
+                    return Err(EngineError {
+                        cause: EngineErrorCause::Internal,
+                        scope: EngineErrorScope::Engine,
+                        execution_id: id.to_string(),
+                        message: Some(format!("Zone may not be found or supported: {:?}", e)),
+                    })
+                }
+            };
+        }
 
         for node_group in &nodes_groups {
             if AwsInstancesType::from_str(node_group.instance_type.as_str()).is_err() {
@@ -180,7 +199,8 @@ impl<'a> EKS<'a> {
             long_id,
             name: name.to_string(),
             version: version.to_string(),
-            region: Region::from_str(region).unwrap(),
+            region,
+            zones: aws_zones,
             cloud_provider,
             dns_provider,
             s3,
@@ -243,6 +263,14 @@ impl<'a> EKS<'a> {
 
         let format_ips =
             |ips: &Vec<String>| -> Vec<String> { ips.iter().map(|ip| format!("\"{}\"", ip)).collect::<Vec<_>>() };
+        let format_zones = |zones: &Vec<AwsZones>| -> Vec<String> {
+            zones
+                .iter()
+                .map(|zone| zone.to_terraform_format_string())
+                .collect::<Vec<_>>()
+        };
+
+        let aws_zones = format_zones(&self.zones);
 
         let mut eks_zone_a_subnet_blocks_private = format_ips(&self.options.eks_zone_a_subnet_blocks);
         let mut eks_zone_b_subnet_blocks_private = format_ips(&self.options.eks_zone_b_subnet_blocks);
@@ -426,7 +454,7 @@ impl<'a> EKS<'a> {
             self.cloud_provider().terraform_state_credentials().region.as_str(),
         );
 
-        context.insert("aws_region", &self.region.name());
+        context.insert("aws_region", &self.region());
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
         context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
         context.insert("vpc_cidr_block", &vpc_cidr_block);
@@ -434,6 +462,7 @@ impl<'a> EKS<'a> {
         context.insert("s3_kubeconfig_bucket", &self.kubeconfig_bucket_name());
 
         // AWS - EKS
+        context.insert("aws_availability_zones", &aws_zones);
         context.insert("eks_cidr_subnet", &eks_cidr_subnet.clone());
         context.insert("kubernetes_cluster_name", &self.name());
         context.insert("kubernetes_cluster_id", self.id());
@@ -643,7 +672,7 @@ impl<'a> EKS<'a> {
             infra_options: self.options.clone(),
             cluster_id: self.id.clone(),
             cluster_long_id: self.long_id,
-            region: self.region().to_string(),
+            region: self.region(),
             cluster_name: self.cluster_name().to_string(),
             cloud_provider: "aws".to_string(),
             test_cluster: self.context.is_test_cluster(),
@@ -1211,12 +1240,16 @@ impl<'a> Kubernetes for EKS<'a> {
         self.version.as_str()
     }
 
-    fn region(&self) -> &str {
-        self.region.name()
+    fn region(&self) -> String {
+        self.region.to_aws_format()
     }
 
     fn zone(&self) -> &str {
         ""
+    }
+
+    fn aws_zones(&self) -> Option<Vec<AwsZones>> {
+        Some(self.zones.clone())
     }
 
     fn cloud_provider(&self) -> &dyn CloudProvider {
@@ -1371,7 +1404,7 @@ impl<'a> Kubernetes for EKS<'a> {
         if let Err(e) = self.delete_crashlooping_pods(
             None,
             None,
-            Some(10),
+            Some(3),
             self.cloud_provider().credentials_environment_variables(),
         ) {
             error!(

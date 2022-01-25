@@ -72,6 +72,23 @@ pub struct ItemMetadata {
     pub annotations: HashMap<String, String>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Namespace {
+    pub api_version: String,
+    pub kind: String,
+    pub metadata: NamespaceMetadata,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NamespaceMetadata {
+    pub creation_timestamp: String,
+    pub name: String,
+    pub resource_version: String,
+    pub uid: String,
+}
+
 #[derive(Deserialize)]
 pub struct Configmap {
     pub data: ConfigmapData,
@@ -269,6 +286,7 @@ pub struct KubernetesNodeStatus {
     pub allocatable: KubernetesNodeStatusResources,
     pub capacity: KubernetesNodeStatusResources,
     pub node_info: KubernetesNodeInfo,
+    pub conditions: Vec<KubernetesNodeCondition>,
 }
 
 #[derive(Deserialize, Clone, Eq, PartialEq)]
@@ -284,6 +302,14 @@ pub struct KubernetesNodeStatusResources {
 pub struct KubernetesNodeInfo {
     pub kube_proxy_version: String,
     pub kubelet_version: String,
+}
+
+#[derive(Deserialize, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesNodeCondition {
+    #[serde(rename = "type")]
+    pub condition_type: String,
+    pub status: String,
 }
 
 #[derive(Deserialize, Clone, Eq, PartialEq)]
@@ -478,6 +504,35 @@ pub struct PDBStatus {
     pub observed_generation: i16,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HPA {
+    pub api_version: String,
+    pub items: Option<Vec<HPAItem>>,
+    pub kind: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HPAItem {
+    pub api_version: String,
+    pub kind: String,
+    pub metadata: HPAMetadata,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HPAMetadata {
+    pub annotations: Option<HPAAnnotationCondition>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HPAAnnotationCondition {
+    #[serde(rename = "autoscaling.alpha.kubernetes.io/conditions")]
+    pub conditions: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::cmd::structs::{KubernetesList, KubernetesPod, KubernetesPodStatusReason, PDB, PVC, SVC};
@@ -504,7 +559,6 @@ mod tests {
                 "name": "app-z164e3ad8",
                 "namespace": "z9b830e28-ze23976e2",
                 "resourceVersion": "6801889",
-                "selfLink": "/api/v1/namespaces/z9b830e28-ze23976e2/services/app-z164e3ad8",
                 "uid": "c165f1b0-b372-449e-9ffa-ed2f06fee7c3"
             },
             "spec": {

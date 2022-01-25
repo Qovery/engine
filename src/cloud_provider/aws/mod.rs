@@ -14,6 +14,7 @@ use crate::runtime::block_on;
 pub mod application;
 pub mod databases;
 pub mod kubernetes;
+pub mod regions;
 pub mod router;
 
 pub struct AWS {
@@ -24,6 +25,7 @@ pub struct AWS {
     name: String,
     pub access_key_id: String,
     pub secret_access_key: String,
+    pub zones: Vec<String>,
     terraform_state_credentials: TerraformStateCredentials,
     listeners: Listeners,
 }
@@ -37,6 +39,7 @@ impl AWS {
         name: &str,
         access_key_id: &str,
         secret_access_key: &str,
+        zones: Vec<String>,
         terraform_state_credentials: TerraformStateCredentials,
     ) -> Self {
         AWS {
@@ -47,6 +50,7 @@ impl AWS {
             name: name.to_string(),
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
+            zones,
             terraform_state_credentials,
             listeners: vec![],
         }
@@ -119,6 +123,10 @@ impl CloudProvider for AWS {
                 ));
             }
         }
+    }
+
+    fn zones(&self) -> &Vec<String> {
+        &self.zones
     }
 
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {

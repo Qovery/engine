@@ -417,7 +417,7 @@ pub enum StorageType {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum Region {
+pub enum DoRegion {
     NewYorkCity1,
     NewYorkCity2,
     NewYorkCity3,
@@ -433,64 +433,64 @@ pub enum Region {
     Bangalore,
 }
 
-impl Region {
+impl DoRegion {
     pub fn as_str(&self) -> &str {
         match self {
-            Region::NewYorkCity1 => "nyc1",
-            Region::NewYorkCity2 => "nyc2",
-            Region::NewYorkCity3 => "nyc3",
-            Region::Amsterdam2 => "ams2",
-            Region::Amsterdam3 => "ams3",
-            Region::SanFrancisco1 => "sfo1",
-            Region::SanFrancisco2 => "sfo2",
-            Region::SanFrancisco3 => "sfo3",
-            Region::Singapore => "sgp1",
-            Region::London => "lon1",
-            Region::Frankfurt => "fra1",
-            Region::Toronto => "tor1",
-            Region::Bangalore => "blr1",
+            DoRegion::NewYorkCity1 => "nyc1",
+            DoRegion::NewYorkCity2 => "nyc2",
+            DoRegion::NewYorkCity3 => "nyc3",
+            DoRegion::Amsterdam2 => "ams2",
+            DoRegion::Amsterdam3 => "ams3",
+            DoRegion::SanFrancisco1 => "sfo1",
+            DoRegion::SanFrancisco2 => "sfo2",
+            DoRegion::SanFrancisco3 => "sfo3",
+            DoRegion::Singapore => "sgp1",
+            DoRegion::London => "lon1",
+            DoRegion::Frankfurt => "fra1",
+            DoRegion::Toronto => "tor1",
+            DoRegion::Bangalore => "blr1",
         }
     }
 }
 
-impl fmt::Display for Region {
+impl fmt::Display for DoRegion {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Region::NewYorkCity1 => write!(f, "nyc1"),
-            Region::NewYorkCity2 => write!(f, "nyc2"),
-            Region::NewYorkCity3 => write!(f, "nyc3"),
-            Region::Amsterdam2 => write!(f, "ams2"),
-            Region::Amsterdam3 => write!(f, "ams3"),
-            Region::SanFrancisco1 => write!(f, "sfo1"),
-            Region::SanFrancisco2 => write!(f, "sfo2"),
-            Region::SanFrancisco3 => write!(f, "sfo3"),
-            Region::Singapore => write!(f, "sgp1"),
-            Region::London => write!(f, "lon1"),
-            Region::Frankfurt => write!(f, "fra1"),
-            Region::Toronto => write!(f, "tor1"),
-            Region::Bangalore => write!(f, "blr1"),
+            DoRegion::NewYorkCity1 => write!(f, "nyc1"),
+            DoRegion::NewYorkCity2 => write!(f, "nyc2"),
+            DoRegion::NewYorkCity3 => write!(f, "nyc3"),
+            DoRegion::Amsterdam2 => write!(f, "ams2"),
+            DoRegion::Amsterdam3 => write!(f, "ams3"),
+            DoRegion::SanFrancisco1 => write!(f, "sfo1"),
+            DoRegion::SanFrancisco2 => write!(f, "sfo2"),
+            DoRegion::SanFrancisco3 => write!(f, "sfo3"),
+            DoRegion::Singapore => write!(f, "sgp1"),
+            DoRegion::London => write!(f, "lon1"),
+            DoRegion::Frankfurt => write!(f, "fra1"),
+            DoRegion::Toronto => write!(f, "tor1"),
+            DoRegion::Bangalore => write!(f, "blr1"),
         }
     }
 }
 
-impl FromStr for Region {
+impl FromStr for DoRegion {
     type Err = ();
 
-    fn from_str(s: &str) -> Result<Region, ()> {
+    fn from_str(s: &str) -> Result<DoRegion, ()> {
         match s {
-            "nyc1" => Ok(Region::NewYorkCity1),
-            "nyc2" => Ok(Region::NewYorkCity2),
-            "nyc3" => Ok(Region::NewYorkCity3),
-            "ams2" => Ok(Region::Amsterdam2),
-            "ams3" => Ok(Region::Amsterdam3),
-            "sfo1" => Ok(Region::SanFrancisco1),
-            "sfo2" => Ok(Region::SanFrancisco2),
-            "sfo3" => Ok(Region::SanFrancisco3),
-            "sgp1" => Ok(Region::Singapore),
-            "lon1" => Ok(Region::London),
-            "fra1" => Ok(Region::Frankfurt),
-            "tor1" => Ok(Region::Toronto),
-            "blr1" => Ok(Region::Bangalore),
+            "nyc1" => Ok(DoRegion::NewYorkCity1),
+            "nyc2" => Ok(DoRegion::NewYorkCity2),
+            "nyc3" => Ok(DoRegion::NewYorkCity3),
+            "ams2" => Ok(DoRegion::Amsterdam2),
+            "ams3" => Ok(DoRegion::Amsterdam3),
+            "sfo1" => Ok(DoRegion::SanFrancisco1),
+            "sfo2" => Ok(DoRegion::SanFrancisco2),
+            "sfo3" => Ok(DoRegion::SanFrancisco3),
+            "sgp1" => Ok(DoRegion::Singapore),
+            "lon1" => Ok(DoRegion::London),
+            "fra1" => Ok(DoRegion::Frankfurt),
+            "tor1" => Ok(DoRegion::Toronto),
+            "blr1" => Ok(DoRegion::Bangalore),
             _ => Err(()),
         }
     }

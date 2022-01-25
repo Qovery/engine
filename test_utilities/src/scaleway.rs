@@ -1,6 +1,6 @@
 use const_format::formatcp;
 use qovery_engine::build_platform::Image;
-use qovery_engine::cloud_provider::scaleway::application::Zone;
+use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::TerraformStateCredentials;
@@ -19,7 +19,7 @@ use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::logger::Logger;
 use tracing::error;
 
-pub const SCW_TEST_ZONE: Zone = Zone::Paris2;
+pub const SCW_TEST_ZONE: ScwZone = ScwZone::Paris2;
 pub const SCW_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const SCW_KUBERNETES_MINOR_VERSION: u8 = 19;
 pub const SCW_KUBERNETES_VERSION: &'static str =
@@ -165,7 +165,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
     }
 }
 
-pub fn scw_object_storage(context: Context, region: Zone) -> ScalewayOS {
+pub fn scw_object_storage(context: Context, region: ScwZone) -> ScalewayOS {
     let secrets = FuncTestsSecrets::new();
     let random_id = generate_id();
 
@@ -190,7 +190,7 @@ pub fn clean_environments(
     context: &Context,
     environments: Vec<Environment>,
     secrets: FuncTestsSecrets,
-    zone: Zone,
+    zone: ScwZone,
 ) -> Result<(), EngineError> {
     let secret_token = secrets.SCALEWAY_SECRET_KEY.unwrap();
     let project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap();

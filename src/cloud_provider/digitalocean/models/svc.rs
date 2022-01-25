@@ -26,7 +26,6 @@ pub struct Metadata {
     pub name: String,
     pub namespace: String,
     pub resource_version: String,
-    pub self_link: String,
     pub uid: String,
 }
 

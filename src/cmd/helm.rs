@@ -778,6 +778,7 @@ where
     let mut args_string: Vec<String> = vec![
         "diff",
         "upgrade",
+        "--no-color",
         "--allow-unreleased",
         "--kubeconfig",
         kubernetes_config.as_ref().to_str().unwrap(),
