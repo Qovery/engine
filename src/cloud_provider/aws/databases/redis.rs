@@ -444,7 +444,7 @@ mod tests {
             ),
             db_id.clone(),
             Action::Create,
-            db_input_name,
+            "redis-db",
             "8",
             "redistest.qovery.io",
             "redisid",
@@ -466,6 +466,6 @@ mod tests {
             },
             vec![],
         );
-        assert_eq!(database.sanitized_db_name(), db_expected_name);
+        assert_eq!(database.sanitized_name(), db_expected_name);
     }
 }

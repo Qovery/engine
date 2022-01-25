@@ -459,7 +459,7 @@ mod tests_postgres {
             ),
             db_id.clone(),
             Action::Create,
-            db_input_name,
+            "postgres-db",
             "8",
             "pgtest.qovery.io",
             "pgid",
@@ -481,6 +481,6 @@ mod tests_postgres {
             },
             vec![],
         );
-        assert_eq!(database.sanitized_db_name(), db_expected_name);
+        assert_eq!(database.sanitized_name(), db_expected_name);
     }
 }

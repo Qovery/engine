@@ -465,7 +465,7 @@ mod tests_mysql {
             ),
             db_id.clone(),
             Action::Create,
-            db_input_name,
+            "mysql-db",
             "8",
             "mysqltest.qovery.io",
             "mysqlid",
@@ -487,6 +487,6 @@ mod tests_mysql {
             },
             vec![],
         );
-        assert_eq!(database.sanitized_db_name(), db_expected_name);
+        assert_eq!(database.sanitized_name(), db_expected_name);
     }
 }

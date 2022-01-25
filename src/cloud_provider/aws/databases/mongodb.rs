@@ -437,7 +437,7 @@ mod tests_mongodb {
             ),
             db_id.clone(),
             Action::Create,
-            db_input_name,
+            "mongo-db",
             "8",
             "mongotest.qovery.io",
             "pgid",
@@ -459,6 +459,6 @@ mod tests_mongodb {
             },
             vec![],
         );
-        assert_eq!(database.sanitized_db_name(), db_expected_name);
+        assert_eq!(database.sanitized_name(), db_expected_name);
     }
 }
