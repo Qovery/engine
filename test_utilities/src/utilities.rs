@@ -343,7 +343,7 @@ impl FuncTestsSecrets {
                 "SCALEWAY_TEST_ORGANIZATION_ID",
                 secrets.SCALEWAY_TEST_ORGANIZATION_ID,
             ),
-            SCALEWAY_TEST_CLUSTER_ID: Self::select_secret("SCALEWAY_TEST_CLUSTER_ID", secrets.SCALEWAY_TEST_CLUSTER_ID),
+            SCALEWAY_TEST_CLUSTER_ID: Some("zd8eb3905".to_string()), //Self::select_secret("SCALEWAY_TEST_CLUSTER_ID", secrets.SCALEWAY_TEST_CLUSTER_ID),
             TERRAFORM_AWS_ACCESS_KEY_ID: Self::select_secret(
                 "TERRAFORM_AWS_ACCESS_KEY_ID",
                 secrets.TERRAFORM_AWS_ACCESS_KEY_ID,

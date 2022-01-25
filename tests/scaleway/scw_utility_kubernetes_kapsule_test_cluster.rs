@@ -31,10 +31,10 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
             .SCALEWAY_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("SCALEWAY_TEST_ORGANIZATION_ID");
-        let cluster_id = secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID");
+        let cluster_id = "zd8eb3905".to_string(); /*secrets
+                                                  .SCALEWAY_TEST_CLUSTER_ID
+                                                  .as_ref()
+                                                  .expect("SCALEWAY_TEST_CLUSTER_ID");*/
 
         let logger = logger();
         let context = context(organization_id.as_str(), cluster_id.as_str());

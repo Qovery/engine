@@ -19,7 +19,7 @@ use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::logger::Logger;
 use tracing::error;
 
-pub const SCW_TEST_ZONE: ScwZone = ScwZone::Paris2;
+pub const SCW_TEST_ZONE: ScwZone = ScwZone::Warsaw1;
 pub const SCW_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const SCW_KUBERNETES_MINOR_VERSION: u8 = 19;
 pub const SCW_KUBERNETES_VERSION: &'static str =

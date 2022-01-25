@@ -1226,14 +1226,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     uuid::Uuid::new_v4(),
                     format!("qovery-{}", context.cluster_id()),
                     SCW_KUBERNETES_VERSION.to_string(),
-                    ScwZone::from_str(
-                        secrets
-                            .clone()
-                            .SCALEWAY_DEFAULT_REGION
-                            .expect("SCALEWAY_DEFAULT_REGION is not set")
-                            .as_str(),
-                    )
-                    .unwrap(),
+                    ScwZone::Warsaw1,
                     cloud_provider,
                     dns_provider,
                     Scaleway::kubernetes_nodes(),
