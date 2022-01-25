@@ -499,8 +499,11 @@ pub fn sanitize_db_name(suffix: &str, db_id: &str) -> String {
     format!("{}-{}", db_id, suffix).replace("_", "-")
 }
 
-pub fn sanitize_name(prefix: &str, app_name: &str) -> String {
-    format!("{}-{}", prefix, app_name).replace("_", "-")
+pub fn sanitize_name(prefix: &str, app_name: &str, is_managed: bool) -> String {
+    match is_managed {
+        true => format!("{}-{}", prefix, app_name).replace("_", "").replace("-", ""),
+        false => format!("{}-{}", prefix, app_name).replace("_", "-"),
+    }
 }
 
 pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, ParseFloatError> {

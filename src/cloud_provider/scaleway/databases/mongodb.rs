@@ -186,7 +186,7 @@ impl Service for MongoDB {
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn(&self.fqdn, self.is_managed_service()).as_str());
-        context.insert("sanitized_name", self.sanitized_name().as_str());
+        context.insert("sanitized_name", self.service_name().as_str());
         context.insert("database_db_name", self.name.as_str());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());

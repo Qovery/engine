@@ -588,8 +588,8 @@ pub fn environnement_2_app_2_routers_1_psql(
     let database_name = "postgres".to_string();
 
     let suffix = generate_id();
-    let application_name1 = sanitize_name("postgresql", &format!("{}-{}", "postgresql-app1", &suffix));
-    let application_name2 = sanitize_name("postgresql", &format!("{}-{}", "postgresql-app2", &suffix));
+    let application_name1 = sanitize_name("postgresql", &format!("{}-{}", "postgresql-app1", &suffix), false);
+    let application_name2 = sanitize_name("postgresql", &format!("{}-{}", "postgresql-app2", &suffix), false);
 
     Environment {
         execution_id: context.execution_id().to_string(),

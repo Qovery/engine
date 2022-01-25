@@ -148,7 +148,7 @@ impl Service for Application {
     }
 
     fn sanitized_name(&self) -> String {
-        sanitize_name("app", self.name())
+        sanitize_name("app", self.name(), false)
     }
 
     fn version(&self) -> String {
