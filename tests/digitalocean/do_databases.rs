@@ -11,7 +11,7 @@ use test_utilities::utilities::{
 };
 
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
-use test_utilities::common::{database_minimal_environment, test_db, working_minimal_environment, Infrastructure};
+use test_utilities::common::{test_db, working_minimal_environment, Infrastructure};
 use test_utilities::digitalocean::{
     clean_environments, DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE,
     DO_SELF_HOSTED_DATABASE_DISK_TYPE, DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE, DO_TEST_REGION,
@@ -536,13 +536,11 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
     );
-    let environment = database_minimal_environment(&context);
 
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,
@@ -632,13 +630,11 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
     );
-    let environment = database_minimal_environment(&context);
 
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,
@@ -729,13 +725,11 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
     );
-    let environment = database_minimal_environment(&context);
 
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,
@@ -798,13 +792,11 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
     );
-    let environment = database_minimal_environment(&context);
 
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,

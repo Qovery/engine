@@ -12,7 +12,7 @@ use test_utilities::utilities::{
 };
 
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
-use test_utilities::common::{database_minimal_environment, Infrastructure};
+use test_utilities::common::Infrastructure;
 use test_utilities::common::{test_db, working_minimal_environment};
 use test_utilities::scaleway::{
     clean_environments, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
@@ -551,13 +551,11 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
             .expect("SCALEWAY_TEST_CLUSTER_ID")
             .as_str(),
     );
-    let environment = database_minimal_environment(&context);
 
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,
@@ -711,13 +709,11 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
             .expect("SCALEWAY_TEST_CLUSTER_ID")
             .as_str(),
     );
-    let environment = database_minimal_environment(&context);
 
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,
@@ -806,13 +802,11 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
             .expect("SCALEWAY_TEST_CLUSTER_ID")
             .as_str(),
     );
-    let environment = database_minimal_environment(&context);
 
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,
@@ -890,13 +884,11 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
             .expect("SCALEWAY_TEST_CLUSTER_ID")
             .as_str(),
     );
-    let environment = database_minimal_environment(&context);
 
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,

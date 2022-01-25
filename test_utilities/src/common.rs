@@ -562,56 +562,6 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
     }
 }
 
-pub fn database_minimal_environment(context: &Context) -> Environment {
-    let suffix = generate_id();
-    let application_id = generate_id();
-    let application_name = format!("{}-{}", "simple-app".to_string(), &suffix);
-    Environment {
-        execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: context.organization_id().to_string(),
-        action: Action::Create,
-        applications: vec![Application {
-            id: application_id,
-            name: application_name,
-            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
-            commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
-            dockerfile_path: Some("Dockerfile".to_string()),
-            buildpack_language: None,
-            root_path: String::from("/"),
-            action: Action::Create,
-            git_credentials: Some(GitCredentials {
-                login: "x-access-token".to_string(),
-                access_token: "xxx".to_string(),
-                expired_at: Utc::now(),
-            }),
-            storage: vec![],
-            environment_vars: BTreeMap::default(),
-            branch: "basic-app-deploy".to_string(),
-            ports: vec![Port {
-                id: "zdf7d6aad".to_string(),
-                long_id: Default::default(),
-                port: 80,
-                public_port: Some(443),
-                name: None,
-                publicly_accessible: false,
-                protocol: Protocol::HTTP,
-            }],
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 256,
-            min_instances: 2,
-            max_instances: 2,
-            cpu_burst: "100m".to_string(),
-            start_timeout_in_seconds: 60,
-        }],
-        routers: vec![],
-        databases: vec![],
-        clone_from_environment_id: None,
-    }
-}
-
 pub fn environment_only_http_server_router_with_sticky_session(context: &Context, test_domain: &str) -> Environment {
     let mut env = environment_only_http_server_router(context, test_domain.clone());
 
@@ -1024,7 +974,6 @@ pub fn routers_sessions_are_sticky(routers: Vec<Router>) -> bool {
 pub fn test_db(
     context: Context,
     logger: Box<dyn Logger>,
-    mut environment: Environment,
     secrets: FuncTestsSecrets,
     version: &str,
     test_name: &str,
@@ -1073,53 +1022,72 @@ pub fn test_db(
     let storage_size = 10;
     let db_disk_type = db_disk_type(provider_kind.clone(), database_mode.clone());
     let db_instance_type = db_instance_type(provider_kind.clone(), db_kind.clone(), database_mode.clone());
-    let db = Database {
-        kind: db_kind.clone(),
+
+    let environment = Environment {
+        execution_id: context.execution_id().to_string(),
+        id: generate_id(),
+        owner_id: generate_id(),
+        project_id: generate_id(),
+        organization_id: context.organization_id().to_string(),
         action: Action::Create,
-        id: db_id.clone(),
-        name: database_db_name.clone(),
-        version: version.to_string(),
-        fqdn_id: format!("{}-{}", db_kind_str.clone(), generate_id()),
-        fqdn: dyn_db_fqdn.clone(),
-        port: database_port.clone(),
-        username: database_username.clone(),
-        password: database_password.clone(),
-        total_cpus: "100m".to_string(),
-        total_ram_in_mib: 512,
-        disk_size_in_gib: storage_size.clone(),
-        database_instance_type: db_instance_type.to_string(),
-        database_disk_type: db_disk_type.to_string(),
-        encrypt_disk: true,
-        activate_high_availability: false,
-        activate_backups: false,
-        publicly_accessible: is_public.clone(),
-        mode: database_mode.clone(),
-    };
-
-    environment.databases = vec![db.clone()];
-
-    let app_name = format!("{}-app-{}", db_kind_str.clone(), generate_id());
-    environment.applications = environment
-        .applications
-        .into_iter()
-        .map(|mut app| {
-            app.branch = app_name.clone();
-            app.commit_id = db_infos.app_commit.clone();
-            app.ports = vec![Port {
+        applications: vec![Application {
+            id: generate_id(),
+            name: format!("{}-app-{}", db_kind_str.clone(), generate_id()),
+            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+            commit_id: db_infos.app_commit.clone(),
+            dockerfile_path: Some(format!("Dockerfile-{}", version)),
+            buildpack_language: None,
+            root_path: String::from("/"),
+            action: Action::Create,
+            git_credentials: Some(GitCredentials {
+                login: "x-access-token".to_string(),
+                access_token: "xxx".to_string(),
+                expired_at: Utc::now(),
+            }),
+            storage: vec![],
+            environment_vars: db_infos.app_env_vars.clone(),
+            branch: "basic-app-deploy".to_string(),
+            ports: vec![Port {
                 id: "zdf7d6aad".to_string(),
                 long_id: Default::default(),
-                port: 1234,
-                public_port: Some(1234),
+                port: 80,
+                public_port: Some(443),
                 name: None,
                 publicly_accessible: false,
                 protocol: Protocol::HTTP,
-            }];
-            app.dockerfile_path = Some(format!("Dockerfile-{}", version));
-            app.environment_vars = db_infos.app_env_vars.clone();
-            app
-        })
-        .collect::<Vec<qovery_engine::models::Application>>();
-    environment.routers[0].routes[0].application_name = app_name.clone();
+            }],
+            total_cpus: "100m".to_string(),
+            total_ram_in_mib: 256,
+            min_instances: 2,
+            max_instances: 2,
+            cpu_burst: "100m".to_string(),
+            start_timeout_in_seconds: 60,
+        }],
+        routers: vec![],
+        databases: vec![Database {
+            kind: db_kind.clone(),
+            action: Action::Create,
+            id: db_id.clone(),
+            name: database_db_name.clone(),
+            version: version.to_string(),
+            fqdn_id: format!("{}-{}", db_kind_str.clone(), generate_id()),
+            fqdn: dyn_db_fqdn.clone(),
+            port: database_port.clone(),
+            username: database_username.clone(),
+            password: database_password.clone(),
+            total_cpus: "100m".to_string(),
+            total_ram_in_mib: 512,
+            disk_size_in_gib: storage_size.clone(),
+            database_instance_type: db_instance_type.to_string(),
+            database_disk_type: db_disk_type.to_string(),
+            encrypt_disk: true,
+            activate_high_availability: false,
+            activate_backups: false,
+            publicly_accessible: is_public.clone(),
+            mode: database_mode.clone(),
+        }],
+        clone_from_environment_id: None,
+    };
 
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;

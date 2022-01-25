@@ -499,13 +499,11 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
             .expect("AWS_TEST_CLUSTER_ID is not set")
             .as_str(),
     );
-    let environment = test_utilities::common::database_minimal_environment(&context);
 
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,
@@ -651,13 +649,11 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
             .expect("AWS_TEST_CLUSTER_ID is not set")
             .as_str(),
     );
-    let environment = test_utilities::common::database_minimal_environment(&context);
 
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,
@@ -775,13 +771,11 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
             .expect("AWS_TEST_CLUSTER_ID is not set")
             .as_str(),
     );
-    let environment = test_utilities::common::database_minimal_environment(&context);
 
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,
@@ -871,13 +865,11 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
             .expect("AWS_TEST_CLUSTER_ID is not set")
             .as_str(),
     );
-    let environment = test_utilities::common::database_minimal_environment(&context);
 
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,
