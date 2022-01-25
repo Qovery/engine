@@ -10,6 +10,7 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::utilities::{
     generate_supported_version, get_self_hosted_mongodb_version, get_supported_version_to_use, print_action,
+    sanitize_db_name,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -103,15 +104,7 @@ impl Service for MongoDB {
     }
 
     fn sanitized_name(&self) -> String {
-        // https://docs.aws.amazon.com/documentdb/latest/developerguide/limits.html#limits-naming_constraints
-        let suffix = "mongodb";
-        let max_size = 60 - suffix.len(); // 63 (max DocumentDB) - 3 (k8s statefulset chars)
-        let mut new_name = format!("{}-{}", self.id(), suffix);
-        if new_name.chars().count() > max_size {
-            new_name = new_name[..max_size].to_string();
-        }
-
-        new_name
+        sanitize_db_name("mongodb", self.id())
     }
 
     fn version(&self) -> String {
@@ -427,8 +420,8 @@ mod tests_mongodb {
 
     #[test]
     fn mongo_name_sanitizer() {
-        let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
-        let db_expected_name = "mongodbtestnamesanitizerwithtoomanycharsnotallowedwhi";
+        let db_id = "dbid";
+        let db_expected_name = "dbid-mongodb";
 
         let database = MongoDB::new(
             Context::new(
@@ -442,7 +435,7 @@ mod tests_mongodb {
                 vec![],
                 None,
             ),
-            "pgid",
+            db_id.clone(),
             Action::Create,
             db_input_name,
             "8",
@@ -466,6 +459,6 @@ mod tests_mongodb {
             },
             vec![],
         );
-        assert_eq!(database.sanitized_name(), db_expected_name);
+        assert_eq!(database.sanitized_db_name(), db_expected_name);
     }
 }

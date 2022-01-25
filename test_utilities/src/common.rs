@@ -534,7 +534,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
                 port: 80,
                 public_port: Some(443),
                 name: None,
-                publicly_accessible: true,
+                publicly_accessible: false,
                 protocol: Protocol::HTTP,
             }],
             total_cpus: "100m".to_string(),

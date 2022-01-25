@@ -9,8 +9,8 @@ use crate::cloud_provider::service::{
     DatabaseType, Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
 };
 use crate::cloud_provider::utilities::{
-    generate_supported_version, get_self_hosted_postgres_version, get_supported_version_to_use,
-    managed_db_name_sanitizer, print_action,
+    generate_supported_version, get_self_hosted_postgres_version, get_supported_version_to_use, print_action,
+    sanitize_db_name,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -114,10 +114,7 @@ impl Service for PostgreSQL {
     }
 
     fn sanitized_name(&self) -> String {
-        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
-        let suffix = "postgresql";
-        let max_size = 63 - 3; // max RDS - k8s statefulset chars
-        managed_db_name_sanitizer(max_size, suffix, self.id())
+        sanitize_db_name("postgresql", self.id())
     }
 
     fn version(&self) -> String {
@@ -445,8 +442,8 @@ mod tests_postgres {
 
     #[test]
     fn postgres_name_sanitizer() {
-        let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
-        let db_expected_name = "postgresqltestnamesanitizerwithtoomanycharsnotallo";
+        let db_id = "dbid";
+        let db_expected_name = "dbid-postgresql";
 
         let database = PostgreSQL::new(
             Context::new(
@@ -460,7 +457,7 @@ mod tests_postgres {
                 vec![],
                 None,
             ),
-            "pgid",
+            db_id.clone(),
             Action::Create,
             db_input_name,
             "8",
@@ -484,6 +481,6 @@ mod tests_postgres {
             },
             vec![],
         );
-        assert_eq!(database.sanitized_name(), db_expected_name);
+        assert_eq!(database.sanitized_db_name(), db_expected_name);
     }
 }

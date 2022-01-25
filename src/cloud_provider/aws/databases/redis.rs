@@ -8,7 +8,9 @@ use crate::cloud_provider::service::{
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Create, Database, DatabaseOptions,
     DatabaseType, Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
 };
-use crate::cloud_provider::utilities::{get_self_hosted_redis_version, get_supported_version_to_use, print_action};
+use crate::cloud_provider::utilities::{
+    get_self_hosted_redis_version, get_supported_version_to_use, print_action, sanitize_db_name,
+};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
@@ -111,16 +113,7 @@ impl Service for Redis {
     }
 
     fn sanitized_name(&self) -> String {
-        // https://aws.amazon.com/about-aws/whats-new/2019/08/elasticache_supports_50_chars_cluster_name
-        let suffix = "redis";
-        let max_size = 47 - suffix.len(); // 50 (max Elasticache ) - 3 (k8s statefulset chars)
-        let mut new_name = self.id().to_string();
-
-        if new_name.chars().count() > max_size {
-            new_name = new_name[..max_size].to_string();
-        }
-
-        format!("{}-{}", new_name, suffix)
+        sanitize_db_name("redis", self.id())
     }
 
     fn version(&self) -> String {
@@ -434,8 +427,8 @@ mod tests {
 
     #[test]
     fn redis_name_sanitizer() {
-        let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
-        let db_expected_name = "redistestnamesanitizerwithtoomanycharsnotallowe";
+        let db_id = "dbid";
+        let db_expected_name = "dbid-redis";
 
         let database = Redis::new(
             Context::new(
@@ -449,7 +442,7 @@ mod tests {
                 vec![],
                 None,
             ),
-            "pgid",
+            db_id.clone(),
             Action::Create,
             db_input_name,
             "8",
@@ -473,6 +466,6 @@ mod tests {
             },
             vec![],
         );
-        assert_eq!(database.sanitized_name(), db_expected_name);
+        assert_eq!(database.sanitized_db_name(), db_expected_name);
     }
 }

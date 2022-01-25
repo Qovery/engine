@@ -6,7 +6,7 @@ use crate::cloud_provider::service::{
     DatabaseType, Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
 };
 use crate::cloud_provider::utilities::{
-    get_self_hosted_postgres_version, get_supported_version_to_use, print_action, sanitize_name, VersionsNumber,
+    get_self_hosted_postgres_version, get_supported_version_to_use, print_action, sanitize_db_name, VersionsNumber,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -148,7 +148,7 @@ impl Service for PostgreSQL {
     }
 
     fn sanitized_name(&self) -> String {
-        sanitize_name("postgresql", self.name())
+        sanitize_db_name("postgresql", self.name())
     }
 
     fn version(&self) -> String {

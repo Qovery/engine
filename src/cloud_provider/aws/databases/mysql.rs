@@ -9,8 +9,8 @@ use crate::cloud_provider::service::{
     DatabaseType, Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
 };
 use crate::cloud_provider::utilities::{
-    generate_supported_version, get_self_hosted_mysql_version, get_supported_version_to_use, managed_db_name_sanitizer,
-    print_action,
+    generate_supported_version, get_self_hosted_mysql_version, get_supported_version_to_use, print_action,
+    sanitize_db_name,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -114,10 +114,7 @@ impl Service for MySQL {
     }
 
     fn sanitized_name(&self) -> String {
-        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
-        let suffix = "mysql";
-        let max_size = 63 - 3; // max RDS - k8s statefulset chars
-        managed_db_name_sanitizer(max_size, suffix, self.id())
+        sanitize_db_name("mysql", self.id())
     }
 
     fn version(&self) -> String {
@@ -451,8 +448,8 @@ mod tests_mysql {
 
     #[test]
     fn mysql_name_sanitizer() {
-        let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
-        let db_expected_name = "mysqltestnamesanitizerwithtoomanycharsnotallowedwhichwi";
+        let db_id = "dbid";
+        let db_expected_name = "dbid-mysql";
 
         let database = MySQL::new(
             Context::new(
@@ -466,7 +463,7 @@ mod tests_mysql {
                 vec![],
                 None,
             ),
-            "mysqlid",
+            db_id.clone(),
             Action::Create,
             db_input_name,
             "8",
@@ -490,6 +487,6 @@ mod tests_mysql {
             },
             vec![],
         );
-        assert_eq!(database.sanitized_name(), db_expected_name);
+        assert_eq!(database.sanitized_db_name(), db_expected_name);
     }
 }
