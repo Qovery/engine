@@ -286,6 +286,7 @@ pub struct KubernetesNodeStatus {
     pub allocatable: KubernetesNodeStatusResources,
     pub capacity: KubernetesNodeStatusResources,
     pub node_info: KubernetesNodeInfo,
+    pub conditions: Vec<KubernetesNodeCondition>,
 }
 
 #[derive(Deserialize, Clone, Eq, PartialEq)]
@@ -301,6 +302,14 @@ pub struct KubernetesNodeStatusResources {
 pub struct KubernetesNodeInfo {
     pub kube_proxy_version: String,
     pub kubelet_version: String,
+}
+
+#[derive(Deserialize, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesNodeCondition {
+    #[serde(rename = "type")]
+    pub condition_type: String,
+    pub status: String,
 }
 
 #[derive(Deserialize, Clone, Eq, PartialEq)]
@@ -493,6 +502,35 @@ pub struct PDBStatus {
     pub disruptions_allowed: i16,
     pub expected_pods: i16,
     pub observed_generation: i16,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HPA {
+    pub api_version: String,
+    pub items: Option<Vec<HPAItem>>,
+    pub kind: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HPAItem {
+    pub api_version: String,
+    pub kind: String,
+    pub metadata: HPAMetadata,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HPAMetadata {
+    pub annotations: Option<HPAAnnotationCondition>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HPAAnnotationCondition {
+    #[serde(rename = "autoscaling.alpha.kubernetes.io/conditions")]
+    pub conditions: Option<String>,
 }
 
 #[cfg(test)]
