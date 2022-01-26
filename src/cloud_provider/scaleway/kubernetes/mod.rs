@@ -513,6 +513,27 @@ impl<'a> Kapsule<'a> {
             return Err(e);
         }
 
+        match self.check_workers_on_create() {
+            Ok(_) => {
+                let message = format!("Kubernetes {} nodes have been successfully created", self.name());
+                info!("{}", &message);
+                self.send_to_customer(&message, &listeners_helper);
+            }
+            Err(e) => {
+                error!(
+                    "Error while deploying cluster {} with Terraform with id {}.",
+                    self.name(),
+                    self.id()
+                );
+                return Err(LegacyEngineError {
+                    cause: EngineErrorCause::Internal,
+                    scope: EngineErrorScope::Engine,
+                    execution_id: self.context.execution_id().to_string(),
+                    message: e.message,
+                });
+            }
+        };
+
         // kubernetes helm deployments on the cluster
         let kubeconfig = PathBuf::from(self.get_kubeconfig_file().expect("expected to get a kubeconfig file").0);
         let credentials_environment_variables: Vec<(String, String)> = self
