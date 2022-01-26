@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use retry::delay::Fixed;
 use std::fs::File;
 use std::path::Path;
