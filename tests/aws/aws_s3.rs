@@ -28,7 +28,7 @@ fn test_delete_bucket() {
         aws_secret_key,
         aws_region.clone(),
         false,
-        Some(AWS_RESOURCE_TTL_IN_SECONDS),
+        context.resource_expiration_in_seconds(),
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -75,7 +75,7 @@ fn test_create_bucket() {
         aws_secret_key,
         aws_region.clone(),
         false,
-        Some(AWS_RESOURCE_TTL_IN_SECONDS),
+        context.resource_expiration_in_seconds(),
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -127,7 +127,7 @@ fn test_recreate_bucket() {
         aws_secret_key,
         aws_region.clone(),
         false,
-        Some(AWS_RESOURCE_TTL_IN_SECONDS),
+        context.resource_expiration_in_seconds(),
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -172,7 +172,7 @@ fn test_put_file() {
         aws_secret_key,
         aws_region.clone(),
         false,
-        Some(AWS_RESOURCE_TTL_IN_SECONDS),
+        context.resource_expiration_in_seconds(),
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -223,7 +223,7 @@ fn test_get_file() {
         aws_secret_key,
         aws_region.clone(),
         false,
-        Some(AWS_RESOURCE_TTL_IN_SECONDS),
+        context.resource_expiration_in_seconds(),
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());

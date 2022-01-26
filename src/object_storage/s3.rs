@@ -202,22 +202,21 @@ impl ObjectStorage for S3 {
             return Err(self.engine_error(EngineErrorCause::Internal, message));
         }
 
-        let creation_date: DateTime<Utc> = Utc::now();
+        let mut bucket_tags = vec![Tag {
+            key: "CreationDate".to_string(),
+            value: Utc::now().to_rfc3339().to_string(),
+        }];
+        if let Some(bucket_ttl) = self.bucket_ttl_in_seconds {
+            bucket_tags.push(Tag {
+                key: "Ttl".to_string(),
+                value: bucket_ttl.to_string(),
+            });
+        }
+
         if let Err(e) = block_on(s3_client.put_bucket_tagging(PutBucketTaggingRequest {
             bucket: bucket_name.to_string(),
             expected_bucket_owner: None,
-            tagging: Tagging {
-                tag_set: vec![
-                    Tag {
-                        key: "CreationDate".to_string(),
-                        value: format!("{}", creation_date.to_rfc3339()),
-                    },
-                    Tag {
-                        key: "Ttl".to_string(),
-                        value: format!("{}", self.bucket_ttl_in_seconds.unwrap_or_else(|| 0).to_string()),
-                    },
-                ],
-            },
+            tagging: Tagging { tag_set: bucket_tags },
             ..Default::default()
         })) {
             let message = format!(
