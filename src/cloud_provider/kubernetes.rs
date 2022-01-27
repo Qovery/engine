@@ -935,7 +935,7 @@ pub fn check_workers_status<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) ->
 where
     P: AsRef<Path>,
 {
-    let result = retry::retry(Fixed::from_millis(10000).take(360), || {
+    let result = retry::retry(Fixed::from_millis(10000).take(60), || {
         match kubectl_exec_get_node(kubernetes_config.as_ref(), envs.clone()) {
             Err(e) => OperationResult::Retry(e),
             Ok(nodes) => {
