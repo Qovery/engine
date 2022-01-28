@@ -482,6 +482,7 @@ impl FromStr for ScwRegion {
 pub enum ScwZone {
     Paris1,
     Paris2,
+    Paris3,
     Amsterdam1,
     Warsaw1,
 }
@@ -492,6 +493,7 @@ impl ScwZone {
         match self {
             ScwZone::Paris1 => "fr-par-1",
             ScwZone::Paris2 => "fr-par-2",
+            ScwZone::Paris3 => "fr-par-3",
             ScwZone::Amsterdam1 => "nl-ams-1",
             ScwZone::Warsaw1 => "pl-waw-1",
         }
@@ -501,6 +503,7 @@ impl ScwZone {
         match self {
             ScwZone::Paris1 => ScwRegion::Paris,
             ScwZone::Paris2 => ScwRegion::Paris,
+            ScwZone::Paris3 => ScwRegion::Paris,
             ScwZone::Amsterdam1 => ScwRegion::Amsterdam,
             ScwZone::Warsaw1 => ScwRegion::Warsaw,
         }
@@ -511,6 +514,7 @@ impl ScwZone {
         match self {
             ScwZone::Paris1 => "fr-par",
             ScwZone::Paris2 => "fr-par",
+            ScwZone::Paris3 => "fr-par",
             ScwZone::Amsterdam1 => "nl-ams",
             ScwZone::Warsaw1 => "pl-waw",
         }
@@ -523,6 +527,7 @@ impl fmt::Display for ScwZone {
         match self {
             ScwZone::Paris1 => write!(f, "fr-par-1"),
             ScwZone::Paris2 => write!(f, "fr-par-2"),
+            ScwZone::Paris3 => write!(f, "fr-par-3"),
             ScwZone::Amsterdam1 => write!(f, "nl-ams-1"),
             ScwZone::Warsaw1 => write!(f, "pl-waw-1"),
         }
@@ -536,6 +541,7 @@ impl FromStr for ScwZone {
         match s {
             "fr-par-1" => Ok(ScwZone::Paris1),
             "fr-par-2" => Ok(ScwZone::Paris2),
+            "fr-par-3" => Ok(ScwZone::Paris3),
             "nl-ams-1" => Ok(ScwZone::Amsterdam1),
             "pl-waw-1" => Ok(ScwZone::Warsaw1),
             _ => Err(()),
@@ -566,6 +572,7 @@ mod tests {
     fn test_zone_to_str() {
         assert_eq!("fr-par-1", ScwZone::Paris1.as_str());
         assert_eq!("fr-par-2", ScwZone::Paris2.as_str());
+        assert_eq!("fr-par-3", ScwZone::Paris3.as_str());
         assert_eq!("nl-ams-1", ScwZone::Amsterdam1.as_str());
         assert_eq!("pl-waw-1", ScwZone::Warsaw1.as_str());
     }
@@ -574,6 +581,7 @@ mod tests {
     fn test_zone_from_str() {
         assert_eq!(ScwZone::from_str("fr-par-1"), Ok(ScwZone::Paris1));
         assert_eq!(ScwZone::from_str("fr-par-2"), Ok(ScwZone::Paris2));
+        assert_eq!(ScwZone::from_str("fr-par-3"), Ok(ScwZone::Paris3));
         assert_eq!(ScwZone::from_str("nl-ams-1"), Ok(ScwZone::Amsterdam1));
         assert_eq!(ScwZone::from_str("pl-waw-1"), Ok(ScwZone::Warsaw1));
     }
@@ -582,6 +590,7 @@ mod tests {
     fn test_zone_region() {
         assert_eq!(ScwZone::Paris1.region(), ScwRegion::Paris);
         assert_eq!(ScwZone::Paris2.region(), ScwRegion::Paris);
+        assert_eq!(ScwZone::Paris3.region(), ScwRegion::Paris);
         assert_eq!(ScwZone::Amsterdam1.region(), ScwRegion::Amsterdam);
         assert_eq!(ScwZone::Warsaw1.region(), ScwRegion::Warsaw);
     }
