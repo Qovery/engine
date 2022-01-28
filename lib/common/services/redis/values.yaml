@@ -362,6 +362,7 @@ master:
   service:
     ##  Redis Master Service type
     type: ClusterIP
+    # name: svc-name
     port: 6379
 
     ## Specify the nodePort value for the LoadBalancer and NodePort service types.

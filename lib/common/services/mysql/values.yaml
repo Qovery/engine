@@ -490,6 +490,7 @@ service:
   ##
   type: ClusterIP
 
+  # name: svc-name
   ## MySQL Service port
   ##
   port: 3306

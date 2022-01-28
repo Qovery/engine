@@ -117,6 +117,7 @@ sentinel:
   service:
     ##  Redis Sentinel Service type
     type: ClusterIP
+    name: {{ service_name }}
     sentinelPort: 26379
     redisPort: 6379
 

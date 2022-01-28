@@ -249,7 +249,7 @@ ldap:
 service:
   ## PosgresSQL service type
   type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
-  # clusterIP: None
+  name: {{ service_name }}
   port: 5432
 
   ## Specify the nodePort value for the LoadBalancer and NodePort service types.
