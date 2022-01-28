@@ -1121,22 +1121,28 @@ pub fn test_db(
                 environment.clone(),
                 secrets.clone(),
             ) {
-                Ok(svc) => assert_eq!(
-                    svc.items
-                        .expect("No items in svc")
-                        .into_iter()
-                        .filter(|svc| svc
-                            .metadata
-                            .name
-                            .contains(get_svc_name(db_kind.clone(), db_id.clone()).as_str())
-                            && &svc.spec.svc_type == "LoadBalancer")
-                        .collect::<Vec<SVCItem>>()
-                        .len(),
-                    match is_public {
-                        true => 1,
-                        false => 0,
-                    }
-                ),
+                Ok(svc) => match is_public {
+                    true => assert_eq!(
+                        svc.items
+                            .expect("No items in svc")
+                            .into_iter()
+                            .filter(|svc| svc.metadata.name == get_svc_name(db_kind.clone(), db_id.clone())
+                                && &svc.spec.svc_type == "LoadBalancer")
+                            .collect::<Vec<SVCItem>>()
+                            .len(),
+                        1
+                    ),
+                    false => assert_eq!(
+                        svc.items
+                            .expect("No items in svc")
+                            .into_iter()
+                            .filter(|svc| svc.metadata.name == get_svc_name(db_kind.clone(), db_id.clone())
+                                && &svc.spec.svc_type == "ClusterIP")
+                            .collect::<Vec<SVCItem>>()
+                            .len(),
+                        1
+                    ),
+                },
                 Err(_) => assert!(false),
             };
         }
@@ -1148,8 +1154,7 @@ pub fn test_db(
                         .expect("No items in svc")
                         .into_iter()
                         .filter(|svc| {
-                            svc.metadata.name.contains(format!("{}-dns", db_id.clone()).as_str())
-                                && svc.spec.svc_type == "ExternalName"
+                            svc.metadata.name == format!("{}-dns", db_id.clone()) && svc.spec.svc_type == "ExternalName"
                         })
                         .collect::<Vec<SVCItem>>();
                     let annotations = &service[0].metadata.annotations;

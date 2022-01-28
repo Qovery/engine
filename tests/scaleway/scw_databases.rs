@@ -2,9 +2,7 @@ use ::function_name::named;
 use tracing::{span, warn, Level};
 
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
-use qovery_engine::models::{
-    Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction, Port, Protocol,
-};
+use qovery_engine::models::{Action, Clone2, Database, DatabaseKind, DatabaseMode, EnvironmentAction, Port, Protocol};
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
     context, engine_run_test, generate_id, generate_password, get_pods, get_svc_name, init, is_pod_restarted_env,
@@ -12,8 +10,8 @@ use test_utilities::utilities::{
 };
 
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
+use test_utilities::common::test_db;
 use test_utilities::common::Infrastructure;
-use test_utilities::common::{test_db, working_minimal_environment};
 use test_utilities::scaleway::{
     clean_environments, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
     SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,

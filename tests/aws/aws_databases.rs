@@ -2,9 +2,7 @@ extern crate test_utilities;
 
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::models::{
-    Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction, Port, Protocol,
-};
+use qovery_engine::models::{Action, Clone2, Database, DatabaseKind, DatabaseMode, EnvironmentAction, Port, Protocol};
 use qovery_engine::transaction::TransactionResult;
 use tracing::{span, Level};
 
