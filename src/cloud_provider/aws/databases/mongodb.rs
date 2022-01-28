@@ -421,8 +421,8 @@ mod tests_mongodb {
 
     #[test]
     fn mongo_name_sanitizer() {
-        let db_id = "dbid";
-        let db_expected_name = "dbid-mongodb";
+        let db_name = "a-name";
+        let db_expected_name = "mongodbaname";
 
         let database = MongoDB::new(
             Context::new(
@@ -436,9 +436,9 @@ mod tests_mongodb {
                 vec![],
                 None,
             ),
-            db_id.clone(),
+            "1234",
             Action::Create,
-            "mongo-db",
+            db_name.clone(),
             "8",
             "mongotest.qovery.io",
             "pgid",
@@ -450,7 +450,7 @@ mod tests_mongodb {
                 password: "".to_string(),
                 host: "".to_string(),
                 port: 5432,
-                mode: DatabaseMode::CONTAINER,
+                mode: DatabaseMode::MANAGED,
                 disk_size_in_gib: 10,
                 database_disk_type: "gp2".to_string(),
                 encrypt_disk: false,

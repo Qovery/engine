@@ -6,7 +6,7 @@ use crate::cloud_provider::service::{
     DatabaseType, Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
 };
 use crate::cloud_provider::utilities::{
-    get_self_hosted_mysql_version, get_supported_version_to_use, print_action, sanitize_db_name, VersionsNumber,
+    get_self_hosted_mysql_version, get_supported_version_to_use, print_action, sanitize_name, VersionsNumber,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -139,7 +139,7 @@ impl Service for MySQL {
     }
 
     fn sanitized_name(&self) -> String {
-        sanitize_db_name("mysql", self.name())
+        sanitize_name("mysql", self.name(), self.is_managed_service())
     }
 
     fn version(&self) -> String {

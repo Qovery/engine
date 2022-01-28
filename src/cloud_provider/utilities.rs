@@ -501,7 +501,13 @@ pub fn sanitize_db_name(suffix: &str, db_id: &str) -> String {
 
 pub fn sanitize_name(prefix: &str, app_name: &str, is_managed: bool) -> String {
     match is_managed {
-        true => format!("{}-{}", prefix, app_name).replace("_", "").replace("-", ""),
+        true => {
+            let mut sanitized_name = format!("{}-{}", prefix, app_name).replace("_", "").replace("-", "");
+            if sanitized_name.chars().count() > 63 {
+                sanitized_name = sanitized_name[..63].to_string();
+            };
+            sanitized_name
+        }
         false => format!("{}-{}", prefix, app_name).replace("_", "-"),
     }
 }

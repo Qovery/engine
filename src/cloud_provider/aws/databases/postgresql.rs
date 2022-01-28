@@ -10,7 +10,7 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::utilities::{
     generate_supported_version, get_self_hosted_postgres_version, get_supported_version_to_use, print_action,
-    sanitize_db_name,
+    sanitize_name,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -114,7 +114,7 @@ impl Service for PostgreSQL {
     }
 
     fn sanitized_name(&self) -> String {
-        sanitize_db_name("postgresql", self.id())
+        sanitize_name("postgresql", self.name(), self.is_managed_service())
     }
 
     fn version(&self) -> String {
@@ -443,8 +443,8 @@ mod tests_postgres {
 
     #[test]
     fn postgres_name_sanitizer() {
-        let db_id = "dbid";
-        let db_expected_name = "dbid-postgresql";
+        let db_name = "a-name";
+        let db_expected_name = "postgresqlaname";
 
         let database = PostgreSQL::new(
             Context::new(
@@ -458,9 +458,9 @@ mod tests_postgres {
                 vec![],
                 None,
             ),
-            db_id.clone(),
+            "1234",
             Action::Create,
-            "postgres-db",
+            db_name.clone(),
             "8",
             "pgtest.qovery.io",
             "pgid",

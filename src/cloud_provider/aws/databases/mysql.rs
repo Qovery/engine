@@ -10,7 +10,7 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::utilities::{
     generate_supported_version, get_self_hosted_mysql_version, get_supported_version_to_use, print_action,
-    sanitize_db_name,
+    sanitize_name,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -114,7 +114,7 @@ impl Service for MySQL {
     }
 
     fn sanitized_name(&self) -> String {
-        sanitize_db_name("mysql", self.id())
+        sanitize_name("mysql", self.name(), self.is_managed_service())
     }
 
     fn version(&self) -> String {
@@ -449,8 +449,8 @@ mod tests_mysql {
 
     #[test]
     fn mysql_name_sanitizer() {
-        let db_id = "dbid";
-        let db_expected_name = "dbid-mysql";
+        let db_name = "a-name";
+        let db_expected_name = "mysqlaname";
 
         let database = MySQL::new(
             Context::new(
@@ -464,9 +464,9 @@ mod tests_mysql {
                 vec![],
                 None,
             ),
-            db_id.clone(),
+            "1234",
             Action::Create,
-            "mysql-db",
+            db_name.clone(),
             "8",
             "mysqltest.qovery.io",
             "mysqlid",

@@ -9,7 +9,7 @@ use crate::cloud_provider::service::{
     DatabaseType, Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
 };
 use crate::cloud_provider::utilities::{
-    get_self_hosted_redis_version, get_supported_version_to_use, print_action, sanitize_db_name,
+    get_self_hosted_redis_version, get_supported_version_to_use, print_action, sanitize_name,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -113,7 +113,7 @@ impl Service for Redis {
     }
 
     fn sanitized_name(&self) -> String {
-        sanitize_db_name("redis", self.id())
+        sanitize_name("redis", self.name(), self.is_managed_service())
     }
 
     fn version(&self) -> String {
@@ -428,8 +428,8 @@ mod tests {
 
     #[test]
     fn redis_name_sanitizer() {
-        let db_id = "dbid";
-        let db_expected_name = "dbid-redis";
+        let db_name = "a-name";
+        let db_expected_name = "redisaname";
 
         let database = Redis::new(
             Context::new(
@@ -443,9 +443,9 @@ mod tests {
                 vec![],
                 None,
             ),
-            db_id.clone(),
+            "1234",
             Action::Create,
-            "redis-db",
+            db_name.clone(),
             "8",
             "redistest.qovery.io",
             "redisid",

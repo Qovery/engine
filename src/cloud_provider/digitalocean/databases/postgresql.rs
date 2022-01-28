@@ -5,7 +5,7 @@ use crate::cloud_provider::service::{
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Create, Database, DatabaseOptions,
     DatabaseType, Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
 };
-use crate::cloud_provider::utilities::{get_self_hosted_postgres_version, print_action, sanitize_db_name};
+use crate::cloud_provider::utilities::{get_self_hosted_postgres_version, print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
@@ -108,7 +108,7 @@ impl Service for PostgreSQL {
     }
 
     fn sanitized_name(&self) -> String {
-        sanitize_db_name("postgresql", self.name())
+        sanitize_name("postgresql", self.name(), self.is_managed_service())
     }
 
     fn version(&self) -> String {
