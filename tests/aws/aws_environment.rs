@@ -104,9 +104,16 @@ fn test_build_cache() {
                 .as_str(),
         );
 
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
+
         let ecr = container_registry_ecr(&context);
         let local_docker = build_platform_local_docker(&context);
-
         let app = environment.applications.first().unwrap();
         let image = app.to_image();
 
