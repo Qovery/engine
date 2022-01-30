@@ -288,7 +288,7 @@ impl LocalDocker {
         }
     }
 
-    fn get_repository_root_path(&self, build: &Build) -> Result<String, EngineError> {
+    fn get_repository_build_root_path(&self, build: &Build) -> Result<String, EngineError> {
         workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
@@ -331,10 +331,10 @@ impl BuildPlatform for LocalDocker {
         info!("LocalDocker.has_cache() called for {}", self.name());
 
         // Check if a local cache layers for the container image exists.
-        let repository_root_path = self.get_repository_root_path(&build)?;
+        let repository_root_path = self.get_repository_build_root_path(&build)?;
 
         let parent_build = build
-            .to_parent_build(repository_root_path)
+            .to_previous_build(repository_root_path)
             .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
         // check if local layers exist
@@ -365,7 +365,7 @@ impl BuildPlatform for LocalDocker {
             return Ok(BuildResult { build });
         }
 
-        let repository_root_path = self.get_repository_root_path(&build)?;
+        let repository_root_path = self.get_repository_build_root_path(&build)?;
 
         info!(
             "cloning repository: {} to {}",

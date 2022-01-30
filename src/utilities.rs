@@ -38,6 +38,8 @@ pub fn get_image_tag(
         // only use when a Dockerfile is used to prevent build cache miss every single time
         // we redeploy an app with a env var changed with Buildpacks.
         dockerfile_path.hash(&mut hasher);
+
+        // TODO check if the environment variables are used in the Dockerfile and only Hash the one that are used
         environment_variables.hash(&mut hasher);
     }
 

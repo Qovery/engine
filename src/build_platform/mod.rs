@@ -44,7 +44,7 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn to_parent_build<P>(&self, clone_repo_into_dir: P) -> Result<Build, Error>
+    pub fn to_previous_build<P>(&self, clone_repo_into_dir: P) -> Result<Build, Error>
     where
         P: AsRef<Path>,
     {
