@@ -5,12 +5,17 @@ use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods, get_pvc, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
 use ::function_name::named;
+use qovery_engine::build_platform::{BuildPlatform, CacheResult};
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubernetes_get_all_pdbs;
+use qovery_engine::container_registry::{ContainerRegistry, PullResult};
+use qovery_engine::error::EngineError;
 use qovery_engine::models::{Action, Clone2, EnvironmentAction, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
-use test_utilities::utilities::{context, init, kubernetes_config_path};
+use std::time::SystemTime;
+use test_utilities::aws::container_registry_ecr;
+use test_utilities::utilities::{build_platform_local_docker, context, init, kubernetes_config_path};
 use tracing::{span, Level};
 
 // TODO:
@@ -69,6 +74,73 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
             TransactionResult::Rollback(_) => assert!(false),
             TransactionResult::UnrecoverableError(_, _) => assert!(false),
         };
+
+        return test_name.to_string();
+    })
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn test_build_cache() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context(
+            secrets
+                .AWS_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("AWS_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
+
+        let ecr = container_registry_ecr(&context);
+        let local_docker = build_platform_local_docker(&context);
+
+        let app = environment.applications.first().unwrap();
+        let image = app.to_image();
+
+        let _ = match local_docker.has_cache(app.to_build()) {
+            Ok(CacheResult::Hit) => assert!(false),
+            Ok(CacheResult::Miss(parent_build)) => assert!(true),
+            Err(err) => assert!(false),
+        };
+
+        let start_pull_time = SystemTime::now();
+        let _ = match ecr.pull(&image).unwrap() {
+            PullResult::Some(_) => assert!(true),
+            PullResult::None => assert!(false),
+        };
+
+        let pull_duration = SystemTime::now().duration_since(start_pull_time).unwrap();
+
+        let _ = match local_docker.has_cache(app.to_build()) {
+            Ok(CacheResult::Hit) => assert!(true),
+            Ok(CacheResult::Miss(parent_build)) => assert!(false),
+            Err(err) => assert!(false),
+        };
+
+        let start_pull_time = SystemTime::now();
+        let _ = match ecr.pull(&image).unwrap() {
+            PullResult::Some(_) => assert!(true),
+            PullResult::None => assert!(false),
+        };
+
+        let pull_duration_2 = SystemTime::now().duration_since(start_pull_time).unwrap();
+
+        if pull_duration_2.as_millis() > pull_duration.as_millis() {
+            assert!(false);
+        }
 
         return test_name.to_string();
     })
