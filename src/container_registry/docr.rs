@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::build_platform::Image;
 use crate::cmd::utilities::QoveryCommand;
-use crate::container_registry::docker::docker_tag_and_push_image;
+use crate::container_registry::docker::{docker_pull_image, docker_tag_and_push_image};
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PullResult, PushResult};
 use crate::error::{cast_simple_error_to_engine_error, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::models::{
@@ -189,6 +189,40 @@ impl DOCR {
             }
         }
     }
+
+    pub fn exec_docr_login(&self) -> Result<(), EngineError> {
+        let mut cmd = QoveryCommand::new(
+            "doctl",
+            &vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
+            &vec![],
+        );
+
+        match cmd.exec() {
+            Ok(_) => Ok(()),
+            Err(_) => Err(self.engine_error(
+                EngineErrorCause::User(
+                    "Your DOCR account seems to be no longer valid (bad Credentials). \
+                Please contact your Organization administrator to fix or change the Credentials.",
+                ),
+                format!("failed to login to DOCR {}", self.name_with_id()),
+            )),
+        }
+    }
+
+    fn pull_image(&self, dest: String, image: &Image) -> Result<PullResult, EngineError> {
+        match docker_pull_image(self.kind(), vec![], dest.clone()) {
+            Ok(_) => {
+                let mut image = image.clone();
+                image.registry_url = Some(dest);
+                Ok(PullResult::Some(image))
+            }
+            Err(e) => Err(self.engine_error(
+                EngineErrorCause::Internal,
+                e.message
+                    .unwrap_or_else(|| "unknown error occurring during docker pull".to_string()),
+            )),
+        }
+    }
 }
 
 impl ContainerRegistry for DOCR {
@@ -319,20 +353,7 @@ impl ContainerRegistry for DOCR {
             Err(_) => warn!("DOCR {} already exists", registry_name.as_str()),
         };
 
-        let mut cmd = QoveryCommand::new(
-            "doctl",
-            &vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
-            &vec![],
-        );
-        if let Err(_) = cmd.exec() {
-            return Err(self.engine_error(
-                EngineErrorCause::User(
-                    "Your DOCR account seems to be no longer valid (bad Credentials). \
-                Please contact your Organization administrator to fix or change the Credentials.",
-                ),
-                format!("failed to login to DOCR {}", self.name_with_id()),
-            ));
-        };
+        let _ = self.exec_docr_login()?;
 
         let dest = format!(
             "registry.digitalocean.com/{}/{}",

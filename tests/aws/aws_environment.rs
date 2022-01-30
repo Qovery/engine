@@ -5,10 +5,10 @@ use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods, get_pvc, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
 use ::function_name::named;
-use qovery_engine::build_platform::{BuildPlatform, CacheResult};
+use qovery_engine::build_platform::{BuildPlatform, BuildResult, CacheResult};
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubernetes_get_all_pdbs;
-use qovery_engine::container_registry::{ContainerRegistry, PullResult};
+use qovery_engine::container_registry::{ContainerRegistry, PullResult, PushResult};
 use qovery_engine::error::EngineError;
 use qovery_engine::models::{Action, Clone2, EnvironmentAction, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
@@ -117,23 +117,40 @@ fn test_build_cache() {
         let app = environment.applications.first().unwrap();
         let image = app.to_image();
 
-        let _ = match local_docker.has_cache(app.to_build()) {
+        let app_build = app.to_build();
+        let _ = match local_docker.has_cache(&app_build) {
             Ok(CacheResult::Hit) => assert!(false),
             Ok(CacheResult::Miss(parent_build)) => assert!(true),
+            Ok(CacheResult::MissWithoutParentBuild) => assert!(false),
             Err(err) => assert!(false),
         };
 
-        let start_pull_time = SystemTime::now();
         let _ = match ecr.pull(&image).unwrap() {
+            PullResult::Some(_) => assert!(false),
+            PullResult::None => assert!(true),
+        };
+
+        let build_result = local_docker.build(app.to_build(), false).unwrap();
+
+        let _ = match ecr.push(&build_result.build.image, false) {
+            Ok(_) => assert!(true),
+            Err(_) => assert!(false),
+        };
+
+        // TODO clean local docker cache
+
+        let start_pull_time = SystemTime::now();
+        let _ = match ecr.pull(&build_result.build.image).unwrap() {
             PullResult::Some(_) => assert!(true),
             PullResult::None => assert!(false),
         };
 
         let pull_duration = SystemTime::now().duration_since(start_pull_time).unwrap();
 
-        let _ = match local_docker.has_cache(app.to_build()) {
+        let _ = match local_docker.has_cache(&build_result.build) {
             Ok(CacheResult::Hit) => assert!(true),
             Ok(CacheResult::Miss(parent_build)) => assert!(false),
+            Ok(CacheResult::MissWithoutParentBuild) => assert!(false),
             Err(err) => assert!(false),
         };
 

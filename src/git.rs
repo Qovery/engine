@@ -3,7 +3,7 @@ use std::path::Path;
 use git2::build::{CheckoutBuilder, RepoBuilder};
 use git2::ErrorCode::Auth;
 use git2::ResetType::Hard;
-use git2::{Cred, CredentialType, Error, Object, RemoteCallbacks, Repository, SubmoduleUpdateOptions};
+use git2::{Cred, CredentialType, Error, Object, Oid, RemoteCallbacks, Repository, SubmoduleUpdateOptions};
 use url::Url;
 
 // Credentials callback is called endlessly until the server return Auth Ok (or a definitive error)
@@ -93,6 +93,11 @@ where
     // Get our repository
     let mut repo = RepoBuilder::new();
     repo.fetch_options(fo);
+
+    if into_dir.as_ref().exists() {
+        let _ = std::fs::remove_dir_all(into_dir.as_ref());
+    }
+
     repo.clone(url.as_str(), into_dir.as_ref())
 }
 
@@ -139,19 +144,20 @@ pub fn get_parent_commit_id<P>(
     commit_id: &str,
     into_dir: P,
     get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
-) -> Result<String, Error>
+) -> Result<Option<String>, Error>
 where
     P: AsRef<Path>,
 {
     // clone repository
     let repo = clone(repository_url, into_dir, get_credentials)?;
 
-    // position the repo at the correct commit
-    let obj = checkout(&repo, commit_id)?;
+    let oid = Oid::from_str(commit_id)?;
+    let commit = match repo.find_commit(oid) {
+        Ok(commit) => commit,
+        Err(_) => return Ok(None),
+    };
 
-    let commit = obj.peel_to_commit()?;
-    let parent_id = commit.parent_id(1)?;
-    Ok(parent_id.to_string())
+    Ok(commit.parent_ids().next().map(|x| x.to_string()))
 }
 
 #[cfg(test)]
@@ -269,9 +275,27 @@ mod tests {
             clone_dir.path,
             &|_| vec![],
         )
+        .unwrap()
         .unwrap();
 
         assert_eq!(result, "32fa68e788f2b3afed7b29091a66fe7c8f84bacd".to_string());
+    }
+
+    #[test]
+    fn test_git_parent_id_not_existing() {
+        let clone_dir = DirectoryToDelete {
+            path: "/tmp/engine_test_parent_id_not_existing",
+        };
+
+        let result = get_parent_commit_id(
+            "https://github.com/Qovery/engine-testing.git",
+            "964f02f3a3065bc7f6fb745d679b1ddb21153cc0",
+            clone_dir.path,
+            &|_| vec![],
+        )
+        .unwrap();
+
+        assert_eq!(result, None);
     }
 
     #[test]

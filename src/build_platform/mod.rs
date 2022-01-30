@@ -21,7 +21,7 @@ pub trait BuildPlatform: Listen {
         format!("{} ({})", self.name(), self.id())
     }
     fn is_valid(&self) -> Result<(), EngineError>;
-    fn has_cache(&self, build: Build) -> Result<CacheResult, EngineError>;
+    fn has_cache(&self, build: &Build) -> Result<CacheResult, EngineError>;
     fn build(&self, build: Build, force_build: bool) -> Result<BuildResult, EngineError>;
     fn build_error(&self, build: Build) -> Result<BuildResult, EngineError>;
     fn engine_error_scope(&self) -> EngineErrorScope {
@@ -44,7 +44,7 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn to_previous_build<P>(&self, clone_repo_into_dir: P) -> Result<Build, Error>
+    pub fn to_previous_build<P>(&self, clone_repo_into_dir: P) -> Result<Option<Build>, Error>
     where
         P: AsRef<Path>,
     {
@@ -61,6 +61,11 @@ impl Build {
             },
         )?;
 
+        let parent_commit_id = match parent_commit_id {
+            None => return Ok(None),
+            Some(parent_commit_id) => parent_commit_id,
+        };
+
         let mut environment_variables_map = BTreeMap::<String, String>::new();
         for env in &self.options.environment_variables {
             environment_variables_map.insert(env.key.clone(), env.value.clone());
@@ -74,14 +79,14 @@ impl Build {
             &parent_commit_id,
         );
 
-        image.commit_id = parent_commit_id;
+        image.commit_id = parent_commit_id.clone();
 
-        Ok(Build {
+        Ok(Some(Build {
             git_repository: GitRepository {
                 url: self.git_repository.url.clone(),
                 credentials: self.git_repository.credentials.clone(),
                 ssh_keys: self.git_repository.ssh_keys.clone(),
-                commit_id: self.git_repository.commit_id.clone(),
+                commit_id: parent_commit_id,
                 dockerfile_path: self.git_repository.dockerfile_path.clone(),
                 root_path: self.git_repository.root_path.clone(),
                 buildpack_language: self.git_repository.buildpack_language.clone(),
@@ -90,7 +95,7 @@ impl Build {
             options: BuildOptions {
                 environment_variables: self.options.environment_variables.clone(),
             },
-        })
+        }))
     }
 }
 
@@ -193,6 +198,7 @@ pub enum Kind {
 type ParentBuild = Build;
 
 pub enum CacheResult {
-    Hit,
+    MissWithoutParentBuild,
     Miss(ParentBuild),
+    Hit,
 }

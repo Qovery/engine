@@ -136,7 +136,11 @@ impl<'a> Transaction<'a> {
 
     fn load_build_app_cache(&self, app: &crate::models::Application) -> Result<(), EngineError> {
         // do load build cache before building app
-        let _ = match self.engine.build_platform().has_cache(app.to_build()) {
+        let build = app.to_build();
+        let _ = match self.engine.build_platform().has_cache(&build) {
+            Ok(CacheResult::MissWithoutParentBuild) => {
+                info!("first build for app {} - cache miss", app.name.as_str());
+            }
             Ok(CacheResult::Hit) => {
                 info!("cache hit for app {}", app.name.as_str());
             }

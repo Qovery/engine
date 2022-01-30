@@ -352,7 +352,7 @@ impl Application {
         self.to_image_with_commit(&self.commit_id)
     }
 
-    pub fn to_image_from_parent_commit<P>(&self, clone_repo_into_dir: P) -> Result<Image, Error>
+    pub fn to_image_from_parent_commit<P>(&self, clone_repo_into_dir: P) -> Result<Option<Image>, Error>
     where
         P: AsRef<Path>,
     {
@@ -369,7 +369,10 @@ impl Application {
             },
         )?;
 
-        Ok(self.to_image_with_commit(&parent_commit_id))
+        Ok(match parent_commit_id {
+            Some(id) => Some(self.to_image_with_commit(&id)),
+            None => None,
+        })
     }
 
     pub fn to_image_with_commit(&self, commit_id: &String) -> Image {

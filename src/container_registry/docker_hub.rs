@@ -4,7 +4,7 @@ use reqwest::StatusCode;
 
 use crate::build_platform::Image;
 use crate::cmd::utilities::QoveryCommand;
-use crate::container_registry::docker::docker_tag_and_push_image;
+use crate::container_registry::docker::{docker_pull_image, docker_tag_and_push_image};
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PullResult, PushResult};
 use crate::error::EngineErrorCause;
 use crate::models::{
@@ -29,6 +29,45 @@ impl DockerHub {
             login: login.to_string(),
             password: password.to_string(),
             listeners: vec![],
+        }
+    }
+
+    pub fn exec_docker_login(&self) -> Result<(), EngineError> {
+        let envs = match self.context.docker_tcp_socket() {
+            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
+            None => vec![],
+        };
+
+        let mut cmd = QoveryCommand::new(
+            "docker",
+            &vec!["login", "-u", self.login.as_str(), "-p", self.password.as_str()],
+            &envs,
+        );
+
+        match cmd.exec() {
+            Ok(_) => Ok(()),
+            Err(_) => Err(self.engine_error(
+                EngineErrorCause::User(
+                    "Your DockerHub account seems to be no longer valid (bad Credentials). \
+                Please contact your Organization administrator to fix or change the Credentials.",
+                ),
+                format!("failed to login to DockerHub {}", self.name_with_id()),
+            )),
+        }
+    }
+
+    fn pull_image(&self, dest: String, image: &Image) -> Result<PullResult, EngineError> {
+        match docker_pull_image(self.kind(), vec![], dest.clone()) {
+            Ok(_) => {
+                let mut image = image.clone();
+                image.registry_url = Some(dest);
+                Ok(PullResult::Some(image))
+            }
+            Err(e) => Err(self.engine_error(
+                EngineErrorCause::Internal,
+                e.message
+                    .unwrap_or_else(|| "unknown error occurring during docker pull".to_string()),
+            )),
         }
     }
 }
@@ -100,31 +139,51 @@ impl ContainerRegistry for DockerHub {
         }
     }
 
-    fn pull(&self, _image: &Image) -> Result<PullResult, EngineError> {
-        // TODO implement
-        Ok(PullResult::None)
+    fn pull(&self, image: &Image) -> Result<PullResult, EngineError> {
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        if !self.does_image_exists(image) {
+            let info_message = format!(
+                "image {:?} does not exist in DockerHub {} repository",
+                image,
+                self.name()
+            );
+            info!("{}", info_message.as_str());
+
+            listeners_helper.deployment_in_progress(ProgressInfo::new(
+                ProgressScope::Application {
+                    id: image.application_id.clone(),
+                },
+                ProgressLevel::Info,
+                Some(info_message),
+                self.context.execution_id(),
+            ));
+
+            return Ok(PullResult::None);
+        }
+
+        let info_message = format!("pull image {:?} from DockerHub {} repository", image, self.name());
+        info!("{}", info_message.as_str());
+
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
+            ProgressScope::Application {
+                id: image.application_id.clone(),
+            },
+            ProgressLevel::Info,
+            Some(info_message),
+            self.context.execution_id(),
+        ));
+
+        let _ = self.exec_docker_login()?;
+
+        let dest = format!("{}/{}", self.login.as_str(), image.name_with_tag().as_str());
+
+        // pull image
+        self.pull_image(dest, image)
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
-        let envs = match self.context.docker_tcp_socket() {
-            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
-            None => vec![],
-        };
-
-        let mut cmd = QoveryCommand::new(
-            "docker",
-            &vec!["login", "-u", self.login.as_str(), "-p", self.password.as_str()],
-            &envs,
-        );
-        if let Err(_) = cmd.exec() {
-            return Err(self.engine_error(
-                EngineErrorCause::User(
-                    "Your DockerHub account seems to be no longer valid (bad Credentials). \
-                Please contact your Organization administrator to fix or change the Credentials.",
-                ),
-                format!("failed to login to DockerHub {}", self.name_with_id()),
-            ));
-        };
+        let _ = self.exec_docker_login()?;
 
         let dest = format!("{}/{}", self.login.as_str(), image.name_with_tag().as_str());
         let listeners_helper = ListenersHelper::new(&self.listeners);

@@ -327,7 +327,7 @@ impl BuildPlatform for LocalDocker {
         Ok(())
     }
 
-    fn has_cache(&self, build: Build) -> Result<CacheResult, EngineError> {
+    fn has_cache(&self, build: &Build) -> Result<CacheResult, EngineError> {
         info!("LocalDocker.has_cache() called for {}", self.name());
 
         // Check if a local cache layers for the container image exists.
@@ -337,9 +337,13 @@ impl BuildPlatform for LocalDocker {
             .to_previous_build(repository_root_path)
             .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
 
+        let parent_build = match parent_build {
+            Some(parent_build) => parent_build,
+            None => return Ok(CacheResult::MissWithoutParentBuild),
+        };
+
         // check if local layers exist
-        let name_with_tag = &parent_build.image.name_with_tag();
-        let mut cmd = QoveryCommand::new("docker", &["images", "-q", name_with_tag], &[]);
+        let mut cmd = QoveryCommand::new("docker", &["images", "-q", parent_build.image.name.as_str()], &[]);
 
         let mut result = CacheResult::Miss(parent_build);
         let _ = cmd.exec_with_timeout(
