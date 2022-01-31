@@ -278,7 +278,7 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        assert_eq!(result, "32fa68e788f2b3afed7b29091a66fe7c8f84bacd".to_string());
+        assert_eq!(result, "1538fb6333b86798f0cf865558a28e729a98dace".to_string());
     }
 
     #[test]
