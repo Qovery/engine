@@ -226,7 +226,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     // pSQL 2 management part
     let psql_id_2 = generate_id();
     let fqdn_id_2 = "my-postgresql-2".to_string() + generate_id().as_str();
-    let fqdn_2 = format!("{}2", get_svc_name(DatabaseKind::Postgresql, psql_id_2.clone()));
+    let fqdn_2 = get_svc_name(DatabaseKind::Postgresql, psql_id_2.clone());
     let database_username_2 = "superuser2".to_string();
     let database_name_2 = "postgres2".to_string();
 
