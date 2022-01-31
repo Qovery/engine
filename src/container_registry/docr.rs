@@ -120,7 +120,7 @@ impl DOCR {
                         EngineErrorCause::Internal,
                         e.message
                             .unwrap_or_else(|| "unknown error occurring during docker push".to_string()),
-                    ))
+                    ));
                 }
             };
 
@@ -209,10 +209,13 @@ impl DOCR {
         }
     }
 
-    fn pull_image(&self, dest: String, image: &Image) -> Result<PullResult, EngineError> {
+    fn pull_image(&self, registry_name: String, dest: String, image: &Image) -> Result<PullResult, EngineError> {
         match docker_pull_image(self.kind(), vec![], dest.clone()) {
             Ok(_) => {
                 let mut image = image.clone();
+                image.registry_name = Some(registry_name.clone());
+                // on DOCR registry secret is the same as registry name
+                image.registry_secret = Some(registry_name);
                 image.registry_url = Some(dest);
                 Ok(PullResult::Some(image))
             }
@@ -339,9 +342,49 @@ impl ContainerRegistry for DOCR {
         }
     }
 
-    fn pull(&self, _image: &Image) -> Result<PullResult, EngineError> {
-        // TODO implement
-        Ok(PullResult::None)
+    fn pull(&self, image: &Image) -> Result<PullResult, EngineError> {
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        if !self.does_image_exists(image) {
+            let info_message = format!("image {:?} does not exist in DOCR {} repository", image, self.name());
+            info!("{}", info_message.as_str());
+
+            listeners_helper.deployment_in_progress(ProgressInfo::new(
+                ProgressScope::Application {
+                    id: image.application_id.clone(),
+                },
+                ProgressLevel::Info,
+                Some(info_message),
+                self.context.execution_id(),
+            ));
+
+            return Ok(PullResult::None);
+        }
+
+        let info_message = format!("pull image {:?} from DOCR {} repository", image, self.name());
+        info!("{}", info_message.as_str());
+
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
+            ProgressScope::Application {
+                id: image.application_id.clone(),
+            },
+            ProgressLevel::Info,
+            Some(info_message),
+            self.context.execution_id(),
+        ));
+
+        let _ = self.exec_docr_login()?;
+
+        let registry_name = self.get_registry_name(image)?;
+
+        let dest = format!(
+            "registry.digitalocean.com/{}/{}",
+            registry_name.as_str(),
+            image.name_with_tag()
+        );
+
+        // pull image
+        self.pull_image(registry_name, dest, image)
     }
 
     // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/
