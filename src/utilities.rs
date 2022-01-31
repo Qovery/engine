@@ -48,3 +48,65 @@ pub fn get_image_tag(
 
     tag
 }
+
+#[cfg(test)]
+mod tests_utilities {
+    use crate::utilities::get_image_tag;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn test_get_image_tag() {
+        let image_tag = get_image_tag(
+            &"/".to_string(),
+            &Some("Dockerfile".to_string()),
+            &BTreeMap::new(),
+            &"63d8c437337416a7067d3f358197ac47d003fab9".to_string(),
+        );
+
+        let image_tag_2 = get_image_tag(
+            &"/".to_string(),
+            &Some("Dockerfile.qovery".to_string()),
+            &BTreeMap::new(),
+            &"63d8c437337416a7067d3f358197ac47d003fab9".to_string(),
+        );
+
+        assert_ne!(image_tag, image_tag_2);
+
+        let image_tag_3 = get_image_tag(
+            &"/xxx".to_string(),
+            &Some("Dockerfile.qovery".to_string()),
+            &BTreeMap::new(),
+            &"63d8c437337416a7067d3f358197ac47d003fab9".to_string(),
+        );
+
+        assert_ne!(image_tag, image_tag_3);
+
+        let image_tag_3_2 = get_image_tag(
+            &"/xxx".to_string(),
+            &Some("Dockerfile.qovery".to_string()),
+            &BTreeMap::new(),
+            &"63d8c437337416a7067d3f358197ac47d003fab9".to_string(),
+        );
+
+        assert_eq!(image_tag_3, image_tag_3_2);
+
+        let image_tag_4 = get_image_tag(
+            &"/".to_string(),
+            &None,
+            &BTreeMap::new(),
+            &"63d8c437337416a7067d3f358197ac47d003fab9".to_string(),
+        );
+
+        let mut env_vars_5 = BTreeMap::new();
+        env_vars_5.insert("toto".to_string(), "key".to_string());
+
+        let image_tag_5 = get_image_tag(
+            &"/".to_string(),
+            &None,
+            &env_vars_5,
+            &"63d8c437337416a7067d3f358197ac47d003fab9".to_string(),
+        );
+
+        assert_eq!(image_tag_4, image_tag_5);
+    }
+}

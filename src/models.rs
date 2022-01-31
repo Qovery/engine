@@ -22,7 +22,8 @@ use crate::cloud_provider::service::{DatabaseOptions, StatefulService, Stateless
 use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
-use crate::{git, utilities};
+use crate::git;
+use crate::utilities::get_image_tag;
 
 #[derive(Clone, Debug)]
 pub struct QoveryIdentifier {
@@ -379,7 +380,7 @@ impl Application {
         Image {
             application_id: self.id.clone(),
             name: self.name.clone(),
-            tag: utilities::get_image_tag(
+            tag: get_image_tag(
                 &self.root_path,
                 &self.dockerfile_path,
                 &self.environment_vars,
