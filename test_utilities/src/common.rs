@@ -553,7 +553,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
-                application_name: application_name,
+                application_name,
             }],
             sticky_sessions_enabled: false,
         }],
