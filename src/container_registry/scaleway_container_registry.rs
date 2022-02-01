@@ -405,7 +405,6 @@ impl ContainerRegistry for ScalewayCR {
 
         let mut image = image.clone();
         let registry_url: String;
-        let registry_name: String;
 
         match self.get_or_create_registry_namespace(&image) {
             Ok(registry) => {
@@ -418,7 +417,6 @@ impl ContainerRegistry for ScalewayCR {
                 image.registry_secret = Some(self.secret_token.clone());
                 image.registry_docker_json_config = Some(self.get_docker_json_config_raw());
                 registry_url = registry.endpoint.unwrap_or_else(|| "undefined".to_string());
-                registry_name = registry.name.unwrap();
             }
             Err(e) => {
                 error!(
