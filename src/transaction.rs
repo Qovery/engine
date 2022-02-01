@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::thread;
 
-use crate::build_platform::BuildResult;
+use crate::build_platform::{BuildResult, CacheResult};
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{Application, Service};
 use crate::container_registry::PushResult;
@@ -134,7 +134,53 @@ impl<'a> Transaction<'a> {
         Ok(())
     }
 
-    fn _build_applications(
+    fn load_build_app_cache(&self, app: &crate::models::Application) -> Result<(), EngineError> {
+        // do load build cache before building app
+        let build = app.to_build();
+        let _ = match self.engine.build_platform().has_cache(&build) {
+            Ok(CacheResult::MissWithoutParentBuild) => {
+                info!("first build for app {} - cache miss", app.name.as_str());
+            }
+            Ok(CacheResult::Hit) => {
+                info!("cache hit for app {}", app.name.as_str());
+            }
+            Ok(CacheResult::Miss(parent_build)) => {
+                info!("cache miss for app {}", app.name.as_str());
+
+                let container_registry = self.engine.container_registry();
+
+                // pull image from container registry
+                // FIXME: if one day we use something else than LocalDocker to build image
+                // FIXME: we'll need to send the PullResult to the Build implementation
+                let _ = match container_registry.pull(&parent_build.image) {
+                    Ok(pull_result) => pull_result,
+                    Err(err) => {
+                        warn!(
+                            "{}",
+                            err.message.clone().unwrap_or(format!(
+                                "something goes wrong while pulling image from {:?} container registry",
+                                container_registry.kind()
+                            ))
+                        );
+                        return Err(err);
+                    }
+                };
+            }
+            Err(err) => {
+                warn!(
+                    "load build app {} cache error: {}",
+                    app.name.as_str(),
+                    err.message.clone().unwrap_or("<no message>".to_string())
+                );
+
+                return Err(err);
+            }
+        };
+
+        Ok(())
+    }
+
+    fn build_applications(
         &self,
         environment: &Environment,
         option: &DeploymentOption,
@@ -151,6 +197,9 @@ impl<'a> Transaction<'a> {
                 let image = app.to_image();
                 let build_result = if option.force_build || !self.engine.container_registry().does_image_exists(&image)
                 {
+                    // If an error occurred we can skip it. It's not critical.
+                    let _ = self.load_build_app_cache(app);
+
                     // only if the build is forced OR if the image does not exist in the registry
                     self.engine.build_platform().build(app.to_build(), option.force_build)
                 } else {
@@ -185,7 +234,7 @@ impl<'a> Transaction<'a> {
         Ok(applications)
     }
 
-    fn _push_applications(
+    fn push_applications(
         &self,
         applications: Vec<Box<dyn Application>>,
         option: &DeploymentOption,
@@ -393,8 +442,8 @@ impl<'a> Transaction<'a> {
                         EnvironmentAction::EnvironmentWithFailover(te, _) => te,
                     };
 
-                    let apps_result = match self._build_applications(target_environment, option) {
-                        Ok(applications) => match self._push_applications(applications, option) {
+                    let apps_result = match self.build_applications(target_environment, option) {
+                        Ok(applications) => match self.push_applications(applications, option) {
                             Ok(results) => {
                                 let applications = results.into_iter().map(|(app, _)| app).collect::<Vec<_>>();
 
@@ -423,8 +472,8 @@ impl<'a> Transaction<'a> {
 
                     // build as well the failover environment, retention could remove the application image
                     if let EnvironmentAction::EnvironmentWithFailover(_, fe) = environment_action {
-                        let apps_result = match self._build_applications(fe, option) {
-                            Ok(applications) => match self._push_applications(applications, option) {
+                        let apps_result = match self.build_applications(fe, option) {
+                            Ok(applications) => match self.push_applications(applications, option) {
                                 Ok(results) => {
                                     let applications = results.into_iter().map(|(app, _)| app).collect::<Vec<_>>();
 
