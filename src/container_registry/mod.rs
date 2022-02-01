@@ -24,6 +24,7 @@ pub trait ContainerRegistry: Listen {
     fn on_delete(&self) -> Result<(), EngineError>;
     fn on_delete_error(&self) -> Result<(), EngineError>;
     fn does_image_exists(&self, image: &Image) -> bool;
+    fn pull(&self, image: &Image) -> Result<PullResult, EngineError>;
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError>;
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError>;
     fn engine_error_scope(&self) -> EngineErrorScope {
@@ -41,6 +42,11 @@ pub trait ContainerRegistry: Listen {
 
 pub struct PushResult {
     pub image: Image,
+}
+
+pub enum PullResult {
+    Some(Image),
+    None,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]

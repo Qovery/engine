@@ -1,10 +1,17 @@
-use std::hash::{Hash, Hasher};
+use std::collections::BTreeMap;
+use std::fmt::{Display, Formatter};
+use std::hash::Hash;
+use std::net::Ipv4Addr;
+use std::path::Path;
+use std::str::FromStr;
+use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
+use git2::{Cred, CredentialType, Error};
+use itertools::Itertools;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::DefaultHasher;
 
 use crate::build_platform::{Build, BuildOptions, Credentials, GitRepository, Image, SshKey};
 use crate::cloud_provider::aws::databases::mongodb::MongoDB;
@@ -15,12 +22,8 @@ use crate::cloud_provider::service::{DatabaseOptions, StatefulService, Stateless
 use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
-use itertools::Itertools;
-use std::collections::BTreeMap;
-use std::fmt::{Display, Formatter};
-use std::net::Ipv4Addr;
-use std::str::FromStr;
-use std::sync::Arc;
+use crate::git;
+use crate::utilities::get_image_tag;
 
 #[derive(Clone, Debug)]
 pub struct QoveryIdentifier {
@@ -347,24 +350,42 @@ impl Application {
     }
 
     pub fn to_image(&self) -> Image {
-        // Image tag == hash(root_path) + commit_id truncate to 127 char
-        // https://github.com/distribution/distribution/blob/6affafd1f030087d88f88841bf66a8abe2bf4d24/reference/regexp.go#L41
-        let mut hasher = DefaultHasher::new();
+        self.to_image_with_commit(&self.commit_id)
+    }
 
-        // If any of those variables changes, we'll get a new hash value, what results in a new image
-        // build and avoids using cache. It is important to build a new image, as those variables may
-        // affect the build result even if user didn't change his code.
-        self.root_path.hash(&mut hasher);
-        self.dockerfile_path.hash(&mut hasher);
-        self.environment_vars.hash(&mut hasher);
+    pub fn to_image_from_parent_commit<P>(&self, clone_repo_into_dir: P) -> Result<Option<Image>, Error>
+    where
+        P: AsRef<Path>,
+    {
+        let parent_commit_id = git::get_parent_commit_id(
+            self.git_url.as_str(),
+            self.commit_id.as_str(),
+            clone_repo_into_dir,
+            &|_| match &self.git_credentials {
+                None => vec![],
+                Some(creds) => vec![(
+                    CredentialType::USER_PASS_PLAINTEXT,
+                    Cred::userpass_plaintext(creds.login.as_str(), creds.access_token.as_str()).unwrap(),
+                )],
+            },
+        )?;
 
-        let mut tag = format!("{}-{}", hasher.finish(), self.commit_id);
-        tag.truncate(127);
+        Ok(match parent_commit_id {
+            Some(id) => Some(self.to_image_with_commit(&id)),
+            None => None,
+        })
+    }
 
+    pub fn to_image_with_commit(&self, commit_id: &String) -> Image {
         Image {
             application_id: self.id.clone(),
             name: self.name.clone(),
-            tag,
+            tag: get_image_tag(
+                &self.root_path,
+                &self.dockerfile_path,
+                &self.environment_vars,
+                commit_id,
+            ),
             commit_id: self.commit_id.clone(),
             registry_name: None,
             registry_secret: None,
