@@ -513,7 +513,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
         action: Action::Create,
         applications: vec![Application {
             id: application_id,
-            name: application_name,
+            name: application_name.clone(),
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
@@ -534,7 +534,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
                 port: 80,
                 public_port: Some(443),
                 name: None,
-                publicly_accessible: false,
+                publicly_accessible: true,
                 protocol: Protocol::HTTP,
             }],
             total_cpus: "100m".to_string(),
@@ -553,7 +553,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
-                application_name: format!("{}-{}", "simple-app".to_string(), &suffix),
+                application_name: application_name,
             }],
             sticky_sessions_enabled: false,
         }],
