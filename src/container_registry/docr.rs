@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::build_platform::Image;
 use crate::cmd::utilities::QoveryCommand;
-use crate::container_registry::docker::docker_tag_and_push_image;
-use crate::container_registry::{ContainerRegistry, EngineError, Kind, PushResult};
+use crate::container_registry::docker::{docker_pull_image, docker_tag_and_push_image};
+use crate::container_registry::{ContainerRegistry, EngineError, Kind, PullResult, PushResult};
 use crate::error::{cast_simple_error_to_engine_error, EngineErrorCause, SimpleError, SimpleErrorKind};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
@@ -120,7 +120,7 @@ impl DOCR {
                         EngineErrorCause::Internal,
                         e.message
                             .unwrap_or_else(|| "unknown error occurring during docker push".to_string()),
-                    ))
+                    ));
                 }
             };
 
@@ -187,6 +187,43 @@ impl DOCR {
                     format!("No response from the Digital Ocean API : {:?}", e),
                 ));
             }
+        }
+    }
+
+    pub fn exec_docr_login(&self) -> Result<(), EngineError> {
+        let mut cmd = QoveryCommand::new(
+            "doctl",
+            &vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
+            &vec![],
+        );
+
+        match cmd.exec() {
+            Ok(_) => Ok(()),
+            Err(_) => Err(self.engine_error(
+                EngineErrorCause::User(
+                    "Your DOCR account seems to be no longer valid (bad Credentials). \
+                Please contact your Organization administrator to fix or change the Credentials.",
+                ),
+                format!("failed to login to DOCR {}", self.name_with_id()),
+            )),
+        }
+    }
+
+    fn pull_image(&self, registry_name: String, dest: String, image: &Image) -> Result<PullResult, EngineError> {
+        match docker_pull_image(self.kind(), vec![], dest.clone()) {
+            Ok(_) => {
+                let mut image = image.clone();
+                image.registry_name = Some(registry_name.clone());
+                // on DOCR registry secret is the same as registry name
+                image.registry_secret = Some(registry_name);
+                image.registry_url = Some(dest);
+                Ok(PullResult::Some(image))
+            }
+            Err(e) => Err(self.engine_error(
+                EngineErrorCause::Internal,
+                e.message
+                    .unwrap_or_else(|| "unknown error occurring during docker pull".to_string()),
+            )),
         }
     }
 }
@@ -305,6 +342,51 @@ impl ContainerRegistry for DOCR {
         }
     }
 
+    fn pull(&self, image: &Image) -> Result<PullResult, EngineError> {
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        if !self.does_image_exists(image) {
+            let info_message = format!("image {:?} does not exist in DOCR {} repository", image, self.name());
+            info!("{}", info_message.as_str());
+
+            listeners_helper.deployment_in_progress(ProgressInfo::new(
+                ProgressScope::Application {
+                    id: image.application_id.clone(),
+                },
+                ProgressLevel::Info,
+                Some(info_message),
+                self.context.execution_id(),
+            ));
+
+            return Ok(PullResult::None);
+        }
+
+        let info_message = format!("pull image {:?} from DOCR {} repository", image, self.name());
+        info!("{}", info_message.as_str());
+
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
+            ProgressScope::Application {
+                id: image.application_id.clone(),
+            },
+            ProgressLevel::Info,
+            Some(info_message),
+            self.context.execution_id(),
+        ));
+
+        let _ = self.exec_docr_login()?;
+
+        let registry_name = self.get_registry_name(image)?;
+
+        let dest = format!(
+            "registry.digitalocean.com/{}/{}",
+            registry_name.as_str(),
+            image.name_with_tag()
+        );
+
+        // pull image
+        self.pull_image(registry_name, dest, image)
+    }
+
     // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
         let registry_name = self.get_registry_name(image)?;
@@ -314,20 +396,7 @@ impl ContainerRegistry for DOCR {
             Err(_) => warn!("DOCR {} already exists", registry_name.as_str()),
         };
 
-        let mut cmd = QoveryCommand::new(
-            "doctl",
-            &vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
-            &vec![],
-        );
-        if let Err(_) = cmd.exec() {
-            return Err(self.engine_error(
-                EngineErrorCause::User(
-                    "Your DOCR account seems to be no longer valid (bad Credentials). \
-                Please contact your Organization administrator to fix or change the Credentials.",
-                ),
-                format!("failed to login to DOCR {}", self.name_with_id()),
-            ));
-        };
+        let _ = self.exec_docr_login()?;
 
         let dest = format!(
             "registry.digitalocean.com/{}/{}",

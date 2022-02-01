@@ -6,12 +6,16 @@ use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods, get_pvc, init, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
 use ::function_name::named;
+use qovery_engine::build_platform::{BuildPlatform, CacheResult};
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::container_registry::{ContainerRegistry, PullResult};
 use qovery_engine::models::{Action, Clone2, EnvironmentAction, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
+use std::time::SystemTime;
 use test_utilities::common::Infrastructure;
-use test_utilities::utilities::context;
+use test_utilities::digitalocean::container_registry_digital_ocean;
+use test_utilities::utilities::{build_platform_local_docker, context};
 use tracing::{span, warn, Level};
 
 // Note: All those tests relies on a test cluster running on DigitalOcean infrastructure.
@@ -75,6 +79,95 @@ fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
         }
 
         test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[named]
+#[test]
+fn test_build_cache() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context(
+            secrets
+                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
+
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
+
+        let docr = container_registry_digital_ocean(&context);
+        let local_docker = build_platform_local_docker(&context);
+        let app = environment.applications.first().unwrap();
+        let image = app.to_image();
+
+        let app_build = app.to_build();
+        let _ = match local_docker.has_cache(&app_build) {
+            Ok(CacheResult::Hit) => assert!(false),
+            Ok(CacheResult::Miss(parent_build)) => assert!(true),
+            Ok(CacheResult::MissWithoutParentBuild) => assert!(false),
+            Err(err) => assert!(false),
+        };
+
+        let _ = match docr.pull(&image).unwrap() {
+            PullResult::Some(_) => assert!(false),
+            PullResult::None => assert!(true),
+        };
+
+        let build_result = local_docker.build(app.to_build(), false).unwrap();
+
+        let _ = match docr.push(&build_result.build.image, false) {
+            Ok(_) => assert!(true),
+            Err(_) => assert!(false),
+        };
+
+        // TODO clean local docker cache
+
+        let start_pull_time = SystemTime::now();
+        let _ = match docr.pull(&build_result.build.image).unwrap() {
+            PullResult::Some(_) => assert!(true),
+            PullResult::None => assert!(false),
+        };
+
+        let pull_duration = SystemTime::now().duration_since(start_pull_time).unwrap();
+
+        let _ = match local_docker.has_cache(&build_result.build) {
+            Ok(CacheResult::Hit) => assert!(true),
+            Ok(CacheResult::Miss(parent_build)) => assert!(false),
+            Ok(CacheResult::MissWithoutParentBuild) => assert!(false),
+            Err(err) => assert!(false),
+        };
+
+        let start_pull_time = SystemTime::now();
+        let _ = match docr.pull(&image).unwrap() {
+            PullResult::Some(_) => assert!(true),
+            PullResult::None => assert!(false),
+        };
+
+        let pull_duration_2 = SystemTime::now().duration_since(start_pull_time).unwrap();
+
+        if pull_duration_2.as_millis() > pull_duration.as_millis() {
+            assert!(false);
+        }
+
+        return test_name.to_string();
     })
 }
 
