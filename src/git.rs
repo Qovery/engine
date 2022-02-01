@@ -3,7 +3,7 @@ use std::path::Path;
 use git2::build::{CheckoutBuilder, RepoBuilder};
 use git2::ErrorCode::Auth;
 use git2::ResetType::Hard;
-use git2::{Cred, CredentialType, Error, RemoteCallbacks, Repository, SubmoduleUpdateOptions};
+use git2::{Cred, CredentialType, Error, Object, Oid, RemoteCallbacks, Repository, SubmoduleUpdateOptions};
 use url::Url;
 
 // Credentials callback is called endlessly until the server return Auth Ok (or a definitive error)
@@ -46,7 +46,7 @@ fn authentication_callback<'a>(
     };
 }
 
-fn checkout(repo: &Repository, commit_id: &str) -> Result<(), Error> {
+fn checkout<'a>(repo: &'a Repository, commit_id: &'a str) -> Result<Object<'a>, Error> {
     let obj = repo.revparse_single(commit_id).map_err(|err| {
         let repo_url = repo
             .find_remote("origin")
@@ -63,7 +63,8 @@ fn checkout(repo: &Repository, commit_id: &str) -> Result<(), Error> {
     let mut checkout_opts = CheckoutBuilder::new();
     checkout_opts.force().remove_ignored(true).remove_untracked(true);
 
-    repo.reset(&obj, Hard, Some(&mut checkout_opts))
+    let _ = repo.reset(&obj, Hard, Some(&mut checkout_opts))?;
+    Ok(obj)
 }
 
 fn clone<P>(
@@ -92,6 +93,11 @@ where
     // Get our repository
     let mut repo = RepoBuilder::new();
     repo.fetch_options(fo);
+
+    if into_dir.as_ref().exists() {
+        let _ = std::fs::remove_dir_all(into_dir.as_ref());
+    }
+
     repo.clone(url.as_str(), into_dir.as_ref())
 }
 
@@ -108,7 +114,7 @@ where
     let repo = clone(repository_url, into_dir, get_credentials)?;
 
     // position the repo at the correct commit
-    checkout(&repo, commit_id)?;
+    let _ = checkout(&repo, commit_id)?;
 
     // check submodules if needed
     {
@@ -133,9 +139,30 @@ where
     Ok(repo)
 }
 
+pub fn get_parent_commit_id<P>(
+    repository_url: &str,
+    commit_id: &str,
+    into_dir: P,
+    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
+) -> Result<Option<String>, Error>
+where
+    P: AsRef<Path>,
+{
+    // clone repository
+    let repo = clone(repository_url, into_dir, get_credentials)?;
+
+    let oid = Oid::from_str(commit_id)?;
+    let commit = match repo.find_commit(oid) {
+        Ok(commit) => commit,
+        Err(_) => return Ok(None),
+    };
+
+    Ok(commit.parent_ids().next().map(|x| x.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::git::{checkout, clone, clone_at_commit};
+    use crate::git::{checkout, clone, clone_at_commit, get_parent_commit_id};
     use git2::{Cred, CredentialType};
 
     struct DirectoryToDelete<'a> {
@@ -232,8 +259,43 @@ mod tests {
         let commit = "9a9c1f4373c8128151a9def9ea3d838fa2ed33e8";
         assert_ne!(repo.head().unwrap().target().unwrap().to_string(), commit);
         let check = checkout(&repo, commit);
-        assert!(matches!(check, Ok(())));
+        assert!(matches!(check, Ok(_)));
         assert_eq!(repo.head().unwrap().target().unwrap().to_string(), commit);
+    }
+
+    #[test]
+    fn test_git_parent_id() {
+        let clone_dir = DirectoryToDelete {
+            path: "/tmp/engine_test_parent_id",
+        };
+
+        let result = get_parent_commit_id(
+            "https://github.com/Qovery/engine-testing.git",
+            "964f02f3a3065bc7f6fb745d679b1ddb21153cc7",
+            clone_dir.path,
+            &|_| vec![],
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(result, "1538fb6333b86798f0cf865558a28e729a98dace".to_string());
+    }
+
+    #[test]
+    fn test_git_parent_id_not_existing() {
+        let clone_dir = DirectoryToDelete {
+            path: "/tmp/engine_test_parent_id_not_existing",
+        };
+
+        let result = get_parent_commit_id(
+            "https://github.com/Qovery/engine-testing.git",
+            "964f02f3a3065bc7f6fb745d679b1ddb21153cc0",
+            clone_dir.path,
+            &|_| vec![],
+        )
+        .unwrap();
+
+        assert_eq!(result, None);
     }
 
     #[test]

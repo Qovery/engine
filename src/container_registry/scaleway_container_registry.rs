@@ -3,8 +3,10 @@ extern crate scaleway_api_rs;
 use crate::cloud_provider::scaleway::application::ScwZone;
 
 use crate::build_platform::Image;
-use crate::container_registry::docker::{docker_login, docker_manifest_inspect, docker_tag_and_push_image};
-use crate::container_registry::{ContainerRegistry, Kind, PushResult};
+use crate::container_registry::docker::{
+    docker_login, docker_manifest_inspect, docker_pull_image, docker_tag_and_push_image,
+};
+use crate::container_registry::{ContainerRegistry, Kind, PullResult, PushResult};
 use crate::error::{EngineError, EngineErrorCause};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
@@ -165,14 +167,14 @@ impl ScalewayCR {
         }
     }
 
-    fn push_image(&self, image_url: String, image: &Image) -> Result<PushResult, EngineError> {
+    fn push_image(&self, dest: String, image: &Image) -> Result<PushResult, EngineError> {
         // https://www.scaleway.com/en/docs/deploy-an-image-from-registry-to-kubernetes-kapsule/
         match docker_tag_and_push_image(
             self.kind(),
             self.get_docker_envs(),
             image.name.clone(),
             image.tag.clone(),
-            image_url,
+            dest,
         ) {
             Ok(_) => {}
             Err(e) => {
@@ -204,6 +206,21 @@ impl ScalewayCR {
             Err(Operation { .. }) => image_not_reachable,
             Err(retry::Error::Internal(_)) => image_not_reachable,
         }
+    }
+
+    fn pull_image(&self, dest: String, image: &Image) -> Result<PullResult, EngineError> {
+        match docker_pull_image(self.kind(), self.get_docker_envs(), dest) {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    e.message
+                        .unwrap_or_else(|| "unknown error occurring during docker pull".to_string()),
+                ))
+            }
+        };
+
+        Ok(PullResult::Some(image.clone()))
     }
 
     pub fn create_registry_namespace(
@@ -295,6 +312,28 @@ impl ScalewayCR {
             .as_bytes(),
         )
     }
+
+    fn exec_docker_login(&self, registry_url: &String) -> Result<(), EngineError> {
+        if docker_login(
+            Kind::ScalewayCr,
+            self.get_docker_envs(),
+            self.login.clone(),
+            self.secret_token.clone(),
+            registry_url.clone(),
+        )
+        .is_err()
+        {
+            return Err(self.engine_error(
+                EngineErrorCause::User(
+                    "Your Scaleway account seems to be no longer valid (bad Credentials). \
+                Please contact your Organization administrator to fix or change the Credentials.",
+                ),
+                format!("failed to login to Scaleway {}", self.name_with_id()),
+            ));
+        };
+
+        Ok(())
+    }
 }
 
 impl ContainerRegistry for ScalewayCR {
@@ -361,6 +400,70 @@ impl ContainerRegistry for ScalewayCR {
         .is_some()
     }
 
+    fn pull(&self, image: &Image) -> Result<PullResult, EngineError> {
+        let listeners_helper = ListenersHelper::new(&self.listeners);
+
+        let mut image = image.clone();
+        let registry_url: String;
+
+        match self.get_or_create_registry_namespace(&image) {
+            Ok(registry) => {
+                info!(
+                    "Scaleway registry namespace for {} has been created",
+                    image.name.as_str()
+                );
+                image.registry_name = Some(image.name.clone()); // Note: Repository namespace should have the same name as the image name
+                image.registry_url = registry.endpoint.clone();
+                image.registry_secret = Some(self.secret_token.clone());
+                image.registry_docker_json_config = Some(self.get_docker_json_config_raw());
+                registry_url = registry.endpoint.unwrap_or_else(|| "undefined".to_string());
+            }
+            Err(e) => {
+                error!(
+                    "Scaleway registry namespace for {} cannot be created, error: {:?}",
+                    image.name.as_str(),
+                    e
+                );
+                return Err(e);
+            }
+        }
+
+        if !self.does_image_exists(&image) {
+            let info_message = format!("image {:?} does not exist in SCR {} repository", image, self.name());
+            info!("{}", info_message.as_str());
+
+            listeners_helper.deployment_in_progress(ProgressInfo::new(
+                ProgressScope::Application {
+                    id: image.application_id.clone(),
+                },
+                ProgressLevel::Info,
+                Some(info_message),
+                self.context.execution_id(),
+            ));
+
+            return Ok(PullResult::None);
+        }
+
+        let info_message = format!("pull image {:?} from SCR {} repository", image, self.name());
+        info!("{}", info_message.as_str());
+
+        listeners_helper.deployment_in_progress(ProgressInfo::new(
+            ProgressScope::Application {
+                id: image.application_id.clone(),
+            },
+            ProgressLevel::Info,
+            Some(info_message),
+            self.context.execution_id(),
+        ));
+
+        let _ = self.exec_docker_login(&registry_url)?;
+
+        let dest = format!("{}/{}", registry_url, image.name_with_tag());
+
+        // pull image
+        self.pull_image(dest, &image)
+    }
+
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
         let mut image = image.clone();
         let registry_url: String;
@@ -389,25 +492,9 @@ impl ContainerRegistry for ScalewayCR {
             }
         }
 
-        if docker_login(
-            Kind::ScalewayCr,
-            self.get_docker_envs(),
-            self.login.clone(),
-            self.secret_token.clone(),
-            registry_url.clone(),
-        )
-        .is_err()
-        {
-            return Err(self.engine_error(
-                EngineErrorCause::User(
-                    "Your Scaleway account seems to be no longer valid (bad Credentials). \
-                Please contact your Organization administrator to fix or change the Credentials.",
-                ),
-                format!("failed to login to Scaleway {}", self.name_with_id()),
-            ));
-        };
+        let _ = self.exec_docker_login(&registry_url)?;
 
-        let image_url = format!("{}/{}", registry_url, image.name_with_tag());
+        let dest = format!("{}/{}", registry_url, image.name_with_tag());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
@@ -449,7 +536,7 @@ impl ContainerRegistry for ScalewayCR {
             self.context.execution_id(),
         ));
 
-        self.push_image(image_url, &image)
+        self.push_image(dest, &image)
     }
 
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {
