@@ -987,7 +987,7 @@ pub fn db_infos(
     match db_kind {
         DatabaseKind::Mongodb => {
             let database_port = 27017;
-            let database_db_name = "my-mongodb".to_string();
+            let database_db_name = "mymongodb".to_string();
             let database_uri = format!(
                 "mongodb://{}:{}@{}:{}/{}",
                 database_username,
@@ -1029,7 +1029,7 @@ pub fn db_infos(
         }
         DatabaseKind::Postgresql => {
             let database_port = 5432;
-            let database_db_name = "postgres".to_string();
+            let database_db_name = "mypostgres".to_string();
             DBInfos {
                 db_port: database_port.clone(),
                 db_name: database_db_name.to_string(),
@@ -1045,7 +1045,7 @@ pub fn db_infos(
         }
         DatabaseKind::Redis => {
             let database_port = 6379;
-            let database_db_name = "my-redis".to_string();
+            let database_db_name = "myredis".to_string();
             DBInfos {
                 db_port: database_port.clone(),
                 db_name: database_db_name.to_string(),
@@ -1097,23 +1097,11 @@ pub fn db_instance_type(provider_kind: Kind, db_kind: DatabaseKind, database_mod
     .to_string()
 }
 
-pub fn get_svc_name(db_kind: DatabaseKind, provider_kind: Kind) -> &'static str {
+pub fn get_svc_name(db_kind: DatabaseKind, db_id: String) -> String {
     match db_kind {
-        DatabaseKind::Postgresql => match provider_kind {
-            Kind::Aws => "postgresqlpostgres",
-            _ => "postgresql-postgres",
-        },
-        DatabaseKind::Mysql => match provider_kind {
-            Kind::Aws => "mysqlmysqldatabase",
-            _ => "mysql-mysqldatabase",
-        },
-        DatabaseKind::Mongodb => match provider_kind {
-            Kind::Aws => "mongodbmymongodb",
-            _ => "mongodb-my-mongodb",
-        },
-        DatabaseKind::Redis => match provider_kind {
-            Kind::Aws => "redismyredis-master",
-            _ => "redis-my-redis-master",
-        },
+        DatabaseKind::Postgresql => format!("{}-postgresql", db_id),
+        DatabaseKind::Mysql => format!("{}-mysql", db_id),
+        DatabaseKind::Mongodb => format!("{}-mongodb", db_id),
+        DatabaseKind::Redis => format!("{}-redis", db_id),
     }
 }

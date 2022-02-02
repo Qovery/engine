@@ -87,7 +87,7 @@ service:
     external-dns.alpha.kubernetes.io/ttl: "300"
   {% endif %}
   type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
-  # clusterIP: None
+  name: {{ service_name }}
   port: {{ private_port }}
 
   ## Specify the nodePort value for the LoadBalancer and NodePort service types.

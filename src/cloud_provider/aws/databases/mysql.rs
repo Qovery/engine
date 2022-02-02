@@ -9,8 +9,8 @@ use crate::cloud_provider::service::{
     DatabaseType, Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
 };
 use crate::cloud_provider::utilities::{
-    generate_supported_version, get_self_hosted_mysql_version, get_supported_version_to_use, managed_db_name_sanitizer,
-    print_action,
+    generate_supported_version, get_self_hosted_mysql_version, get_supported_version_to_use, print_action,
+    sanitize_name,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -114,10 +114,7 @@ impl Service for MySQL {
     }
 
     fn sanitized_name(&self) -> String {
-        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
-        let prefix = "mysql";
-        let max_size = 63 - 3; // max RDS - k8s statefulset chars
-        managed_db_name_sanitizer(max_size, prefix, self.name())
+        sanitize_name("mysql", self.name(), self.is_managed_service())
     }
 
     fn version(&self) -> String {
@@ -208,10 +205,9 @@ impl Service for MySQL {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert(
-            "fqdn",
-            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
-        );
+        context.insert("fqdn", self.fqdn(&self.fqdn, self.is_managed_service()).as_str());
+        context.insert("sanitized_name", self.sanitized_name().as_str());
+        context.insert("service_name", self.service_name().as_str());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
         context.insert("database_port", &self.private_port());
@@ -453,8 +449,8 @@ mod tests_mysql {
 
     #[test]
     fn mysql_name_sanitizer() {
-        let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
-        let db_expected_name = "mysqltestnamesanitizerwithtoomanycharsnotallowedwhichwi";
+        let db_name = "a-name";
+        let db_expected_name = "mysqlaname";
 
         let database = MySQL::new(
             Context::new(
@@ -468,9 +464,9 @@ mod tests_mysql {
                 vec![],
                 None,
             ),
-            "mysqlid",
+            "1234",
             Action::Create,
-            db_input_name,
+            db_name.clone(),
             "8",
             "mysqltest.qovery.io",
             "mysqlid",

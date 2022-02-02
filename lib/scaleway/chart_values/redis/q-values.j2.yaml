@@ -326,6 +326,7 @@ master:
   service:
     ##  Redis Master Service type
     type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
+    name: {{ service_name }}
     port: 6379
 
     ## Specify the nodePort value for the LoadBalancer and NodePort service types.

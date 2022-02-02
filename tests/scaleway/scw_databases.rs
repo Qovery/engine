@@ -2,9 +2,7 @@ use ::function_name::named;
 use tracing::{span, warn, Level};
 
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
-use qovery_engine::models::{
-    Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction, Port, Protocol,
-};
+use qovery_engine::models::{Action, Clone2, Database, DatabaseKind, DatabaseMode, EnvironmentAction, Port, Protocol};
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
     context, engine_run_test, generate_id, generate_password, get_pods, get_svc_name, init, is_pod_restarted_env,
@@ -12,8 +10,8 @@ use test_utilities::utilities::{
 };
 
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
+use test_utilities::common::test_db;
 use test_utilities::common::Infrastructure;
-use test_utilities::common::{test_db, working_minimal_environment};
 use test_utilities::scaleway::{
     clean_environments, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
     SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,
@@ -61,7 +59,6 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
                 .as_str(),
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
-            Kind::Scw,
         );
 
         let mut environment_delete = environment.clone();
@@ -125,7 +122,6 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .as_str(),
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
-            Kind::Scw,
         );
 
         let mut environment_delete = environment.clone();
@@ -214,7 +210,6 @@ fn postgresql_failover_dev_environment_with_all_options() {
             test_domain.as_str(),
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
-            Kind::Scw,
         );
         let environment_check = environment.clone();
         let mut environment_never_up = environment.clone();
@@ -240,7 +235,6 @@ fn postgresql_failover_dev_environment_with_all_options() {
             test_domain.as_str(),
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
-            Kind::Scw,
         );
 
         environment_delete.action = Action::Delete;
@@ -336,14 +330,12 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             test_domain.as_str(),
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
-            Kind::Scw,
         );
         let mut environment_delete = test_utilities::common::environnement_2_app_2_routers_1_psql(
             &context_for_deletion,
             test_domain.as_str(),
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
-            Kind::Scw,
         );
 
         environment_delete.action = Action::Delete;
@@ -416,8 +408,9 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 .as_str(),
         );
 
+        let db_id = generate_id();
         let app_name = format!("postgresql-app-{}", generate_id());
-        let database_host = get_svc_name(DatabaseKind::Postgresql, Kind::Scw).to_string();
+        let database_host = get_svc_name(DatabaseKind::Postgresql, db_id.clone()).to_string();
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
@@ -428,7 +421,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
             action: Action::Create,
-            id: generate_id(),
+            id: db_id.clone(),
             name: database_db_name.clone(),
             version: "11.8.0".to_string(),
             fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
@@ -542,20 +535,25 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
  **
  **/
 #[allow(dead_code)]
-fn test_postgresql_configuration(
-    context: Context,
-    environment: Environment,
-    secrets: FuncTestsSecrets,
-    version: &str,
-    test_name: &str,
-    database_mode: DatabaseMode,
-    is_public: bool,
-) {
+fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .SCALEWAY_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
+            .as_str(),
+        secrets
+            .SCALEWAY_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_CLUSTER_ID")
+            .as_str(),
+    );
+
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,
@@ -572,224 +570,56 @@ fn test_postgresql_configuration(
 #[named]
 #[test]
 fn private_postgresql_v10_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), CONTAINER, false);
+    test_postgresql_configuration("10", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn public_postgresql_v10_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), CONTAINER, true);
+    test_postgresql_configuration("10", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn private_postgresql_v11_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), CONTAINER, false);
+    test_postgresql_configuration("11", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn public_postgresql_v11_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), CONTAINER, true);
+    test_postgresql_configuration("11", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn private_postgresql_v12_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER, false);
+    test_postgresql_configuration("12", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn public_postgresql_v12_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER, true);
+    test_postgresql_configuration("12", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn private_postgresql_v13_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "13", function_name!(), CONTAINER, false);
+    test_postgresql_configuration("13", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn public_postgresql_v13_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "13", function_name!(), CONTAINER, true);
+    test_postgresql_configuration("13", function_name!(), CONTAINER, true);
 }
 
 // Postgres production environment
@@ -798,28 +628,7 @@ fn public_postgresql_v13_deploy_a_working_dev_environment() {
 #[test]
 #[ignore]
 fn private_postgresql_v10_deploy_a_working_prod_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), MANAGED, false);
+    test_postgresql_configuration("10", function_name!(), MANAGED, false);
 }
 
 #[cfg(feature = "test-scw-managed-services")]
@@ -827,28 +636,7 @@ fn private_postgresql_v10_deploy_a_working_prod_environment() {
 #[test]
 #[ignore]
 fn public_postgresql_v10_deploy_a_working_prod_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), MANAGED, true);
+    test_postgresql_configuration("10", function_name!(), MANAGED, true);
 }
 
 #[cfg(feature = "test-scw-managed-services")]
@@ -856,28 +644,7 @@ fn public_postgresql_v10_deploy_a_working_prod_environment() {
 #[test]
 #[ignore]
 fn private_postgresql_v11_deploy_a_working_prod_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), MANAGED, false);
+    test_postgresql_configuration("11", function_name!(), MANAGED, false);
 }
 
 #[cfg(feature = "test-scw-managed-services")]
@@ -885,28 +652,7 @@ fn private_postgresql_v11_deploy_a_working_prod_environment() {
 #[test]
 #[ignore]
 fn public_postgresql_v11_deploy_a_working_prod_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), MANAGED, true);
+    test_postgresql_configuration("11", function_name!(), MANAGED, true);
 }
 
 #[cfg(feature = "test-scw-managed-services")]
@@ -914,28 +660,7 @@ fn public_postgresql_v11_deploy_a_working_prod_environment() {
 #[test]
 #[ignore]
 fn private_postgresql_v12_deploy_a_working_prod_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), MANAGED, false);
+    test_postgresql_configuration("12", function_name!(), MANAGED, false);
 }
 
 #[cfg(feature = "test-scw-managed-services")]
@@ -943,28 +668,7 @@ fn private_postgresql_v12_deploy_a_working_prod_environment() {
 #[test]
 #[ignore]
 fn public_postgresql_v12_deploy_a_working_prod_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), MANAGED, true);
+    test_postgresql_configuration("12", function_name!(), MANAGED, true);
 }
 
 #[cfg(feature = "test-scw-managed-services")]
@@ -972,28 +676,7 @@ fn public_postgresql_v12_deploy_a_working_prod_environment() {
 #[test]
 #[ignore]
 fn private_postgresql_v13_deploy_a_working_prod_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "13", function_name!(), MANAGED, false);
+    test_postgresql_configuration("13", function_name!(), MANAGED, false);
 }
 
 #[cfg(feature = "test-scw-managed-services")]
@@ -1001,28 +684,7 @@ fn private_postgresql_v13_deploy_a_working_prod_environment() {
 #[test]
 #[ignore]
 fn public_postgresql_v13_deploy_a_working_prod_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_postgresql_configuration(context, environment, secrets, "13", function_name!(), MANAGED, true);
+    test_postgresql_configuration("13", function_name!(), MANAGED, true);
 }
 
 /**
@@ -1031,20 +693,25 @@ fn public_postgresql_v13_deploy_a_working_prod_environment() {
  **
  **/
 #[allow(dead_code)]
-fn test_mongodb_configuration(
-    context: Context,
-    environment: Environment,
-    secrets: FuncTestsSecrets,
-    version: &str,
-    test_name: &str,
-    database_mode: DatabaseMode,
-    is_public: bool,
-) {
+fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .SCALEWAY_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
+            .as_str(),
+        secrets
+            .SCALEWAY_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_CLUSTER_ID")
+            .as_str(),
+    );
+
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,
@@ -1061,224 +728,56 @@ fn test_mongodb_configuration(
 #[named]
 #[test]
 fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER, false);
+    test_mongodb_configuration("3.6", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn public_mongodb_v3_6_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER, true);
+    test_mongodb_configuration("3.6", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn private_mongodb_v4_0_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), CONTAINER, false);
+    test_mongodb_configuration("4.0", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn public_mongodb_v4_0_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), CONTAINER, true);
+    test_mongodb_configuration("4.0", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!(), CONTAINER, false);
+    test_mongodb_configuration("4.2", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn public_mongodb_v4_2_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!(), CONTAINER, true);
+    test_mongodb_configuration("4.2", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!(), CONTAINER, false);
+    test_mongodb_configuration("4.4", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!(), CONTAINER, true);
+    test_mongodb_configuration("4.4", function_name!(), CONTAINER, true);
 }
 
 /**
@@ -1287,20 +786,25 @@ fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
  **
  **/
 #[allow(dead_code)]
-fn test_mysql_configuration(
-    context: Context,
-    environment: Environment,
-    secrets: FuncTestsSecrets,
-    version: &str,
-    test_name: &str,
-    database_mode: DatabaseMode,
-    is_public: bool,
-) {
+fn test_mysql_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .SCALEWAY_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
+            .as_str(),
+        secrets
+            .SCALEWAY_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_CLUSTER_ID")
+            .as_str(),
+    );
+
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,
@@ -1317,112 +821,28 @@ fn test_mysql_configuration(
 #[named]
 #[test]
 fn private_mysql_v5_7_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), CONTAINER, false);
+    test_mysql_configuration("5.7", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn public_mysql_v5_7_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), CONTAINER, true);
+    test_mysql_configuration("5.7", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn private_mysql_v8_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), CONTAINER, false);
+    test_mysql_configuration("8.0", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn public_mysql_v8_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), CONTAINER, true);
+    test_mysql_configuration("8.0", function_name!(), CONTAINER, true);
 }
 
 // MySQL production environment (RDS)
@@ -1431,28 +851,7 @@ fn public_mysql_v8_deploy_a_working_dev_environment() {
 #[test]
 #[ignore]
 fn private_mysql_v8_deploy_a_working_prod_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = test_utilities::common::working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), MANAGED, false);
+    test_mysql_configuration("8.0", function_name!(), MANAGED, false);
 }
 
 #[cfg(feature = "test-scw-managed-services")]
@@ -1460,28 +859,7 @@ fn private_mysql_v8_deploy_a_working_prod_environment() {
 #[test]
 #[ignore]
 fn public_mysql_v8_deploy_a_working_prod_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = test_utilities::common::working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), MANAGED, true);
+    test_mysql_configuration("8.0", function_name!(), MANAGED, true);
 }
 
 /**
@@ -1490,20 +868,25 @@ fn public_mysql_v8_deploy_a_working_prod_environment() {
  **
  **/
 #[allow(dead_code)]
-fn test_redis_configuration(
-    context: Context,
-    environment: Environment,
-    secrets: FuncTestsSecrets,
-    version: &str,
-    test_name: &str,
-    database_mode: DatabaseMode,
-    is_public: bool,
-) {
+fn test_redis_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .SCALEWAY_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
+            .as_str(),
+        secrets
+            .SCALEWAY_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("SCALEWAY_TEST_CLUSTER_ID")
+            .as_str(),
+    );
+
     engine_run_test(|| {
         test_db(
             context,
             logger(),
-            environment,
             secrets,
             version,
             test_name,
@@ -1520,110 +903,26 @@ fn test_redis_configuration(
 #[named]
 #[test]
 fn private_redis_v5_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_redis_configuration(context, environment, secrets, "5", function_name!(), CONTAINER, false);
+    test_redis_configuration("5", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn public_redis_v5_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_redis_configuration(context, environment, secrets, "5", function_name!(), CONTAINER, true);
+    test_redis_configuration("5", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn private_redis_v6_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_redis_configuration(context, environment, secrets, "6", function_name!(), CONTAINER, false);
+    test_redis_configuration("6", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn public_redis_v6_deploy_a_working_dev_environment() {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
-    );
-    let environment = working_minimal_environment(
-        &context,
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-            .as_str(),
-    );
-    test_redis_configuration(context, environment, secrets, "6", function_name!(), CONTAINER, true);
+    test_redis_configuration("6", function_name!(), CONTAINER, true);
 }

@@ -385,6 +385,18 @@ but Helm 2.9 and 2.10 does not support it, so we need to implement this if-else 
 {{- end -}}
 
 {{/*
+Returns the proper Service name depending if an explicit service name is set
+in the values file. If the name is not explicitly set it will take the "mongodb.fullname"
+*/}}
+{{- define "redis.serviceName" -}}
+  {{- if .Values.master.service.name -}}
+    {{ .Values.master.service.name }}
+  {{- else -}}
+    {{ template "redis.fullname" .}}
+  {{- end -}}
+{{- end -}}
+
+{{/*
 Compile all warnings into a single message, and call fail.
 */}}
 {{- define "redis.validateValues" -}}

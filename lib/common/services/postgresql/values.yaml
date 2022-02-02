@@ -249,6 +249,7 @@ ldap:
 service:
   ## PosgresSQL service type
   type: ClusterIP
+  # name: svc-name
   # clusterIP: None
   port: 5432
 
