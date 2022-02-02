@@ -264,18 +264,6 @@ but Helm 2.9 and 2.10 does not support it, so we need to implement this if-else 
 {{- end -}}
 
 {{/*
-Returns the proper Service name depending if an explicit service name is set
-in the values file. If the name is not explicitly set it will take the "mongodb.fullname"
-*/}}
-{{- define "mysql.serviceName" -}}
-  {{- if .Values.service.name -}}
-    {{ .Values.service.name }}
-  {{- else -}}
-    {{ template "mysql.fullname" .}}
-  {{- end -}}
-{{- end -}}
-
-{{/*
 Renders a value that contains template.
 Usage:
 {{ include "mysql.tplValue" ( dict "value" .Values.path.to.the.Value "context" $) }}

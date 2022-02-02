@@ -8,9 +8,7 @@ use crate::cloud_provider::service::{
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Create, Database, DatabaseOptions,
     DatabaseType, Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
 };
-use crate::cloud_provider::utilities::{
-    get_self_hosted_redis_version, get_supported_version_to_use, print_action, sanitize_name,
-};
+use crate::cloud_provider::utilities::{get_self_hosted_redis_version, get_supported_version_to_use, print_action};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
@@ -113,7 +111,16 @@ impl Service for Redis {
     }
 
     fn sanitized_name(&self) -> String {
-        sanitize_name("redis", self.name(), self.is_managed_service())
+        // https://aws.amazon.com/about-aws/whats-new/2019/08/elasticache_supports_50_chars_cluster_name
+        let prefix = "redis";
+        let max_size = 47 - prefix.len(); // 50 (max Elasticache ) - 3 (k8s statefulset chars)
+        let mut new_name = self.name().replace("_", "").replace("-", "");
+
+        if new_name.chars().count() > max_size {
+            new_name = new_name[..max_size].to_string();
+        }
+
+        format!("{}{}", prefix, new_name)
     }
 
     fn version(&self) -> String {
@@ -202,9 +209,10 @@ impl Service for Redis {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert("fqdn", self.fqdn(&self.fqdn, self.is_managed_service()).as_str());
-        context.insert("sanitized_name", self.sanitized_name().as_str());
-        context.insert("service_name", self.service_name().as_str());
+        context.insert(
+            "fqdn",
+            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
+        );
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
         context.insert("database_port", &self.private_port());
@@ -428,8 +436,8 @@ mod tests {
 
     #[test]
     fn redis_name_sanitizer() {
-        let db_name = "a-name";
-        let db_expected_name = "redisaname";
+        let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
+        let db_expected_name = "redistestnamesanitizerwithtoomanycharsnotallowe";
 
         let database = Redis::new(
             Context::new(
@@ -443,9 +451,9 @@ mod tests {
                 vec![],
                 None,
             ),
-            "1234",
+            "pgid",
             Action::Create,
-            db_name.clone(),
+            db_input_name,
             "8",
             "redistest.qovery.io",
             "redisid",

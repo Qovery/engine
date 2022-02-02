@@ -2,14 +2,16 @@ use ::function_name::named;
 use tracing::{span, warn, Level};
 
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
-use qovery_engine::models::{Action, Clone2, Database, DatabaseKind, DatabaseMode, EnvironmentAction, Port, Protocol};
+use qovery_engine::models::{
+    Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction, Port, Protocol,
+};
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
 
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
-use test_utilities::common::{test_db, Infrastructure};
+use test_utilities::common::{test_db, working_minimal_environment, Infrastructure};
 use test_utilities::digitalocean::{
     clean_environments, DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE,
     DO_SELF_HOSTED_DATABASE_DISK_TYPE, DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE, DO_TEST_REGION,
@@ -55,6 +57,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
                 .as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
+            Kind::Do,
         );
 
         let mut environment_delete = environment.clone();
@@ -116,6 +119,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
+            Kind::Do,
         );
 
         let mut environment_delete = environment.clone();
@@ -197,6 +201,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             test_domain.as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
+            Kind::Do,
         );
         let environment_check = environment.clone();
         let mut environment_never_up = environment.clone();
@@ -222,6 +227,7 @@ fn postgresql_failover_dev_environment_with_all_options() {
             test_domain.as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
+            Kind::Do,
         );
 
         environment_delete.action = Action::Delete;
@@ -315,6 +321,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             test_domain.as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
+            Kind::Do,
         );
         //let env_to_check = environment.clone();
         let mut environment_delete = test_utilities::common::environnement_2_app_2_routers_1_psql(
@@ -322,6 +329,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             test_domain.as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
+            Kind::Do,
         );
 
         environment_delete.action = Action::Delete;
@@ -398,9 +406,8 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         );
         let database_mode = CONTAINER;
 
-        let db_id = generate_id();
         let app_name = format!("postgresql-app-{}", generate_id());
-        let database_host = get_svc_name(DatabaseKind::Postgresql, db_id.clone()).to_string();
+        let database_host = get_svc_name(DatabaseKind::Postgresql, Kind::Do).to_string();
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
@@ -408,7 +415,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
             action: Action::Create,
-            id: db_id.clone(),
+            id: generate_id(),
             name: database_db_name.clone(),
             version: "11.8.0".to_string(),
             fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
@@ -522,23 +529,20 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
  **
  **/
 #[allow(dead_code)]
-fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
-    let secrets = FuncTestsSecrets::new();
-    let context = context(
-        secrets
-            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
-        secrets
-            .DIGITAL_OCEAN_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
-    );
-
+fn test_postgresql_configuration(
+    context: Context,
+    environment: Environment,
+    secrets: FuncTestsSecrets,
+    version: &str,
+    test_name: &str,
+    database_mode: DatabaseMode,
+    is_public: bool,
+) {
     engine_run_test(|| {
         test_db(
             context,
             logger(),
+            environment,
             secrets,
             version,
             test_name,
@@ -555,68 +559,6 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
 #[named]
 #[test]
 fn private_postgresql_v10_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("10", function_name!(), CONTAINER, false);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[ignore]
-#[named]
-#[test]
-fn public_postgresql_v10_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("10", function_name!(), CONTAINER, true);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[ignore]
-#[named]
-#[test]
-fn private_postgresql_v11_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("11", function_name!(), CONTAINER, false);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[ignore]
-#[named]
-#[test]
-fn public_postgresql_v11_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("11", function_name!(), CONTAINER, true);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[named]
-#[test]
-fn private_postgresql_v12_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("12", function_name!(), CONTAINER, false);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[named]
-#[test]
-fn public_postgresql_v12_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("12", function_name!(), CONTAINER, true);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[named]
-#[test]
-fn private_postgresql_v13_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("13", function_name!(), CONTAINER, false);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[named]
-#[test]
-fn public_postgresql_v13_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("13", function_name!(), CONTAINER, true);
-}
-
-/**
- **
- ** MongoDB tests
- **
- **/
-#[allow(dead_code)]
-fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
     let secrets = FuncTestsSecrets::new();
     let context = context(
         secrets
@@ -629,10 +571,229 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
             .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
     );
 
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn public_postgresql_v10_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "10", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn private_postgresql_v11_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn public_postgresql_v11_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "11", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v12_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[named]
+#[test]
+fn public_postgresql_v12_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "12", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v13_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "13", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[named]
+#[test]
+fn public_postgresql_v13_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_postgresql_configuration(context, environment, secrets, "13", function_name!(), CONTAINER, true);
+}
+
+/**
+ **
+ ** MongoDB tests
+ **
+ **/
+#[allow(dead_code)]
+fn test_mongodb_configuration(
+    context: Context,
+    environment: Environment,
+    secrets: FuncTestsSecrets,
+    version: &str,
+    test_name: &str,
+    database_mode: DatabaseMode,
+    is_public: bool,
+) {
     engine_run_test(|| {
         test_db(
             context,
             logger(),
+            environment,
             secrets,
             version,
             test_name,
@@ -649,69 +810,6 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
 #[named]
 #[test]
 fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("3.6", function_name!(), CONTAINER, false);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[ignore]
-#[named]
-#[test]
-fn public_mongodb_v3_6_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("3.6", function_name!(), CONTAINER, true);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[ignore]
-#[named]
-#[test]
-fn private_mongodb_v4_0_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("4.0", function_name!(), CONTAINER, false);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[ignore]
-#[named]
-#[test]
-fn public_mongodb_v4_0_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("4.0", function_name!(), CONTAINER, true);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[ignore]
-#[named]
-#[test]
-fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("4.2", function_name!(), CONTAINER, false);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[named]
-#[test]
-fn public_mongodb_v4_2_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("4.2", function_name!(), CONTAINER, true);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[named]
-#[test]
-fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("4.4", function_name!(), CONTAINER, false);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[named]
-#[test]
-fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("4.4", function_name!(), CONTAINER, true);
-}
-
-/**
- **
- ** MySQL tests
- **
- **/
-#[allow(dead_code)]
-fn test_mysql_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
     let secrets = FuncTestsSecrets::new();
     let context = context(
         secrets
@@ -724,10 +822,230 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
             .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
     );
 
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn public_mongodb_v3_6_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "3.6", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn private_mongodb_v4_0_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn public_mongodb_v4_0_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "4.0", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[named]
+#[test]
+fn public_mongodb_v4_2_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "4.2", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[named]
+#[test]
+fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[named]
+#[test]
+fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mongodb_configuration(context, environment, secrets, "4.4", function_name!(), CONTAINER, true);
+}
+
+/**
+ **
+ ** MySQL tests
+ **
+ **/
+#[allow(dead_code)]
+fn test_mysql_configuration(
+    context: Context,
+    environment: Environment,
+    secrets: FuncTestsSecrets,
+    version: &str,
+    test_name: &str,
+    database_mode: DatabaseMode,
+    is_public: bool,
+) {
     engine_run_test(|| {
         test_db(
             context,
             logger(),
+            environment,
             secrets,
             version,
             test_name,
@@ -744,41 +1062,6 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
 #[named]
 #[test]
 fn private_mysql_v5_7_deploy_a_working_dev_environment() {
-    test_mysql_configuration("5.7", function_name!(), CONTAINER, false);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[ignore]
-#[named]
-#[test]
-fn public_mysql_v5_7_deploy_a_working_dev_environment() {
-    test_mysql_configuration("5.7", function_name!(), CONTAINER, true);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[ignore]
-#[named]
-#[test]
-fn private_mysql_v8_deploy_a_working_dev_environment() {
-    test_mysql_configuration("8.0", function_name!(), CONTAINER, false);
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[named]
-#[test]
-fn public_mysql_v8_deploy_a_working_dev_environment() {
-    test_mysql_configuration("8.0", function_name!(), CONTAINER, true);
-}
-
-// MySQL production environment
-
-/**
- **
- ** Redis tests
- **
- **/
-#[allow(dead_code)]
-fn test_redis_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
     let secrets = FuncTestsSecrets::new();
     let context = context(
         secrets
@@ -791,10 +1074,122 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
             .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
     );
 
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn public_mysql_v5_7_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mysql_configuration(context, environment, secrets, "5.7", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[ignore]
+#[named]
+#[test]
+fn private_mysql_v8_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[named]
+#[test]
+fn public_mysql_v8_deploy_a_working_dev_environment() {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_mysql_configuration(context, environment, secrets, "8.0", function_name!(), CONTAINER, true);
+}
+
+// MySQL production environment
+
+/**
+ **
+ ** Redis tests
+ **
+ **/
+#[allow(dead_code)]
+fn test_redis_configuration(
+    context: Context,
+    environment: Environment,
+    secrets: FuncTestsSecrets,
+    version: &str,
+    test_name: &str,
+    database_mode: DatabaseMode,
+    is_public: bool,
+) {
     engine_run_test(|| {
         test_db(
             context,
             logger(),
+            environment,
             secrets,
             version,
             test_name,
@@ -811,7 +1206,27 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
 #[named]
 #[test]
 fn private_redis_v5_deploy_a_working_dev_environment() {
-    test_redis_configuration("5", function_name!(), CONTAINER, false);
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_redis_configuration(context, environment, secrets, "5", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-do-self-hosted")]
@@ -819,7 +1234,27 @@ fn private_redis_v5_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn public_redis_v5_deploy_a_working_dev_environment() {
-    test_redis_configuration("5", function_name!(), CONTAINER, true);
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_redis_configuration(context, environment, secrets, "5", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-do-self-hosted")]
@@ -827,12 +1262,52 @@ fn public_redis_v5_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn private_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6", function_name!(), CONTAINER, false);
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_redis_configuration(context, environment, secrets, "6", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-do-self-hosted")]
 #[named]
 #[test]
 fn public_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6", function_name!(), CONTAINER, true);
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+        secrets
+            .DIGITAL_OCEAN_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+    );
+
+    let environment = working_minimal_environment(
+        &context,
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str(),
+    );
+    test_redis_configuration(context, environment, secrets, "6", function_name!(), CONTAINER, true);
 }

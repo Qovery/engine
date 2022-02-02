@@ -149,7 +149,7 @@ service:
   {% endif %}
 
   type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
-  name: {{ service_name }}
+  # clusterIP: None
   port: {{ private_port }}
 
   ## Specify the nodePort value for the LoadBalancer and NodePort service types.

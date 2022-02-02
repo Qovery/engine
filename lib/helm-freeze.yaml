@@ -52,24 +52,22 @@ charts:
     version: 7.14.5
     dest: services
     no_sync: true
-    # Chart is frozen due to custom modification see https://github.com/Qovery/engine/pull/293 https://github.com/Qovery/engine/pull/572
+    # Chart is frozen due to custom modification see https://github.com/Qovery/engine/pull/293
   - name: mysql
     repo_name: bitnami
     version: 6.14.2
     dest: services
     no_sync: true
-    # Chart is frozen due to custom modification see https://github.com/Qovery/engine/pull/572
   - name: postgresql
     repo_name: bitnami
     version: 8.9.8
     dest: services
-    # Chart is frozen due to custom modification see https://github.com/Qovery/engine/pull/293 https://github.com/Qovery/engine/pull/572
+    # Chart is frozen due to custom modification see https://github.com/Qovery/engine/pull/293
   - name: redis
     repo_name: bitnami
     version: 12.0.1
     dest: services
     no_sync: true
-    # Chart is frozen due to custom modification see https://github.com/Qovery/engine/pull/572
   - name: pleco
     version: 0.9.33
     repo_name: pleco

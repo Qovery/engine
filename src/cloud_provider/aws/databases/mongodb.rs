@@ -10,7 +10,6 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::utilities::{
     generate_supported_version, get_self_hosted_mongodb_version, get_supported_version_to_use, print_action,
-    sanitize_name,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -104,7 +103,15 @@ impl Service for MongoDB {
     }
 
     fn sanitized_name(&self) -> String {
-        sanitize_name("mongodb", self.name(), self.is_managed_service())
+        // https://docs.aws.amazon.com/documentdb/latest/developerguide/limits.html#limits-naming_constraints
+        let prefix = "mongodb";
+        let max_size = 60 - prefix.len(); // 63 (max DocumentDB) - 3 (k8s statefulset chars)
+        let mut new_name = format!("{}{}", prefix, self.name().replace("_", "").replace("-", ""));
+        if new_name.chars().count() > max_size {
+            new_name = new_name[..max_size].to_string();
+        }
+
+        new_name
     }
 
     fn version(&self) -> String {
@@ -180,9 +187,10 @@ impl Service for MongoDB {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert("fqdn", self.fqdn(&self.fqdn, self.is_managed_service()).as_str());
-        context.insert("sanitized_name", self.sanitized_name().as_str());
-        context.insert("service_name", self.service_name().as_str());
+        context.insert(
+            "fqdn",
+            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
+        );
         context.insert("database_db_name", self.name.as_str());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
@@ -421,8 +429,8 @@ mod tests_mongodb {
 
     #[test]
     fn mongo_name_sanitizer() {
-        let db_name = "a-name";
-        let db_expected_name = "mongodbaname";
+        let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
+        let db_expected_name = "mongodbtestnamesanitizerwithtoomanycharsnotallowedwhi";
 
         let database = MongoDB::new(
             Context::new(
@@ -436,9 +444,9 @@ mod tests_mongodb {
                 vec![],
                 None,
             ),
-            "1234",
+            "pgid",
             Action::Create,
-            db_name.clone(),
+            db_input_name,
             "8",
             "mongotest.qovery.io",
             "pgid",
@@ -450,7 +458,7 @@ mod tests_mongodb {
                 password: "".to_string(),
                 host: "".to_string(),
                 port: 5432,
-                mode: DatabaseMode::MANAGED,
+                mode: DatabaseMode::CONTAINER,
                 disk_size_in_gib: 10,
                 database_disk_type: "gp2".to_string(),
                 encrypt_disk: false,

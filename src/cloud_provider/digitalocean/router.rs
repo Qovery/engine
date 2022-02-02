@@ -77,7 +77,7 @@ impl Service for Router {
     }
 
     fn sanitized_name(&self) -> String {
-        sanitize_name("router", self.name(), false)
+        sanitize_name("router", self.name())
     }
 
     fn version(&self) -> String {

@@ -495,21 +495,17 @@ pub fn check_domain_for(
     Ok(())
 }
 
-pub fn sanitize_db_name(suffix: &str, db_id: &str) -> String {
-    format!("{}-{}", db_id, suffix).replace("_", "-")
+pub fn sanitize_name(prefix: &str, name: &str) -> String {
+    format!("{}-{}", prefix, name).replace("_", "-")
 }
 
-pub fn sanitize_name(prefix: &str, app_name: &str, is_managed: bool) -> String {
-    match is_managed {
-        true => {
-            let mut sanitized_name = format!("{}-{}", prefix, app_name).replace("_", "").replace("-", "");
-            if sanitized_name.chars().count() > 63 {
-                sanitized_name = sanitized_name[..63].to_string();
-            };
-            sanitized_name
-        }
-        false => format!("{}-{}", prefix, app_name).replace("_", "-"),
+pub fn managed_db_name_sanitizer(max_size: usize, prefix: &str, name: &str) -> String {
+    let max_size = max_size - prefix.len();
+    let mut new_name = format!("{}{}", prefix, name.replace("_", "").replace("-", ""));
+    if new_name.chars().count() > max_size {
+        new_name = new_name[..max_size].to_string();
     }
+    new_name
 }
 
 pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, ParseFloatError> {

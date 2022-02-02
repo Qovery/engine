@@ -135,7 +135,7 @@ clusterDomain: cluster.local
 ## Kubernetes service type
 service:
   ## Specify an explicit service name.
-  name: {{ service_name }}
+  # name: svc-mongo
   ## Provide any additional annotations which may be required.
   ## The value is evaluated as a template, so, for example, the value can depend on .Release or .Chart
   {% if publicly_accessible -%}

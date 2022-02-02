@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ template "mysql.serviceName" . }}
+  name: {{ template "mysql.fullname" . }}
   labels: {{- include "mysql.labels" . | nindent 4 }}
     component: master
   {{- if or .Values.service.annotations .Values.metrics.service.annotations }}

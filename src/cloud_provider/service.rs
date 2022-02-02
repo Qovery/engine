@@ -9,7 +9,7 @@ use tera::Context as TeraContext;
 use crate::build_platform::Image;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::utilities::{check_domain_for, sanitize_db_name};
+use crate::cloud_provider::utilities::check_domain_for;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::Statefulset;
@@ -30,18 +30,6 @@ pub trait Service: ToTransmitter {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
     fn sanitized_name(&self) -> String;
-    fn service_name(&self) -> String {
-        match self.service_type() {
-            ServiceType::Application => self.sanitized_name(),
-            ServiceType::Database(db_kind) => match db_kind {
-                DatabaseType::PostgreSQL(_) => sanitize_db_name("postgresql", self.id()),
-                DatabaseType::MongoDB(_) => sanitize_db_name("mongodb", self.id()),
-                DatabaseType::MySQL(_) => sanitize_db_name("mysql", self.id()),
-                DatabaseType::Redis(_) => sanitize_db_name("redis", self.id()),
-            },
-            ServiceType::Router => self.sanitized_name(),
-        }
-    }
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
     }
@@ -81,12 +69,16 @@ pub trait Service: ToTransmitter {
     fn min_instances(&self) -> u32;
     fn max_instances(&self) -> u32;
     fn publicly_accessible(&self) -> bool;
-    fn fqdn<'a>(&self, fqdn: &'a String, is_managed: bool) -> String {
+    fn fqdn<'a>(&self, target: &DeploymentTarget, fqdn: &'a String, is_managed: bool) -> String {
         match &self.publicly_accessible() {
             true => fqdn.to_string(),
             false => match is_managed {
-                true => format!("{}-dns", self.id()),
-                false => format!("{}", self.sanitized_name()),
+                true => format!("{}-dns.{}.svc.cluster.local", self.id(), target.environment.namespace()),
+                false => format!(
+                    "{}.{}.svc.cluster.local",
+                    self.sanitized_name(),
+                    target.environment.namespace()
+                ),
             },
         }
     }

@@ -108,7 +108,7 @@ impl Service for PostgreSQL {
     }
 
     fn sanitized_name(&self) -> String {
-        sanitize_name("postgresql", self.name(), self.is_managed_service())
+        sanitize_name("postgresql", self.name())
     }
 
     fn version(&self) -> String {
@@ -184,9 +184,10 @@ impl Service for PostgreSQL {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert("fqdn", self.fqdn(&self.fqdn, self.is_managed_service()).as_str());
-        context.insert("sanitized_name", self.sanitized_name().as_str());
-        context.insert("service_name", self.service_name().as_str());
+        context.insert(
+            "fqdn",
+            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
+        );
         context.insert("database_db_name", self.name());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());

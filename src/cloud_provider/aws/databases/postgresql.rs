@@ -9,8 +9,8 @@ use crate::cloud_provider::service::{
     DatabaseType, Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
 };
 use crate::cloud_provider::utilities::{
-    generate_supported_version, get_self_hosted_postgres_version, get_supported_version_to_use, print_action,
-    sanitize_name,
+    generate_supported_version, get_self_hosted_postgres_version, get_supported_version_to_use,
+    managed_db_name_sanitizer, print_action,
 };
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
@@ -114,7 +114,10 @@ impl Service for PostgreSQL {
     }
 
     fn sanitized_name(&self) -> String {
-        sanitize_name("postgresql", self.name(), self.is_managed_service())
+        // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html#RDS_Limits.Constraints
+        let prefix = "postgresql";
+        let max_size = 63 - 3; // max RDS - k8s statefulset chars
+        managed_db_name_sanitizer(max_size, prefix, self.name())
     }
 
     fn version(&self) -> String {
@@ -190,9 +193,10 @@ impl Service for PostgreSQL {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert("fqdn", self.fqdn(&self.fqdn, self.is_managed_service()).as_str());
-        context.insert("sanitized_name", self.sanitized_name().as_str());
-        context.insert("service_name", self.service_name().as_str());
+        context.insert(
+            "fqdn",
+            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
+        );
         context.insert("database_name", self.sanitized_name().as_str());
         context.insert("database_db_name", self.name());
         context.insert("database_login", self.options.login.as_str());
@@ -443,8 +447,8 @@ mod tests_postgres {
 
     #[test]
     fn postgres_name_sanitizer() {
-        let db_name = "a-name";
-        let db_expected_name = "postgresqlaname";
+        let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
+        let db_expected_name = "postgresqltestnamesanitizerwithtoomanycharsnotallo";
 
         let database = PostgreSQL::new(
             Context::new(
@@ -458,9 +462,9 @@ mod tests_postgres {
                 vec![],
                 None,
             ),
-            "1234",
+            "pgid",
             Action::Create,
-            db_name.clone(),
+            db_input_name,
             "8",
             "pgtest.qovery.io",
             "pgid",

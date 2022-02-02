@@ -121,7 +121,7 @@ service:
   ## PosgresSQL service type
 
   type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
-  name: {{ service_name }}
+  # clusterIP: None
   port: 5432
 
   ## Provide any additional annotations which may be required. Evaluated as a template.
