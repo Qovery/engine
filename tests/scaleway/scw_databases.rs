@@ -177,128 +177,6 @@ fn deploy_an_environment_with_db_and_pause_it() {
     })
 }
 
-// this test ensure containers databases are never restarted, even in failover environment case
-#[cfg(feature = "test-scw-self-hosted")]
-#[named]
-#[test]
-fn postgresql_failover_dev_environment_with_all_options() {
-    let test_name = function_name!();
-    engine_run_test(|| {
-        init();
-
-        let span = span!(Level::INFO, "test", name = test_name);
-        let _enter = span.enter();
-
-        let logger = logger();
-        let secrets = FuncTestsSecrets::new();
-        let context = context(
-            secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
-        );
-        let context_for_deletion = context.clone_not_same_execution_id();
-        let test_domain = secrets
-            .clone()
-            .DEFAULT_TEST_DOMAIN
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
-
-        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
-            &context,
-            test_domain.as_str(),
-            SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
-            SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
-            Kind::Scw,
-        );
-        let environment_check = environment.clone();
-        let mut environment_never_up = environment.clone();
-        // error in ports, these applications will never be up !!
-        environment_never_up.applications = environment_never_up
-            .applications
-            .into_iter()
-            .map(|mut app| {
-                app.ports = vec![Port {
-                    id: "zdf7d6aad".to_string(),
-                    long_id: Default::default(),
-                    port: 4789,
-                    public_port: Some(443),
-                    name: None,
-                    publicly_accessible: true,
-                    protocol: Protocol::HTTP,
-                }];
-                app
-            })
-            .collect::<Vec<qovery_engine::models::Application>>();
-        let mut environment_delete = test_utilities::common::environnement_2_app_2_routers_1_psql(
-            &context_for_deletion,
-            test_domain.as_str(),
-            SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
-            SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
-            Kind::Scw,
-        );
-
-        environment_delete.action = Action::Delete;
-
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_fail_ok = EnvironmentAction::EnvironmentWithFailover(environment_never_up, environment.clone());
-        let env_action_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
-
-        match environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-        // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
-        let database_name = format!("postgresql-{}-0", &environment_check.databases[0].name);
-        match is_pod_restarted_env(
-            context.clone(),
-            ProviderKind::Scw,
-            environment_check.clone(),
-            database_name.as_str(),
-            secrets.clone(),
-        ) {
-            (true, _) => assert!(true),
-            (false, _) => assert!(false),
-        }
-        match environment_check.deploy_environment(Kind::Scw, &context, &env_action_fail_ok, logger.clone()) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(true),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-        // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY EVEN IF FAIL
-        match is_pod_restarted_env(
-            context.clone(),
-            ProviderKind::Scw,
-            environment_check.clone(),
-            database_name.as_str(),
-            secrets.clone(),
-        ) {
-            (true, _) => assert!(true),
-            (false, _) => assert!(false),
-        }
-
-        match environment_delete.delete_environment(Kind::Scw, &context_for_deletion, &env_action_for_deletion, logger)
-        {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-
-        // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment, environment_delete], secrets, SCW_TEST_ZONE) {
-            warn!("cannot clean environments, error: {:?}", e);
-        }
-
-        return test_name.to_string();
-    })
-}
-
 // Ensure a full environment can run correctly
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
@@ -431,7 +309,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             id: generate_id(),
             name: database_db_name.clone(),
             version: "11.8.0".to_string(),
-            fqdn_id: "postgresql-".to_string() + generate_id().as_str(),
+            fqdn_id: database_host.clone(),
             fqdn: database_host.clone(),
             port: database_port,
             username: database_username.clone(),

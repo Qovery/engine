@@ -50,6 +50,11 @@ resource "helm_release" "documentdb_instance_external_name" {
     value = "{{database_id}}"
   }
 
+  set {
+    name = "service_name"
+    value = "{{service_name}}"
+  }
+
   depends_on = [
     aws_docdb_cluster.documentdb_cluster
   ]

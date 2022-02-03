@@ -370,6 +370,7 @@ master:
     ##  Redis Master Service type
     type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
     port: 6379
+    name: {{ service_name }}
 
     ## Specify the nodePort value for the LoadBalancer and NodePort service types.
     ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
