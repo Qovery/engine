@@ -947,7 +947,10 @@ impl<'a> EKS<'a> {
         };
 
         if tf_workers_resources.is_empty() {
-            return Err(EngineError::new_cluster_has_no_worker_nodes(event_details.clone()));
+            return Err(EngineError::new_cluster_has_no_worker_nodes(
+                event_details.clone(),
+                None,
+            ));
         }
 
         let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;

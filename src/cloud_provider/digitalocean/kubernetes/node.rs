@@ -133,6 +133,7 @@ mod tests {
             NodeGroups::new("".to_string(), 2, 2, "s-2vcpu-4gb".to_string(), 20).unwrap(),
             NodeGroups {
                 name: "".to_string(),
+                id: None,
                 min_nodes: 2,
                 max_nodes: 2,
                 instance_type: "s-2vcpu-4gb".to_string(),
