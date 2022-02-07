@@ -480,6 +480,7 @@ service:
   ##
   type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
 
+  name: {{ service_name }}
   ## MySQL Service port
   ##
   port: 3306
