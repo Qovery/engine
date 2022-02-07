@@ -979,6 +979,7 @@ pub struct DBInfos {
 
 pub fn db_infos(
     db_kind: DatabaseKind,
+    db_id: String,
     database_mode: DatabaseMode,
     database_username: String,
     database_password: String,
@@ -987,7 +988,7 @@ pub fn db_infos(
     match db_kind {
         DatabaseKind::Mongodb => {
             let database_port = 27017;
-            let database_db_name = "my-mongodb".to_string();
+            let database_db_name = db_id;
             let database_uri = format!(
                 "mongodb://{}:{}@{}:{}/{}",
                 database_username,
@@ -1013,7 +1014,7 @@ pub fn db_infos(
         }
         DatabaseKind::Mysql => {
             let database_port = 3306;
-            let database_db_name = "mysqldatabase".to_string();
+            let database_db_name = db_id;
             DBInfos {
                 db_port: database_port.clone(),
                 db_name: database_db_name.to_string(),
@@ -1029,7 +1030,11 @@ pub fn db_infos(
         }
         DatabaseKind::Postgresql => {
             let database_port = 5432;
-            let database_db_name = "postgres".to_string();
+            let database_db_name = if database_mode == MANAGED {
+                "postgres".to_string()
+            } else {
+                db_id
+            };
             DBInfos {
                 db_port: database_port.clone(),
                 db_name: database_db_name.to_string(),
@@ -1045,7 +1050,7 @@ pub fn db_infos(
         }
         DatabaseKind::Redis => {
             let database_port = 6379;
-            let database_db_name = "my-redis".to_string();
+            let database_db_name = db_id;
             DBInfos {
                 db_port: database_port.clone(),
                 db_name: database_db_name.to_string(),

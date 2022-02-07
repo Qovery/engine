@@ -123,6 +123,7 @@ service:
   type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
   # clusterIP: None
   port: 5432
+  name: {{ service_name }}
 
   ## Provide any additional annotations which may be required. Evaluated as a template.
   ##
