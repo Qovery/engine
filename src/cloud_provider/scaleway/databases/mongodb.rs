@@ -189,6 +189,7 @@ impl Service for MongoDB {
             "fqdn",
             self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
         );
+        context.insert("service_name", self.fqdn_id.as_str());
         context.insert("database_db_name", self.name.as_str());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());

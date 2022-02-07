@@ -197,6 +197,7 @@ impl Service for PostgreSQL {
             "fqdn",
             self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
         );
+        context.insert("service_name", self.fqdn_id.as_str());
         context.insert("database_name", self.sanitized_name().as_str());
         context.insert("database_db_name", self.name());
         context.insert("database_login", self.options.login.as_str());

@@ -1404,7 +1404,7 @@ impl<'a> Kubernetes for EKS<'a> {
         if let Err(e) = self.delete_crashlooping_pods(
             None,
             None,
-            Some(10),
+            Some(3),
             self.cloud_provider().credentials_environment_variables(),
         ) {
             error!(
