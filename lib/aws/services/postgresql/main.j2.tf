@@ -51,6 +51,10 @@ resource "helm_release" "postgres_instance_external_name" {
     name = "app_id"
     value = "{{database_id}}"
   }
+  set {
+    name = "service_name"
+    value = "{{service_name}}"
+  }
 
   depends_on = [
     aws_db_instance.postgresql_instance
