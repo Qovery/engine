@@ -215,7 +215,6 @@ pub fn environment_3_apps_3_routers_3_databases(
     let version_mongo = "4.4";
 
     // pSQL 1 management part
-    let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
     let fqdn = get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()).to_string();
     let database_port = 5432;
     let database_username = "superuser".to_string();
@@ -223,7 +222,6 @@ pub fn environment_3_apps_3_routers_3_databases(
     let database_name = "postgres".to_string();
 
     // pSQL 2 management part
-    let fqdn_id_2 = "my-postgresql-2".to_string() + generate_id().as_str();
     let fqdn_2 = format!("{}2", get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()));
     let database_username_2 = "superuser2".to_string();
     let database_name_2 = "postgres2".to_string();
@@ -425,7 +423,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 id: generate_id(),
                 name: database_name.clone(),
                 version: "11.8.0".to_string(),
-                fqdn_id: fqdn_id.clone(),
+                fqdn_id: fqdn.clone(),
                 fqdn: fqdn.clone(),
                 port: database_port.clone(),
                 username: database_username.clone(),
@@ -447,7 +445,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 id: generate_id(),
                 name: database_name_2.clone(),
                 version: "11.8.0".to_string(),
-                fqdn_id: fqdn_id_2.clone(),
+                fqdn_id: fqdn_2.clone(),
                 fqdn: fqdn_2.clone(),
                 port: database_port.clone(),
                 username: database_username_2.clone(),
@@ -469,7 +467,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 id: generate_id(),
                 name: database_db_name_mongo.clone(),
                 version: version_mongo.to_string(),
-                fqdn_id: "mongodb-".to_string() + generate_id().as_str(),
+                fqdn_id: database_host_mongo.clone(),
                 fqdn: database_host_mongo.clone(),
                 port: database_port_mongo.clone(),
                 username: database_username_mongo.clone(),
@@ -572,13 +570,11 @@ pub fn environment_only_http_server_router_with_sticky_session(context: &Context
 
 pub fn environnement_2_app_2_routers_1_psql(
     context: &Context,
-
     test_domain: &str,
     database_instance_type: &str,
     database_disk_type: &str,
     provider_kind: Kind,
 ) -> Environment {
-    let fqdn_id = "my-postgresql-".to_string() + generate_id().as_str();
     let fqdn = get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()).to_string();
 
     let database_port = 5432;
@@ -603,7 +599,7 @@ pub fn environnement_2_app_2_routers_1_psql(
             id: generate_id(),
             name: database_name.clone(),
             version: "11.8.0".to_string(),
-            fqdn_id: fqdn_id.clone(),
+            fqdn_id: fqdn.clone(),
             fqdn: fqdn.clone(),
             port: database_port.clone(),
             username: database_username.clone(),
@@ -992,44 +988,42 @@ pub fn test_db(
     let database_username = "superuser".to_string();
     let database_password = generate_id();
     let db_kind_str = db_kind.name().to_string();
-    let database_host = format!(
-        "{}-{}.{}.{}",
-        db_kind_str.clone(),
-        generate_id(),
+    let db_id = generate_id();
+    let database_host = format!("{}-{}", db_id, db_kind_str.clone());
+    let database_fqdn = format!(
+        "{}.{}.{}",
+        database_host,
         context.cluster_id(),
         secrets
             .clone()
             .DEFAULT_TEST_DOMAIN
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
     );
-    let dyn_db_fqdn = match is_public.clone() {
-        true => database_host.clone(),
-        false => match database_mode.clone() {
-            DatabaseMode::MANAGED => format!("{}-dns", app_id.clone()),
-            DatabaseMode::CONTAINER => get_svc_name(db_kind.clone(), provider_kind.clone()).to_string(),
-        },
-    };
 
     let db_infos = db_infos(
         db_kind.clone(),
+        db_id.clone(),
         database_mode.clone(),
         database_username.clone(),
         database_password.clone(),
-        dyn_db_fqdn.clone(),
+        if is_public {
+            database_fqdn.clone()
+        } else {
+            database_host.clone()
+        },
     );
     let database_port = db_infos.db_port.clone();
-    let database_db_name = db_infos.db_name.clone();
     let storage_size = 10;
     let db_disk_type = db_disk_type(provider_kind.clone(), database_mode.clone());
     let db_instance_type = db_instance_type(provider_kind.clone(), db_kind.clone(), database_mode.clone());
     let db = Database {
         kind: db_kind.clone(),
         action: Action::Create,
-        id: app_id.clone(),
-        name: database_db_name.clone(),
+        id: db_id.clone(),
+        name: db_id.clone(),
         version: version.to_string(),
-        fqdn_id: format!("{}-{}", db_kind_str.clone(), generate_id()),
-        fqdn: database_host.clone(),
+        fqdn_id: database_host.clone(),
+        fqdn: database_fqdn.clone(),
         port: database_port.clone(),
         username: database_username.clone(),
         password: database_password.clone(),
@@ -1052,6 +1046,8 @@ pub fn test_db(
         .applications
         .into_iter()
         .map(|mut app| {
+            app.id = app_id.clone();
+            app.name = app_id.clone();
             app.branch = app_name.clone();
             app.commit_id = db_infos.app_commit.clone();
             app.ports = vec![Port {
@@ -1068,7 +1064,7 @@ pub fn test_db(
             app
         })
         .collect::<Vec<qovery_engine::models::Application>>();
-    environment.routers[0].routes[0].application_name = app_name.clone();
+    environment.routers[0].routes[0].application_name = app_id.clone();
 
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;
@@ -1106,11 +1102,7 @@ pub fn test_db(
                     svc.items
                         .expect("No items in svc")
                         .into_iter()
-                        .filter(|svc| svc
-                            .metadata
-                            .name
-                            .contains(get_svc_name(db_kind.clone(), provider_kind.clone()))
-                            && &svc.spec.svc_type == "LoadBalancer")
+                        .filter(|svc| svc.metadata.name == database_host && &svc.spec.svc_type == "LoadBalancer")
                         .collect::<Vec<SVCItem>>()
                         .len(),
                     match is_public {
@@ -1128,17 +1120,14 @@ pub fn test_db(
                         .items
                         .expect("No items in svc")
                         .into_iter()
-                        .filter(|svc| {
-                            svc.metadata.name.contains(format!("{}-dns", app_id.clone()).as_str())
-                                && svc.spec.svc_type == "ExternalName"
-                        })
+                        .filter(|svc| svc.metadata.name == database_host && svc.spec.svc_type == "ExternalName")
                         .collect::<Vec<SVCItem>>();
                     let annotations = &service[0].metadata.annotations;
                     assert_eq!(service.len(), 1);
                     match is_public {
                         true => {
                             assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
-                            assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_host);
+                            assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_fqdn);
                         }
                         false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
                     }

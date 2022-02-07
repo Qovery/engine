@@ -33,3 +33,10 @@ resource "aws_kms_key" "s3_kubeconfig_kms_encryption" {
     }
   )
 }
+
+resource "aws_s3_bucket_public_access_block" "kubeconfigs_access" {
+  bucket = aws_s3_bucket.kubeconfigs_bucket.id
+
+  ignore_public_acls = true
+  restrict_public_buckets  = true
+}

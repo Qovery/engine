@@ -51,6 +51,11 @@ resource "helm_release" "elasticache_instance_external_name" {
   }
 
   set {
+    name = "service_name"
+    value = "{{service_name}}"
+  }
+
+  set {
     name= "publicly_accessible"
     value= {{ publicly_accessible }}
   }
