@@ -408,18 +408,17 @@ pub fn deploy_environment(
             "deployment",
             CheckAction::Deploy,
         )?;
+
         // check all deployed services
-        for service in &environment.stateful_services {
-            let _ = service::check_kubernetes_service_error(
-                service.on_create_check(),
-                kubernetes,
-                service,
-                &stateful_deployment_target,
-                &listeners_helper,
-                "check deployment",
-                CheckAction::Deploy,
-            )?;
-        }
+        let _ = service::check_kubernetes_service_error(
+            service.on_create_check(),
+            kubernetes,
+            service,
+            &stateful_deployment_target,
+            &listeners_helper,
+            "check deployment",
+            CheckAction::Deploy,
+        )?;
     }
 
     // Quick fix: adding 100 ms delay to avoid race condition on service status update
@@ -442,33 +441,16 @@ pub fn deploy_environment(
             "deployment",
             CheckAction::Deploy,
         )?;
-    }
 
-    // Quick fix: adding 100 ms delay to avoid race condition on service status update
-    thread::sleep(std::time::Duration::from_millis(100));
+        // Quick fix: adding 100 ms delay to avoid race condition on service status update
+        thread::sleep(std::time::Duration::from_millis(100));
 
-    // check all deployed services
-    for service in &environment.stateful_services {
+        // check all deployed services
         let _ = service::check_kubernetes_service_error(
             service.on_create_check(),
             kubernetes,
             service,
             &stateful_deployment_target,
-            &listeners_helper,
-            "check deployment",
-            CheckAction::Deploy,
-        )?;
-    }
-
-    // Quick fix: adding 100 ms delay to avoid race condition on service status update
-    thread::sleep(std::time::Duration::from_millis(100));
-
-    for service in &environment.stateless_services {
-        let _ = service::check_kubernetes_service_error(
-            service.on_create_check(),
-            kubernetes,
-            service,
-            &stateless_deployment_target,
             &listeners_helper,
             "check deployment",
             CheckAction::Deploy,
