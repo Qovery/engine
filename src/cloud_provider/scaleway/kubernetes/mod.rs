@@ -329,7 +329,13 @@ impl<'a> Kapsule<'a> {
 
                     match env::var_os("VAULT_SECRET_ID") {
                         Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
-                        None => error!("VAULT_SECRET_ID environment variable wasn't found"),
+                        None => self.logger().log(
+                            LogLevel::Error,
+                            EngineEvent::Error(EngineError::new_missing_required_env_variable(
+                                event_details.clone(),
+                                "VAULT_SECRET_ID".to_string(),
+                            )),
+                        ),
                     }
                 }
                 None => {
@@ -866,7 +872,6 @@ impl<'a> Kapsule<'a> {
         match terraform_exec(temp_dir.as_str(), terraform_args) {
             Ok(_) => {
                 let message = format!("Kubernetes cluster {} successfully paused", self.name());
-                info!("{}", &message);
                 self.send_to_customer(&message, &listeners_helper);
                 self.logger().log(
                     LogLevel::Info,

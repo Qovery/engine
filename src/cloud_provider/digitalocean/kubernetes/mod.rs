@@ -367,7 +367,13 @@ impl<'a> DOKS<'a> {
 
                     match env::var_os("VAULT_SECRET_ID") {
                         Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
-                        None => error!("VAULT_SECRET_ID environment variable wasn't found"),
+                        None => self.logger().log(
+                            LogLevel::Error,
+                            EngineEvent::Error(EngineError::new_missing_required_env_variable(
+                                event_details.clone(),
+                                "VAULT_SECRET_ID".to_string(),
+                            )),
+                        ),
                     }
                 }
                 None => {
