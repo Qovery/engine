@@ -20,7 +20,7 @@ fn test_delete_bucket() {
         .expect(format!("AWS region `{}` seems not to be valid", aws_region_raw).as_str());
 
     let aws_os = S3::new(
-        context,
+        context.clone(),
         id.to_string(),
         name.to_string(),
         aws_access_key,
@@ -67,7 +67,7 @@ fn test_create_bucket() {
         .expect(format!("AWS region `{}` seems not to be valid", aws_region_raw).as_str());
 
     let aws_os = S3::new(
-        context,
+        context.clone(),
         id.to_string(),
         name.to_string(),
         aws_access_key,
@@ -119,7 +119,7 @@ fn test_recreate_bucket() {
         .expect(format!("AWS region `{}` seems not to be valid", aws_region_raw).as_str());
 
     let aws_os = S3::new(
-        context,
+        context.clone(),
         id.to_string(),
         name.to_string(),
         aws_access_key,
@@ -164,7 +164,7 @@ fn test_put_file() {
         .expect(format!("AWS region `{}` seems not to be valid", aws_region_raw).as_str());
 
     let aws_os = S3::new(
-        context,
+        context.clone(),
         id.to_string(),
         name.to_string(),
         aws_access_key,
@@ -215,7 +215,7 @@ fn test_get_file() {
         .expect(format!("AWS region `{}` seems not to be valid", aws_region_raw).as_str());
 
     let aws_os = S3::new(
-        context,
+        context.clone(),
         id.to_string(),
         name.to_string(),
         aws_access_key,
