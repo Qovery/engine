@@ -151,7 +151,7 @@ service:
   type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
   # clusterIP: None
   port: {{ private_port }}
-  name: {{ service_name }}
+  qovery_name: {{ service_name }}
 
   ## Specify the nodePort value for the LoadBalancer and NodePort service types.
   ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
