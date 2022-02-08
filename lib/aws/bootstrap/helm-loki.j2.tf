@@ -65,3 +65,10 @@ resource "aws_s3_bucket" "loki_bucket" {
     }
   )
 }
+
+resource "aws_s3_bucket_public_access_block" "loki_access" {
+  bucket = aws_s3_bucket.loki_bucket.id
+
+  ignore_public_acls = true
+  restrict_public_buckets  = true
+}
