@@ -1242,7 +1242,7 @@ impl HelmChart for AwsVpcCniChart {
                 for kind in kinds {
                     // Setting annotations and labels on kind/aws-node
                     let steps = || -> Result<(), CommandError> {
-                        let tag = format!("meta.helm.sh/release-name={}", self.chart_info.name);
+                        let label = format!("meta.helm.sh/release-name={}", self.chart_info.name);
                         let args = vec![
                             "-n",
                             "kube-system",
@@ -1250,7 +1250,7 @@ impl HelmChart for AwsVpcCniChart {
                             "--overwrite",
                             kind,
                             "aws-node",
-                            tag.as_str(),
+                            label.as_str(),
                         ];
                         let mut stdout = "".to_string();
                         let mut stderr = "".to_string();
@@ -1258,8 +1258,8 @@ impl HelmChart for AwsVpcCniChart {
                         kubectl_exec_with_output(
                             args.clone(),
                             environment_variables.clone(),
-                            |out| stdout = out.to_string(),
-                            |out| stderr = out.to_string(),
+                            |out| stdout = format!("{}\n{}", stdout, out),
+                            |out| stderr = format!("{}\n{}", stderr, out),
                         )?;
 
                         let args = vec![
@@ -1277,8 +1277,8 @@ impl HelmChart for AwsVpcCniChart {
                         kubectl_exec_with_output(
                             args.clone(),
                             environment_variables.clone(),
-                            |out| stdout = out.to_string(),
-                            |out| stderr = out.to_string(),
+                            |out| stdout = format!("{}\n{}", stdout, out),
+                            |out| stderr = format!("{}\n{}", stderr, out),
                         )?;
 
                         let args = vec![
@@ -1296,8 +1296,8 @@ impl HelmChart for AwsVpcCniChart {
                         kubectl_exec_with_output(
                             args.clone(),
                             environment_variables.clone(),
-                            |out| stdout = out.to_string(),
-                            |out| stderr = out.to_string(),
+                            |out| stdout = format!("{}\n{}", stdout, out),
+                            |out| stderr = format!("{}\n{}", stderr, out),
                         )?;
 
                         Ok(())

@@ -410,18 +410,6 @@ pub fn deploy_environment(
         )?;
 
         // check all deployed services
-        for service in &environment.stateful_services {
-            let _ = service::check_kubernetes_service_error(
-                service.on_create_check(),
-                kubernetes,
-                service,
-                event_details.clone(),
-                &stateful_deployment_target,
-                &listeners_helper,
-                "check deployment",
-                CheckAction::Deploy,
-            )?;
-        }
         let _ = service::check_kubernetes_service_error(
             service.on_create_check(),
             kubernetes,
