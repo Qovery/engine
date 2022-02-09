@@ -16,7 +16,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::error::{EngineError, EngineErrorScope, StringError};
-use crate::events::{ToTransmitter, Transmitter};
+use crate::events::{EnvironmentStep, Stage, ToTransmitter, Transmitter};
 use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
@@ -279,6 +279,7 @@ impl Terraform for PostgreSQL {
 impl Create for PostgreSQL {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -287,7 +288,7 @@ impl Create for PostgreSQL {
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
-            deploy_stateful_service(target, self)
+            deploy_stateful_service(target, self, event_details.clone())
         })
     }
 
@@ -343,6 +344,7 @@ impl Pause for PostgreSQL {
 impl Delete for PostgreSQL {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -351,7 +353,7 @@ impl Delete for PostgreSQL {
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
-            delete_stateful_service(target, self)
+            delete_stateful_service(target, self, event_details.clone())
         })
     }
 

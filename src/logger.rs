@@ -9,7 +9,7 @@ pub enum LogLevel {
     Error,
 }
 
-pub trait Logger: Send {
+pub trait Logger: Send + Sync {
     fn log(&self, log_level: LogLevel, event: EngineEvent);
     fn clone_dyn(&self) -> Box<dyn Logger>;
 }
@@ -81,6 +81,7 @@ mod tests {
     use super::*;
     use crate::cloud_provider::scaleway::application::ScwRegion;
     use crate::cloud_provider::Kind;
+    use crate::errors;
     use crate::errors::EngineError;
     use crate::events::{EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
     use crate::models::QoveryIdentifier;
@@ -126,8 +127,10 @@ mod tests {
                     ),
                     qovery_message.to_string(),
                     user_message.to_string(),
-                    Some(raw_message.to_string()),
-                    Some(raw_message_safe.to_string()),
+                    Some(errors::CommandError::new(
+                        raw_message.to_string(),
+                        Some(raw_message_safe.to_string()),
+                    )),
                     Some(link.clone()),
                     Some(hint.to_string()),
                 )),

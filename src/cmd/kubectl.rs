@@ -15,6 +15,7 @@ use crate::cmd::structs::{
 use crate::cmd::utilities::QoveryCommand;
 use crate::constants::KUBECONFIG;
 use crate::error::{SimpleError, SimpleErrorKind};
+use crate::errors::CommandError;
 
 pub enum ScalingKind {
     Deployment,
@@ -33,7 +34,7 @@ pub fn kubectl_exec_with_output<F, X>(
     envs: Vec<(&str, &str)>,
     stdout_output: F,
     stderr_output: X,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     F: FnMut(String),
     X: FnMut(String),
@@ -44,7 +45,14 @@ where
         let args_string = args.join(" ");
         let msg = format!("Error on command: kubectl {}. {:?}", args_string, &err);
         error!("{}", &msg);
-        return Err(SimpleError::new(SimpleErrorKind::Other, Some(msg)));
+        return Err(CommandError::new_from_command_line(
+            "Error while executing a kubectl command.".to_string(),
+            "kubectl".to_string(),
+            args.into_iter().map(|a| a.to_string()).collect(),
+            envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            None,
+            None,
+        ));
     };
 
     Ok(())
@@ -55,7 +63,7 @@ pub fn kubectl_exec_get_number_of_restart<P>(
     namespace: &str,
     pod_name: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<String, SimpleError>
+) -> Result<String, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -86,32 +94,38 @@ pub fn do_kubectl_exec_describe_service<P>(
     kubernetes_config: P,
     namespace: &str,
     service_name: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<DoLoadBalancer, SimpleError>
+    input_envs: Vec<(&str, &str)>,
+) -> Result<DoLoadBalancer, CommandError>
 where
     P: AsRef<Path>,
 {
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-    _envs.extend(envs);
+    let mut envs = Vec::with_capacity(input_envs.len() + 1);
+    envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    envs.extend(input_envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(20);
+    let mut err_output_vec: Vec<String> = Vec::with_capacity(20);
+    let cmd_args = vec!["get", "svc", "-n", namespace, service_name, "-o", "json"];
     let _ = kubectl_exec_with_output(
-        vec!["get", "svc", "-n", namespace, service_name, "-o", "json"],
-        _envs,
+        cmd_args.clone(),
+        envs.clone(),
         |line| output_vec.push(line),
-        |line| error!("{}", line),
+        |line| err_output_vec.push(line),
     )?;
 
     let output_string: String = output_vec.join("\n");
+    let err_output_string: String = output_vec.join("\n");
 
     match serde_json::from_str::<DoLoadBalancer>(output_string.as_str()) {
         Ok(x) => Ok(x),
-        Err(err) => {
-            error!("{:?}", err);
-            error!("{}", output_string.as_str());
-            Err(SimpleError::new(SimpleErrorKind::Other, Some(output_string)))
-        }
+        Err(err) => Err(CommandError::new_from_command_line(
+            format!("Error while executing kubectl command: {:?}", err),
+            "kubectl".to_string(),
+            cmd_args.into_iter().map(|a| a.to_string()).collect(),
+            envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            Some(output_string.to_string()),
+            Some(err_output_string.to_string()),
+        )),
     }
 }
 
@@ -121,7 +135,7 @@ pub fn do_kubectl_exec_get_external_ingress_ip<P>(
     namespace: &str,
     selector: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<String>, SimpleError>
+) -> Result<Option<String>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -142,7 +156,7 @@ pub fn do_kubectl_exec_get_loadbalancer_id<P>(
     namespace: &str,
     service_name: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<String>, SimpleError>
+) -> Result<Option<String>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -169,7 +183,7 @@ pub fn kubectl_exec_get_external_ingress_hostname<P>(
     namespace: &str,
     name: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<String>, SimpleError>
+) -> Result<Option<String>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -193,7 +207,7 @@ pub fn kubectl_exec_is_pod_ready_with_retry<P>(
     namespace: &str,
     selector: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<bool>, SimpleError>
+) -> Result<Option<bool>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -225,7 +239,7 @@ where
                 total_delay: _,
                 tries: _,
             } => Ok(Some(false)),
-            retry::Error::Internal(err) => Err(SimpleError::new(SimpleErrorKind::Other, Some(err))),
+            retry::Error::Internal(err) => Err(CommandError::new_from_safe_message(err)),
         },
         Ok(_) => Ok(Some(true)),
     }
@@ -236,7 +250,7 @@ pub fn kubectl_exec_get_secrets<P>(
     namespace: &str,
     selector: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Secrets, SimpleError>
+) -> Result<Secrets, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -262,7 +276,7 @@ pub fn kubectl_exec_is_pod_ready<P>(
     namespace: &str,
     selector: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<bool>, SimpleError>
+) -> Result<Option<bool>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -326,7 +340,7 @@ pub fn kubectl_exec_is_job_ready<P>(
     namespace: &str,
     job_name: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<bool>, SimpleError>
+) -> Result<Option<bool>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -370,7 +384,7 @@ pub fn kubectl_exec_create_namespace<P>(
     namespace: &str,
     labels: Option<Vec<LabelsContent>>,
     envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -405,22 +419,21 @@ pub fn kubectl_add_labels_to_namespace<P>(
     namespace: &str,
     labels: Vec<LabelsContent>,
     envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
     if labels.is_empty() {
-        return Err(SimpleError::new(
-            SimpleErrorKind::Other,
-            Some("No labels were defined, can't set them"),
+        return Err(CommandError::new_from_safe_message(
+            "No labels were defined, can't set them".to_string(),
         ));
     };
 
     if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace, envs.clone()) {
-        return Err(SimpleError::new(
-            SimpleErrorKind::Other,
-            Some(format! {"Can't set labels on namespace {} because it doesn't exists", namespace}),
-        ));
+        return Err(CommandError::new_from_safe_message(format!(
+            "Can't set labels on namespace {} because it doesn't exists",
+            namespace
+        )));
     }
 
     let mut command_args = Vec::new();
@@ -447,7 +460,7 @@ pub fn does_contain_terraform_tfstate<P>(
     kubernetes_config: P,
     namespace: &str,
     envs: &Vec<(&str, &str)>,
-) -> Result<bool, SimpleError>
+) -> Result<bool, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -484,7 +497,7 @@ where
 pub fn kubectl_exec_get_all_namespaces<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
-) -> Result<Vec<String>, SimpleError>
+) -> Result<Vec<String>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -509,25 +522,15 @@ pub fn kubectl_exec_delete_namespace<P>(
     kubernetes_config: P,
     namespace: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
-    match does_contain_terraform_tfstate(&kubernetes_config, &namespace, &envs) {
-        Ok(exist) => match exist {
-            true => {
-                return Err(SimpleError::new(
-                    SimpleErrorKind::Other,
-                    Some("Namespace contains terraform tfstates in secret, can't delete it !"),
-                ));
-            }
-            false => info!(
-                "Namespace {} doesn't contain any tfstates, able to delete it",
-                namespace
-            ),
-        },
-        Err(_) => debug!("Unable to execute describe on secrets. it may not exist anymore"),
-    };
+    if does_contain_terraform_tfstate(&kubernetes_config, &namespace, &envs)? {
+        return Err(CommandError::new_from_safe_message(
+            "Namespace contains terraform tfstates in secret, can't delete it !".to_string(),
+        ));
+    }
 
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
@@ -547,7 +550,7 @@ pub fn kubectl_exec_delete_crd<P>(
     kubernetes_config: P,
     crd_name: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -570,7 +573,7 @@ pub fn kubectl_exec_delete_secret<P>(
     namespace: &str,
     secret: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -593,7 +596,7 @@ pub fn kubectl_exec_logs<P>(
     namespace: &str,
     selector: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Vec<String>, SimpleError>
+) -> Result<Vec<String>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -617,7 +620,7 @@ pub fn kubectl_exec_describe_pod<P>(
     namespace: &str,
     selector: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<String, SimpleError>
+) -> Result<String, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -636,7 +639,7 @@ where
     Ok(output_vec.join("\n"))
 }
 
-pub fn kubectl_exec_version<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<KubernetesVersion, SimpleError>
+pub fn kubectl_exec_version<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<KubernetesVersion, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -649,7 +652,7 @@ pub fn kubectl_exec_get_daemonset<P>(
     namespace: &str,
     selectors: Option<&str>,
     envs: Vec<(&str, &str)>,
-) -> Result<Daemonset, SimpleError>
+) -> Result<Daemonset, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -672,7 +675,7 @@ pub fn kubectl_exec_rollout_restart_deployment<P>(
     name: &str,
     namespace: &str,
     envs: &Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -691,7 +694,7 @@ where
 pub fn kubectl_exec_get_node<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
-) -> Result<KubernetesList<KubernetesNode>, SimpleError>
+) -> Result<KubernetesList<KubernetesNode>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -702,7 +705,7 @@ pub fn kubectl_exec_count_all_objects<P>(
     kubernetes_config: P,
     object_kind: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<usize, SimpleError>
+) -> Result<usize, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -721,7 +724,7 @@ pub fn kubectl_exec_get_pods<P>(
     namespace: Option<&str>,
     selector: Option<&str>,
     envs: Vec<(&str, &str)>,
-) -> Result<KubernetesList<KubernetesPod>, SimpleError>
+) -> Result<KubernetesList<KubernetesPod>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -756,7 +759,7 @@ pub fn kubectl_exec_get_pod_by_name<P>(
     namespace: Option<&str>,
     pod_name: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<KubernetesPod, SimpleError>
+) -> Result<KubernetesPod, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -780,7 +783,7 @@ pub fn kubectl_exec_get_configmap<P>(
     namespace: &str,
     name: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Configmap, SimpleError>
+) -> Result<Configmap, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -795,7 +798,7 @@ pub fn kubectl_exec_get_json_events<P>(
     kubernetes_config: P,
     namespace: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<KubernetesList<KubernetesEvent>, SimpleError>
+) -> Result<KubernetesList<KubernetesEvent>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -811,7 +814,7 @@ pub fn kubectl_exec_get_events<P>(
     kubernetes_config: P,
     namespace: Option<&str>,
     envs: Vec<(&str, &str)>,
-) -> Result<String, SimpleError>
+) -> Result<String, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -836,7 +839,7 @@ pub fn kubectl_delete_objects_in_all_namespaces<P>(
     kubernetes_config: P,
     object: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -849,15 +852,11 @@ where
     match result {
         Ok(_) => Ok(()),
         Err(e) => {
-            match &e.message {
-                Some(message) => {
-                    if message.contains("No resources found") || message.ends_with(" deleted") {
-                        return Ok(());
-                    }
-                }
-                None => {}
-            };
-            Err(e)
+            let lower_case_message = e.message().to_lowercase();
+            if lower_case_message.contains("no resources found") || lower_case_message.ends_with(" deleted") {
+                return Ok(());
+            }
+            return Err(e);
         }
     }
 }
@@ -877,7 +876,7 @@ pub fn kubectl_exec_api_custom_metrics<P>(
     namespace: &str,
     specific_pod_name: Option<&str>,
     metric_name: &str,
-) -> Result<KubernetesApiMetrics, SimpleError>
+) -> Result<KubernetesApiMetrics, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -906,7 +905,7 @@ pub fn kubectl_exec_scale_replicas<P>(
     kind: ScalingKind,
     name: &str,
     replicas_count: u32,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -952,7 +951,7 @@ pub fn kubectl_exec_scale_replicas_by_selector<P>(
     kind: ScalingKind,
     selector: &str,
     replicas_count: u32,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -993,7 +992,6 @@ where
         0 => PodCondition::Delete,
         _ => PodCondition::Ready,
     };
-    info!("waiting for the pods to get the expected status: {:?}", &condition);
     kubectl_exec_wait_for_pods_condition(kubernetes_config, envs, namespace, selector, condition)
 }
 
@@ -1003,7 +1001,7 @@ pub fn kubectl_exec_wait_for_pods_condition<P>(
     namespace: &str,
     selector: &str,
     condition: PodCondition,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -1036,7 +1034,7 @@ where
     )
 }
 
-pub fn kubectl_get_pvc<P>(kubernetes_config: P, namespace: &str, envs: Vec<(&str, &str)>) -> Result<PVC, SimpleError>
+pub fn kubectl_get_pvc<P>(kubernetes_config: P, namespace: &str, envs: Vec<(&str, &str)>) -> Result<PVC, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -1047,7 +1045,7 @@ where
     )
 }
 
-pub fn kubectl_get_svc<P>(kubernetes_config: P, namespace: &str, envs: Vec<(&str, &str)>) -> Result<SVC, SimpleError>
+pub fn kubectl_get_svc<P>(kubernetes_config: P, namespace: &str, envs: Vec<(&str, &str)>) -> Result<SVC, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -1071,7 +1069,7 @@ pub fn kubectl_delete_crash_looping_pods<P>(
     namespace: Option<&str>,
     selector: Option<&str>,
     envs: Vec<(&str, &str)>,
-) -> Result<Vec<KubernetesPod>, SimpleError>
+) -> Result<Vec<KubernetesPod>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -1110,7 +1108,7 @@ pub fn kubectl_get_crash_looping_pods<P>(
     selector: Option<&str>,
     restarted_min_count: Option<usize>,
     envs: Vec<(&str, &str)>,
-) -> Result<Vec<KubernetesPod>, SimpleError>
+) -> Result<Vec<KubernetesPod>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -1154,7 +1152,7 @@ pub fn kubectl_exec_delete_pod<P>(
     pod_namespace: &str,
     pod_name: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<KubernetesPod, SimpleError>
+) -> Result<KubernetesPod, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -1181,11 +1179,11 @@ where
         |_| {},
     ) {
         Ok(_) => Ok(pod_to_be_deleted),
-        Err(e) => Err(e),
+        Err(e) => Err(CommandError::new(e.message(), None)),
     }
 }
 
-fn kubectl_exec<P, T>(args: Vec<&str>, kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<T, SimpleError>
+fn kubectl_exec<P, T>(args: Vec<&str>, kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<T, CommandError>
 where
     P: AsRef<Path>,
     T: DeserializeOwned,
@@ -1214,15 +1212,17 @@ where
                 env_vars_in_vec.push(x.1.to_string());
             });
             let environment_variables = env_vars_in_vec.join(" ");
-            error!(
-                "json parsing error on {:?} on command: {} kubectl {}. {:?}",
-                std::any::type_name::<T>(),
-                environment_variables,
-                args_string,
-                err
-            );
-            error!("{}", output_string.as_str());
-            return Err(SimpleError::new(SimpleErrorKind::Other, Some(output_string)));
+            return Err(CommandError::new(
+                format!(
+                    "JSON parsing error on {:?} on command: {} kubectl {}, output: {}. {:?}",
+                    std::any::type_name::<T>(),
+                    environment_variables,
+                    args_string,
+                    output_string,
+                    err
+                ),
+                Some("JSON parsing error on kubectl command.".to_string()),
+            ));
         }
     };
 
@@ -1233,7 +1233,7 @@ pub fn kubernetes_get_all_pdbs<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
     namespace: Option<&str>,
-) -> Result<PDB, SimpleError>
+) -> Result<PDB, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -1254,7 +1254,7 @@ pub fn kubernetes_get_all_hpas<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
     namespace: Option<&str>,
-) -> Result<HPA, SimpleError>
+) -> Result<HPA, CommandError>
 where
     P: AsRef<Path>,
 {

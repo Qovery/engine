@@ -10,6 +10,7 @@ use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_get_secrets};
 use crate::cmd::structs::{HelmChart, HelmHistoryRow, HelmListItem, Secrets};
 use crate::cmd::utilities::QoveryCommand;
 use crate::error::{SimpleError, SimpleErrorKind};
+use crate::errors::CommandError;
 use chrono::{DateTime, Duration, Utc};
 use core::time;
 use retry::delay::Fixed;
@@ -45,7 +46,7 @@ pub fn helm_exec_with_upgrade_history<P>(
     timeout: Timeout<u32>,
     envs: Vec<(&str, &str)>,
     service_type: ServiceType,
-) -> Result<Option<HelmHistoryRow>, SimpleError>
+) -> Result<Option<HelmHistoryRow>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -106,7 +107,7 @@ pub fn helm_destroy_chart_if_breaking_changes_version_detected(
     kubernetes_config: &Path,
     environment_variables: &Vec<(&str, &str)>,
     chart_info: &ChartInfo,
-) -> Result<(), SimpleError> {
+) -> Result<(), CommandError> {
     // If there is a breaking version set for the current helm chart,
     // then we compare this breaking version with the currently installed version if any.
     // If current installed version is older than breaking change one, then we delete
@@ -137,7 +138,7 @@ pub fn helm_exec_upgrade_with_chart_info<P>(
     kubernetes_config: P,
     envs: &Vec<(&str, &str)>,
     chart: &ChartInfo,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -197,13 +198,16 @@ where
         };
         // no need to validate yaml as it will be done by helm
         if let Err(e) = file_create() {
-            return Err(SimpleError {
-                kind: SimpleErrorKind::Other,
-                message: Some(format!(
-                    "error while writing yaml content to file {}\n{}\n{}",
-                    &file_path, value_file.yaml_content, e
-                )),
-            });
+            let safe_message = format!("Error while writing yaml content to file `{}`", &file_path);
+            return Err(CommandError::new(
+                format!(
+                    "{}\nContent\n{}\nError: {}",
+                    safe_message.to_string(),
+                    value_file.yaml_content,
+                    e
+                ),
+                Some(safe_message.to_string()),
+            ));
         };
 
         args_string.push("-f".to_string());
@@ -275,7 +279,7 @@ where
                 envs.clone(),
             ) {
                 Ok(_) => info!("Helm lock detected and cleaned"),
-                Err(e) => warn!("Couldn't cleanup Helm lock. {:?}", e.message),
+                Err(e) => warn!("Couldn't cleanup Helm lock. {:?}", e.message()),
             }
         }
 
@@ -287,14 +291,19 @@ where
                     OperationResult::Ok(())
                 }
             }
-            Err(e) => OperationResult::Retry(e),
+            Err(e) => OperationResult::Retry(SimpleError::new(SimpleErrorKind::Other, Some(e.message()))),
         }
     });
 
     match result {
         Ok(_) => Ok(()),
-        Err(Operation { error, .. }) => return Err(error),
-        Err(retry::Error::Internal(e)) => return Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+        Err(Operation { error, .. }) => {
+            return Err(CommandError::new(
+                error.message.unwrap_or("No error message".to_string()),
+                None,
+            ));
+        }
+        Err(retry::Error::Internal(e)) => return Err(CommandError::new(e, None)),
     }
 }
 
@@ -304,7 +313,7 @@ pub fn clean_helm_lock<P>(
     release_name: &str,
     timeout: i64,
     envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -322,22 +331,13 @@ where
         match helm_get_secret_lock_name(&result, timeout_i64.clone()) {
             Ok(x) => return OperationResult::Ok(x),
             Err(e) => match e.kind {
-                ParsingError => OperationResult::Retry(SimpleError {
-                    kind: SimpleErrorKind::Other,
-                    message: Some(e.message),
-                }),
-                IncorrectFormatDate => OperationResult::Retry(SimpleError {
-                    kind: SimpleErrorKind::Other,
-                    message: Some(e.message),
-                }),
+                ParsingError => OperationResult::Retry(CommandError::new(e.message, None)),
+                IncorrectFormatDate => OperationResult::Retry(CommandError::new(e.message, None)),
                 NotYetExpired => {
                     if e.wait_before_release_lock.is_none() {
-                        return OperationResult::Retry(SimpleError {
-                            kind: SimpleErrorKind::Other,
-                            message: Some(
-                                "missing helm time to wait information, before releasing the lock".to_string(),
-                            ),
-                        });
+                        return OperationResult::Retry(CommandError::new_from_safe_message(
+                            "Missing helm time to wait information, before releasing the lock".to_string(),
+                        ));
                     };
 
                     let time_to_wait = e.wait_before_release_lock.unwrap() as u64;
@@ -346,19 +346,13 @@ where
                         info!("waiting {}s before retrying the deployment...", time_to_wait);
                         thread::sleep(time::Duration::from_secs(time_to_wait));
                     } else {
-                        return OperationResult::Err(SimpleError {
-                            kind: SimpleErrorKind::Other,
-                            message: Some(e.message),
-                        });
+                        return OperationResult::Err(CommandError::new(e.message, None));
                     }
 
                     // retrieve now the secret
                     match helm_get_secret_lock_name(&result, timeout_i64.clone()) {
                         Ok(x) => OperationResult::Ok(x),
-                        Err(e) => OperationResult::Err(SimpleError {
-                            kind: SimpleErrorKind::Other,
-                            message: Some(e.message),
-                        }),
+                        Err(e) => OperationResult::Err(CommandError::new(e.message, None)),
                     }
                 }
             },
@@ -368,14 +362,11 @@ where
     match result {
         Err(err) => {
             return match err {
-                retry::Error::Operation { .. } => Err(SimpleError {
-                    kind: SimpleErrorKind::Other,
-                    message: Some(format!(
-                        "internal error while trying to deploy helm chart {}",
-                        release_name
-                    )),
-                }),
-                retry::Error::Internal(err) => Err(SimpleError::new(SimpleErrorKind::Other, Some(err))),
+                retry::Error::Operation { .. } => Err(CommandError::new_from_safe_message(format!(
+                    "internal error while trying to deploy helm chart {}",
+                    release_name
+                ))),
+                retry::Error::Internal(err) => Err(CommandError::new_from_safe_message(err)),
             }
         }
         Ok(x) => {
@@ -451,7 +442,7 @@ pub fn helm_exec_uninstall_with_chart_info<P>(
     kubernetes_config: P,
     envs: &Vec<(&str, &str)>,
     chart: &ChartInfo,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -475,7 +466,7 @@ pub fn helm_exec_uninstall<P>(
     namespace: &str,
     release_name: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -499,12 +490,12 @@ pub fn helm_exec_history<P>(
     namespace: &str,
     release_name: &str,
     envs: &Vec<(&str, &str)>,
-) -> Result<Vec<HelmHistoryRow>, SimpleError>
+) -> Result<Vec<HelmHistoryRow>, CommandError>
 where
     P: AsRef<Path>,
 {
     let mut output_string = String::new();
-    match helm_exec_with_output(
+    helm_exec_with_output(
         // WARN: do not add argument --debug, otherwise JSON decoding will not work
         vec![
             "history",
@@ -525,10 +516,8 @@ where
                 error!("{}", line)
             }
         },
-    ) {
-        Ok(_) => info!("Helm history success for release name: {}", release_name),
-        Err(_) => info!("Helm history found for release name: {}", release_name),
-    };
+    )?;
+
     // TODO better check, release not found
 
     let mut results = match serde_json::from_str::<Vec<HelmHistoryRow>>(output_string.as_str()) {
@@ -589,7 +578,7 @@ pub fn helm_exec_upgrade_with_override_file<P>(
     chart_root_dir: P,
     override_file: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -630,7 +619,7 @@ pub fn helm_exec_with_upgrade_history_with_override<P>(
     chart_root_dir: P,
     override_file: &str,
     envs: Vec<(&str, &str)>,
-) -> Result<Option<HelmHistoryRow>, SimpleError>
+) -> Result<Option<HelmHistoryRow>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -670,7 +659,7 @@ pub fn is_chart_deployed<P>(
     envs: Vec<(&str, &str)>,
     namespace: Option<&str>,
     chart_name: String,
-) -> Result<bool, SimpleError>
+) -> Result<bool, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -719,7 +708,7 @@ pub fn helm_list<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
     namespace: Option<&str>,
-) -> Result<Vec<HelmChart>, SimpleError>
+) -> Result<Vec<HelmChart>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -755,9 +744,11 @@ where
             }
         }
         Err(e) => {
-            let message = format!("Error while deserializing all helms names {}", e);
-            error!("{}", message.as_str());
-            return Err(SimpleError::new(SimpleErrorKind::Other, Some(message)));
+            let message_safe = "Error while deserializing all helms names";
+            return Err(CommandError::new(
+                format!("{}, error: {}", message_safe, e),
+                Some(message_safe.to_string()),
+            ));
         }
     }
 
@@ -768,7 +759,7 @@ pub fn helm_upgrade_diff_with_chart_info<P>(
     kubernetes_config: P,
     envs: &Vec<(String, String)>,
     chart: &ChartInfo,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -805,13 +796,16 @@ where
         };
         // no need to validate yaml as it will be done by helm
         if let Err(e) = file_create() {
-            return Err(SimpleError {
-                kind: SimpleErrorKind::Other,
-                message: Some(format!(
-                    "error while writing yaml content to file {}\n{}\n{}",
-                    &file_path, value_file.yaml_content, e
-                )),
-            });
+            let safe_message = format!("Error while writing yaml content to file `{}`", &file_path);
+            return Err(CommandError::new(
+                format!(
+                    "{}\nContent\n{}\nError: {}",
+                    safe_message.to_string(),
+                    value_file.yaml_content,
+                    e
+                ),
+                Some(safe_message.to_string()),
+            ));
         };
 
         args_string.push("-f".to_string());
@@ -833,7 +827,7 @@ where
     )
 }
 
-pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), SimpleError> {
+pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), CommandError> {
     helm_exec_with_output(
         args,
         envs,
@@ -851,7 +845,7 @@ pub fn helm_exec_with_output<F, X>(
     envs: Vec<(&str, &str)>,
     stdout_output: F,
     stderr_output: X,
-) -> Result<(), SimpleError>
+) -> Result<(), CommandError>
 where
     F: FnMut(String),
     X: FnMut(String),
@@ -861,7 +855,7 @@ where
     // It means that the command successfully ran, but it didn't terminate as expected
     let mut cmd = QoveryCommand::new("helm", &args, &envs);
     match cmd.exec_with_timeout(Duration::max_value(), stdout_output, stderr_output) {
-        Err(err) => Err(SimpleError::new(SimpleErrorKind::Other, Some(format!("{}", err)))),
+        Err(err) => Err(CommandError::new(format!("{:?}", err), None)),
         _ => Ok(()),
     }
 }

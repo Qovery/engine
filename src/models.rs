@@ -39,6 +39,10 @@ impl QoveryIdentifier {
         }
     }
 
+    pub fn new_random() -> Self {
+        Self::new(uuid::Uuid::new_v4().to_string())
+    }
+
     fn extract_short(raw: &str) -> String {
         let max_execution_id_chars: usize = 7;
         match raw.char_indices().nth(max_execution_id_chars) {

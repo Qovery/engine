@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::cloud_provider::digitalocean::application::DoRegion;
 use crate::cloud_provider::digitalocean::do_api_common::{do_get_from_api, DoApiType};
 use crate::cloud_provider::digitalocean::models::vpc::{Vpc, Vpcs};
-use crate::error::{SimpleError, SimpleErrorKind};
+use crate::errors::CommandError;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -31,7 +31,7 @@ pub fn get_do_subnet_available_from_api(
     token: &str,
     desired_subnet: String,
     region: DoRegion,
-) -> Result<Option<Vpc>, SimpleError> {
+) -> Result<Option<Vpc>, CommandError> {
     // get subnets from the API
     let vpcs = match do_get_from_api(token, DoApiType::Vpc, DoApiType::Vpc.api_url()) {
         Ok(x) => do_get_vpcs_from_api_output(x.as_str())?,
@@ -42,7 +42,7 @@ pub fn get_do_subnet_available_from_api(
     get_do_vpc_from_subnet(desired_subnet, vpcs, region)
 }
 
-pub fn get_do_vpc_name_available_from_api(token: &str, desired_name: String) -> Result<Option<Vpc>, SimpleError> {
+pub fn get_do_vpc_name_available_from_api(token: &str, desired_name: String) -> Result<Option<Vpc>, CommandError> {
     // get names from the API
     let vpcs = match do_get_from_api(token, DoApiType::Vpc, DoApiType::Vpc.api_url()) {
         Ok(x) => do_get_vpcs_from_api_output(x.as_str())?,
@@ -53,13 +53,13 @@ pub fn get_do_vpc_name_available_from_api(token: &str, desired_name: String) -> 
     Ok(get_do_vpc_from_name(desired_name, vpcs))
 }
 
-pub fn get_do_random_available_subnet_from_api(token: &str, region: DoRegion) -> Result<String, SimpleError> {
+pub fn get_do_random_available_subnet_from_api(token: &str, region: DoRegion) -> Result<String, CommandError> {
     let json_content = do_get_from_api(token, DoApiType::Vpc, DoApiType::Vpc.api_url())?;
     let existing_vpcs = do_get_vpcs_from_api_output(&json_content)?;
     get_random_available_subnet(existing_vpcs, region)
 }
 
-fn get_random_available_subnet(existing_vpcs: Vec<Vpc>, region: DoRegion) -> Result<String, SimpleError> {
+fn get_random_available_subnet(existing_vpcs: Vec<Vpc>, region: DoRegion) -> Result<String, CommandError> {
     let subnet_start = 0;
     let subnet_end = 254;
 
@@ -78,10 +78,9 @@ fn get_random_available_subnet(existing_vpcs: Vec<Vpc>, region: DoRegion) -> Res
         }
     }
 
-    Err(SimpleError {
-        kind: SimpleErrorKind::Other,
-        message: Some("no available subnet found on this Digital Ocean account.".to_string()),
-    })
+    Err(CommandError::new_from_safe_message(
+        "no available subnet found on this Digital Ocean account.".to_string(),
+    ))
 }
 
 fn get_do_vpc_from_name(desired_name: String, existing_vpcs: Vec<Vpc>) -> Option<Vpc> {
@@ -101,17 +100,14 @@ fn get_do_vpc_from_subnet(
     desired_subnet: String,
     existing_vpcs: Vec<Vpc>,
     region: DoRegion,
-) -> Result<Option<Vpc>, SimpleError> {
+) -> Result<Option<Vpc>, CommandError> {
     let mut exists = None;
 
     match is_do_reserved_vpc_subnets(region, desired_subnet.as_str()) {
-        true => Err(SimpleError {
-            kind: SimpleErrorKind::Other,
-            message: Some(format!(
-                "subnet {} can't be used because it's a DigitalOcean dedicated subnet",
-                desired_subnet
-            )),
-        }),
+        true => Err(CommandError::new_from_safe_message(format!(
+            "subnet {} can't be used because it's a DigitalOcean dedicated subnet",
+            desired_subnet
+        ))),
         false => {
             for vpc in existing_vpcs {
                 if vpc.ip_range == desired_subnet {
@@ -124,19 +120,19 @@ fn get_do_vpc_from_subnet(
     }
 }
 
-fn do_get_vpcs_from_api_output(json_content: &str) -> Result<Vec<Vpc>, SimpleError> {
+fn do_get_vpcs_from_api_output(json_content: &str) -> Result<Vec<Vpc>, CommandError> {
     // better to use lib when VPC will be supported https://github.com/LoganDark/digitalocean/issues/3
     let res_vpcs = serde_json::from_str::<Vpcs>(json_content);
 
     match res_vpcs {
         Ok(vpcs) => Ok(vpcs.vpcs),
-        Err(e) => Err(SimpleError::new(
-            SimpleErrorKind::Other,
-            Some(format!(
-                "error while trying to deserialize json received from Digital Ocean VPC API. {}",
-                e
-            )),
-        )),
+        Err(e) => {
+            let message_safe = "Error while trying to deserialize json received from Digital Ocean VPC API";
+            Err(CommandError::new(
+                format!("{}, error: {}", message_safe.to_string(), e),
+                Some(message_safe.to_string()),
+            ))
+        }
     }
 }
 

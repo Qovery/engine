@@ -1,5 +1,5 @@
 use crate::cloud_provider::kubernetes::InstanceType;
-use crate::errors::SimpleError;
+use crate::errors::CommandError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
@@ -67,9 +67,9 @@ impl fmt::Display for ScwInstancesType {
 }
 
 impl FromStr for ScwInstancesType {
-    type Err = SimpleError;
+    type Err = CommandError;
 
-    fn from_str(s: &str) -> Result<ScwInstancesType, SimpleError> {
+    fn from_str(s: &str) -> Result<ScwInstancesType, CommandError> {
         match s {
             "gp1-xs" => Ok(ScwInstancesType::Gp1Xs),
             "gp1-s" => Ok(ScwInstancesType::Gp1S),
@@ -82,7 +82,7 @@ impl FromStr for ScwInstancesType {
             "render-s" => Ok(ScwInstancesType::RenderS),
             _ => {
                 let message = format!("`{}` instance type is not supported", s);
-                return Err(SimpleError::new(message.clone(), message));
+                return Err(CommandError::new(message.clone(), Some(message)));
             }
         }
     }

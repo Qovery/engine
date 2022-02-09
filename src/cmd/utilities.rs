@@ -234,7 +234,7 @@ mod tests {
 
     #[test]
     fn test_run_version_for_command() {
-        let ret = run_version_command_for("/bin/ls");
+        let ret = run_version_command_for("ls");
         assert_eq!(ret.is_empty(), false);
         assert_eq!(ret.contains("GNU"), true)
     }

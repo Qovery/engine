@@ -363,6 +363,7 @@ pub struct HelmListItem {
     pub app_version: String,
 }
 
+#[derive(Clone, PartialEq)]
 pub struct HelmChart {
     pub name: String,
     pub namespace: String,

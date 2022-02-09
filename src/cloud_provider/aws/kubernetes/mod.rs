@@ -33,15 +33,13 @@ use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, 
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
-use crate::error::EngineErrorCause::Internal;
-use crate::error::{
-    cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind,
-};
-use crate::errors::EngineError as NewEngineError;
-use crate::events::{EnvironmentStep, Stage};
-use crate::logger::Logger;
+use crate::errors::{CommandError, EngineError};
+use crate::events::Stage::Infrastructure;
+use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+use crate::logger::{LogLevel, Logger};
 use crate::models::{
-    Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ToHelmString, ToTerraformString,
+    Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, QoveryIdentifier, ToHelmString,
+    ToTerraformString,
 };
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
@@ -152,6 +150,16 @@ impl<'a> EKS<'a> {
         nodes_groups: Vec<NodeGroups>,
         logger: &'a dyn Logger,
     ) -> Result<Self, EngineError> {
+        let event_details = EventDetails::new(
+            Some(cloud_provider.kind()),
+            QoveryIdentifier::new(context.organization_id().to_string()),
+            QoveryIdentifier::new(context.cluster_id().to_string()),
+            QoveryIdentifier::new(context.execution_id().to_string()),
+            Some(region.to_string()),
+            Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
+            Transmitter::Kubernetes(id.to_string(), name.to_string()),
+        );
+
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
 
         let mut aws_zones: Vec<AwsZones> = Vec::with_capacity(3);
@@ -159,28 +167,27 @@ impl<'a> EKS<'a> {
             match AwsZones::from_string(zone.to_string()) {
                 Ok(x) => aws_zones.push(x),
                 Err(e) => {
-                    return Err(EngineError {
-                        cause: EngineErrorCause::Internal,
-                        scope: EngineErrorScope::Engine,
-                        execution_id: id.to_string(),
-                        message: Some(format!("Zone may not be found or supported: {:?}", e)),
-                    })
+                    return Err(EngineError::new_unsupported_zone(
+                        event_details.clone(),
+                        region.to_string(),
+                        zone.to_string(),
+                        CommandError::new_from_safe_message(e.to_string()),
+                    ))
                 }
             };
         }
 
         for node_group in &nodes_groups {
-            if AwsInstancesType::from_str(node_group.instance_type.as_str()).is_err() {
-                return Err(EngineError::new(
-                    EngineErrorCause::Internal,
-                    EngineErrorScope::Engine,
-                    context.execution_id(),
-                    Some(format!(
-                        "Nodegroup instance type {} is not valid for {}",
-                        node_group.instance_type,
-                        cloud_provider.name()
-                    )),
-                ));
+            if let Err(e) = AwsInstancesType::from_str(node_group.instance_type.as_str()) {
+                let err = EngineError::new_unsupported_instance_type(
+                    event_details.clone(),
+                    node_group.instance_type.as_str(),
+                    e,
+                );
+
+                logger.log(LogLevel::Error, EngineEvent::Error(err.clone()));
+
+                return Err(err);
             }
         }
 
@@ -242,26 +249,62 @@ impl<'a> EKS<'a> {
         .to_string()
     }
 
-    // divide by 2 the total number of subnet to get the exact same number as private and public
-    fn check_odd_subnets(&self, zone_name: &str, subnet_block: &Vec<String>) -> Result<usize, EngineError> {
-        let is_odd = subnet_block.len() % 2;
-
-        if is_odd == 1 {
-            Err(EngineError {
-                cause: EngineErrorCause::Internal,
-                scope: EngineErrorScope::Engine,
-                execution_id: self.context.execution_id().to_string(),
-                message: Some(format!(
-                    "the number of subnets for zone '{}' should be an even number, not an odd!",
-                    zone_name
-                )),
-            })
-        } else {
-            Ok((subnet_block.len() / 2) as usize)
+    /// divide by 2 the total number of subnet to get the exact same number as private and public
+    fn check_odd_subnets(
+        &self,
+        event_details: EventDetails,
+        zone_name: &str,
+        subnet_block: &Vec<String>,
+    ) -> Result<usize, EngineError> {
+        if subnet_block.len() % 2 == 1 {
+            return Err(EngineError::new_subnets_count_is_not_even(
+                event_details,
+                zone_name.to_string(),
+                subnet_block.len(),
+            ));
         }
+
+        Ok((subnet_block.len() / 2) as usize)
+    }
+
+    fn set_cluster_autoscaler_replicas(
+        &self,
+        event_details: EventDetails,
+        replicas_count: u32,
+    ) -> Result<(), EngineError> {
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Deploying(
+                event_details.clone(),
+                EventMessage::new_from_safe(format!("Scaling cluster autoscaler to `{}`.", replicas_count)),
+            ),
+        );
+        let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
+        let selector = "cluster-autoscaler-aws-cluster-autoscaler";
+        let namespace = "kube-system";
+        let _ = kubectl_exec_scale_replicas(
+            kubeconfig_path,
+            self.cloud_provider().credentials_environment_variables(),
+            namespace,
+            ScalingKind::Deployment,
+            selector,
+            replicas_count,
+        )
+        .map_err(|e| {
+            EngineError::new_k8s_scale_replicas(
+                event_details.clone(),
+                selector.to_string(),
+                namespace.to_string(),
+                replicas_count,
+                e,
+            )
+        })?;
+
+        Ok(())
     }
 
     fn tera_context(&self) -> Result<TeraContext, EngineError> {
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
         let mut context = TeraContext::new();
 
         let format_ips =
@@ -281,9 +324,12 @@ impl<'a> EKS<'a> {
 
         match self.options.vpc_qovery_network_mode {
             VpcQoveryNetworkMode::WithNatGateways => {
-                let max_subnet_zone_a = self.check_odd_subnets("a", &eks_zone_a_subnet_blocks_private)?;
-                let max_subnet_zone_b = self.check_odd_subnets("b", &eks_zone_b_subnet_blocks_private)?;
-                let max_subnet_zone_c = self.check_odd_subnets("c", &eks_zone_c_subnet_blocks_private)?;
+                let max_subnet_zone_a =
+                    self.check_odd_subnets(event_details.clone(), "a", &eks_zone_a_subnet_blocks_private)?;
+                let max_subnet_zone_b =
+                    self.check_odd_subnets(event_details.clone(), "b", &eks_zone_b_subnet_blocks_private)?;
+                let max_subnet_zone_c =
+                    self.check_odd_subnets(event_details.clone(), "c", &eks_zone_c_subnet_blocks_private)?;
 
                 let eks_zone_a_subnet_blocks_public: Vec<String> =
                     eks_zone_a_subnet_blocks_private.drain(max_subnet_zone_a..).collect();
@@ -417,7 +463,13 @@ impl<'a> EKS<'a> {
 
                     match env::var_os("VAULT_SECRET_ID") {
                         Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
-                        None => error!("VAULT_SECRET_ID environment variable wasn't found"),
+                        None => self.logger().log(
+                            LogLevel::Error,
+                            EngineEvent::Error(EngineError::new_missing_required_env_variable(
+                                event_details.clone(),
+                                "VAULT_SECRET_ID".to_string(),
+                            )),
+                        ),
                     }
                 }
                 None => {
@@ -528,8 +580,16 @@ impl<'a> EKS<'a> {
     }
 
     fn create(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Deploying(
+                event_details.clone(),
+                EventMessage::new_from_safe("Preparing EKS cluster deployment.".to_string()),
+            ),
+        );
         self.send_to_customer(
             format!("Preparing EKS {} cluster deployment with id {}", self.name(), self.id()).as_str(),
             &listeners_helper,
@@ -537,25 +597,41 @@ impl<'a> EKS<'a> {
 
         // upgrade cluster instead if required
         match self.get_kubeconfig_file() {
-            Ok(f) => match is_kubernetes_upgrade_required(
-                f.0,
+            Ok((path, _)) => match is_kubernetes_upgrade_required(
+                path,
                 &self.version,
                 self.cloud_provider.credentials_environment_variables(),
+                event_details.clone(),
+                self.logger(),
             ) {
                 Ok(x) => {
                     if x.required_upgrade_on.is_some() {
                         return self.upgrade_with_status(x);
                     }
-                    info!("Kubernetes cluster upgrade not required");
+
+                    self.logger().log(
+                        LogLevel::Info,
+                        EngineEvent::Deploying(
+                            event_details.clone(),
+                            EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
+                        ),
+                    )
                 }
-                Err(e) => error!(
-                    "Error detected, upgrade won't occurs, but standard deployment. {:?}",
-                    e.message
-                ),
+                Err(e) => {
+                    self.logger().log(LogLevel::Error, EngineEvent::Error(e));
+                    self.logger().log(
+                        LogLevel::Info,
+                        EngineEvent::Deploying(
+                            event_details.clone(),
+                            EventMessage::new_from_safe(
+                                "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
+                            ),
+                        ),
+                    );
+                }
             },
-            Err(_) => {
-                info!("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before");
-            }
+            Err(_) => self.logger().log(LogLevel::Info, EngineEvent::Deploying(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
+
         };
 
         // create AWS IAM roles
@@ -565,41 +641,67 @@ impl<'a> EKS<'a> {
                 self.cloud_provider.access_key_id().as_str(),
                 self.cloud_provider.secret_access_key().as_str(),
             ) {
-                Ok(_) => info!("Role {} is already present, no need to create", role.role_name),
-                Err(e) => error!(
-                    "Error while getting, or creating the role {} : causing by {:?}",
-                    role.role_name, e
+                Ok(_) => self.logger().log(
+                    LogLevel::Info,
+                    EngineEvent::Deploying(
+                        event_details.clone(),
+                        EventMessage::new_from_safe(format!(
+                            "Role {} is already present, no need to create",
+                            role.role_name
+                        )),
+                    ),
+                ),
+                Err(e) => self.logger().log(
+                    LogLevel::Error,
+                    EngineEvent::Error(EngineError::new_cannot_get_or_create_iam_role(
+                        event_details.clone(),
+                        role.role_name,
+                        e,
+                    )),
                 ),
             }
         }
 
-        let temp_dir = self.get_temp_dir()?;
+        let temp_dir = self.get_temp_dir(event_details.clone())?;
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
 
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(
-                self.template_directory.as_str(),
-                temp_dir.as_str(),
-                &context,
-            ),
-        )?;
+        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+            self.template_directory.as_str(),
+            temp_dir.as_str(),
+            context,
+        ) {
+            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                event_details.clone(),
+                self.template_directory.to_string(),
+                temp_dir.to_string(),
+                e,
+            ));
+        }
 
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
+        let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::copy_non_template_files(
-                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
-                common_charts_temp_dir.as_str(),
-            ),
-        )?;
+        if let Err(e) =
+            crate::template::copy_non_template_files(bootstrap_charts_dir.to_string(), common_charts_temp_dir.as_str())
+        {
+            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                event_details.clone(),
+                bootstrap_charts_dir.to_string(),
+                common_charts_temp_dir.to_string(),
+                e,
+            ));
+        }
 
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Deploying(
+                event_details.clone(),
+                EventMessage::new_from_safe("Deploying EKS cluster.".to_string()),
+            ),
+        );
         self.send_to_customer(
             format!("Deploying EKS {} cluster deployment with id {}", self.name(), self.id()).as_str(),
             &listeners_helper,
@@ -613,62 +715,54 @@ impl<'a> EKS<'a> {
                     for entry in x.clone() {
                         if entry.starts_with(item) {
                             match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
-                                Ok(_) => info!("successfully removed {}", &entry),
+                                Ok(_) => self.logger().log(
+                                    LogLevel::Info,
+                                    EngineEvent::Deploying(
+                                        event_details.clone(),
+                                        EventMessage::new_from_safe(format!("successfully removed {}", &entry)),
+                                    ),
+                                ),
                                 Err(e) => {
-                                    return Err(EngineError {
-                                        cause: EngineErrorCause::Internal,
-                                        scope: EngineErrorScope::Engine,
-                                        execution_id: self.context.execution_id().to_string(),
-                                        message: Some(format!(
-                                            "error while trying to remove {} out of terraform state file.\n {:?}",
-                                            entry, e.message
-                                        )),
-                                    })
+                                    return Err(EngineError::new_terraform_cannot_remove_entry_out(
+                                        event_details.clone(),
+                                        entry.to_string(),
+                                        e,
+                                    ))
                                 }
                             }
                         };
                     }
                 }
             }
-            Err(e) => warn!(
-                "no state list exists yet, this is normal if it's a newly created cluster. {:?}",
-                e
+            Err(e) => self.logger().log(
+                LogLevel::Warning,
+                EngineEvent::Error(EngineError::new_terraform_state_does_not_exist(
+                    event_details.clone(),
+                    e,
+                )),
             ),
         };
 
         // terraform deployment dedicated to cloud resources
-        match cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
-        ) {
-            Ok(_) => {}
-            Err(e) => {
-                format!(
-                    "Error while deploying cluster {} with Terraform with id {}.",
-                    self.name(),
-                    self.id()
-                );
-                return Err(e);
-            }
-        };
+        if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
+            return Err(EngineError::new_terraform_error_while_executing_pipeline(
+                event_details.clone(),
+                e,
+            ));
+        }
 
         // kubernetes helm deployments on the cluster
         // todo: instead of downloading kubeconfig file, use the one that has just been generated by terraform
-        let kubeconfig_path = match self.get_kubeconfig_file() {
-            Ok((path, _)) => path,
-            Err(e) => {
-                error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
-                return Err(e.to_legacy_engine_error());
-            }
-        };
-        let kubeconfig = Path::new(&kubeconfig_path);
+        let kubeconfig_path = &self.get_kubeconfig_file_path()?;
+        let kubeconfig_path = Path::new(kubeconfig_path);
+
         let credentials_environment_variables: Vec<(String, String)> = self
             .cloud_provider
             .credentials_environment_variables()
             .into_iter()
             .map(|x| (x.0.to_string(), x.1.to_string()))
             .collect();
+
         let charts_prerequisites = ChartsConfigPrerequisites {
             organization_id: self.cloud_provider.organization_id().to_string(),
             organization_long_id: self.cloud_provider.organization_long_id(),
@@ -696,51 +790,67 @@ impl<'a> EKS<'a> {
             disable_pleco: self.context.disable_pleco(),
         };
 
-        let helm_charts_to_deploy = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            aws_helm_charts(
-                format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
-                &charts_prerequisites,
-                Some(&temp_dir),
-                &kubeconfig,
-                &credentials_environment_variables,
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Deploying(
+                event_details.clone(),
+                EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
             ),
-        )?;
-
-        cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            deploy_charts_levels(
-                &kubeconfig,
-                &credentials_environment_variables,
-                helm_charts_to_deploy,
-                self.context.is_dry_run_deploy(),
-            ),
+        );
+        let helm_charts_to_deploy = aws_helm_charts(
+            format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
+            &charts_prerequisites,
+            Some(&temp_dir),
+            &kubeconfig_path,
+            &credentials_environment_variables,
         )
+        .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
+
+        deploy_charts_levels(
+            &kubeconfig_path,
+            &credentials_environment_variables,
+            helm_charts_to_deploy,
+            self.context.is_dry_run_deploy(),
+        )
+        .map_err(|e| EngineError::new_helm_charts_deploy_error(event_details.clone(), e))
     }
 
     fn create_error(&self) -> Result<(), EngineError> {
-        let kubeconfig = match self.get_kubeconfig_file() {
-            Ok((path, _)) => path,
-            Err(e) => {
-                error!("kubernetes cluster has just been deployed, but kubeconfig wasn't available, can't finish installation");
-                return Err(e.to_legacy_engine_error());
-            }
-        };
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
+        let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
         let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
-        warn!("EKS.create_error() called for {}", self.name());
-        match kubectl_exec_get_events(kubeconfig, None, environment_variables) {
-            Ok(ok_line) => info!("{}", ok_line),
-            Err(err) => error!("{:?}", err),
+
+        self.logger().log(
+            LogLevel::Warning,
+            EngineEvent::Deploying(
+                self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create)),
+                EventMessage::new_from_safe("EKS.create_error() called.".to_string()),
+            ),
+        );
+
+        match kubectl_exec_get_events(kubeconfig_path, None, environment_variables) {
+            Ok(ok_line) => self.logger().log(
+                LogLevel::Info,
+                EngineEvent::Deploying(event_details.clone(), EventMessage::new(ok_line, None)),
+            ),
+            Err(err) => self.logger().log(
+                LogLevel::Error,
+                EngineEvent::Deploying(event_details.clone(), EventMessage::new(err.message(), None)),
+            ),
         };
-        Err(self.engine_error(
-            EngineErrorCause::Internal,
-            format!("{} Kubernetes cluster failed on deployment", self.name()),
-        ))
+
+        Ok(())
     }
 
     fn upgrade_error(&self) -> Result<(), EngineError> {
+        self.logger().log(
+            LogLevel::Warning,
+            EngineEvent::Deploying(
+                self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade)),
+                EventMessage::new_from_safe("EKS.upgrade_error() called.".to_string()),
+            ),
+        );
+
         Ok(())
     }
 
@@ -749,17 +859,35 @@ impl<'a> EKS<'a> {
     }
 
     fn downgrade_error(&self) -> Result<(), EngineError> {
+        self.logger().log(
+            LogLevel::Warning,
+            EngineEvent::Deploying(
+                self.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade)),
+                EventMessage::new_from_safe("EKS.downgrade_error() called.".to_string()),
+            ),
+        );
+
         Ok(())
     }
 
     fn pause(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
         let listeners_helper = ListenersHelper::new(&self.listeners);
+
         self.send_to_customer(
             format!("Preparing EKS {} cluster pause with id {}", self.name(), self.id()).as_str(),
             &listeners_helper,
         );
 
-        let temp_dir = self.get_temp_dir()?;
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Pausing(
+                self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
+                EventMessage::new_from_safe("Preparing EKS cluster pause.".to_string()),
+            ),
+        );
+
+        let temp_dir = self.get_temp_dir(event_details.clone())?;
 
         // generate terraform files and copy them into temp dir
         let mut context = self.tera_context()?;
@@ -768,27 +896,33 @@ impl<'a> EKS<'a> {
         let worker_nodes: Vec<NodeGroupsFormat> = Vec::new();
         context.insert("eks_worker_nodes", &worker_nodes);
 
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(
-                self.template_directory.as_str(),
-                temp_dir.as_str(),
-                &context,
-            ),
-        )?;
+        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+            self.template_directory.as_str(),
+            temp_dir.as_str(),
+            context,
+        ) {
+            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                event_details.clone(),
+                self.template_directory.to_string(),
+                temp_dir.to_string(),
+                e,
+            ));
+        }
 
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
+        let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::copy_non_template_files(
-                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
-                common_charts_temp_dir.as_str(),
-            ),
-        )?;
+        if let Err(e) =
+            crate::template::copy_non_template_files(bootstrap_charts_dir.to_string(), common_charts_temp_dir.as_str())
+        {
+            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                event_details.clone(),
+                bootstrap_charts_dir.to_string(),
+                common_charts_temp_dir.to_string(),
+                e,
+            ));
+        }
 
         // pause: only select terraform workers elements to pause to avoid applying on the whole config
         // this to avoid failures because of helm deployments on removing workers nodes
@@ -803,29 +937,17 @@ impl<'a> EKS<'a> {
                 tf_workers_resources_name
             }
             Err(e) => {
-                return Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Kubernetes(self.id.clone(), self.name.clone()),
-                    execution_id: self.context.execution_id().to_string(),
-                    message: e.message,
-                })
+                let error = EngineError::new_terraform_state_does_not_exist(event_details.clone(), e);
+                self.logger().log(LogLevel::Error, EngineEvent::Error(error.clone()));
+                return Err(error);
             }
         };
+
         if tf_workers_resources.is_empty() {
-            return Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Kubernetes(self.id.clone(), self.name.clone()),
-                    execution_id: self.context.execution_id().to_string(),
-                    message: Some("No worker nodes present, can't Pause the infrastructure. This can happen if there where a manual operations on the workers or the infrastructure is already pause.".to_string()),
-                });
+            return Err(EngineError::new_cluster_has_no_worker_nodes(event_details.clone()));
         }
 
-        let kubernetes_config_file_path = match self.get_kubeconfig_file_path() {
-            Ok(path) => path,
-            Err(e) => {
-                return Err(e.to_legacy_engine_error());
-            }
-        };
+        let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
 
         // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
         if self.get_engine_location() == EngineLocation::ClientSide {
@@ -847,14 +969,8 @@ impl<'a> EKS<'a> {
                                     match metric.value.parse::<i32>() {
                                         Ok(job_count) if job_count > 0 => current_engine_jobs += 1,
                                         Err(e) => {
-                                            error!(
-                                                "error while looking at the API metric value {}. {:?}",
-                                                metric_name, e
-                                            );
-                                            return OperationResult::Retry(SimpleError {
-                                                kind: SimpleErrorKind::Other,
-                                                message: Some(e.to_string()),
-                                            });
+                                            let safe_message = "Error while looking at the API metric value"; 
+                                            return OperationResult::Retry(EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), CommandError::new(format!("{}, error: {}", safe_message, e.to_string()), Some(safe_message.to_string()))));
                                         }
                                         _ => {}
                                     }
@@ -863,42 +979,29 @@ impl<'a> EKS<'a> {
                                 if current_engine_jobs == 0 {
                                     OperationResult::Ok(())
                                 } else {
-                                    OperationResult::Retry(SimpleError {
-                                        kind: SimpleErrorKind::Other,
-                                        message: Some("can't pause the infrastructure now, Engine jobs are currently running, retrying later...".to_string()),
-                                    })
+                                    OperationResult::Retry(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details.clone(), None))
                                 }
                             }
                             Err(e) => {
-                                error!("error while looking at the API metric value {}. {:?}", metric_name, e);
-                                OperationResult::Retry(e)
+                                OperationResult::Retry(
+                                    EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), e))
                             }
                         };
                     });
 
                     match wait_engine_job_finish {
                         Ok(_) => {
-                            info!("no current running jobs on the Engine, infrastructure pause is allowed to start")
+                            self.logger().log(LogLevel::Info, EngineEvent::Pausing(event_details.clone(), EventMessage::new_from_safe("No current running jobs on the Engine, infrastructure pause is allowed to start".to_string())));
                         }
                         Err(Operation { error, .. }) => {
-                            return Err(EngineError {
-                                cause: EngineErrorCause::Internal,
-                                scope: EngineErrorScope::Engine,
-                                execution_id: self.context.execution_id().to_string(),
-                                message: error.message,
-                            })
+                            return Err(error)
                         }
                         Err(retry::Error::Internal(msg)) => {
-                            return Err(EngineError::new(
-                                EngineErrorCause::Internal,
-                                EngineErrorScope::Engine,
-                                self.context.execution_id(),
-                                Some(msg),
-                            ))
+                            return Err(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details.clone(), Some(CommandError::new_from_safe_message(msg))))
                         }
                     }
                 }
-                false => warn!("The Engines are running Client side, but metric history flag is disabled. You will encounter issues during cluster lifecycles if you do not enable metric history"),
+                false => self.logger().log(LogLevel::Warning, EngineEvent::Pausing(event_details.clone(), EventMessage::new_from_safe("The Engines are running Client side, but metric history flag is disabled. You will encounter issues during cluster lifecycles if you do not enable metric history".to_string()))),
             }
         }
 
@@ -908,81 +1011,112 @@ impl<'a> EKS<'a> {
         }
         let terraform_args = terraform_args_string.iter().map(|x| &**x).collect();
 
-        let message = format!("Pausing EKS {} cluster deployment with id {}", self.name(), self.id());
-        info!("{}", &message);
-        self.send_to_customer(&message, &listeners_helper);
+        self.send_to_customer(
+            format!("Pausing EKS {} cluster deployment with id {}", self.name(), self.id()).as_str(),
+            &listeners_helper,
+        );
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Pausing(
+                event_details.clone(),
+                EventMessage::new_from_safe("Pausing EKS cluster deployment.".to_string()),
+            ),
+        );
 
-        match cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            terraform_exec(temp_dir.as_str(), terraform_args),
-        ) {
+        match terraform_exec(temp_dir.as_str(), terraform_args) {
             Ok(_) => {
                 let message = format!("Kubernetes cluster {} successfully paused", self.name());
-                info!("{}", &message);
                 self.send_to_customer(&message, &listeners_helper);
+                self.logger().log(
+                    LogLevel::Info,
+                    EngineEvent::Pausing(event_details.clone(), EventMessage::new_from_safe(message)),
+                );
                 Ok(())
             }
-            Err(e) => {
-                error!("Error while pausing cluster {} with id {}.", self.name(), self.id());
-                Err(e)
-            }
+            Err(e) => Err(EngineError::new_terraform_error_while_executing_pipeline(
+                event_details.clone(),
+                e,
+            )),
         }
     }
 
     fn pause_error(&self) -> Result<(), EngineError> {
-        Err(self.engine_error(
-            EngineErrorCause::Internal,
-            format!("{} Kubernetes cluster failed to pause", self.name()),
-        ))
+        self.logger().log(
+            LogLevel::Warning,
+            EngineEvent::Pausing(
+                self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
+                EventMessage::new_from_safe("EKS.pause_error() called.".to_string()),
+            ),
+        );
+
+        Ok(())
     }
 
     fn delete(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let mut skip_kubernetes_step = false;
+
         self.send_to_customer(
             format!("Preparing to delete EKS cluster {} with id {}", self.name(), self.id()).as_str(),
             &listeners_helper,
         );
+        self.logger().log(
+            LogLevel::Warning,
+            EngineEvent::Deleting(
+                event_details.clone(),
+                EventMessage::new_from_safe("Preparing to delete EKS cluster.".to_string()),
+            ),
+        );
 
-        let temp_dir = match self.get_temp_dir() {
-            Ok(dir) => dir,
-            Err(e) => return Err(e),
-        };
+        let temp_dir = self.get_temp_dir(event_details.clone())?;
 
         // generate terraform files and copy them into temp dir
         let context = self.tera_context()?;
 
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(
-                self.template_directory.as_str(),
-                temp_dir.as_str(),
-                &context,
-            ),
-        )?;
+        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+            self.template_directory.as_str(),
+            temp_dir.as_str(),
+            context,
+        ) {
+            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                event_details.clone(),
+                self.template_directory.to_string(),
+                temp_dir.to_string(),
+                e,
+            ));
+        }
 
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
+        let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::copy_non_template_files(
-                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
-                common_charts_temp_dir.as_str(),
-            ),
-        )?;
+        if let Err(e) =
+            crate::template::copy_non_template_files(bootstrap_charts_dir.to_string(), common_charts_temp_dir.as_str())
+        {
+            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                event_details.clone(),
+                bootstrap_charts_dir.to_string(),
+                common_charts_temp_dir.to_string(),
+                e,
+            ));
+        }
 
         let kubernetes_config_file_path = match self.get_kubeconfig_file_path() {
             Ok(x) => x,
             Err(e) => {
-                warn!(
-                    "skipping Kubernetes uninstall because it can't be reached. {:?}",
-                    e.message(),
+                let safe_message = "Skipping Kubernetes uninstall because it can't be reached.";
+                self.logger().log(
+                    LogLevel::Warning,
+                    EngineEvent::Deleting(
+                        event_details.clone(),
+                        EventMessage::new(
+                            format!("{}, error: {}", safe_message.to_string(), e.message()),
+                            Some(safe_message.to_string()),
+                        ),
+                    ),
                 );
+
                 skip_kubernetes_step = true;
                 "".to_string()
             }
@@ -995,16 +1129,28 @@ impl<'a> EKS<'a> {
             self.name(),
             self.id()
         );
-        info!("{}", &message);
         self.send_to_customer(&message, &listeners_helper);
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)),
+        );
 
-        info!("Running Terraform apply before running a delete");
-        if let Err(e) = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            cmd::terraform::terraform_init_validate_plan_apply(temp_dir.as_str(), false),
-        ) {
-            error!("An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy: {:?}", e.message);
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Deleting(
+                event_details.clone(),
+                EventMessage::new_from_safe("Running Terraform apply before running a delete.".to_string()),
+            ),
+        );
+        if let Err(e) = cmd::terraform::terraform_init_validate_plan_apply(temp_dir.as_str(), false) {
+            // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
+            self.logger().log(
+                LogLevel::Error,
+                EngineEvent::Error(EngineError::new_terraform_error_while_executing_pipeline(
+                    event_details.clone(),
+                    e,
+                )),
+            );
         };
 
         if !skip_kubernetes_step {
@@ -1014,7 +1160,10 @@ impl<'a> EKS<'a> {
                 self.name(),
                 self.id()
             );
-            info!("{}", &message);
+            self.logger().log(
+                LogLevel::Info,
+                EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message.to_string())),
+            );
             self.send_to_customer(&message, &listeners_helper);
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
@@ -1027,33 +1176,60 @@ impl<'a> EKS<'a> {
                     let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
                     let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
 
-                    info!("Deleting non Qovery namespaces");
+                    self.logger().log(
+                        LogLevel::Info,
+                        EngineEvent::Deleting(
+                            event_details.clone(),
+                            EventMessage::new_from_safe("Deleting non Qovery namespaces".to_string()),
+                        ),
+                    );
+
                     for namespace_to_delete in namespaces_to_delete.iter() {
-                        info!("Starting namespace {} deletion process", namespace_to_delete);
-                        let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
+                        match cmd::kubectl::kubectl_exec_delete_namespace(
                             &kubernetes_config_file_path,
                             namespace_to_delete,
                             self.cloud_provider().credentials_environment_variables(),
-                        );
-
-                        match deletion {
-                            Ok(_) => info!("Namespace {} is deleted", namespace_to_delete),
+                        ) {
+                            Ok(_) => self.logger().log(
+                                LogLevel::Info,
+                                EngineEvent::Deleting(
+                                    event_details.clone(),
+                                    EventMessage::new_from_safe(format!(
+                                        "Namespace `{}` deleted successfully.",
+                                        namespace_to_delete
+                                    )),
+                                ),
+                            ),
                             Err(e) => {
-                                if e.message.is_some() && e.message.unwrap().contains("not found") {
-                                    {}
-                                } else {
-                                    error!("Can't delete the namespace {}", namespace_to_delete);
+                                if !(e.message().contains("not found")) {
+                                    self.logger().log(
+                                        LogLevel::Error,
+                                        EngineEvent::Deleting(
+                                            event_details.clone(),
+                                            EventMessage::new_from_safe(format!(
+                                                "Can't delete the namespace `{}`",
+                                                namespace_to_delete
+                                            )),
+                                        ),
+                                    );
                                 }
                             }
                         }
                     }
                 }
-
-                Err(e) => error!(
-                    "Error while getting all namespaces for Kubernetes cluster {}: error {:?}",
-                    self.name_with_id(),
-                    e.message
-                ),
+                Err(e) => {
+                    let message_safe = format!(
+                        "Error while getting all namespaces for Kubernetes cluster {}",
+                        self.name_with_id(),
+                    );
+                    self.logger().log(
+                        LogLevel::Error,
+                        EngineEvent::Deleting(
+                            event_details.clone(),
+                            EventMessage::new(format!("{}, error: {}", message_safe, e.message(),), Some(message_safe)),
+                        ),
+                    );
+                }
             }
 
             let message = format!(
@@ -1061,8 +1237,11 @@ impl<'a> EKS<'a> {
                 self.name(),
                 self.id()
             );
-            info!("{}", &message);
             self.send_to_customer(&message, &listeners_helper);
+            self.logger().log(
+                LogLevel::Info,
+                EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)),
+            );
 
             // delete custom metrics api to avoid stale namespaces on deletion
             let _ = cmd::helm::helm_uninstall_list(
@@ -1076,28 +1255,23 @@ impl<'a> EKS<'a> {
             );
 
             // required to avoid namespace stuck on deletion
-            match uninstall_cert_manager(
+            uninstall_cert_manager(
                 &kubernetes_config_file_path,
                 self.cloud_provider().credentials_environment_variables(),
-            ) {
-                Ok(_) => {}
-                Err(e) => {
-                    return Err(EngineError::new(
-                        Internal,
-                        self.engine_error_scope(),
-                        self.context().execution_id(),
-                        e.message,
-                    ))
-                }
-            };
+                event_details.clone(),
+                self.logger(),
+            )?;
 
-            info!("Deleting Qovery managed helm charts");
+            self.logger().log(
+                LogLevel::Info,
+                EngineEvent::Deleting(
+                    event_details.clone(),
+                    EventMessage::new_from_safe("Deleting Qovery managed helm charts".to_string()),
+                ),
+            );
+
             let qovery_namespaces = get_qovery_managed_namespaces();
             for qovery_namespace in qovery_namespaces.iter() {
-                info!(
-                    "Starting Qovery managed charts deletion process in {} namespace",
-                    qovery_namespace
-                );
                 let charts_to_delete = cmd::helm::helm_list(
                     &kubernetes_config_file_path,
                     self.cloud_provider().credentials_environment_variables(),
@@ -1106,49 +1280,99 @@ impl<'a> EKS<'a> {
                 match charts_to_delete {
                     Ok(charts) => {
                         for chart in charts {
-                            info!("Deleting chart {} in {} namespace", chart.name, chart.namespace);
                             match cmd::helm::helm_exec_uninstall(
                                 &kubernetes_config_file_path,
                                 &chart.namespace,
                                 &chart.name,
                                 self.cloud_provider().credentials_environment_variables(),
                             ) {
-                                Ok(_) => info!("chart {} deleted", chart.name),
-                                Err(e) => error!("{:?}", e),
+                                Ok(_) => self.logger().log(
+                                    LogLevel::Info,
+                                    EngineEvent::Deleting(
+                                        event_details.clone(),
+                                        EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
+                                    ),
+                                ),
+                                Err(e) => {
+                                    let message_safe = format!("Can't delete chart `{}`", chart.name);
+                                    self.logger().log(
+                                        LogLevel::Error,
+                                        EngineEvent::Deleting(
+                                            event_details.clone(),
+                                            EventMessage::new(
+                                                format!("{}, error: {}", message_safe, e.message()),
+                                                Some(message_safe),
+                                            ),
+                                        ),
+                                    )
+                                }
                             }
                         }
                     }
                     Err(e) => {
-                        if e.message.is_some() && e.message.unwrap().contains("not found") {
-                            {}
-                        } else {
-                            error!("Can't delete the namespace {}", qovery_namespace);
+                        if !(e.message().contains("not found")) {
+                            self.logger().log(
+                                LogLevel::Error,
+                                EngineEvent::Deleting(
+                                    event_details.clone(),
+                                    EventMessage::new_from_safe(format!(
+                                        "Can't delete the namespace {}",
+                                        qovery_namespace
+                                    )),
+                                ),
+                            )
                         }
                     }
                 }
             }
 
-            info!("Deleting Qovery managed Namespaces");
+            self.logger().log(
+                LogLevel::Info,
+                EngineEvent::Deleting(
+                    event_details.clone(),
+                    EventMessage::new_from_safe("Deleting Qovery managed namespaces".to_string()),
+                ),
+            );
+
             for qovery_namespace in qovery_namespaces.iter() {
-                info!("Starting namespace {} deletion process", qovery_namespace);
                 let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
                     &kubernetes_config_file_path,
                     qovery_namespace,
                     self.cloud_provider().credentials_environment_variables(),
                 );
                 match deletion {
-                    Ok(_) => info!("Namespace {} is fully deleted", qovery_namespace),
+                    Ok(_) => self.logger().log(
+                        LogLevel::Info,
+                        EngineEvent::Deleting(
+                            event_details.clone(),
+                            EventMessage::new_from_safe(format!("Namespace {} is fully deleted", qovery_namespace)),
+                        ),
+                    ),
                     Err(e) => {
-                        if e.message.is_some() && e.message.unwrap().contains("not found") {
-                            {}
-                        } else {
-                            error!("Can't delete the namespace {}", qovery_namespace);
+                        if !(e.message().contains("not found")) {
+                            self.logger().log(
+                                LogLevel::Error,
+                                EngineEvent::Deleting(
+                                    event_details.clone(),
+                                    EventMessage::new_from_safe(format!(
+                                        "Can't delete namespace {}.",
+                                        qovery_namespace
+                                    )),
+                                ),
+                            )
                         }
                     }
                 }
             }
 
-            info!("Delete all remaining deployed helm applications");
+            self.logger().log(
+                LogLevel::Info,
+                EngineEvent::Deleting(
+                    event_details.clone(),
+                    EventMessage::new_from_safe("Delete all remaining deployed helm applications".to_string()),
+                ),
+            );
+
             match cmd::helm::helm_list(
                 &kubernetes_config_file_path,
                 self.cloud_provider().credentials_environment_variables(),
@@ -1156,60 +1380,109 @@ impl<'a> EKS<'a> {
             ) {
                 Ok(helm_charts) => {
                     for chart in helm_charts {
-                        info!("Deleting chart {} in progress...", chart.name);
-                        let _ = cmd::helm::helm_uninstall_list(
+                        match cmd::helm::helm_uninstall_list(
                             &kubernetes_config_file_path,
-                            vec![chart],
+                            vec![chart.clone()],
                             self.cloud_provider().credentials_environment_variables(),
-                        );
+                        ) {
+                            Ok(_) => self.logger().log(
+                                LogLevel::Info,
+                                EngineEvent::Deleting(
+                                    event_details.clone(),
+                                    EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
+                                ),
+                            ),
+                            Err(e) => {
+                                let message_safe = format!("Error deleting chart `{}` deleted", chart.name);
+                                self.logger().log(
+                                    LogLevel::Error,
+                                    EngineEvent::Deleting(
+                                        event_details.clone(),
+                                        EventMessage::new(
+                                            format!(
+                                                "{}, error: {}",
+                                                message_safe,
+                                                e.message.unwrap_or("no error message".to_string())
+                                            ),
+                                            Some(message_safe),
+                                        ),
+                                    ),
+                                )
+                            }
+                        }
                     }
                 }
-                Err(_) => error!("Unable to get helm list"),
+                Err(e) => {
+                    let message_safe = "Unable to get helm list";
+                    self.logger().log(
+                        LogLevel::Error,
+                        EngineEvent::Deleting(
+                            event_details.clone(),
+                            EventMessage::new(
+                                format!("{}, error: {}", message_safe, e.message()),
+                                Some(message_safe.to_string()),
+                            ),
+                        ),
+                    )
+                }
             }
         };
 
         let message = format!("Deleting Kubernetes cluster {}/{}", self.name(), self.id());
-        info!("{}", &message);
         self.send_to_customer(&message, &listeners_helper);
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)),
+        );
 
-        info!("Running Terraform destroy");
-        let terraform_result =
-            retry::retry(
-                Fibonacci::from_millis(60000).take(3),
-                || match cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false),
-                ) {
-                    Ok(_) => OperationResult::Ok(()),
-                    Err(e) => OperationResult::Retry(e),
-                },
-            );
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Deleting(
+                event_details.clone(),
+                EventMessage::new_from_safe("Running Terraform destroy".to_string()),
+            ),
+        );
 
-        match terraform_result {
+        match retry::retry(Fibonacci::from_millis(60000).take(3), || {
+            match cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
+                Ok(_) => OperationResult::Ok(()),
+                Err(e) => OperationResult::Retry(e),
+            }
+        }) {
             Ok(_) => {
-                let message = format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id());
-                info!("{}", &message);
-                self.send_to_customer(&message, &listeners_helper);
+                self.send_to_customer(
+                    format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id()).as_str(),
+                    &listeners_helper,
+                );
+                self.logger().log(
+                    LogLevel::Info,
+                    EngineEvent::Deleting(
+                        event_details.clone(),
+                        EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),
+                    ),
+                );
                 Ok(())
             }
-            Err(Operation { error, .. }) => Err(error),
-            Err(retry::Error::Internal(msg)) => Err(EngineError::new(
-                EngineErrorCause::Internal,
-                self.engine_error_scope(),
-                self.context().execution_id(),
-                Some(format!(
-                    "Error while deleting cluster {} with id {}: {}",
-                    self.name(),
-                    self.id(),
-                    msg
-                )),
+            Err(Operation { error, .. }) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
+                event_details.clone(),
+                error,
+            )),
+            Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
+                event_details.clone(),
+                CommandError::new(msg, None),
             )),
         }
     }
 
     fn delete_error(&self) -> Result<(), EngineError> {
-        // FIXME What should we do if something goes wrong while deleting the cluster?
+        self.logger().log(
+            LogLevel::Warning,
+            EngineEvent::Deleting(
+                self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete)),
+                EventMessage::new_from_safe("EKS.delete_error() called.".to_string()),
+            ),
+        );
+
         Ok(())
     }
 
@@ -1271,7 +1544,7 @@ impl<'a> Kubernetes for EKS<'a> {
         &self.s3
     }
 
-    fn is_valid(&self) -> Result<(), NewEngineError> {
+    fn is_valid(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
@@ -1298,7 +1571,9 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         let listeners_helper = ListenersHelper::new(&self.listeners);
+
         self.send_to_customer(
             format!(
                 "Start preparing EKS upgrade process {} cluster with id {}",
@@ -1308,16 +1583,15 @@ impl<'a> Kubernetes for EKS<'a> {
             .as_str(),
             &listeners_helper,
         );
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Deploying(
+                event_details.clone(),
+                EventMessage::new_from_safe("Start preparing EKS cluster upgrade process".to_string()),
+            ),
+        );
 
-        let temp_dir = match self.get_temp_dir() {
-            Ok(dir) => dir,
-            Err(e) => return Err(e),
-        };
-
-        let kubeconfig = match self.get_kubeconfig_file() {
-            Ok((path, _)) => path,
-            Err(e) => return Err(e.to_legacy_engine_error()),
-        };
+        let temp_dir = self.get_temp_dir(event_details.clone())?;
 
         // generate terraform files and copy them into temp dir
         let mut context = self.tera_context()?;
@@ -1327,13 +1601,22 @@ impl<'a> Kubernetes for EKS<'a> {
         //
         match &kubernetes_upgrade_status.required_upgrade_on {
             Some(KubernetesNodesType::Masters) => {
-                let message = format!(
-                    "Start upgrading process for master nodes on {}/{}",
-                    self.name(),
-                    self.id()
+                self.send_to_customer(
+                    format!(
+                        "Start upgrading process for master nodes on {}/{}",
+                        self.name(),
+                        self.id()
+                    )
+                    .as_str(),
+                    &listeners_helper,
                 );
-                info!("{}", &message);
-                self.send_to_customer(&message, &listeners_helper);
+                self.logger().log(
+                    LogLevel::Info,
+                    EngineEvent::Deploying(
+                        event_details.clone(),
+                        EventMessage::new_from_safe("Start upgrading process for master nodes.".to_string()),
+                    ),
+                );
 
                 // AWS requires the upgrade to be done in 2 steps (masters, then workers)
                 // use the current kubernetes masters' version for workers, in order to avoid migration in one step
@@ -1347,59 +1630,94 @@ impl<'a> Kubernetes for EKS<'a> {
                     format!("{}", &kubernetes_upgrade_status.deployed_masters_version).as_str(),
                 );
 
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::generate_and_copy_all_files_into_dir(
-                        self.template_directory.as_str(),
-                        temp_dir.as_str(),
-                        &context,
-                    ),
-                )?;
+                if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+                    self.template_directory.as_str(),
+                    temp_dir.as_str(),
+                    context.clone(),
+                ) {
+                    return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                        event_details.clone(),
+                        self.template_directory.to_string(),
+                        temp_dir.to_string(),
+                        e,
+                    ));
+                }
 
                 let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-                let _ = cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    crate::template::copy_non_template_files(
-                        format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
-                        common_charts_temp_dir.as_str(),
-                    ),
-                )?;
+                let common_bootstrap_charts = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
+                if let Err(e) = crate::template::copy_non_template_files(
+                    common_bootstrap_charts.as_str(),
+                    common_charts_temp_dir.as_str(),
+                ) {
+                    return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                        event_details.clone(),
+                        common_bootstrap_charts.to_string(),
+                        common_charts_temp_dir.to_string(),
+                        e,
+                    ));
+                }
 
                 self.send_to_customer(
                     format!("Upgrading Kubernetes {} master nodes", self.name()).as_str(),
                     &listeners_helper,
                 );
+                self.logger().log(
+                    LogLevel::Info,
+                    EngineEvent::Deploying(
+                        event_details.clone(),
+                        EventMessage::new_from_safe("Upgrading Kubernetes master nodes.".to_string()),
+                    ),
+                );
 
-                match cast_simple_error_to_engine_error(
-                    self.engine_error_scope(),
-                    self.context.execution_id(),
-                    terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
-                ) {
+                match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
                     Ok(_) => {
-                        let message = format!(
-                            "Kubernetes {} master nodes have been successfully upgraded",
-                            self.name()
+                        self.send_to_customer(
+                            format!(
+                                "Kubernetes {} master nodes have been successfully upgraded",
+                                self.name()
+                            )
+                            .as_str(),
+                            &listeners_helper,
                         );
-                        info!("{}", &message);
-                        self.send_to_customer(&message, &listeners_helper);
+                        self.logger().log(
+                            LogLevel::Info,
+                            EngineEvent::Deploying(
+                                event_details.clone(),
+                                EventMessage::new_from_safe(
+                                    "Kubernetes master nodes have been successfully upgraded.".to_string(),
+                                ),
+                            ),
+                        );
                     }
                     Err(e) => {
-                        error!(
-                            "Error while upgrading master nodes for cluster {} with id {}.",
-                            self.name(),
-                            self.id()
-                        );
-                        return Err(e);
+                        return Err(EngineError::new_terraform_error_while_executing_pipeline(
+                            event_details.clone(),
+                            e,
+                        ));
                     }
                 }
             }
             Some(KubernetesNodesType::Workers) => {
-                info!("No need to perform Kubernetes master upgrade, they are already up to date")
+                self.logger().log(
+                    LogLevel::Info,
+                    EngineEvent::Deploying(
+                        event_details.clone(),
+                        EventMessage::new_from_safe(
+                            "No need to perform Kubernetes master upgrade, they are already up to date.".to_string(),
+                        ),
+                    ),
+                );
             }
             None => {
-                info!("No Kubernetes upgrade required, masters and workers are already up to date");
+                self.logger().log(
+                    LogLevel::Info,
+                    EngineEvent::Deploying(
+                        event_details.clone(),
+                        EventMessage::new_from_safe(
+                            "No Kubernetes upgrade required, masters and workers are already up to date.".to_string(),
+                        ),
+                    ),
+                );
                 return Ok(());
             }
         }
@@ -1409,25 +1727,30 @@ impl<'a> Kubernetes for EKS<'a> {
             None,
             Some(3),
             self.cloud_provider().credentials_environment_variables(),
+            Stage::Infrastructure(InfrastructureStep::Upgrade),
         ) {
-            error!(
-                "Error while upgrading nodes for cluster {} with id {}. {}",
-                self.name(),
-                self.id(),
-                e.message.clone().unwrap_or("Can't get error message".to_string()),
-            );
+            self.logger().log(LogLevel::Error, EngineEvent::Error(e.clone()));
             return Err(e);
-        };
+        }
 
         //
         // Upgrade worker nodes
         //
-        let message = format!(
-            "Preparing workers nodes for upgrade for Kubernetes cluster {}",
-            self.name()
+        self.send_to_customer(
+            format!(
+                "Preparing workers nodes for upgrade for Kubernetes cluster {}",
+                self.name()
+            )
+            .as_str(),
+            &listeners_helper,
         );
-        info!("{}", &message);
-        self.send_to_customer(message.as_str(), &listeners_helper);
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Deploying(
+                event_details.clone(),
+                EventMessage::new_from_safe("Preparing workers nodes for upgrade for Kubernetes cluster.".to_string()),
+            ),
+        );
 
         // disable cluster autoscaler to avoid interfering with AWS upgrade procedure
         context.insert("enable_cluster_autoscaler", &false);
@@ -1436,108 +1759,82 @@ impl<'a> Kubernetes for EKS<'a> {
             format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
         );
 
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(
-                self.template_directory.as_str(),
-                temp_dir.as_str(),
-                &context,
-            ),
-        )?;
+        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+            self.template_directory.as_str(),
+            temp_dir.as_str(),
+            context.clone(),
+        ) {
+            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                event_details.clone(),
+                self.template_directory.to_string(),
+                temp_dir.to_string(),
+                e,
+            ));
+        }
 
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::copy_non_template_files(
-                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
-                common_charts_temp_dir.as_str(),
+        let common_bootstrap_charts = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
+        if let Err(e) =
+            crate::template::copy_non_template_files(common_bootstrap_charts.as_str(), common_charts_temp_dir.as_str())
+        {
+            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                event_details.clone(),
+                common_bootstrap_charts.to_string(),
+                common_charts_temp_dir.to_string(),
+                e,
+            ));
+        }
+
+        self.send_to_customer(
+            format!("Upgrading Kubernetes {} worker nodes", self.name()).as_str(),
+            &listeners_helper,
+        );
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Deploying(
+                event_details.clone(),
+                EventMessage::new_from_safe("Upgrading Kubernetes worker nodes.".to_string()),
             ),
-        )?;
+        );
 
-        let message = format!("Upgrading Kubernetes {} worker nodes", self.name());
-        info!("{}", &message);
-        self.send_to_customer(message.as_str(), &listeners_helper);
+        // Disable cluster autoscaler deployment
+        let _ = self.set_cluster_autoscaler_replicas(event_details.clone(), 0)?;
 
-        // disable cluster autoscaler deployment
-        info!("down-scaling cluster autoscaler to 0");
-        match kubectl_exec_scale_replicas(
-            &kubeconfig,
-            self.cloud_provider().credentials_environment_variables(),
-            "kube-system",
-            ScalingKind::Deployment,
-            "cluster-autoscaler-aws-cluster-autoscaler",
-            0,
-        ) {
-            Ok(_) => {}
-            Err(e) => {
-                return Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context.execution_id().to_string(),
-                    message: e.message,
-                })
-            }
-        };
-
-        match cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()),
-        ) {
+        match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
             Ok(_) => {
-                let message = format!(
-                    "Kubernetes {} workers nodes have been successfully upgraded",
-                    self.name()
+                self.send_to_customer(
+                    format!(
+                        "Kubernetes {} workers nodes have been successfully upgraded",
+                        self.name()
+                    )
+                    .as_str(),
+                    &listeners_helper,
                 );
-                info!("{}", &message);
-                self.send_to_customer(&message, &listeners_helper);
+                self.logger().log(
+                    LogLevel::Info,
+                    EngineEvent::Deploying(
+                        event_details.clone(),
+                        EventMessage::new_from_safe(
+                            "Kubernetes workers nodes have been successfully upgraded.".to_string(),
+                        ),
+                    ),
+                );
             }
             Err(e) => {
                 // enable cluster autoscaler deployment
-                info!("up-scaling cluster autoscaler to 1");
-                let _ = kubectl_exec_scale_replicas(
-                    &kubeconfig,
-                    self.cloud_provider().credentials_environment_variables(),
-                    "kube-system",
-                    ScalingKind::Deployment,
-                    "cluster-autoscaler-aws-cluster-autoscaler",
-                    1,
-                );
-                error!(
-                    "Error while upgrading master nodes for cluster {} with id {}.",
-                    self.name(),
-                    self.id()
-                );
-                return Err(e);
+                let _ = self.set_cluster_autoscaler_replicas(event_details.clone(), 1)?;
+
+                return Err(EngineError::new_terraform_error_while_executing_pipeline(
+                    event_details.clone(),
+                    e,
+                ));
             }
         }
 
         // enable cluster autoscaler deployment
-        info!("up-scaling cluster autoscaler to 1");
-        match kubectl_exec_scale_replicas(
-            &kubeconfig,
-            self.cloud_provider().credentials_environment_variables(),
-            "kube-system",
-            ScalingKind::Deployment,
-            "cluster-autoscaler-aws-cluster-autoscaler",
-            1,
-        ) {
-            Ok(_) => {}
-            Err(e) => {
-                return Err(EngineError {
-                    cause: EngineErrorCause::Internal,
-                    scope: EngineErrorScope::Engine,
-                    execution_id: self.context.execution_id().to_string(),
-                    message: e.message,
-                })
-            }
-        };
-
-        Ok(())
+        self.set_cluster_autoscaler_replicas(event_details.clone(), 1)
     }
 
     #[named]
@@ -1642,24 +1939,26 @@ impl<'a> Kubernetes for EKS<'a> {
 
     #[named]
     fn deploy_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
         );
-        kubernetes::deploy_environment_error(self, environment)
+        kubernetes::deploy_environment_error(self, environment, event_details)
     }
 
     #[named]
     fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
         );
-        kubernetes::pause_environment(self, environment)
+        kubernetes::pause_environment(self, environment, event_details)
     }
 
     #[named]
@@ -1675,13 +1974,14 @@ impl<'a> Kubernetes for EKS<'a> {
 
     #[named]
     fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
         );
-        kubernetes::delete_environment(self, environment)
+        kubernetes::delete_environment(self, environment, event_details)
     }
 
     #[named]

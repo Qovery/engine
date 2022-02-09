@@ -8,8 +8,9 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::utilities::{check_cname_for, print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
-use crate::error::{cast_simple_error_to_engine_error, EngineError, EngineErrorCause, EngineErrorScope};
-use crate::events::{ToTransmitter, Transmitter};
+use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
+use crate::errors::EngineError as NewEngineError;
+use crate::events::{EnvironmentStep, Stage, ToTransmitter, Transmitter};
 use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
 
@@ -262,6 +263,7 @@ impl Create for Router {
             function_name!(),
             self.name(),
         );
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
 
@@ -278,27 +280,32 @@ impl Create for Router {
         let context = self.tera_context(target)?;
 
         let from_dir = format!("{}/scaleway/charts/q-ingress-tls", self.context.lib_root_dir());
-        let _ = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::template::generate_and_copy_all_files_into_dir(from_dir.as_str(), workspace_dir.as_str(), &context),
-        )?;
+        if let Err(e) =
+            crate::template::generate_and_copy_all_files_into_dir(from_dir.as_str(), workspace_dir.as_str(), context)
+        {
+            return Err(NewEngineError::new_cannot_copy_files_from_one_directory_to_another(
+                event_details.clone(),
+                from_dir.to_string(),
+                workspace_dir.to_string(),
+                e,
+            )
+            .to_legacy_engine_error());
+        }
 
         // do exec helm upgrade and return the last deployment status
-        let helm_history_row = cast_simple_error_to_engine_error(
-            self.engine_error_scope(),
-            self.context.execution_id(),
-            crate::cmd::helm::helm_exec_with_upgrade_history(
-                kubernetes_config_file_path.as_str(),
-                environment.namespace(),
-                helm_release_name.as_str(),
-                self.selector(),
-                workspace_dir.as_str(),
-                self.start_timeout(),
-                kubernetes.cloud_provider().credentials_environment_variables(),
-                self.service_type(),
-            ),
-        )?;
+        let helm_history_row = crate::cmd::helm::helm_exec_with_upgrade_history(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            helm_release_name.as_str(),
+            self.selector(),
+            workspace_dir.as_str(),
+            self.start_timeout(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
+            self.service_type(),
+        )
+        .map_err(|e| {
+            NewEngineError::new_helm_charts_upgrade_error(event_details.clone(), e).to_legacy_engine_error()
+        })?;
 
         if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
             return Err(self.engine_error(EngineErrorCause::Internal, "Router has failed to be deployed".into()));
@@ -380,13 +387,14 @@ impl Pause for Router {
 impl Delete for Router {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
         );
-        delete_router(target, self, false)
+        delete_router(target, self, false, event_details)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -395,12 +403,13 @@ impl Delete for Router {
 
     #[named]
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
         );
-        delete_router(target, self, true)
+        delete_router(target, self, true, event_details)
     }
 }
