@@ -649,7 +649,7 @@ datasources:
             path: chart_path("common/charts/ingress-nginx"),
             namespace: HelmChartNamespaces::NginxIngress,
             // Because of NLB, svc can take some time to start
-            timeout_in_seconds: 300,
+            timeout_in_seconds: 800,
             values_files: vec![chart_path("chart_values/nginx-ingress.yaml")],
             values: vec![
                 // Controller resources limits
