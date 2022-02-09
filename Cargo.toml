@@ -55,14 +55,14 @@ serde_json = "1.0.64"
 serde_derive = "1.0.126"
 # AWS deps
 tokio = { version = "1.10.0", features = ["full"] }
-rusoto_core = "0.46.0"
-rusoto_sts = "0.46.0"
-rusoto_credential = "0.46.0"
-rusoto_ecr = "0.46.0"
-rusoto_eks = "0.46.0"
-rusoto_s3 = "0.46.0"
-rusoto_dynamodb = "0.46.0"
-rusoto_iam = "0.46.0"
+rusoto_core = "0.47.0"
+rusoto_sts = "0.47.0"
+rusoto_credential = "0.47.0"
+rusoto_ecr = "0.47.0"
+rusoto_eks = "0.47.0"
+rusoto_s3 = "0.47.0"
+rusoto_dynamodb = "0.47.0"
+rusoto_iam = "0.47.0"
 
 # Digital Ocean Deps
 digitalocean = "0.1.1"
