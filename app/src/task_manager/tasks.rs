@@ -1,9 +1,11 @@
 use std::borrow::{Borrow, Cow};
 use std::fs;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use crossbeam_channel::Sender;
+use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 
 use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use qovery_engine::logger::Logger;
@@ -167,6 +169,9 @@ impl Task for InfrastructureTask {
             sender,
         );
 
+        let region = kubernetes.region();
+        let aws_region = AwsRegion::from_str(region.as_str()).expect("Invalid AWS region");
+
         match qovery_engine::fs::create_workspace_archive(
             engine.context().workspace_root_dir(),
             engine.context().execution_id(),
@@ -176,6 +181,7 @@ impl Task for InfrastructureTask {
                 &self.context,
                 self.request.archive.as_ref(),
                 file.as_str(),
+                aws_region,
             ) {
                 Ok(_) => {
                     let _ = fs::remove_file(file).map_err(|err| error!("Cannot delete file {}", err));
@@ -367,6 +373,9 @@ impl Task for EnvironmentTask {
             sender,
         );
 
+        let region = kubernetes.region();
+        let aws_region = AwsRegion::from_str(region.as_str()).expect("Invalid AWS region");
+
         match qovery_engine::fs::create_workspace_archive(
             engine.context().workspace_root_dir(),
             engine.context().execution_id(),
@@ -376,6 +385,7 @@ impl Task for EnvironmentTask {
                 &self.context,
                 self.request.archive.as_ref(),
                 file.as_str(),
+                aws_region,
             ) {
                 Ok(_) => {
                     let _ = fs::remove_file(file).map_err(|err| error!("Cannot remove file {}", err));
@@ -699,6 +709,7 @@ fn upload_s3_file(
     context: &Context,
     archive: Option<&Archive>,
     file_path: &str,
+    region: AwsRegion,
 ) -> Result<(), EngineError> {
     let archive = match archive {
         Some(archive) => archive,
@@ -726,6 +737,9 @@ fn upload_s3_file(
         "archive-s3".to_string(),
         archive.access_key_id.to_string(),
         archive.secret_access_key.to_string(),
+        region,
+        true,
+        context.resource_expiration_in_seconds(),
     );
 
     match s3.put(archive.bucket_name.as_str(), object_key.as_str(), file_path) {

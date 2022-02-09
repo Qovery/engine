@@ -1,5 +1,5 @@
 use crate::nats;
-use qovery_engine::errors::EngineError;
+use qovery_engine::errors::{CommandError, EngineError};
 use qovery_engine::events::io::EngineEvent as EngineEventIo;
 use qovery_engine::events::EngineEvent;
 use qovery_engine::logger::{LogLevel, Logger, StdIoLogger};
@@ -39,8 +39,10 @@ impl Logger for NatsLogger {
                             event_details.clone(),
                             error_message_qovery,
                             error_message_user,
-                            Some(message_raw),
-                            Some(message_safe.to_string()),
+                            Some(CommandError::new(
+                                message_raw.to_string(),
+                                Some(message_safe.to_string()),
+                            )),
                             None,
                             None,
                         )),
@@ -56,8 +58,10 @@ impl Logger for NatsLogger {
                         event_details.clone(),
                         error_message_qovery,
                         error_message_user,
-                        Some(message_raw),
-                        Some(message_safe.to_string()),
+                        Some(CommandError::new(
+                            message_raw.to_string(),
+                            Some(message_safe.to_string()),
+                        )),
                         None,
                         None,
                     )),

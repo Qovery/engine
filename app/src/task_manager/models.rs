@@ -246,7 +246,7 @@ impl Kubernetes {
                 logger,
             ) {
                 Ok(res) => Ok(Box::new(res)),
-                Err(e) => Err(e),
+                Err(e) => Err(e.to_legacy_engine_error()),
             },
             qovery_engine::cloud_provider::kubernetes::Kind::Doks => match DOKS::new(
                 context.clone(),
@@ -266,7 +266,7 @@ impl Kubernetes {
                 logger,
             ) {
                 Ok(res) => Ok(Box::new(res)),
-                Err(e) => Err(e),
+                Err(e) => Err(e.to_legacy_engine_error()),
             },
             qovery_engine::cloud_provider::kubernetes::Kind::ScwKapsule => match Kapsule::new(
                 context.clone(),
