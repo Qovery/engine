@@ -11,7 +11,7 @@ metadata:
     appId: {{ id }}
     app: {{ sanitized_name }}
 spec:
-  minAvailable: 1
+  minAvailable: {%- if max_instances <= 1 %} 10% {% else %} 0 {%- endif %}
   selector:
     matchLabels:
       ownerId: {{ owner_id }}
