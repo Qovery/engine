@@ -206,6 +206,7 @@ impl<'a> Kapsule<'a> {
     }
 
     fn tera_context(&self) -> Result<TeraContext, EngineError> {
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
         let mut context = TeraContext::new();
 
         // Scaleway
