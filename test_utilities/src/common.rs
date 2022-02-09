@@ -44,6 +44,11 @@ use std::path::Path;
 use std::str::FromStr;
 use tracing::{span, Level};
 
+pub enum RegionActivationStatus {
+    Deactivated,
+    Activated,
+}
+
 pub enum ClusterDomain {
     Default,
     Custom(String),
