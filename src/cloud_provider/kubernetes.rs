@@ -411,7 +411,7 @@ pub fn deploy_environment(
 
         // check all deployed services
         let _ = service::check_kubernetes_service_error(
-            service.on_create_check(),
+            service.exec_check_action(),
             kubernetes,
             service,
             event_details.clone(),
@@ -449,11 +449,11 @@ pub fn deploy_environment(
 
         // check all deployed services
         let _ = service::check_kubernetes_service_error(
-            service.on_create_check(),
+            service.exec_check_action(),
             kubernetes,
             service,
             event_details.clone(),
-            &stateful_deployment_target,
+            &stateless_deployment_target,
             &listeners_helper,
             "check deployment",
             CheckAction::Deploy,
