@@ -641,7 +641,7 @@ pub fn delete_environment(
             &listeners_helper,
             "delete",
             CheckAction::Delete,
-        )?;
+        );
     }
 
     // Quick fix: adding 100 ms delay to avoid race condition on service status update

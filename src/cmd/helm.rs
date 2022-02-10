@@ -495,7 +495,7 @@ where
     P: AsRef<Path>,
 {
     let mut output_string = String::new();
-    helm_exec_with_output(
+    let _ = helm_exec_with_output(
         // WARN: do not add argument --debug, otherwise JSON decoding will not work
         vec![
             "history",
@@ -516,7 +516,7 @@ where
                 error!("{}", line)
             }
         },
-    )?;
+    );
 
     // TODO better check, release not found
 
