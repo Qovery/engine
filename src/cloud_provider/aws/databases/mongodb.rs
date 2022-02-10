@@ -353,7 +353,7 @@ impl Delete for MongoDB {
             self.name(),
         );
 
-        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
+        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
             delete_stateful_service(target, self, event_details.clone())
         })
     }
