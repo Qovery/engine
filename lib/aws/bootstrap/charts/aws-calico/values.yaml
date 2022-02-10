@@ -7,7 +7,7 @@ podSecurityPolicy:
   create: false
 
 calico:
-  tag: v3.13.4
+  tag: v3.19.1
 
   typha:
     logseverity: Info #Debug, Info, Warning, Error, Fatal
@@ -22,6 +22,8 @@ calico:
     tolerations: []
     nodeSelector:
       beta.kubernetes.io/os: linux
+    podAnnotations: {}
+    podLabels: {}
   node:
     logseverity: Info #Debug, Info, Warning, Error, Fatal
     image: quay.io/calico/node
@@ -37,6 +39,8 @@ calico:
     #   value: 'some value'
     nodeSelector:
       beta.kubernetes.io/os: linux
+    podAnnotations: {}
+    podLabels: {}
   typha_autoscaler:
     resources:
       requests:
@@ -48,7 +52,9 @@ calico:
     tolerations: []
     nodeSelector:
       beta.kubernetes.io/os: linux
+    podAnnotations: {}
+    podLabels: {}
 
 autoscaler:
-  tag: "1.7.1"
-  image: k8s.gcr.io/cluster-proportional-autoscaler-amd64
+  tag: "1.8.3"
+  image: k8s.gcr.io/cpa/cluster-proportional-autoscaler-amd64
