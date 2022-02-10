@@ -56,8 +56,8 @@ resource "helm_release" "elasticache_instance_external_name" {
   }
 
   set {
-    name= "publicly_accessible"
-    value= {{ publicly_accessible }}
+    name = "publicly_accessible"
+    value = var.publicly_accessible
   }
 
   depends_on = [
