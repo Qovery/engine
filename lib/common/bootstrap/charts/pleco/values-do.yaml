@@ -21,6 +21,8 @@ doFeatures:
   lb: true
   db: true
   volume: true
+  firewall: true
+  vpc: true
 
 resources:
   limits:
