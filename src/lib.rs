@@ -1,10 +1,11 @@
+#![allow(deprecated)]
+
 extern crate tera;
 #[macro_use]
 extern crate tracing;
 extern crate trust_dns_resolver;
 
 pub mod build_platform;
-#[allow(deprecated)]
 pub mod cloud_provider;
 pub mod cmd;
 pub mod constants;

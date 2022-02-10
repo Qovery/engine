@@ -5,7 +5,7 @@ pub mod io;
 extern crate url;
 
 use crate::cloud_provider::Kind;
-use crate::errors::EngineError;
+use crate::errors::{CommandError, EngineError};
 use crate::models::QoveryIdentifier;
 use std::fmt::{Display, Formatter};
 
@@ -19,7 +19,7 @@ pub enum EngineEvent {
     /// Warning: represents a warning message event.
     Warning(EventDetails, EventMessage),
     /// Error: represents an error event.
-    Error(EngineError),
+    Error(EngineError, Option<EventMessage>),
     /// Waiting: represents an engine waiting event.
     ///
     /// Engine is waiting for a task to be done.
@@ -52,7 +52,7 @@ impl EngineEvent {
             EngineEvent::Debug(details, _message) => details,
             EngineEvent::Info(details, _message) => details,
             EngineEvent::Warning(details, _message) => details,
-            EngineEvent::Error(engine_error) => engine_error.event_details(),
+            EngineEvent::Error(engine_error, _message) => engine_error.event_details(),
             EngineEvent::Waiting(details, _message) => details,
             EngineEvent::Deploying(details, _message) => details,
             EngineEvent::Pausing(details, _message) => details,
@@ -69,7 +69,7 @@ impl EngineEvent {
             EngineEvent::Debug(_details, message) => message.message(message_verbosity),
             EngineEvent::Info(_details, message) => message.message(message_verbosity),
             EngineEvent::Warning(_details, message) => message.message(message_verbosity),
-            EngineEvent::Error(engine_error) => engine_error.message(),
+            EngineEvent::Error(engine_error, _message) => engine_error.message(),
             EngineEvent::Waiting(_details, message) => message.message(message_verbosity),
             EngineEvent::Deploying(_details, message) => message.message(message_verbosity),
             EngineEvent::Pausing(_details, message) => message.message(message_verbosity),
@@ -142,6 +142,12 @@ impl EventMessage {
     }
 }
 
+impl From<CommandError> for EventMessage {
+    fn from(e: CommandError) -> Self {
+        EventMessage::new(e.message_raw(), e.message_safe())
+    }
+}
+
 impl Display for EventMessage {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.message(EventMessageVerbosity::SafeOnly).as_str()) // By default, expose only the safe message.
@@ -193,6 +199,8 @@ pub enum GeneralStep {
     RetrieveClusterConfig,
     /// RetrieveClusterResources: retrieving cluster resources
     RetrieveClusterResources,
+    /// UnderMigration: error migration hasn't been completed yet.
+    UnderMigration,
 }
 
 impl Display for GeneralStep {
@@ -204,6 +212,7 @@ impl Display for GeneralStep {
                 GeneralStep::RetrieveClusterConfig => "retrieve-cluster-config",
                 GeneralStep::RetrieveClusterResources => "retrieve-cluster-resources",
                 GeneralStep::ValidateSystemRequirements => "validate-system-requirements",
+                GeneralStep::UnderMigration => "under-migration",
             }
         )
     }

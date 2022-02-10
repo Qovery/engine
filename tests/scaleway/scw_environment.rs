@@ -112,7 +112,7 @@ fn test_build_cache() {
         );
 
         let scr = container_registry_scw(&context);
-        let local_docker = build_platform_local_docker(&context);
+        let local_docker = build_platform_local_docker(&context, logger());
         let app = environment.applications.first().unwrap();
         let image = app.to_image();
 

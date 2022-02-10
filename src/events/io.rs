@@ -23,6 +23,7 @@ pub enum EngineEvent {
     },
     Error {
         error: EngineError,
+        message: Option<EventMessage>,
     },
     #[deprecated(note = "event status is carried by EventDetails directly")]
     Waiting {
@@ -76,8 +77,12 @@ impl From<events::EngineEvent> for EngineEvent {
                 details: EventDetails::from(d),
                 message: EventMessage::from(m),
             },
-            events::EngineEvent::Error(e) => EngineEvent::Error {
+            events::EngineEvent::Error(e, m) => EngineEvent::Error {
                 error: EngineError::from(e),
+                message: match m {
+                    Some(msg) => Some(EventMessage::from(msg)),
+                    None => None,
+                },
             },
             events::EngineEvent::Waiting(d, m) => EngineEvent::Waiting {
                 details: EventDetails::from(d),
@@ -151,6 +156,7 @@ pub enum GeneralStep {
     RetrieveClusterConfig,
     RetrieveClusterResources,
     ValidateSystemRequirements,
+    UnderMigration,
 }
 
 impl From<events::GeneralStep> for GeneralStep {
@@ -159,6 +165,7 @@ impl From<events::GeneralStep> for GeneralStep {
             events::GeneralStep::RetrieveClusterConfig => GeneralStep::RetrieveClusterConfig,
             events::GeneralStep::RetrieveClusterResources => GeneralStep::RetrieveClusterResources,
             events::GeneralStep::ValidateSystemRequirements => GeneralStep::ValidateSystemRequirements,
+            events::GeneralStep::UnderMigration => GeneralStep::UnderMigration,
         }
     }
 }

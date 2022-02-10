@@ -185,7 +185,7 @@ impl<'a> EKS<'a> {
                     e,
                 );
 
-                logger.log(LogLevel::Error, EngineEvent::Error(err.clone()));
+                logger.log(LogLevel::Error, EngineEvent::Error(err.clone(), None));
 
                 return Err(err);
             }
@@ -465,10 +465,13 @@ impl<'a> EKS<'a> {
                         Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
                         None => self.logger().log(
                             LogLevel::Error,
-                            EngineEvent::Error(EngineError::new_missing_required_env_variable(
-                                event_details.clone(),
-                                "VAULT_SECRET_ID".to_string(),
-                            )),
+                            EngineEvent::Error(
+                                EngineError::new_missing_required_env_variable(
+                                    event_details.clone(),
+                                    "VAULT_SECRET_ID".to_string(),
+                                ),
+                                None,
+                            ),
                         ),
                     }
                 }
@@ -618,7 +621,7 @@ impl<'a> EKS<'a> {
                     )
                 }
                 Err(e) => {
-                    self.logger().log(LogLevel::Error, EngineEvent::Error(e));
+                    self.logger().log(LogLevel::Error, EngineEvent::Error(e, None));
                     self.logger().log(
                         LogLevel::Info,
                         EngineEvent::Deploying(
@@ -653,11 +656,10 @@ impl<'a> EKS<'a> {
                 ),
                 Err(e) => self.logger().log(
                     LogLevel::Error,
-                    EngineEvent::Error(EngineError::new_cannot_get_or_create_iam_role(
-                        event_details.clone(),
-                        role.role_name,
-                        e,
-                    )),
+                    EngineEvent::Error(
+                        EngineError::new_cannot_get_or_create_iam_role(event_details.clone(), role.role_name, e),
+                        None,
+                    ),
                 ),
             }
         }
@@ -736,10 +738,10 @@ impl<'a> EKS<'a> {
             }
             Err(e) => self.logger().log(
                 LogLevel::Warning,
-                EngineEvent::Error(EngineError::new_terraform_state_does_not_exist(
-                    event_details.clone(),
-                    e,
-                )),
+                EngineEvent::Error(
+                    EngineError::new_terraform_state_does_not_exist(event_details.clone(), e),
+                    None,
+                ),
             ),
         };
 
@@ -941,7 +943,8 @@ impl<'a> EKS<'a> {
             }
             Err(e) => {
                 let error = EngineError::new_terraform_state_does_not_exist(event_details.clone(), e);
-                self.logger().log(LogLevel::Error, EngineEvent::Error(error.clone()));
+                self.logger()
+                    .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
                 return Err(error);
             }
         };
@@ -1149,10 +1152,10 @@ impl<'a> EKS<'a> {
             // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
             self.logger().log(
                 LogLevel::Error,
-                EngineEvent::Error(EngineError::new_terraform_error_while_executing_pipeline(
-                    event_details.clone(),
-                    e,
-                )),
+                EngineEvent::Error(
+                    EngineError::new_terraform_error_while_executing_pipeline(event_details.clone(), e),
+                    None,
+                ),
             );
         };
 
@@ -1509,22 +1512,28 @@ impl<'a> Kubernetes for EKS<'a> {
 
     #[named]
     fn on_create(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.create())
     }
 
     #[named]
     fn on_create_error(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.create_error())
     }
@@ -1688,7 +1697,7 @@ impl<'a> Kubernetes for EKS<'a> {
             self.cloud_provider().credentials_environment_variables(),
             Stage::Infrastructure(InfrastructureStep::Upgrade),
         ) {
-            self.logger().log(LogLevel::Error, EngineEvent::Error(e.clone()));
+            self.logger().log(LogLevel::Error, EngineEvent::Error(e.clone(), None));
             return Err(e);
         }
 
@@ -1798,88 +1807,112 @@ impl<'a> Kubernetes for EKS<'a> {
 
     #[named]
     fn on_upgrade(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.upgrade())
     }
 
     #[named]
     fn on_upgrade_error(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.upgrade_error())
     }
 
     #[named]
     fn on_downgrade(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.downgrade())
     }
 
     #[named]
     fn on_downgrade_error(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.downgrade_error())
     }
 
     #[named]
     fn on_pause(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
         send_progress_on_long_task(self, Action::Pause, || self.pause())
     }
 
     #[named]
     fn on_pause_error(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
         send_progress_on_long_task(self, Action::Pause, || self.pause_error())
     }
 
     #[named]
     fn on_delete(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || self.delete())
     }
 
     #[named]
     fn on_delete_error(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
@@ -1892,8 +1925,10 @@ impl<'a> Kubernetes for EKS<'a> {
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
-        kubernetes::deploy_environment(self, environment, event_details)
+        kubernetes::deploy_environment(self, environment, event_details, self.logger())
     }
 
     #[named]
@@ -1904,8 +1939,10 @@ impl<'a> Kubernetes for EKS<'a> {
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
-        kubernetes::deploy_environment_error(self, environment, event_details)
+        kubernetes::deploy_environment_error(self, environment, event_details, self.logger())
     }
 
     #[named]
@@ -1916,17 +1953,22 @@ impl<'a> Kubernetes for EKS<'a> {
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
-        kubernetes::pause_environment(self, environment, event_details)
+        kubernetes::pause_environment(self, environment, event_details, self.logger())
     }
 
     #[named]
     fn pause_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
         Ok(())
     }
@@ -1939,17 +1981,22 @@ impl<'a> Kubernetes for EKS<'a> {
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
-        kubernetes::delete_environment(self, environment, event_details)
+        kubernetes::delete_environment(self, environment, event_details, self.logger())
     }
 
     #[named]
     fn delete_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
         Ok(())
     }

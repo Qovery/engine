@@ -4,7 +4,7 @@ use crate::build_platform::BuildPlatform;
 use crate::cloud_provider::CloudProvider;
 use crate::container_registry::ContainerRegistry;
 use crate::dns_provider::DnsProvider;
-use crate::error::EngineError;
+use crate::errors::EngineError;
 use crate::logger::Logger;
 use crate::models::Context;
 use crate::session::Session;

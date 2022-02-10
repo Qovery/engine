@@ -66,7 +66,7 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
         if let Err(err) = tx.create_kubernetes(&kubernetes) {
             panic!("{:?}", err)
         }
-        let ret = tx.commit();
+        let ret = tx.commit(logger.clone());
         assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()
@@ -129,7 +129,7 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
         if let Err(err) = tx.delete_kubernetes(&kubernetes) {
             panic!("{:?}", err)
         }
-        let ret = tx.commit();
+        let ret = tx.commit(logger.clone());
         assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()
