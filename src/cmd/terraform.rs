@@ -201,9 +201,11 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Co
 
     let result = cmd.exec_with_output(
         |line| {
+            info!("{}", line);
             stdout.push(line);
         },
         |line| {
+            error!("{}", line);
             stderr.push(line);
         },
     );
