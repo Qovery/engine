@@ -62,6 +62,7 @@ charts:
     repo_name: bitnami
     version: 8.9.8
     dest: services
+    no_sync: true
     # Chart is frozen due to custom modification see https://github.com/Qovery/engine/pull/293
   - name: redis
     repo_name: bitnami
@@ -69,7 +70,7 @@ charts:
     dest: services
     no_sync: true
   - name: pleco
-    version: 0.9.33
+    version: 0.10.1
     repo_name: pleco
   - name: do-k8s-token-rotate
     version: 0.1.3
