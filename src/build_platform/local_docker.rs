@@ -7,7 +7,7 @@ use sysinfo::{Disk, DiskExt, SystemExt};
 
 use crate::build_platform::{docker, Build, BuildPlatform, BuildResult, CacheResult, Credentials, Image, Kind};
 use crate::cmd::utilities::QoveryCommand;
-use crate::error::{EngineError, EngineErrorCause, SimpleError, SimpleErrorKind};
+use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind};
 use crate::fs::workspace_directory;
 use crate::git;
 use crate::models::{
@@ -217,7 +217,43 @@ impl LocalDocker {
             buildpacks_args.push(builder_name);
             if let Some(buildpacks_language) = &build.git_repository.buildpack_language {
                 buildpacks_args.push("-b");
-                buildpacks_args.push(buildpacks_language.as_str());
+                match buildpacks_language.split('@').collect::<Vec<&str>>().as_slice() {
+                    [builder] => {
+                        // no version specified, so we use the latest builder
+                        buildpacks_args.push(builder);
+                    }
+                    [builder, _version] => {
+                        // version specified, we need to use the specified builder
+                        // but also ensure that the user has set the correct runtime version in his project
+                        // this is language dependent
+                        // https://elements.heroku.com/buildpacks/heroku/heroku-buildpack-python
+                        // https://devcenter.heroku.com/articles/buildpacks
+                        // TODO: Check user project is correctly configured for this builder and version
+                        buildpacks_args.push(builder);
+                    }
+                    _ => {
+                        let msg = format!(
+                            "Cannot build: Invalid buildpacks language format: expected `builder[@version]` got {}",
+                            buildpacks_language
+                        );
+                        lh.deployment_error(ProgressInfo::new(
+                            ProgressScope::Application {
+                                id: build.image.application_id.clone(),
+                            },
+                            ProgressLevel::Error,
+                            Some(msg.clone()),
+                            self.context.execution_id(),
+                        ));
+
+                        let err = EngineError::new(
+                            EngineErrorCause::Internal,
+                            EngineErrorScope::Engine,
+                            self.context.execution_id().to_string(),
+                            Some(msg),
+                        );
+                        return Err(err);
+                    }
+                }
             }
 
             // Just a fallback for now to help our bot loving users deploy their apps
