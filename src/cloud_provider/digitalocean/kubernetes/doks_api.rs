@@ -63,12 +63,10 @@ fn get_do_kubernetes_latest_slug_version(
     doks_versions: &Vec<KubernetesVersion>,
     wished_version: &str,
 ) -> Result<Option<String>, CommandError> {
-    let wished_k8s_version =
-        VersionsNumber::from_str(wished_version).map_err(|e| CommandError::new_from_safe_message(e.to_string()))?;
+    let wished_k8s_version = VersionsNumber::from_str(wished_version)?;
 
     for kubernetes_doks_version in doks_versions {
-        let current_k8s_version = VersionsNumber::from_str(kubernetes_doks_version.kubernetes_version.as_str())
-            .map_err(|e| CommandError::new_from_safe_message(e.to_string()))?;
+        let current_k8s_version = VersionsNumber::from_str(kubernetes_doks_version.kubernetes_version.as_str())?;
         if current_k8s_version.major == wished_k8s_version.major
             && current_k8s_version.minor == wished_k8s_version.minor
         {

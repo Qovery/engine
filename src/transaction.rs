@@ -6,8 +6,9 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{Application, Service};
 use crate::container_registry::PushResult;
 use crate::engine::Engine;
-use crate::error::EngineError;
-use crate::errors::EngineError as NewEngineError;
+use crate::errors::{EngineError, Tag};
+use crate::events::{EngineEvent, EventMessage};
+use crate::logger::{LogLevel, Logger};
 use crate::models::{
     Action, Environment, EnvironmentAction, EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel,
     ProgressScope,
@@ -28,7 +29,7 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    pub fn create_kubernetes(&mut self, kubernetes: &'a dyn Kubernetes) -> Result<(), NewEngineError> {
+    pub fn create_kubernetes(&mut self, kubernetes: &'a dyn Kubernetes) -> Result<(), EngineError> {
         match kubernetes.is_valid() {
             Ok(_) => {
                 self.steps.push(Step::CreateKubernetes(kubernetes));
@@ -38,7 +39,7 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    pub fn pause_kubernetes(&mut self, kubernetes: &'a dyn Kubernetes) -> Result<(), NewEngineError> {
+    pub fn pause_kubernetes(&mut self, kubernetes: &'a dyn Kubernetes) -> Result<(), EngineError> {
         match kubernetes.is_valid() {
             Ok(_) => {
                 self.steps.push(Step::PauseKubernetes(kubernetes));
@@ -48,7 +49,7 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    pub fn delete_kubernetes(&mut self, kubernetes: &'a dyn Kubernetes) -> Result<(), NewEngineError> {
+    pub fn delete_kubernetes(&mut self, kubernetes: &'a dyn Kubernetes) -> Result<(), EngineError> {
         match kubernetes.is_valid() {
             Ok(_) => {
                 self.steps.push(Step::DeleteKubernetes(kubernetes));
@@ -151,17 +152,12 @@ impl<'a> Transaction<'a> {
                                 container_registry.kind()
                             ))
                         );
-                        return Err(err);
+                        return Err(EngineError::new_from_legacy_engine_error(err));
                     }
                 };
             }
             Err(err) => {
-                warn!(
-                    "load build app {} cache error: {}",
-                    app.name.as_str(),
-                    err.message.clone().unwrap_or("<no message>".to_string())
-                );
-
+                warn!("load build app {} cache error: {}", app.name.as_str(), err.message());
                 return Err(err);
             }
         };
@@ -173,6 +169,7 @@ impl<'a> Transaction<'a> {
         &self,
         environment: &Environment,
         option: &DeploymentOption,
+        logger: Box<dyn Logger>,
     ) -> Result<Vec<Box<dyn Application>>, EngineError> {
         // do the same for applications
         let apps_to_build = environment
@@ -219,6 +216,7 @@ impl<'a> Transaction<'a> {
                 self.engine.context(),
                 &build_result.build.image,
                 self.engine.cloud_provider(),
+                logger.clone(),
             ) {
                 applications.push(app)
             }
@@ -252,7 +250,7 @@ impl<'a> Transaction<'a> {
                 Ok(tuple) => results.push(tuple),
                 Err(err) => {
                     error!("error pushing docker image {:?}", err);
-                    return Err(err);
+                    return Err(EngineError::new_from_legacy_engine_error(err));
                 }
             }
         }
@@ -260,10 +258,14 @@ impl<'a> Transaction<'a> {
         Ok(results)
     }
 
-    fn check_environment(&self, environment: &crate::cloud_provider::environment::Environment) -> TransactionResult {
+    fn check_environment(
+        &self,
+        environment: &crate::cloud_provider::environment::Environment,
+        logger: Box<dyn Logger>,
+    ) -> TransactionResult {
         if let Err(engine_error) = environment.is_valid() {
             warn!("ROLLBACK STARTED! an error occurred {:?}", engine_error);
-            return match self.rollback() {
+            return match self.rollback(logger) {
                 Ok(_) => TransactionResult::Rollback(engine_error),
                 Err(err) => {
                     error!("ROLLBACK FAILED! fatal error: {:?}", err);
@@ -275,25 +277,25 @@ impl<'a> Transaction<'a> {
         TransactionResult::Ok
     }
 
-    pub fn rollback(&self) -> Result<(), RollbackError> {
+    pub fn rollback(&self, logger: Box<dyn Logger>) -> Result<(), RollbackError> {
         for step in self.executed_steps.iter() {
             match step {
                 Step::CreateKubernetes(kubernetes) => {
                     // revert kubernetes creation
                     if let Err(err) = kubernetes.on_create_error() {
-                        return Err(RollbackError::CommitError(err.to_legacy_engine_error()));
+                        return Err(RollbackError::CommitError(err));
                     };
                 }
                 Step::DeleteKubernetes(kubernetes) => {
                     // revert kubernetes deletion
                     if let Err(err) = kubernetes.on_delete_error() {
-                        return Err(RollbackError::CommitError(err.to_legacy_engine_error()));
+                        return Err(RollbackError::CommitError(err));
                     };
                 }
                 Step::PauseKubernetes(kubernetes) => {
                     // revert pause
                     if let Err(err) = kubernetes.on_pause_error() {
-                        return Err(RollbackError::CommitError(err.to_legacy_engine_error()));
+                        return Err(RollbackError::CommitError(err));
                     };
                 }
                 Step::BuildEnvironment(_environment_action, _option) => {
@@ -301,13 +303,13 @@ impl<'a> Transaction<'a> {
                 }
                 Step::DeployEnvironment(kubernetes, environment_action) => {
                     // revert environment deployment
-                    self.rollback_environment(*kubernetes, *environment_action)?;
+                    self.rollback_environment(*kubernetes, *environment_action, logger.clone())?;
                 }
                 Step::PauseEnvironment(kubernetes, environment_action) => {
-                    self.rollback_environment(*kubernetes, *environment_action)?;
+                    self.rollback_environment(*kubernetes, *environment_action, logger.clone())?;
                 }
                 Step::DeleteEnvironment(kubernetes, environment_action) => {
-                    self.rollback_environment(*kubernetes, *environment_action)?;
+                    self.rollback_environment(*kubernetes, *environment_action, logger.clone())?;
                 }
             }
         }
@@ -321,21 +323,29 @@ impl<'a> Transaction<'a> {
         &self,
         kubernetes: &dyn Kubernetes,
         environment_action: &EnvironmentAction,
+        logger: Box<dyn Logger>,
     ) -> Result<(), RollbackError> {
         let qe_environment = |environment: &Environment| {
             let mut _applications = Vec::with_capacity(environment.applications.len());
             for application in environment.applications.iter() {
                 let build = application.to_build();
 
-                if let Some(x) =
-                    application.to_application(self.engine.context(), &build.image, self.engine.cloud_provider())
-                {
+                if let Some(x) = application.to_application(
+                    self.engine.context(),
+                    &build.image,
+                    self.engine.cloud_provider(),
+                    logger.clone(),
+                ) {
                     _applications.push(x)
                 }
             }
 
-            let qe_environment =
-                environment.to_qe_environment(self.engine.context(), &_applications, self.engine.cloud_provider());
+            let qe_environment = environment.to_qe_environment(
+                self.engine.context(),
+                &_applications,
+                self.engine.cloud_provider(),
+                logger.clone(),
+            );
 
             qe_environment
         };
@@ -354,7 +364,7 @@ impl<'a> Transaction<'a> {
 
                 let _ = match action {
                     Ok(_) => {}
-                    Err(err) => return Err(RollbackError::CommitError(err.to_legacy_engine_error())),
+                    Err(err) => return Err(RollbackError::CommitError(err)),
                 };
 
                 Err(RollbackError::NoFailoverEnvironment)
@@ -362,7 +372,7 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    pub fn commit(mut self) -> TransactionResult {
+    pub fn commit(mut self, logger: Box<dyn Logger>) -> TransactionResult {
         let mut applications_by_environment: HashMap<&Environment, Vec<Box<dyn Application>>> = HashMap::new();
 
         for step in self.steps.iter() {
@@ -375,7 +385,8 @@ impl<'a> Transaction<'a> {
                     match self.commit_infrastructure(
                         *kubernetes,
                         Action::Create,
-                        kubernetes.on_create().map_err(|e| e.to_legacy_engine_error()),
+                        kubernetes.on_create(),
+                        logger.clone(),
                     ) {
                         TransactionResult::Ok => {}
                         err => {
@@ -389,7 +400,8 @@ impl<'a> Transaction<'a> {
                     match self.commit_infrastructure(
                         *kubernetes,
                         Action::Delete,
-                        kubernetes.on_delete().map_err(|e| e.to_legacy_engine_error()),
+                        kubernetes.on_delete(),
+                        logger.clone(),
                     ) {
                         TransactionResult::Ok => {}
                         err => {
@@ -400,11 +412,8 @@ impl<'a> Transaction<'a> {
                 }
                 Step::PauseKubernetes(kubernetes) => {
                     // pause kubernetes
-                    match self.commit_infrastructure(
-                        *kubernetes,
-                        Action::Pause,
-                        kubernetes.on_pause().map_err(|e| e.to_legacy_engine_error()),
-                    ) {
+                    match self.commit_infrastructure(*kubernetes, Action::Pause, kubernetes.on_pause(), logger.clone())
+                    {
                         TransactionResult::Ok => {}
                         err => {
                             error!("Error while pausing infrastructure: {:?}", err);
@@ -418,11 +427,21 @@ impl<'a> Transaction<'a> {
                         EnvironmentAction::Environment(te) => te,
                     };
 
-                    let applications_builds = match self.build_applications(target_environment, option) {
+                    let applications_builds = match self.build_applications(target_environment, option, logger.clone())
+                    {
                         Ok(apps) => apps,
                         Err(engine_err) => {
-                            warn!("ROLLBACK STARTED! an error occurred {:?}", engine_err);
-                            return if engine_err.is_cancel() {
+                            logger.log(
+                                LogLevel::Error,
+                                EngineEvent::Error(
+                                    engine_err.clone(),
+                                    Some(EventMessage::new_from_safe(
+                                        "ROLLBACK STARTED! an error occurred".to_string(),
+                                    )),
+                                ),
+                            );
+
+                            return if engine_err.tag() == &Tag::TaskCancellationRequested {
                                 TransactionResult::Canceled
                             } else {
                                 TransactionResult::Rollback(engine_err)
@@ -442,7 +461,7 @@ impl<'a> Transaction<'a> {
                         }
                         Err(engine_err) => {
                             warn!("ROLLBACK STARTED! an error occurred {:?}", engine_err);
-                            return match self.rollback() {
+                            return match self.rollback(logger.clone()) {
                                 Ok(_) => TransactionResult::Rollback(engine_err),
                                 Err(err) => {
                                     error!("ROLLBACK FAILED! fatal error: {:?}", err);
@@ -460,11 +479,8 @@ impl<'a> Transaction<'a> {
                         *kubernetes,
                         *environment_action,
                         &applications_by_environment,
-                        |qe_env| {
-                            kubernetes
-                                .deploy_environment(qe_env)
-                                .map_err(|e| e.to_legacy_engine_error())
-                        },
+                        |qe_env| kubernetes.deploy_environment(qe_env),
+                        logger.clone(),
                     ) {
                         TransactionResult::Ok => {}
                         err => {
@@ -479,11 +495,8 @@ impl<'a> Transaction<'a> {
                         *kubernetes,
                         *environment_action,
                         &applications_by_environment,
-                        |qe_env| {
-                            kubernetes
-                                .pause_environment(qe_env)
-                                .map_err(|e| e.to_legacy_engine_error())
-                        },
+                        |qe_env| kubernetes.pause_environment(qe_env),
+                        logger.clone(),
                     ) {
                         TransactionResult::Ok => {}
                         err => {
@@ -498,11 +511,8 @@ impl<'a> Transaction<'a> {
                         *kubernetes,
                         *environment_action,
                         &applications_by_environment,
-                        |qe_env| {
-                            kubernetes
-                                .delete_environment(qe_env)
-                                .map_err(|e| e.to_legacy_engine_error())
-                        },
+                        |qe_env| kubernetes.delete_environment(qe_env),
+                        logger.clone(),
                     ) {
                         TransactionResult::Ok => {}
                         err => {
@@ -522,6 +532,7 @@ impl<'a> Transaction<'a> {
         kubernetes: &dyn Kubernetes,
         action: Action,
         result: Result<(), EngineError>,
+        logger: Box<dyn Logger>,
     ) -> TransactionResult {
         // send back the right progress status
         fn send_progress(lh: &ListenersHelper, action: Action, execution_id: &str, is_error: bool) {
@@ -563,7 +574,7 @@ impl<'a> Transaction<'a> {
         match result {
             Err(err) => {
                 warn!("infrastructure ROLLBACK STARTED! an error occurred {:?}", err);
-                match self.rollback() {
+                match self.rollback(logger) {
                     Ok(_) => {
                         // an error occurred on infrastructure deployment BUT rolledback is OK
                         send_progress(&lh, action, execution_id, true);
@@ -591,6 +602,7 @@ impl<'a> Transaction<'a> {
         environment_action: &EnvironmentAction,
         applications_by_environment: &HashMap<&Environment, Vec<Box<dyn Application>>>,
         action_fn: F,
+        logger: Box<dyn Logger>,
     ) -> TransactionResult
     where
         F: Fn(&crate::cloud_provider::environment::Environment) -> Result<(), EngineError>,
@@ -609,9 +621,10 @@ impl<'a> Transaction<'a> {
             self.engine.context(),
             built_applications,
             kubernetes.cloud_provider(),
+            logger.clone(),
         );
 
-        let _ = match self.check_environment(&qe_environment) {
+        let _ = match self.check_environment(&qe_environment, logger.clone()) {
             TransactionResult::Ok => {}
             err => return err, // which it means that an error occurred
         };
@@ -661,7 +674,7 @@ impl<'a> Transaction<'a> {
 
         let _ = match action_fn(&qe_environment) {
             Err(err) => {
-                let rollback_result = match self.rollback() {
+                let rollback_result = match self.rollback(logger) {
                     Ok(_) => TransactionResult::Rollback(err),
                     Err(rollback_err) => {
                         error!("ROLLBACK FAILED! fatal error: {:?}", rollback_err);

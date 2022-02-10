@@ -8,6 +8,8 @@ use crate::cmd::command::QoveryCommand;
 use crate::container_registry::docker::{docker_pull_image, docker_tag_and_push_image};
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PullResult, PushResult};
 use crate::error::{cast_simple_error_to_engine_error, EngineErrorCause, SimpleError, SimpleErrorKind};
+use crate::errors::EngineError as NewEngineError;
+use crate::events::{ToTransmitter, Transmitter};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
@@ -228,6 +230,12 @@ impl DOCR {
     }
 }
 
+impl ToTransmitter for DOCR {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::ContainerRegistry(self.id().to_string(), self.name().to_string())
+    }
+}
+
 impl ContainerRegistry for DOCR {
     fn context(&self) -> &Context {
         &self.context
@@ -245,7 +253,7 @@ impl ContainerRegistry for DOCR {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), NewEngineError> {
         Ok(())
     }
 

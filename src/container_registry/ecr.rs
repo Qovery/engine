@@ -13,6 +13,8 @@ use crate::cmd::command::QoveryCommand;
 use crate::container_registry::docker::{docker_pull_image, docker_tag_and_push_image};
 use crate::container_registry::{ContainerRegistry, Kind, PullResult, PushResult};
 use crate::error::{EngineError, EngineErrorCause};
+use crate::errors::EngineError as NewEngineError;
+use crate::events::{ToTransmitter, Transmitter};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
@@ -359,6 +361,12 @@ impl ECR {
     }
 }
 
+impl ToTransmitter for ECR {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::ContainerRegistry(self.id().to_string(), self.name().to_string())
+    }
+}
+
 impl ContainerRegistry for ECR {
     fn context(&self) -> &Context {
         &self.context
@@ -376,18 +384,14 @@ impl ContainerRegistry for ECR {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), NewEngineError> {
         let client = StsClient::new_with_client(self.client(), Region::default());
         let s = block_on(client.get_caller_identity(GetCallerIdentityRequest::default()));
 
         match s {
             Ok(_) => Ok(()),
-            Err(_) => Err(self.engine_error(
-                EngineErrorCause::User(
-                    "Your ECR account seems to be no longer valid (bad Credentials). \
-                    Please contact your Organization administrator to fix or change the Credentials.",
-                ),
-                format!("bad ECR credentials for {}", self.name_with_id()),
+            Err(_) => Err(NewEngineError::new_client_invalid_cloud_provider_credentials(
+                self.get_event_details(),
             )),
         }
     }

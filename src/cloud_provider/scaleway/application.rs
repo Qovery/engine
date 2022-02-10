@@ -4,6 +4,7 @@ use std::str::FromStr;
 use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
+use crate::cloud_provider::kubernetes::validate_k8s_required_cpu_and_burstable;
 use crate::cloud_provider::models::{
     EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
 };
@@ -12,14 +13,13 @@ use crate::cloud_provider::service::{
     scale_down_application, send_progress_on_long_task, Action, Application as CApplication, Create, Delete, Helm,
     Pause, Service, ServiceType, StatelessService,
 };
-use crate::cloud_provider::utilities::{print_action, sanitize_name, validate_k8s_required_cpu_and_burstable};
+use crate::cloud_provider::utilities::{print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
-use crate::error::EngineErrorCause::Internal;
-use crate::error::{EngineError, EngineErrorScope};
-use crate::errors::CommandError;
-use crate::events::{EnvironmentStep, Stage, ToTransmitter, Transmitter};
+use crate::errors::{CommandError, EngineError};
+use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage, ToTransmitter, Transmitter};
+use crate::logger::{LogLevel, Logger};
 use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper, Port};
 use ::function_name::named;
 
@@ -39,6 +39,7 @@ pub struct Application {
     storage: Vec<Storage<StorageType>>,
     environment_variables: Vec<EnvironmentVariable>,
     listeners: Listeners,
+    logger: Box<dyn Logger>,
 }
 
 impl Application {
@@ -58,7 +59,8 @@ impl Application {
         storage: Vec<Storage<StorageType>>,
         environment_variables: Vec<EnvironmentVariable>,
         listeners: Listeners,
-    ) -> Application {
+        logger: Box<dyn Logger>,
+    ) -> Self {
         Application {
             context,
             id: id.to_string(),
@@ -75,6 +77,7 @@ impl Application {
             storage,
             environment_variables,
             listeners,
+            logger,
         }
     }
 
@@ -196,6 +199,7 @@ impl Service for Application {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
@@ -210,9 +214,15 @@ impl Service for Application {
             ),
             None => {
                 let image_name_with_tag = self.image().name_with_tag();
-                warn!(
-                    "there is no registry url, use image name with tag with the default container registry: {}",
-                    image_name_with_tag.as_str()
+                self.logger().log(
+                    LogLevel::Warning,
+                    EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new_from_safe(format!(
+                            "there is no registry url, use image name with tag with the default container registry: {}",
+                            image_name_with_tag.as_str()
+                        )),
+                    ),
                 );
                 context.insert("image_name_with_tag", image_name_with_tag.as_str());
             }
@@ -246,14 +256,16 @@ impl Service for Application {
             &self.id,
             self.total_cpus(),
             self.cpu_burst(),
+            event_details.clone(),
+            self.logger(),
         ) {
             Ok(l) => l,
             Err(e) => {
-                return Err(EngineError::new(
-                    Internal,
-                    EngineErrorScope::Application(self.id().to_string(), self.name().to_string()),
-                    self.context.execution_id(),
-                    Some(e.to_string()),
+                return Err(EngineError::new_k8s_validate_required_cpu_and_burstable_error(
+                    event_details.clone(),
+                    self.total_cpus(),
+                    self.cpu_burst(),
+                    e,
                 ));
             }
         };
@@ -310,19 +322,22 @@ impl Service for Application {
         Some(format!("appId={}", self.id))
     }
 
-    fn engine_error_scope(&self) -> EngineErrorScope {
-        EngineErrorScope::Application(self.id().to_string(), self.name().to_string())
+    fn logger(&self) -> &dyn Logger {
+        &*self.logger
     }
 }
 
 impl Create for Application {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
@@ -336,11 +351,14 @@ impl Create for Application {
 
     #[named]
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
@@ -352,11 +370,14 @@ impl Create for Application {
 impl Pause for Application {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details,
+            self.logger(),
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
@@ -375,11 +396,14 @@ impl Pause for Application {
 
     #[named]
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details,
+            self.logger(),
         );
 
         Ok(())
@@ -395,6 +419,8 @@ impl Delete for Application {
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
@@ -414,6 +440,8 @@ impl Delete for Application {
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {

@@ -66,7 +66,7 @@ impl Cluster<AWS, Options> for AWS {
         let container_registry = Box::new(container_registry_ecr(context));
 
         // use LocalDocker
-        let build_platform = Box::new(build_platform_local_docker(context));
+        let build_platform = Box::new(build_platform_local_docker(context, logger.clone()));
 
         // use AWS
         let cloud_provider = AWS::cloud_provider(context);
