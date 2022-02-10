@@ -1,6 +1,5 @@
 use std::borrow::{Borrow, Cow};
 use std::fs;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
@@ -169,19 +168,15 @@ impl Task for InfrastructureTask {
             sender,
         );
 
-        let region = kubernetes.region();
-        let aws_region = AwsRegion::from_str(region.as_str()).expect("Invalid AWS region");
-
         match qovery_engine::fs::create_workspace_archive(
             engine.context().workspace_root_dir(),
             engine.context().execution_id(),
         ) {
             Ok(file) => match upload_s3_file(
-                self.request.organization_id.as_str(),
                 &self.context,
                 self.request.archive.as_ref(),
                 file.as_str(),
-                aws_region,
+                AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
             ) {
                 Ok(_) => {
                     let _ = fs::remove_file(file).map_err(|err| error!("Cannot delete file {}", err));
@@ -373,19 +368,15 @@ impl Task for EnvironmentTask {
             sender,
         );
 
-        let region = kubernetes.region();
-        let aws_region = AwsRegion::from_str(region.as_str()).expect("Invalid AWS region");
-
         match qovery_engine::fs::create_workspace_archive(
             engine.context().workspace_root_dir(),
             engine.context().execution_id(),
         ) {
             Ok(file) => match upload_s3_file(
-                self.request.organization_id.as_str(),
                 &self.context,
                 self.request.archive.as_ref(),
                 file.as_str(),
-                aws_region,
+                AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
             ) {
                 Ok(_) => {
                     let _ = fs::remove_file(file).map_err(|err| error!("Cannot remove file {}", err));
@@ -705,7 +696,6 @@ fn basename(path: &str, sep: char) -> Cow<str> {
 }
 
 fn upload_s3_file(
-    organization_id: &str,
     context: &Context,
     archive: Option<&Archive>,
     file_path: &str,
@@ -719,7 +709,7 @@ fn upload_s3_file(
         }
     };
 
-    let object_key = format!("{}/{}", organization_id, basename(file_path, '/'));
+    let object_key = format!("{}/{}", context.organization_id(), basename(file_path, '/'));
 
     info!(
         "Sending file {} to bucket {} object {} with access_key_id '{}' and secret_access_key '{}'",
