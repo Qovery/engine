@@ -144,6 +144,15 @@ pub trait StatelessService: Service + Create + Pause + Delete {
             crate::cloud_provider::service::Action::Nothing => Ok(()),
         }
     }
+
+    fn exec_check_action(&self) -> Result<(), EngineError> {
+        match self.action() {
+            crate::cloud_provider::service::Action::Create => self.on_create_check(),
+            crate::cloud_provider::service::Action::Delete => self.on_delete_check(),
+            crate::cloud_provider::service::Action::Pause => self.on_pause_check(),
+            crate::cloud_provider::service::Action::Nothing => Ok(()),
+        }
+    }
 }
 
 pub trait StatefulService: Service + Create + Pause + Delete {
@@ -152,6 +161,15 @@ pub trait StatefulService: Service + Create + Pause + Delete {
             crate::cloud_provider::service::Action::Create => self.on_create(deployment_target),
             crate::cloud_provider::service::Action::Delete => self.on_delete(deployment_target),
             crate::cloud_provider::service::Action::Pause => self.on_pause(deployment_target),
+            crate::cloud_provider::service::Action::Nothing => Ok(()),
+        }
+    }
+
+    fn exec_check_action(&self) -> Result<(), EngineError> {
+        match self.action() {
+            crate::cloud_provider::service::Action::Create => self.on_create_check(),
+            crate::cloud_provider::service::Action::Delete => self.on_delete_check(),
+            crate::cloud_provider::service::Action::Pause => self.on_pause_check(),
             crate::cloud_provider::service::Action::Nothing => Ok(()),
         }
     }
