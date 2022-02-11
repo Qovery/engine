@@ -140,6 +140,12 @@ spec:
             {{ if eq .Values.doFeatures.volume true }}
             - --enable-volume
             {{ end }}
+            {{ if eq .Values.doFeatures.firewall true }}
+            - --enable-firewall
+            {{ end }}
+            {{ if eq .Values.doFeatures.vpc true }}
+            - --enable-vpc
+            {{ end }}
             {{- end }}
           env:
             - name: "AWS_EXECUTION_ENV"
