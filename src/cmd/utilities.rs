@@ -253,7 +253,7 @@ mod tests {
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
 
-        let mut cmd = QoveryCommand::new("cat", &vec!["/dev/urandom"], &vec![]);
+        let mut cmd = QoveryCommand::new("sh", &vec!["-c", "cat /dev/urandom | grep -a --null-data ."], &vec![]);
         let ret = cmd.exec_with_timeout(Duration::seconds(2), |_| {}, |_| {});
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
