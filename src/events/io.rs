@@ -81,15 +81,15 @@ impl From<events::EngineEvent> for EngineEvent {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub struct EventMessage {
-    raw: String,
-    safe: Option<String>,
+    safe_message: String,
+    full_details: Option<String>,
 }
 
 impl From<events::EventMessage> for EventMessage {
     fn from(message: events::EventMessage) -> Self {
         EventMessage {
-            raw: message.raw,
-            safe: message.safe,
+            safe_message: message.safe_message,
+            full_details: message.full_details,
         }
     }
 }
