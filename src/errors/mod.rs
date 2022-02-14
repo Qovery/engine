@@ -529,7 +529,7 @@ impl EngineError {
     ) -> EngineError {
         let mut message = vec!["There is not enough resources on the cluster:".to_string()];
 
-        if free_cpu > requested_cpu {
+        if requested_cpu > free_cpu {
             message.push(format!(
                 "{} CPU requested and only {} CPU available",
                 free_cpu, requested_cpu
@@ -549,7 +549,7 @@ impl EngineError {
             event_details,
             Tag::NotEnoughResourcesToDeployEnvironment,
             message.to_string(),
-            message.to_string(),
+            message,
             None,
             None,
             Some("Consider to add one more node or upgrade your nodes configuration. If not possible, pause or delete unused environments.".to_string()),
