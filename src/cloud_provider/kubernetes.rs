@@ -764,12 +764,8 @@ where
                 EngineEvent::Deleting(
                     event_details.clone(),
                     EventMessage::new(
-                        format!(
-                            "Encountering issues while trying to get objects kind {}: {:?}",
-                            object,
-                            e.message()
-                        ),
-                        None,
+                        format!("Encountering issues while trying to get objects kind {}.", object,),
+                        Some(e.message()),
                     ),
                 ),
             );
@@ -786,7 +782,10 @@ where
                         LogLevel::Warning,
                         EngineEvent::Deleting(
                             event_details.clone(),
-                            EventMessage::new(format!("Failed to delete all {} objects, retrying...", object,), None),
+                            EventMessage::new_from_safe(format!(
+                                "Failed to delete all {} objects, retrying...",
+                                object,
+                            )),
                         ),
                     );
                     OperationResult::Retry(e)
@@ -1039,7 +1038,7 @@ fn check_kubernetes_upgrade_status(
             if let Some(msg) = x.message {
                 logger.log(
                     LogLevel::Info,
-                    EngineEvent::Deploying(event_details.clone(), EventMessage::new(msg, None)),
+                    EngineEvent::Deploying(event_details.clone(), EventMessage::new_from_safe(msg)),
                 );
             };
             if x.older_version_detected {
@@ -1067,9 +1066,8 @@ fn check_kubernetes_upgrade_status(
             LogLevel::Warning,
             EngineEvent::Deploying(
                 event_details.clone(),
-                EventMessage::new(
+                EventMessage::new_from_safe(
                     "No worker nodes found, can't check if upgrade is required for workers".to_string(),
-                    None,
                 ),
             ),
         );
@@ -1120,19 +1118,16 @@ fn check_kubernetes_upgrade_status(
         LogLevel::Info,
         EngineEvent::Deploying(
             event_details.clone(),
-            EventMessage::new(
-                match &required_upgrade_on {
-                    None => "All workers are up to date, no upgrade required".to_string(),
-                    Some(node_type) => match node_type {
-                        KubernetesNodesType::Masters => "Kubernetes master upgrade required".to_string(),
-                        KubernetesNodesType::Workers => format!(
-                            "Kubernetes workers upgrade required, need to update {}/{} nodes",
-                            non_up_to_date_workers, total_workers
-                        ),
-                    },
+            EventMessage::new_from_safe(match &required_upgrade_on {
+                None => "All workers are up to date, no upgrade required".to_string(),
+                Some(node_type) => match node_type {
+                    KubernetesNodesType::Masters => "Kubernetes master upgrade required".to_string(),
+                    KubernetesNodesType::Workers => format!(
+                        "Kubernetes workers upgrade required, need to update {}/{} nodes",
+                        non_up_to_date_workers, total_workers
+                    ),
                 },
-                None,
-            ),
+            }),
         ),
     );
 

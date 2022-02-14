@@ -677,11 +677,14 @@ impl<'a> Kapsule<'a> {
         match kubectl_exec_get_events(kubeconfig_path, None, environment_variables) {
             Ok(ok_line) => self.logger().log(
                 LogLevel::Info,
-                EngineEvent::Deploying(event_details.clone(), EventMessage::new(ok_line, None)),
+                EngineEvent::Deploying(event_details.clone(), EventMessage::new_from_safe(ok_line)),
             ),
             Err(err) => self.logger().log(
                 LogLevel::Error,
-                EngineEvent::Deploying(event_details.clone(), EventMessage::new(err.message(), None)),
+                EngineEvent::Deploying(
+                    event_details.clone(),
+                    EventMessage::new("Error trying to get kubernetes events".to_string(), Some(err.message())),
+                ),
             ),
         };
 
@@ -957,10 +960,7 @@ impl<'a> Kapsule<'a> {
                     LogLevel::Warning,
                     EngineEvent::Deleting(
                         event_details.clone(),
-                        EventMessage::new(
-                            format!("{}, error: {}", safe_message.to_string(), e.message()),
-                            Some(safe_message.to_string()),
-                        ),
+                        EventMessage::new(safe_message.to_string(), Some(e.message())),
                     ),
                 );
                 skip_kubernetes_step = true;
@@ -1072,7 +1072,7 @@ impl<'a> Kapsule<'a> {
                         LogLevel::Error,
                         EngineEvent::Deleting(
                             event_details.clone(),
-                            EventMessage::new(format!("{}, error: {}", message_safe, e.message()), Some(message_safe)),
+                            EventMessage::new(message_safe, Some(e.message())),
                         ),
                     );
                 }
@@ -1145,10 +1145,7 @@ impl<'a> Kapsule<'a> {
                                         LogLevel::Error,
                                         EngineEvent::Deleting(
                                             event_details.clone(),
-                                            EventMessage::new(
-                                                format!("{}, error: {}", message_safe, e.message()),
-                                                Some(message_safe),
-                                            ),
+                                            EventMessage::new(message_safe, Some(e.message())),
                                         ),
                                     )
                                 }
@@ -1244,14 +1241,7 @@ impl<'a> Kapsule<'a> {
                                     LogLevel::Error,
                                     EngineEvent::Deleting(
                                         event_details.clone(),
-                                        EventMessage::new(
-                                            format!(
-                                                "{}, error: {}",
-                                                message_safe,
-                                                e.message.unwrap_or("no error message".to_string())
-                                            ),
-                                            Some(message_safe),
-                                        ),
+                                        EventMessage::new(message_safe, e.message),
                                     ),
                                 )
                             }
@@ -1264,10 +1254,7 @@ impl<'a> Kapsule<'a> {
                         LogLevel::Error,
                         EngineEvent::Deleting(
                             event_details.clone(),
-                            EventMessage::new(
-                                format!("{}, error: {}", message_safe, e.message()),
-                                Some(message_safe.to_string()),
-                            ),
+                            EventMessage::new(message_safe.to_string(), Some(e.message())),
                         ),
                     )
                 }

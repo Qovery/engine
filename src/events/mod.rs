@@ -46,27 +46,33 @@ impl EngineEvent {
     }
 
     /// Returns engine's event message.
-    pub fn get_message(&self) -> String {
+    pub fn message(&self, message_verbosity: EventMessageVerbosity) -> String {
         match self {
             EngineEvent::Error(engine_error) => engine_error.message(),
-            EngineEvent::Waiting(_details, message) => message.message(),
-            EngineEvent::Deploying(_details, message) => message.message(),
-            EngineEvent::Pausing(_details, message) => message.message(),
-            EngineEvent::Deleting(_details, message) => message.message(),
-            EngineEvent::Deployed(_details, message) => message.message(),
-            EngineEvent::Paused(_details, message) => message.message(),
-            EngineEvent::Deleted(_details, message) => message.message(),
+            EngineEvent::Waiting(_details, event_message) => event_message.message(message_verbosity),
+            EngineEvent::Deploying(_details, event_message) => event_message.message(message_verbosity),
+            EngineEvent::Pausing(_details, event_message) => event_message.message(message_verbosity),
+            EngineEvent::Deleting(_details, event_message) => event_message.message(message_verbosity),
+            EngineEvent::Deployed(_details, event_message) => event_message.message(message_verbosity),
+            EngineEvent::Paused(_details, event_message) => event_message.message(message_verbosity),
+            EngineEvent::Deleted(_details, event_message) => event_message.message(message_verbosity),
         }
     }
+}
+
+/// EventMessageVerbosity: represents event message's verbosity from minimal to full verbosity.
+pub enum EventMessageVerbosity {
+    SafeOnly,
+    FullDetails,
 }
 
 #[derive(Debug, Clone)]
 /// EventMessage: represents an event message.
 pub struct EventMessage {
-    /// raw: represents a raw event message which may include unsafe elements such as passwords and tokens.
-    raw: String,
-    /// safe: represents an event message from which unsafe elements have been removed (passwords and tokens).
-    safe: Option<String>,
+    // Message which is known to be safe: doesn't expose any credentials nor touchy info.
+    safe_message: String,
+    // String containing full details including touchy data (passwords and tokens).
+    full_details: Option<String>,
 }
 
 impl EventMessage {
@@ -74,40 +80,50 @@ impl EventMessage {
     ///
     /// Arguments
     ///
-    /// * `raw`: Event raw message string (which may include unsafe text such as passwords and tokens).
-    /// * `safe`: Event safe message string (from which all unsafe text such as passwords and tokens has been removed).
-    pub fn new(raw: String, safe: Option<String>) -> Self {
-        EventMessage { raw, safe }
+    /// * `safe_message`: Event safe message string (from which all unsafe text such as passwords and tokens has been removed).
+    /// * `full_details`: Event raw message string (which may include unsafe text such as passwords and tokens).
+    pub fn new(safe_message: String, full_details: Option<String>) -> Self {
+        EventMessage {
+            safe_message,
+            full_details,
+        }
     }
 
     /// Creates e new EventMessage from safe message.
     ///
     /// Arguments
     ///
-    /// * `safe`: Event safe message string (from which all unsafe text such as passwords and tokens has been removed).
-    pub fn new_from_safe(safe: String) -> Self {
+    /// * `safe_message`: Event safe message string (from which all unsafe text such as passwords and tokens has been removed).
+    pub fn new_from_safe(safe_message: String) -> Self {
         EventMessage {
-            raw: safe.to_string(),
-            safe: Some(safe),
+            safe_message,
+            full_details: None,
         }
     }
 
     /// Returns message for event message.
-    pub fn message(&self) -> String {
-        if let Some(msg) = &self.safe {
-            return format!("{} {}", msg.clone(), self.raw.clone());
+    ///
+    /// Arguments
+    ///
+    /// * `message_verbosity`: Which verbosity is required for the message.
+    pub fn message(&self, message_verbosity: EventMessageVerbosity) -> String {
+        match message_verbosity {
+            EventMessageVerbosity::SafeOnly => self.safe_message.to_string(),
+            EventMessageVerbosity::FullDetails => match &self.full_details {
+                None => self.safe_message.to_string(),
+                Some(details) => format!(
+                    "{} / Full details: {}",
+                    self.safe_message.to_string(),
+                    details.to_string()
+                ),
+            },
         }
-
-        self.raw.clone()
     }
 }
 
 impl Display for EventMessage {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match &self.safe {
-            Some(safe) => safe,
-            None => &self.raw,
-        })
+        f.write_str(self.message(EventMessageVerbosity::SafeOnly).as_str()) // By default, expose only the safe message.
     }
 }
 
@@ -408,23 +424,45 @@ impl EventDetails {
 
 #[cfg(test)]
 mod tests {
-    use crate::events::{EnvironmentStep, EventMessage, InfrastructureStep, Stage};
+    use crate::events::{EnvironmentStep, EventMessage, EventMessageVerbosity, InfrastructureStep, Stage};
 
     #[test]
-    fn test_event_message_get_message() {
+    fn test_event_message() {
         // setup:
-        let test_cases: Vec<(Option<String>, String, String)> = vec![
-            (None, "raw".to_string(), "raw".to_string()),
-            (Some("safe".to_string()), "raw".to_string(), "safe raw".to_string()),
+        let test_cases: Vec<(String, Option<String>, EventMessageVerbosity, String)> = vec![
+            (
+                "safe".to_string(),
+                Some("raw".to_string()),
+                EventMessageVerbosity::SafeOnly,
+                "safe".to_string(),
+            ),
+            (
+                "safe".to_string(),
+                None,
+                EventMessageVerbosity::SafeOnly,
+                "safe".to_string(),
+            ),
+            (
+                "safe".to_string(),
+                None,
+                EventMessageVerbosity::FullDetails,
+                "safe".to_string(),
+            ),
+            (
+                "safe".to_string(),
+                Some("raw".to_string()),
+                EventMessageVerbosity::FullDetails,
+                "safe / Full details: raw".to_string(),
+            ),
         ];
 
         for tc in test_cases {
             // execute:
-            let (safe_message, raw_message, expected) = tc;
-            let event_message = EventMessage::new(raw_message, safe_message);
+            let (safe_message, raw_message, verbosity, expected) = tc;
+            let event_message = EventMessage::new(safe_message, raw_message);
 
             // validate:
-            assert_eq!(expected, event_message.message());
+            assert_eq!(expected, event_message.message(verbosity));
         }
     }
 
