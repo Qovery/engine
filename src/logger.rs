@@ -1,4 +1,4 @@
-use crate::events::EngineEvent;
+use crate::events::{EngineEvent, EventMessageVerbosity};
 use tracing;
 
 #[derive(Debug, Clone)]
@@ -63,10 +63,10 @@ impl Logger for StdIoLogger {
         )
         .in_scope(|| {
             match log_level {
-                LogLevel::Debug => debug!("{}", event.get_message()),
-                LogLevel::Info => info!("{}", event.get_message()),
-                LogLevel::Warning => warn!("{}", event.get_message()),
-                LogLevel::Error => error!("{}", event.get_message()),
+                LogLevel::Debug => debug!("{}", event.message(EventMessageVerbosity::FullDetails)),
+                LogLevel::Info => info!("{}", event.message(EventMessageVerbosity::FullDetails)),
+                LogLevel::Warning => warn!("{}", event.message(EventMessageVerbosity::FullDetails)),
+                LogLevel::Error => error!("{}", event.message(EventMessageVerbosity::FullDetails)),
             };
         });
     }
@@ -107,8 +107,8 @@ mod tests {
         let app_name = format!("simple-app-{}", app_id);
         let qovery_message = "Qovery message";
         let user_message = "User message";
+        let safe_message = "Safe message";
         let raw_message = "Raw message";
-        let raw_message_safe = "Raw message safe";
         let link = Url::parse("https://qovery.com").expect("cannot parse Url");
         let hint = "An hint !";
 
@@ -128,8 +128,8 @@ mod tests {
                     qovery_message.to_string(),
                     user_message.to_string(),
                     Some(errors::CommandError::new(
-                        raw_message.to_string(),
-                        Some(raw_message_safe.to_string()),
+                        safe_message.to_string(),
+                        Some(raw_message.to_string()),
                     )),
                     Some(link.clone()),
                     Some(hint.to_string()),
@@ -148,7 +148,7 @@ mod tests {
                         Stage::Infrastructure(InfrastructureStep::Create),
                         Transmitter::Kubernetes(cluster_id.to_string(), cluster_name.to_string()),
                     ),
-                    EventMessage::new(raw_message.to_string(), Some(raw_message_safe.to_string())),
+                    EventMessage::new(raw_message.to_string(), Some(safe_message.to_string())),
                 ),
                 description: "Deploying info event",
             },
@@ -164,7 +164,7 @@ mod tests {
                         Stage::Environment(EnvironmentStep::Pause),
                         Transmitter::Application(app_id.to_string(), app_name.to_string()),
                     ),
-                    EventMessage::new(raw_message.to_string(), Some(raw_message_safe.to_string())),
+                    EventMessage::new(raw_message.to_string(), Some(safe_message.to_string())),
                 ),
                 description: "Pausing application debug event",
             },
@@ -180,7 +180,7 @@ mod tests {
                         Stage::Environment(EnvironmentStep::Delete),
                         Transmitter::Application(app_id.to_string(), app_name.to_string()),
                     ),
-                    EventMessage::new(raw_message.to_string(), Some(raw_message_safe.to_string())),
+                    EventMessage::new(raw_message.to_string(), Some(safe_message.to_string())),
                 ),
                 description: "Deleting application warning event",
             },
@@ -267,8 +267,9 @@ mod tests {
                 tc.description
             );
 
-            let message = tc.event.get_message().to_string();
-            assert!(logs_contain(&message), "{}", tc.description);
+            // Logger should display everything
+            assert!(logs_contain(safe_message), "{}", tc.description);
+            assert!(logs_contain(raw_message), "{}", tc.description);
         }
     }
 }
