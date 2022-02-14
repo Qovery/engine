@@ -534,7 +534,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "replicaCount".to_string(),
-                    value: "2".to_string(),
+                    value: "1".to_string(),
                 },
                 // https://cert-manager.io/docs/configuration/acme/dns01/#setting-nameservers-for-dns01-self-check
                 ChartSetValue {
