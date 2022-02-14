@@ -15,7 +15,7 @@ use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::aws::regions::AwsZones;
-use crate::cloud_provider::environment::{Environment, EnvironmentResources};
+use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::service::CheckAction;
 use crate::cloud_provider::utilities::VersionsNumber;
