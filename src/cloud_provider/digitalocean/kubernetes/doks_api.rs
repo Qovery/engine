@@ -2,13 +2,13 @@ use crate::cloud_provider::digitalocean::do_api_common::{do_get_from_api, DoApiT
 use crate::cloud_provider::digitalocean::models::doks::KubernetesCluster;
 use crate::cloud_provider::digitalocean::models::doks::{DoksList, DoksOptions, KubernetesVersion};
 use crate::cloud_provider::utilities::VersionsNumber;
-use crate::error::{SimpleError, SimpleErrorKind, StringError};
+use crate::errors::CommandError;
 use std::str::FromStr;
 
 pub fn get_doks_info_from_name(
     json_content: &str,
     cluster_name: String,
-) -> Result<Option<KubernetesCluster>, SimpleError> {
+) -> Result<Option<KubernetesCluster>, CommandError> {
     let res_doks = serde_json::from_str::<DoksList>(json_content);
 
     match res_doks {
@@ -22,53 +22,39 @@ pub fn get_doks_info_from_name(
                 }
             }
 
-            if cluster_info.is_some() {
-                info!("cluster {} is present from DigitalOcean API", cluster_name);
-            } else {
-                info!("cluster {} is not present from DigitalOcean API", cluster_name)
-            }
-
             Ok(cluster_info)
         }
-        Err(e) => Err(SimpleError {
-            kind: SimpleErrorKind::Other,
-            message: Some(format!(
-                "error while trying to deserialize json received from Digital Ocean DOKS API. {}",
-                e
-            )),
-        }),
+        Err(e) => {
+            let safe_message = "Error while trying to deserialize json received from Digital Ocean DOKS API";
+            return Err(CommandError::new(
+                format!("{}, error: {}", safe_message.to_string(), e.to_string()),
+                Some(safe_message.to_string()),
+            ));
+        }
     }
 }
 
-pub fn get_do_latest_doks_slug_from_api(token: &str, wished_version: &str) -> Result<Option<String>, SimpleError> {
+pub fn get_do_latest_doks_slug_from_api(token: &str, wished_version: &str) -> Result<Option<String>, CommandError> {
     let api_url = format!("{}/options", DoApiType::Doks.api_url());
 
     let json_content = do_get_from_api(token, DoApiType::Doks, api_url)?;
     let doks_versions = get_doks_versions_from_api_output(&json_content)?;
-    match get_do_kubernetes_latest_slug_version(&doks_versions, wished_version) {
-        Ok(x) => Ok(x),
-        Err(e) => Err(SimpleError {
-            kind: SimpleErrorKind::Other,
-            message: Some(format!(
-                "version {} is not supported by DigitalOcean. {}",
-                wished_version, e
-            )),
-        }),
-    }
+
+    get_do_kubernetes_latest_slug_version(&doks_versions, wished_version)
 }
 
-fn get_doks_versions_from_api_output(json_content: &str) -> Result<Vec<KubernetesVersion>, SimpleError> {
+fn get_doks_versions_from_api_output(json_content: &str) -> Result<Vec<KubernetesVersion>, CommandError> {
     let res_doks_options = serde_json::from_str::<DoksOptions>(json_content);
 
     match res_doks_options {
         Ok(options) => Ok(options.options.versions),
-        Err(e) => Err(SimpleError {
-            kind: SimpleErrorKind::Other,
-            message: Some(format!(
-                "error while trying to deserialize json received from Digital Ocean DOKS API. {}",
-                e
-            )),
-        }),
+        Err(e) => {
+            let safe_message = "Error while trying to deserialize json received from Digital Ocean DOKS API";
+            return Err(CommandError::new(
+                format!("{}, error: {}", safe_message.to_string(), e.to_string()),
+                Some(safe_message.to_string()),
+            ));
+        }
     }
 }
 
@@ -76,18 +62,24 @@ fn get_doks_versions_from_api_output(json_content: &str) -> Result<Vec<Kubernete
 fn get_do_kubernetes_latest_slug_version(
     doks_versions: &Vec<KubernetesVersion>,
     wished_version: &str,
-) -> Result<Option<String>, StringError> {
-    let wished_k8s_version = VersionsNumber::from_str(wished_version)?;
+) -> Result<Option<String>, CommandError> {
+    let wished_k8s_version =
+        VersionsNumber::from_str(wished_version).map_err(|e| CommandError::new_from_safe_message(e.to_string()))?;
 
     for kubernetes_doks_version in doks_versions {
-        let current_k8s_version = VersionsNumber::from_str(kubernetes_doks_version.kubernetes_version.as_str())?;
+        let current_k8s_version = VersionsNumber::from_str(kubernetes_doks_version.kubernetes_version.as_str())
+            .map_err(|e| CommandError::new_from_safe_message(e.to_string()))?;
         if current_k8s_version.major == wished_k8s_version.major
             && current_k8s_version.minor == wished_k8s_version.minor
         {
             return Ok(Some(kubernetes_doks_version.slug.clone()));
         }
     }
-    Ok(None)
+
+    Err(CommandError::new_from_safe_message(format!(
+        "DOKS version `{}` is not supported.",
+        wished_k8s_version.to_string()
+    )))
 }
 
 #[cfg(test)]
@@ -373,20 +365,19 @@ mod tests_doks {
         let doks_versions = get_doks_versions_from_api_output(json_content.as_str()).unwrap();
 
         // not supported anymore version
-        assert!(get_do_kubernetes_latest_slug_version(&doks_versions, "1.18")
-            .unwrap()
-            .is_none());
+        assert!(get_do_kubernetes_latest_slug_version(&doks_versions, "1.18").is_err());
+
         // supported versions
         assert_eq!(
             get_do_kubernetes_latest_slug_version(&doks_versions, "1.19")
-                .unwrap()
-                .unwrap(),
+                .expect("error getting do kubernetes version 1.19")
+                .expect("error, version 1.19 is none"),
             "1.19.12-do.0".to_string()
         );
         assert_eq!(
             get_do_kubernetes_latest_slug_version(&doks_versions, "1.21")
-                .unwrap()
-                .unwrap(),
+                .expect("error getting do kubernetes version 1.21")
+                .expect("error, version 1.21 is none"),
             "1.21.2-do.2".to_string()
         );
     }

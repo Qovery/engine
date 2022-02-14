@@ -234,7 +234,7 @@ mod tests {
 
     #[test]
     fn test_run_version_for_command() {
-        let ret = run_version_command_for("/bin/ls");
+        let ret = run_version_command_for("ls");
         assert_eq!(ret.is_empty(), false);
         assert_eq!(ret.contains("GNU"), true)
     }
@@ -253,7 +253,7 @@ mod tests {
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
 
-        let mut cmd = QoveryCommand::new("cat", &vec!["/dev/urandom"], &vec![]);
+        let mut cmd = QoveryCommand::new("sh", &vec!["-c", "cat /dev/urandom | grep -a --null-data ."], &vec![]);
         let ret = cmd.exec_with_timeout(Duration::seconds(2), |_| {}, |_| {});
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));

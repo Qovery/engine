@@ -4,55 +4,46 @@ use retry::OperationResult;
 
 use crate::cmd::utilities::QoveryCommand;
 use crate::constants::TF_PLUGIN_CACHE_DIR;
-use crate::error::SimpleErrorKind::Other;
-use crate::error::{SimpleError, SimpleErrorKind};
+use crate::errors::CommandError;
 use rand::Rng;
 use retry::Error::Operation;
 use std::{env, fs, thread, time};
 
-fn manage_common_issues(terraform_provider_lock: &String, err: &SimpleError) -> bool {
+fn manage_common_issues(terraform_provider_lock: &String, err: &CommandError) -> Result<(), CommandError> {
     // Error: Failed to install provider from shared cache
     // in order to avoid lock errors on parallel run, let's sleep a bit
     // https://github.com/hashicorp/terraform/issues/28041
-    let mut found_managed_issue = false;
-    debug!("{:?}", err);
 
-    match &err.message {
-        None => warn!("no know method to fix this Terraform issue"),
-        Some(message) => {
-            if message.contains("Failed to install provider from shared cache")
-                || message.contains("Failed to install provider")
-            {
-                found_managed_issue = true;
-                let sleep_time_int = rand::thread_rng().gen_range(20..45);
-                let sleep_time = time::Duration::from_secs(sleep_time_int);
+    if err.message().contains("Failed to install provider from shared cache")
+        || err.message().contains("Failed to install provider")
+    {
+        let sleep_time_int = rand::thread_rng().gen_range(20..45);
+        let sleep_time = time::Duration::from_secs(sleep_time_int);
 
-                warn!(
-                    "failed to install provider from shared cache, cleaning and sleeping {} before retrying...",
-                    sleep_time_int
-                );
-                thread::sleep(sleep_time);
+        // failed to install provider from shared cache, cleaning and sleeping before retrying...",
+        thread::sleep(sleep_time);
 
-                match fs::remove_file(&terraform_provider_lock) {
-                    Ok(_) => info!("terraform lock file {} has been removed", &terraform_provider_lock),
-                    Err(e) => error!(
-                        "wasn't able to delete terraform lock file {}: {}",
-                        &terraform_provider_lock, e
-                    ),
-                }
-            }
+        return match fs::remove_file(&terraform_provider_lock) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(CommandError::new(
+                format!("Wasn't able to delete terraform lock file {}", &terraform_provider_lock),
+                Some(format!(
+                    "Wasn't able to delete terraform lock file {}, error: {:?}",
+                    &terraform_provider_lock, e
+                )),
+            )),
+        };
+    } else if err.message().contains("Plugin reinitialization required") {
+        // terraform init is required
+        return Ok(());
+    }
 
-            if message.contains("Plugin reinitialization required") {
-                warn!("terraform init is required");
-                found_managed_issue = true;
-            }
-        }
-    };
-
-    found_managed_issue
+    Err(CommandError::new_from_safe_message(
+        "Not known method to fix this Terraform issue".to_string(),
+    ))
 }
 
-fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
+fn terraform_init_validate(root_dir: &str) -> Result<(), CommandError> {
     let terraform_provider_lock = format!("{}/.terraform.lock.hcl", &root_dir);
 
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
@@ -60,8 +51,8 @@ fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
         match terraform_exec(root_dir, vec!["init", "-no-color"]) {
             Ok(_) => OperationResult::Ok(()),
             Err(err) => {
-                manage_common_issues(&terraform_provider_lock, &err);
-                error!("error while trying to run terraform init, retrying...");
+                let _ = manage_common_issues(&terraform_provider_lock, &err);
+                // Error while trying to run terraform init, retrying...
                 OperationResult::Retry(err)
             }
         };
@@ -70,8 +61,8 @@ fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
         match terraform_exec(root_dir, vec!["validate", "-no-color"]) {
             Ok(_) => OperationResult::Ok(()),
             Err(err) => {
-                manage_common_issues(&terraform_provider_lock, &err);
-                error!("error while trying to Terraform validate on the rendered templates");
+                let _ = manage_common_issues(&terraform_provider_lock, &err);
+                // error while trying to Terraform validate on the rendered templates
                 OperationResult::Retry(err)
             }
         }
@@ -80,11 +71,12 @@ fn terraform_init_validate(root_dir: &str) -> Result<(), SimpleError> {
     match result {
         Ok(_) => Ok(()),
         Err(Operation { error, .. }) => return Err(error),
-        Err(retry::Error::Internal(e)) => return Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+        Err(retry::Error::Internal(e)) => return Err(CommandError::new(e, None)),
     }
 }
 
-pub fn terraform_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Result<(), SimpleError> {
+pub fn terraform_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Result<(), CommandError> {
+    // terraform init
     if let Err(e) = terraform_init_validate(root_dir) {
         return Err(e);
     }
@@ -95,7 +87,7 @@ pub fn terraform_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Resu
             match terraform_exec(root_dir, vec!["plan", "-no-color", "-out", "tf_plan"]) {
                 Ok(out) => OperationResult::Ok(out),
                 Err(err) => {
-                    error!("While trying to Terraform plan the rendered templates");
+                    // Error while trying to Terraform plan the rendered templates
                     OperationResult::Retry(err)
                 }
             }
@@ -104,17 +96,14 @@ pub fn terraform_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Resu
         return match result {
             Ok(_) => Ok(()),
             Err(Operation { error, .. }) => Err(error),
-            Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+            Err(retry::Error::Internal(e)) => Err(CommandError::new(e, None)),
         };
     }
 
-    match terraform_plan_apply(root_dir) {
-        Ok(_) => Ok(()),
-        Err(e) => Err(e),
-    }
+    terraform_plan_apply(root_dir)
 }
 
-pub fn terraform_init_validate_destroy(root_dir: &str, run_apply_before_destroy: bool) -> Result<(), SimpleError> {
+pub fn terraform_init_validate_destroy(root_dir: &str, run_apply_before_destroy: bool) -> Result<(), CommandError> {
     // terraform init
     if let Err(e) = terraform_init_validate(root_dir) {
         return Err(e);
@@ -122,10 +111,7 @@ pub fn terraform_init_validate_destroy(root_dir: &str, run_apply_before_destroy:
 
     // better to apply before destroy to ensure terraform destroy will delete on all resources
     if run_apply_before_destroy {
-        match terraform_plan_apply(root_dir) {
-            Ok(_) => {}
-            Err(e) => return Err(e),
-        }
+        terraform_plan_apply(root_dir)?;
     }
 
     // terraform destroy
@@ -133,7 +119,7 @@ pub fn terraform_init_validate_destroy(root_dir: &str, run_apply_before_destroy:
         match terraform_exec(root_dir, vec!["destroy", "-no-color", "-auto-approve"]) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
-                error!("error while trying to run terraform destroy on rendered templates, retrying...");
+                // Error while trying to run terraform destroy on rendered templates, retrying...
                 OperationResult::Retry(err)
             }
         }
@@ -142,25 +128,22 @@ pub fn terraform_init_validate_destroy(root_dir: &str, run_apply_before_destroy:
     match result {
         Ok(_) => Ok(()),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+        Err(retry::Error::Internal(e)) => Err(CommandError::new(e, None)),
     }
 }
 
-fn terraform_plan_apply(root_dir: &str) -> Result<(), SimpleError> {
+fn terraform_plan_apply(root_dir: &str) -> Result<(), CommandError> {
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // plan
-        match terraform_exec(root_dir, vec!["plan", "-no-color", "-out", "tf_plan"]) {
-            Ok(_) => {}
-            Err(err) => {
-                error!("While trying to Terraform plan the rendered templates");
-                return OperationResult::Retry(err);
-            }
-        };
+        if let Err(err) = terraform_exec(root_dir, vec!["plan", "-no-color", "-out", "tf_plan"]) {
+            // Error while trying to Terraform plan the rendered templates
+            return OperationResult::Retry(err);
+        }
         // apply
         match terraform_exec(root_dir, vec!["apply", "-no-color", "-auto-approve", "tf_plan"]) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
-                error!("error while trying to run terraform apply on rendered templates, retrying...");
+                // Error while trying to run terraform apply on rendered templates, retrying...
                 OperationResult::Retry(err)
             }
         }
@@ -169,11 +152,11 @@ fn terraform_plan_apply(root_dir: &str) -> Result<(), SimpleError> {
     match result {
         Ok(_) => Ok(()),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+        Err(retry::Error::Internal(e)) => Err(CommandError::new(e, None)),
     }
 }
 
-pub fn terraform_init_validate_state_list(root_dir: &str) -> Result<Vec<String>, SimpleError> {
+pub fn terraform_init_validate_state_list(root_dir: &str) -> Result<Vec<String>, CommandError> {
     // terraform init and validate
     if let Err(e) = terraform_init_validate(root_dir) {
         return Err(e);
@@ -184,7 +167,7 @@ pub fn terraform_init_validate_state_list(root_dir: &str) -> Result<Vec<String>,
         match terraform_exec(root_dir, vec!["state", "list"]) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
-                error!("error while trying to run terraform state list, retrying...");
+                // Error while trying to run terraform state list, retrying...
                 OperationResult::Retry(err)
             }
         }
@@ -193,11 +176,11 @@ pub fn terraform_init_validate_state_list(root_dir: &str) -> Result<Vec<String>,
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(SimpleError::new(SimpleErrorKind::Other, Some(e))),
+        Err(retry::Error::Internal(e)) => Err(CommandError::new(e, None)),
     }
 }
 
-pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, SimpleError> {
+pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, CommandError> {
     // override if environment variable is set
     let tf_plugin_cache_dir_value = match env::var_os(TF_PLUGIN_CACHE_DIR) {
         Some(val) => format!("{:?}", val),
@@ -231,18 +214,14 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Si
 
     match result {
         Ok(_) => Ok(stdout),
-        Err(e) => {
-            debug!("Terraform endend in error {:?}", e);
-            let err = SimpleError::new(Other, Some(stdout.join("\n")));
-            Err(err)
-        }
+        Err(_) => Err(CommandError::new(stdout.join("\n"), None)),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::cmd::terraform::{manage_common_issues, terraform_init_validate};
-    use crate::error::{SimpleError, SimpleErrorKind};
+    use crate::errors::CommandError;
     use std::fs;
     use tracing::{span, Level};
     use tracing_test::traced_test;
@@ -269,14 +248,8 @@ obtain schema: the cached package for registry.terraform.io/hashicorp/time
 in the dependency lock file
         "#;
 
-        let could_not_load_plugin_error = SimpleError {
-            kind: SimpleErrorKind::Other,
-            message: Some(could_not_load_plugin.to_string()),
-        };
-        assert!(manage_common_issues(
-            &"/tmp/do_not_exists".to_string(),
-            &could_not_load_plugin_error
-        ));
+        let could_not_load_plugin_error = CommandError::new_from_safe_message(could_not_load_plugin.to_string());
+        assert!(manage_common_issues(&"/tmp/do_not_exists".to_string(), &could_not_load_plugin_error).is_ok());
     }
 
     #[test]

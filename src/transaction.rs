@@ -288,19 +288,19 @@ impl<'a> Transaction<'a> {
                 Step::CreateKubernetes(kubernetes) => {
                     // revert kubernetes creation
                     if let Err(err) = kubernetes.on_create_error() {
-                        return Err(RollbackError::CommitError(err));
+                        return Err(RollbackError::CommitError(err.to_legacy_engine_error()));
                     };
                 }
                 Step::DeleteKubernetes(kubernetes) => {
                     // revert kubernetes deletion
                     if let Err(err) = kubernetes.on_delete_error() {
-                        return Err(RollbackError::CommitError(err));
+                        return Err(RollbackError::CommitError(err.to_legacy_engine_error()));
                     };
                 }
                 Step::PauseKubernetes(kubernetes) => {
                     // revert pause
                     if let Err(err) = kubernetes.on_pause_error() {
-                        return Err(RollbackError::CommitError(err));
+                        return Err(RollbackError::CommitError(err.to_legacy_engine_error()));
                     };
                 }
                 Step::BuildEnvironment(_environment_action, _option) => {
@@ -371,7 +371,7 @@ impl<'a> Transaction<'a> {
 
                 let _ = match action {
                     Ok(_) => {}
-                    Err(err) => return Err(RollbackError::CommitError(err)),
+                    Err(err) => return Err(RollbackError::CommitError(err.to_legacy_engine_error())),
                 };
 
                 Ok(())
@@ -389,7 +389,7 @@ impl<'a> Transaction<'a> {
 
                 let _ = match action {
                     Ok(_) => {}
-                    Err(err) => return Err(RollbackError::CommitError(err)),
+                    Err(err) => return Err(RollbackError::CommitError(err.to_legacy_engine_error())),
                 };
 
                 Err(RollbackError::NoFailoverEnvironment)
@@ -407,7 +407,11 @@ impl<'a> Transaction<'a> {
             match step {
                 Step::CreateKubernetes(kubernetes) => {
                     // create kubernetes
-                    match self.commit_infrastructure(*kubernetes, Action::Create, kubernetes.on_create()) {
+                    match self.commit_infrastructure(
+                        *kubernetes,
+                        Action::Create,
+                        kubernetes.on_create().map_err(|e| e.to_legacy_engine_error()),
+                    ) {
                         TransactionResult::Ok => {}
                         err => {
                             error!("Error while creating infrastructure: {:?}", err);
@@ -417,7 +421,11 @@ impl<'a> Transaction<'a> {
                 }
                 Step::DeleteKubernetes(kubernetes) => {
                     // delete kubernetes
-                    match self.commit_infrastructure(*kubernetes, Action::Delete, kubernetes.on_delete()) {
+                    match self.commit_infrastructure(
+                        *kubernetes,
+                        Action::Delete,
+                        kubernetes.on_delete().map_err(|e| e.to_legacy_engine_error()),
+                    ) {
                         TransactionResult::Ok => {}
                         err => {
                             error!("Error while deleting infrastructure: {:?}", err);
@@ -427,7 +435,11 @@ impl<'a> Transaction<'a> {
                 }
                 Step::PauseKubernetes(kubernetes) => {
                     // pause kubernetes
-                    match self.commit_infrastructure(*kubernetes, Action::Pause, kubernetes.on_pause()) {
+                    match self.commit_infrastructure(
+                        *kubernetes,
+                        Action::Pause,
+                        kubernetes.on_pause().map_err(|e| e.to_legacy_engine_error()),
+                    ) {
                         TransactionResult::Ok => {}
                         err => {
                             error!("Error while pausing infrastructure: {:?}", err);
@@ -496,7 +508,11 @@ impl<'a> Transaction<'a> {
                         *kubernetes,
                         *environment_action,
                         &applications_by_environment,
-                        |qe_env| kubernetes.deploy_environment(qe_env),
+                        |qe_env| {
+                            kubernetes
+                                .deploy_environment(qe_env)
+                                .map_err(|e| e.to_legacy_engine_error())
+                        },
                     ) {
                         TransactionResult::Ok => {}
                         err => {
@@ -511,7 +527,11 @@ impl<'a> Transaction<'a> {
                         *kubernetes,
                         *environment_action,
                         &applications_by_environment,
-                        |qe_env| kubernetes.pause_environment(qe_env),
+                        |qe_env| {
+                            kubernetes
+                                .pause_environment(qe_env)
+                                .map_err(|e| e.to_legacy_engine_error())
+                        },
                     ) {
                         TransactionResult::Ok => {}
                         err => {
@@ -526,7 +546,11 @@ impl<'a> Transaction<'a> {
                         *kubernetes,
                         *environment_action,
                         &applications_by_environment,
-                        |qe_env| kubernetes.delete_environment(qe_env),
+                        |qe_env| {
+                            kubernetes
+                                .delete_environment(qe_env)
+                                .map_err(|e| e.to_legacy_engine_error())
+                        },
                     ) {
                         TransactionResult::Ok => {}
                         err => {

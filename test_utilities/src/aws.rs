@@ -20,14 +20,15 @@ use crate::cloudflare::dns_provider_cloudflare;
 use crate::common::{Cluster, ClusterDomain};
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
-pub const AWS_REGION_FOR_S3: &str = "eu-west-3";
-pub const AWS_TEST_REGION: &str = "eu-west-3";
+pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
+pub const AWS_TEST_REGION: AwsRegion = AwsRegion::EuWest3;
 pub const AWS_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const AWS_KUBERNETES_MINOR_VERSION: u8 = 19;
 pub const AWS_KUBERNETES_VERSION: &'static str =
     formatcp!("{}.{}", AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION);
 pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t3.micro";
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
+pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 7200;
 
 pub fn container_registry_ecr(context: &Context) -> ECR {
     let secrets = FuncTestsSecrets::new();

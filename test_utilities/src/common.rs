@@ -35,7 +35,7 @@ use qovery_engine::cloud_provider::{CloudProvider, Kind};
 use qovery_engine::cmd::kubectl::kubernetes_get_all_hpas;
 use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::engine::Engine;
-use qovery_engine::error::{SimpleError, SimpleErrorKind};
+use qovery_engine::errors::CommandError;
 use qovery_engine::logger::Logger;
 use qovery_engine::models::DatabaseMode::CONTAINER;
 use qovery_engine::transaction::DeploymentOption;
@@ -43,6 +43,11 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::str::FromStr;
 use tracing::{span, Level};
+
+pub enum RegionActivationStatus {
+    Deactivated,
+    Activated,
+}
 
 pub enum ClusterDomain {
     Default,
@@ -1534,7 +1539,7 @@ pub fn cluster_test(
     test_name.to_string()
 }
 
-pub fn metrics_server_test<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<(), SimpleError>
+pub fn metrics_server_test<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -1551,10 +1556,9 @@ where
                     .expect("No hpa condition.")
                     .contains("ValidMetricFound")
                 {
-                    return Err(SimpleError {
-                        kind: SimpleErrorKind::Other,
-                        message: Some("Metrics server doesn't work".to_string()),
-                    });
+                    return Err(CommandError::new_from_safe_message(
+                        "Metrics server doesn't work".to_string(),
+                    ));
                 }
             }
             Ok(())

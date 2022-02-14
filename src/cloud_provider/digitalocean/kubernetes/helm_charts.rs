@@ -5,12 +5,11 @@ use crate::cloud_provider::helm::{
     ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
-use crate::error::{SimpleError, SimpleErrorKind};
+use crate::errors::CommandError;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufReader;
-use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DigitalOceanQoveryTerraformConfig {
@@ -118,16 +117,16 @@ pub fn do_helm_charts(
     qovery_terraform_config_file: &str,
     chart_config_prerequisites: &ChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
-    _kubernetes_config: &Path,
-    _envs: &[(String, String)],
-) -> Result<Vec<Vec<Box<dyn HelmChart>>>, SimpleError> {
-    info!("preparing chart configuration to be deployed");
-
+) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     let content_file = match File::open(&qovery_terraform_config_file) {
         Ok(x) => x,
-        Err(e) => return Err(SimpleError{ kind: SimpleErrorKind::Other, message: Some(
-            format!("Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?. {:?}", e)
-        )}),
+        Err(e) => {
+            let message_safe = "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?";
+            return Err(CommandError::new(
+                format!("{}, error: {:?}", message_safe.to_string(), e),
+                Some(message_safe.to_string()),
+            ));
+        }
     };
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
@@ -135,14 +134,14 @@ pub fn do_helm_charts(
     let qovery_terraform_config: DigitalOceanQoveryTerraformConfig = match serde_json::from_reader(reader) {
         Ok(config) => config,
         Err(e) => {
-            error!(
-                "error while parsing terraform config file {}: {:?}",
-                &qovery_terraform_config_file, &e
+            let message_safe = format!(
+                "Error while parsing terraform config file {}",
+                qovery_terraform_config_file
             );
-            return Err(SimpleError {
-                kind: SimpleErrorKind::Other,
-                message: Some(format!("{:?}", e)),
-            });
+            return Err(CommandError::new(
+                format!("{}, error: {:?}", message_safe.to_string(), e),
+                Some(message_safe.to_string()),
+            ));
         }
     };
 
@@ -650,7 +649,7 @@ datasources:
             path: chart_path("common/charts/ingress-nginx"),
             namespace: HelmChartNamespaces::NginxIngress,
             // Because of NLB, svc can take some time to start
-            timeout_in_seconds: 300,
+            timeout_in_seconds: 800,
             values_files: vec![chart_path("chart_values/nginx-ingress.yaml")],
             values: vec![
                 // Controller resources limits
@@ -806,22 +805,13 @@ datasources:
     };
     let shell_agent = get_chart_for_shell_agent(shell_context, chart_path)?;
 
-    let qovery_agent_version: QoveryAgent = match get_qovery_app_version(
+    let qovery_agent_version: QoveryAgent = get_qovery_app_version(
         QoveryAppName::Agent,
         &chart_config_prerequisites.infra_options.agent_version_controller_token,
         &chart_config_prerequisites.infra_options.qovery_api_url,
         &chart_config_prerequisites.cluster_id,
-    ) {
-        Ok(x) => x,
-        Err(e) => {
-            let msg = format!("Qovery agent version couldn't be retrieved. {}", e);
-            error!("{}", &msg);
-            return Err(SimpleError {
-                kind: SimpleErrorKind::Other,
-                message: Some(msg),
-            });
-        }
-    };
+    )?;
+
     let mut qovery_agent = CommonChart {
         chart_info: ChartInfo {
             name: "qovery-agent".to_string(),
@@ -888,22 +878,13 @@ datasources:
         })
     }
 
-    let qovery_engine_version: QoveryEngine = match get_qovery_app_version(
+    let qovery_engine_version: QoveryEngine = get_qovery_app_version(
         QoveryAppName::Engine,
         &chart_config_prerequisites.infra_options.engine_version_controller_token,
         &chart_config_prerequisites.infra_options.qovery_api_url,
         &chart_config_prerequisites.cluster_id,
-    ) {
-        Ok(x) => x,
-        Err(e) => {
-            let msg = format!("Qovery engine version couldn't be retrieved. {}", e);
-            error!("{}", &msg);
-            return Err(SimpleError {
-                kind: SimpleErrorKind::Other,
-                message: Some(msg),
-            });
-        }
-    };
+    )?;
+
     let qovery_engine = CommonChart {
         chart_info: ChartInfo {
             name: "qovery-engine".to_string(),

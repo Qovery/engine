@@ -5,11 +5,10 @@ use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods, get_pvc, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
 use ::function_name::named;
-use qovery_engine::build_platform::{BuildPlatform, BuildResult, CacheResult};
+use qovery_engine::build_platform::{BuildPlatform, CacheResult};
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubernetes_get_all_pdbs;
-use qovery_engine::container_registry::{ContainerRegistry, PullResult, PushResult};
-use qovery_engine::error::EngineError;
+use qovery_engine::container_registry::{ContainerRegistry, PullResult};
 use qovery_engine::models::{Action, Clone2, EnvironmentAction, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
@@ -89,7 +88,6 @@ fn test_build_cache() {
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
-        let logger = logger();
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets

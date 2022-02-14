@@ -1,5 +1,5 @@
 use self::rusoto_iam::{CreateServiceLinkedRoleRequest, GetRoleRequest, Iam, IamClient};
-use crate::error::{SimpleError, SimpleErrorKind};
+use crate::errors::CommandError;
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use tokio::runtime::Runtime;
@@ -13,13 +13,12 @@ pub struct Role {
 }
 
 pub fn get_default_roles_to_create() -> Vec<Role> {
-    vec![Role {
-        role_name: "AWSServiceRoleForAmazonElasticsearchService".to_string(),
-        service_name: "es.amazonaws.com".to_string(),
-        description:
-            "role permissions policy allows Amazon ES to complete create, delete, describe,  modify on ec2 and elb"
-                .to_string(),
-    }]
+    vec![Role::new(
+        "AWSServiceRoleForAmazonElasticsearchService".to_string(),
+        "es.amazonaws.com".to_string(),
+        "role permissions policy allows Amazon ES to complete create, delete, describe,  modify on ec2 and elb"
+            .to_string(),
+    )]
 }
 
 impl Role {
@@ -31,7 +30,7 @@ impl Role {
         }
     }
 
-    pub async fn is_exist(&self, access_key: &str, secret_key: &str) -> Result<bool, SimpleError> {
+    pub async fn is_exist(&self, access_key: &str, secret_key: &str) -> Result<bool, CommandError> {
         let credentials = StaticProvider::new(access_key.to_string(), secret_key.to_string(), None, None);
         let client = Client::new_with(credentials, HttpClient::new().unwrap());
         let iam_client = IamClient::new_with_client(client, Region::UsEast1);
@@ -40,33 +39,33 @@ impl Role {
                 role_name: self.role_name.clone(),
             })
             .await;
-        return match role {
+
+        match role {
             Ok(_) => Ok(true),
-            Err(e) => Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some(format!(
-                    "Unable to know if {} exist on AWS Account: {:?}",
-                    &self.role_name, e
-                )),
+            Err(e) => Err(CommandError::new(
+                format!("Unable to know if {} exist on AWS account: {:?}", &self.role_name, e),
+                Some(format!("Unable to know if {} exist on AWS account.", &self.role_name,)),
             )),
-        };
+        }
     }
 
-    pub fn create_service_linked_role(&self, access_key: &str, secret_key: &str) -> Result<bool, SimpleError> {
+    pub fn create_service_linked_role(&self, access_key: &str, secret_key: &str) -> Result<bool, CommandError> {
         let future_is_exist = self.is_exist(access_key, secret_key);
         let exist = Runtime::new()
             .expect("Failed to create Tokio runtime to check if role exist")
             .block_on(future_is_exist);
-        return match exist {
+
+        match exist {
             Ok(true) => {
-                info!("Role {} already exist, nothing to do", &self.role_name);
+                // Role already exist, nothing to do
                 Ok(true)
             }
             _ => {
-                info!("Role {} doesn't exist, let's create it !", &self.role_name);
+                // Role doesn't exist, let's create it !
                 let credentials = StaticProvider::new(access_key.to_string(), secret_key.to_string(), None, None);
                 let client = Client::new_with(credentials, HttpClient::new().unwrap());
                 let iam_client = IamClient::new_with_client(client, Region::UsEast1);
+
                 let future_create = iam_client.create_service_linked_role(CreateServiceLinkedRoleRequest {
                     aws_service_name: self.service_name.clone(),
                     custom_suffix: None,
@@ -75,17 +74,18 @@ impl Role {
                 let created = Runtime::new()
                     .expect("Failed to create Tokio runtime to check if role exist")
                     .block_on(future_create);
+
                 return match created {
                     Ok(_) => Ok(true),
-                    Err(e) => Err(SimpleError::new(
-                        SimpleErrorKind::Other,
-                        Some(format!(
-                            "Unable to know if {} exist on AWS Account: {:?}",
-                            &self.role_name, e
-                        )),
-                    )),
+                    Err(e) => {
+                        let safe_message = format!("Unable to know if `{}` exist on AWS Account", &self.role_name);
+                        return Err(CommandError::new(
+                            format!("{}, error: {:?}", safe_message, e),
+                            Some(safe_message),
+                        ));
+                    }
                 };
             }
-        };
+        }
     }
 }

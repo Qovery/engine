@@ -20,7 +20,7 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
 use std::fs;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 use crate::scaleway::{
     SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
@@ -35,8 +35,8 @@ use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DIGITAL_OCEAN_SPACES_ACCESS_ID, DIGITAL_OCEAN_SPACES_SECRET_ID,
     DIGITAL_OCEAN_TOKEN, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
-use qovery_engine::error::{SimpleError, SimpleErrorKind};
 use qovery_engine::models::{Context, Database, DatabaseKind, DatabaseMode, Environment, Features, Metadata};
+use retry::Error::Operation;
 use serde::{Deserialize, Serialize};
 
 extern crate time;
@@ -48,7 +48,7 @@ use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::cmd::utilities::QoveryCommand;
-use qovery_engine::error::SimpleErrorKind::Other;
+use qovery_engine::errors::CommandError;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::models::DatabaseMode::MANAGED;
 use qovery_engine::object_storage::spaces::{BucketDeleteStrategy, Spaces};
@@ -480,7 +480,7 @@ pub fn kubernetes_config_path(
     provider_kind: Kind,
     workspace_directory: &str,
     secrets: FuncTestsSecrets,
-) -> Result<String, SimpleError> {
+) -> Result<String, CommandError> {
     let kubernetes_config_bucket_name = format!("qovery-kubeconfigs-{}", context.cluster_id());
     let kubernetes_config_object_key = format!("{}.yaml", context.cluster_id());
     let kubernetes_config_file_path = format!("{}/kubernetes_config_{}", workspace_directory, context.cluster_id());
@@ -504,7 +504,7 @@ fn get_kubernetes_config_file<P>(
     kubernetes_config_object_key: String,
     file_path: P,
     secrets: FuncTestsSecrets,
-) -> Result<fs::File, SimpleError>
+) -> Result<fs::File, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -564,30 +564,28 @@ where
                                 match file.read_to_string(&mut content) {
                                     Ok(_) => Ok(content),
                                     Err(e) => {
-                                        let message = format!("error while trying to read file, error: {}", e);
-                                        error!("{}", message);
-
-                                        Err(SimpleError::new(SimpleErrorKind::Other, Some(message)))
+                                        let message_safe = "Error while trying to read file";
+                                        Err(CommandError::new(
+                                            format!("{}, error: {}", message_safe.to_string(), e),
+                                            Some(message_safe.to_string()),
+                                        ))
                                     }
                                 }
                             }
                             Err(e) => {
-                                let message = format!(
-                                    "error while trying to get kubeconfig from spaces, error: {:?}",
-                                    e.message,
-                                );
-                                error!("{}", message);
-
-                                Err(SimpleError::new(SimpleErrorKind::Other, e.message))
+                                let message_safe = "Error  while trying to get kubeconfig from spaces";
+                                Err(CommandError::new(
+                                    format!(
+                                        "{}, error: {}",
+                                        message_safe.to_string(),
+                                        e.message.unwrap_or("no error message".to_string())
+                                    ),
+                                    Some(message_safe.to_string()),
+                                ))
                             }
                         }
                     }
-                    Err(_) => {
-                        let message = format!("`{}` is not a valid region", region_raw);
-                        error!("{}", message);
-
-                        Err(SimpleError::new(SimpleErrorKind::Other, Some(message)))
-                    }
+                    Err(e) => Err(e),
                 }
             }
             Kind::Scw => {
@@ -618,19 +616,19 @@ where
                 ));
 
                 if let Err(e) = clusters_res {
-                    let message = format!("error while trying to get clusters, error: {}", e.to_string());
-                    error!("{}", message);
-
-                    return OperationResult::Retry(SimpleError::new(SimpleErrorKind::Other, Some(message.as_str())));
+                    let message_safe = "Error while trying to get clusters";
+                    return OperationResult::Retry(CommandError::new(
+                        format!("{}, error: {}", message_safe.to_string(), e.to_string()),
+                        Some(message_safe.to_string()),
+                    ));
                 }
 
                 let clusters = clusters_res.unwrap();
 
                 if clusters.clusters.is_none() {
-                    let message = "error while trying to get clusters, error: no clusters found";
-                    error!("{}", message);
-
-                    return OperationResult::Retry(SimpleError::new(SimpleErrorKind::Other, Some(message)));
+                    return OperationResult::Retry(CommandError::new_from_safe_message(
+                        "Error while trying to get clusters".to_string(),
+                    ));
                 }
 
                 let clusters = clusters.clusters.unwrap();
@@ -661,13 +659,10 @@ where
                                         );
                                     }
                                     Err(e) => {
-                                        let message =
-                                            format!("error while trying to get clusters, error: {}", e.to_string());
-                                        error!("{}", message);
-
-                                        return OperationResult::Retry(SimpleError::new(
-                                            SimpleErrorKind::Other,
-                                            Some(message.as_str()),
+                                        let message_safe = "Error while trying to get clusters";
+                                        return OperationResult::Retry(CommandError::new(
+                                            format!("{}, error: {}", message_safe.to_string(), e.to_string()),
+                                            Some(message_safe.to_string()),
                                         ));
                                     }
                                 };
@@ -676,7 +671,9 @@ where
                     }
                 }
 
-                Err(SimpleError::new(SimpleErrorKind::Other, Some("Test cluster not found")))
+                Err(CommandError::new_from_safe_message(
+                    "Test cluster not found".to_string(),
+                ))
             }
         };
 
@@ -688,11 +685,9 @@ where
 
     let file_content = match file_content_result {
         Ok(file_content) => file_content,
-        Err(_) => {
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some("file content is empty (retry failed multiple times) - which is not the expected content - what's wrong?"),
-            ));
+        Err(Operation { error, .. }) => return Err(error),
+        Err(retry::Error::Internal(msg)) => {
+            return Err(CommandError::new_from_safe_message(msg));
         }
     };
 
@@ -700,12 +695,25 @@ where
         .create(true)
         .write(true)
         .truncate(true)
-        .open(file_path.as_ref())?;
-    let _ = kubernetes_config_file.write_all(file_content.as_bytes())?;
+        .open(file_path.as_ref())
+        .map_err(|e| {
+            let message_safe = format!("Error opening kubeconfig file.");
+            CommandError::new(
+                format!("{}, error: {}", message_safe.to_string(), e.to_string()),
+                Some(message_safe.to_string()),
+            )
+        })?;
+    let _ = kubernetes_config_file
+        .write_all(file_content.as_bytes())
+        .map_err(|_| CommandError::new_from_safe_message("Error while trying to write into file.".to_string()))?;
+
     // removes warning kubeconfig is (world/group) readable
-    let mut perms = fs::metadata(file_path.as_ref())?.permissions();
+    let mut perms = fs::metadata(file_path.as_ref())
+        .map_err(|_| CommandError::new_from_safe_message("Error while trying to get file metadata.".to_string()))?
+        .permissions();
     perms.set_readonly(false);
-    fs::set_permissions(file_path.as_ref(), perms)?;
+    fs::set_permissions(file_path.as_ref(), perms)
+        .map_err(|_| CommandError::new_from_safe_message("Error while trying to set file permission.".to_string()))?;
     Ok(kubernetes_config_file)
 }
 
@@ -765,7 +773,7 @@ fn aws_s3_get_object(
     secret_access_key: &str,
     bucket_name: &str,
     object_key: &str,
-) -> Result<String, SimpleError> {
+) -> Result<String, CommandError> {
     let local_path = format!("/tmp/{}", object_key); // FIXME: change hardcoded /tmp/
 
     // gets an aws s3 object using aws-cli
@@ -782,8 +790,9 @@ fn aws_s3_get_object(
     );
 
     cmd.exec()
-        .map_err(|err| SimpleError::new(Other, Some(format!("{}", err))))?;
-    let s = fs::read_to_string(&local_path)?;
+        .map_err(|err| CommandError::new_from_safe_message(format!("{:?}", err)))?;
+    let s = fs::read_to_string(&local_path)
+        .map_err(|_| CommandError::new_from_safe_message("Error while trying to read file to string.".to_string()))?;
 
     Ok(s)
 }
@@ -829,7 +838,7 @@ pub fn get_pods(
     environment_check: Environment,
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
-) -> Result<KubernetesList<KubernetesPod>, SimpleError> {
+) -> Result<KubernetesList<KubernetesPod>, CommandError> {
     let namespace_name = format!(
         "{}-{}",
         &environment_check.project_id.clone(),
@@ -901,7 +910,7 @@ pub fn get_pvc(
     provider_kind: Kind,
     environment_check: Environment,
     secrets: FuncTestsSecrets,
-) -> Result<PVC, SimpleError> {
+) -> Result<PVC, CommandError> {
     let namespace_name = format!(
         "{}-{}",
         &environment_check.project_id.clone(),
@@ -930,7 +939,7 @@ pub fn get_svc(
     provider_kind: Kind,
     environment_check: Environment,
     secrets: FuncTestsSecrets,
-) -> Result<SVC, SimpleError> {
+) -> Result<SVC, CommandError> {
     let namespace_name = format!(
         "{}-{}",
         &environment_check.project_id.clone(),

@@ -3,6 +3,7 @@ use crate::cloud_provider::aws::regions::RegionAndZoneErrors::*;
 use crate::models::ToTerraformString;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use strum_macros::EnumIter;
 
@@ -288,6 +289,17 @@ pub enum RegionAndZoneErrors {
     RegionNotSupported,
     ZoneNotFound,
     ZoneNotSupported,
+}
+
+impl Display for RegionAndZoneErrors {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            RegionNotFound => "Region not found",
+            RegionNotSupported => "Region not supported",
+            ZoneNotFound => "Zone not found",
+            ZoneNotSupported => "Zone not supported",
+        })
+    }
 }
 
 impl AwsZones {

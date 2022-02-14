@@ -49,13 +49,13 @@ impl EngineEvent {
     pub fn get_message(&self) -> String {
         match self {
             EngineEvent::Error(engine_error) => engine_error.message(),
-            EngineEvent::Waiting(_details, message) => message.get_message(),
-            EngineEvent::Deploying(_details, message) => message.get_message(),
-            EngineEvent::Pausing(_details, message) => message.get_message(),
-            EngineEvent::Deleting(_details, message) => message.get_message(),
-            EngineEvent::Deployed(_details, message) => message.get_message(),
-            EngineEvent::Paused(_details, message) => message.get_message(),
-            EngineEvent::Deleted(_details, message) => message.get_message(),
+            EngineEvent::Waiting(_details, message) => message.message(),
+            EngineEvent::Deploying(_details, message) => message.message(),
+            EngineEvent::Pausing(_details, message) => message.message(),
+            EngineEvent::Deleting(_details, message) => message.message(),
+            EngineEvent::Deployed(_details, message) => message.message(),
+            EngineEvent::Paused(_details, message) => message.message(),
+            EngineEvent::Deleted(_details, message) => message.message(),
         }
     }
 }
@@ -80,10 +80,22 @@ impl EventMessage {
         EventMessage { raw, safe }
     }
 
-    /// Returns message for event message, safe message if exists, otherwise raw.
-    pub fn get_message(&self) -> String {
+    /// Creates e new EventMessage from safe message.
+    ///
+    /// Arguments
+    ///
+    /// * `safe`: Event safe message string (from which all unsafe text such as passwords and tokens has been removed).
+    pub fn new_from_safe(safe: String) -> Self {
+        EventMessage {
+            raw: safe.to_string(),
+            safe: Some(safe),
+        }
+    }
+
+    /// Returns message for event message.
+    pub fn message(&self) -> String {
         if let Some(msg) = &self.safe {
-            return msg.clone();
+            return format!("{} {}", msg.clone(), self.raw.clone());
         }
 
         self.raw.clone()
@@ -138,6 +150,8 @@ impl Display for Stage {
 #[derive(Debug, Clone)]
 /// GeneralStep: represents an engine general step usually shared across all engine stages
 pub enum GeneralStep {
+    /// ValidateSystemRequirements: validating system requirements
+    ValidateSystemRequirements,
     /// RetrieveClusterConfig: retrieving cluster configuration
     RetrieveClusterConfig,
     /// RetrieveClusterResources: retrieving cluster resources
@@ -152,6 +166,7 @@ impl Display for GeneralStep {
             match &self {
                 GeneralStep::RetrieveClusterConfig => "retrieve-cluster-config",
                 GeneralStep::RetrieveClusterResources => "retrieve-cluster-resources",
+                GeneralStep::ValidateSystemRequirements => "validate-system-requirements",
             }
         )
     }
@@ -170,6 +185,8 @@ pub enum InfrastructureStep {
     Resume,
     /// Upgrade: upgrade a cluster.
     Upgrade,
+    /// Downgrade: upgrade a cluster.
+    Downgrade,
     /// Delete: delete a cluster.
     Delete,
 }
@@ -184,6 +201,7 @@ impl Display for InfrastructureStep {
                 InfrastructureStep::Create => "create",
                 InfrastructureStep::Pause => "pause",
                 InfrastructureStep::Upgrade => "upgrade",
+                InfrastructureStep::Downgrade => "downgrade",
                 InfrastructureStep::Delete => "delete",
                 InfrastructureStep::Resume => "resume",
             },
@@ -345,6 +363,13 @@ impl EventDetails {
         }
     }
 
+    /// TODO(benjaminch): remove this dirty hack
+    pub fn clone_changing_stage(event_details: EventDetails, stage: Stage) -> Self {
+        let mut event_details = event_details.clone();
+        event_details.stage = stage;
+        event_details
+    }
+
     /// Returns event's provider name.
     pub fn provider_kind(&self) -> Option<Kind> {
         self.provider_kind.clone()
@@ -390,7 +415,7 @@ mod tests {
         // setup:
         let test_cases: Vec<(Option<String>, String, String)> = vec![
             (None, "raw".to_string(), "raw".to_string()),
-            (Some("safe".to_string()), "raw".to_string(), "safe".to_string()),
+            (Some("safe".to_string()), "raw".to_string(), "safe raw".to_string()),
         ];
 
         for tc in test_cases {
@@ -399,7 +424,7 @@ mod tests {
             let event_message = EventMessage::new(raw_message, safe_message);
 
             // validate:
-            assert_eq!(expected, event_message.get_message());
+            assert_eq!(expected, event_message.message());
         }
     }
 
