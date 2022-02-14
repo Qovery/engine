@@ -384,17 +384,10 @@ pub fn deploy_environment(
         },
     };
 
+    // Resources check before deploy
+    // TODO(ENG-1066): we should check if env can be deployed or not based on required resources and available ones.
+    // This check is not trivial since auto-scaler comes to play and resources distribution on nodes might not behave necesarly the way we think.
     // do not deploy if there is not enough resources
-    let resources = kubernetes.resources(environment)?;
-    let required_resources = environment.required_resources();
-
-    if let Err(e) = check_kubernetes_has_enough_resources_to_deploy_environment(
-        resources,
-        required_resources,
-        event_details.clone(),
-    ) {
-        return Err(e);
-    }
 
     // create all stateful services (database)
     for service in &environment.stateful_services {
@@ -700,38 +693,6 @@ pub fn delete_environment(
         &environment.namespace(),
         kubernetes.cloud_provider().credentials_environment_variables(),
     );
-
-    Ok(())
-}
-
-/// check that there is enough CPU and RAM, and pods resources
-/// before starting to deploy stateful and stateless services
-pub fn check_kubernetes_has_enough_resources_to_deploy_environment(
-    resources: Resources,
-    environment_resources: EnvironmentResources,
-    event_details: EventDetails,
-) -> Result<(), EngineError> {
-    if (environment_resources.cpu > resources.free_cpu)
-        || (environment_resources.ram_in_mib > resources.free_ram_in_mib)
-    {
-        // not enough resources CPU or RAM
-        return Err(EngineError::new_cannot_deploy_not_enough_resources_available(
-            event_details.clone(),
-            environment_resources.ram_in_mib,
-            resources.free_ram_in_mib,
-            environment_resources.cpu,
-            resources.free_cpu,
-        ));
-    }
-
-    if environment_resources.pods > resources.free_pods {
-        // not enough free pods on the cluster
-        return Err(EngineError::new_cannot_deploy_not_enough_free_pods_available(
-            event_details,
-            environment_resources.pods,
-            resources.free_pods,
-        ));
-    }
 
     Ok(())
 }
