@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 pub mod io;
 
 extern crate url;
@@ -10,23 +12,36 @@ use std::fmt::{Display, Formatter};
 #[derive(Debug, Clone)]
 /// EngineEvent: represents an event happening in the Engine.
 pub enum EngineEvent {
+    /// Debug: represents a debug message event.
+    Debug(EventDetails, EventMessage),
+    /// Info: represents an info message event.
+    Info(EventDetails, EventMessage),
+    /// Warning: represents a warning message event.
+    Warning(EventDetails, EventMessage),
     /// Error: represents an error event.
     Error(EngineError),
     /// Waiting: represents an engine waiting event.
     ///
     /// Engine is waiting for a task to be done.
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Waiting(EventDetails, EventMessage),
     /// Deploying: represents an engine deploying event.
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Deploying(EventDetails, EventMessage),
     /// Pausing: represents an engine pausing event.
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Pausing(EventDetails, EventMessage),
     /// Deleting: represents an engine deleting event.
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Deleting(EventDetails, EventMessage),
     /// Deployed: represents an engine deployed event.
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Deployed(EventDetails, EventMessage),
     /// Paused: represents an engine paused event.
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Paused(EventDetails, EventMessage),
     /// Deleted: represents an engine deleted event.
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Deleted(EventDetails, EventMessage),
 }
 
@@ -34,6 +49,9 @@ impl EngineEvent {
     /// Returns engine's event details.
     pub fn get_details(&self) -> &EventDetails {
         match self {
+            EngineEvent::Debug(details, _message) => details,
+            EngineEvent::Info(details, _message) => details,
+            EngineEvent::Warning(details, _message) => details,
             EngineEvent::Error(engine_error) => engine_error.event_details(),
             EngineEvent::Waiting(details, _message) => details,
             EngineEvent::Deploying(details, _message) => details,
@@ -48,14 +66,17 @@ impl EngineEvent {
     /// Returns engine's event message.
     pub fn message(&self, message_verbosity: EventMessageVerbosity) -> String {
         match self {
+            EngineEvent::Debug(_details, message) => message.message(message_verbosity),
+            EngineEvent::Info(_details, message) => message.message(message_verbosity),
+            EngineEvent::Warning(_details, message) => message.message(message_verbosity),
             EngineEvent::Error(engine_error) => engine_error.message(),
-            EngineEvent::Waiting(_details, event_message) => event_message.message(message_verbosity),
-            EngineEvent::Deploying(_details, event_message) => event_message.message(message_verbosity),
-            EngineEvent::Pausing(_details, event_message) => event_message.message(message_verbosity),
-            EngineEvent::Deleting(_details, event_message) => event_message.message(message_verbosity),
-            EngineEvent::Deployed(_details, event_message) => event_message.message(message_verbosity),
-            EngineEvent::Paused(_details, event_message) => event_message.message(message_verbosity),
-            EngineEvent::Deleted(_details, event_message) => event_message.message(message_verbosity),
+            EngineEvent::Waiting(_details, message) => message.message(message_verbosity),
+            EngineEvent::Deploying(_details, message) => message.message(message_verbosity),
+            EngineEvent::Pausing(_details, message) => message.message(message_verbosity),
+            EngineEvent::Deleting(_details, message) => message.message(message_verbosity),
+            EngineEvent::Deployed(_details, message) => message.message(message_verbosity),
+            EngineEvent::Paused(_details, message) => message.message(message_verbosity),
+            EngineEvent::Deleted(_details, message) => message.message(message_verbosity),
         }
     }
 }
