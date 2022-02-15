@@ -2,8 +2,8 @@ use crate::cloud_provider::helm::HelmAction::Deploy;
 use crate::cloud_provider::helm::HelmChartNamespaces::KubeSystem;
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAppName, QoveryShellAgent};
 use crate::cmd::helm::{
-    helm_destroy_chart_if_breaking_changes_version_detected, helm_exec_uninstall_with_chart_info,
-    helm_exec_upgrade_with_chart_info, helm_upgrade_diff_with_chart_info, is_chart_deployed,
+    helm_destroy_chart_if_breaking_changes_version_detected, helm_exec_upgrade_with_chart_info,
+    helm_upgrade_diff_with_chart_info, to_command_error, Helm,
 };
 use crate::cmd::kubectl::{
     kubectl_delete_crash_looping_pods, kubectl_exec_delete_crd, kubectl_exec_get_configmap, kubectl_exec_get_events,
@@ -104,6 +104,17 @@ impl ChartInfo {
             values_files,
             parse_stderr_for_error,
             k8s_selector,
+            ..Default::default()
+        }
+    }
+
+    pub fn new_from_release_name(name: &str, custom_namespace: &str) -> ChartInfo {
+        ChartInfo {
+            name: name.to_string(),
+            namespace: HelmChartNamespaces::Custom,
+            custom_namespace: Some(custom_namespace.to_string()),
+            timeout_in_seconds: 3600,
+            atomic: true,
             ..Default::default()
         }
     }
@@ -216,6 +227,8 @@ pub trait HelmChart: Send {
     ) -> Result<Option<ChartPayload>, CommandError> {
         let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         let chart_info = self.get_chart_info();
+        let helm = Helm::new(kubernetes_config).map_err(to_command_error)?;
+
         match chart_info.action {
             HelmAction::Deploy => {
                 if let Err(e) = helm_destroy_chart_if_breaking_changes_version_detected(
@@ -233,19 +246,7 @@ pub trait HelmChart: Send {
             }
             HelmAction::Destroy => {
                 let chart_info = self.get_chart_info();
-                match is_chart_deployed(
-                    kubernetes_config,
-                    environment_variables.clone(),
-                    Some(chart_info.get_namespace_string().as_str()),
-                    chart_info.name.clone(),
-                ) {
-                    Ok(deployed) => {
-                        if deployed {
-                            helm_exec_uninstall_with_chart_info(kubernetes_config, &environment_variables, chart_info)?
-                        }
-                    }
-                    Err(e) => return Err(e),
-                };
+                helm.uninstall(&chart_info).map_err(to_command_error)?;
             }
             HelmAction::Skip => {}
         }
@@ -591,6 +592,8 @@ impl HelmChart for PrometheusOperatorConfigChart {
     ) -> Result<Option<ChartPayload>, CommandError> {
         let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         let chart_info = self.get_chart_info();
+        let helm = Helm::new(kubernetes_config).map_err(to_command_error)?;
+
         match chart_info.action {
             HelmAction::Deploy => {
                 if let Err(e) = helm_destroy_chart_if_breaking_changes_version_detected(
@@ -608,30 +611,19 @@ impl HelmChart for PrometheusOperatorConfigChart {
             }
             HelmAction::Destroy => {
                 let chart_info = self.get_chart_info();
-                match is_chart_deployed(
-                    kubernetes_config,
-                    environment_variables.clone(),
-                    Some(chart_info.get_namespace_string().as_str()),
-                    chart_info.name.clone(),
-                ) {
-                    Ok(deployed) => {
-                        if deployed {
-                            let prometheus_crds = [
-                                "prometheuses.monitoring.coreos.com",
-                                "prometheusrules.monitoring.coreos.com",
-                                "servicemonitors.monitoring.coreos.com",
-                                "podmonitors.monitoring.coreos.com",
-                                "alertmanagers.monitoring.coreos.com",
-                                "thanosrulers.monitoring.coreos.com",
-                            ];
-                            helm_exec_uninstall_with_chart_info(kubernetes_config, &environment_variables, chart_info)?;
-                            for crd in &prometheus_crds {
-                                kubectl_exec_delete_crd(kubernetes_config, crd, environment_variables.clone())?;
-                            }
-                        }
-                    }
-                    Err(e) => return Err(e),
-                };
+                helm.uninstall(&chart_info).map_err(to_command_error)?;
+
+                let prometheus_crds = [
+                    "prometheuses.monitoring.coreos.com",
+                    "prometheusrules.monitoring.coreos.com",
+                    "servicemonitors.monitoring.coreos.com",
+                    "podmonitors.monitoring.coreos.com",
+                    "alertmanagers.monitoring.coreos.com",
+                    "thanosrulers.monitoring.coreos.com",
+                ];
+                for crd in &prometheus_crds {
+                    let _ = kubectl_exec_delete_crd(kubernetes_config, crd, environment_variables.clone());
+                }
             }
             HelmAction::Skip => {}
         }

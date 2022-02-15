@@ -14,7 +14,7 @@ use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::helm::deploy_charts_levels;
+use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
     KubernetesNodesType, KubernetesUpgradeStatus, ProviderOptions,
@@ -24,11 +24,11 @@ use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
+use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{
     kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events,
     kubectl_exec_scale_replicas, ScalingKind,
 };
-use crate::cmd::structs::HelmChart;
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider;
@@ -1244,15 +1244,9 @@ impl<'a> EKS<'a> {
             );
 
             // delete custom metrics api to avoid stale namespaces on deletion
-            let _ = cmd::helm::helm_uninstall_list(
-                &kubernetes_config_file_path,
-                vec![HelmChart {
-                    name: "metrics-server".to_string(),
-                    namespace: "kube-system".to_string(),
-                    version: None,
-                }],
-                self.cloud_provider().credentials_environment_variables(),
-            );
+            let helm = Helm::new(&kubernetes_config_file_path).map_err(|e| to_engine_error(&event_details, e))?;
+            let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
+            helm.uninstall(&chart).map_err(|e| to_engine_error(&event_details, e))?;
 
             // required to avoid namespace stuck on deletion
             uninstall_cert_manager(
@@ -1270,6 +1264,20 @@ impl<'a> EKS<'a> {
                 ),
             );
 
+            let helm = match Helm::new(&kubernetes_config_file_path) {
+                Ok(helm) => helm,
+                Err(err) => {
+                    self.logger().log(
+                        LogLevel::Error,
+                        EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(err.to_string())),
+                    );
+                    return Err(EngineError::new_cannot_get_cluster_error(
+                        event_details.clone(),
+                        CommandError::new_from_safe_message(err.to_string()),
+                    ));
+                }
+            };
+
             let qovery_namespaces = get_qovery_managed_namespaces();
             for qovery_namespace in qovery_namespaces.iter() {
                 let charts_to_delete = cmd::helm::helm_list(
@@ -1280,12 +1288,8 @@ impl<'a> EKS<'a> {
                 match charts_to_delete {
                     Ok(charts) => {
                         for chart in charts {
-                            match cmd::helm::helm_exec_uninstall(
-                                &kubernetes_config_file_path,
-                                &chart.namespace,
-                                &chart.name,
-                                self.cloud_provider().credentials_environment_variables(),
-                            ) {
+                            let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
+                            match helm.uninstall(&chart_info) {
                                 Ok(_) => self.logger().log(
                                     LogLevel::Info,
                                     EngineEvent::Deleting(
@@ -1294,12 +1298,12 @@ impl<'a> EKS<'a> {
                                     ),
                                 ),
                                 Err(e) => {
-                                    let message_safe = format!("Can't delete chart `{}`", chart.name);
+                                    let message_safe = format!("Can't delete chart `{}`: {}", &chart.name, e);
                                     self.logger().log(
                                         LogLevel::Error,
                                         EngineEvent::Deleting(
                                             event_details.clone(),
-                                            EventMessage::new(message_safe, Some(e.message())),
+                                            EventMessage::new(message_safe, Some(e.to_string())),
                                         ),
                                     )
                                 }
@@ -1370,6 +1374,7 @@ impl<'a> EKS<'a> {
                 ),
             );
 
+            let helm = Helm::new(&kubernetes_config_file_path).map_err(|e| to_engine_error(&event_details, e))?;
             match cmd::helm::helm_list(
                 &kubernetes_config_file_path,
                 self.cloud_provider().credentials_environment_variables(),
@@ -1377,11 +1382,8 @@ impl<'a> EKS<'a> {
             ) {
                 Ok(helm_charts) => {
                     for chart in helm_charts {
-                        match cmd::helm::helm_uninstall_list(
-                            &kubernetes_config_file_path,
-                            vec![chart.clone()],
-                            self.cloud_provider().credentials_environment_variables(),
-                        ) {
+                        let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
+                        match helm.uninstall(&chart_info) {
                             Ok(_) => self.logger().log(
                                 LogLevel::Info,
                                 EngineEvent::Deleting(
@@ -1390,12 +1392,12 @@ impl<'a> EKS<'a> {
                                 ),
                             ),
                             Err(e) => {
-                                let message_safe = format!("Error deleting chart `{}` deleted", chart.name);
+                                let message_safe = format!("Error deleting chart `{}` deleted: {}", chart.name, e);
                                 self.logger().log(
                                     LogLevel::Error,
                                     EngineEvent::Deleting(
                                         event_details.clone(),
-                                        EventMessage::new(message_safe, e.message),
+                                        EventMessage::new(message_safe, Some(e.to_string())),
                                     ),
                                 )
                             }

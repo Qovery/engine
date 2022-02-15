@@ -3,14 +3,14 @@ use std::path::{Path, PathBuf};
 
 use tracing::{error, info, span, Level};
 
-use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, CommonChart};
-use crate::cloud_provider::service::ServiceType;
+use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::helm::HelmCommand::{ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{CannotRollback, CmdError, InvalidKubeConfig, ReleaseDoesNotExist};
 use crate::cmd::structs::{HelmChart, HelmHistoryRow, HelmListItem};
 use crate::cmd::utilities::QoveryCommand;
 use crate::error::{SimpleError, SimpleErrorKind};
-use crate::errors::CommandError;
+use crate::errors::{CommandError, EngineError};
+use crate::events::EventDetails;
 use chrono::Duration;
 use retry::delay::Fixed;
 use retry::Error::Operation;
@@ -29,7 +29,7 @@ pub enum Timeout<T> {
 }
 
 impl Timeout<u32> {
-    fn value(&self) -> u32 {
+    pub fn value(&self) -> u32 {
         match *self {
             Timeout::Default => HELM_DEFAULT_TIMEOUT_IN_SECONDS,
             Timeout::Value(t) => t,
@@ -341,72 +341,6 @@ impl Helm {
     }
 }
 
-pub fn helm_exec_with_upgrade_history<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    release_name: &str,
-    selector: Option<String>,
-    chart_root_dir: P,
-    timeout: Timeout<u32>,
-    envs: Vec<(&str, &str)>,
-    service_type: ServiceType,
-) -> Result<Option<HelmHistoryRow>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    // do exec helm upgrade
-    info!(
-        "exec helm upgrade for namespace {} and chart {}",
-        &namespace,
-        chart_root_dir.as_ref().to_str().unwrap()
-    );
-
-    let path = match chart_root_dir.as_ref().to_str().is_some() {
-        true => chart_root_dir.as_ref().to_str().unwrap(),
-        false => "",
-    }
-    .to_string();
-
-    let current_chart = CommonChart {
-        chart_info: ChartInfo::new_from_custom_namespace(
-            release_name.to_string(),
-            path.clone(),
-            namespace.to_string(),
-            timeout.value() as i64,
-            match service_type {
-                ServiceType::Database(_) => vec![format!("{}/q-values.yaml", path)],
-                _ => vec![],
-            },
-            false,
-            selector,
-        ),
-    };
-
-    let environment_variables: Vec<(String, String)> =
-        envs.iter().map(|x| (x.0.to_string(), x.1.to_string())).collect();
-
-    deploy_charts_levels(
-        kubernetes_config.as_ref(),
-        &environment_variables,
-        vec![vec![Box::new(current_chart)]],
-        false,
-    )?;
-
-    // list helm history
-    info!(
-        "exec helm history for namespace {} and chart {}",
-        namespace,
-        chart_root_dir.as_ref().to_str().unwrap()
-    );
-
-    let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, &envs)?;
-
-    // take the last deployment from helm history - or return none if there is no history
-    Ok(helm_history_rows
-        .first()
-        .map(|helm_history_row| helm_history_row.clone()))
-}
-
 pub fn helm_destroy_chart_if_breaking_changes_version_detected(
     kubernetes_config: &Path,
     environment_variables: &Vec<(&str, &str)>,
@@ -425,12 +359,9 @@ pub fn helm_destroy_chart_if_breaking_changes_version_detected(
             chart_info.name.clone(),
         ) {
             if installed_version.le(breaking_version) {
-                return helm_exec_uninstall(
-                    kubernetes_config,
-                    chart_namespace.as_str(),
-                    chart_info.name.as_str(),
-                    environment_variables.to_owned(),
-                );
+                // FIXME: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+                let helm = Helm::new(kubernetes_config).unwrap();
+                helm.uninstall(&chart_info).unwrap();
             }
         }
     }
@@ -603,53 +534,6 @@ pub enum HelmDeploymentErrors {
     HelmLockError,
 }
 
-pub fn helm_exec_uninstall_with_chart_info<P>(
-    kubernetes_config: P,
-    envs: &Vec<(&str, &str)>,
-    chart: &ChartInfo,
-) -> Result<(), CommandError>
-where
-    P: AsRef<Path>,
-{
-    helm_exec_with_output(
-        vec![
-            "uninstall",
-            "--kubeconfig",
-            kubernetes_config.as_ref().to_str().unwrap(),
-            "--namespace",
-            chart.get_namespace_string().as_str(),
-            &chart.name,
-        ],
-        envs.clone(),
-        |line| info!("{}", line.as_str()),
-        |line| error!("{}", line.as_str()),
-    )
-}
-
-pub fn helm_exec_uninstall<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    release_name: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<(), CommandError>
-where
-    P: AsRef<Path>,
-{
-    helm_exec_with_output(
-        vec![
-            "uninstall",
-            "--kubeconfig",
-            kubernetes_config.as_ref().to_str().unwrap(),
-            "--namespace",
-            namespace,
-            release_name,
-        ],
-        envs,
-        |line| info!("{}", line.as_str()),
-        |line| error!("{}", line.as_str()),
-    )
-}
-
 pub fn helm_exec_history<P>(
     kubernetes_config: P,
     namespace: &str,
@@ -696,44 +580,6 @@ where
     let _ = results.reverse();
 
     Ok(results)
-}
-
-pub fn helm_uninstall_list<P>(
-    kubernetes_config: P,
-    helm_list: Vec<HelmChart>,
-    envs: Vec<(&str, &str)>,
-) -> Result<String, SimpleError>
-where
-    P: AsRef<Path>,
-{
-    let mut output_vec: Vec<String> = Vec::new();
-
-    for chart in helm_list {
-        match helm_exec_with_output(
-            vec![
-                "uninstall",
-                "-n",
-                chart.namespace.as_str(),
-                chart.name.as_str(),
-                "--kubeconfig",
-                kubernetes_config.as_ref().to_str().unwrap(),
-            ],
-            envs.clone(),
-            |line| output_vec.push(line),
-            |line| error!("{}", line),
-        ) {
-            Ok(_) => info!(
-                "Helm uninstall succeed for {} on namespace {}",
-                chart.name, chart.namespace
-            ),
-            Err(_) => info!(
-                "Helm history found for release name {} on namespace {}",
-                chart.name, chart.namespace
-            ),
-        };
-    }
-
-    Ok(output_vec.join("\n"))
 }
 
 pub fn helm_exec_upgrade_with_override_file<P>(
@@ -817,26 +663,6 @@ where
     Ok(helm_history_rows
         .first()
         .map(|helm_history_row| helm_history_row.clone()))
-}
-
-pub fn is_chart_deployed<P>(
-    kubernetes_config: P,
-    envs: Vec<(&str, &str)>,
-    namespace: Option<&str>,
-    chart_name: String,
-) -> Result<bool, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let deployed_charts = helm_list(kubernetes_config, envs, namespace)?;
-
-    for chart in deployed_charts {
-        if chart.name == chart_name {
-            return Ok(true);
-        }
-    }
-
-    Ok(false)
 }
 
 pub fn helm_get_chart_version<P>(
@@ -992,7 +818,7 @@ where
     )
 }
 
-pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), CommandError> {
+fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), CommandError> {
     helm_exec_with_output(
         args,
         envs,
@@ -1005,7 +831,7 @@ pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), Command
     )
 }
 
-pub fn helm_exec_with_output<F, X>(
+fn helm_exec_with_output<F, X>(
     args: Vec<&str>,
     envs: Vec<(&str, &str)>,
     stdout_output: F,
@@ -1023,6 +849,14 @@ where
         Err(err) => Err(CommandError::new(format!("{:?}", err), None)),
         _ => Ok(()),
     }
+}
+
+pub fn to_command_error(error: HelmError) -> CommandError {
+    CommandError::new_from_safe_message(error.to_string())
+}
+
+pub fn to_engine_error(event_details: &EventDetails, error: HelmError) -> EngineError {
+    EngineError::new_helm_error(event_details.clone(), error)
 }
 
 #[cfg(test)]
