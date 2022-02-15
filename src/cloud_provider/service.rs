@@ -463,44 +463,12 @@ where
 }
 
 /// do specific operations on a stateless service deployment error
-pub fn deploy_stateless_service_error<T>(target: &DeploymentTarget, service: &T) -> Result<(), EngineError>
+pub fn deploy_stateless_service_error<T>(_target: &DeploymentTarget, _service: &T) -> Result<(), EngineError>
 where
     T: Service + Helm,
 {
-    let kubernetes = target.kubernetes;
-    let environment = target.environment;
-    let helm_release_name = service.helm_release_name();
-    let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-    let kubernetes_config_file_path = match kubernetes.get_kubeconfig_file_path() {
-        Ok(path) => path,
-        Err(e) => return Err(e.to_legacy_engine_error()),
-    };
-
-    let history_rows = crate::cmd::helm::helm_exec_history(
-        kubernetes_config_file_path.as_str(),
-        environment.namespace(),
-        helm_release_name.as_str(),
-        &kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| {
-        NewEngineError::new_helm_chart_history_error(
-            event_details.clone(),
-            helm_release_name.to_string(),
-            environment.namespace().to_string(),
-            e,
-        )
-        .to_legacy_engine_error()
-    })?;
-
-    if history_rows.len() == 1 {
-        let helm = cmd::helm::Helm::new(&kubernetes_config_file_path)
-            .map_err(|e| NewEngineError::new_helm_error(event_details.clone(), e).to_legacy_engine_error())?;
-
-        let chart = ChartInfo::new_from_release_name(&helm_release_name, environment.namespace());
-        helm.uninstall(&chart)
-            .map_err(|e| NewEngineError::new_helm_error(event_details.clone(), e).to_legacy_engine_error())?;
-    }
-
+    // Nothing to do as we sait --atomic on chart release that we do
+    // So helm rollback for us if a deployment fails
     Ok(())
 }
 
@@ -1276,30 +1244,12 @@ pub fn helm_uninstall_release(
         .get_kubeconfig_file_path()
         .map_err(|e| e.to_legacy_engine_error())?;
 
-    let history_rows = crate::cmd::helm::helm_exec_history(
-        kubernetes_config_file_path.as_str(),
-        environment.namespace(),
-        helm_release_name,
-        &kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| {
-        NewEngineError::new_k8s_history(event_details.clone(), environment.namespace().to_string(), e)
-            .to_legacy_engine_error()
-    })?;
+    let helm = cmd::helm::Helm::new(&kubernetes_config_file_path)
+        .map_err(|e| NewEngineError::new_helm_error(event_details.clone(), e).to_legacy_engine_error())?;
 
-    // if there is no valid history - then delete the helm chart
-    let first_valid_history_row = history_rows.iter().find(|x| x.is_successfully_deployed());
-
-    if first_valid_history_row.is_some() {
-        let helm = cmd::helm::Helm::new(&kubernetes_config_file_path)
-            .map_err(|e| NewEngineError::new_helm_error(event_details.clone(), e).to_legacy_engine_error())?;
-
-        let chart = ChartInfo::new_from_release_name(helm_release_name, environment.namespace());
-        helm.uninstall(&chart)
-            .map_err(|e| NewEngineError::new_helm_error(event_details.clone(), e).to_legacy_engine_error())?;
-    }
-
-    Ok(())
+    let chart = ChartInfo::new_from_release_name(helm_release_name, environment.namespace());
+    helm.uninstall(&chart, &kubernetes.cloud_provider().credentials_environment_variables())
+        .map_err(|e| NewEngineError::new_helm_error(event_details.clone(), e).to_legacy_engine_error())
 }
 
 /// This function call (start|pause|delete)_in_progress function every 10 seconds when a

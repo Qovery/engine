@@ -1,10 +1,7 @@
 use crate::cloud_provider::helm::HelmAction::Deploy;
 use crate::cloud_provider::helm::HelmChartNamespaces::KubeSystem;
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAppName, QoveryShellAgent};
-use crate::cmd::helm::{
-    helm_destroy_chart_if_breaking_changes_version_detected, helm_exec_upgrade_with_chart_info,
-    helm_upgrade_diff_with_chart_info, to_command_error, Helm,
-};
+use crate::cmd::helm::{to_command_error, Helm};
 use crate::cmd::kubectl::{
     kubectl_delete_crash_looping_pods, kubectl_exec_delete_crd, kubectl_exec_get_configmap, kubectl_exec_get_events,
     kubectl_exec_rollout_restart_deployment, kubectl_exec_with_output,
@@ -231,22 +228,20 @@ pub trait HelmChart: Send {
 
         match chart_info.action {
             HelmAction::Deploy => {
-                if let Err(e) = helm_destroy_chart_if_breaking_changes_version_detected(
-                    kubernetes_config,
-                    &environment_variables,
-                    chart_info,
-                ) {
+                if let Err(e) = helm.uninstall_chart_if_breaking_version(chart_info, &environment_variables) {
                     warn!(
                         "error while trying to destroy chart if breaking change is detected: {:?}",
-                        e.message()
+                        e.to_string()
                     );
                 }
 
-                helm_exec_upgrade_with_chart_info(kubernetes_config, &environment_variables, chart_info)?
+                helm.upgrade(&chart_info, &environment_variables)
+                    .map_err(to_command_error)?;
             }
             HelmAction::Destroy => {
                 let chart_info = self.get_chart_info();
-                helm.uninstall(&chart_info).map_err(to_command_error)?;
+                helm.uninstall(&chart_info, &environment_variables)
+                    .map_err(to_command_error)?;
             }
             HelmAction::Skip => {}
         }
@@ -331,13 +326,15 @@ pub fn deploy_charts_levels(
     dry_run: bool,
 ) -> Result<(), CommandError> {
     // first show diff
+    let helm = Helm::new(&kubernetes_config).map_err(to_command_error)?;
     for level in &charts {
         for chart in level {
             let chart_info = chart.get_chart_info();
             match chart_info.action {
                 // don't do diff on destroy or skip
                 HelmAction::Deploy => {
-                    let _ = helm_upgrade_diff_with_chart_info(&kubernetes_config, envs, chart.get_chart_info());
+                    let envs: Vec<(&str, &str)> = envs.iter().map(|(x, y)| (x.as_str(), y.as_str())).collect();
+                    let _ = helm.upgrade_diff(chart.get_chart_info(), &envs);
                 }
                 _ => {}
             }
@@ -596,22 +593,20 @@ impl HelmChart for PrometheusOperatorConfigChart {
 
         match chart_info.action {
             HelmAction::Deploy => {
-                if let Err(e) = helm_destroy_chart_if_breaking_changes_version_detected(
-                    kubernetes_config,
-                    &environment_variables,
-                    chart_info,
-                ) {
+                if let Err(e) = helm.uninstall_chart_if_breaking_version(chart_info, &environment_variables) {
                     warn!(
                         "error while trying to destroy chart if breaking change is detected: {}",
-                        e.message()
+                        e.to_string()
                     );
                 }
 
-                helm_exec_upgrade_with_chart_info(kubernetes_config, &environment_variables, chart_info)?
+                helm.upgrade(&chart_info, &environment_variables)
+                    .map_err(to_command_error)?;
             }
             HelmAction::Destroy => {
                 let chart_info = self.get_chart_info();
-                helm.uninstall(&chart_info).map_err(to_command_error)?;
+                helm.uninstall(&chart_info, &environment_variables)
+                    .map_err(to_command_error)?;
 
                 let prometheus_crds = [
                     "prometheuses.monitoring.coreos.com",
