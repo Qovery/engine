@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use crate::cloud_provider::io::Kind;
 use crate::errors::io::EngineError;
 use crate::events;
@@ -7,33 +9,52 @@ use serde_derive::{Deserialize, Serialize};
 #[serde(tag = "type")]
 #[serde(rename_all = "lowercase")]
 pub enum EngineEvent {
+    Debug {
+        details: EventDetails,
+        message: EventMessage,
+    },
+    Info {
+        details: EventDetails,
+        message: EventMessage,
+    },
+    Warning {
+        details: EventDetails,
+        message: EventMessage,
+    },
     Error {
         error: EngineError,
     },
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Waiting {
         details: EventDetails,
         message: EventMessage,
     },
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Deploying {
         details: EventDetails,
         message: EventMessage,
     },
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Pausing {
         details: EventDetails,
         message: EventMessage,
     },
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Deleting {
         details: EventDetails,
         message: EventMessage,
     },
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Deployed {
         details: EventDetails,
         message: EventMessage,
     },
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Paused {
         details: EventDetails,
         message: EventMessage,
     },
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Deleted {
         details: EventDetails,
         message: EventMessage,
@@ -43,6 +64,18 @@ pub enum EngineEvent {
 impl From<events::EngineEvent> for EngineEvent {
     fn from(event: events::EngineEvent) -> Self {
         match event {
+            events::EngineEvent::Debug(d, m) => EngineEvent::Debug {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
+            events::EngineEvent::Info(d, m) => EngineEvent::Info {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
+            events::EngineEvent::Warning(d, m) => EngineEvent::Warning {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
             events::EngineEvent::Error(e) => EngineEvent::Error {
                 error: EngineError::from(e),
             },
