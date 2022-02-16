@@ -60,6 +60,7 @@ pub enum HelmError {
 #[derive(Debug)]
 pub struct Helm {
     kubernetes_config: PathBuf,
+    common_envs: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -91,14 +92,27 @@ impl ReleaseStatus {
 }
 
 impl Helm {
-    pub fn new<P: AsRef<Path>>(kubernetes_config: P) -> Result<Helm, HelmError> {
+    fn get_all_envs<'a>(&'a self, envs: &'a [(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
+        let mut all_envs: Vec<(&str, &str)> = self.common_envs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+        all_envs.append(&mut envs.to_vec());
+
+        all_envs
+    }
+
+    pub fn new<P: AsRef<Path>>(kubernetes_config: P, common_envs: &[(&str, &str)]) -> Result<Helm, HelmError> {
         // Check kube config file is valid
         let kubernetes_config = kubernetes_config.as_ref().to_path_buf();
         if !kubernetes_config.exists() || !kubernetes_config.is_file() {
             return Err(InvalidKubeConfig(kubernetes_config));
         }
 
-        Ok(Helm { kubernetes_config })
+        Ok(Helm {
+            kubernetes_config,
+            common_envs: common_envs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        })
     }
 
     pub fn check_release_exist(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<ReleaseStatus, HelmError> {
@@ -118,7 +132,7 @@ impl Helm {
         let mut stderr = String::new();
         match helm_exec_with_output(
             &args,
-            envs,
+            &self.get_all_envs(envs),
             |line| stdout.push_str(&line),
             |line| stderr.push_str(&line),
         ) {
@@ -159,7 +173,7 @@ impl Helm {
         ];
 
         let mut stderr = String::new();
-        match helm_exec_with_output(&args, envs, |_| {}, |line| stderr.push_str(&line)) {
+        match helm_exec_with_output(&args, &self.get_all_envs(envs), |_| {}, |line| stderr.push_str(&line)) {
             Err(err) => {
                 stderr.push_str(&err.message());
                 let error = CommandError::new(stderr, err.message_safe());
@@ -191,7 +205,7 @@ impl Helm {
             "--wait",
         ];
 
-        match helm_exec(&args, envs) {
+        match helm_exec(&args, &self.get_all_envs(envs)) {
             Err(err) => Err(CmdError(UNINSTALL, err)),
             Ok(_) => Ok(()),
         }
@@ -240,7 +254,7 @@ impl Helm {
         let mut output_string: Vec<String> = Vec::with_capacity(20);
         if let Err(cmd_error) = helm_exec_with_output(
             &helm_args,
-            envs,
+            &self.get_all_envs(envs),
             |line| output_string.push(line),
             |line| error!("{}", line),
         ) {
@@ -340,7 +354,7 @@ impl Helm {
         let mut stderr_msg = String::new();
         let helm_ret = helm_exec_with_output(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
-            envs,
+            &self.get_all_envs(envs),
             |line| {
                 info!("{}", line);
             },
@@ -447,7 +461,7 @@ impl Helm {
 
         let helm_ret = helm_exec_with_output(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
-            envs,
+            &self.get_all_envs(envs),
             |line| {
                 info!("{}", line);
             },
@@ -548,7 +562,7 @@ pub fn to_engine_error(event_details: &EventDetails, error: HelmError) -> Engine
     EngineError::new_helm_error(event_details.clone(), error)
 }
 
-#[cfg(feature = "test-with-kue")]
+#[cfg(feature = "test-with-kube")]
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::helm::{ChartInfo, ChartSetValue};
@@ -583,7 +597,7 @@ mod tests {
             );
             chart.wait = true;
             chart.atomic = true;
-            let helm = Helm::new(KUBECONFIG_PATH).unwrap();
+            let helm = Helm::new(KUBECONFIG_PATH, &vec![]).unwrap();
 
             let cleanup = HelmTestCtx { helm, chart };
             cleanup.cleanup();

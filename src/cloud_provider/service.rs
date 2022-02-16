@@ -425,8 +425,11 @@ where
     })?;
 
     // do exec helm upgrade and return the last deployment status
-    let helm = helm::Helm::new(&kubernetes_config_file_path)
-        .map_err(|e| helm::to_engine_error(&event_details, e).to_legacy_engine_error())?;
+    let helm = helm::Helm::new(
+        &kubernetes_config_file_path,
+        &kubernetes.cloud_provider().credentials_environment_variables(),
+    )
+    .map_err(|e| helm::to_engine_error(&event_details, e).to_legacy_engine_error())?;
     let chart = ChartInfo::new_from_custom_namespace(
         helm_release_name,
         workspace_dir.clone(),
@@ -440,7 +443,7 @@ where
         service.selector(),
     );
 
-    helm.upgrade(&chart, &kubernetes.cloud_provider().credentials_environment_variables())
+    helm.upgrade(&chart, &vec![])
         .map_err(|e| helm::to_engine_error(&event_details, e).to_legacy_engine_error())?;
 
     crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
@@ -734,8 +737,11 @@ where
         })?;
 
         // do exec helm upgrade and return the last deployment status
-        let helm = helm::Helm::new(&kubernetes_config_file_path)
-            .map_err(|e| helm::to_engine_error(&event_details, e).to_legacy_engine_error())?;
+        let helm = helm::Helm::new(
+            &kubernetes_config_file_path,
+            &kubernetes.cloud_provider().credentials_environment_variables(),
+        )
+        .map_err(|e| helm::to_engine_error(&event_details, e).to_legacy_engine_error())?;
         let chart = ChartInfo::new_from_custom_namespace(
             service.helm_release_name(),
             workspace_dir.clone(),
@@ -749,7 +755,7 @@ where
             service.selector(),
         );
 
-        helm.upgrade(&chart, &kubernetes.cloud_provider().credentials_environment_variables())
+        helm.upgrade(&chart, &vec![])
             .map_err(|e| helm::to_engine_error(&event_details, e).to_legacy_engine_error())?;
 
         // check app status
@@ -1244,11 +1250,14 @@ pub fn helm_uninstall_release(
         .get_kubeconfig_file_path()
         .map_err(|e| e.to_legacy_engine_error())?;
 
-    let helm = cmd::helm::Helm::new(&kubernetes_config_file_path)
-        .map_err(|e| NewEngineError::new_helm_error(event_details.clone(), e).to_legacy_engine_error())?;
+    let helm = cmd::helm::Helm::new(
+        &kubernetes_config_file_path,
+        &kubernetes.cloud_provider().credentials_environment_variables(),
+    )
+    .map_err(|e| NewEngineError::new_helm_error(event_details.clone(), e).to_legacy_engine_error())?;
 
     let chart = ChartInfo::new_from_release_name(helm_release_name, environment.namespace());
-    helm.uninstall(&chart, &kubernetes.cloud_provider().credentials_environment_variables())
+    helm.uninstall(&chart, &vec![])
         .map_err(|e| NewEngineError::new_helm_error(event_details.clone(), e).to_legacy_engine_error())
 }
 

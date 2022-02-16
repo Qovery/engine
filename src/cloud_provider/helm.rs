@@ -224,24 +224,22 @@ pub trait HelmChart: Send {
     ) -> Result<Option<ChartPayload>, CommandError> {
         let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         let chart_info = self.get_chart_info();
-        let helm = Helm::new(kubernetes_config).map_err(to_command_error)?;
+        let helm = Helm::new(kubernetes_config, &environment_variables).map_err(to_command_error)?;
 
         match chart_info.action {
             HelmAction::Deploy => {
-                if let Err(e) = helm.uninstall_chart_if_breaking_version(chart_info, &environment_variables) {
+                if let Err(e) = helm.uninstall_chart_if_breaking_version(chart_info, &vec![]) {
                     warn!(
                         "error while trying to destroy chart if breaking change is detected: {:?}",
                         e.to_string()
                     );
                 }
 
-                helm.upgrade(&chart_info, &environment_variables)
-                    .map_err(to_command_error)?;
+                helm.upgrade(&chart_info, &vec![]).map_err(to_command_error)?;
             }
             HelmAction::Destroy => {
                 let chart_info = self.get_chart_info();
-                helm.uninstall(&chart_info, &environment_variables)
-                    .map_err(to_command_error)?;
+                helm.uninstall(&chart_info, &vec![]).map_err(to_command_error)?;
             }
             HelmAction::Skip => {}
         }
@@ -326,15 +324,15 @@ pub fn deploy_charts_levels(
     dry_run: bool,
 ) -> Result<(), CommandError> {
     // first show diff
-    let helm = Helm::new(&kubernetes_config).map_err(to_command_error)?;
+    let envs_ref: Vec<(&str, &str)> = envs.iter().map(|(x, y)| (x.as_str(), y.as_str())).collect();
+    let helm = Helm::new(&kubernetes_config, &envs_ref).map_err(to_command_error)?;
     for level in &charts {
         for chart in level {
             let chart_info = chart.get_chart_info();
             match chart_info.action {
                 // don't do diff on destroy or skip
                 HelmAction::Deploy => {
-                    let envs: Vec<(&str, &str)> = envs.iter().map(|(x, y)| (x.as_str(), y.as_str())).collect();
-                    let _ = helm.upgrade_diff(chart.get_chart_info(), &envs);
+                    let _ = helm.upgrade_diff(chart.get_chart_info(), &vec![]);
                 }
                 _ => {}
             }
@@ -589,24 +587,22 @@ impl HelmChart for PrometheusOperatorConfigChart {
     ) -> Result<Option<ChartPayload>, CommandError> {
         let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
         let chart_info = self.get_chart_info();
-        let helm = Helm::new(kubernetes_config).map_err(to_command_error)?;
+        let helm = Helm::new(kubernetes_config, &environment_variables).map_err(to_command_error)?;
 
         match chart_info.action {
             HelmAction::Deploy => {
-                if let Err(e) = helm.uninstall_chart_if_breaking_version(chart_info, &environment_variables) {
+                if let Err(e) = helm.uninstall_chart_if_breaking_version(chart_info, &vec![]) {
                     warn!(
                         "error while trying to destroy chart if breaking change is detected: {}",
                         e.to_string()
                     );
                 }
 
-                helm.upgrade(&chart_info, &environment_variables)
-                    .map_err(to_command_error)?;
+                helm.upgrade(&chart_info, &vec![]).map_err(to_command_error)?;
             }
             HelmAction::Destroy => {
                 let chart_info = self.get_chart_info();
-                helm.uninstall(&chart_info, &environment_variables)
-                    .map_err(to_command_error)?;
+                helm.uninstall(&chart_info, &vec![]).map_err(to_command_error)?;
 
                 let prometheus_crds = [
                     "prometheuses.monitoring.coreos.com",

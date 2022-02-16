@@ -347,8 +347,11 @@ impl Create for Router {
         }
 
         // do exec helm upgrade and return the last deployment status
-        let helm = helm::Helm::new(&kubernetes_config_file_path)
-            .map_err(|e| helm::to_engine_error(&event_details, e).to_legacy_engine_error())?;
+        let helm = helm::Helm::new(
+            &kubernetes_config_file_path,
+            &kubernetes.cloud_provider().credentials_environment_variables(),
+        )
+        .map_err(|e| helm::to_engine_error(&event_details, e).to_legacy_engine_error())?;
         let chart = ChartInfo::new_from_custom_namespace(
             helm_release_name,
             workspace_dir.clone(),
@@ -362,7 +365,7 @@ impl Create for Router {
             self.selector(),
         );
 
-        helm.upgrade(&chart, &kubernetes.cloud_provider().credentials_environment_variables())
+        helm.upgrade(&chart, &vec![])
             .map_err(|e| helm::to_engine_error(&event_details, e).to_legacy_engine_error())
     }
 

@@ -1090,9 +1090,13 @@ impl<'a> Kapsule<'a> {
             );
 
             // delete custom metrics api to avoid stale namespaces on deletion
-            let helm = Helm::new(&kubernetes_config_file_path).map_err(|e| to_engine_error(&event_details, e))?;
+            let helm = Helm::new(
+                &kubernetes_config_file_path,
+                &self.cloud_provider.credentials_environment_variables(),
+            )
+            .map_err(|e| to_engine_error(&event_details, e))?;
             let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
-            helm.uninstall(&chart, &self.cloud_provider.credentials_environment_variables())
+            helm.uninstall(&chart, &vec![])
                 .map_err(|e| to_engine_error(&event_details, e))?;
 
             // required to avoid namespace stuck on deletion
@@ -1111,31 +1115,15 @@ impl<'a> Kapsule<'a> {
                 ),
             );
 
-            let helm = match Helm::new(&kubernetes_config_file_path) {
-                Ok(helm) => helm,
-                Err(err) => {
-                    self.logger().log(
-                        LogLevel::Error,
-                        EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(err.to_string())),
-                    );
-                    return Err(EngineError::new_cannot_get_cluster_error(
-                        event_details.clone(),
-                        CommandError::new_from_safe_message(err.to_string()),
-                    ));
-                }
-            };
             let qovery_namespaces = get_qovery_managed_namespaces();
             for qovery_namespace in qovery_namespaces.iter() {
                 let charts_to_delete = helm
-                    .list_release(
-                        Some(qovery_namespace),
-                        &self.cloud_provider().credentials_environment_variables(),
-                    )
+                    .list_release(Some(qovery_namespace), &vec![])
                     .map_err(|e| to_engine_error(&event_details, e))?;
 
                 for chart in charts_to_delete {
                     let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                    match helm.uninstall(&chart_info, &self.cloud_provider.credentials_environment_variables()) {
+                    match helm.uninstall(&chart_info, &vec![]) {
                         Ok(_) => self.logger().log(
                             LogLevel::Info,
                             EngineEvent::Deleting(
@@ -1204,11 +1192,11 @@ impl<'a> Kapsule<'a> {
                 ),
             );
 
-            match helm.list_release(None, &self.cloud_provider().credentials_environment_variables()) {
+            match helm.list_release(None, &vec![]) {
                 Ok(helm_charts) => {
                     for chart in helm_charts {
                         let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                        match helm.uninstall(&chart_info, &self.cloud_provider.credentials_environment_variables()) {
+                        match helm.uninstall(&chart_info, &vec![]) {
                             Ok(_) => self.logger().log(
                                 LogLevel::Info,
                                 EngineEvent::Deleting(
