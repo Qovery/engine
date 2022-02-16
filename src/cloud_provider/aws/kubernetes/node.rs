@@ -87,6 +87,7 @@ mod tests {
             NodeGroups::new("".to_string(), 2, 2, "t2.large".to_string(), 20).unwrap(),
             NodeGroups {
                 name: "".to_string(),
+                id: None,
                 min_nodes: 2,
                 max_nodes: 2,
                 instance_type: "t2.large".to_string(),

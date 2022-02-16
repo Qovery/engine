@@ -102,7 +102,7 @@ fn test_build_cache() {
                 .as_str(),
         );
 
-        let mut environment = test_utilities::common::working_minimal_environment(
+        let environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
@@ -118,9 +118,9 @@ fn test_build_cache() {
         let app_build = app.to_build();
         let _ = match local_docker.has_cache(&app_build) {
             Ok(CacheResult::Hit) => assert!(false),
-            Ok(CacheResult::Miss(parent_build)) => assert!(true),
+            Ok(CacheResult::Miss(_)) => assert!(true),
             Ok(CacheResult::MissWithoutParentBuild) => assert!(false),
-            Err(err) => assert!(false),
+            Err(_) => assert!(false),
         };
 
         let _ = match ecr.pull(&image).unwrap() {
@@ -147,9 +147,9 @@ fn test_build_cache() {
 
         let _ = match local_docker.has_cache(&build_result.build) {
             Ok(CacheResult::Hit) => assert!(true),
-            Ok(CacheResult::Miss(parent_build)) => assert!(false),
+            Ok(CacheResult::Miss(_)) => assert!(false),
             Ok(CacheResult::MissWithoutParentBuild) => assert!(false),
-            Err(err) => assert!(false),
+            Err(_) => assert!(false),
         };
 
         let start_pull_time = SystemTime::now();
@@ -1110,6 +1110,10 @@ fn deploy_a_non_working_environment_with_a_working_failover_on_aws_eks() {
 #[ignore]
 fn deploy_2_non_working_environments_with_2_working_failovers_on_aws_eks() {
     init();
+
+    let test_name = function_name!();
+    let span = span!(Level::INFO, "test", name = test_name);
+    let _enter = span.enter();
 
     let logger = logger();
     let secrets = FuncTestsSecrets::new();

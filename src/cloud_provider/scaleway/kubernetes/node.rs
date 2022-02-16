@@ -88,6 +88,47 @@ impl FromStr for ScwInstancesType {
     }
 }
 
+#[derive(Clone)]
+pub struct ScwNodeGroup {
+    pub name: String,
+    pub id: Option<String>,
+    pub min_nodes: i32,
+    pub max_nodes: i32,
+    pub instance_type: String,
+    pub disk_size_in_gib: i32,
+    pub status: scaleway_api_rs::models::scaleway_k8s_v1_pool::Status,
+}
+
+impl ScwNodeGroup {
+    pub fn new(
+        id: Option<String>,
+        group_name: String,
+        min_nodes: i32,
+        max_nodes: i32,
+        instance_type: String,
+        disk_size_in_gib: i32,
+        status: scaleway_api_rs::models::scaleway_k8s_v1_pool::Status,
+    ) -> Result<Self, CommandError> {
+        if min_nodes > max_nodes {
+            let msg = format!(
+                "The number of minimum nodes ({}) for group name {} is higher than maximum nodes ({})",
+                &group_name, &min_nodes, &max_nodes
+            );
+            return Err(CommandError::new_from_safe_message(msg));
+        }
+
+        Ok(ScwNodeGroup {
+            name: group_name,
+            id,
+            min_nodes,
+            max_nodes,
+            instance_type,
+            disk_size_in_gib,
+            status,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[cfg(test)]
@@ -104,6 +145,7 @@ mod tests {
                 NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20).unwrap(),
                 NodeGroups {
                     name: "".to_string(),
+                    id: None,
                     min_nodes: 2,
                     max_nodes: 2,
                     instance_type: "dev1-l".to_string(),
