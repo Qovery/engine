@@ -1,4 +1,4 @@
-FROM rust:1.52.1-buster
+FROM rust:1.58.1-buster
 
 ARG BIN_DEST_FOLDER="/binaries"
 ARG SCCACHE_REDIS

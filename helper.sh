@@ -84,7 +84,7 @@ function check_untracked_files() {
 
 function get_gitlab_engine_commit_id() {
   # Ensure we're in the correct folder
-  if [ "$(git config --get remote.origin.url | $grep -c "gitlab.com:qovery/qovery-engine.git")" != "1" ] && [ -z $CI_REPOSITORY_URL ] ; then
+  if [ "$(git config --get remote.origin.url | $grep -c "gitlab.com:qovery/engine/qovery-engine.git")" != "1" ] && [ -z $CI_REPOSITORY_URL ] ; then
     (fatal "You're not in the correct directory and should be in the gitlab repo: $(pwd)")
   fi
   git rev-parse HEAD
