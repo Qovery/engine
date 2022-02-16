@@ -34,7 +34,7 @@ use crate::fs::workspace_directory;
 use crate::logger::{LogLevel, Logger};
 use crate::models::ProgressLevel::Info;
 use crate::models::{
-    Action, Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier,
+    Action, Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier, StringPath,
 };
 use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
@@ -78,29 +78,65 @@ pub trait Kubernetes: Listen {
         )
     }
 
+    fn get_kubeconfig_filename(&self) -> String {
+        format!("{}.yaml", self.id())
+    }
+
     fn get_kubeconfig_file(&self) -> Result<(String, File), EngineError> {
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let bucket_name = format!("qovery-kubeconfigs-{}", self.id());
-        let object_key = format!("{}.yaml", self.id());
+        let object_key = self.get_kubeconfig_filename();
         let stage = Stage::General(GeneralStep::RetrieveClusterConfig);
 
-        let (string_path, file) = match self
-            .config_file_store()
-            .get(bucket_name.as_str(), object_key.as_str(), true)
-        {
-            Ok((path, file)) => (path, file),
-            Err(err) => {
-                let error = EngineError::new_cannot_retrieve_cluster_config_file(
-                    self.get_event_details(stage),
-                    CommandError::new_from_safe_message(
-                        format!(
-                            "Error getting file from store, error: {}",
-                            err.message.unwrap_or_else(|| "no details.".to_string())
-                        )
-                        .to_string(),
-                    ),
-                );
-                self.logger().log(LogLevel::Error, EngineEvent::Error(error.clone()));
-                return Err(error);
+        // check if kubeconfig locally exists
+        let local_kubeconfig = match self.get_temp_dir(event_details) {
+            Ok(x) => {
+                let local_kubeconfig_folder_path = format!("{}/{}", &x, &bucket_name);
+                let local_kubeconfig_generated = format!("{}/{}", &local_kubeconfig_folder_path, &object_key);
+                if Path::new(&local_kubeconfig_generated).exists() {
+                    match File::open(&local_kubeconfig_generated) {
+                        Ok(_) => Some(local_kubeconfig_generated),
+                        Err(_) => {
+                            debug!("couldn't open {} file", &local_kubeconfig_generated);
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            }
+            Err(_) => None,
+        };
+
+        // otherwise, try to get it from object storage
+        let (string_path, file) = match local_kubeconfig {
+            Some(local_kubeconfig_generated) => {
+                let kubeconfig_file =
+                    File::open(&local_kubeconfig_generated).expect("couldn't read kubeconfig file, but file exists");
+
+                (StringPath::from(&local_kubeconfig_generated), kubeconfig_file)
+            }
+            None => {
+                match self
+                    .config_file_store()
+                    .get(bucket_name.as_str(), object_key.as_str(), true)
+                {
+                    Ok((path, file)) => (path, file),
+                    Err(err) => {
+                        let error = EngineError::new_cannot_retrieve_cluster_config_file(
+                            self.get_event_details(stage),
+                            CommandError::new_from_safe_message(
+                                format!(
+                                    "Error getting file from store, error: {}",
+                                    err.message.unwrap_or_else(|| "no details.".to_string())
+                                )
+                                .to_string(),
+                            ),
+                        );
+                        self.logger().log(LogLevel::Error, EngineEvent::Error(error.clone()));
+                        return Err(error);
+                    }
+                }
             }
         };
 
@@ -233,11 +269,12 @@ pub trait Kubernetes: Listen {
     where
         Self: Sized,
     {
+        let kubeconfig = match self.get_kubeconfig_file() {
+            Ok((path, _)) => path,
+            Err(e) => return Err(CommandError::new(e.message(), None)),
+        };
         send_progress_on_long_task(self, Action::Create, || {
-            check_workers_status(
-                self.get_kubeconfig_file_path().expect("Unable to get Kubeconfig"),
-                self.cloud_provider().credentials_environment_variables(),
-            )
+            check_workers_status(&kubeconfig, self.cloud_provider().credentials_environment_variables())
         })
     }
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError>;
@@ -436,11 +473,29 @@ pub fn deploy_environment(
             "deployment",
             CheckAction::Deploy,
         )?;
+    }
 
-        // Quick fix: adding 100 ms delay to avoid race condition on service status update
-        thread::sleep(std::time::Duration::from_millis(100));
+    // Quick fix: adding 100 ms delay to avoid race condition on service status update
+    thread::sleep(std::time::Duration::from_millis(100));
 
-        // check all deployed services
+    // check all deployed services
+    for service in &environment.stateful_services {
+        let _ = service::check_kubernetes_service_error(
+            service.exec_check_action(),
+            kubernetes,
+            service,
+            event_details.clone(),
+            &stateless_deployment_target,
+            &listeners_helper,
+            "check deployment",
+            CheckAction::Deploy,
+        )?;
+    }
+
+    // Quick fix: adding 100 ms delay to avoid race condition on service status update
+    thread::sleep(std::time::Duration::from_millis(100));
+
+    for service in &environment.stateless_services {
         let _ = service::check_kubernetes_service_error(
             service.exec_check_action(),
             kubernetes,
@@ -1192,6 +1247,7 @@ impl NodeGroups {
 
         Ok(NodeGroups {
             name: group_name,
+            id: None,
             min_nodes,
             max_nodes,
             instance_type,
