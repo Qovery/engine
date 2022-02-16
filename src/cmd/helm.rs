@@ -194,7 +194,7 @@ impl Helm {
         let timeout = format!("{}s", &chart.timeout_in_seconds);
         let namespace = chart.get_namespace_string();
         let args = vec![
-            "delete",
+            "uninstall",
             &chart.name,
             "--kubeconfig",
             self.kubernetes_config.to_str().unwrap_or_default(),
@@ -560,6 +560,18 @@ pub fn to_command_error(error: HelmError) -> CommandError {
 
 pub fn to_engine_error(event_details: &EventDetails, error: HelmError) -> EngineError {
     EngineError::new_helm_error(event_details.clone(), error)
+}
+
+#[cfg(test)]
+mod tests_simple {
+    use crate::cmd::helm::helm_exec_with_output;
+
+    #[test]
+    fn check_version() {
+        let mut output = String::new();
+        let _ = helm_exec_with_output(&vec!["version"], &vec![], |line| output.push_str(&line), |_line| {});
+        assert!(output.contains("Version:\"v3.7.2\""));
+    }
 }
 
 #[cfg(feature = "test-with-kube")]
