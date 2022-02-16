@@ -526,19 +526,6 @@ impl Helm {
     }
 }
 
-fn helm_exec(args: &[&str], envs: &[(&str, &str)]) -> Result<(), CommandError> {
-    helm_exec_with_output(
-        args,
-        envs,
-        |line| {
-            span!(Level::INFO, "{}", "{}", line);
-        },
-        |line_err| {
-            span!(Level::INFO, "{}", "{}", line_err);
-        },
-    )
-}
-
 fn helm_exec_with_output<F, X>(
     args: &[&str],
     envs: &[(&str, &str)],
