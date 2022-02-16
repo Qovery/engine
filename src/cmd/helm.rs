@@ -554,17 +554,17 @@ pub fn to_engine_error(event_details: &EventDetails, error: HelmError) -> Engine
     EngineError::new_helm_error(event_details.clone(), error)
 }
 
-//#[cfg(test)]
-//mod tests_simple {
-//    use crate::cmd::helm::helm_exec_with_output;
-//
-//    #[test]
-//    fn check_version() {
-//        let mut output = String::new();
-//        let _ = helm_exec_with_output(&vec!["version"], &vec![], |line| output.push_str(&line), |_line| {});
-//        assert!(output.contains("Version:\"v3.7.2\""));
-//    }
-//}
+#[cfg(test)]
+mod tests_simple {
+    use crate::cmd::helm::helm_exec_with_output;
+
+    #[test]
+    fn check_version() {
+        let mut output = String::new();
+        let _ = helm_exec_with_output(&vec!["version"], &vec![], |line| output.push_str(&line), |_line| {});
+        assert!(output.contains("Version:\"v3.7.2\""));
+    }
+}
 
 #[cfg(feature = "test-with-kube")]
 #[cfg(test)]
