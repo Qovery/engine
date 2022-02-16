@@ -1208,7 +1208,7 @@ impl<'a> DOKS<'a> {
                                 ),
                             ),
                             Err(e) => {
-                                let message_safe = format!("Error deleting chart `{}` deleted: {}", chart.name, e);
+                                let message_safe = format!("Error deleting chart `{}`: {}", chart.name, e);
                                 self.logger().log(
                                     LogLevel::Error,
                                     EngineEvent::Deleting(

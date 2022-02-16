@@ -205,8 +205,13 @@ impl Helm {
             "--wait",
         ];
 
-        match helm_exec(&args, &self.get_all_envs(envs)) {
-            Err(err) => Err(CmdError(UNINSTALL, err)),
+        let mut stderr = String::new();
+        match helm_exec_with_output(&args, &self.get_all_envs(envs), |_| {}, |line| stderr.push_str(&line)) {
+            Err(err) => {
+                stderr.push_str(&err.message());
+                let error = CommandError::new(stderr, err.message_safe());
+                Err(CmdError(UNINSTALL, error))
+            }
             Ok(_) => Ok(()),
         }
     }
