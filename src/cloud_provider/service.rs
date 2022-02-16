@@ -434,7 +434,7 @@ where
         helm_release_name,
         workspace_dir.clone(),
         environment.namespace().to_string(),
-        service.start_timeout().value() as i64,
+        600_i64,
         match service.service_type() {
             ServiceType::Database(_) => vec![format!("{}/q-values.yaml", &workspace_dir)],
             _ => vec![],
@@ -746,7 +746,7 @@ where
             service.helm_release_name(),
             workspace_dir.clone(),
             environment.namespace().to_string(),
-            service.start_timeout().value() as i64,
+            600_i64,
             match service.service_type() {
                 ServiceType::Database(_) => vec![format!("{}/q-values.yaml", &workspace_dir)],
                 _ => vec![],
