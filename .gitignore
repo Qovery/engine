@@ -1,5 +1,6 @@
 **/target
 *.iml
+*.orig
 .idea
 .qovery-workspace
 .terraform/
