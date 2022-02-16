@@ -572,8 +572,6 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
-    const KUBECONFIG_PATH: &str = "/home/erebe/.kube/config";
-
     struct HelmTestCtx {
         helm: Helm,
         chart: ChartInfo,
@@ -597,7 +595,9 @@ mod tests {
             );
             chart.wait = true;
             chart.atomic = true;
-            let helm = Helm::new(KUBECONFIG_PATH, &vec![]).unwrap();
+            let mut kube_config = dirs::home_dir().unwrap();
+            kube_config.push(".kube/config");
+            let helm = Helm::new(kube_config.to_str().unwrap(), &vec![]).unwrap();
 
             let cleanup = HelmTestCtx { helm, chart };
             cleanup.cleanup();
@@ -644,7 +644,11 @@ mod tests {
         assert!(matches!(ret, Ok(vec) if vec.len() == 1));
 
         // Install a second stuff
-        let HelmTestCtx { ref helm, ref chart } = HelmTestCtx::new("test-list-release-2");
+        let HelmTestCtx {
+            ref helm,
+            ref mut chart,
+        } = HelmTestCtx::new("test-list-release-2");
+        chart.custom_namespace = Some("hello-my-friend-this-is-a-test".to_string());
         let ret = helm.upgrade(&chart, &vec![]);
         assert!(matches!(ret, Ok(())));
 
