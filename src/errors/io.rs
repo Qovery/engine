@@ -76,6 +76,9 @@ pub enum Tag {
     CannotGetCluster,
     ObjectStorageCannotCreateBucket,
     ObjectStorageCannotPutFileIntoBucket,
+    NoClusterFound,
+    OnlyOneClusterExpected,
+    CloudProviderApiMissingInfo,
 }
 
 impl From<errors::Tag> for Tag {
@@ -139,6 +142,9 @@ impl From<errors::Tag> for Tag {
             errors::Tag::UnsupportedZone => Tag::UnsupportedZone,
             errors::Tag::K8sNodeIsNotReadyWithTheRequestedVersion => Tag::K8sNodeIsNotReadyWithTheRequestedVersion,
             errors::Tag::K8sNodeIsNotReady => Tag::K8sNodeIsNotReady,
+            errors::Tag::NoClusterFound => Tag::NoClusterFound,
+            errors::Tag::OnlyOneClusterExpected => Tag::OnlyOneClusterExpected,
+            errors::Tag::CloudProviderApiMissingInfo => Tag::CloudProviderApiMissingInfo,
         }
     }
 }
