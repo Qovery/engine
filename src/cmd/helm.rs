@@ -1,7 +1,7 @@
 use std::io::{Error, Write};
 use std::path::{Path, PathBuf};
 
-use tracing::{error, info, span, Level};
+use tracing::{error, info};
 
 use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::helm::HelmCommand::{LIST, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
