@@ -15,7 +15,7 @@ use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::aws::regions::AwsZones;
-use crate::cloud_provider::environment::{Environment, EnvironmentResources};
+use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::service::CheckAction;
 use crate::cloud_provider::utilities::VersionsNumber;
@@ -384,17 +384,10 @@ pub fn deploy_environment(
         },
     };
 
+    // Resources check before deploy
+    // TODO(ENG-1066): we should check if env can be deployed or not based on required resources and available ones.
+    // This check is not trivial since auto-scaler comes to play and resources distribution on nodes might not behave necesarly the way we think.
     // do not deploy if there is not enough resources
-    let resources = kubernetes.resources(environment)?;
-    let required_resources = environment.required_resources();
-
-    if let Err(e) = check_kubernetes_has_enough_resources_to_deploy_environment(
-        resources,
-        required_resources,
-        event_details.clone(),
-    ) {
-        return Err(e);
-    }
 
     // create all stateful services (database)
     for service in &environment.stateful_services {
@@ -704,38 +697,6 @@ pub fn delete_environment(
     Ok(())
 }
 
-/// check that there is enough CPU and RAM, and pods resources
-/// before starting to deploy stateful and stateless services
-pub fn check_kubernetes_has_enough_resources_to_deploy_environment(
-    resources: Resources,
-    environment_resources: EnvironmentResources,
-    event_details: EventDetails,
-) -> Result<(), EngineError> {
-    if (environment_resources.cpu > resources.free_cpu)
-        || (environment_resources.ram_in_mib > resources.free_ram_in_mib)
-    {
-        // not enough resources CPU or RAM
-        return Err(EngineError::new_cannot_deploy_not_enough_resources_available(
-            event_details.clone(),
-            environment_resources.ram_in_mib,
-            resources.free_ram_in_mib,
-            environment_resources.cpu,
-            resources.free_cpu,
-        ));
-    }
-
-    if environment_resources.pods > resources.free_pods {
-        // not enough free pods on the cluster
-        return Err(EngineError::new_cannot_deploy_not_enough_free_pods_available(
-            event_details,
-            environment_resources.pods,
-            resources.free_pods,
-        ));
-    }
-
-    Ok(())
-}
-
 pub fn uninstall_cert_manager<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
@@ -764,12 +725,8 @@ where
                 EngineEvent::Deleting(
                     event_details.clone(),
                     EventMessage::new(
-                        format!(
-                            "Encountering issues while trying to get objects kind {}: {:?}",
-                            object,
-                            e.message()
-                        ),
-                        None,
+                        format!("Encountering issues while trying to get objects kind {}.", object,),
+                        Some(e.message()),
                     ),
                 ),
             );
@@ -786,7 +743,10 @@ where
                         LogLevel::Warning,
                         EngineEvent::Deleting(
                             event_details.clone(),
-                            EventMessage::new(format!("Failed to delete all {} objects, retrying...", object,), None),
+                            EventMessage::new_from_safe(format!(
+                                "Failed to delete all {} objects, retrying...",
+                                object,
+                            )),
                         ),
                     );
                     OperationResult::Retry(e)
@@ -1039,7 +999,7 @@ fn check_kubernetes_upgrade_status(
             if let Some(msg) = x.message {
                 logger.log(
                     LogLevel::Info,
-                    EngineEvent::Deploying(event_details.clone(), EventMessage::new(msg, None)),
+                    EngineEvent::Deploying(event_details.clone(), EventMessage::new_from_safe(msg)),
                 );
             };
             if x.older_version_detected {
@@ -1067,9 +1027,8 @@ fn check_kubernetes_upgrade_status(
             LogLevel::Warning,
             EngineEvent::Deploying(
                 event_details.clone(),
-                EventMessage::new(
+                EventMessage::new_from_safe(
                     "No worker nodes found, can't check if upgrade is required for workers".to_string(),
-                    None,
                 ),
             ),
         );
@@ -1120,19 +1079,16 @@ fn check_kubernetes_upgrade_status(
         LogLevel::Info,
         EngineEvent::Deploying(
             event_details.clone(),
-            EventMessage::new(
-                match &required_upgrade_on {
-                    None => "All workers are up to date, no upgrade required".to_string(),
-                    Some(node_type) => match node_type {
-                        KubernetesNodesType::Masters => "Kubernetes master upgrade required".to_string(),
-                        KubernetesNodesType::Workers => format!(
-                            "Kubernetes workers upgrade required, need to update {}/{} nodes",
-                            non_up_to_date_workers, total_workers
-                        ),
-                    },
+            EventMessage::new_from_safe(match &required_upgrade_on {
+                None => "All workers are up to date, no upgrade required".to_string(),
+                Some(node_type) => match node_type {
+                    KubernetesNodesType::Masters => "Kubernetes master upgrade required".to_string(),
+                    KubernetesNodesType::Workers => format!(
+                        "Kubernetes workers upgrade required, need to update {}/{} nodes",
+                        non_up_to_date_workers, total_workers
+                    ),
                 },
-                None,
-            ),
+            }),
         ),
     );
 
