@@ -136,7 +136,7 @@ impl Helm {
             |line| stdout.push_str(&line),
             |line| stderr.push_str(&line),
         ) {
-            Err(_) if stderr.contains("Error: release: not found") => Err(ReleaseDoesNotExist(chart.name.clone())),
+            Err(_) if stderr.contains("release: not found") => Err(ReleaseDoesNotExist(chart.name.clone())),
             Err(err) => {
                 stderr.push_str(&err.message());
                 let error = CommandError::new(stderr, err.message_safe());
@@ -547,7 +547,7 @@ where
     // Note: Helm CLI use spf13/cobra lib for the CLI; One function is mainly used to return an error if a command failed.
     // Helm returns an error each time a command does not succeed as they want. Which leads to handling error with status code 1
     // It means that the command successfully ran, but it didn't terminate as expected
-    let mut cmd = QoveryCommand::new("helm", args, envs);
+    let mut cmd = QoveryCommand::new("/tmp/bin/helm/helm3.7.2", args, envs);
     match cmd.exec_with_timeout(Duration::max_value(), stdout_output, stderr_output) {
         Err(err) => Err(CommandError::new(format!("{:?}", err), None)),
         _ => Ok(()),
