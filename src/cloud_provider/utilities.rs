@@ -11,7 +11,6 @@ use retry::delay::Fixed;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::net::{IpAddr, Ipv4Addr};
 use std::num::ParseFloatError;
 use std::str::FromStr;
 use trust_dns_resolver::config::*;

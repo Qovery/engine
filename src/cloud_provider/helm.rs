@@ -9,7 +9,6 @@ use crate::cmd::kubectl::{
 use crate::cmd::structs::HelmHistoryRow;
 use crate::errors::CommandError;
 use crate::utilities::calculate_hash;
-use itertools::Itertools;
 use semver::Version;
 use std::collections::HashMap;
 use std::path::Path;
