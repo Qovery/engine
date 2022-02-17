@@ -572,11 +572,11 @@ datasources:
                 // Webhooks resources limits
                 ChartSetValue {
                     key: "webhook.resources.limits.cpu".to_string(),
-                    value: "20m".to_string(),
+                    value: "200m".to_string(),
                 },
                 ChartSetValue {
                     key: "webhook.resources.requests.cpu".to_string(),
-                    value: "20m".to_string(),
+                    value: "50m".to_string(),
                 },
                 ChartSetValue {
                     key: "webhook.resources.limits.memory".to_string(),

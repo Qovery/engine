@@ -401,7 +401,6 @@ impl Helm {
             self.kubernetes_config.to_str().unwrap_or_default().to_string(),
             "--create-namespace".to_string(),
             "--install".to_string(),
-            "--no-hooks".to_string(), // If engine is launched remotely, it does not have access to the cluster
             "--timeout".to_string(),
             timeout_string.as_str().to_string(),
             "--history-max".to_string(),
