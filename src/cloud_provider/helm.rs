@@ -110,7 +110,7 @@ impl ChartInfo {
             name: name.to_string(),
             namespace: HelmChartNamespaces::Custom,
             custom_namespace: Some(custom_namespace.to_string()),
-            timeout_in_seconds: 3600,
+            timeout_in_seconds: 600,
             atomic: true,
             ..Default::default()
         }
