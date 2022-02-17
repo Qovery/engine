@@ -9,6 +9,7 @@ use crate::cmd::kubectl::{
 use crate::cmd::structs::HelmHistoryRow;
 use crate::errors::CommandError;
 use crate::utilities::calculate_hash;
+use itertools::Itertools;
 use semver::Version;
 use std::collections::HashMap;
 use std::path::Path;
@@ -297,24 +298,31 @@ fn deploy_parallel_charts(
         handles.push(handle);
     }
 
+    let mut errors: Vec<Result<(), CommandError>> = vec![];
     for handle in handles {
         match handle.join() {
             Ok(helm_run_ret) => {
                 if let Err(e) = helm_run_ret {
-                    return Err(e);
+                    errors.push(Err(e));
                 }
             }
             Err(e) => {
                 let safe_message = "Thread panicked during parallel charts deployments.";
-                return Err(CommandError::new(
+                let error = Err(CommandError::new(
                     format!("{}, error: {:?}", safe_message.to_string(), e),
                     Some(safe_message.to_string()),
                 ));
+                errors.push(error);
             }
         }
     }
 
-    Ok(())
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        error!("Deployments of charts failed with: {:?}", errors);
+        errors.remove(0)
+    }
 }
 
 pub fn deploy_charts_levels(
