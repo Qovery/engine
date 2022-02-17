@@ -559,7 +559,7 @@ pub fn to_engine_error(event_details: &EventDetails, error: HelmError) -> Engine
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::helm::{ChartInfo, ChartSetValue};
-    use crate::cmd::helm::{Helm, HelmError};
+    use crate::cmd::helm::{helm_exec_with_output, Helm, HelmError};
     use crate::cmd::utilities::QoveryCommand;
     use std::sync::{Arc, Barrier};
     use std::thread;
