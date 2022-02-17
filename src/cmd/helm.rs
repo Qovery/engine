@@ -1,27 +1,23 @@
 use std::io::{Error, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use tracing::{error, info, span, Level};
+use tracing::{error, info};
 
-use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, CommonChart};
-use crate::cloud_provider::service::ServiceType;
-use crate::cmd::helm::HelmLockErrors::{IncorrectFormatDate, NotYetExpired, ParsingError};
-use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_get_secrets};
-use crate::cmd::structs::{HelmChart, HelmHistoryRow, HelmListItem, Secrets};
+use crate::cloud_provider::helm::ChartInfo;
+use crate::cmd::helm::HelmCommand::{LIST, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
+use crate::cmd::helm::HelmError::{CannotRollback, CmdError, InvalidKubeConfig, ReleaseDoesNotExist};
+use crate::cmd::structs::{HelmChart, HelmListItem};
 use crate::cmd::utilities::QoveryCommand;
-use crate::error::{SimpleError, SimpleErrorKind};
-use crate::errors::CommandError;
-use chrono::{DateTime, Duration, Utc};
-use core::time;
-use retry::delay::Fixed;
-use retry::Error::Operation;
-use retry::OperationResult;
+use crate::errors::{CommandError, EngineError};
+use crate::events::EventDetails;
+use chrono::Duration;
 use semver::Version;
+use serde_derive::Deserialize;
 use std::fs::File;
 use std::str::FromStr;
-use std::thread;
 
 const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 300;
+const HELM_MAX_HISTORY: &str = "50";
 
 pub enum Timeout<T> {
     Default,
@@ -29,7 +25,7 @@ pub enum Timeout<T> {
 }
 
 impl Timeout<u32> {
-    fn value(&self) -> u32 {
+    pub fn value(&self) -> u32 {
         match *self {
             Timeout::Default => HELM_DEFAULT_TIMEOUT_IN_SECONDS,
             Timeout::Value(t) => t,
@@ -37,812 +33,505 @@ impl Timeout<u32> {
     }
 }
 
-pub fn helm_exec_with_upgrade_history<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    release_name: &str,
-    selector: Option<String>,
-    chart_root_dir: P,
-    timeout: Timeout<u32>,
-    envs: Vec<(&str, &str)>,
-    service_type: ServiceType,
-) -> Result<Option<HelmHistoryRow>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    // do exec helm upgrade
-    info!(
-        "exec helm upgrade for namespace {} and chart {}",
-        &namespace,
-        chart_root_dir.as_ref().to_str().unwrap()
-    );
+#[derive(thiserror::Error, Debug)]
+pub enum HelmError {
+    #[error("Kubernetes config file path is not valid or does not exist: {0}")]
+    InvalidKubeConfig(PathBuf),
 
-    let path = match chart_root_dir.as_ref().to_str().is_some() {
-        true => chart_root_dir.as_ref().to_str().unwrap(),
-        false => "",
-    }
-    .to_string();
+    #[error("Requested Helm release `{0}` does not exist")]
+    ReleaseDoesNotExist(String),
 
-    let current_chart = CommonChart {
-        chart_info: ChartInfo::new_from_custom_namespace(
-            release_name.to_string(),
-            path.clone(),
-            namespace.to_string(),
-            timeout.value() as i64,
-            match service_type {
-                ServiceType::Database(_) => vec![format!("{}/q-values.yaml", path)],
-                _ => vec![],
-            },
-            false,
-            selector,
-        ),
-    };
+    #[error("Requested Helm release `{0}` is under an helm lock. Ensure release is de-locked before going further")]
+    ReleaseLocked(String),
 
-    let environment_variables: Vec<(String, String)> =
-        envs.iter().map(|x| (x.0.to_string(), x.1.to_string())).collect();
+    #[error("Helm release `{0}` during helm {1:?} has been rollbacked")]
+    Rollbacked(String, HelmCommand),
 
-    deploy_charts_levels(
-        kubernetes_config.as_ref(),
-        &environment_variables,
-        vec![vec![Box::new(current_chart)]],
-        false,
-    )?;
+    #[error("Helm release `{0}` cannot be rollbacked due to be at revision 1")]
+    CannotRollback(String),
 
-    // list helm history
-    info!(
-        "exec helm history for namespace {} and chart {}",
-        namespace,
-        chart_root_dir.as_ref().to_str().unwrap()
-    );
+    #[error("Helm timed out for release `{0}` during helm {1:?}: {2}")]
+    Timeout(String, HelmCommand, String),
 
-    let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, &envs)?;
-
-    // take the last deployment from helm history - or return none if there is no history
-    Ok(helm_history_rows
-        .first()
-        .map(|helm_history_row| helm_history_row.clone()))
+    #[error("Helm command `{1:?}` for release {0} terminated with an error: {2:?}")]
+    CmdError(String, HelmCommand, CommandError),
 }
 
-pub fn helm_destroy_chart_if_breaking_changes_version_detected(
-    kubernetes_config: &Path,
-    environment_variables: &Vec<(&str, &str)>,
-    chart_info: &ChartInfo,
-) -> Result<(), CommandError> {
-    // If there is a breaking version set for the current helm chart,
-    // then we compare this breaking version with the currently installed version if any.
-    // If current installed version is older than breaking change one, then we delete
-    // the chart before applying it.
-    if let Some(breaking_version) = &chart_info.last_breaking_version_requiring_restart {
-        let chart_namespace = chart_info.get_namespace_string();
-        if let Some(installed_version) = helm_get_chart_version(
+#[derive(Debug)]
+pub struct Helm {
+    kubernetes_config: PathBuf,
+    common_envs: Vec<(String, String)>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum HelmCommand {
+    ROLLBACK,
+    STATUS,
+    UPGRADE,
+    UNINSTALL,
+    LIST,
+    DIFF,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct ReleaseInfo {
+    // https://github.com/helm/helm/blob/12f1bc0acdeb675a8c50a78462ed3917fb7b2e37/pkg/release/status.go
+    status: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct ReleaseStatus {
+    pub version: u64,
+    pub info: ReleaseInfo,
+}
+
+impl ReleaseStatus {
+    fn is_locked(&self) -> bool {
+        self.info.status.starts_with("pending-")
+    }
+}
+
+impl Helm {
+    fn get_all_envs<'a>(&'a self, envs: &'a [(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
+        let mut all_envs: Vec<(&str, &str)> = self.common_envs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+        all_envs.append(&mut envs.to_vec());
+
+        all_envs
+    }
+
+    pub fn new<P: AsRef<Path>>(kubernetes_config: P, common_envs: &[(&str, &str)]) -> Result<Helm, HelmError> {
+        // Check kube config file is valid
+        let kubernetes_config = kubernetes_config.as_ref().to_path_buf();
+        if !kubernetes_config.exists() || !kubernetes_config.is_file() {
+            return Err(InvalidKubeConfig(kubernetes_config));
+        }
+
+        Ok(Helm {
             kubernetes_config,
-            environment_variables.to_owned(),
-            Some(chart_namespace.as_str()),
-            chart_info.name.clone(),
+            common_envs: common_envs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        })
+    }
+
+    pub fn check_release_exist(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<ReleaseStatus, HelmError> {
+        let namespace = chart.get_namespace_string();
+        let args = vec![
+            "status",
+            &chart.name,
+            "--kubeconfig",
+            self.kubernetes_config.to_str().unwrap_or_default(),
+            "--namespace",
+            &namespace,
+            "-o",
+            "json",
+        ];
+
+        let mut stdout = String::new();
+        let mut stderr = String::new();
+        match helm_exec_with_output(
+            &args,
+            &self.get_all_envs(envs),
+            |line| stdout.push_str(&line),
+            |line| stderr.push_str(&line),
         ) {
-            if installed_version.le(breaking_version) {
-                return helm_exec_uninstall(
-                    kubernetes_config,
-                    chart_namespace.as_str(),
-                    chart_info.name.as_str(),
-                    environment_variables.to_owned(),
-                );
+            Err(_) if stderr.contains("release: not found") => Err(ReleaseDoesNotExist(chart.name.clone())),
+            Err(err) => {
+                stderr.push_str(&err.message());
+                let error = CommandError::new(stderr, err.message_safe());
+                Err(CmdError(chart.name.clone(), STATUS, error))
+            }
+            Ok(_) => {
+                let status: ReleaseStatus = serde_json::from_str(&stdout).unwrap_or_default();
+                Ok(status)
             }
         }
     }
 
-    Ok(())
-}
+    pub fn rollback(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
+        if self.check_release_exist(chart, envs)?.version <= 1 {
+            return Err(CannotRollback(chart.name.clone()));
+        }
 
-pub fn helm_exec_upgrade_with_chart_info<P>(
-    kubernetes_config: P,
-    envs: &Vec<(&str, &str)>,
-    chart: &ChartInfo,
-) -> Result<(), CommandError>
-where
-    P: AsRef<Path>,
-{
-    let debug = false;
-    let timeout_string = format!("{}s", &chart.timeout_in_seconds);
+        let timeout = format!("{}s", &chart.timeout_in_seconds);
+        let namespace = chart.get_namespace_string();
+        let args = vec![
+            "rollback",
+            &chart.name,
+            "--kubeconfig",
+            self.kubernetes_config.to_str().unwrap_or_default(),
+            "--namespace",
+            &namespace,
+            "--timeout",
+            &timeout,
+            "--history-max",
+            HELM_MAX_HISTORY,
+            "--cleanup-on-fail",
+            "--force",
+            "--wait",
+        ];
 
-    let mut args_string: Vec<String> = vec![
-        "upgrade",
-        "--kubeconfig",
-        kubernetes_config.as_ref().to_str().unwrap(),
-        "--create-namespace",
-        "--install",
-        "--timeout",
-        timeout_string.as_str(),
-        "--history-max",
-        "50",
-        "--namespace",
-        chart.get_namespace_string().as_str(),
-    ]
-    .into_iter()
-    .map(|x| x.to_string())
-    .collect();
-
-    if debug {
-        args_string.push("-o".to_string());
-        args_string.push("json".to_string());
-    }
-    // warn: don't add debug or json output won't work
-    if chart.atomic {
-        args_string.push("--atomic".to_string())
-    }
-    if chart.force_upgrade {
-        args_string.push("--force".to_string())
-    }
-    if chart.dry_run {
-        args_string.push("--dry-run".to_string())
-    }
-    if chart.wait {
-        args_string.push("--wait".to_string())
+        let mut stderr = String::new();
+        match helm_exec_with_output(&args, &self.get_all_envs(envs), |_| {}, |line| stderr.push_str(&line)) {
+            Err(err) => {
+                stderr.push_str(&err.message());
+                let error = CommandError::new(stderr, err.message_safe());
+                Err(CmdError(chart.name.clone(), ROLLBACK, error))
+            }
+            Ok(_) => Ok(()),
+        }
     }
 
-    // overrides and files overrides
-    for value in &chart.values {
-        args_string.push("--set".to_string());
-        args_string.push(format!("{}={}", value.key, value.value));
+    pub fn uninstall(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
+        // If the release does not exist, we do not return an error
+        match self.check_release_exist(chart, envs) {
+            Ok(_) => {}
+            Err(ReleaseDoesNotExist(_)) => return Ok(()),
+            Err(err) => return Err(err),
+        }
+
+        let timeout = format!("{}s", &chart.timeout_in_seconds);
+        let namespace = chart.get_namespace_string();
+        let args = vec![
+            "uninstall",
+            &chart.name,
+            "--kubeconfig",
+            self.kubernetes_config.to_str().unwrap_or_default(),
+            "--namespace",
+            &namespace,
+            "--timeout",
+            &timeout,
+            "--wait",
+        ];
+
+        let mut stderr = String::new();
+        match helm_exec_with_output(&args, &self.get_all_envs(envs), |_| {}, |line| stderr.push_str(&line)) {
+            Err(err) => {
+                stderr.push_str(&err.message());
+                let error = CommandError::new(stderr, err.message_safe());
+                Err(CmdError(chart.name.clone(), UNINSTALL, error))
+            }
+            Ok(_) => Ok(()),
+        }
     }
-    for value_file in &chart.values_files {
-        args_string.push("-f".to_string());
-        args_string.push(value_file.clone());
-    }
-    for value_file in &chart.yaml_files_content {
-        let file_path = format!("{}/{}", chart.path, &value_file.filename);
-        let file_create = || -> Result<(), Error> {
-            let mut file = File::create(&file_path)?;
-            file.write_all(value_file.yaml_content.as_bytes())?;
-            Ok(())
-        };
-        // no need to validate yaml as it will be done by helm
-        if let Err(e) = file_create() {
-            let safe_message = format!("Error while writing yaml content to file `{}`", &file_path);
-            return Err(CommandError::new(
-                format!(
-                    "{}\nContent\n{}\nError: {}",
-                    safe_message.to_string(),
-                    value_file.yaml_content,
-                    e
-                ),
-                Some(safe_message.to_string()),
-            ));
-        };
 
-        args_string.push("-f".to_string());
-        args_string.push(file_path.clone());
+    fn unlock_release(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
+        match self.check_release_exist(chart, envs) {
+            Ok(release) if release.is_locked() && release.version <= 1 => {
+                info!("Helm lock detected. Uninstalling it as it is the first version and rollback is not possible");
+                self.uninstall(chart, envs)?;
+            }
+            Ok(release) if release.is_locked() => {
+                info!("Helm lock detected. Forcing rollback to previous version");
+                self.rollback(chart, envs)?;
+            }
+            Ok(release) => {
+                // Happy path nothing to do
+                debug!("Helm release status: {:?}", release)
+            }
+            Err(_) => {} // Happy path nothing to do
+        }
+
+        Ok(())
     }
 
-    // add last elements
-    args_string.push(chart.name.to_string());
-    args_string.push(chart.path.to_string());
+    /// List deployed helm charts
+    ///
+    /// # Arguments
+    ///
+    /// * `envs` - environment variables required for kubernetes connection
+    /// * `namespace` - list charts from a kubernetes namespace or use None to select all namespaces
+    pub fn list_release(&self, namespace: Option<&str>, envs: &[(&str, &str)]) -> Result<Vec<HelmChart>, HelmError> {
+        let mut helm_args = vec![
+            "list",
+            "-a",
+            "--kubeconfig",
+            self.kubernetes_config.to_str().unwrap_or_default(),
+            "-o",
+            "json",
+        ];
+        match namespace {
+            Some(ns) => helm_args.append(&mut vec!["-n", ns]),
+            None => helm_args.push("-A"),
+        }
 
-    let mut json_output_string = String::new();
-    let mut error_message = String::new();
+        let mut output_string: Vec<String> = Vec::with_capacity(20);
+        if let Err(cmd_error) = helm_exec_with_output(
+            &helm_args,
+            &self.get_all_envs(envs),
+            |line| output_string.push(line),
+            |line| error!("{}", line),
+        ) {
+            return Err(HelmError::CmdError("none".to_string(), LIST, cmd_error));
+        }
 
-    let result = retry::retry(Fixed::from_millis(15000).take(3), || {
-        let args = args_string.iter().map(|x| x.as_str()).collect();
-        let mut helm_error_during_deployment = SimpleError {
-            kind: SimpleErrorKind::Other,
-            message: None,
-        };
-        let mut should_clean_helm_lock = false;
+        let values = serde_json::from_str::<Vec<HelmListItem>>(&output_string.join(""));
+        let mut helms_charts: Vec<HelmChart> = Vec::new();
 
+        match values {
+            Ok(all_helms) => {
+                for helm in all_helms {
+                    let raw_version = helm.chart.replace(format!("{}-", helm.name).as_str(), "");
+                    let version = Version::from_str(raw_version.as_str()).ok();
+                    helms_charts.push(HelmChart::new(helm.name, helm.namespace, version))
+                }
+
+                Ok(helms_charts)
+            }
+            Err(e) => {
+                let message_safe = "Error while deserializing all helms names";
+                Err(HelmError::CmdError(
+                    "none".to_string(),
+                    LIST,
+                    CommandError::new(
+                        format!("{}, error: {}", message_safe, e),
+                        Some(message_safe.to_string()),
+                    ),
+                ))
+            }
+        }
+    }
+
+    pub fn get_chart_version(
+        &self,
+        chart_name: String,
+        namespace: Option<&str>,
+        envs: &[(&str, &str)],
+    ) -> Result<Option<Version>, HelmError> {
+        let deployed_charts = self.list_release(namespace, envs)?;
+        for chart in deployed_charts {
+            if chart.name == chart_name {
+                return Ok(chart.version);
+            }
+        }
+
+        // found nothing ;'(
+        Ok(None)
+    }
+
+    pub fn upgrade_diff(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
+        let mut args_string: Vec<String> = vec![
+            "diff".to_string(),
+            "upgrade".to_string(),
+            "--kubeconfig".to_string(),
+            self.kubernetes_config.to_str().unwrap_or_default().to_string(),
+            "--install".to_string(),
+            "--namespace".to_string(),
+            chart.get_namespace_string(),
+        ];
+
+        for value in &chart.values {
+            args_string.push("--set".to_string());
+            args_string.push(format!("{}={}", value.key, value.value));
+        }
+
+        for value_file in &chart.values_files {
+            args_string.push("-f".to_string());
+            args_string.push(value_file.clone());
+        }
+
+        for value_file in &chart.yaml_files_content {
+            let file_path = format!("{}/{}", chart.path, &value_file.filename);
+            let file_create = || -> Result<(), Error> {
+                let mut file = File::create(&file_path)?;
+                file.write_all(value_file.yaml_content.as_bytes())?;
+                Ok(())
+            };
+
+            // no need to validate yaml as it will be done by helm
+            if let Err(e) = file_create() {
+                let safe_message = format!("Error while writing yaml content to file `{}`", &file_path);
+                let cmd_err = CommandError::new(
+                    format!("{}\nContent\n{}\nError: {}", safe_message, value_file.yaml_content, e),
+                    Some(safe_message),
+                );
+                return Err(HelmError::CmdError(chart.name.clone(), HelmCommand::UPGRADE, cmd_err));
+            };
+
+            args_string.push("-f".to_string());
+            args_string.push(file_path);
+        }
+
+        // add last elements
+        args_string.push(chart.name.clone());
+        args_string.push(chart.path.clone());
+
+        let mut stderr_msg = String::new();
         let helm_ret = helm_exec_with_output(
-            args,
-            envs.clone(),
+            &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
+            &self.get_all_envs(envs),
             |line| {
                 info!("{}", line);
-                json_output_string = line
             },
             |line| {
-                if line.contains("another operation (install/upgrade/rollback) is in progress") {
-                    error_message = format!("helm lock detected for {}, looking for cleaning lock", chart.name);
-                    helm_error_during_deployment.message = Some(error_message.clone());
-                    warn!("{}. {}", &error_message, &line);
-                    should_clean_helm_lock = true;
-                    return;
-                }
-
-                if !chart.parse_stderr_for_error {
-                    warn!("chart {}: {}", chart.name, line);
-                    return;
-                }
-
-                // helm errors are not json formatted unfortunately
-                if line.contains("has been rolled back") {
-                    error_message = format!("deployment {} has been rolled back", chart.name);
-                    helm_error_during_deployment.message = Some(error_message.clone());
-                    warn!("{}. {}", &error_message, &line);
-                } else if line.contains("has been uninstalled") {
-                    error_message = format!("deployment {} has been uninstalled due to failure", chart.name);
-                    helm_error_during_deployment.message = Some(error_message.clone());
-                    warn!("{}. {}", &error_message, &line);
-                    // special fix for prometheus operator
-                } else if line.contains("info: skipping unknown hook: \"crd-install\"") {
-                    debug!("chart {}: {}", chart.name, line);
-                } else {
-                    error_message = format!("deployment {} has failed", chart.name);
-                    helm_error_during_deployment.message = Some(error_message.clone());
-                    error!("{}. {}", &error_message, &line);
-                }
+                stderr_msg.push_str(&line);
+                warn!("chart {}: {}", chart.name, line);
             },
         );
 
-        if should_clean_helm_lock {
-            match clean_helm_lock(
-                &kubernetes_config,
-                chart.get_namespace_string().as_str(),
-                &chart.name,
-                chart.timeout_in_seconds,
-                envs.clone(),
-            ) {
-                Ok(_) => info!("Helm lock detected and cleaned"),
-                Err(e) => warn!("Couldn't cleanup Helm lock. {:?}", e.message()),
+        match helm_ret {
+            // Ok is ok
+            Ok(_) => Ok(()),
+            Err(err) => {
+                error!("Helm error: {:?}", err);
+                Err(CmdError(
+                    chart.name.clone(),
+                    HelmCommand::DIFF,
+                    CommandError::new(stderr_msg.clone(), Some(stderr_msg)),
+                ))
             }
         }
+    }
+
+    pub fn upgrade(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
+        // Due to crash or error it is possible that the release is under an helm lock
+        // Try to un-stuck the situation first if needed
+        // We don't care if the rollback failed, as it is a best effort to remove the lock
+        // and to re-launch an upgrade just after
+        let unlock_ret = self.unlock_release(chart, envs);
+        info!("Helm lock status: {:?}", unlock_ret);
+
+        let debug = false;
+        let timeout_string = format!("{}s", &chart.timeout_in_seconds);
+
+        let mut args_string: Vec<String> = vec![
+            "upgrade".to_string(),
+            "--kubeconfig".to_string(),
+            self.kubernetes_config.to_str().unwrap_or_default().to_string(),
+            "--create-namespace".to_string(),
+            "--install".to_string(),
+            "--timeout".to_string(),
+            timeout_string.as_str().to_string(),
+            "--history-max".to_string(),
+            HELM_MAX_HISTORY.to_string(),
+            "--namespace".to_string(),
+            chart.get_namespace_string(),
+        ];
+
+        if debug {
+            args_string.push("-o".to_string());
+            args_string.push("json".to_string());
+        }
+
+        // warn: don't add debug or json output won't work
+        if chart.atomic {
+            args_string.push("--atomic".to_string())
+        }
+        if chart.force_upgrade {
+            args_string.push("--force".to_string())
+        }
+        if chart.dry_run {
+            args_string.push("--dry-run".to_string())
+        }
+        if chart.wait {
+            args_string.push("--wait".to_string())
+        }
+
+        // overrides and files overrides
+        for value in &chart.values {
+            args_string.push("--set".to_string());
+            args_string.push(format!("{}={}", value.key, value.value));
+        }
+
+        for value_file in &chart.values_files {
+            args_string.push("-f".to_string());
+            args_string.push(value_file.clone());
+        }
+        for value_file in &chart.yaml_files_content {
+            let file_path = format!("{}/{}", chart.path, &value_file.filename);
+            let file_create = || -> Result<(), Error> {
+                let mut file = File::create(&file_path)?;
+                file.write_all(value_file.yaml_content.as_bytes())?;
+                Ok(())
+            };
+
+            // no need to validate yaml as it will be done by helm
+            if let Err(e) = file_create() {
+                let safe_message = format!("Error while writing yaml content to file `{}`", &file_path);
+                let cmd_err = CommandError::new(
+                    format!("{}\nContent\n{}\nError: {}", safe_message, value_file.yaml_content, e),
+                    Some(safe_message),
+                );
+                return Err(HelmError::CmdError(chart.name.clone(), HelmCommand::UPGRADE, cmd_err));
+            };
+
+            args_string.push("-f".to_string());
+            args_string.push(file_path);
+        }
+
+        // add last elements
+        args_string.push(chart.name.clone());
+        args_string.push(chart.path.clone());
+
+        let mut error_message: Vec<String> = vec![];
+
+        let helm_ret = helm_exec_with_output(
+            &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
+            &self.get_all_envs(envs),
+            |line| {
+                info!("{}", line);
+            },
+            |line| {
+                warn!("chart {}: {}", chart.name, line);
+                error_message.push(line);
+            },
+        );
 
         match helm_ret {
-            Ok(_) => {
-                if helm_error_during_deployment.message.is_some() {
-                    OperationResult::Retry(helm_error_during_deployment)
+            // Ok is ok
+            Ok(_) => Ok(()),
+            Err(err) => {
+                error!("Helm error: {:?}", err);
+
+                // Try do define/specify a bit more the message
+                let stderr_msg: String = error_message.into_iter().collect();
+                let stderr_msg = format!("{}: {}", stderr_msg, err.message());
+                let error = if stderr_msg.contains("another operation (install/upgrade/rollback) is in progress") {
+                    HelmError::ReleaseLocked(chart.name.clone())
+                } else if stderr_msg.contains("has been rolled back") {
+                    HelmError::Rollbacked(chart.name.clone(), UPGRADE)
+                } else if stderr_msg.contains("timed out waiting") {
+                    HelmError::Timeout(chart.name.clone(), UPGRADE, stderr_msg)
                 } else {
-                    OperationResult::Ok(())
-                }
-            }
-            Err(e) => OperationResult::Retry(SimpleError::new(SimpleErrorKind::Other, Some(e.message()))),
-        }
-    });
-
-    match result {
-        Ok(_) => Ok(()),
-        Err(Operation { error, .. }) => {
-            return Err(CommandError::new(
-                error.message.unwrap_or("No error message".to_string()),
-                None,
-            ));
-        }
-        Err(retry::Error::Internal(e)) => return Err(CommandError::new(e, None)),
-    }
-}
-
-pub fn clean_helm_lock<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    release_name: &str,
-    timeout: i64,
-    envs: Vec<(&str, &str)>,
-) -> Result<(), CommandError>
-where
-    P: AsRef<Path>,
-{
-    let selector = format!("name={}", release_name);
-    let timeout_i64 = timeout;
-
-    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
-        // get secrets for this helm deployment
-        let result = match kubectl_exec_get_secrets(&kubernetes_config, namespace, &selector, envs.clone()) {
-            Ok(x) => x,
-            Err(e) => return OperationResult::Retry(e),
-        };
-
-        // get helm release name (secret) containing the lock and clean if possible
-        match helm_get_secret_lock_name(&result, timeout_i64.clone()) {
-            Ok(x) => return OperationResult::Ok(x),
-            Err(e) => match e.kind {
-                ParsingError => OperationResult::Retry(CommandError::new(e.message, None)),
-                IncorrectFormatDate => OperationResult::Retry(CommandError::new(e.message, None)),
-                NotYetExpired => {
-                    if e.wait_before_release_lock.is_none() {
-                        return OperationResult::Retry(CommandError::new_from_safe_message(
-                            "Missing helm time to wait information, before releasing the lock".to_string(),
-                        ));
-                    };
-
-                    let time_to_wait = e.wait_before_release_lock.unwrap() as u64;
-                    // wait 2min max to avoid the customer to re-launch a job or exit
-                    if time_to_wait < 120 {
-                        info!("waiting {}s before retrying the deployment...", time_to_wait);
-                        thread::sleep(time::Duration::from_secs(time_to_wait));
-                    } else {
-                        return OperationResult::Err(CommandError::new(e.message, None));
-                    }
-
-                    // retrieve now the secret
-                    match helm_get_secret_lock_name(&result, timeout_i64.clone()) {
-                        Ok(x) => OperationResult::Ok(x),
-                        Err(e) => OperationResult::Err(CommandError::new(e.message, None)),
-                    }
-                }
-            },
-        }
-    });
-
-    match result {
-        Err(err) => {
-            return match err {
-                retry::Error::Operation { .. } => Err(CommandError::new_from_safe_message(format!(
-                    "internal error while trying to deploy helm chart {}",
-                    release_name
-                ))),
-                retry::Error::Internal(err) => Err(CommandError::new_from_safe_message(err)),
-            }
-        }
-        Ok(x) => {
-            if let Err(e) = kubectl_exec_delete_secret(&kubernetes_config, namespace, x.as_str(), envs.clone()) {
-                return Err(e);
-            };
-            Ok(())
-        }
-    }
-}
-
-pub enum HelmDeploymentErrors {
-    SimpleError,
-    HelmLockError,
-}
-
-#[derive(Debug)]
-pub enum HelmLockErrors {
-    ParsingError,
-    IncorrectFormatDate,
-    NotYetExpired,
-}
-
-#[derive(Debug)]
-pub struct HelmLockError {
-    kind: HelmLockErrors,
-    message: String,
-    wait_before_release_lock: Option<i64>,
-}
-
-/// Get helm secret name containing the lock
-pub fn helm_get_secret_lock_name(secrets_items: &Secrets, timeout: i64) -> Result<String, HelmLockError> {
-    match secrets_items.items.last() {
-        None => Err(HelmLockError {
-            kind: ParsingError,
-            message: "couldn't parse the list of secrets, it's certainly empty".to_string(),
-            wait_before_release_lock: None,
-        }),
-        Some(x) => {
-            let creation_time = match DateTime::parse_from_rfc3339(&x.metadata.creation_timestamp) {
-                Ok(x) => x,
-                Err(e) => {
-                    return Err(HelmLockError {
-                        kind: IncorrectFormatDate,
-                        message: format!("incorrect format date input from secrets. {:?}", e),
-                        wait_before_release_lock: None,
-                    })
-                }
-            };
-            let now = Utc::now().timestamp();
-            let max_timeout = creation_time.timestamp() + timeout;
-
-            // not yet expired
-            if &now < &max_timeout {
-                let time_to_wait = &max_timeout - &now;
-                return Err(HelmLockError {
-                    kind: NotYetExpired,
-                    message: format!(
-                        "helm lock has not yet expired, please wait {}s before retrying",
-                        &time_to_wait
-                    ),
-                    wait_before_release_lock: Some(time_to_wait),
-                });
-            }
-
-            //expired
-            Ok(x.metadata.name.to_string())
-        }
-    }
-}
-
-pub fn helm_exec_uninstall_with_chart_info<P>(
-    kubernetes_config: P,
-    envs: &Vec<(&str, &str)>,
-    chart: &ChartInfo,
-) -> Result<(), CommandError>
-where
-    P: AsRef<Path>,
-{
-    helm_exec_with_output(
-        vec![
-            "uninstall",
-            "--kubeconfig",
-            kubernetes_config.as_ref().to_str().unwrap(),
-            "--namespace",
-            chart.get_namespace_string().as_str(),
-            &chart.name,
-        ],
-        envs.clone(),
-        |line| info!("{}", line.as_str()),
-        |line| error!("{}", line.as_str()),
-    )
-}
-
-pub fn helm_exec_uninstall<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    release_name: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<(), CommandError>
-where
-    P: AsRef<Path>,
-{
-    helm_exec_with_output(
-        vec![
-            "uninstall",
-            "--kubeconfig",
-            kubernetes_config.as_ref().to_str().unwrap(),
-            "--namespace",
-            namespace,
-            release_name,
-        ],
-        envs,
-        |line| info!("{}", line.as_str()),
-        |line| error!("{}", line.as_str()),
-    )
-}
-
-pub fn helm_exec_history<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    release_name: &str,
-    envs: &Vec<(&str, &str)>,
-) -> Result<Vec<HelmHistoryRow>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let mut output_string = String::new();
-    let _ = helm_exec_with_output(
-        // WARN: do not add argument --debug, otherwise JSON decoding will not work
-        vec![
-            "history",
-            "--kubeconfig",
-            kubernetes_config.as_ref().to_str().unwrap(),
-            "--namespace",
-            namespace,
-            "-o",
-            "json",
-            release_name,
-        ],
-        envs.clone(),
-        |line| output_string = line,
-        |line| {
-            if line.contains("Error: release: not found") {
-                info!("{}", line)
-            } else {
-                error!("{}", line)
-            }
-        },
-    );
-
-    // TODO better check, release not found
-
-    let mut results = match serde_json::from_str::<Vec<HelmHistoryRow>>(output_string.as_str()) {
-        Ok(x) => x,
-        Err(_) => vec![],
-    };
-
-    // unsort results by revision number
-    let _ = results.sort_by_key(|x| x.revision);
-    // there is no performance penalty to do it in 2 operations instead of one, but who really cares anyway
-    let _ = results.reverse();
-
-    Ok(results)
-}
-
-pub fn helm_uninstall_list<P>(
-    kubernetes_config: P,
-    helm_list: Vec<HelmChart>,
-    envs: Vec<(&str, &str)>,
-) -> Result<String, SimpleError>
-where
-    P: AsRef<Path>,
-{
-    let mut output_vec: Vec<String> = Vec::new();
-
-    for chart in helm_list {
-        match helm_exec_with_output(
-            vec![
-                "uninstall",
-                "-n",
-                chart.namespace.as_str(),
-                chart.name.as_str(),
-                "--kubeconfig",
-                kubernetes_config.as_ref().to_str().unwrap(),
-            ],
-            envs.clone(),
-            |line| output_vec.push(line),
-            |line| error!("{}", line),
-        ) {
-            Ok(_) => info!(
-                "Helm uninstall succeed for {} on namespace {}",
-                chart.name, chart.namespace
-            ),
-            Err(_) => info!(
-                "Helm history found for release name {} on namespace {}",
-                chart.name, chart.namespace
-            ),
-        };
-    }
-
-    Ok(output_vec.join("\n"))
-}
-
-pub fn helm_exec_upgrade_with_override_file<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    release_name: &str,
-    chart_root_dir: P,
-    override_file: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<(), CommandError>
-where
-    P: AsRef<Path>,
-{
-    helm_exec_with_output(
-        vec![
-            "upgrade",
-            "--kubeconfig",
-            kubernetes_config.as_ref().to_str().unwrap(),
-            "--create-namespace",
-            "--install",
-            "--history-max",
-            "50",
-            "--wait",
-            "--namespace",
-            namespace,
-            release_name,
-            chart_root_dir.as_ref().to_str().unwrap(),
-            "-f",
-            override_file,
-        ],
-        envs,
-        |line| info!("{}", line.as_str()),
-        |line| {
-            // don't crash errors if releases are not found
-            if line.contains("Error: release: not found") {
-                info!("{}", line)
-            } else {
-                error!("{}", line)
-            }
-        },
-    )
-}
-
-pub fn helm_exec_with_upgrade_history_with_override<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    release_name: &str,
-    chart_root_dir: P,
-    override_file: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<Option<HelmHistoryRow>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    // do exec helm upgrade
-    info!(
-        "exec helm upgrade for namespace {} and chart {}",
-        namespace,
-        chart_root_dir.as_ref().to_str().unwrap()
-    );
-
-    let _ = helm_exec_upgrade_with_override_file(
-        kubernetes_config.as_ref(),
-        namespace,
-        release_name,
-        chart_root_dir.as_ref(),
-        override_file,
-        envs.clone(),
-    )?;
-
-    // list helm history
-    info!(
-        "exec helm history for namespace {} and chart {}",
-        namespace,
-        chart_root_dir.as_ref().to_str().unwrap()
-    );
-
-    let helm_history_rows = helm_exec_history(kubernetes_config.as_ref(), namespace, release_name, &envs)?;
-
-    // take the last deployment from helm history - or return none if there is no history
-    Ok(helm_history_rows
-        .first()
-        .map(|helm_history_row| helm_history_row.clone()))
-}
-
-pub fn is_chart_deployed<P>(
-    kubernetes_config: P,
-    envs: Vec<(&str, &str)>,
-    namespace: Option<&str>,
-    chart_name: String,
-) -> Result<bool, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let deployed_charts = helm_list(kubernetes_config, envs, namespace)?;
-
-    for chart in deployed_charts {
-        if chart.name == chart_name {
-            return Ok(true);
-        }
-    }
-
-    Ok(false)
-}
-
-pub fn helm_get_chart_version<P>(
-    kubernetes_config: P,
-    envs: Vec<(&str, &str)>,
-    namespace: Option<&str>,
-    chart_name: String,
-) -> Option<Version>
-where
-    P: AsRef<Path>,
-{
-    match helm_list(kubernetes_config, envs, namespace) {
-        Ok(deployed_charts) => {
-            for chart in deployed_charts {
-                if chart.name == chart_name {
-                    return chart.version;
-                }
-            }
-
-            None
-        }
-        Err(_) => None,
-    }
-}
-
-/// List deployed helm charts
-///
-/// # Arguments
-///
-/// * `kubernetes_config` - kubernetes config path
-/// * `envs` - environment variables required for kubernetes connection
-/// * `namespace` - list charts from a kubernetes namespace or use None to select all namespaces
-pub fn helm_list<P>(
-    kubernetes_config: P,
-    envs: Vec<(&str, &str)>,
-    namespace: Option<&str>,
-) -> Result<Vec<HelmChart>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let mut output_vec: Vec<String> = Vec::new();
-    let mut helm_args = vec![
-        "list",
-        "--kubeconfig",
-        kubernetes_config.as_ref().to_str().unwrap(),
-        "-o",
-        "json",
-    ];
-    match namespace {
-        Some(ns) => helm_args.append(&mut vec!["-n", ns]),
-        None => helm_args.push("-A"),
-    }
-
-    let _ = helm_exec_with_output(helm_args, envs, |line| output_vec.push(line), |line| error!("{}", line));
-
-    let output_string: String = output_vec.join("");
-    let values = serde_json::from_str::<Vec<HelmListItem>>(output_string.as_str());
-    let mut helms_charts: Vec<HelmChart> = Vec::new();
-
-    match values {
-        Ok(all_helms) => {
-            for helm in all_helms {
-                let raw_version = helm.chart.replace(format!("{}-", helm.name).as_str(), "");
-                let version = match Version::from_str(raw_version.as_str()) {
-                    Ok(v) => Some(v),
-                    Err(_) => None,
+                    CmdError(
+                        chart.name.clone(),
+                        HelmCommand::UPGRADE,
+                        CommandError::new(stderr_msg.clone(), Some(stderr_msg)),
+                    )
                 };
 
-                helms_charts.push(HelmChart::new(helm.name, helm.namespace, version))
+                Err(error)
             }
         }
-        Err(e) => {
-            let message_safe = "Error while deserializing all helms names";
-            return Err(CommandError::new(
-                format!("{}, error: {}", message_safe, e),
-                Some(message_safe.to_string()),
-            ));
+    }
+
+    pub fn uninstall_chart_if_breaking_version(
+        &self,
+        chart: &ChartInfo,
+        envs: &[(&str, &str)],
+    ) -> Result<(), HelmError> {
+        // If there is a breaking version set for the current helm chart,
+        // then we compare this breaking version with the currently installed version if any.
+        // If current installed version is older than breaking change one, then we delete
+        // the chart before applying it.
+        if let Some(breaking_version) = &chart.last_breaking_version_requiring_restart {
+            if let Some(installed_version) =
+                self.get_chart_version(chart.name.clone(), Some(chart.get_namespace_string().as_str()), envs)?
+            {
+                if installed_version.le(breaking_version) {
+                    self.uninstall(&chart, envs)?;
+                }
+            }
         }
-    }
 
-    Ok(helms_charts)
+        Ok(())
+    }
 }
 
-pub fn helm_upgrade_diff_with_chart_info<P>(
-    kubernetes_config: P,
-    envs: &Vec<(String, String)>,
-    chart: &ChartInfo,
-) -> Result<(), CommandError>
-where
-    P: AsRef<Path>,
-{
-    let mut environment_variables = envs.clone();
-    environment_variables.push(("HELM_NAMESPACE".to_string(), chart.get_namespace_string()));
-
-    let mut args_string: Vec<String> = vec![
-        "diff",
-        "upgrade",
-        "--no-color",
-        "--allow-unreleased",
-        "--kubeconfig",
-        kubernetes_config.as_ref().to_str().unwrap(),
-    ]
-    .into_iter()
-    .map(|x| x.to_string())
-    .collect();
-
-    // overrides and files overrides
-    for value in &chart.values {
-        args_string.push("--set".to_string());
-        args_string.push(format!("{}={}", value.key, value.value));
-    }
-    for value_file in &chart.values_files {
-        args_string.push("-f".to_string());
-        args_string.push(value_file.clone());
-    }
-    for value_file in &chart.yaml_files_content {
-        let file_path = format!("{}/{}", chart.path, &value_file.filename);
-        let file_create = || -> Result<(), Error> {
-            let mut file = File::create(&file_path)?;
-            file.write_all(value_file.yaml_content.as_bytes())?;
-            Ok(())
-        };
-        // no need to validate yaml as it will be done by helm
-        if let Err(e) = file_create() {
-            let safe_message = format!("Error while writing yaml content to file `{}`", &file_path);
-            return Err(CommandError::new(
-                format!(
-                    "{}\nContent\n{}\nError: {}",
-                    safe_message.to_string(),
-                    value_file.yaml_content,
-                    e
-                ),
-                Some(safe_message.to_string()),
-            ));
-        };
-
-        args_string.push("-f".to_string());
-        args_string.push(file_path.clone());
-    }
-
-    // add last elements
-    args_string.push(chart.name.to_string());
-    args_string.push(chart.path.to_string());
-
-    helm_exec_with_output(
-        args_string.iter().map(|x| x.as_str()).collect(),
-        environment_variables
-            .iter()
-            .map(|x| (x.0.as_str(), x.1.as_str()))
-            .collect(),
-        |line| info!("{}", line),
-        |line| error!("{}", line),
-    )
-}
-
-pub fn helm_exec(args: Vec<&str>, envs: Vec<(&str, &str)>) -> Result<(), CommandError> {
-    helm_exec_with_output(
-        args,
-        envs,
-        |line| {
-            span!(Level::INFO, "{}", "{}", line);
-        },
-        |line_err| {
-            span!(Level::INFO, "{}", "{}", line_err);
-        },
-    )
-}
-
-pub fn helm_exec_with_output<F, X>(
-    args: Vec<&str>,
-    envs: Vec<(&str, &str)>,
+fn helm_exec_with_output<F, X>(
+    args: &[&str],
+    envs: &[(&str, &str)],
     stdout_output: F,
     stderr_output: X,
 ) -> Result<(), CommandError>
@@ -853,69 +542,309 @@ where
     // Note: Helm CLI use spf13/cobra lib for the CLI; One function is mainly used to return an error if a command failed.
     // Helm returns an error each time a command does not succeed as they want. Which leads to handling error with status code 1
     // It means that the command successfully ran, but it didn't terminate as expected
-    let mut cmd = QoveryCommand::new("helm", &args, &envs);
+    let mut cmd = QoveryCommand::new("helm", args, envs);
     match cmd.exec_with_timeout(Duration::max_value(), stdout_output, stderr_output) {
         Err(err) => Err(CommandError::new(format!("{:?}", err), None)),
         _ => Ok(()),
     }
 }
 
+pub fn to_command_error(error: HelmError) -> CommandError {
+    CommandError::new_from_safe_message(error.to_string())
+}
+
+pub fn to_engine_error(event_details: &EventDetails, error: HelmError) -> EngineError {
+    EngineError::new_helm_error(event_details.clone(), error)
+}
+
+#[cfg(feature = "test-with-kube")]
 #[cfg(test)]
 mod tests {
-    use crate::cmd::helm::helm_get_secret_lock_name;
-    use crate::cmd::structs::Secrets;
-    use chrono::{DateTime, NaiveDateTime, Utc};
+    use crate::cloud_provider::helm::{ChartInfo, ChartSetValue};
+    use crate::cmd::helm::{helm_exec_with_output, Helm, HelmError};
+    use crate::cmd::utilities::QoveryCommand;
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+    use std::time::Duration;
+
+    struct HelmTestCtx {
+        helm: Helm,
+        chart: ChartInfo,
+    }
+
+    impl HelmTestCtx {
+        fn cleanup(&self) {
+            let ret = self.helm.uninstall(&self.chart, &vec![]);
+            assert!(ret.is_ok())
+        }
+
+        fn new(release_name: &str) -> HelmTestCtx {
+            let mut chart = ChartInfo::new_from_custom_namespace(
+                release_name.to_string(),
+                "tests/helm/simple_nginx".to_string(),
+                "default".to_string(),
+                300,
+                vec![],
+                false,
+                None,
+            );
+            chart.wait = true;
+            chart.atomic = true;
+            let mut kube_config = dirs::home_dir().unwrap();
+            kube_config.push(".kube/config");
+            let helm = Helm::new(kube_config.to_str().unwrap(), &vec![]).unwrap();
+
+            let cleanup = HelmTestCtx { helm, chart };
+            cleanup.cleanup();
+            cleanup
+        }
+    }
+
+    impl Drop for HelmTestCtx {
+        fn drop(&mut self) {
+            self.cleanup()
+        }
+    }
 
     #[test]
-    fn test_helm_lock_get_name() {
-        let json_content = r#"
-{
-    "apiVersion": "v1",
-    "items": [
-        {
-            "apiVersion": "v1",
-            "data": {
-                "release": "coucou"
-            },
-            "kind": "Secret",
-            "metadata": {
-                "creationTimestamp": "2021-09-02T23:20:36Z",
-                "labels": {
-                    "modifiedAt": "1632324195",
-                    "name": "cert-manager",
-                    "owner": "helm",
-                    "status": "superseded",
-                    "version": "1"
-                },
-                "name": "sh.helm.release.v1.cert-manager.v1",
-                "namespace": "cert-manager",
-                "resourceVersion": "7287406",
-                "uid": "173b76c4-4f48-4544-8928-64a9b8b376d5"
-            },
-            "type": "helm.sh/release.v1"
-        }
-    ],
-    "kind": "List",
-    "metadata": {
-        "resourceVersion": "",
-        "selfLink": ""
+    fn check_version() {
+        let mut output = String::new();
+        let _ = helm_exec_with_output(&vec!["version"], &vec![], |line| output.push_str(&line), |_line| {});
+        assert!(output.contains("Version:\"v3.7.2\""));
     }
-}
-        "#;
-        let mut secrets = serde_json::from_str::<Secrets>(json_content).unwrap();
 
-        // expired lock should be ok
-        let res = helm_get_secret_lock_name(&secrets, 300).unwrap();
-        assert_eq!(res, "sh.helm.release.v1.cert-manager.v1".to_string());
+    #[test]
+    fn test_release_exist() {
+        let HelmTestCtx { ref helm, ref chart } = HelmTestCtx::new("test-release-exist");
+        let ret = helm.check_release_exist(chart, &vec![]);
 
-        // lock is not expired yet
-        let time_in_future = NaiveDateTime::from_timestamp(Utc::now().timestamp() + 30, 0);
-        let time_in_future_datetime_format: DateTime<Utc> = DateTime::from_utc(time_in_future, Utc);
-        secrets.items[0].metadata.creation_timestamp = time_in_future_datetime_format.to_rfc3339();
-        let res = helm_get_secret_lock_name(&secrets, 300);
-        assert_eq!(
-            res.unwrap_err().message,
-            "helm lock has not yet expired, please wait 330s before retrying".to_string()
-        )
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name))
+    }
+
+    #[test]
+    fn test_list_release() {
+        let HelmTestCtx {
+            ref helm,
+            ref mut chart,
+        } = HelmTestCtx::new("test-list-release");
+        chart.custom_namespace = Some("hello-my-friend-this-is-a-test".to_string());
+
+        // no existing namespace should return an empty array
+        let ret = helm.list_release(Some("tsdfsfsdf"), &vec![]);
+        assert!(matches!(ret, Ok(vec) if vec.is_empty()));
+
+        // install something
+        let ret = helm.upgrade(&chart, &vec![]);
+        assert!(matches!(ret, Ok(())));
+
+        // We should have at least one release in all the release
+        let ret = helm.list_release(None, &vec![]);
+        assert!(matches!(ret, Ok(vec) if !vec.is_empty()));
+
+        // We should have at least one release in all the release
+        let ret = helm.list_release(Some(&chart.get_namespace_string()), &vec![]);
+        assert!(matches!(ret, Ok(vec) if vec.len() == 1));
+
+        // Install a second stuff
+        let HelmTestCtx {
+            ref helm,
+            ref mut chart,
+        } = HelmTestCtx::new("test-list-release-2");
+        chart.custom_namespace = Some("hello-my-friend-this-is-a-test".to_string());
+        let ret = helm.upgrade(&chart, &vec![]);
+        assert!(matches!(ret, Ok(())));
+
+        let ret = helm.list_release(Some(&chart.get_namespace_string()), &vec![]);
+        assert!(matches!(ret, Ok(vec) if vec.len() == 2));
+    }
+
+    #[test]
+    fn test_upgrade_diff() {
+        let HelmTestCtx { ref helm, ref chart } = HelmTestCtx::new("test-upgrade-diff");
+
+        let ret = helm.upgrade_diff(&chart, &vec![]);
+        assert!(matches!(ret, Ok(())));
+    }
+
+    #[test]
+    fn test_rollback() {
+        let HelmTestCtx { ref helm, ref chart } = HelmTestCtx::new("test-rollback");
+
+        // check release does not exist yet
+        let ret = helm.rollback(&chart, &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+
+        // install it
+        let ret = helm.upgrade(&chart, &vec![]);
+        assert!(matches!(ret, Ok(())));
+
+        // First revision cannot be rollback
+        let ret = helm.rollback(&chart, &vec![]);
+        assert!(matches!(ret, Err(HelmError::CannotRollback(_))));
+
+        // 2nd upgrade
+        let ret = helm.upgrade(&chart, &vec![]);
+        assert!(matches!(ret, Ok(())));
+
+        // Rollback should be ok now
+        let ret = helm.rollback(&chart, &vec![]);
+        assert!(matches!(ret, Ok(())));
+    }
+
+    #[test]
+    fn test_upgrade() {
+        let HelmTestCtx { ref helm, ref chart } = HelmTestCtx::new("test-upgrade");
+
+        // check release does not exist yet
+        let ret = helm.check_release_exist(&chart, &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+
+        // install it
+        let ret = helm.upgrade(&chart, &vec![]);
+        assert!(matches!(ret, Ok(())));
+
+        // check now it exists
+        let ret = helm.check_release_exist(&chart, &vec![]);
+        assert!(matches!(ret, Ok(_)));
+    }
+
+    #[test]
+    fn test_upgrade_timeout() {
+        let HelmTestCtx {
+            ref helm,
+            ref mut chart,
+        } = HelmTestCtx::new("test-upgrade-timeout");
+        chart.timeout_in_seconds = 1;
+
+        // check release does not exist yet
+        let ret = helm.check_release_exist(&chart, &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+
+        // install it
+        let ret = helm.upgrade(&chart, &vec![]);
+        assert!(matches!(ret, Err(HelmError::Timeout(_, _, _))));
+
+        // Release should not exist if it fails
+        let ret = helm.check_release_exist(&chart, &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+    }
+
+    #[test]
+    fn test_upgrade_with_lock_during_install() {
+        // We want to check that we manage to install a chart even if a lock is present while it was the first installation
+        let HelmTestCtx { ref helm, ref chart } = HelmTestCtx::new("test-upgrade-with-lock-install");
+
+        // check release does not exist yet
+        let ret = helm.check_release_exist(&chart, &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+
+        // Spawn our task killer
+        let barrier = Arc::new(Barrier::new(2));
+        std::thread::spawn({
+            let barrier = barrier.clone();
+            let chart_name = chart.name.clone();
+            move || {
+                barrier.wait();
+                thread::sleep(Duration::from_millis(3000));
+                let mut cmd = QoveryCommand::new("pkill", &vec!["-9", "-f", &format!("helm.*{}", chart_name)], &vec![]);
+                let _ = cmd.exec();
+            }
+        });
+
+        // install it
+        barrier.wait();
+        let ret = helm.upgrade(&chart, &vec![]);
+        assert!(matches!(ret, Err(_)));
+
+        // Release should be locked
+        let ret = helm.check_release_exist(&chart, &vec![]);
+        assert!(matches!(ret, Ok(release) if release.is_locked()));
+
+        // New installation should work even if a lock is present
+        let ret = helm.upgrade(&chart, &vec![]);
+        assert!(matches!(ret, Ok(())));
+
+        // Release should not be locked anymore
+        let ret = helm.check_release_exist(&chart, &vec![]);
+        assert!(matches!(ret, Ok(release) if !release.is_locked()));
+    }
+
+    #[test]
+    fn test_upgrade_with_lock_during_upgrade() {
+        // We want to check that we manage to install a chart even if a lock is present while it not the first installation
+        let HelmTestCtx {
+            ref helm,
+            ref mut chart,
+        } = HelmTestCtx::new("test-upgrade-with-lock-upgrade");
+
+        // check release does not exist yet
+        let ret = helm.check_release_exist(&chart, &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+
+        // First install
+        let ret = helm.upgrade(&chart, &vec![]);
+        assert!(matches!(ret, Ok(())));
+
+        // Spawn our task killer
+        let barrier = Arc::new(Barrier::new(2));
+        std::thread::spawn({
+            let barrier = barrier.clone();
+            let chart_name = chart.name.clone();
+            move || {
+                barrier.wait();
+                thread::sleep(Duration::from_millis(3000));
+                let mut cmd = QoveryCommand::new("pkill", &vec!["-9", "-f", &format!("helm.*{}", chart_name)], &vec![]);
+                let _ = cmd.exec();
+            }
+        });
+
+        chart.values = vec![ChartSetValue {
+            key: "initialDelaySeconds".to_string(),
+            value: "6".to_string(),
+        }];
+        barrier.wait();
+        let ret = helm.upgrade(&chart, &vec![]);
+        assert!(matches!(ret, Err(_)));
+
+        // Release should be locked
+        let ret = helm.check_release_exist(&chart, &vec![]);
+        assert!(matches!(ret, Ok(release) if release.is_locked() && release.version == 2));
+
+        // New installation should work even if a lock is present
+        let ret = helm.upgrade(&chart, &vec![]);
+        assert!(matches!(ret, Ok(())));
+
+        // Release should not be locked anymore
+        let ret = helm.check_release_exist(&chart, &vec![]);
+        assert!(matches!(ret, Ok(release) if !release.is_locked() && release.version == 4));
+    }
+
+    #[test]
+    fn test_uninstall() {
+        let HelmTestCtx { ref helm, ref chart } = HelmTestCtx::new("test-uninstall");
+
+        // check release does not exist yet
+        let ret = helm.check_release_exist(&chart, &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+
+        // deleting something that does not exist should not be an issue
+        let ret = helm.uninstall(&chart, &vec![]);
+        assert!(matches!(ret, Ok(())));
+
+        // install it
+        let ret = helm.upgrade(&chart, &vec![]);
+        assert!(matches!(ret, Ok(())));
+
+        // check now it exists
+        let ret = helm.check_release_exist(&chart, &vec![]);
+        assert!(matches!(ret, Ok(_)));
+
+        // Delete it
+        let ret = helm.uninstall(&chart, &vec![]);
+        assert!(matches!(ret, Ok(())));
+
+        // check release does not exist anymore
+        let ret = helm.check_release_exist(&chart, &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
     }
 }

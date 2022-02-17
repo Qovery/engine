@@ -8,9 +8,12 @@ use tera::Context as TeraContext;
 
 use crate::build_platform::Image;
 use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::utilities::check_domain_for;
 use crate::cloud_provider::DeploymentTarget;
+use crate::cmd;
+use crate::cmd::helm;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::Statefulset;
 use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_scale_replicas_by_selector, ScalingKind};
@@ -365,30 +368,11 @@ pub fn deploy_user_stateless_service<T>(target: &DeploymentTarget, service: &T) 
 where
     T: Service + Helm,
 {
-    deploy_stateless_service(
-        target,
-        service,
-        service.engine_error(
-            EngineErrorCause::User(
-                "Your application has failed to start. \
-                Ensure you can run it without issues with `qovery run` and check its logs from the web interface or the CLI with `qovery log`. \
-                This issue often occurs due to ports misconfiguration. Make sure you exposed the correct port (using EXPOSE statement in Dockerfile or via Qovery configuration).",
-            ),
-            format!(
-                "{} {} has failed to start ⤬",
-                service.service_type().name(),
-                service.name_with_id()
-            ),
-        ),
-    )
+    deploy_stateless_service(target, service)
 }
 
 /// deploy a stateless service (app, router, database...) on Kubernetes
-pub fn deploy_stateless_service<T>(
-    target: &DeploymentTarget,
-    service: &T,
-    thrown_error: EngineError,
-) -> Result<(), EngineError>
+pub fn deploy_stateless_service<T>(target: &DeploymentTarget, service: &T) -> Result<(), EngineError>
 where
     T: Service + Helm,
 {
@@ -441,26 +425,26 @@ where
     })?;
 
     // do exec helm upgrade and return the last deployment status
-    let helm_history_row = crate::cmd::helm::helm_exec_with_upgrade_history(
-        kubernetes_config_file_path.as_str(),
-        environment.namespace(),
-        helm_release_name.as_str(),
-        service.selector(),
-        workspace_dir.as_str(),
-        service.start_timeout(),
-        kubernetes.cloud_provider().credentials_environment_variables(),
-        service.service_type(),
+    let helm = helm::Helm::new(
+        &kubernetes_config_file_path,
+        &kubernetes.cloud_provider().credentials_environment_variables(),
     )
-    .map_err(|e| NewEngineError::new_helm_charts_upgrade_error(event_details.clone(), e).to_legacy_engine_error())?;
+    .map_err(|e| helm::to_engine_error(&event_details, e).to_legacy_engine_error())?;
+    let chart = ChartInfo::new_from_custom_namespace(
+        helm_release_name,
+        workspace_dir.clone(),
+        environment.namespace().to_string(),
+        600_i64,
+        match service.service_type() {
+            ServiceType::Database(_) => vec![format!("{}/q-values.yaml", &workspace_dir)],
+            _ => vec![],
+        },
+        false,
+        service.selector(),
+    );
 
-    // check deployment status
-    if helm_history_row.is_none()
-        || !helm_history_row
-            .expect("Error getting helm history row")
-            .is_successfully_deployed()
-    {
-        return Err(thrown_error);
-    }
+    helm.upgrade(&chart, &vec![])
+        .map_err(|e| helm::to_engine_error(&event_details, e).to_legacy_engine_error())?;
 
     crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
         kubernetes_config_file_path.as_str(),
@@ -482,48 +466,12 @@ where
 }
 
 /// do specific operations on a stateless service deployment error
-pub fn deploy_stateless_service_error<T>(target: &DeploymentTarget, service: &T) -> Result<(), EngineError>
+pub fn deploy_stateless_service_error<T>(_target: &DeploymentTarget, _service: &T) -> Result<(), EngineError>
 where
     T: Service + Helm,
 {
-    let kubernetes = target.kubernetes;
-    let environment = target.environment;
-    let helm_release_name = service.helm_release_name();
-    let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-    let kubernetes_config_file_path = match kubernetes.get_kubeconfig_file_path() {
-        Ok(path) => path,
-        Err(e) => return Err(e.to_legacy_engine_error()),
-    };
-
-    let history_rows = crate::cmd::helm::helm_exec_history(
-        kubernetes_config_file_path.as_str(),
-        environment.namespace(),
-        helm_release_name.as_str(),
-        &kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| {
-        NewEngineError::new_helm_chart_history_error(
-            event_details.clone(),
-            helm_release_name.to_string(),
-            environment.namespace().to_string(),
-            e,
-        )
-        .to_legacy_engine_error()
-    })?;
-
-    if history_rows.len() == 1 {
-        crate::cmd::helm::helm_exec_uninstall(
-            kubernetes_config_file_path.as_str(),
-            environment.namespace(),
-            helm_release_name.as_str(),
-            kubernetes.cloud_provider().credentials_environment_variables(),
-        )
-        .map_err(|e| {
-            NewEngineError::new_helm_chart_uninstall_error(event_details.clone(), helm_release_name.to_string(), e)
-                .to_legacy_engine_error()
-        })?;
-    }
-
+    // Nothing to do as we sait --atomic on chart release that we do
+    // So helm rollback for us if a deployment fails
     Ok(())
 }
 
@@ -789,30 +737,26 @@ where
         })?;
 
         // do exec helm upgrade and return the last deployment status
-        let helm_history_row = crate::cmd::helm::helm_exec_with_upgrade_history(
-            kubernetes_config_file_path.to_string(),
-            environment.namespace(),
-            service.helm_release_name().as_str(),
-            service.selector(),
-            workspace_dir.to_string(),
-            service.start_timeout(),
-            kubernetes.cloud_provider().credentials_environment_variables(),
-            service.service_type(),
+        let helm = helm::Helm::new(
+            &kubernetes_config_file_path,
+            &kubernetes.cloud_provider().credentials_environment_variables(),
         )
-        .map_err(|e| {
-            NewEngineError::new_helm_charts_upgrade_error(event_details.clone(), e).to_legacy_engine_error()
-        })?;
+        .map_err(|e| helm::to_engine_error(&event_details, e).to_legacy_engine_error())?;
+        let chart = ChartInfo::new_from_custom_namespace(
+            service.helm_release_name(),
+            workspace_dir.clone(),
+            environment.namespace().to_string(),
+            600_i64,
+            match service.service_type() {
+                ServiceType::Database(_) => vec![format!("{}/q-values.yaml", &workspace_dir)],
+                _ => vec![],
+            },
+            false,
+            service.selector(),
+        );
 
-        // check deployment status
-        if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-            return Err(service.engine_error(
-                EngineErrorCause::Internal,
-                format!(
-                    "{} service fails to be deployed (before start)",
-                    service.service_type().name()
-                ),
-            ));
-        }
+        helm.upgrade(&chart, &vec![])
+            .map_err(|e| helm::to_engine_error(&event_details, e).to_legacy_engine_error())?;
 
         // check app status
         match crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
@@ -1306,34 +1250,15 @@ pub fn helm_uninstall_release(
         .get_kubeconfig_file_path()
         .map_err(|e| e.to_legacy_engine_error())?;
 
-    let history_rows = crate::cmd::helm::helm_exec_history(
-        kubernetes_config_file_path.as_str(),
-        environment.namespace(),
-        helm_release_name,
+    let helm = cmd::helm::Helm::new(
+        &kubernetes_config_file_path,
         &kubernetes.cloud_provider().credentials_environment_variables(),
     )
-    .map_err(|e| {
-        NewEngineError::new_k8s_history(event_details.clone(), environment.namespace().to_string(), e)
-            .to_legacy_engine_error()
-    })?;
+    .map_err(|e| NewEngineError::new_helm_error(event_details.clone(), e).to_legacy_engine_error())?;
 
-    // if there is no valid history - then delete the helm chart
-    let first_valid_history_row = history_rows.iter().find(|x| x.is_successfully_deployed());
-
-    if first_valid_history_row.is_some() {
-        crate::cmd::helm::helm_exec_uninstall(
-            kubernetes_config_file_path.as_str(),
-            environment.namespace(),
-            helm_release_name,
-            kubernetes.cloud_provider().credentials_environment_variables(),
-        )
-        .map_err(|e| {
-            NewEngineError::new_helm_chart_uninstall_error(event_details.clone(), helm_release_name.to_string(), e)
-                .to_legacy_engine_error()
-        })?;
-    }
-
-    Ok(())
+    let chart = ChartInfo::new_from_release_name(helm_release_name, environment.namespace());
+    helm.uninstall(&chart, &vec![])
+        .map_err(|e| NewEngineError::new_helm_error(event_details.clone(), e).to_legacy_engine_error())
 }
 
 /// This function call (start|pause|delete)_in_progress function every 10 seconds when a

@@ -1,5 +1,6 @@
 use tera::Context as TeraContext;
 
+use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
     default_tera_context, delete_router, deploy_stateless_service_error, send_progress_on_long_task, Action, Create,
@@ -7,6 +8,7 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::utilities::{check_cname_for, print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
+use crate::cmd::helm;
 use crate::cmd::helm::Timeout;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use crate::errors::EngineError as NewEngineError;
@@ -345,25 +347,26 @@ impl Create for Router {
         }
 
         // do exec helm upgrade and return the last deployment status
-        let helm_history_row = crate::cmd::helm::helm_exec_with_upgrade_history(
-            kubernetes_config_file_path.as_str(),
-            environment.namespace(),
-            helm_release_name.as_str(),
-            self.selector(),
-            workspace_dir.as_str(),
-            self.start_timeout(),
-            kubernetes.cloud_provider().credentials_environment_variables(),
-            self.service_type(),
+        let helm = helm::Helm::new(
+            &kubernetes_config_file_path,
+            &kubernetes.cloud_provider().credentials_environment_variables(),
         )
-        .map_err(|e| {
-            NewEngineError::new_helm_charts_upgrade_error(event_details.clone(), e).to_legacy_engine_error()
-        })?;
+        .map_err(|e| helm::to_engine_error(&event_details, e).to_legacy_engine_error())?;
+        let chart = ChartInfo::new_from_custom_namespace(
+            helm_release_name,
+            workspace_dir.clone(),
+            environment.namespace().to_string(),
+            self.start_timeout().value() as i64,
+            match self.service_type() {
+                ServiceType::Database(_) => vec![format!("{}/q-values.yaml", &workspace_dir)],
+                _ => vec![],
+            },
+            false,
+            self.selector(),
+        );
 
-        if helm_history_row.is_none() || !helm_history_row.unwrap().is_successfully_deployed() {
-            return Err(self.engine_error(EngineErrorCause::Internal, "Router has failed to be deployed".into()));
-        }
-
-        Ok(())
+        helm.upgrade(&chart, &vec![])
+            .map_err(|e| helm::to_engine_error(&event_details, e).to_legacy_engine_error())
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
