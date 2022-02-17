@@ -11,6 +11,7 @@ use retry::delay::Fixed;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::net::{IpAddr, Ipv4Addr};
 use std::num::ParseFloatError;
 use std::str::FromStr;
 use trust_dns_resolver::config::*;
@@ -325,10 +326,18 @@ fn cloudflare_dns_resolver() -> Resolver {
     //  We want to avoid cache and using host file of the host, as some provider force caching
     //  which lead to stale response
     resolver_options.cache_size = 0;
-    resolver_options.use_hosts_file = false;
+    resolver_options.use_hosts_file = true;
+    resolver_options.ip_strategy = LookupIpStrategy::Ipv4Only;
+    let dns = IpAddr::V4(Ipv4Addr::new(192, 168, 1, 254));
+    let resolver = ResolverConfig::from_parts(
+        None,
+        vec![],
+        NameServerConfigGroup::from_ips_clear(&vec![dns], 53, true),
+    );
 
-    Resolver::new(ResolverConfig::cloudflare(), resolver_options)
-        .expect("Invalid cloudflare DNS resolver configuration")
+    Resolver::new(resolver, resolver_options).unwrap()
+    //Resolver::new(ResolverConfig::cloudflare(), resolver_options)
+    //    .expect("Invalid cloudflare DNS resolver configuration")
 }
 
 fn get_cname_record_value(resolver: &Resolver, cname: &str) -> Option<String> {

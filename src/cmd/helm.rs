@@ -53,8 +53,8 @@ pub enum HelmError {
     #[error("Helm timed out for release `{0}` during helm {1:?}: {2}")]
     Timeout(String, HelmCommand, String),
 
-    #[error("Helm command `{0:?}` terminated with an error: {1:?}")]
-    CmdError(HelmCommand, CommandError),
+    #[error("Helm command `{1:?}` for release {0} terminated with an error: {2:?}")]
+    CmdError(String, HelmCommand, CommandError),
 }
 
 #[derive(Debug)]
@@ -140,7 +140,7 @@ impl Helm {
             Err(err) => {
                 stderr.push_str(&err.message());
                 let error = CommandError::new(stderr, err.message_safe());
-                Err(CmdError(STATUS, error))
+                Err(CmdError(chart.name.clone(), STATUS, error))
             }
             Ok(_) => {
                 let status: ReleaseStatus = serde_json::from_str(&stdout).unwrap_or_default();
@@ -177,7 +177,7 @@ impl Helm {
             Err(err) => {
                 stderr.push_str(&err.message());
                 let error = CommandError::new(stderr, err.message_safe());
-                Err(CmdError(ROLLBACK, error))
+                Err(CmdError(chart.name.clone(), ROLLBACK, error))
             }
             Ok(_) => Ok(()),
         }
@@ -210,7 +210,7 @@ impl Helm {
             Err(err) => {
                 stderr.push_str(&err.message());
                 let error = CommandError::new(stderr, err.message_safe());
-                Err(CmdError(UNINSTALL, error))
+                Err(CmdError(chart.name.clone(), UNINSTALL, error))
             }
             Ok(_) => Ok(()),
         }
@@ -263,7 +263,7 @@ impl Helm {
             |line| output_string.push(line),
             |line| error!("{}", line),
         ) {
-            return Err(HelmError::CmdError(LIST, cmd_error));
+            return Err(HelmError::CmdError("none".to_string(), LIST, cmd_error));
         }
 
         let values = serde_json::from_str::<Vec<HelmListItem>>(&output_string.join(""));
@@ -282,6 +282,7 @@ impl Helm {
             Err(e) => {
                 let message_safe = "Error while deserializing all helms names";
                 Err(HelmError::CmdError(
+                    "none".to_string(),
                     LIST,
                     CommandError::new(
                         format!("{}, error: {}", message_safe, e),
@@ -345,7 +346,7 @@ impl Helm {
                     format!("{}\nContent\n{}\nError: {}", safe_message, value_file.yaml_content, e),
                     Some(safe_message),
                 );
-                return Err(HelmError::CmdError(HelmCommand::UPGRADE, cmd_err));
+                return Err(HelmError::CmdError(chart.name.clone(), HelmCommand::UPGRADE, cmd_err));
             };
 
             args_string.push("-f".to_string());
@@ -375,6 +376,7 @@ impl Helm {
             Err(err) => {
                 error!("Helm error: {:?}", err);
                 Err(CmdError(
+                    chart.name.clone(),
                     HelmCommand::DIFF,
                     CommandError::new(stderr_msg.clone(), Some(stderr_msg)),
                 ))
@@ -452,7 +454,7 @@ impl Helm {
                     format!("{}\nContent\n{}\nError: {}", safe_message, value_file.yaml_content, e),
                     Some(safe_message),
                 );
-                return Err(HelmError::CmdError(HelmCommand::UPGRADE, cmd_err));
+                return Err(HelmError::CmdError(chart.name.clone(), HelmCommand::UPGRADE, cmd_err));
             };
 
             args_string.push("-f".to_string());
@@ -494,6 +496,7 @@ impl Helm {
                     HelmError::Timeout(chart.name.clone(), UPGRADE, stderr_msg)
                 } else {
                     CmdError(
+                        chart.name.clone(),
                         HelmCommand::UPGRADE,
                         CommandError::new(stderr_msg.clone(), Some(stderr_msg)),
                     )

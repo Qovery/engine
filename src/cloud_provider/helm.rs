@@ -17,7 +17,7 @@ use thread::spawn;
 use tracing::{span, Level};
 use uuid::Uuid;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum HelmAction {
     Deploy,
     Destroy,
@@ -326,24 +326,22 @@ pub fn deploy_charts_levels(
     // first show diff
     let envs_ref: Vec<(&str, &str)> = envs.iter().map(|(x, y)| (x.as_str(), y.as_str())).collect();
     let helm = Helm::new(&kubernetes_config, &envs_ref).map_err(to_command_error)?;
-    for level in &charts {
-        for chart in level {
+
+    for level in charts {
+        // Show diff for all chart in this state
+        for chart in &level {
             let chart_info = chart.get_chart_info();
-            match chart_info.action {
-                // don't do diff on destroy or skip
-                HelmAction::Deploy => {
-                    let _ = helm.upgrade_diff(chart.get_chart_info(), &vec![]);
-                }
-                _ => {}
+            // don't do diff on destroy or skip
+            if chart_info.action == HelmAction::Deploy {
+                let _ = helm.upgrade_diff(chart_info, &vec![]);
             }
         }
-    }
 
-    // then apply
-    if dry_run {
-        return Ok(());
-    }
-    for level in charts.into_iter() {
+        // Skip actual deployment if dry run
+        if dry_run {
+            continue;
+        }
+
         if let Err(e) = deploy_parallel_charts(&kubernetes_config, &envs, level) {
             return Err(e);
         }
@@ -602,18 +600,20 @@ impl HelmChart for PrometheusOperatorConfigChart {
             }
             HelmAction::Destroy => {
                 let chart_info = self.get_chart_info();
-                helm.uninstall(&chart_info, &vec![]).map_err(to_command_error)?;
+                if helm.check_release_exist(&chart_info, &vec![]).is_ok() {
+                    helm.uninstall(&chart_info, &vec![]).map_err(to_command_error)?;
 
-                let prometheus_crds = [
-                    "prometheuses.monitoring.coreos.com",
-                    "prometheusrules.monitoring.coreos.com",
-                    "servicemonitors.monitoring.coreos.com",
-                    "podmonitors.monitoring.coreos.com",
-                    "alertmanagers.monitoring.coreos.com",
-                    "thanosrulers.monitoring.coreos.com",
-                ];
-                for crd in &prometheus_crds {
-                    let _ = kubectl_exec_delete_crd(kubernetes_config, crd, environment_variables.clone());
+                    let prometheus_crds = [
+                        "prometheuses.monitoring.coreos.com",
+                        "prometheusrules.monitoring.coreos.com",
+                        "servicemonitors.monitoring.coreos.com",
+                        "podmonitors.monitoring.coreos.com",
+                        "alertmanagers.monitoring.coreos.com",
+                        "thanosrulers.monitoring.coreos.com",
+                    ];
+                    for crd in &prometheus_crds {
+                        let _ = kubectl_exec_delete_crd(kubernetes_config, crd, environment_variables.clone());
+                    }
                 }
             }
             HelmAction::Skip => {}

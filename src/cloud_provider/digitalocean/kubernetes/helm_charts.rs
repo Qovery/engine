@@ -544,7 +544,9 @@ datasources:
                 },
                 ChartSetValue {
                     key: "prometheus.servicemonitor.enabled".to_string(),
-                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
+                    // Due to cycle, prometheus need tls certificate from cert manager, and enabling this will require
+                    // prometheus to be already installed
+                    value: "false".to_string(),
                 },
                 ChartSetValue {
                     key: "prometheus.servicemonitor.prometheusInstance".to_string(),
@@ -1033,13 +1035,13 @@ datasources:
         Box::new(old_prometheus_operator),
     ];
 
-    let mut level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(container_registry_secret)];
+    let mut level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(container_registry_secret), Box::new(cert_manager)];
 
     let mut level_3: Vec<Box<dyn HelmChart>> = vec![];
 
     let mut level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(metrics_server), Box::new(external_dns)];
 
-    let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress), Box::new(cert_manager)];
+    let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
 
     let mut level_6: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),

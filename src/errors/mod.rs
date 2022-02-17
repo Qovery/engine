@@ -1512,7 +1512,7 @@ impl EngineError {
     /// * `error`: Raw error message.
     pub fn new_helm_error(event_details: EventDetails, error: HelmError) -> EngineError {
         let cmd_error = match &error {
-            HelmError::CmdError(_, cmd_error) => Some(cmd_error.clone()),
+            HelmError::CmdError(_, _, cmd_error) => Some(cmd_error.clone()),
             _ => None,
         };
 

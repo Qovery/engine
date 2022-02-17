@@ -1377,7 +1377,7 @@ prometheusOperator:
 
     # Use certmanager to generate webhook certs
     certManager:
-      enabled: false
+      enabled: true
       # issuerRef:
       #   name: "issuer"
       #   kind: "ClusterIssuer"
