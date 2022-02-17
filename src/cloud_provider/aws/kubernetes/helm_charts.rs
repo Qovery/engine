@@ -458,6 +458,7 @@ pub fn aws_helm_charts(
         },
     };
 
+    /* Example to delete an old install
     let old_prometheus_operator = PrometheusOperatorConfigChart {
         chart_info: ChartInfo {
             name: "prometheus-operator".to_string(),
@@ -465,7 +466,7 @@ pub fn aws_helm_charts(
             action: HelmAction::Destroy,
             ..Default::default()
         },
-    };
+    };*/
 
     let kube_prometheus_stack = PrometheusOperatorConfigChart {
         chart_info: ChartInfo {
@@ -1155,7 +1156,6 @@ datasources:
         Box::new(q_storage_class),
         Box::new(coredns_config),
         Box::new(aws_vpc_cni_chart),
-        Box::new(old_prometheus_operator),
     ];
 
     let level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
