@@ -1,7 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
     get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo, ChartPayload, ChartSetValue,
-    ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmAction, HelmChart, HelmChartNamespaces,
+    ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces,
     PrometheusOperatorConfigChart, ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
