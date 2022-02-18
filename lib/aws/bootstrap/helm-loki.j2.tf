@@ -71,4 +71,6 @@ resource "aws_s3_bucket_public_access_block" "loki_access" {
 
   ignore_public_acls = true
   restrict_public_buckets  = true
+  block_public_policy = true
+  block_public_acls = true
 }
