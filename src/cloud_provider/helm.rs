@@ -110,8 +110,6 @@ impl ChartInfo {
             name: name.to_string(),
             namespace: HelmChartNamespaces::Custom,
             custom_namespace: Some(custom_namespace.to_string()),
-            timeout_in_seconds: 600,
-            atomic: true,
             ..Default::default()
         }
     }
@@ -138,7 +136,7 @@ impl Default for ChartInfo {
             atomic: true,
             force_upgrade: false,
             last_breaking_version_requiring_restart: None,
-            timeout_in_seconds: 300,
+            timeout_in_seconds: 600,
             dry_run: false,
             wait: true,
             values: Vec::new(),

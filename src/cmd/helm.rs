@@ -16,7 +16,7 @@ use serde_derive::Deserialize;
 use std::fs::File;
 use std::str::FromStr;
 
-const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 300;
+const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 600;
 const HELM_MAX_HISTORY: &str = "50";
 
 pub enum Timeout<T> {
@@ -579,17 +579,15 @@ mod tests {
         }
 
         fn new(release_name: &str) -> HelmTestCtx {
-            let mut chart = ChartInfo::new_from_custom_namespace(
+            let chart = ChartInfo::new_from_custom_namespace(
                 release_name.to_string(),
                 "tests/helm/simple_nginx".to_string(),
                 "default".to_string(),
-                300,
+                600,
                 vec![],
                 false,
                 None,
             );
-            chart.wait = true;
-            chart.atomic = true;
             let mut kube_config = dirs::home_dir().unwrap();
             kube_config.push(".kube/config");
             let helm = Helm::new(kube_config.to_str().unwrap(), &vec![]).unwrap();

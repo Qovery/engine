@@ -304,7 +304,7 @@ impl Create for Router {
             helm_release_name,
             workspace_dir.clone(),
             environment.namespace().to_string(),
-            self.start_timeout().value() as i64,
+            600_i64,
             match self.service_type() {
                 ServiceType::Database(_) => vec![format!("{}/q-values.yaml", &workspace_dir)],
                 _ => vec![],
