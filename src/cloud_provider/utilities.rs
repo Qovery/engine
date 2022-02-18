@@ -319,7 +319,7 @@ impl fmt::Display for VersionsNumber {
     }
 }
 
-fn cloudflare_dns_resolver() -> Resolver {
+fn google_dns_resolver() -> Resolver {
     let mut resolver_options = ResolverOpts::default();
 
     //  We want to avoid cache and using host file of the host, as some provider force caching
@@ -335,8 +335,7 @@ fn cloudflare_dns_resolver() -> Resolver {
     //);
 
     //Resolver::new(resolver, resolver_options).unwrap()
-    Resolver::new(ResolverConfig::cloudflare(), resolver_options)
-        .expect("Invalid cloudflare DNS resolver configuration")
+    Resolver::new(ResolverConfig::google(), resolver_options).expect("Invalid google DNS resolver configuration")
 }
 
 fn get_cname_record_value(resolver: &Resolver, cname: &str) -> Option<String> {
@@ -360,7 +359,7 @@ pub fn check_cname_for(
     cname_to_check: &str,
     execution_id: &str,
 ) -> Result<String, String> {
-    let resolver = cloudflare_dns_resolver();
+    let resolver = google_dns_resolver();
     let listener_helper = ListenersHelper::new(listeners);
 
     let send_deployment_progress = |msg: &str| {
@@ -428,7 +427,7 @@ pub fn check_domain_for(
     execution_id: &str,
     context_id: &str,
 ) -> Result<(), EngineError> {
-    let resolver = cloudflare_dns_resolver();
+    let resolver = google_dns_resolver();
 
     for domain in domains_to_check {
         listener_helper.deployment_in_progress(ProgressInfo::new(
@@ -586,7 +585,7 @@ pub fn print_action(cloud_provider_name: &str, struct_name: &str, fn_name: &str,
 mod tests {
     use crate::cloud_provider::models::CpuLimits;
     use crate::cloud_provider::utilities::{
-        cloudflare_dns_resolver, convert_k8s_cpu_value_to_f32, get_cname_record_value,
+        convert_k8s_cpu_value_to_f32, get_cname_record_value, google_dns_resolver,
         validate_k8s_required_cpu_and_burstable, VersionsNumber,
     };
     use crate::error::StringError;
@@ -634,7 +633,7 @@ mod tests {
 
     #[test]
     pub fn test_cname_resolution() {
-        let resolver = cloudflare_dns_resolver();
+        let resolver = google_dns_resolver();
         let cname = get_cname_record_value(&resolver, "ci-test-no-delete.qovery.io");
 
         assert_eq!(cname, Some(String::from("qovery.io.")));
