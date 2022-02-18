@@ -3,6 +3,7 @@ pub mod io;
 extern crate url;
 
 use crate::cloud_provider::utilities::VersionsNumber;
+use crate::cmd::helm::HelmError;
 use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
 use crate::events::EventDetails;
 use url::Url;
@@ -88,6 +89,8 @@ pub enum Tag {
     Unknown,
     /// MissingRequiredEnvVariable: represents an error where a required env variable is not set.
     MissingRequiredEnvVariable,
+    /// NoClusterFound: represents an error where no cluster was found
+    NoClusterFound,
     /// ClusterHasNoWorkerNodes: represents an error where the current cluster doesn't have any worker nodes.
     ClusterHasNoWorkerNodes,
     /// CannotGetWorkspaceDirectory: represents an error while trying to get workspace directory.
@@ -188,10 +191,14 @@ pub enum Tag {
     CannotGetSupportedVersions,
     /// CannotGetCluster: represents an error where we cannot get cluster.
     CannotGetCluster,
+    /// OnlyOneClusterExpected: represents an error where only one cluster was expected but several where found
+    OnlyOneClusterExpected,
     /// ObjectStorageCannotCreateBucket: represents an error while trying to create a new object storage bucket.
     ObjectStorageCannotCreateBucket,
     /// ObjectStorageCannotPutFileIntoBucket: represents an error while trying to put a file into an object storage bucket.
     ObjectStorageCannotPutFileIntoBucket,
+    /// CloudProviderApiMissingInfo: represents an error while expecting mandatory info
+    CloudProviderApiMissingInfo,
 }
 
 #[derive(Clone, Debug)]
@@ -353,18 +360,48 @@ impl EngineError {
     /// Arguments:
     ///
     /// * `event_details`: Error linked event details.
-    pub fn new_cluster_has_no_worker_nodes(event_details: EventDetails) -> EngineError {
+    /// * `raw_error`: Raw error message.
+    pub fn new_cluster_has_no_worker_nodes(
+        event_details: EventDetails,
+        raw_error: Option<CommandError>,
+    ) -> EngineError {
         let message = "No worker nodes present, can't proceed with operation.";
         EngineError::new(
             event_details,
             Tag::ClusterHasNoWorkerNodes,
             message.to_string(),
             message.to_string(),
-            None,
+            raw_error,
             None,
             Some(
                 "This can happen if there where a manual operations on the workers or the infrastructure is paused."
                     .to_string(),
+            ),
+        )
+    }
+
+    /// Missing API info from the Cloud provider itself
+    ///
+    ///
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_missing_api_info_from_cloud_provider_error(
+        event_details: EventDetails,
+        raw_error: Option<CommandError>,
+    ) -> EngineError {
+        let message = "Error, missing required information from the Cloud Provider API";
+        EngineError::new(
+            event_details,
+            Tag::CloudProviderApiMissingInfo,
+            message.to_string(),
+            message.to_string(),
+            raw_error,
+            None,
+            Some(
+                "This can happen if the cloud provider is encountering issues. You should try again later".to_string(),
             ),
         )
     }
@@ -1467,6 +1504,29 @@ impl EngineError {
         )
     }
 
+    /// Creates new error from an Helm error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_helm_error(event_details: EventDetails, error: HelmError) -> EngineError {
+        let cmd_error = match &error {
+            HelmError::CmdError(_, _, cmd_error) => Some(cmd_error.clone()),
+            _ => None,
+        };
+
+        EngineError::new(
+            event_details,
+            Tag::HelmChartUninstallError,
+            error.to_string(),
+            error.to_string(),
+            cmd_error,
+            None,
+            None,
+        )
+    }
+
     /// Creates new error while uninstalling Helm chart.
     ///
     /// Arguments:
@@ -1676,6 +1736,69 @@ impl EngineError {
             Some(raw_error),
             None,
             Some("Maybe there is a lag and cluster is not yet reported, please retry later.".to_string()),
+        )
+    }
+
+    /// Creates new error while trying to get cluster.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_missing_workers_group_info_error(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message = "Error, cannot get cluster.";
+
+        EngineError::new(
+            event_details,
+            Tag::CannotGetCluster,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            Some("Maybe there is a lag and cluster is not yet reported, please retry later.".to_string()),
+        )
+    }
+
+    /// No cluster found
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_no_cluster_found_error(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message = "Error, no cluster found.";
+
+        EngineError::new(
+            event_details,
+            Tag::CannotGetCluster,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            Some("Maybe there is a lag and cluster is not yet reported, please retry later.".to_string()),
+        )
+    }
+
+    /// Too many clusters found, while expected only one
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_multiple_cluster_found_expected_one_error(
+        event_details: EventDetails,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = "Too many clusters found with this name, where 1 was expected";
+
+        EngineError::new(
+            event_details,
+            Tag::OnlyOneClusterExpected,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            Some("Please contact Qovery support for investigation.".to_string()),
         )
     }
 }

@@ -65,6 +65,7 @@ pub struct CpuLimits {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct NodeGroups {
     pub name: String,
+    pub id: Option<String>,
     pub min_nodes: i32,
     pub max_nodes: i32,
     pub instance_type: String,

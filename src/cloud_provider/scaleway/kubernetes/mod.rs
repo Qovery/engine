@@ -3,7 +3,7 @@ pub mod node;
 
 use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::helm::deploy_charts_levels;
+use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
     KubernetesUpgradeStatus, ProviderOptions,
@@ -12,11 +12,11 @@ use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::application::ScwZone;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
-use crate::cloud_provider::scaleway::kubernetes::node::ScwInstancesType;
+use crate::cloud_provider::scaleway::kubernetes::node::{ScwInstancesType, ScwNodeGroup};
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::{kubernetes, CloudProvider};
+use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
-use crate::cmd::structs::HelmChart;
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
@@ -29,17 +29,31 @@ use crate::models::{
 };
 use crate::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use crate::object_storage::ObjectStorage;
+use crate::runtime::block_on;
 use crate::string::terraform_list_format;
 use crate::{cmd, dns_provider};
 use ::function_name::named;
+use reqwest::StatusCode;
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
 use retry::OperationResult;
+use scaleway_api_rs::apis::Error;
+use scaleway_api_rs::models::ScalewayK8sV1Cluster;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::Path;
 use std::str::FromStr;
 use tera::Context as TeraContext;
+
+#[derive(PartialEq)]
+pub enum ScwNodeGroupErrors {
+    CloudProviderApiError(CommandError),
+    ClusterDoesNotExists(CommandError),
+    MultipleClusterFound,
+    NoNodePoolFound(CommandError),
+    MissingNodePoolInfo,
+    NodeGroupValidationError(CommandError),
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KapsuleOptions {
@@ -193,6 +207,210 @@ impl<'a> Kapsule<'a> {
         })
     }
 
+    fn get_configuration(&self) -> scaleway_api_rs::apis::configuration::Configuration {
+        scaleway_api_rs::apis::configuration::Configuration {
+            api_key: Some(scaleway_api_rs::apis::configuration::ApiKey {
+                key: self.options.scaleway_secret_key.clone(),
+                prefix: None,
+            }),
+            ..scaleway_api_rs::apis::configuration::Configuration::default()
+        }
+    }
+
+    fn get_scw_cluster_info(&self) -> Result<Option<ScalewayK8sV1Cluster>, EngineError> {
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+
+        // get cluster info
+        let cluster_info = match block_on(scaleway_api_rs::apis::clusters_api::list_clusters(
+            &self.get_configuration(),
+            self.region().as_str(),
+            None,
+            Some(self.options.scaleway_project_id.as_str()),
+            None,
+            None,
+            None,
+            Some(self.cluster_name().as_str()),
+            None,
+            None,
+        )) {
+            Ok(x) => x,
+            Err(e) => {
+                let msg = format!("wasn't able to retrieve SCW cluster information from the API. {:?}", e);
+                return Err(EngineError::new_cannot_get_cluster_error(
+                    event_details.clone(),
+                    CommandError::new(msg.clone(), Some(msg)),
+                ));
+            }
+        };
+
+        // if no cluster exists
+        let cluster_info_content = cluster_info.clusters.unwrap();
+        if &cluster_info_content.len() == &(0 as usize) {
+            return Ok(None);
+        } else if &cluster_info_content.len() != &(1 as usize) {
+            let msg = format!(
+                "too many clusters found with this name, where 1 was expected. {:?}",
+                &cluster_info_content.len()
+            );
+            return Err(EngineError::new_multiple_cluster_found_expected_one_error(
+                event_details,
+                CommandError::new(msg.clone(), Some(msg)),
+            ));
+        }
+
+        Ok(Some(cluster_info_content[0].clone()))
+    }
+
+    fn get_existing_sanitized_node_groups(
+        &self,
+        cluster_info: ScalewayK8sV1Cluster,
+    ) -> Result<Vec<ScwNodeGroup>, ScwNodeGroupErrors> {
+        let error_cluster_id = format!("expected cluster id for this Scaleway cluster");
+        let cluster_id = match cluster_info.id {
+            None => {
+                return Err(ScwNodeGroupErrors::NodeGroupValidationError(
+                    CommandError::new_from_safe_message(error_cluster_id),
+                ))
+            }
+            Some(x) => x,
+        };
+
+        let pools = match block_on(scaleway_api_rs::apis::pools_api::list_pools(
+            &self.get_configuration(),
+            self.region().as_str(),
+            cluster_id.as_str(),
+            None,
+            None,
+            None,
+            None,
+            None,
+        )) {
+            Ok(x) => x,
+            Err(e) => {
+                let msg = format!("error while trying to get SCW pool info from cluster {}", &cluster_id);
+                let msg_with_error = format!("{}. {:?}", msg.clone(), e);
+                return Err(ScwNodeGroupErrors::CloudProviderApiError(CommandError::new(
+                    msg_with_error,
+                    Some(msg),
+                )));
+            }
+        };
+
+        // ensure pool are present
+        if pools.pools.is_none() {
+            let msg = format!(
+                "No SCW pool found from the SCW API for cluster {}/{}",
+                &cluster_id,
+                &cluster_info.name.unwrap_or("unknown cluster".to_string())
+            );
+            return Err(ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(
+                msg.clone(),
+                Some(msg),
+            )));
+        }
+
+        // create sanitized nodegroup pools
+        let mut nodegroup_pool: Vec<ScwNodeGroup> = Vec::with_capacity(pools.total_count.unwrap_or(0 as f32) as usize);
+        for ng in pools.pools.unwrap() {
+            if ng.id.is_none() {
+                let msg = format!(
+                    "error while trying to validate SCW pool ID from cluster {}",
+                    &cluster_id
+                );
+                return Err(ScwNodeGroupErrors::NodeGroupValidationError(CommandError::new(
+                    msg.clone(),
+                    Some(msg),
+                )));
+            }
+            let ng_sanitized = self.get_node_group_info(ng.id.unwrap().as_str())?;
+            nodegroup_pool.push(ng_sanitized)
+        }
+
+        Ok(nodegroup_pool)
+    }
+
+    fn get_node_group_info(&self, pool_id: &str) -> Result<ScwNodeGroup, ScwNodeGroupErrors> {
+        let pool = match block_on(scaleway_api_rs::apis::pools_api::get_pool(
+            &self.get_configuration(),
+            self.region().as_str(),
+            pool_id,
+        )) {
+            Ok(x) => x,
+            Err(e) => {
+                return Err(match e {
+                    Error::ResponseError(x) => {
+                        let msg_with_error = format!(
+                            "Error code while getting node group: {}, API message: {} ",
+                            x.status, x.content
+                        );
+                        match x.status {
+                            StatusCode::NOT_FOUND => ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(
+                                msg_with_error,
+                                Some("No node pool found".to_string()),
+                            )),
+                            _ => ScwNodeGroupErrors::CloudProviderApiError(CommandError::new(
+                                msg_with_error,
+                                Some("Scaleway API error while trying to get node group".to_string()),
+                            )),
+                        }
+                    }
+                    _ => {
+                        let msg = "This Scaleway API error is not supported in the engine, please add it to better support it".to_string();
+                        ScwNodeGroupErrors::NodeGroupValidationError(CommandError::new(msg.clone(), Some(msg)))
+                    }
+                })
+            }
+        };
+
+        // ensure there is no missing info
+        if let Err(e) = self.check_missing_nodegroup_info(&pool.name, "name") {
+            return Err(e);
+        };
+        if let Err(e) = self.check_missing_nodegroup_info(&pool.min_size, "min_size") {
+            return Err(e);
+        };
+        if let Err(e) = self.check_missing_nodegroup_info(&pool.max_size, "max_size") {
+            return Err(e);
+        };
+        if let Err(e) = self.check_missing_nodegroup_info(&pool.status, "status") {
+            return Err(e);
+        };
+
+        match ScwNodeGroup::new(
+            pool.id,
+            pool.name.unwrap(),
+            pool.min_size.unwrap() as i32,
+            pool.max_size.unwrap() as i32,
+            pool.node_type,
+            pool.size as i32,
+            pool.status.unwrap(),
+        ) {
+            Ok(x) => Ok(x),
+            Err(e) => Err(ScwNodeGroupErrors::NodeGroupValidationError(e)),
+        }
+    }
+
+    fn check_missing_nodegroup_info<T>(&self, item: &Option<T>, name: &str) -> Result<(), ScwNodeGroupErrors> {
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+
+        self.logger.log(
+            LogLevel::Error,
+            EngineEvent::Error(EngineError::new_missing_workers_group_info_error(
+                event_details,
+                CommandError::new_from_safe_message(format!(
+                    "Missing node pool info {} for cluster {}",
+                    name,
+                    self.context.cluster_id()
+                )),
+            )),
+        );
+
+        if item.is_none() {
+            return Err(ScwNodeGroupErrors::MissingNodePoolInfo);
+        };
+        Ok(())
+    }
+
     fn kubeconfig_bucket_name(&self) -> String {
         format!("qovery-kubeconfigs-{}", self.id())
     }
@@ -256,7 +474,7 @@ impl<'a> Kapsule<'a> {
         // Kubernetes
         context.insert("test_cluster", &self.context.is_test_cluster());
         context.insert("kubernetes_cluster_id", self.id());
-        context.insert("kubernetes_cluster_name", self.name());
+        context.insert("kubernetes_cluster_name", self.cluster_name().as_str());
         context.insert("kubernetes_cluster_version", self.version());
 
         // Qovery
@@ -579,6 +797,192 @@ impl<'a> Kapsule<'a> {
             return Err(error);
         }
 
+        let cluster_info = self.get_scw_cluster_info()?;
+        if cluster_info.is_none() {
+            let msg = "no cluster found from the Scaleway API".to_string();
+            return Err(EngineError::new_no_cluster_found_error(
+                event_details.clone(),
+                CommandError::new(msg.clone(), Some(msg)),
+            ));
+        }
+
+        let current_nodegroups = match self
+            .get_existing_sanitized_node_groups(cluster_info.expect("A cluster should be present at this create stage"))
+        {
+            Ok(x) => x,
+            Err(e) => {
+                match e {
+                    ScwNodeGroupErrors::CloudProviderApiError(c) => {
+                        return Err(EngineError::new_missing_api_info_from_cloud_provider_error(
+                            event_details.clone(),
+                            Some(c),
+                        ))
+                    }
+                    ScwNodeGroupErrors::ClusterDoesNotExists(_) => self.logger().log(
+                        LogLevel::Info,
+                        EngineEvent::Deploying(
+                            event_details.clone(),
+                            EventMessage::new_from_safe(
+                                "cluster do not exists, no node groups can be retrieved for upgrade check".to_string(),
+                            ),
+                        ),
+                    ),
+                    ScwNodeGroupErrors::MultipleClusterFound => {
+                        let msg = "multiple clusters found, can't match the correct node groups".to_string();
+                        return Err(EngineError::new_multiple_cluster_found_expected_one_error(
+                            event_details.clone(),
+                            CommandError::new(msg.clone(), Some(msg)),
+                        ));
+                    }
+                    ScwNodeGroupErrors::NoNodePoolFound(_) => self.logger().log(
+                        LogLevel::Info,
+                        EngineEvent::Deploying(
+                            event_details.clone(),
+                            EventMessage::new_from_safe(
+                                "cluster exists, but no node groups found for upgrade check".to_string(),
+                            ),
+                        ),
+                    ),
+                    ScwNodeGroupErrors::MissingNodePoolInfo => {
+                        let msg = format!("Error with Scaleway API while trying to retrieve node pool info");
+                        return Err(EngineError::new_missing_api_info_from_cloud_provider_error(
+                            event_details.clone(),
+                            Some(CommandError::new_from_safe_message(msg)),
+                        ));
+                    }
+                    ScwNodeGroupErrors::NodeGroupValidationError(c) => {
+                        return Err(EngineError::new_missing_api_info_from_cloud_provider_error(
+                            event_details.clone(),
+                            Some(c),
+                        ));
+                    }
+                };
+                Vec::with_capacity(0)
+            }
+        };
+
+        // ensure all node groups are in ready state Scaleway side
+        self.logger.log(
+            LogLevel::Info,
+            EngineEvent::Deploying(
+                event_details.clone(),
+                EventMessage::new_from_safe(
+                    "ensuring all groups nodes are in ready state from the Scaleway API".to_string(),
+                ),
+            ),
+        );
+
+        for ng in current_nodegroups {
+            let res = retry::retry(
+                // retry 10 min max per nodegroup until they are ready
+                Fixed::from_millis(15000).take(40),
+                || {
+                    self.logger().log(
+                        LogLevel::Info,
+                        EngineEvent::Deploying(
+                            event_details.clone(),
+                            EventMessage::new_from_safe(format!(
+                                "checking node group {}/{:?}, current status: {:?}",
+                                &ng.name,
+                                &ng.id.as_ref().unwrap_or(&"unknown".to_string()),
+                                &ng.status
+                            )),
+                        ),
+                    );
+                    let pool_id = match &ng.id {
+                        None => {
+                            let msg =
+                                "node group id was expected to get info, but not found from Scaleway API".to_string();
+                            return OperationResult::Retry(
+                                EngineError::new_missing_api_info_from_cloud_provider_error(
+                                    event_details.clone(),
+                                    Some(CommandError::new_from_safe_message(msg)),
+                                ),
+                            );
+                        }
+                        Some(x) => x,
+                    };
+                    let scw_ng = match self.get_node_group_info(pool_id.as_str()) {
+                        Ok(x) => x,
+                        Err(e) => {
+                            return match e {
+                                ScwNodeGroupErrors::CloudProviderApiError(c) => {
+                                    let current_error = EngineError::new_missing_api_info_from_cloud_provider_error(
+                                        event_details.clone(),
+                                        Some(c),
+                                    );
+                                    self.logger
+                                        .log(LogLevel::Error, EngineEvent::Error(current_error.clone()));
+                                    OperationResult::Retry(current_error)
+                                }
+                                ScwNodeGroupErrors::ClusterDoesNotExists(c) => {
+                                    let current_error =
+                                        EngineError::new_no_cluster_found_error(event_details.clone(), c);
+                                    self.logger
+                                        .log(LogLevel::Error, EngineEvent::Error(current_error.clone()));
+                                    OperationResult::Retry(current_error)
+                                }
+                                ScwNodeGroupErrors::MultipleClusterFound => {
+                                    OperationResult::Retry(EngineError::new_multiple_cluster_found_expected_one_error(
+                                        event_details.clone(),
+                                        CommandError::new_from_safe_message(
+                                            "Multiple cluster found while one was expected".to_string(),
+                                        ),
+                                    ))
+                                }
+                                ScwNodeGroupErrors::NoNodePoolFound(_) => OperationResult::Ok(()),
+                                ScwNodeGroupErrors::MissingNodePoolInfo => {
+                                    OperationResult::Retry(EngineError::new_missing_api_info_from_cloud_provider_error(
+                                        event_details.clone(),
+                                        None,
+                                    ))
+                                }
+                                ScwNodeGroupErrors::NodeGroupValidationError(c) => {
+                                    let current_error = EngineError::new_missing_api_info_from_cloud_provider_error(
+                                        event_details.clone(),
+                                        Some(c),
+                                    );
+                                    self.logger
+                                        .log(LogLevel::Error, EngineEvent::Error(current_error.clone()));
+                                    OperationResult::Retry(current_error)
+                                }
+                            }
+                        }
+                    };
+                    match scw_ng.status == scaleway_api_rs::models::scaleway_k8s_v1_pool::Status::Ready {
+                        true => OperationResult::Ok(()),
+                        false => OperationResult::Retry(EngineError::new_k8s_node_not_ready(
+                            event_details.clone(),
+                            CommandError::new_from_safe_message(format!(
+                                "waiting for node group {} to be ready, current status: {:?}",
+                                &scw_ng.name, scw_ng.status
+                            )),
+                        )),
+                    }
+                },
+            );
+            match res {
+                Ok(_) => {}
+                Err(Operation { error, .. }) => return Err(error),
+                Err(retry::Error::Internal(msg)) => {
+                    return Err(EngineError::new_k8s_node_not_ready(
+                        event_details.clone(),
+                        CommandError::new(msg, Some("Waiting for too long worker nodes to be ready".to_string())),
+                    ))
+                }
+            }
+        }
+        self.logger.log(
+            LogLevel::Info,
+            EngineEvent::Deploying(
+                event_details.clone(),
+                EventMessage::new_from_safe(
+                    "all node groups for this cluster are ready from cloud provider API".to_string(),
+                ),
+            ),
+        );
+
+        // ensure all nodes are ready on Kubernetes
         match self.check_workers_on_create() {
             Ok(_) => {
                 self.send_to_customer(
@@ -793,7 +1197,10 @@ impl<'a> Kapsule<'a> {
         };
 
         if tf_workers_resources.is_empty() {
-            return Err(EngineError::new_cluster_has_no_worker_nodes(event_details.clone()));
+            return Err(EngineError::new_cluster_has_no_worker_nodes(
+                event_details.clone(),
+                None,
+            ));
         }
 
         let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
@@ -1090,15 +1497,14 @@ impl<'a> Kapsule<'a> {
             );
 
             // delete custom metrics api to avoid stale namespaces on deletion
-            let _ = cmd::helm::helm_uninstall_list(
+            let helm = Helm::new(
                 &kubernetes_config_file_path,
-                vec![HelmChart {
-                    name: "metrics-server".to_string(),
-                    namespace: "kube-system".to_string(),
-                    version: None,
-                }],
-                self.cloud_provider().credentials_environment_variables(),
-            );
+                &self.cloud_provider.credentials_environment_variables(),
+            )
+            .map_err(|e| to_engine_error(&event_details, e))?;
+            let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
+            helm.uninstall(&chart, &vec![])
+                .map_err(|e| to_engine_error(&event_details, e))?;
 
             // required to avoid namespace stuck on deletion
             uninstall_cert_manager(
@@ -1118,50 +1524,27 @@ impl<'a> Kapsule<'a> {
 
             let qovery_namespaces = get_qovery_managed_namespaces();
             for qovery_namespace in qovery_namespaces.iter() {
-                let charts_to_delete = cmd::helm::helm_list(
-                    &kubernetes_config_file_path,
-                    self.cloud_provider().credentials_environment_variables(),
-                    Some(qovery_namespace),
-                );
-                match charts_to_delete {
-                    Ok(charts) => {
-                        for chart in charts {
-                            match cmd::helm::helm_exec_uninstall(
-                                &kubernetes_config_file_path,
-                                &chart.namespace,
-                                &chart.name,
-                                self.cloud_provider().credentials_environment_variables(),
-                            ) {
-                                Ok(_) => self.logger().log(
-                                    LogLevel::Info,
-                                    EngineEvent::Deleting(
-                                        event_details.clone(),
-                                        EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
-                                    ),
-                                ),
-                                Err(e) => {
-                                    let message_safe = format!("Can't delete chart `{}`", chart.name);
-                                    self.logger().log(
-                                        LogLevel::Error,
-                                        EngineEvent::Deleting(
-                                            event_details.clone(),
-                                            EventMessage::new(message_safe, Some(e.message())),
-                                        ),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        if !(e.message().contains("not found")) {
+                let charts_to_delete = helm
+                    .list_release(Some(qovery_namespace), &vec![])
+                    .map_err(|e| to_engine_error(&event_details, e))?;
+
+                for chart in charts_to_delete {
+                    let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
+                    match helm.uninstall(&chart_info, &vec![]) {
+                        Ok(_) => self.logger().log(
+                            LogLevel::Info,
+                            EngineEvent::Deleting(
+                                event_details.clone(),
+                                EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
+                            ),
+                        ),
+                        Err(e) => {
+                            let message_safe = format!("Can't delete chart `{}`", chart.name);
                             self.logger().log(
                                 LogLevel::Error,
                                 EngineEvent::Deleting(
                                     event_details.clone(),
-                                    EventMessage::new_from_safe(format!(
-                                        "Can't delete the namespace {}",
-                                        qovery_namespace
-                                    )),
+                                    EventMessage::new(message_safe, Some(e.to_string())),
                                 ),
                             )
                         }
@@ -1216,18 +1599,11 @@ impl<'a> Kapsule<'a> {
                 ),
             );
 
-            match cmd::helm::helm_list(
-                &kubernetes_config_file_path,
-                self.cloud_provider().credentials_environment_variables(),
-                None,
-            ) {
+            match helm.list_release(None, &vec![]) {
                 Ok(helm_charts) => {
                     for chart in helm_charts {
-                        match cmd::helm::helm_uninstall_list(
-                            &kubernetes_config_file_path,
-                            vec![chart.clone()],
-                            self.cloud_provider().credentials_environment_variables(),
-                        ) {
+                        let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
+                        match helm.uninstall(&chart_info, &vec![]) {
                             Ok(_) => self.logger().log(
                                 LogLevel::Info,
                                 EngineEvent::Deleting(
@@ -1236,12 +1612,12 @@ impl<'a> Kapsule<'a> {
                                 ),
                             ),
                             Err(e) => {
-                                let message_safe = format!("Error deleting chart `{}` deleted", chart.name);
+                                let message_safe = format!("Error deleting chart `{}`: {}", chart.name, e);
                                 self.logger().log(
                                     LogLevel::Error,
                                     EngineEvent::Deleting(
                                         event_details.clone(),
-                                        EventMessage::new(message_safe, e.message),
+                                        EventMessage::new(message_safe, Some(e.to_string())),
                                     ),
                                 )
                             }
@@ -1254,7 +1630,7 @@ impl<'a> Kapsule<'a> {
                         LogLevel::Error,
                         EngineEvent::Deleting(
                             event_details.clone(),
-                            EventMessage::new(message_safe.to_string(), Some(e.message())),
+                            EventMessage::new(message_safe.to_string(), Some(e.to_string())),
                         ),
                     )
                 }

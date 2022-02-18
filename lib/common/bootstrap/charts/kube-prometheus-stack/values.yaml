@@ -1342,7 +1342,7 @@ prometheusOperator:
   ## rules from making their way into prometheus and potentially preventing the container from starting
   admissionWebhooks:
     failurePolicy: Fail
-    enabled: true
+    enabled: false
     ## A PEM encoded CA bundle which will be used to validate the webhook's server certificate.
     ## If unspecified, system trust roots on the apiserver are used.
     caBundle: ""
@@ -1377,7 +1377,7 @@ prometheusOperator:
 
     # Use certmanager to generate webhook certs
     certManager:
-      enabled: false
+      enabled: true
       # issuerRef:
       #   name: "issuer"
       #   kind: "ClusterIssuer"
