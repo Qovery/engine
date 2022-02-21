@@ -104,13 +104,8 @@ impl Request {
 
     pub fn environment_action(&self) -> Option<EnvironmentAction> {
         self.target_environment.as_ref()?;
-
         let environment = self.target_environment.as_ref().unwrap().clone();
-
-        Some(match self.failover_environment.clone() {
-            Some(fe) => EnvironmentAction::EnvironmentWithFailover(environment, fe),
-            None => EnvironmentAction::Environment(environment),
-        })
+        Some(EnvironmentAction::Environment(environment))
     }
 }
 
