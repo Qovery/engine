@@ -1,7 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
     get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo, ChartPayload, ChartSetValue,
-    ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmAction, HelmChart, HelmChartNamespaces,
+    ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces,
     PrometheusOperatorConfigChart, ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
@@ -459,6 +459,7 @@ pub fn aws_helm_charts(
         },
     };
 
+    /* Example to delete an old install
     let old_prometheus_operator = PrometheusOperatorConfigChart {
         chart_info: ChartInfo {
             name: "prometheus-operator".to_string(),
@@ -466,7 +467,7 @@ pub fn aws_helm_charts(
             action: HelmAction::Destroy,
             ..Default::default()
         },
-    };
+    };*/
 
     let kube_prometheus_stack = PrometheusOperatorConfigChart {
         chart_info: ChartInfo {
@@ -705,7 +706,9 @@ datasources:
                 },
                 ChartSetValue {
                     key: "prometheus.servicemonitor.enabled".to_string(),
-                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
+                    // Due to cycle, prometheus need tls certificate from cert manager, and enabling this will require
+                    // prometheus to be already installed
+                    value: "false".to_string(),
                 },
                 ChartSetValue {
                     key: "prometheus.servicemonitor.prometheusInstance".to_string(),
@@ -731,11 +734,11 @@ datasources:
                 // Webhooks resources limits
                 ChartSetValue {
                     key: "webhook.resources.limits.cpu".to_string(),
-                    value: "20m".to_string(),
+                    value: "200m".to_string(),
                 },
                 ChartSetValue {
                     key: "webhook.resources.requests.cpu".to_string(),
-                    value: "20m".to_string(),
+                    value: "50m".to_string(),
                 },
                 ChartSetValue {
                     key: "webhook.resources.limits.memory".to_string(),
@@ -1154,26 +1157,27 @@ datasources:
         Box::new(q_storage_class),
         Box::new(coredns_config),
         Box::new(aws_vpc_cni_chart),
-        Box::new(old_prometheus_operator),
     ];
 
-    let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
+    let level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
-    let mut level_3: Vec<Box<dyn HelmChart>> = vec![
+    let mut level_3: Vec<Box<dyn HelmChart>> = vec![];
+
+    let mut level_4: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cluster_autoscaler),
         Box::new(aws_iam_eks_user_mapper),
         Box::new(aws_calico),
     ];
 
-    let mut level_4: Vec<Box<dyn HelmChart>> = vec![
+    let mut level_5: Vec<Box<dyn HelmChart>> = vec![
         Box::new(metrics_server),
         Box::new(aws_node_term_handler),
         Box::new(external_dns),
     ];
 
-    let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress), Box::new(cert_manager)];
+    let mut level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
 
-    let mut level_6: Vec<Box<dyn HelmChart>> = vec![
+    let mut level_7: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
         Box::new(qovery_agent),
         Box::new(shell_agent),
@@ -1182,26 +1186,26 @@ datasources:
 
     // observability
     if chart_config_prerequisites.ff_metrics_history_enabled {
-        level_2.push(Box::new(kube_prometheus_stack));
-        level_4.push(Box::new(prometheus_adapter));
-        level_4.push(Box::new(kube_state_metrics));
+        level_3.push(Box::new(kube_prometheus_stack));
+        level_5.push(Box::new(prometheus_adapter));
+        level_5.push(Box::new(kube_state_metrics));
     }
     if chart_config_prerequisites.ff_log_history_enabled {
-        level_3.push(Box::new(promtail));
-        level_4.push(Box::new(loki));
+        level_4.push(Box::new(promtail));
+        level_5.push(Box::new(loki));
     }
 
     if chart_config_prerequisites.ff_metrics_history_enabled || chart_config_prerequisites.ff_log_history_enabled {
-        level_6.push(Box::new(grafana))
+        level_7.push(Box::new(grafana))
     };
 
     // pleco
     if !chart_config_prerequisites.disable_pleco {
-        level_5.push(Box::new(pleco));
+        level_6.push(Box::new(pleco));
     }
 
     info!("charts configuration preparation finished");
-    Ok(vec![level_1, level_2, level_3, level_4, level_5, level_6])
+    Ok(vec![level_1, level_2, level_3, level_4, level_5, level_6, level_7])
 }
 
 // AWS CNI
