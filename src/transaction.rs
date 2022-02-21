@@ -118,17 +118,6 @@ impl<'a> Transaction<'a> {
                 Ok(_) => {}
                 Err(err) => return Err(err),
             },
-            EnvironmentAction::EnvironmentWithFailover(te, fe) => {
-                match te.is_valid() {
-                    Ok(_) => {}
-                    Err(err) => return Err(err),
-                };
-
-                match fe.is_valid() {
-                    Ok(_) => {}
-                    Err(err) => return Err(err),
-                };
-            }
         };
 
         Ok(())
@@ -348,34 +337,6 @@ impl<'a> Transaction<'a> {
         };
 
         match environment_action {
-            EnvironmentAction::EnvironmentWithFailover(target_environment, failover_environment) => {
-                // let's reverse changes and rollback on the provided failover version
-                let target_qe_environment = qe_environment(target_environment);
-                let failover_qe_environment = qe_environment(failover_environment);
-
-                let action = match failover_environment.action {
-                    Action::Create => {
-                        let _ = kubernetes.deploy_environment_error(&target_qe_environment);
-                        kubernetes.deploy_environment(&failover_qe_environment)
-                    }
-                    Action::Pause => {
-                        let _ = kubernetes.pause_environment_error(&target_qe_environment);
-                        kubernetes.pause_environment(&failover_qe_environment)
-                    }
-                    Action::Delete => {
-                        let _ = kubernetes.delete_environment_error(&target_qe_environment);
-                        kubernetes.delete_environment(&failover_qe_environment)
-                    }
-                    Action::Nothing => Ok(()),
-                };
-
-                let _ = match action {
-                    Ok(_) => {}
-                    Err(err) => return Err(RollbackError::CommitError(err.to_legacy_engine_error())),
-                };
-
-                Ok(())
-            }
             EnvironmentAction::Environment(te) => {
                 // revert changes but there is no failover environment
                 let target_qe_environment = qe_environment(te);
@@ -451,7 +412,6 @@ impl<'a> Transaction<'a> {
                     // build applications
                     let target_environment = match environment_action {
                         EnvironmentAction::Environment(te) => te,
-                        EnvironmentAction::EnvironmentWithFailover(te, _) => te,
                     };
 
                     let apps_result = match self.build_applications(target_environment, option) {
@@ -481,26 +441,6 @@ impl<'a> Transaction<'a> {
 
                     let applications = apps_result.ok().unwrap();
                     applications_by_environment.insert(target_environment, applications);
-
-                    // build as well the failover environment, retention could remove the application image
-                    if let EnvironmentAction::EnvironmentWithFailover(_, fe) = environment_action {
-                        let apps_result = match self.build_applications(fe, option) {
-                            Ok(applications) => match self.push_applications(applications, option) {
-                                Ok(results) => {
-                                    let applications = results.into_iter().map(|(app, _)| app).collect::<Vec<_>>();
-
-                                    Ok(applications)
-                                }
-                                Err(err) => Err(err),
-                            },
-                            Err(err) => Err(err),
-                        };
-                        if apps_result.is_err() {
-                            // should never be triggered because core always should ask for working failover environment
-                            let commit_error = apps_result.err().unwrap();
-                            error!("An error occurred on failover application  {:?}", commit_error);
-                        }
-                    };
                 }
                 Step::DeployEnvironment(kubernetes, environment_action) => {
                     // deploy complete environment
@@ -645,7 +585,6 @@ impl<'a> Transaction<'a> {
     {
         let target_environment = match environment_action {
             EnvironmentAction::Environment(te) => te,
-            EnvironmentAction::EnvironmentWithFailover(te, _) => te,
         };
 
         let empty_vec = Vec::with_capacity(0);

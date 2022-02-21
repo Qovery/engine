@@ -71,7 +71,6 @@ impl Display for QoveryIdentifier {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EnvironmentAction {
     Environment(TargetEnvironment),
-    EnvironmentWithFailover(TargetEnvironment, FailoverEnvironment),
 }
 
 pub type TargetEnvironment = Environment;
