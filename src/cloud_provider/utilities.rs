@@ -319,7 +319,7 @@ impl fmt::Display for VersionsNumber {
     }
 }
 
-fn google_dns_resolver() -> Resolver {
+fn dns_resolvers() -> Vec<Resolver> {
     let mut resolver_options = ResolverOpts::default();
 
     //  We want to avoid cache and using host file of the host, as some provider force caching
@@ -335,7 +335,13 @@ fn google_dns_resolver() -> Resolver {
     //);
 
     //Resolver::new(resolver, resolver_options).unwrap()
-    Resolver::new(ResolverConfig::google(), resolver_options).expect("Invalid google DNS resolver configuration")
+    vec![
+        Resolver::new(ResolverConfig::google(), resolver_options).expect("Invalid google DNS resolver configuration"),
+        Resolver::new(ResolverConfig::cloudflare(), resolver_options)
+            .expect("Invalid cloudflare DNS resolver configuration"),
+        Resolver::new(ResolverConfig::quad9(), resolver_options).expect("Invalid quad9 DNS resolver configuration"),
+        Resolver::from_system_conf().expect("Invalid system DNS resolver configuration"),
+    ]
 }
 
 fn get_cname_record_value(resolver: &Resolver, cname: &str) -> Option<String> {
@@ -359,7 +365,7 @@ pub fn check_cname_for(
     cname_to_check: &str,
     execution_id: &str,
 ) -> Result<String, String> {
-    let resolver = google_dns_resolver();
+    let resolvers = dns_resolvers();
     let listener_helper = ListenersHelper::new(listeners);
 
     let send_deployment_progress = |msg: &str| {
@@ -389,9 +395,15 @@ pub fn check_cname_for(
     );
 
     // Trying for 5 min to resolve CNAME
+    let mut ix: usize = 0;
+    let mut next_resolver = || {
+        let resolver = &resolvers[ix % resolvers.len()];
+        ix += 1;
+        resolver
+    };
     let fixed_iterable = Fixed::from_millis(Duration::seconds(5).num_milliseconds() as u64).take(6 * 5);
     let check_result = retry::retry(fixed_iterable, || {
-        match get_cname_record_value(&resolver, cname_to_check) {
+        match get_cname_record_value(next_resolver(), cname_to_check) {
             Some(domain) => OperationResult::Ok(domain),
             None => {
                 let msg = format!(
@@ -427,7 +439,7 @@ pub fn check_domain_for(
     execution_id: &str,
     context_id: &str,
 ) -> Result<(), EngineError> {
-    let resolver = google_dns_resolver();
+    let resolvers = dns_resolvers();
 
     for domain in domains_to_check {
         listener_helper.deployment_in_progress(ProgressInfo::new(
@@ -442,8 +454,14 @@ pub fn check_domain_for(
             execution_id,
         ));
 
+        let mut ix: usize = 0;
+        let mut next_resolver = || {
+            let resolver = &resolvers[ix % resolvers.len()];
+            ix += 1;
+            resolver
+        };
         let fixed_iterable = Fixed::from_millis(3000).take(100);
-        let check_result = retry::retry(fixed_iterable, || match resolver.lookup_ip(domain) {
+        let check_result = retry::retry(fixed_iterable, || match next_resolver().lookup_ip(domain) {
             Ok(lookup_ip) => OperationResult::Ok(lookup_ip),
             Err(err) => {
                 let x = format!("Domain resolution check for '{}' is still in progress...", domain);
@@ -585,8 +603,8 @@ pub fn print_action(cloud_provider_name: &str, struct_name: &str, fn_name: &str,
 mod tests {
     use crate::cloud_provider::models::CpuLimits;
     use crate::cloud_provider::utilities::{
-        convert_k8s_cpu_value_to_f32, get_cname_record_value, google_dns_resolver,
-        validate_k8s_required_cpu_and_burstable, VersionsNumber,
+        convert_k8s_cpu_value_to_f32, dns_resolvers, get_cname_record_value, validate_k8s_required_cpu_and_burstable,
+        VersionsNumber,
     };
     use crate::error::StringError;
     use crate::models::ListenersHelper;
@@ -633,8 +651,8 @@ mod tests {
 
     #[test]
     pub fn test_cname_resolution() {
-        let resolver = google_dns_resolver();
-        let cname = get_cname_record_value(&resolver, "ci-test-no-delete.qovery.io");
+        let resolvers = dns_resolvers();
+        let cname = get_cname_record_value(&resolvers[0], "ci-test-no-delete.qovery.io");
 
         assert_eq!(cname, Some(String::from("qovery.io.")));
     }
