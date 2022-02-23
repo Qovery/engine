@@ -1,5 +1,5 @@
 use crate::cmd;
-use crate::cmd::utilities::QoveryCommand;
+use crate::cmd::command::QoveryCommand;
 use crate::container_registry::Kind;
 use crate::error::{SimpleError, SimpleErrorKind};
 use chrono::Duration;
@@ -78,7 +78,7 @@ pub fn docker_manifest_inspect(
                 image_with_tag,
                 registry_provider,
                 registry_url,
-                cmd::utilities::command_to_string(binary, &args, &envs),
+                cmd::command::command_to_string(binary, &args, &envs),
                 e,
             );
             None
@@ -118,7 +118,7 @@ pub fn docker_login(
                 "error while trying to login to registry {} {}, command `{}`: {:?}",
                 registry_provider,
                 registry_url,
-                cmd::utilities::command_to_string(binary, &args, &docker_envs),
+                cmd::command::command_to_string(binary, &args, &docker_envs),
                 e,
             );
             error!("{}", error_message);

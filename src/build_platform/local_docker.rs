@@ -6,8 +6,8 @@ use git2::{Cred, CredentialType};
 use sysinfo::{Disk, DiskExt, SystemExt};
 
 use crate::build_platform::{docker, Build, BuildPlatform, BuildResult, CacheResult, Credentials, Image, Kind};
-use crate::cmd::utilities::QoveryCommand;
-use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, SimpleError, SimpleErrorKind};
+use crate::cmd::command::{CommandError, QoveryCommand};
+use crate::error::{EngineError, EngineErrorCause, EngineErrorScope, SimpleError};
 use crate::fs::workspace_directory;
 use crate::git;
 use crate::models::{
@@ -79,6 +79,7 @@ impl LocalDocker {
         env_var_args: Vec<String>,
         use_build_cache: bool,
         lh: &ListenersHelper,
+        is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<BuildResult, EngineError> {
         let mut docker_args = if !use_build_cache {
             vec!["build", "--no-cache"]
@@ -126,7 +127,7 @@ impl LocalDocker {
         // docker build
         let mut cmd = QoveryCommand::new("docker", &docker_args, &self.get_docker_host_envs());
 
-        let exit_status = cmd.exec_with_timeout(
+        let exit_status = cmd.exec_with_abort(
             Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
             |line| {
                 info!("{}", line);
@@ -152,10 +153,14 @@ impl LocalDocker {
                     self.context.execution_id(),
                 ));
             },
+            is_task_canceled,
         );
 
         match exit_status {
             Ok(_) => Ok(BuildResult { build }),
+            Err(CommandError::Killed(msg)) => Err(
+                self.engine_error(EngineErrorCause::Canceled, msg)
+            ),
             Err(err) => Err(self.engine_error(
                 EngineErrorCause::User(
                     "It looks like there is something wrong in your Dockerfile. Try building the application locally with `docker build --no-cache`.",
@@ -176,13 +181,13 @@ impl LocalDocker {
         env_var_args: Vec<String>,
         use_build_cache: bool,
         lh: &ListenersHelper,
+        is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<BuildResult, EngineError> {
         let name_with_tag = build.image.name_with_tag();
 
         let args = self.context.docker_build_options();
 
-        let mut exit_status: Result<(), SimpleError> =
-            Err(SimpleError::new(SimpleErrorKind::Other, Some("no builder names")));
+        let mut exit_status: Result<(), CommandError> = Ok(());
 
         for builder_name in BUILDPACKS_BUILDERS.iter() {
             let mut buildpacks_args = if !use_build_cache {
@@ -268,35 +273,34 @@ impl LocalDocker {
 
             // buildpacks build
             let mut cmd = QoveryCommand::new("pack", &buildpacks_args, &self.get_docker_host_envs());
-            exit_status = cmd
-                .exec_with_timeout(
-                    Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
-                    |line| {
-                        info!("{}", line);
+            exit_status = cmd.exec_with_abort(
+                Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
+                |line| {
+                    info!("{}", line);
 
-                        lh.deployment_in_progress(ProgressInfo::new(
-                            ProgressScope::Application {
-                                id: build.image.application_id.clone(),
-                            },
-                            ProgressLevel::Info,
-                            Some(line),
-                            self.context.execution_id(),
-                        ));
-                    },
-                    |line| {
-                        error!("{}", line);
+                    lh.deployment_in_progress(ProgressInfo::new(
+                        ProgressScope::Application {
+                            id: build.image.application_id.clone(),
+                        },
+                        ProgressLevel::Info,
+                        Some(line),
+                        self.context.execution_id(),
+                    ));
+                },
+                |line| {
+                    error!("{}", line);
 
-                        lh.deployment_in_progress(ProgressInfo::new(
-                            ProgressScope::Application {
-                                id: build.image.application_id.clone(),
-                            },
-                            ProgressLevel::Warn,
-                            Some(line),
-                            self.context.execution_id(),
-                        ));
-                    },
-                )
-                .map_err(|err| SimpleError::new(SimpleErrorKind::Other, Some(format!("{:?}", err))));
+                    lh.deployment_in_progress(ProgressInfo::new(
+                        ProgressScope::Application {
+                            id: build.image.application_id.clone(),
+                        },
+                        ProgressLevel::Warn,
+                        Some(line),
+                        self.context.execution_id(),
+                    ));
+                },
+                is_task_canceled,
+            );
 
             if exit_status.is_ok() {
                 // quit now if the builder successfully build the app
@@ -306,6 +310,7 @@ impl LocalDocker {
 
         match exit_status {
             Ok(_) => Ok(BuildResult { build }),
+            Err(CommandError::Killed(msg)) => Err(self.engine_error(EngineErrorCause::Canceled, msg)),
             Err(err) => {
                 warn!("{:?}", err);
 
@@ -352,11 +357,11 @@ impl BuildPlatform for LocalDocker {
     }
 
     fn is_valid(&self) -> Result<(), EngineError> {
-        if !crate::cmd::utilities::does_binary_exist("docker") {
+        if !crate::cmd::command::does_binary_exist("docker") {
             return Err(self.engine_error(EngineErrorCause::Internal, String::from("docker binary not found")));
         }
 
-        if !crate::cmd::utilities::does_binary_exist("pack") {
+        if !crate::cmd::command::does_binary_exist("pack") {
             return Err(self.engine_error(EngineErrorCause::Internal, String::from("pack binary not found")));
         }
 
@@ -391,8 +396,19 @@ impl BuildPlatform for LocalDocker {
         Ok(result)
     }
 
-    fn build(&self, build: Build, force_build: bool) -> Result<BuildResult, EngineError> {
+    fn build(
+        &self,
+        build: Build,
+        force_build: bool,
+        is_task_canceled: &dyn Fn() -> bool,
+    ) -> Result<BuildResult, EngineError> {
         info!("LocalDocker.build() called for {}", self.name());
+        if is_task_canceled() {
+            return Err(self.engine_error(
+                EngineErrorCause::Canceled,
+                "Notified to cancel current task".to_string(),
+            ));
+        }
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
@@ -439,6 +455,12 @@ impl BuildPlatform for LocalDocker {
         }
 
         // git clone
+        if is_task_canceled() {
+            return Err(self.engine_error(
+                EngineErrorCause::Canceled,
+                "Notified to cancel current task".to_string(),
+            ));
+        }
         if let Err(clone_error) = git::clone_at_commit(
             &build.git_repository.url,
             &build.git_repository.commit_id,
@@ -538,6 +560,7 @@ impl BuildPlatform for LocalDocker {
                 env_var_args,
                 !disable_build_cache,
                 &listeners_helper,
+                is_task_canceled,
             )
         } else {
             // build container with Buildpacks
@@ -547,6 +570,7 @@ impl BuildPlatform for LocalDocker {
                 env_var_args,
                 !disable_build_cache,
                 &listeners_helper,
+                is_task_canceled,
             )
         };
 

@@ -77,6 +77,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             cloud_provider,
             dns_provider,
             logger,
+            Box::new(|| false),
         )
     }
 
