@@ -21,7 +21,7 @@ charts:
   - name: aws-node-termination-handler
     repo_name: aws
     dest: aws-bootstrap
-    version: 0.8.0
+    version: 0.16.1
   - name: aws-vpc-cni
     repo_name: aws
     dest: aws-bootstrap
