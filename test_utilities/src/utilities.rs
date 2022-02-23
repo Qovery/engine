@@ -45,9 +45,9 @@ use crate::digitalocean::{
     DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
 };
 use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
+use qovery_engine::cmd::command::QoveryCommand;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
-use qovery_engine::cmd::utilities::QoveryCommand;
 use qovery_engine::errors::CommandError;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::models::DatabaseMode::MANAGED;

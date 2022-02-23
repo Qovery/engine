@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 
-use crate::cmd::utilities::QoveryCommand;
+use crate::cmd::command::QoveryCommand;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DoVpc {

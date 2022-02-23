@@ -7,12 +7,12 @@ use serde::de::DeserializeOwned;
 
 use crate::cloud_provider::digitalocean::models::svc::DoLoadBalancer;
 use crate::cloud_provider::metrics::KubernetesApiMetrics;
+use crate::cmd::command::QoveryCommand;
 use crate::cmd::structs::{
     Configmap, Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
     KubernetesPod, KubernetesPodStatusPhase, KubernetesPodStatusReason, KubernetesService, KubernetesVersion,
     LabelsContent, Namespace, Secrets, HPA, PDB, PVC, SVC,
 };
-use crate::cmd::utilities::QoveryCommand;
 use crate::constants::KUBECONFIG;
 use crate::error::{SimpleError, SimpleErrorKind};
 use crate::errors::CommandError;

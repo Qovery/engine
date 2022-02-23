@@ -190,7 +190,11 @@ impl<'a> Transaction<'a> {
                     let _ = self.load_build_app_cache(app);
 
                     // only if the build is forced OR if the image does not exist in the registry
-                    self.engine.build_platform().build(app.to_build(), option.force_build)
+                    self.engine.build_platform().build(
+                        app.to_build(),
+                        option.force_build,
+                        &self.engine.is_task_canceled,
+                    )
                 } else {
                     // use the cache
                     Ok(BuildResult::new(app.to_build()))
@@ -414,32 +418,40 @@ impl<'a> Transaction<'a> {
                         EnvironmentAction::Environment(te) => te,
                     };
 
-                    let apps_result = match self.build_applications(target_environment, option) {
-                        Ok(applications) => match self.push_applications(applications, option) {
-                            Ok(results) => {
-                                let applications = results.into_iter().map(|(app, _)| app).collect::<Vec<_>>();
-
-                                Ok(applications)
-                            }
-                            Err(err) => Err(err),
-                        },
-                        Err(err) => Err(err),
+                    let applications_builds = match self.build_applications(target_environment, option) {
+                        Ok(apps) => apps,
+                        Err(engine_err) => {
+                            warn!("ROLLBACK STARTED! an error occurred {:?}", engine_err);
+                            return if engine_err.is_cancel() {
+                                TransactionResult::Canceled
+                            } else {
+                                TransactionResult::Rollback(engine_err)
+                            };
+                        }
                     };
 
-                    if apps_result.is_err() {
-                        let commit_error = apps_result.err().unwrap();
-                        warn!("ROLLBACK STARTED! an error occurred {:?}", commit_error);
-
-                        return match self.rollback() {
-                            Ok(_) => TransactionResult::Rollback(commit_error),
-                            Err(err) => {
-                                error!("ROLLBACK FAILED! fatal error: {:?}", err);
-                                return TransactionResult::UnrecoverableError(commit_error, err);
-                            }
-                        };
+                    if (self.engine.is_task_canceled)() {
+                        return TransactionResult::Canceled;
                     }
 
-                    let applications = apps_result.ok().unwrap();
+                    let applications = match self.push_applications(applications_builds, option) {
+                        Ok(results) => {
+                            let applications = results.into_iter().map(|(app, _)| app).collect::<Vec<_>>();
+
+                            applications
+                        }
+                        Err(engine_err) => {
+                            warn!("ROLLBACK STARTED! an error occurred {:?}", engine_err);
+                            return match self.rollback() {
+                                Ok(_) => TransactionResult::Rollback(engine_err),
+                                Err(err) => {
+                                    error!("ROLLBACK FAILED! fatal error: {:?}", err);
+                                    TransactionResult::UnrecoverableError(engine_err, err)
+                                }
+                            };
+                        }
+                    };
+
                     applications_by_environment.insert(target_environment, applications);
                 }
                 Step::DeployEnvironment(kubernetes, environment_action) => {
@@ -726,6 +738,7 @@ pub enum RollbackError {
 #[derive(Debug)]
 pub enum TransactionResult {
     Ok,
+    Canceled,
     Rollback(EngineError),
     UnrecoverableError(EngineError, RollbackError),
 }

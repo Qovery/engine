@@ -9,7 +9,7 @@ use rusoto_ecr::{
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use crate::build_platform::Image;
-use crate::cmd::utilities::QoveryCommand;
+use crate::cmd::command::QoveryCommand;
 use crate::container_registry::docker::{docker_pull_image, docker_tag_and_push_image};
 use crate::container_registry::{ContainerRegistry, Kind, PullResult, PushResult};
 use crate::error::{EngineError, EngineErrorCause};

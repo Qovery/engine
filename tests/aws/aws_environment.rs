@@ -62,17 +62,11 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
-        match environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
-        match environment_for_delete.delete_environment(Kind::Aws, &context_for_delete, &ea_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment_for_delete.delete_environment(Kind::Aws, &context_for_delete, &ea_delete, logger);
+        assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
     })
@@ -128,7 +122,8 @@ fn test_build_cache() {
             PullResult::None => assert!(true),
         };
 
-        let build_result = local_docker.build(app.to_build(), false).unwrap();
+        let cancel_task = || false;
+        let build_result = local_docker.build(app.to_build(), false, &cancel_task).unwrap();
 
         let _ = match ecr.push(&build_result.build.image, false) {
             Ok(_) => assert!(true),
@@ -205,11 +200,8 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let selector = format!("appId={}", environment.clone().applications[0].id);
 
-        match environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
         let ret = get_pods(
             context.clone(),
@@ -221,11 +213,8 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
-        match environment.pause_environment(Kind::Aws, &context_for_delete, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.pause_environment(Kind::Aws, &context_for_delete, &ea, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
         let ret = get_pods(
@@ -275,11 +264,8 @@ fn deploy_a_working_environment_and_pause_it_eks() {
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
-        match environment.deploy_environment(Kind::Aws, &ctx_resume, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.deploy_environment(Kind::Aws, &ctx_resume, &ea, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
         let ret = get_pods(
             context.clone(),
@@ -331,11 +317,9 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         assert!(filtered_pdb);
 
         // Cleanup
-        match environment.delete_environment(Kind::Aws, &context_for_delete, &ea, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.delete_environment(Kind::Aws, &context_for_delete, &ea, logger);
+        assert!(matches!(ret, TransactionResult::Ok));
+
         return test_name.to_string();
     })
 }
@@ -381,17 +365,14 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        match environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
 
-        match environment_delete.delete_environment(Kind::Aws, &context_for_delete, &ea_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
+        let ret = environment_delete.delete_environment(Kind::Aws, &context_for_delete, &ea_delete, logger);
+        assert!(matches!(
+            ret,
+            TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
+        ));
 
         return test_name.to_string();
     })
@@ -456,17 +437,11 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        match environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
-        match environment_delete.delete_environment(Kind::Aws, &context_for_deletion, &ea_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment_delete.delete_environment(Kind::Aws, &context_for_deletion, &ea_delete, logger);
+        assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
     })
@@ -531,17 +506,11 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        match environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
-        match environment_delete.delete_environment(Kind::Aws, &context_for_deletion, &ea_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment_delete.delete_environment(Kind::Aws, &context_for_deletion, &ea_delete, logger);
+        assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
     })
@@ -587,17 +556,11 @@ fn deploy_a_working_environment_with_domain() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        match environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
-        match environment_delete.delete_environment(Kind::Aws, &context_for_deletion, &ea_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment_delete.delete_environment(Kind::Aws, &context_for_deletion, &ea_delete, logger);
+        assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
     })
@@ -662,11 +625,8 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        match environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
         match get_pvc(context.clone(), Kind::Aws, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
@@ -676,11 +636,8 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
             Err(_) => assert!(false),
         };
 
-        match environment_delete.delete_environment(Kind::Aws, &context_for_deletion, &ea_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment_delete.delete_environment(Kind::Aws, &context_for_deletion, &ea_delete, logger);
+        assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
     })
@@ -750,11 +707,8 @@ fn redeploy_same_app_with_ebs() {
         let ea2 = EnvironmentAction::Environment(environment_redeploy.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        match environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
         match get_pvc(context.clone(), Kind::Aws, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
@@ -773,11 +727,8 @@ fn redeploy_same_app_with_ebs() {
             secrets.clone(),
         );
 
-        match environment_redeploy.deploy_environment(Kind::Aws, &context_bis, &ea2, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment_redeploy.deploy_environment(Kind::Aws, &context_bis, &ea2, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
         let (_, number2) = is_pod_restarted_env(
             context.clone(),
@@ -788,11 +739,9 @@ fn redeploy_same_app_with_ebs() {
         );
         //nothing change in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
-        match environment_delete.delete_environment(Kind::Aws, &context_for_deletion, &ea_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment_delete.delete_environment(Kind::Aws, &context_for_deletion, &ea_delete, logger);
+        assert!(matches!(ret, TransactionResult::Ok));
+
         return test_name.to_string();
     })
 }
@@ -854,26 +803,19 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         let ea_not_working = EnvironmentAction::Environment(environment_for_not_working.clone());
         let ea_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
-        match environment_for_not_working.deploy_environment(
+        let ret = environment_for_not_working.deploy_environment(
             Kind::Aws,
             &context_for_not_working,
             &ea_not_working,
             logger.clone(),
-        ) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
-        match environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-        match environment_for_delete.delete_environment(Kind::Aws, &context_for_delete, &ea_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        );
+        assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
+
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let ret = environment_for_delete.delete_environment(Kind::Aws, &context_for_delete, &ea_delete, logger);
+        assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
     })
@@ -946,48 +888,39 @@ fn deploy_ok_fail_fail_ok_environment() {
         let ea_delete = EnvironmentAction::Environment(delete_env.clone());
 
         // OK
-        match environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
         // FAIL and rollback
-        match not_working_env_1.deploy_environment(
+        let ret = not_working_env_1.deploy_environment(
             Kind::Aws,
             &context_for_not_working_1,
             &ea_not_working_1,
             logger.clone(),
-        ) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(true),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
+        );
+        assert!(matches!(
+            ret,
+            TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)
+        ));
 
         // FAIL and Rollback again
-        match not_working_env_2.deploy_environment(
+        let ret = not_working_env_2.deploy_environment(
             Kind::Aws,
             &context_for_not_working_2,
             &ea_not_working_2,
             logger.clone(),
-        ) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(true),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
+        );
+        assert!(matches!(
+            ret,
+            TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)
+        ));
 
         // Should be working
-        match environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
-        match delete_env.delete_environment(Kind::Aws, &context_for_delete, &ea_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = delete_env.delete_environment(Kind::Aws, &context_for_delete, &ea_delete, logger);
+        assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
     })
@@ -1033,16 +966,11 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(delete_env.clone());
 
-        match environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
-        match delete_env.delete_environment(Kind::Aws, &context_for_delete, &ea_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
+
+        let ret = delete_env.delete_environment(Kind::Aws, &context_for_delete, &ea_delete, logger);
+        assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
     })
@@ -1089,21 +1017,15 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
-        match environment.deploy_environment(Kind::Aws, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.deploy_environment(Kind::Aws, &context, &env_action, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
         // checking if cookie is properly set on the app
         assert!(routers_sessions_are_sticky(environment.routers.clone()));
 
-        match environment_for_delete.delete_environment(Kind::Aws, &context_for_delete, &env_action_for_delete, logger)
-        {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret =
+            environment_for_delete.delete_environment(Kind::Aws, &context_for_delete, &env_action_for_delete, logger);
+        assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()
     })
