@@ -31,6 +31,10 @@ impl Connection {
         self.cnx.request_timeout(subject.name.as_str(), payload, timeout)
     }
 
+    pub fn subscribe(&self, subject: &Subject) -> io::Result<Subscription> {
+        self.cnx.subscribe(subject.name.as_str())
+    }
+
     pub fn drain(&self) -> io::Result<()> {
         self.cnx.drain()
     }

@@ -12,6 +12,7 @@ use std::io::{BufRead, BufReader, Error};
 use std::path::Path;
 use std::sync::Arc;
 
+use std::borrow::Borrow;
 use std::time::Duration;
 use std::{env, thread};
 use std::{fs, io, process};
@@ -36,6 +37,7 @@ use crate::logger::nats_logger::NatsLogger;
 
 use crate::models::{StatusResponse, TaskSelector};
 use crate::nats::{subjects, Connection, Message};
+use crate::subjects::Subject;
 use crate::task_manager::models::Request;
 use crate::task_manager::task_manager::{PreRun, Task, TaskManager};
 use crate::task_manager::tasks::{EnvironmentTask, InfrastructureTask};
@@ -127,7 +129,7 @@ fn check_versions_from(path: &str) -> Result<(), EngineInitError> {
 
         // check if the binary need to be tested
         if bin_to_check.contains(&binary_name) {
-            let result_cmd = cmd::utilities::run_version_command_for(&binary_name);
+            let result_cmd = cmd::command::run_version_command_for(&binary_name);
             let version = lowercase.split('=').last().unwrap_or("").replace('"', "");
 
             if !result_cmd.contains(&version) {
@@ -576,12 +578,33 @@ fn spawn_task_poller(
                     }
                 };
 
+            let task_id = engine_task.id().to_string();
+            let task_cancel_subscription = match nats.subscribe(&Subject::new_for_task_cancel(engine_task.borrow())) {
+                Ok(subscription) => {
+                    info!("Subscribed on {:?} for task cancellation {}", subscription, &task_id);
+                    subscription
+                }
+                Err(err) => {
+                    error!("Cannot subscribe on nats cancellation subject: {}", err);
+                    continue;
+                }
+            };
+
             // Ask the task manager to process our task
             task_manager.add_task(engine_task);
 
             // We wait for the task to finish as we don't want the engine to queue them
-            while task_manager.remaining_tasks_to_run() > 0 {
-                thread::sleep(Duration::from_secs(10))
+            loop {
+                // Wait to receive a cancel
+                if let Ok(_) = task_cancel_subscription.next_timeout(Duration::from_secs(10)) {
+                    info!("Engine received cancel notification for task: {}", &task_id);
+                    task_manager.cancel_current_task()
+                }
+
+                // If the task is finished to be run, go get a new one
+                if task_manager.remaining_tasks_to_run() <= 0 {
+                    break;
+                }
             }
         }
 

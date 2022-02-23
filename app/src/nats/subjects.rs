@@ -1,5 +1,6 @@
 use crate::models::TaskSelector;
 use crate::utils::Mode;
+use crate::Task;
 use lazy_static::lazy_static;
 use qovery_engine::events::EngineEvent;
 use std::fmt::{Display, Formatter};
@@ -34,6 +35,12 @@ impl Subject {
                 event_details.organisation_id().to_string().to_lowercase(),
                 event_details.cluster_id().to_string().to_lowercase(),
             ),
+        }
+    }
+
+    pub fn new_for_task_cancel(task: &dyn Task) -> Self {
+        Subject {
+            name: format!("engine.task.{}.cancel", task.id()),
         }
     }
 }

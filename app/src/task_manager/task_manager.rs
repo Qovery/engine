@@ -1,5 +1,5 @@
 use std::mem::ManuallyDrop;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -43,6 +43,7 @@ pub struct TaskManager {
     // because we wrap TaskManager into a RwLock.
     // Consuming threads_handle should be a final states
     threads_handle: Mutex<Vec<(String, JoinHandle<()>)>>,
+    current_task: Arc<RwLock<Option<InternalTask>>>,
 }
 
 impl TaskManager {
@@ -67,6 +68,7 @@ impl TaskManager {
             running_tasks: METRICS_NB_RUNNING_TASKS.clone(),
             running: false,
             threads_handle: Mutex::new(Vec::with_capacity(2)),
+            current_task: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -89,6 +91,13 @@ impl TaskManager {
             let _ = handle
                 .join()
                 .map_err(|err| error!("Cannot join thread {}: {:?}", thread_name, err));
+        }
+    }
+    pub fn cancel_current_task(&self) {
+        let lock = self.current_task.read().unwrap();
+        match &*lock {
+            Some(task) => task.task.cancel(),
+            None => {}
         }
     }
 
@@ -171,6 +180,7 @@ impl TaskManager {
         let task_status_tx = self.task_status_tx.clone();
         let task_executor_rx = self.task_executor_rx.clone();
         let nb_running_tasks = self.running_tasks.clone();
+        let current_task_lock = self.current_task.clone();
         let thread_name = "tm-task-processor";
 
         let th = thread::Builder::new()
@@ -221,6 +231,13 @@ impl TaskManager {
                     match internal_task.task.pre_run() {
                         PreRun::Yes => {
                             let start_time = Instant::now();
+                            {
+                                let mut current_task = current_task_lock.write().unwrap();
+                                current_task.replace(internal_task);
+                            }
+
+                            let current_task = current_task_lock.read().unwrap();
+                            let internal_task = current_task.as_ref().unwrap();
                             internal_task.task.run(&task_status_tx, logger.clone());
                             info!(
                                 "task {} took {} sec to be executed",
@@ -317,7 +334,7 @@ fn add_task(
         .map_err(|err| error!("cannot enqueue task {}", err));
 }
 
-pub trait Task: Send {
+pub trait Task: Send + Sync {
     fn created_at(&self) -> &DateTime<Utc>;
     fn group_id(&self) -> &str;
     fn id(&self) -> &str;
@@ -327,6 +344,8 @@ pub trait Task: Send {
     /// this function is called just before `run()` is called.
     fn pre_run(&self) -> PreRun;
     fn run(&self, sender: &Sender<Message>, logger: Box<dyn Logger>);
+    fn cancel(&self);
+    fn cancel_checker(&self) -> Box<dyn Fn() -> bool>;
 }
 
 pub struct InternalTask {
@@ -407,6 +426,7 @@ pub enum State {
     DeploymentError,
     PauseError,
     DeleteError,
+    Canceled,
 }
 
 impl evmap::shallow_copy::ShallowCopy for Status {
@@ -502,8 +522,16 @@ mod tests {
 
         fn run(&self, _: &Sender<Message>, _logger: Box<dyn Logger>) {
             self.barrier_begin.wait();
-            self.have_been_run.compare_and_swap(false, true, Ordering::Release);
+            let _ = self
+                .have_been_run
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
             self.barrier_end.wait();
+        }
+
+        fn cancel(&self) {}
+
+        fn cancel_checker(&self) -> Box<dyn Fn() -> bool> {
+            Box::new(|| false)
         }
     }
 
@@ -529,6 +557,11 @@ mod tests {
             PreRun::Yes
         }
         fn run(&self, _sender: &Sender<Message>, _logger: Box<dyn Logger>) {}
+        fn cancel(&self) {}
+
+        fn cancel_checker(&self) -> Box<dyn Fn() -> bool> {
+            Box::new(|| false)
+        }
     }
 
     #[test]

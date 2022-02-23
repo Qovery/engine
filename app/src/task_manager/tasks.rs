@@ -1,5 +1,6 @@
 use std::borrow::{Borrow, Cow};
 use std::fs;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
@@ -100,6 +101,7 @@ impl Task for InfrastructureTask {
             None,
             false,
             false,
+            false,
         );
 
         let my_progress_listener: Arc<Box<dyn ProgressListener>> = Arc::new(Box::new(MyProgressListener {
@@ -107,7 +109,10 @@ impl Task for InfrastructureTask {
             sender: sender.clone(),
         }));
 
-        let engine = match self.request.engine(&self.context, my_progress_listener, logger) {
+        let engine = match self
+            .request
+            .engine(&self.context, my_progress_listener, logger, self.cancel_checker())
+        {
             Ok(engine) => engine,
             Err(err) => {
                 send_progress(
@@ -118,6 +123,7 @@ impl Task for InfrastructureTask {
                     Some(format!("failed to create engine {:?}", err)),
                     true,
                     true,
+                    false,
                 );
                 return;
             }
@@ -134,6 +140,7 @@ impl Task for InfrastructureTask {
                     Some(format!("failed to get engine session {:?}", err)),
                     true,
                     true,
+                    false,
                 );
 
                 return;
@@ -188,6 +195,12 @@ impl Task for InfrastructureTask {
 
         info!("infrastructure task {} finished", self.id());
     }
+
+    fn cancel(&self) {}
+
+    fn cancel_checker(&self) -> Box<dyn Fn() -> bool> {
+        Box::new(|| false)
+    }
 }
 
 #[derive(Clone)]
@@ -196,6 +209,7 @@ pub struct EnvironmentTask {
     context: Context,
     request: Request,
     pre_run_callback: Arc<Box<dyn Fn(&dyn Task) -> PreRun + Send + Sync>>,
+    cancel_requested: Arc<AtomicBool>,
 }
 
 impl EnvironmentTask {
@@ -214,7 +228,12 @@ impl EnvironmentTask {
             context,
             request,
             pre_run_callback: Arc::new(pre_run_callback),
+            cancel_requested: Arc::new(AtomicBool::from(false)),
         }
+    }
+
+    fn _is_canceled(&self) -> bool {
+        self.cancel_requested.load(Ordering::Acquire)
     }
 
     fn action_context(&self, level: ProgressLevel) -> ActionContext {
@@ -278,6 +297,7 @@ impl Task for EnvironmentTask {
             None,
             false,
             false,
+            false,
         );
 
         let my_progress_listener: Arc<Box<dyn ProgressListener>> = Arc::new(Box::new(MyProgressListener {
@@ -285,7 +305,10 @@ impl Task for EnvironmentTask {
             sender: sender.clone(),
         }));
 
-        let engine = match self.request.engine(&self.context, my_progress_listener, logger) {
+        let engine = match self
+            .request
+            .engine(&self.context, my_progress_listener, logger, self.cancel_checker())
+        {
             Ok(engine) => engine,
             Err(err) => {
                 send_progress(
@@ -296,6 +319,7 @@ impl Task for EnvironmentTask {
                     Some(format!("failed to create engine {:?}", err)),
                     true,
                     true,
+                    false,
                 );
 
                 return;
@@ -314,6 +338,7 @@ impl Task for EnvironmentTask {
                     Some(format!("failed to get engine session {:?}", err)),
                     true,
                     true,
+                    false,
                 );
 
                 return;
@@ -347,6 +372,7 @@ impl Task for EnvironmentTask {
                             .to_string(),
                     ),
                     true,
+                    false,
                     false,
                 );
                 return;
@@ -387,6 +413,15 @@ impl Task for EnvironmentTask {
         };
 
         info!("environment task {} finished", self.id());
+    }
+
+    fn cancel(&self) {
+        self.cancel_requested.store(true, Ordering::Release);
+    }
+
+    fn cancel_checker(&self) -> Box<dyn Fn() -> bool> {
+        let cancel_requested = self.cancel_requested.clone();
+        Box::new(move || cancel_requested.load(Ordering::Acquire))
     }
 }
 
@@ -534,8 +569,11 @@ fn send_progress(
     message: Option<String>,
     is_error: bool,
     is_final: bool,
+    is_cancel: bool,
 ) {
-    let status = if is_error {
+    let status = if is_cancel {
+        Status::new(State::Canceled, message, context)
+    } else if is_error {
         match request.action {
             Action::Create => Status::new(State::DeploymentError, message, context),
             Action::Pause => Status::new(State::PauseError, message, context),
@@ -569,7 +607,7 @@ fn handle_transaction_result(
         TransactionResult::Ok => {
             action_context.level = ProgressLevel::Info;
 
-            send_progress(task, request, sender, action_context, None, false, true);
+            send_progress(task, request, sender, action_context, None, false, true, false);
         }
         TransactionResult::Rollback(engine_error) => {
             action_context.level = ProgressLevel::Warn;
@@ -581,6 +619,7 @@ fn handle_transaction_result(
                 action_context,
                 Some(format_engine_error_output(engine_error, None)),
                 true,
+                false,
                 false,
             );
         }
@@ -595,7 +634,13 @@ fn handle_transaction_result(
                 Some(format_engine_error_output(engine_error, Some(rollback_err))),
                 true,
                 false,
+                false,
             );
+        }
+        TransactionResult::Canceled => {
+            action_context.level = ProgressLevel::Error;
+
+            send_progress(task, request, sender, action_context, None, false, true, true);
         }
     }
 }
@@ -684,6 +729,9 @@ fn format_engine_error_output(engine_error: EngineError, rollback_error: Option<
             engine_error.message.unwrap_or_else(|| "<no error message>".into()),
             hint
         ),
+        EngineErrorCause::Canceled => {
+            todo!()
+        }
     }
 }
 
