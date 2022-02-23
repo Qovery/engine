@@ -9,6 +9,9 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: "{{ include "aws-calico.fullname" . }}-node"
+      {{- if .Values.calico.node.podLabels }}
+{{ toYaml .Values.calico.node.podLabels | indent 6 }}
+      {{- end }}
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:
@@ -17,8 +20,23 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: "{{ include "aws-calico.fullname" . }}-node"
+        {{- if .Values.calico.node.podLabels }}
+{{ toYaml .Values.calico.node.podLabels | indent 8 }}
+        {{- end }}
+      {{- with .Values.calico.node.podAnnotations }}
+      annotations: {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
       priorityClassName: system-node-critical
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                - key: "eks.amazonaws.com/compute-type"
+                  operator: NotIn
+                  values:
+                    - fargate
       nodeSelector:
         {{- toYaml .Values.calico.node.nodeSelector | nindent 8 }}
       hostNetwork: true
@@ -70,6 +88,8 @@ spec:
               value: "none"
             - name: FELIX_PROMETHEUSMETRICSENABLED
               value: "true"
+            - name: FELIX_ROUTESOURCE
+              value: "WorkloadIPs"
             - name: NO_DEFAULT_POOLS
               value: "true"
             # Set based on the k8s node name.
@@ -95,12 +115,14 @@ spec:
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
+            timeoutSeconds: 5
           readinessProbe:
             exec:
               command:
                 - /bin/calico-node
                 - -felix-ready
             periodSeconds: 10
+            timeoutSeconds: 5
           resources:
             {{- toYaml .Values.calico.node.resources | nindent 12 }}
           volumeMounts:
