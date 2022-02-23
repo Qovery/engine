@@ -272,7 +272,8 @@ impl Helm {
         match values {
             Ok(all_helms) => {
                 for helm in all_helms {
-                    let raw_version = helm.chart.replace(format!("{}-", helm.name).as_str(), "");
+                    let last_dash_pos = helm.chart.rfind('-').expect("Can't parse helm chart") + 1;
+                    let raw_version = helm.chart[last_dash_pos..].to_string();
                     let version = Version::from_str(raw_version.as_str()).ok();
                     helms_charts.push(HelmChart::new(helm.name, helm.namespace, version))
                 }
