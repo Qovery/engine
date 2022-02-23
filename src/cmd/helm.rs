@@ -567,6 +567,7 @@ mod tests {
     use std::sync::{Arc, Barrier};
     use std::thread;
     use std::time::Duration;
+    use semver::Version;
 
     struct HelmTestCtx {
         helm: Helm,
@@ -845,5 +846,16 @@ mod tests {
         // check release does not exist anymore
         let ret = helm.check_release_exist(&chart, &vec![]);
         assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+    }
+
+    #[test]
+    fn test_getting_version() {
+        let HelmTestCtx {
+            ref helm,
+            ref mut chart,
+        } = HelmTestCtx::new("test-version-release");
+        let _ = helm.upgrade(&chart, &vec![]);
+        let releases = helm.list_release(Some(&chart.get_namespace_string()), &vec![]).unwrap();
+        assert_eq!(releases[0].clone().version.unwrap(), Version::new(0,1,0))
     }
 }
