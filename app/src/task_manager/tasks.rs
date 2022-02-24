@@ -640,7 +640,7 @@ fn handle_transaction_result(
         TransactionResult::Canceled => {
             action_context.level = ProgressLevel::Error;
 
-            let msg = format!("⛔ Deployment {} has been canceled at user request ⛔", task.id());
+            let msg = format!("🚫 Deployment {} has been canceled at user request 🚫", task.id());
             send_progress(task, request, sender, action_context, Some(msg), false, true, true);
         }
     }
