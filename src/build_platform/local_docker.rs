@@ -574,10 +574,24 @@ impl BuildPlatform for LocalDocker {
             )
         };
 
+        let msg = match &result {
+            Ok(_) => format!("✅ Container {} is built", self.name_with_id()),
+            Err(engine_err) if engine_err.is_cancel() => {
+                format!("⛔ Container {} build has been canceled", self.name_with_id())
+            }
+            Err(engine_err) => {
+                format!(
+                    "❌ Container {} failed to be build: {}",
+                    self.name_with_id(),
+                    engine_err.message.as_ref().map(|x| x.as_str()).unwrap_or_default()
+                )
+            }
+        };
+
         listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Application { id: app_id },
             ProgressLevel::Info,
-            Some(format!("container {} is built ✔", self.name_with_id())),
+            Some(msg),
             self.context.execution_id(),
         ));
 
