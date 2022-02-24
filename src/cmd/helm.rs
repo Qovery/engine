@@ -564,10 +564,10 @@ mod tests {
     use crate::cloud_provider::helm::{ChartInfo, ChartSetValue};
     use crate::cmd::command::QoveryCommand;
     use crate::cmd::helm::{helm_exec_with_output, Helm, HelmError};
+    use semver::Version;
     use std::sync::{Arc, Barrier};
     use std::thread;
     use std::time::Duration;
-    use semver::Version;
 
     struct HelmTestCtx {
         helm: Helm,
@@ -856,6 +856,6 @@ mod tests {
         } = HelmTestCtx::new("test-version-release");
         let _ = helm.upgrade(&chart, &vec![]);
         let releases = helm.list_release(Some(&chart.get_namespace_string()), &vec![]).unwrap();
-        assert_eq!(releases[0].clone().version.unwrap(), Version::new(0,1,0))
+        assert_eq!(releases[0].clone().version.unwrap(), Version::new(0, 1, 0))
     }
 }
