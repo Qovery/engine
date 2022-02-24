@@ -675,7 +675,6 @@ fn private_postgresql_v10_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-scw-managed-services")]
 #[named]
 #[test]
-#[ignore]
 fn public_postgresql_v10_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let context = context(
@@ -733,7 +732,6 @@ fn private_postgresql_v11_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-scw-managed-services")]
 #[named]
 #[test]
-#[ignore]
 fn public_postgresql_v11_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let context = context(
@@ -791,7 +789,6 @@ fn private_postgresql_v12_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-scw-managed-services")]
 #[named]
 #[test]
-#[ignore]
 fn public_postgresql_v12_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let context = context(
@@ -849,7 +846,6 @@ fn private_postgresql_v13_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-scw-managed-services")]
 #[named]
 #[test]
-#[ignore]
 fn public_postgresql_v13_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let context = context(
@@ -1308,7 +1304,6 @@ fn private_mysql_v8_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-scw-managed-services")]
 #[named]
 #[test]
-#[ignore]
 fn public_mysql_v8_deploy_a_working_prod_environment() {
     let secrets = FuncTestsSecrets::new();
     let context = context(
