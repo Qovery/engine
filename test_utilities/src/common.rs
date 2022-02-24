@@ -563,6 +563,49 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
     }
 }
 
+pub fn database_test_environment(context: &Context) -> Environment {
+    let suffix = generate_id();
+    let application_id = generate_id();
+    let application_name = format!("{}-{}", "simple-app".to_string(), &suffix);
+
+    Environment {
+        execution_id: context.execution_id().to_string(),
+        id: generate_id(),
+        owner_id: generate_id(),
+        project_id: generate_id(),
+        organization_id: context.organization_id().to_string(),
+        action: Action::Create,
+        applications: vec![Application {
+            id: application_id,
+            name: application_name,
+            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+            commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
+            dockerfile_path: Some("Dockerfile".to_string()),
+            buildpack_language: None,
+            root_path: String::from("/"),
+            action: Action::Create,
+            git_credentials: Some(GitCredentials {
+                login: "x-access-token".to_string(),
+                access_token: "xxx".to_string(),
+                expired_at: Utc::now(),
+            }),
+            storage: vec![],
+            environment_vars: BTreeMap::default(),
+            branch: "basic-app-deploy".to_string(),
+            ports: vec![],
+            total_cpus: "100m".to_string(),
+            total_ram_in_mib: 256,
+            min_instances: 1,
+            max_instances: 1,
+            cpu_burst: "100m".to_string(),
+            start_timeout_in_seconds: 60,
+        }],
+        routers: vec![],
+        databases: vec![],
+        clone_from_environment_id: None,
+    }
+}
+
 pub fn environment_only_http_server_router_with_sticky_session(context: &Context, test_domain: &str) -> Environment {
     let mut env = environment_only_http_server_router(context, test_domain.clone());
 
@@ -1070,7 +1113,6 @@ pub fn test_db(
             app
         })
         .collect::<Vec<qovery_engine::models::Application>>();
-    environment.routers[0].routes[0].application_name = app_id.clone();
 
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;
