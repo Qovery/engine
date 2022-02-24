@@ -13,27 +13,18 @@ use qovery_engine::models::{Context, ProgressInfo, ProgressLevel, ProgressListen
 use qovery_engine::transaction::{RollbackError, TransactionResult};
 
 use crate::task_manager::models::{Action, Archive, Request};
-use crate::task_manager::task_manager::{ActionContext, InternalTask, Message, PreRun, State, Status, Task};
+use crate::task_manager::task_manager::{ActionContext, InternalTask, Message, State, Status, Task};
 use qovery_engine::object_storage::ObjectStorage;
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
     context: Context,
     request: Request,
-    pre_run_callback: Arc<Box<dyn Fn(&dyn Task) -> PreRun + Send + Sync>>,
 }
 
 impl InfrastructureTask {
-    pub fn new(
-        context: Context,
-        request: Request,
-        pre_run_callback: Box<dyn Fn(&dyn Task) -> PreRun + Send + Sync>,
-    ) -> Self {
-        InfrastructureTask {
-            context,
-            request,
-            pre_run_callback: Arc::new(pre_run_callback),
-        }
+    pub fn new(context: Context, request: Request) -> Self {
+        InfrastructureTask { context, request }
     }
 
     fn action_context(&self, level: ProgressLevel) -> ActionContext {
@@ -46,15 +37,6 @@ impl InfrastructureTask {
             *self.created_at(),
         )
     }
-
-    fn infrastructure_id(&self) -> String {
-        format!(
-            "{}-{}-{}",
-            self.request.cloud_provider.id.as_str(),
-            self.request.container_registry.id.as_str(),
-            self.request.build_platform.id.as_str()
-        )
-    }
 }
 
 impl Task for InfrastructureTask {
@@ -62,16 +44,8 @@ impl Task for InfrastructureTask {
         &self.request.created_at
     }
 
-    fn group_id(&self) -> &str {
-        self.request.organization_id.as_str()
-    }
-
     fn id(&self) -> &str {
         self.request.id.as_str()
-    }
-
-    fn bytes_payload(&self) -> &Vec<u8> {
-        self.request.bytes_payload.borrow()
     }
 
     fn send_status(&self, sender: &Sender<Message>, status: Status) {
@@ -82,15 +56,13 @@ impl Task for InfrastructureTask {
         let _ = sender.send(Ok(it));
     }
 
-    fn pre_run(&self) -> PreRun {
-        (self.pre_run_callback)(self)
-    }
-
     fn run(&self, sender: &Sender<Message>, logger: Box<dyn Logger>) {
         info!(
-            "infrastructure task {} started with infrastructure id {}",
+            "infrastructure task {} started with infrastructure id {}-{}-{}",
             self.id(),
-            self.infrastructure_id()
+            self.request.cloud_provider.id.as_str(),
+            self.request.container_registry.id.as_str(),
+            self.request.build_platform.id.as_str()
         );
 
         send_progress(
@@ -205,29 +177,16 @@ impl Task for InfrastructureTask {
 
 #[derive(Clone)]
 pub struct EnvironmentTask {
-    group_id: String,
     context: Context,
     request: Request,
-    pre_run_callback: Arc<Box<dyn Fn(&dyn Task) -> PreRun + Send + Sync>>,
     cancel_requested: Arc<AtomicBool>,
 }
 
 impl EnvironmentTask {
-    pub fn new(
-        context: Context,
-        request: Request,
-        pre_run_callback: Box<dyn Fn(&dyn Task) -> PreRun + Send + Sync>,
-    ) -> Self {
+    pub fn new(context: Context, request: Request) -> Self {
         EnvironmentTask {
-            group_id: request
-                .target_environment
-                .as_ref()
-                .expect("missing `target_environment` to create EnvironmentTask")
-                .id
-                .clone(),
             context,
             request,
-            pre_run_callback: Arc::new(pre_run_callback),
             cancel_requested: Arc::new(AtomicBool::from(false)),
         }
     }
@@ -261,16 +220,8 @@ impl Task for EnvironmentTask {
         &self.request.created_at
     }
 
-    fn group_id(&self) -> &str {
-        self.group_id.as_str()
-    }
-
     fn id(&self) -> &str {
         self.request.id.as_str()
-    }
-
-    fn bytes_payload(&self) -> &Vec<u8> {
-        self.request.bytes_payload.borrow()
     }
 
     fn send_status(&self, sender: &Sender<Message>, status: Status) {
@@ -280,10 +231,6 @@ impl Task for EnvironmentTask {
         };
 
         let _ = sender.send(Ok(it));
-    }
-
-    fn pre_run(&self) -> PreRun {
-        (self.pre_run_callback)(self)
     }
 
     fn run(&self, sender: &Sender<Message>, logger: Box<dyn Logger>) {

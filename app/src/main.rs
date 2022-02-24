@@ -39,7 +39,7 @@ use crate::models::{StatusResponse, TaskSelector};
 use crate::nats::{subjects, Connection, Message};
 use crate::subjects::Subject;
 use crate::task_manager::models::Request;
-use crate::task_manager::task_manager::{PreRun, Task, TaskManager};
+use crate::task_manager::task_manager::{Task, TaskManager};
 use crate::task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 use crate::utils::{log_no_spam_builder, LogErrorOnDrop};
 
@@ -80,10 +80,9 @@ fn to_engine_task(
         request.metadata.clone(),
     );
 
-    let pre_run_callback = Box::new(move |_task: &dyn Task| PreRun::Yes);
     let task: Box<dyn Task> = match task_selector {
-        TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(context, request, pre_run_callback)),
-        TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(context, request, pre_run_callback)),
+        TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(context, request)),
+        TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(context, request)),
     };
 
     Ok(task)
@@ -367,16 +366,8 @@ pub fn using_json_path_parameter(
     );
 
     let task: Box<dyn Task> = match deployment_type {
-        TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(
-            context.clone(),
-            req.clone(),
-            Box::new(|_: &dyn Task| PreRun::Yes),
-        )),
-        TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(
-            context,
-            req,
-            Box::new(|_: &dyn Task| PreRun::Yes),
-        )),
+        TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(context.clone(), req.clone())),
+        TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(context, req)),
     };
 
     task_manager.add_task(task);
