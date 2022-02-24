@@ -577,7 +577,7 @@ impl BuildPlatform for LocalDocker {
         let msg = match &result {
             Ok(_) => format!("✅ Container {} is built", self.name_with_id()),
             Err(engine_err) if engine_err.is_cancel() => {
-                format!("⛔ Container {} build has been canceled", self.name_with_id())
+                format!("🚫 Container {} build has been canceled", self.name_with_id())
             }
             Err(engine_err) => {
                 format!(
