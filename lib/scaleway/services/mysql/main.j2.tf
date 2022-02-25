@@ -56,9 +56,6 @@ resource "scaleway_rdb_instance" "mysql_instance" {
 
   tags              = local.tags_mysql_list
 
-  publicly_accessible = var.publicly_accessible
-
-
 # TODO:(benjaminch): features to be added at some point but be discussed with Scaleway
   # - port
   # - instance create timeout
