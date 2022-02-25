@@ -208,7 +208,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     let database_port_mongo = 27017;
     let database_db_name_mongo = "my-mongodb".to_string();
     let database_username_mongo = "superuser".to_string();
-    let database_password_mongo = generate_password(false);
+    let database_password_mongo = generate_password(provider_kind.clone(), DatabaseMode::CONTAINER);
     let database_uri_mongo = format!(
         "mongodb://{}:{}@{}:{}/{}",
         database_username_mongo,
@@ -223,7 +223,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     let fqdn = get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()).to_string();
     let database_port = 5432;
     let database_username = "superuser".to_string();
-    let database_password = generate_password(true);
+    let database_password = generate_password(provider_kind.clone(), DatabaseMode::CONTAINER);
     let database_name = "postgres".to_string();
 
     // pSQL 2 management part
@@ -598,7 +598,7 @@ pub fn database_test_environment(context: &Context) -> Environment {
             min_instances: 1,
             max_instances: 1,
             cpu_burst: "100m".to_string(),
-            start_timeout_in_seconds: 60,
+            start_timeout_in_seconds: 120,
         }],
         routers: vec![],
         databases: vec![],
@@ -627,7 +627,7 @@ pub fn environnement_2_app_2_routers_1_psql(
 
     let database_port = 5432;
     let database_username = "superuser".to_string();
-    let database_password = generate_password(true);
+    let database_password = generate_password(provider_kind.clone(), DatabaseMode::CONTAINER);
     let database_name = "postgres".to_string();
 
     let suffix = generate_id();
@@ -1033,9 +1033,8 @@ pub fn test_db(
     let context_for_delete = context.clone_not_same_execution_id();
 
     let app_id = generate_id();
-
     let database_username = "superuser".to_string();
-    let database_password = generate_id();
+    let database_password = generate_password(provider_kind.clone(), database_mode.clone());
     let db_kind_str = db_kind.name().to_string();
     let db_id = generate_id();
     let database_host = format!("{}-{}", db_id, db_kind_str.clone());
@@ -1076,8 +1075,8 @@ pub fn test_db(
         port: database_port.clone(),
         username: database_username.clone(),
         password: database_password.clone(),
-        total_cpus: "100m".to_string(),
-        total_ram_in_mib: 512,
+        total_cpus: "50m".to_string(),
+        total_ram_in_mib: 256,
         disk_size_in_gib: storage_size.clone(),
         database_instance_type: db_instance_type.to_string(),
         database_disk_type: db_disk_type.to_string(),

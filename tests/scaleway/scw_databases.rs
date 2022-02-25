@@ -271,13 +271,12 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         );
 
         let app_name = format!("postgresql-app-{}", generate_id());
+        let database_mode = CONTAINER;
         let database_host = get_svc_name(DatabaseKind::Postgresql, Kind::Scw).to_string();
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_password(true);
-
-        let database_mode = CONTAINER;
+        let database_password = generate_password(Kind::Scw, database_mode.clone());
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
