@@ -12,19 +12,48 @@ use qovery_engine::logger::Logger;
 use qovery_engine::models::{Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope};
 use qovery_engine::transaction::{RollbackError, TransactionResult};
 
-use crate::task_manager::models::{Action, Archive, Request};
-use crate::task_manager::task_manager::{ActionContext, InternalTask, Message, State, Status, Task};
+use crate::task_manager::models::{Action, Archive, EngineRequest};
+use crate::task_manager::task_manager::{ActionContext, State, Status, Task};
 use qovery_engine::object_storage::ObjectStorage;
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
-    context: Context,
-    request: Request,
+    workspace_root_dir: String,
+    lib_root_dir: String,
+    docker_host: Option<String>,
+    request: EngineRequest,
+    status_sender: Sender<Status>,
 }
 
 impl InfrastructureTask {
-    pub fn new(context: Context, request: Request) -> Self {
-        InfrastructureTask { context, request }
+    pub fn new(
+        request: EngineRequest,
+        status_sender: Sender<Status>,
+        workspace_root_dir: String,
+        lib_root_dir: String,
+        docker_host: Option<String>,
+    ) -> Self {
+        InfrastructureTask {
+            workspace_root_dir,
+            lib_root_dir,
+            docker_host,
+            request,
+            status_sender,
+        }
+    }
+
+    fn info_context(&self) -> Context {
+        Context::new(
+            self.request.organization_id.to_string(),
+            self.request.cloud_provider.id.to_string(),
+            self.request.id.to_string(),
+            self.workspace_root_dir.to_string(),
+            self.lib_root_dir.to_string(),
+            self.request.test_cluster,
+            self.docker_host.clone(),
+            self.request.features.clone(),
+            self.request.metadata.clone(),
+        )
     }
 
     fn action_context(&self, level: ProgressLevel) -> ActionContext {
@@ -48,15 +77,11 @@ impl Task for InfrastructureTask {
         self.request.id.as_str()
     }
 
-    fn send_status(&self, sender: &Sender<Message>, status: Status) {
-        let it = InternalTask {
-            task: Box::new(self.clone()),
-            status,
-        };
-        let _ = sender.send(Ok(it));
+    fn send_status(&self, status: Status) {
+        let _ = self.status_sender.send(status);
     }
 
-    fn run(&self, sender: &Sender<Message>, logger: Box<dyn Logger>) {
+    fn run(&self, logger: Box<dyn Logger>) {
         info!(
             "infrastructure task {} started with infrastructure id {}-{}-{}",
             self.id(),
@@ -68,7 +93,6 @@ impl Task for InfrastructureTask {
         send_progress(
             self,
             &self.request,
-            sender,
             self.action_context(ProgressLevel::Info),
             None,
             false,
@@ -78,19 +102,20 @@ impl Task for InfrastructureTask {
 
         let my_progress_listener: Arc<Box<dyn ProgressListener>> = Arc::new(Box::new(MyProgressListener {
             task: self.clone(),
-            sender: sender.clone(),
+            sender: self.status_sender.clone(),
         }));
 
-        let engine = match self
-            .request
-            .engine(&self.context, my_progress_listener, logger, self.cancel_checker())
-        {
+        let engine = match self.request.engine(
+            &self.info_context(),
+            my_progress_listener,
+            logger,
+            self.cancel_checker(),
+        ) {
             Ok(engine) => engine,
             Err(err) => {
                 send_progress(
                     self,
                     &self.request,
-                    sender,
                     self.action_context(ProgressLevel::Error),
                     Some(format!("failed to create engine {:?}", err)),
                     true,
@@ -107,7 +132,6 @@ impl Task for InfrastructureTask {
                 send_progress(
                     self,
                     &self.request,
-                    sender,
                     self.action_context(ProgressLevel::Error),
                     Some(format!("failed to get engine session {:?}", err)),
                     true,
@@ -144,7 +168,6 @@ impl Task for InfrastructureTask {
             self,
             &self.request,
             self.action_context(ProgressLevel::Info),
-            sender,
         );
 
         match qovery_engine::fs::create_workspace_archive(
@@ -152,7 +175,7 @@ impl Task for InfrastructureTask {
             engine.context().execution_id(),
         ) {
             Ok(file) => match upload_s3_file(
-                &self.context,
+                &self.info_context(),
                 self.request.archive.as_ref(),
                 file.as_str(),
                 AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
@@ -177,18 +200,44 @@ impl Task for InfrastructureTask {
 
 #[derive(Clone)]
 pub struct EnvironmentTask {
-    context: Context,
-    request: Request,
+    workspace_root_dir: String,
+    lib_root_dir: String,
+    docker_host: Option<String>,
+    request: EngineRequest,
+    status_sender: Sender<Status>,
     cancel_requested: Arc<AtomicBool>,
 }
 
 impl EnvironmentTask {
-    pub fn new(context: Context, request: Request) -> Self {
+    pub fn new(
+        request: EngineRequest,
+        status_sender: Sender<Status>,
+        workspace_root_dir: String,
+        lib_root_dir: String,
+        docker_host: Option<String>,
+    ) -> Self {
         EnvironmentTask {
-            context,
+            workspace_root_dir,
+            lib_root_dir,
+            docker_host,
             request,
+            status_sender,
             cancel_requested: Arc::new(AtomicBool::from(false)),
         }
+    }
+
+    fn info_context(&self) -> Context {
+        Context::new(
+            self.request.organization_id.to_string(),
+            self.request.cloud_provider.id.to_string(),
+            self.request.id.to_string(),
+            self.workspace_root_dir.to_string(),
+            self.lib_root_dir.to_string(),
+            self.request.test_cluster,
+            self.docker_host.clone(),
+            self.request.features.clone(),
+            self.request.metadata.clone(),
+        )
     }
 
     fn _is_canceled(&self) -> bool {
@@ -224,22 +273,16 @@ impl Task for EnvironmentTask {
         self.request.id.as_str()
     }
 
-    fn send_status(&self, sender: &Sender<Message>, status: Status) {
-        let it = InternalTask {
-            task: Box::new(self.clone()),
-            status,
-        };
-
-        let _ = sender.send(Ok(it));
+    fn send_status(&self, status: Status) {
+        let _ = self.status_sender.send(status);
     }
 
-    fn run(&self, sender: &Sender<Message>, logger: Box<dyn Logger>) {
+    fn run(&self, logger: Box<dyn Logger>) {
         info!("environment task {} started", self.id());
 
         send_progress(
             self,
             &self.request,
-            sender,
             self.action_context(ProgressLevel::Info),
             None,
             false,
@@ -249,19 +292,20 @@ impl Task for EnvironmentTask {
 
         let my_progress_listener: Arc<Box<dyn ProgressListener>> = Arc::new(Box::new(MyProgressListener {
             task: self.clone(),
-            sender: sender.clone(),
+            sender: self.status_sender.clone(),
         }));
 
-        let engine = match self
-            .request
-            .engine(&self.context, my_progress_listener, logger, self.cancel_checker())
-        {
+        let engine = match self.request.engine(
+            &self.info_context(),
+            my_progress_listener,
+            logger,
+            self.cancel_checker(),
+        ) {
             Ok(engine) => engine,
             Err(err) => {
                 send_progress(
                     self,
                     &self.request,
-                    sender,
                     self.action_context(ProgressLevel::Error),
                     Some(format!("failed to create engine {:?}", err)),
                     true,
@@ -280,7 +324,6 @@ impl Task for EnvironmentTask {
                 send_progress(
                     self,
                     &self.request,
-                    sender,
                     self.action_context(ProgressLevel::Error),
                     Some(format!("failed to get engine session {:?}", err)),
                     true,
@@ -312,7 +355,6 @@ impl Task for EnvironmentTask {
                 send_progress(
                     self,
                     &self.request,
-                    sender,
                     self.action_context(ProgressLevel::Error),
                     Some(
                         "failed to get environment action, self.request.environment_action() returned None variant"
@@ -338,7 +380,6 @@ impl Task for EnvironmentTask {
             self,
             &self.request,
             self.action_context(ProgressLevel::Info),
-            sender,
         );
 
         match qovery_engine::fs::create_workspace_archive(
@@ -346,7 +387,7 @@ impl Task for EnvironmentTask {
             engine.context().execution_id(),
         ) {
             Ok(file) => match upload_s3_file(
-                &self.context,
+                &self.info_context(),
                 self.request.archive.as_ref(),
                 file.as_str(),
                 AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
@@ -377,22 +418,15 @@ where
     T: Task + Clone + 'static,
 {
     task: T,
-    sender: Sender<Message>,
+    sender: Sender<Status>,
 }
 
 impl<T> MyProgressListener<T>
 where
     T: Task + Clone + 'static,
 {
-    fn get_internal_task(&self, status: Status) -> InternalTask {
-        InternalTask {
-            task: Box::new(self.task.clone()),
-            status,
-        }
-    }
-
-    fn send(&self, internal_task: InternalTask) {
-        match self.sender.send(Ok(internal_task)) {
+    fn send(&self, status: Status) {
+        match self.sender.send(status) {
             Ok(_) => {}
             Err(err) => error!("{:?}", err),
         };
@@ -408,110 +442,89 @@ where
     T: Task + Clone + 'static + Sync,
 {
     fn deployment_in_progress(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::new(
+        self.send(Status::new(
             State::DeploymentInProgress,
             info.message.clone(),
             self.action_context(info),
         ));
-
-        self.send(it);
     }
 
     fn pause_in_progress(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::new(
+        self.send(Status::new(
             State::PauseInProgress,
             info.message.clone(),
             self.action_context(info),
         ));
-
-        self.send(it);
     }
 
     fn delete_in_progress(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::new(
+        self.send(Status::new(
             State::DeleteInProgress,
             info.message.clone(),
             self.action_context(info),
         ));
-
-        self.send(it);
     }
 
     fn error(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::new(
+        self.send(Status::new(
             State::Error,
             info.message.clone(),
             self.action_context(info),
         ));
-
-        self.send(it);
     }
 
     fn deployed(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::new(
+        self.send(Status::new(
             State::Deployed,
             info.message.clone(),
             self.action_context(info),
         ));
-
-        self.send(it);
     }
 
     fn paused(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::new(
+        self.send(Status::new(
             State::Paused,
             info.message.clone(),
             self.action_context(info),
         ));
-
-        self.send(it);
     }
 
     fn deleted(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::new(
+        self.send(Status::new(
             State::Deleted,
             info.message.clone(),
             self.action_context(info),
         ));
-
-        self.send(it);
     }
 
     fn deployment_error(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::new(
+        self.send(Status::new(
             State::DeploymentError,
             info.message.clone(),
             self.action_context(info),
         ));
-
-        self.send(it);
     }
 
     fn pause_error(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::new(
+        self.send(Status::new(
             State::PauseError,
             info.message.clone(),
             self.action_context(info),
         ));
-
-        self.send(it);
     }
 
     fn delete_error(&self, info: ProgressInfo) {
-        let it = self.get_internal_task(Status::new(
+        self.send(Status::new(
             State::DeleteError,
             info.message.clone(),
             self.action_context(info),
         ));
-
-        self.send(it);
     }
 }
 
 fn send_progress(
     task: &dyn Task,
-    request: &Request,
-    sender: &Sender<Message>,
+    request: &EngineRequest,
     context: ActionContext,
     message: Option<String>,
     is_error: bool,
@@ -540,21 +553,20 @@ fn send_progress(
         }
     };
 
-    task.send_status(sender, status);
+    task.send_status(status);
 }
 
 fn handle_transaction_result(
     transaction_result: TransactionResult,
     task: &dyn Task,
-    request: &Request,
+    request: &EngineRequest,
     mut action_context: ActionContext,
-    sender: &Sender<Message>,
 ) {
     match transaction_result {
         TransactionResult::Ok => {
             action_context.level = ProgressLevel::Info;
 
-            send_progress(task, request, sender, action_context, None, false, true, false);
+            send_progress(task, request, action_context, None, false, true, false);
         }
         TransactionResult::Rollback(engine_error) => {
             action_context.level = ProgressLevel::Warn;
@@ -562,7 +574,6 @@ fn handle_transaction_result(
             send_progress(
                 task,
                 request,
-                sender,
                 action_context,
                 Some(format_engine_error_output(engine_error, None)),
                 true,
@@ -576,7 +587,6 @@ fn handle_transaction_result(
             send_progress(
                 task,
                 request,
-                sender,
                 action_context,
                 Some(format_engine_error_output(engine_error, Some(rollback_err))),
                 true,
@@ -588,7 +598,7 @@ fn handle_transaction_result(
             action_context.level = ProgressLevel::Error;
 
             let msg = format!("🚫 Deployment {} has been canceled at user request 🚫", task.id());
-            send_progress(task, request, sender, action_context, Some(msg), false, true, true);
+            send_progress(task, request, action_context, Some(msg), false, true, true);
         }
     }
 }

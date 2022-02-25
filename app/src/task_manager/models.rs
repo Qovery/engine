@@ -24,7 +24,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct Request {
+pub struct EngineRequest {
     pub id: String,
     pub organization_id: String,
     pub organization_long_id: uuid::Uuid,
@@ -52,7 +52,7 @@ pub enum RequestError {
     DnsProvider(String),
 }
 
-impl Request {
+impl EngineRequest {
     pub fn engine(
         &self,
         context: &Context,

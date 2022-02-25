@@ -4,7 +4,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
-use crossbeam_channel::{unbounded, Receiver, RecvError, RecvTimeoutError, Sender, TryRecvError};
+use crossbeam_channel::{unbounded, Receiver, RecvError, RecvTimeoutError, Sender};
 use serde::{Deserialize, Serialize};
 
 use crate::utils::log_no_spam_builder;
@@ -19,33 +19,31 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use tracing;
 
-pub type Message = Result<InternalTask, Error>;
-
 lazy_static! {
     static ref METRICS_NB_RUNNING_TASKS: IntGauge =
         register_int_gauge!("taskmanager_nb_running_tasks", "Number of tasks currently running").unwrap();
 }
 
 pub struct TaskManager {
-    task_executor_tx: Sender<InternalTask>,
-    task_executor_rx: Receiver<InternalTask>,
+    task_executor_tx: Sender<Box<dyn Task>>,
+    task_executor_rx: Receiver<Box<dyn Task>>,
     should_stop: Arc<AtomicBool>,
     is_stopped: Arc<AtomicBool>,
-    task_status_tx: Sender<Message>,
-    task_status_rx: Receiver<Message>,
+    task_status_tx: Sender<Status>,
+    task_status_rx: Receiver<Status>,
     running_tasks: IntGauge,
     running: bool,
     // We use a Mutex to provide interior mutability
     // because we wrap TaskManager into a RwLock.
     // Consuming threads_handle should be a final states
     threads_handle: Mutex<Vec<(String, JoinHandle<()>)>>,
-    current_task: Arc<RwLock<Option<InternalTask>>>,
+    current_task: Arc<RwLock<Option<Box<dyn Task>>>>,
 }
 
 impl TaskManager {
     pub fn new() -> Self {
-        let (task_executor_tx, task_executor_rx) = unbounded::<InternalTask>();
-        let (task_status_tx, task_status_rx) = unbounded::<Message>();
+        let (task_executor_tx, task_executor_rx) = unbounded::<Box<dyn Task>>();
+        let (task_status_tx, task_status_rx) = unbounded::<Status>();
         let should_stop = Arc::new(AtomicBool::new(false));
         let is_stopped = Arc::new(AtomicBool::new(false));
 
@@ -61,6 +59,13 @@ impl TaskManager {
             threads_handle: Mutex::new(Vec::with_capacity(2)),
             current_task: Arc::new(RwLock::new(None)),
         }
+    }
+
+    pub fn get_task_status_tx(&self) -> &Sender<Status> {
+        &self.task_status_tx
+    }
+    pub fn get_task_status_rx(&self) -> &Receiver<Status> {
+        &self.task_status_rx
     }
 
     pub fn add_task(&self, task: Box<dyn Task>) {
@@ -86,15 +91,12 @@ impl TaskManager {
             ),
         );
 
-        let internal_task = InternalTask { task, status };
-
-        // send status contained inside the internal task
-        internal_task.send_status(&self.task_status_tx);
+        task.send_status(status);
 
         // add internal task to queue
         let _ = self
             .task_executor_tx
-            .send(internal_task)
+            .send(task)
             .map_err(|err| error!("cannot enqueue task {}", err));
     }
 
@@ -113,7 +115,7 @@ impl TaskManager {
     pub fn cancel_current_task(&self) {
         let lock = self.current_task.read().unwrap();
         match &*lock {
-            Some(task) => task.task.cancel(),
+            Some(task) => task.cancel(),
             None => {}
         }
     }
@@ -124,67 +126,15 @@ impl TaskManager {
     }
 
     /// run task manager - only a single instance will run
-    pub fn run(&mut self, logger: Box<dyn Logger>) -> Result<Receiver<Message>, Error> {
+    pub fn run(&mut self, logger: Box<dyn Logger>) -> Result<(), Error> {
         if self.running {
             return Err(Error::AlreadyRunning);
         }
 
         // only one run allowed
         self.running = true;
-
-        let (task_status_forwarder_tx, task_status_forwarder_rx) = unbounded::<Message>();
-
-        // Task Manager keeps track of task status internally.
-        // So we subscribe to the notification channel and update our internal hashmap
-        // Once done, we forward the task's status update to the subscriber of the taskManager (the one calling .run())
-        {
-            let is_stopped = self.is_stopped.clone();
-            let task_status_rx = self.task_status_rx.clone();
-            let thread_name = "tm-task-status-updater";
-            let func = move || {
-                let _drop_logger = LogErrorOnDrop::new(thread_name);
-                while !is_stopped.load(Ordering::Acquire) || !task_status_rx.is_empty() {
-                    if is_stopped.load(Relaxed) {
-                        info!(
-                            "{} should stop, but still have {} pending tasks to process",
-                            thread_name,
-                            task_status_rx.len()
-                        );
-                    }
-
-                    let task_status = match task_status_rx.recv_timeout(Duration::from_secs(1)) {
-                        Ok(task_status) => task_status,
-
-                        // No task to process, sleep and retry later
-                        Err(RecvTimeoutError::Timeout) => {
-                            continue;
-                        }
-
-                        // Channel is disconnected (dropped in the other end)
-                        // We will not received any message anymore, exiting
-                        Err(err) => {
-                            error!("Cannot retrieve task status {}", err);
-                            return;
-                        }
-                    };
-
-                    // Forward the status to the receiver
-                    let _ = task_status_forwarder_tx
-                        .send(task_status)
-                        .map_err(|err| error!("Cannot send task status update: {}", err));
-                }
-            };
-
-            let th = thread::Builder::new()
-                .name(thread_name.to_string())
-                .spawn(func)
-                .unwrap();
-            self.threads_handle.lock().unwrap().push((thread_name.to_string(), th));
-        };
-
         let is_stopped = self.is_stopped.clone();
         let should_stop = self.should_stop.clone();
-        let task_status_tx = self.task_status_tx.clone();
         let task_executor_rx = self.task_executor_rx.clone();
         let nb_running_tasks = self.running_tasks.clone();
         let current_task_lock = self.current_task.clone();
@@ -204,14 +154,13 @@ impl TaskManager {
                         );
                     }
 
-                    let internal_task = match task_executor_rx.try_recv() {
+                    let task = match task_executor_rx.recv_timeout(Duration::from_secs(1)) {
                         // Dequeue our task !
                         Ok(internal_task) => internal_task,
 
                         // No task to process, sleep and retry later
-                        Err(TryRecvError::Empty) => {
+                        Err(RecvTimeoutError::Timeout) => {
                             log_debug_waiting();
-                            thread::sleep(Duration::from_secs(1));
                             continue;
                         }
 
@@ -228,25 +177,21 @@ impl TaskManager {
 
                     // Activate a tracing span with max level to add task log elements to tracing
                     // events of all levels
-                    let task_span = span!(
-                        tracing::Level::INFO,
-                        "task",
-                        execution_id = internal_task.status.context.execution_id_short().as_str(),
-                    );
+                    let task_span = span!(tracing::Level::INFO, "task", execution_id = task.id());
                     let _enter = task_span.enter();
 
                     let start_time = Instant::now();
                     {
                         let mut current_task = current_task_lock.write().unwrap();
-                        current_task.replace(internal_task);
+                        current_task.replace(task);
                     }
 
                     let current_task = current_task_lock.read().unwrap();
-                    let internal_task = current_task.as_ref().unwrap();
-                    internal_task.task.run(&task_status_tx, logger.clone());
+                    let task = current_task.as_ref().unwrap();
+                    task.run(logger.clone());
                     info!(
                         "task {} took {} sec to be executed",
-                        internal_task.task.id(),
+                        &task.id(),
                         start_time.elapsed().as_secs()
                     );
                     info!("it remains {} tasks to be run", task_executor_rx.len());
@@ -257,28 +202,17 @@ impl TaskManager {
             .unwrap();
 
         self.threads_handle.lock().unwrap().push((thread_name.to_string(), th));
-        Ok(task_status_forwarder_rx)
+        Ok(())
     }
 }
 
 pub trait Task: Send + Sync {
     fn created_at(&self) -> &DateTime<Utc>;
     fn id(&self) -> &str;
-    fn send_status(&self, sender: &Sender<Message>, status: Status);
-    fn run(&self, sender: &Sender<Message>, logger: Box<dyn Logger>);
+    fn send_status(&self, status: Status);
+    fn run(&self, logger: Box<dyn Logger>);
     fn cancel(&self);
     fn cancel_checker(&self) -> Box<dyn Fn() -> bool>;
-}
-
-pub struct InternalTask {
-    pub task: Box<dyn Task>,
-    pub status: Status,
-}
-
-impl InternalTask {
-    pub fn send_status(&self, sender: &Sender<Message>) {
-        self.task.send_status(sender, self.status.clone());
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -301,14 +235,6 @@ impl ActionContext {
             level,
             execution_id,
             task_created_at,
-        }
-    }
-
-    pub fn execution_id_short(&self) -> String {
-        let max_execution_id_chars: usize = 7;
-        match self.execution_id.char_indices().nth(max_execution_id_chars) {
-            None => self.execution_id.to_string(),
-            Some((idx, _)) => self.execution_id[..idx].to_string(),
         }
     }
 }
@@ -376,12 +302,11 @@ impl fmt::Display for Error {
 
 #[cfg(test)]
 mod tests {
-    use crate::task_manager::task_manager::{ActionContext, InternalTask, Message, State, Status, Task, TaskManager};
+    use crate::task_manager::task_manager::{ActionContext, State, Status, Task, TaskManager};
     use chrono::{DateTime, NaiveDateTime, Utc};
     use crossbeam_channel::Sender;
     use qovery_engine::logger::{Logger, StdIoLogger};
     use qovery_engine::models::{ProgressLevel, ProgressScope};
-    use std::cmp;
     use std::sync::atomic::Ordering::Acquire;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Barrier};
@@ -394,16 +319,18 @@ mod tests {
         pub have_been_run: Arc<AtomicBool>,
         pub barrier_begin: Arc<Barrier>,
         pub barrier_end: Arc<Barrier>,
+        pub task_status_tx: Sender<Status>,
     }
 
     impl WaitingTask {
-        fn new() -> WaitingTask {
+        fn new(sender: Sender<Status>) -> WaitingTask {
             WaitingTask {
                 date: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc),
                 bytes: vec![],
                 have_been_run: Arc::new(AtomicBool::new(false)),
                 barrier_begin: Arc::new(Barrier::new(2)),
                 barrier_end: Arc::new(Barrier::new(2)),
+                task_status_tx: sender,
             }
         }
     }
@@ -416,15 +343,11 @@ mod tests {
             "0"
         }
 
-        fn send_status(&self, task_status_tx: &Sender<Message>, status: Status) {
-            let it = InternalTask {
-                task: Box::new(self.clone()),
-                status,
-            };
-            let _ = task_status_tx.send(Ok(it));
+        fn send_status(&self, status: Status) {
+            let _ = self.task_status_tx.send(status);
         }
 
-        fn run(&self, _: &Sender<Message>, _logger: Box<dyn Logger>) {
+        fn run(&self, _logger: Box<dyn Logger>) {
             self.barrier_begin.wait();
             let _ = self
                 .have_been_run
@@ -450,8 +373,8 @@ mod tests {
         fn id(&self) -> &str {
             "1"
         }
-        fn send_status(&self, _sender: &Sender<Message>, _status: Status) {}
-        fn run(&self, _sender: &Sender<Message>, _logger: Box<dyn Logger>) {}
+        fn send_status(&self, _status: Status) {}
+        fn run(&self, _logger: Box<dyn Logger>) {}
         fn cancel(&self) {}
 
         fn cancel_checker(&self) -> Box<dyn Fn() -> bool> {
@@ -464,14 +387,15 @@ mod tests {
         let logger = StdIoLogger::new();
         let mut tm = TaskManager::new();
         tm.running_tasks = prometheus::IntGauge::new("abc", "degf").unwrap();
-        let task = WaitingTask::new();
+        let task = WaitingTask::new(tm.task_status_tx.clone());
 
         assert_eq!(tm.running_tasks.get(), 0);
         assert_eq!(task.have_been_run.load(Ordering::Acquire), false);
         tm.add_task(Box::new(task.clone()));
 
-        let task_status_rx = tm.run(Box::new(logger)).expect("Impossible to run task Manager");
-        assert_eq!(task_status_rx.recv().unwrap().is_ok(), true);
+        let task_status_rx = tm.task_status_rx.clone();
+        tm.run(Box::new(logger)).expect("Impossible to run task Manager");
+        assert_eq!(task_status_rx.recv_timeout(Duration::from_secs(10)).is_ok(), true);
 
         task.barrier_begin.wait();
         assert_eq!(tm.running_tasks.get(), 1);
@@ -497,30 +421,28 @@ mod tests {
         let logger = StdIoLogger::new();
         let mut tm = TaskManager::new();
         tm.running_tasks = prometheus::IntGauge::new("abcd", "degf").unwrap();
-        let task = WaitingTask::new();
-        let task_status_rx = tm.run(Box::new(logger)).expect("Impossible to run task Manager");
+        let task = WaitingTask::new(tm.task_status_tx.clone());
+        let task_status_rx = tm.get_task_status_rx().clone();
+        tm.run(Box::new(logger)).expect("Impossible to run task Manager");
         tm.add_task(Box::new(task.clone()));
 
-        assert_eq!(task_status_rx.recv().unwrap().unwrap().status.status, State::Waiting);
+        assert_eq!(task_status_rx.recv().unwrap().status, State::Waiting);
 
         task.barrier_begin.wait();
         task.barrier_end.wait();
 
-        task.send_status(
-            &tm.task_status_tx,
-            Status {
-                status: State::Deleted,
-                message: None,
-                context: ActionContext {
-                    scope: ProgressScope::Queued,
-                    level: ProgressLevel::Debug,
-                    execution_id: "".to_string(),
-                    task_created_at: DateTime::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc),
-                },
+        task.send_status(Status {
+            status: State::Deleted,
+            message: None,
+            context: ActionContext {
+                scope: ProgressScope::Queued,
+                level: ProgressLevel::Debug,
+                execution_id: "".to_string(),
+                task_created_at: DateTime::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc),
             },
-        );
+        });
 
-        assert_eq!(task_status_rx.recv().unwrap().unwrap().status.status, State::Deleted);
+        assert_eq!(task_status_rx.recv().unwrap().status, State::Deleted);
 
         tm.stop();
         assert_eq!(tm.wait_shutdown(), ());
@@ -545,70 +467,5 @@ mod tests {
 
         assert_eq!(tm.wait_shutdown(), ());
         assert_eq!(tm.remaining_tasks_to_run(), 0);
-    }
-
-    #[test]
-    fn test_auction_context_execution_id_short() {
-        // setup:
-        struct TestCase<'a> {
-            execution_id: &'a str,
-            expected_execution_id_short: &'a str,
-            description: &'a str,
-        }
-
-        let test_cases: Vec<TestCase> = vec![
-            TestCase {
-                execution_id: "",
-                expected_execution_id_short: "",
-                description: "empty execution_id",
-            },
-            TestCase {
-                execution_id: " ",
-                expected_execution_id_short: " ",
-                description: "whitespace execution_id",
-            },
-            TestCase {
-                execution_id: "azertyuiopmlkjhgfdsqwxcvbn",
-                expected_execution_id_short: "azertyu",
-                description: "execution_id with more chars count than short version",
-            },
-            TestCase {
-                execution_id: "azertyu",
-                expected_execution_id_short: "azertyu",
-                description: "execution_id with same chars count than short version",
-            },
-            TestCase {
-                execution_id: "azerty",
-                expected_execution_id_short: "azerty",
-                description: "execution_id with less chars count than short version",
-            },
-        ];
-
-        for tc in test_cases {
-            // execute:
-            let auction_context = ActionContext::new(
-                ProgressScope::Infrastructure {
-                    execution_id: tc.execution_id.to_string(),
-                },
-                ProgressLevel::Info,
-                tc.execution_id.to_string(),
-                Utc::now(),
-            );
-            let result = auction_context.execution_id_short();
-
-            // verify:
-            assert_eq!(
-                cmp::min(7usize, tc.execution_id.len()),
-                result.len(),
-                "case: {}, execution_id: {:?}",
-                tc.description,
-                tc.execution_id,
-            );
-            assert_eq!(
-                tc.expected_execution_id_short, result,
-                "case: {}, execution_id: {:?}",
-                tc.description, tc.execution_id,
-            );
-        }
     }
 }

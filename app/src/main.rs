@@ -26,7 +26,6 @@ use uuid::Uuid;
 
 use qovery_engine::cmd;
 use qovery_engine::logger::{Logger, StdIoLogger};
-use qovery_engine::models::Context;
 use utils::Mode;
 
 use crate::constants::ASCII_BANNER;
@@ -38,8 +37,8 @@ use crate::logger::nats_logger::NatsLogger;
 use crate::models::{StatusResponse, TaskSelector};
 use crate::nats::{subjects, Connection, Message};
 use crate::subjects::Subject;
-use crate::task_manager::models::Request;
-use crate::task_manager::task_manager::{Task, TaskManager};
+use crate::task_manager::models::EngineRequest;
+use crate::task_manager::task_manager::{Status, Task, TaskManager};
 use crate::task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 use crate::utils::{log_no_spam_builder, LogErrorOnDrop};
 
@@ -58,8 +57,9 @@ fn to_engine_task(
     lib_root_dir: &str,
     docker_tcp_socket: &Option<String>,
     task_selector: &TaskSelector,
+    status_sender: Sender<Status>,
 ) -> Result<Box<dyn Task>, serde_json::Error> {
-    let request = match serde_json::from_slice::<Request>(&msg.data) {
+    let request = match serde_json::from_slice::<EngineRequest>(&msg.data) {
         Ok(req) => req,
         Err(err) => {
             error!("{}", msg);
@@ -68,21 +68,21 @@ fn to_engine_task(
         }
     };
 
-    let context = Context::new(
-        request.organization_id.to_string(),
-        request.cloud_provider.id.to_string(),
-        request.id.to_string(),
-        workspace_root_dir.to_string(),
-        lib_root_dir.to_string(),
-        request.test_cluster,
-        docker_tcp_socket.clone(),
-        request.features.clone(),
-        request.metadata.clone(),
-    );
-
     let task: Box<dyn Task> = match task_selector {
-        TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(context, request)),
-        TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(context, request)),
+        TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(
+            request,
+            status_sender,
+            workspace_root_dir.to_string(),
+            lib_root_dir.to_string(),
+            docker_tcp_socket.clone(),
+        )),
+        TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(
+            request,
+            status_sender,
+            workspace_root_dir.to_string(),
+            lib_root_dir.to_string(),
+            docker_tcp_socket.clone(),
+        )),
     };
 
     Ok(task)
@@ -345,29 +345,30 @@ pub fn using_json_path_parameter(
     info!("Using {} configuration file", deploy_from_file);
 
     let file = BufReader::new(File::open(deploy_from_file)?);
-    let req: Request = serde_json::from_reader(file)
+    let mut req: EngineRequest = serde_json::from_reader(file)
         .map_err(|err| {
             error!("Impossible to parse json file: {}", err);
             process::exit(1);
         })
         .unwrap();
+    req.test_cluster = test_cluster;
 
     let mut task_manager = TaskManager::new();
-    let context = Context::new(
-        req.organization_id.to_string(),
-        req.cloud_provider.id.to_string(),
-        req.id.to_string(),
-        workspace_root_dir,
-        lib_root_dir,
-        test_cluster,
-        docker_host,
-        req.features.clone(),
-        req.metadata.clone(),
-    );
-
     let task: Box<dyn Task> = match deployment_type {
-        TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(context.clone(), req.clone())),
-        TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(context, req)),
+        TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(
+            req.clone(),
+            task_manager.get_task_status_tx().clone(),
+            workspace_root_dir,
+            lib_root_dir,
+            docker_host,
+        )),
+        TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(
+            req,
+            task_manager.get_task_status_tx().clone(),
+            workspace_root_dir,
+            lib_root_dir,
+            docker_host,
+        )),
     };
 
     task_manager.add_task(task);
@@ -404,7 +405,8 @@ fn using_nats_server(
     info!("connection to the NATS server established");
 
     let mut tm = TaskManager::new();
-    let status_rx = tm.run(logger).unwrap();
+    let status_rx = tm.get_task_status_rx().clone();
+    tm.run(logger).unwrap();
     let task_manager = Arc::new(tm);
 
     let _ = {
@@ -416,15 +418,14 @@ fn using_nats_server(
                 // send back the message to a topic: E.g core.task.status
                 // json: {"status": {"kind": "Failed", "message": "blablabla"}, "id": "abc", "created_at": "<datetime>"}
                 match status_rx.recv() {
-                    Ok(Ok(internal_task)) => {
-                        let sr = StatusResponse::new(internal_task.task.id().to_string(), internal_task.status);
+                    Ok(status) => {
+                        let sr = StatusResponse::new(status.context.execution_id.to_string(), status);
                         let json = serde_json::to_string(&sr).unwrap();
                         debug!("send through NATS StatusResponse: {}", json.as_str());
                         let _ = nc
                             .publish(&subjects::CORE_TASK_STATUS, json.as_bytes())
                             .map_err(|err| error!("Cannot publish on {}: {}", subjects::CORE_TASK_STATUS.name, err));
                     }
-                    Ok(Err(err)) => error!("{:?}", err),
                     // Other end of the channel is disconnected
                     Err(_) => return,
                 };
@@ -560,14 +561,20 @@ fn spawn_task_poller(
             );
 
             // Convert our nats message into an engine task
-            let engine_task =
-                match to_engine_task(msg, &workspace_root_dir, &lib_root_dir, &docker_host, &task_selector) {
-                    Ok(task) => task,
-                    Err(err) => {
-                        error!("Cannot converts Nats message payload to an engine task: {}", err);
-                        continue;
-                    }
-                };
+            let engine_task = match to_engine_task(
+                msg,
+                &workspace_root_dir,
+                &lib_root_dir,
+                &docker_host,
+                &task_selector,
+                task_manager.get_task_status_tx().clone(),
+            ) {
+                Ok(task) => task,
+                Err(err) => {
+                    error!("Cannot converts Nats message payload to an engine task: {}", err);
+                    continue;
+                }
+            };
 
             let task_id = engine_task.id().to_string();
             let task_cancel_subscription = match nats.subscribe(&Subject::new_for_task_cancel(engine_task.borrow())) {
