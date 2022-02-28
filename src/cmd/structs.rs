@@ -42,6 +42,7 @@ pub struct SecretItem {
     pub api_version: String,
     pub kind: String,
     pub metadata: SecretMetadata,
+    pub data: HashMap<String, String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]

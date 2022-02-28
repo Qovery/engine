@@ -1,3 +1,6 @@
+use std::fmt::Debug;
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 
 use retry::delay::Fibonacci;
@@ -1205,6 +1208,38 @@ where
     Ok(result)
 }
 
+fn kubectl_exec_raw_output<P>(
+    args: Vec<&str>,
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    keep_format: bool,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let mut _envs = Vec::with_capacity(envs.len() + 1);
+    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    _envs.extend(envs);
+
+    let mut output_vec: Vec<String> = Vec::with_capacity(50);
+    let _ = kubectl_exec_with_output(args.clone(), _envs.clone(), &mut |line| output_vec.push(line), &mut |line| {
+        error!("{}", line)
+    })?;
+
+    let mut output_string: String = String::new();
+
+    match keep_format {
+        true => {
+            output_string = output_vec.join("\n");
+        }
+        false => {
+            output_string = output_vec.join("");
+        }
+    }
+
+    Ok(output_string)
+}
+
 pub fn kubernetes_get_all_pdbs<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
@@ -1245,4 +1280,78 @@ where
     }
 
     kubectl_exec::<P, HPA>(cmd_args, kubernetes_config, envs)
+}
+
+pub fn kubectl_get_resource_yaml<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    resource: &str,
+    namespace: Option<&str>,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let mut cmd_args = vec!["get", resource, "-oyaml"];
+    match namespace {
+        Some(n) => {
+            cmd_args.push("-n");
+            cmd_args.push(n);
+        }
+        None => cmd_args.push("--all-namespaces"),
+    }
+
+    kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, true)
+}
+
+pub fn kubectl_apply_with_path<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    file_path: &str,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    kubectl_exec_raw_output::<P>(vec!["apply", "-f", file_path], kubernetes_config, envs, false)
+}
+
+pub fn kubectl_create_secret<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: Option<&str>,
+    secret_name: String,
+    key: String,
+    value: String,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let secret_arg = format!("--from-literal={}=\"{}\"", key, value);
+    let mut cmd_args = vec!["create", "secret", "generic", secret_name.as_str(), secret_arg.as_str()];
+    match namespace {
+        Some(n) => {
+            cmd_args.push("-n");
+            cmd_args.push(n);
+        }
+        None => cmd_args.push("--all-namespaces"),
+    }
+
+    kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, false)
+}
+
+pub fn kubectl_create_secret_from_file<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: Option<&str>,
+    backup_name: String,
+    key: String,
+    file_path: String,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let mut file = File::open(file_path.as_str()).unwrap();
+    let mut content = String::new();
+    let _ = file.read_to_string(&mut content);
+
+    kubectl_create_secret(kubernetes_config, envs, namespace, backup_name, key, content)
 }

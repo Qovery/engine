@@ -7,9 +7,11 @@ use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::command::QoveryCommand;
 use crate::cmd::helm::HelmCommand::{LIST, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{CannotRollback, CmdError, InvalidKubeConfig, ReleaseDoesNotExist};
+use crate::cmd::kubectl::{kubectl_create_secret_from_file, kubectl_get_resource_yaml};
 use crate::cmd::structs::{HelmChart, HelmListItem};
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
+use crate::fs::{create_yaml_backup_file, remove_lines_starting_with};
 use semver::Version;
 use serde_derive::Deserialize;
 use std::fs::File;
@@ -58,7 +60,7 @@ pub enum HelmError {
 
 #[derive(Debug)]
 pub struct Helm {
-    kubernetes_config: PathBuf,
+    pub kubernetes_config: PathBuf,
     common_envs: Vec<(String, String)>,
 }
 
@@ -524,6 +526,105 @@ impl Helm {
 
         Ok(())
     }
+
+    pub fn prepare_chart_backup<P>(
+        &self,
+        workspace_root_dir: P,
+        chart: &ChartInfo,
+        envs: &[(&str, &str)],
+        backup_resources: Vec<String>,
+    ) -> Result<Vec<(String, String)>, HelmError>
+    where
+        P: AsRef<Path>,
+    {
+        let mut backups: Vec<(String, String)> = vec![];
+        for backup_resource in backup_resources {
+            match kubectl_get_resource_yaml(
+                &self.kubernetes_config,
+                envs.to_vec(),
+                backup_resource.as_str(),
+                Some(chart.get_namespace_string().as_str()),
+            ) {
+                Ok(content) => {
+                    backups.push((backup_resource, content));
+                }
+                Err(e) => {
+                    return Err(CmdError(
+                        chart.name.clone(),
+                        HelmCommand::UPGRADE,
+                        CommandError::new(e.message_raw(), e.message_safe()),
+                    ))
+                }
+            }
+        }
+
+        let mut backup_infos: Vec<(String, String)> = vec![];
+        for backup in backups.clone() {
+            match create_yaml_backup_file(
+                workspace_root_dir.as_ref(),
+                chart.name.to_string(),
+                backup.0.clone(),
+                backup.1,
+            ) {
+                Ok(path) => {
+                    backup_infos.push((backup.0, path));
+                }
+                Err(e) => {
+                    return Err(CmdError(
+                        chart.name.clone(),
+                        HelmCommand::UPGRADE,
+                        CommandError::new(e.to_string(), Some(e.to_string())),
+                    ))
+                }
+            }
+        }
+
+        for backup_info in backup_infos.clone() {
+            if let Err(e) = remove_lines_starting_with(backup_info.1.clone(), "resourceVersion") {
+                return Err(CmdError(
+                    chart.name.clone(),
+                    HelmCommand::UPGRADE,
+                    CommandError::new(e.to_string(), Some(e.to_string())),
+                ));
+            }
+            if let Err(e) = remove_lines_starting_with(backup_info.1.clone(), "uid") {
+                return Err(CmdError(
+                    chart.name.clone(),
+                    HelmCommand::UPGRADE,
+                    CommandError::new(e.to_string(), Some(e.to_string())),
+                ));
+            }
+
+            let backup_name = format!("{}-{}-backup", chart.name, backup_info.0);
+            if let Err(e) = kubectl_create_secret_from_file(
+                &self.kubernetes_config,
+                envs.to_vec(),
+                Some(chart.namespace.to_string().as_str()),
+                backup_name,
+                backup_info.0,
+                backup_info.1,
+            ) {
+                return Err(CmdError(
+                    chart.name.clone(),
+                    HelmCommand::UPGRADE,
+                    CommandError::new(e.message_raw(), e.message_safe()),
+                ));
+            }
+        }
+
+        Ok(backup_infos)
+    }
+
+    // pub fn apply_chart_backup(&self, envs: &[(&str, &str)], chart_name: String) -> Result<(), HelmError> {
+    //     match kubectl_apply_with_path(&self.kubernetes_config, envs.to_vec(), backup_path) {
+    //         Ok(_) => Ok(()),
+    //         Err(e) => CmdError(
+    //             chart_name,
+    //             HelmCommand::UPGRADE,
+    //             CommandError::new(e.message_raw(), e.message_safe()),
+    //         ),
+    //     }
+    // }
 }
 
 fn helm_exec_with_output<STDOUT, STDERR>(
@@ -554,30 +655,41 @@ pub fn to_engine_error(event_details: &EventDetails, error: HelmError) -> Engine
     EngineError::new_helm_error(event_details.clone(), error)
 }
 
-#[cfg(feature = "test-with-kube")]
+// #[cfg(feature = "test-with-kube")]
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::helm::{ChartInfo, ChartSetValue};
+    use crate::cloud_provider::helm::{
+        deploy_charts_levels, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
+    };
     use crate::cmd::command::QoveryCommand;
     use crate::cmd::helm::{helm_exec_with_output, Helm, HelmError};
+    use crate::cmd::kubectl::{kubectl_apply_with_path, kubectl_exec_delete_namespace, kubectl_exec_get_secrets};
+    use crate::cmd::structs::SecretItem;
+    use crate::errors::EngineError;
     use semver::Version;
+    use std::borrow::Borrow;
+    use std::path::Path;
     use std::sync::{Arc, Barrier};
     use std::thread;
+    use std::thread::sleep;
     use std::time::Duration;
+    use tempdir::TempDir;
 
     struct HelmTestCtx {
         helm: Helm,
-        chart: ChartInfo,
+        charts: Vec<ChartInfo>,
     }
 
     impl HelmTestCtx {
         fn cleanup(&self) {
-            let ret = self.helm.uninstall(&self.chart, &[]);
-            assert!(ret.is_ok())
+            for chart in &self.charts {
+                let ret = self.helm.uninstall(chart, &vec![]);
+                assert!(ret.is_ok())
+            }
         }
 
         fn new(release_name: &str) -> HelmTestCtx {
-            let chart = ChartInfo::new_from_custom_namespace(
+            let charts = vec![ChartInfo::new_from_custom_namespace(
                 release_name.to_string(),
                 "tests/helm/simple_nginx".to_string(),
                 "default".to_string(),
@@ -585,12 +697,42 @@ mod tests {
                 vec![],
                 false,
                 None,
-            );
+            )];
+            let mut kube_config = dirs::home_dir().unwrap();
+            kube_config.push(".kube/config");
+            let helm = Helm::new(kube_config.to_str().unwrap(), &vec![]).unwrap();
+
+            let cleanup = HelmTestCtx { helm, charts };
+            cleanup.cleanup();
+            cleanup
+        }
+
+        fn new_cert_manager(release_name: &str) -> HelmTestCtx {
+            let charts = vec![
+                ChartInfo::new_from_custom_namespace(
+                    release_name.to_string(),
+                    "lib/common/bootstrap/charts/cert-manager".to_string(),
+                    "cert-manager".to_string(),
+                    600,
+                    vec!["tests/helm/cert_manager.yaml".to_string()],
+                    false,
+                    None,
+                ),
+                ChartInfo::new_from_custom_namespace(
+                    release_name.to_string(),
+                    "lib/common/bootstrap/charts/cert-manager-configs".to_string(),
+                    "cert-manager".to_string(),
+                    600,
+                    vec!["tests/helm/cert_manager_conf.yaml".to_string()],
+                    false,
+                    None,
+                ),
+            ];
             let mut kube_config = dirs::home_dir().unwrap();
             kube_config.push(".kube/config");
             let helm = Helm::new(kube_config.to_str().unwrap(), &[]).unwrap();
 
-            let cleanup = HelmTestCtx { helm, chart };
+            let cleanup = HelmTestCtx { helm, charts };
             cleanup.cleanup();
             cleanup
         }
@@ -611,26 +753,26 @@ mod tests {
 
     #[test]
     fn test_release_exist() {
-        let HelmTestCtx { ref helm, ref chart } = HelmTestCtx::new("test-release-exist");
-        let ret = helm.check_release_exist(chart, &[]);
+        let HelmTestCtx { ref helm, ref charts } = HelmTestCtx::new("test-release-exist");
+        let ret = helm.check_release_exist(&charts[0], &vec![]);
 
-        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name))
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == charts[0].name))
     }
 
     #[test]
     fn test_list_release() {
         let HelmTestCtx {
             ref helm,
-            ref mut chart,
+            ref mut charts,
         } = HelmTestCtx::new("test-list-release");
-        chart.custom_namespace = Some("hello-my-friend-this-is-a-test".to_string());
+        charts[0].custom_namespace = Some("hello-my-friend-this-is-a-test".to_string());
 
         // no existing namespace should return an empty array
         let ret = helm.list_release(Some("tsdfsfsdf"), &[]);
         assert!(matches!(ret, Ok(vec) if vec.is_empty()));
 
         // install something
-        let ret = helm.upgrade(chart, &[]);
+        let ret = helm.upgrade(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(())));
 
         // We should have at least one release in all the release
@@ -638,69 +780,69 @@ mod tests {
         assert!(matches!(ret, Ok(vec) if !vec.is_empty()));
 
         // We should have at least one release in all the release
-        let ret = helm.list_release(Some(&chart.get_namespace_string()), &[]);
+        let ret = helm.list_release(Some(&charts[0].get_namespace_string()), &vec![]);
         assert!(matches!(ret, Ok(vec) if vec.len() == 1));
 
         // Install a second stuff
         let HelmTestCtx {
             ref helm,
-            ref mut chart,
+            ref mut charts,
         } = HelmTestCtx::new("test-list-release-2");
-        chart.custom_namespace = Some("hello-my-friend-this-is-a-test".to_string());
-        let ret = helm.upgrade(chart, &[]);
+        charts[0].custom_namespace = Some("hello-my-friend-this-is-a-test".to_string());
+        let ret = helm.upgrade(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(())));
 
-        let ret = helm.list_release(Some(&chart.get_namespace_string()), &[]);
+        let ret = helm.list_release(Some(&charts[0].get_namespace_string()), &vec![]);
         assert!(matches!(ret, Ok(vec) if vec.len() == 2));
     }
 
     #[test]
     fn test_upgrade_diff() {
-        let HelmTestCtx { ref helm, ref chart } = HelmTestCtx::new("test-upgrade-diff");
+        let HelmTestCtx { ref helm, ref charts } = HelmTestCtx::new("test-upgrade-diff");
 
-        let ret = helm.upgrade_diff(chart, &[]);
+        let ret = helm.upgrade_diff(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(())));
     }
 
     #[test]
     fn test_rollback() {
-        let HelmTestCtx { ref helm, ref chart } = HelmTestCtx::new("test-rollback");
+        let HelmTestCtx { ref helm, ref charts } = HelmTestCtx::new("test-rollback");
 
         // check release does not exist yet
-        let ret = helm.rollback(chart, &[]);
-        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+        let ret = helm.rollback(&charts[0], &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == charts[0].name));
 
         // install it
-        let ret = helm.upgrade(chart, &[]);
+        let ret = helm.upgrade(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(())));
 
         // First revision cannot be rollback
-        let ret = helm.rollback(chart, &[]);
+        let ret = helm.rollback(&charts[0], &vec![]);
         assert!(matches!(ret, Err(HelmError::CannotRollback(_))));
 
         // 2nd upgrade
-        let ret = helm.upgrade(chart, &[]);
+        let ret = helm.upgrade(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(())));
 
         // Rollback should be ok now
-        let ret = helm.rollback(chart, &[]);
+        let ret = helm.rollback(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(())));
     }
 
     #[test]
     fn test_upgrade() {
-        let HelmTestCtx { ref helm, ref chart } = HelmTestCtx::new("test-upgrade");
+        let HelmTestCtx { ref helm, ref charts } = HelmTestCtx::new("test-upgrade");
 
         // check release does not exist yet
-        let ret = helm.check_release_exist(chart, &[]);
-        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+        let ret = helm.check_release_exist(&charts[0], &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == charts[0].name));
 
         // install it
-        let ret = helm.upgrade(chart, &[]);
+        let ret = helm.upgrade(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(())));
 
         // check now it exists
-        let ret = helm.check_release_exist(chart, &[]);
+        let ret = helm.check_release_exist(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(_)));
     }
 
@@ -708,37 +850,37 @@ mod tests {
     fn test_upgrade_timeout() {
         let HelmTestCtx {
             ref helm,
-            ref mut chart,
+            ref mut charts,
         } = HelmTestCtx::new("test-upgrade-timeout");
-        chart.timeout_in_seconds = 1;
+        charts[0].timeout_in_seconds = 1;
 
         // check release does not exist yet
-        let ret = helm.check_release_exist(chart, &[]);
-        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+        let ret = helm.check_release_exist(&charts[0], &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == charts[0].name));
 
         // install it
-        let ret = helm.upgrade(chart, &[]);
+        let ret = helm.upgrade(&charts[0], &vec![]);
         assert!(matches!(ret, Err(HelmError::Timeout(_, _, _))));
 
         // Release should not exist if it fails
-        let ret = helm.check_release_exist(chart, &[]);
-        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+        let ret = helm.check_release_exist(&charts[0], &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == charts[0].name));
     }
 
     #[test]
     fn test_upgrade_with_lock_during_install() {
         // We want to check that we manage to install a chart even if a lock is present while it was the first installation
-        let HelmTestCtx { ref helm, ref chart } = HelmTestCtx::new("test-upgrade-with-lock-install");
+        let HelmTestCtx { ref helm, ref charts } = HelmTestCtx::new("test-upgrade-with-lock-install");
 
         // check release does not exist yet
-        let ret = helm.check_release_exist(chart, &[]);
-        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+        let ret = helm.check_release_exist(&charts[0], &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == charts[0].name));
 
         // Spawn our task killer
         let barrier = Arc::new(Barrier::new(2));
         std::thread::spawn({
             let barrier = barrier.clone();
-            let chart_name = chart.name.clone();
+            let chart_name = charts[0].name.clone();
             move || {
                 barrier.wait();
                 thread::sleep(Duration::from_millis(3000));
@@ -749,19 +891,19 @@ mod tests {
 
         // install it
         barrier.wait();
-        let ret = helm.upgrade(chart, &[]);
+        let ret = helm.upgrade(&charts[0], &vec![]);
         assert!(matches!(ret, Err(_)));
 
         // Release should be locked
-        let ret = helm.check_release_exist(chart, &[]);
+        let ret = helm.check_release_exist(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(release) if release.is_locked()));
 
         // New installation should work even if a lock is present
-        let ret = helm.upgrade(chart, &[]);
+        let ret = helm.upgrade(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(())));
 
         // Release should not be locked anymore
-        let ret = helm.check_release_exist(chart, &[]);
+        let ret = helm.check_release_exist(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(release) if !release.is_locked()));
     }
 
@@ -770,22 +912,22 @@ mod tests {
         // We want to check that we manage to install a chart even if a lock is present while it not the first installation
         let HelmTestCtx {
             ref helm,
-            ref mut chart,
+            ref mut charts,
         } = HelmTestCtx::new("test-upgrade-with-lock-upgrade");
 
         // check release does not exist yet
-        let ret = helm.check_release_exist(chart, &[]);
-        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+        let ret = helm.check_release_exist(&charts[0], &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == charts[0].name));
 
         // First install
-        let ret = helm.upgrade(chart, &[]);
+        let ret = helm.upgrade(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(())));
 
         // Spawn our task killer
         let barrier = Arc::new(Barrier::new(2));
         std::thread::spawn({
             let barrier = barrier.clone();
-            let chart_name = chart.name.clone();
+            let chart_name = charts[0].name.clone();
             move || {
                 barrier.wait();
                 thread::sleep(Duration::from_millis(3000));
@@ -794,64 +936,64 @@ mod tests {
             }
         });
 
-        chart.values = vec![ChartSetValue {
+        charts[0].values = vec![ChartSetValue {
             key: "initialDelaySeconds".to_string(),
             value: "6".to_string(),
         }];
         barrier.wait();
-        let ret = helm.upgrade(chart, &[]);
+        let ret = helm.upgrade(&charts[0], &vec![]);
         assert!(matches!(ret, Err(_)));
 
         // Release should be locked
-        let ret = helm.check_release_exist(chart, &[]);
+        let ret = helm.check_release_exist(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(release) if release.is_locked() && release.version == 2));
 
         // New installation should work even if a lock is present
-        let ret = helm.upgrade(chart, &[]);
+        let ret = helm.upgrade(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(())));
 
         // Release should not be locked anymore
-        let ret = helm.check_release_exist(chart, &[]);
+        let ret = helm.check_release_exist(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(release) if !release.is_locked() && release.version == 4));
     }
 
     #[test]
     fn test_uninstall() {
-        let HelmTestCtx { ref helm, ref chart } = HelmTestCtx::new("test-uninstall");
+        let HelmTestCtx { ref helm, ref charts } = HelmTestCtx::new("test-uninstall");
 
         // check release does not exist yet
-        let ret = helm.check_release_exist(chart, &[]);
-        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+        let ret = helm.check_release_exist(&charts[0], &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == charts[0].name));
 
         // deleting something that does not exist should not be an issue
-        let ret = helm.uninstall(chart, &[]);
+        let ret = helm.uninstall(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(())));
 
         // install it
-        let ret = helm.upgrade(chart, &[]);
+        let ret = helm.upgrade(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(())));
 
         // check now it exists
-        let ret = helm.check_release_exist(chart, &[]);
+        let ret = helm.check_release_exist(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(_)));
 
         // Delete it
-        let ret = helm.uninstall(chart, &[]);
+        let ret = helm.uninstall(&charts[0], &vec![]);
         assert!(matches!(ret, Ok(())));
 
         // check release does not exist anymore
-        let ret = helm.check_release_exist(chart, &[]);
-        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == chart.name));
+        let ret = helm.check_release_exist(&charts[0], &vec![]);
+        assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == charts[0].name));
     }
 
     #[test]
     fn test_getting_version() {
         let HelmTestCtx {
             ref helm,
-            ref mut chart,
+            ref mut charts,
         } = HelmTestCtx::new("test-version-release");
-        let _ = helm.upgrade(chart, &[]);
-        let releases = helm.list_release(Some(&chart.get_namespace_string()), &[]).unwrap();
+        let _ = helm.upgrade(&charts[0], &[]);
+        let releases = helm.list_release(Some(&charts[0].get_namespace_string()), &[]).unwrap();
         assert_eq!(releases[0].clone().version.unwrap(), Version::new(0, 1, 0))
     }
 }

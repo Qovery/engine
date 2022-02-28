@@ -1,9 +1,12 @@
 use std::collections::HashSet;
 use std::fs;
-use std::fs::{create_dir_all, File};
-use std::io::{Error, ErrorKind};
+use std::fs::{create_dir_all, File, OpenOptions};
+use std::io::{BufRead, BufReader, Error, ErrorKind, Write};
 use std::path::Path;
 
+use crate::cmd::structs::SecretItem;
+use crate::errors::CommandError;
+use base64::decode;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use std::ffi::OsStr;
@@ -151,6 +154,125 @@ pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> R
     }
 }
 
+pub fn create_yaml_backup_file<P>(
+    working_root_dir: P,
+    chart_name: String,
+    resource_name: String,
+    content: String,
+) -> Result<String, std::io::Error>
+where
+    P: AsRef<Path>,
+{
+    info!("creating yaml backup file for {}", resource_name);
+
+    let dir = working_root_dir.as_ref().join("backups");
+
+    create_dir_all(&dir)?;
+
+    let root_path = dir
+        .to_str()
+        .map(|e| e.to_string())
+        .ok_or_else(|| Error::from(ErrorKind::NotFound));
+
+    let string_path = format!("{}/{}_{}_backup.yaml", root_path?, chart_name, resource_name);
+    let str_path = string_path.as_str();
+    let path = Path::new(str_path);
+
+    let mut file = match File::create(&path) {
+        Err(e) => return Err(e),
+        Ok(file) => file,
+    };
+
+    match file.write(content.as_bytes()) {
+        Err(e) => Err(e),
+        Ok(_) => {
+            file.flush()?;
+            Ok(path
+                .to_str()
+                .map(|e| e.to_string())
+                .ok_or_else(|| Error::from(ErrorKind::NotFound))?)
+        }
+    }
+}
+
+pub fn remove_lines_starting_with(path: String, starter: &str) -> Result<String, std::io::Error> {
+    info!("editing yaml backup file {}", path);
+
+    let mut file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .truncate(true)
+        .open(path.as_str())
+        .map_err(|_| Error::from(ErrorKind::NotFound))?;
+
+    let content = BufReader::new(file.try_clone().unwrap())
+        .lines()
+        .filter(|line| !line.as_ref().unwrap().contains(starter))
+        .map(|line| line.unwrap())
+        .collect::<Vec<String>>()
+        .join("\n");
+
+    match file.write(content.as_bytes()) {
+        Err(e) => Err(e),
+        Ok(_) => Ok(path),
+    }
+}
+
+pub fn list_yaml_backup_files<P>(working_root_dir: P) -> Result<Vec<String>, std::io::Error>
+where
+    P: AsRef<Path>,
+{
+    let files = WalkDir::new(working_root_dir)
+        .follow_links(true)
+        .into_iter()
+        .filter_map(|e| e.ok());
+    let mut backup_paths: Vec<String> = vec![];
+    for file in files {
+        if file
+            .file_name()
+            .to_str()
+            .ok_or_else(|| Error::from(ErrorKind::NotFound))?
+            .to_string()
+            .contains("backup.yaml")
+        {
+            backup_paths.push(file.path().to_str().expect("No file path").to_string())
+        }
+    }
+
+    if backup_paths.is_empty() {
+        return Err(Error::from(ErrorKind::NotFound));
+    }
+
+    Ok(backup_paths)
+}
+
+pub fn create_yaml_file_from_secret<P>(
+    working_root_dir: P,
+    secret: SecretItem,
+    chart_name: String,
+    resource_name: String,
+) -> Result<(), CommandError>
+where
+    P: AsRef<Path>,
+{
+    let message = format!("Unable to decode secret for {}/{}", chart_name, resource_name);
+    for (_secret_name, secret_content) in secret.data {
+        let content = decode(secret_content)
+            .map_err(|_| CommandError::new(message.clone(), Some(message.clone())))?
+            .iter()
+            .map(|x| x.to_string())
+            .collect();
+        if let Err(e) =
+            create_yaml_backup_file(working_root_dir.as_ref(), chart_name.clone(), resource_name.clone(), content)
+        {
+            let message = format!("Unable to create backup file for {}/{}: {}", chart_name, resource_name, e);
+            return Err(CommandError::new(message.clone(), Some(message)));
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     extern crate tempdir;
@@ -159,7 +281,6 @@ mod tests {
     use flate2::read::GzDecoder;
     use std::collections::HashSet;
     use std::fs::File;
-    use std::io::prelude::*;
     use std::io::BufReader;
     use tempdir::TempDir;
 
@@ -250,6 +371,105 @@ mod tests {
 
         // clean:
         tmp_files.into_iter().for_each(drop);
+        tmp_dir.close().expect("error closing temporary directory");
+    }
+
+    #[test]
+    fn test_backup_cleaning() {
+        let content = r#"
+          apiVersion: cert-manager.io/v1
+          kind: Certificate
+          metadata:
+            annotations:
+              meta.helm.sh/release-name: cert-manager-configs
+              meta.helm.sh/release-namespace: cert-manager
+            creationTimestamp: "2021-11-04T10:26:27Z"
+            generation: 2
+            labels:
+              app.kubernetes.io/managed-by: Helm
+            name: qovery
+            namespace: qovery
+            resourceVersion: "28347460"
+            uid: 509aad5f-db2d-44c3-b03b-beaf144118e2
+          spec:
+            dnsNames:
+            - 'qovery'
+            issuerRef:
+              kind: ClusterIssuer
+              name: qovery
+            secretName: qovery
+          status:
+            conditions:
+            - lastTransitionTime: "2021-11-30T15:33:03Z"
+              message: Certificate is up to date and has not expired
+              reason: Ready
+              status: "True"
+              type: Ready
+            notAfter: "2022-04-29T13:34:51Z"
+            notBefore: "2022-01-29T13:34:52Z"
+            renewalTime: "2022-03-30T13:34:51Z"
+            revision: 3
+        "#;
+
+        let tmp_dir = TempDir::new("workspace_directory").expect("error creating temporary dir");
+        let mut file_path = create_yaml_backup_file(
+            tmp_dir.path().to_str().unwrap(),
+            "test".to_string(),
+            "test".to_string(),
+            content.to_string(),
+        )
+        .expect("No such file");
+        file_path = remove_lines_starting_with(file_path, "resourceVersion").unwrap();
+        file_path = remove_lines_starting_with(file_path, "uid").unwrap();
+
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(file_path)
+            .expect("file doesn't exist");
+
+        let result = BufReader::new(file.try_clone().unwrap())
+            .lines()
+            .map(|line| line.unwrap())
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        let new_content = r#"
+          apiVersion: cert-manager.io/v1
+          kind: Certificate
+          metadata:
+            annotations:
+              meta.helm.sh/release-name: cert-manager-configs
+              meta.helm.sh/release-namespace: cert-manager
+            creationTimestamp: "2021-11-04T10:26:27Z"
+            generation: 2
+            labels:
+              app.kubernetes.io/managed-by: Helm
+            name: qovery
+            namespace: qovery
+          spec:
+            dnsNames:
+            - 'qovery'
+            issuerRef:
+              kind: ClusterIssuer
+              name: qovery
+            secretName: qovery
+          status:
+            conditions:
+            - lastTransitionTime: "2021-11-30T15:33:03Z"
+              message: Certificate is up to date and has not expired
+              reason: Ready
+              status: "True"
+              type: Ready
+            notAfter: "2022-04-29T13:34:51Z"
+            notBefore: "2022-01-29T13:34:52Z"
+            renewalTime: "2022-03-30T13:34:51Z"
+            revision: 3
+        "#
+        .to_string();
+
+        assert_eq!(result, new_content);
+        drop(file);
         tmp_dir.close().expect("error closing temporary directory");
     }
 }

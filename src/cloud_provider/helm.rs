@@ -359,7 +359,7 @@ pub fn deploy_charts_levels(
 // Common charts
 //
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct CommonChart {
     pub chart_info: ChartInfo,
 }
