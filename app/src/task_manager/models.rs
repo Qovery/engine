@@ -60,7 +60,7 @@ impl EngineRequest {
         logger: Box<dyn Logger>,
         is_task_canceled: Box<dyn Fn() -> bool>,
     ) -> Result<Engine, RequestError> {
-        let mut build_platform = self.build_platform.to_engine_build_platform(&context);
+        let mut build_platform = self.build_platform.to_engine_build_platform(&context, logger.clone());
         build_platform.add_listener(progress_listener.clone());
 
         let mut cloud_provider = self
@@ -128,10 +128,14 @@ pub struct BuildPlatform {
 }
 
 impl BuildPlatform {
-    pub fn to_engine_build_platform(&self, context: &Context) -> Box<dyn qovery_engine::build_platform::BuildPlatform> {
+    pub fn to_engine_build_platform(
+        &self,
+        context: &Context,
+        logger: Box<dyn Logger>,
+    ) -> Box<dyn qovery_engine::build_platform::BuildPlatform> {
         Box::new(match self.kind {
             qovery_engine::build_platform::Kind::LocalDocker => {
-                LocalDocker::new(context.clone(), self.id.as_str(), self.name.as_str())
+                LocalDocker::new(context.clone(), self.id.as_str(), self.name.as_str(), logger)
             }
         })
     }

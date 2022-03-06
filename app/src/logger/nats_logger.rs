@@ -35,7 +35,30 @@ impl Logger for NatsLogger {
                     let message_raw = format!("{}: {}", message_safe, e);
                     self.std_logger.log(
                         LogLevel::Error,
-                        EngineEvent::Error(EngineError::new_unknown(
+                        EngineEvent::Error(
+                            EngineError::new_unknown(
+                                event_details.clone(),
+                                error_message_qovery,
+                                error_message_user,
+                                Some(CommandError::new(
+                                    message_raw.to_string(),
+                                    Some(message_safe.to_string()),
+                                )),
+                                None,
+                                None,
+                            ),
+                            None,
+                        ),
+                    );
+                }
+            }
+            Err(e) => {
+                let message_safe = "cannot serialize event object to JSON";
+                let message_raw = format!("{}: {}", message_safe, e);
+                self.std_logger.log(
+                    LogLevel::Error,
+                    EngineEvent::Error(
+                        EngineError::new_unknown(
                             event_details.clone(),
                             error_message_qovery,
                             error_message_user,
@@ -45,26 +68,9 @@ impl Logger for NatsLogger {
                             )),
                             None,
                             None,
-                        )),
-                    );
-                }
-            }
-            Err(e) => {
-                let message_safe = "cannot serialize event object to JSON";
-                let message_raw = format!("{}: {}", message_safe, e);
-                self.std_logger.log(
-                    LogLevel::Error,
-                    EngineEvent::Error(EngineError::new_unknown(
-                        event_details.clone(),
-                        error_message_qovery,
-                        error_message_user,
-                        Some(CommandError::new(
-                            message_raw.to_string(),
-                            Some(message_safe.to_string()),
-                        )),
+                        ),
                         None,
-                        None,
-                    )),
+                    ),
                 );
             }
         }

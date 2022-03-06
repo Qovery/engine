@@ -108,7 +108,7 @@ impl Task for InfrastructureTask {
         let engine = match self.request.engine(
             &self.info_context(),
             my_progress_listener,
-            logger,
+            logger.clone(),
             self.cancel_checker(),
         ) {
             Ok(engine) => engine,
@@ -164,7 +164,7 @@ impl Task for InfrastructureTask {
         };
 
         handle_transaction_result(
-            tx.commit(),
+            tx.commit(logger.clone()),
             self,
             &self.request,
             self.action_context(ProgressLevel::Info),
@@ -298,7 +298,7 @@ impl Task for EnvironmentTask {
         let engine = match self.request.engine(
             &self.info_context(),
             my_progress_listener,
-            logger,
+            logger.clone(),
             self.cancel_checker(),
         ) {
             Ok(engine) => engine,
@@ -376,7 +376,7 @@ impl Task for EnvironmentTask {
         };
 
         handle_transaction_result(
-            tx.commit(),
+            tx.commit(logger.clone()),
             self,
             &self.request,
             self.action_context(ProgressLevel::Info),
@@ -575,7 +575,7 @@ fn handle_transaction_result(
                 task,
                 request,
                 action_context,
-                Some(format_engine_error_output(engine_error, None)),
+                Some(format_engine_error_output(engine_error.to_legacy_engine_error(), None)),
                 true,
                 false,
                 false,
@@ -588,7 +588,10 @@ fn handle_transaction_result(
                 task,
                 request,
                 action_context,
-                Some(format_engine_error_output(engine_error, Some(rollback_err))),
+                Some(format_engine_error_output(
+                    engine_error.to_legacy_engine_error(),
+                    Some(rollback_err),
+                )),
                 true,
                 false,
                 false,
@@ -620,16 +623,11 @@ fn format_engine_error_output(engine_error: EngineError, rollback_error: Option<
 
     let rollback_engine_error_message = match rollback_error {
         Some(rollback_error) => match rollback_error {
-            RollbackError::CommitError(rollback_engine_error) => {
-                if let Some(message) = rollback_engine_error.message {
-                    Some(format!(
-                        "{} (scope: {:?} | cause: {:?})",
-                        message, rollback_engine_error.scope, rollback_engine_error.cause
-                    ))
-                } else {
-                    None
-                }
-            }
+            RollbackError::CommitError(rollback_engine_error) => Some(format!(
+                "{} (event_details: {:?})",
+                rollback_engine_error.message(),
+                rollback_engine_error.event_details(),
+            )),
             _ => None,
         },
         _ => None,
