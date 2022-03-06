@@ -16,6 +16,7 @@ pub struct Engine {
     cloud_provider: Box<dyn CloudProvider>,
     dns_provider: Box<dyn DnsProvider>,
     logger: Box<dyn Logger>,
+    pub is_task_canceled: Box<dyn Fn() -> bool>,
 }
 
 impl Engine {
@@ -26,6 +27,7 @@ impl Engine {
         cloud_provider: Box<dyn CloudProvider>,
         dns_provider: Box<dyn DnsProvider>,
         logger: Box<dyn Logger>,
+        is_task_canceled: Box<dyn Fn() -> bool>,
     ) -> Engine {
         Engine {
             context,
@@ -34,6 +36,7 @@ impl Engine {
             cloud_provider,
             dns_provider,
             logger,
+            is_task_canceled,
         }
     }
 }

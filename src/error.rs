@@ -26,6 +26,10 @@ impl EngineError {
             message: message.map(|message| message.into()),
         }
     }
+
+    pub fn is_cancel(&self) -> bool {
+        self.cause == EngineErrorCause::Canceled
+    }
 }
 
 #[derive(Debug)]
@@ -60,9 +64,10 @@ impl From<Transmitter> for EngineErrorScope {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum EngineErrorCause {
     Internal,
+    Canceled,
     User(&'static str),
 }
 

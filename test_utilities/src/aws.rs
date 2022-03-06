@@ -80,6 +80,7 @@ impl Cluster<AWS, Options> for AWS {
             cloud_provider,
             dns_provider,
             logger,
+            Box::new(|| false),
         )
     }
 

@@ -991,7 +991,7 @@ pub fn test_db(
 
     let app_id = generate_id();
     let database_username = "superuser".to_string();
-    let database_password = generate_id();
+    let database_password = generate_password(true);
     let db_kind_str = db_kind.name().to_string();
     let db_id = generate_id();
     let database_host = format!("{}-{}", db_id, db_kind_str.clone());
@@ -1076,11 +1076,8 @@ pub fn test_db(
     let ea = EnvironmentAction::Environment(environment.clone());
     let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-    match environment.deploy_environment(provider_kind.clone(), &context, &ea, logger.clone()) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    }
+    let ret = environment.deploy_environment(provider_kind.clone(), &context, &ea, logger.clone());
+    assert!(matches!(ret, TransactionResult::Ok));
 
     match database_mode.clone() {
         DatabaseMode::CONTAINER => {
@@ -1142,11 +1139,8 @@ pub fn test_db(
         }
     }
 
-    match environment_delete.delete_environment(provider_kind.clone(), &context_for_delete, &ea_delete, logger) {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    }
+    let ret = environment_delete.delete_environment(provider_kind.clone(), &context_for_delete, &ea_delete, logger);
+    assert!(matches!(ret, TransactionResult::Ok));
 
     return test_name.to_string();
 }
@@ -1390,11 +1384,7 @@ pub fn cluster_test(
     if let Err(err) = deploy_tx.create_kubernetes(kubernetes.as_ref()) {
         panic!("{:?}", err)
     }
-    let _ = match deploy_tx.commit() {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+    assert!(matches!(deploy_tx.commit(), TransactionResult::Ok));
 
     // Deploy env if any
     if let Some(env) = environment_to_deploy {
@@ -1404,11 +1394,8 @@ pub fn cluster_test(
         if let Err(err) = deploy_env_tx.deploy_environment(kubernetes.as_ref(), env) {
             panic!("{:?}", err)
         }
-        match deploy_env_tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+
+        assert!(matches!(deploy_env_tx.commit(), TransactionResult::Ok));
     }
 
     if let Err(err) = metrics_server_test(
@@ -1430,21 +1417,14 @@ pub fn cluster_test(
             if let Err(err) = pause_tx.pause_kubernetes(kubernetes.as_ref()) {
                 panic!("{:?}", err)
             }
-            match pause_tx.commit() {
-                TransactionResult::Ok => assert!(true),
-                TransactionResult::Rollback(_) => assert!(false),
-                TransactionResult::UnrecoverableError(_, _) => assert!(false),
-            };
+            assert!(matches!(pause_tx.commit(), TransactionResult::Ok));
 
             // Resume
             if let Err(err) = resume_tx.create_kubernetes(kubernetes.as_ref()) {
                 panic!("{:?}", err)
             }
-            let _ = match resume_tx.commit() {
-                TransactionResult::Ok => assert!(true),
-                TransactionResult::Rollback(_) => assert!(false),
-                TransactionResult::UnrecoverableError(_, _) => assert!(false),
-            };
+
+            assert!(matches!(resume_tx.commit(), TransactionResult::Ok));
 
             if let Err(err) = metrics_server_test(
                 kubernetes
@@ -1478,11 +1458,7 @@ pub fn cluster_test(
             if let Err(err) = upgrade_tx.create_kubernetes(upgraded_kubernetes.as_ref()) {
                 panic!("{:?}", err)
             }
-            let _ = match upgrade_tx.commit() {
-                TransactionResult::Ok => assert!(true),
-                TransactionResult::Rollback(_) => assert!(false),
-                TransactionResult::UnrecoverableError(_, _) => assert!(false),
-            };
+            assert!(matches!(upgrade_tx.commit(), TransactionResult::Ok));
 
             if let Err(err) = metrics_server_test(
                 upgraded_kubernetes
@@ -1501,11 +1477,7 @@ pub fn cluster_test(
             if let Err(err) = delete_tx.delete_kubernetes(upgraded_kubernetes.as_ref()) {
                 panic!("{:?}", err)
             }
-            match delete_tx.commit() {
-                TransactionResult::Ok => assert!(true),
-                TransactionResult::Rollback(_) => assert!(false),
-                TransactionResult::UnrecoverableError(_, _) => assert!(false),
-            };
+            assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
 
             return test_name.to_string();
         }
@@ -1519,22 +1491,14 @@ pub fn cluster_test(
         if let Err(err) = destroy_env_tx.delete_environment(kubernetes.as_ref(), env) {
             panic!("{:?}", err)
         }
-        match destroy_env_tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        assert!(matches!(destroy_env_tx.commit(), TransactionResult::Ok));
     }
 
     // Delete
     if let Err(err) = delete_tx.delete_kubernetes(kubernetes.as_ref()) {
         panic!("{:?}", err)
     }
-    match delete_tx.commit() {
-        TransactionResult::Ok => assert!(true),
-        TransactionResult::Rollback(_) => assert!(false),
-        TransactionResult::UnrecoverableError(_, _) => assert!(false),
-    };
+    assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
 
     test_name.to_string()
 }

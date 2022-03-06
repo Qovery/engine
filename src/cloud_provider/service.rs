@@ -113,7 +113,7 @@ pub trait Service: ToTransmitter {
         let binaries = ["kubectl", "helm", "terraform", "aws-iam-authenticator"];
 
         for binary in binaries.iter() {
-            if !crate::cmd::utilities::does_binary_exist(binary) {
+            if !crate::cmd::command::does_binary_exist(binary) {
                 return Err(NewEngineError::new_missing_required_binary(
                     self.get_event_details(Stage::General(GeneralStep::ValidateSystemRequirements)),
                     binary.to_string(),

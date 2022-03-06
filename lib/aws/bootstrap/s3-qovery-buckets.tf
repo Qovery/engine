@@ -13,6 +13,7 @@ resource "aws_s3_bucket" "kubeconfigs_bucket" {
       "Name" = "Kubernetes kubeconfig"
     }
   )
+
   server_side_encryption_configuration {
     rule {
       apply_server_side_encryption_by_default {
@@ -21,7 +22,6 @@ resource "aws_s3_bucket" "kubeconfigs_bucket" {
       }
     }
   }
-
 }
 
 resource "aws_kms_key" "s3_kubeconfig_kms_encryption" {
@@ -39,4 +39,6 @@ resource "aws_s3_bucket_public_access_block" "kubeconfigs_access" {
 
   ignore_public_acls = true
   restrict_public_buckets  = true
+  block_public_policy = true
+  block_public_acls = true
 }

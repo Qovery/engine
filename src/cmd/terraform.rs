@@ -2,7 +2,7 @@ use dirs::home_dir;
 use retry::delay::Fixed;
 use retry::OperationResult;
 
-use crate::cmd::utilities::QoveryCommand;
+use crate::cmd::command::QoveryCommand;
 use crate::constants::TF_PLUGIN_CACHE_DIR;
 use crate::errors::CommandError;
 use rand::Rng;

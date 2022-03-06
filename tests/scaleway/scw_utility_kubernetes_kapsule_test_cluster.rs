@@ -65,11 +65,8 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
         if let Err(err) = tx.create_kubernetes(&kubernetes) {
             panic!("{:?}", err)
         }
-        let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+
+        assert!(matches!(tx.commit(), TransactionResult::Ok));
 
         test_name.to_string()
     });
@@ -130,11 +127,8 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
         if let Err(err) = tx.delete_kubernetes(&kubernetes) {
             panic!("{:?}", err)
         }
-        match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = tx.commit();
+        assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()
     });

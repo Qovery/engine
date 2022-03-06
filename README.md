@@ -18,12 +18,11 @@
     <img src="https://raw.githubusercontent.com/Qovery/public-resources/master/qovery_kubernetes_cloudproviders.svg" height="450px" alt="Qovery stack on top of Kubernetes and Cloud providers" />
 </p>
 
-**Qovery Engine** is an open-source abstraction layer library that turns easy apps deployment on **AWS**, **GCP**, **Azure**, and other Cloud providers in just a few minutes. The Qovery Engine is written in [Rust](https://www.rust-lang.org) and takes advantage of [Terraform](https://www.terraform.io), [Helm](https://helm.sh), [Kubectl](https://kubernetes.io/docs/reference/kubectl/overview), and [Docker](https://www.docker.com) to manage resources.
+**Qovery Engine** is an open-source abstraction layer library that turns easy application deployment on **AWS**, **GCP**, **Azure**, and other Cloud providers in just a few minutes. The Qovery Engine is written in [Rust](https://www.rust-lang.org) and takes advantage of [Terraform](https://www.terraform.io), [Helm](https://helm.sh), [Kubectl](https://kubernetes.io/docs/reference/kubectl/overview), and [Docker](https://www.docker.com) to manage resources.
 
 - Website: https://www.qovery.com
-- Full doc: https://docs.qovery.com
-- Qovery Engine doc: *coming soon*
-- Community: [Join us](https://discord.qovery.com) on Discord and on our [Q&A forum](https://community.qovery.com)
+- Qovery documentation: https://hub.qovery.com/docs
+- Community: [Join us](https://discord.qovery.com) on Discord and on our [Q&A forum](https://discuss.qovery.com)
 
 **Please note**: We take Qovery's security and our users' trust very seriously. If you believe you have found a security issue in Qovery, please responsibly disclose by contacting us at security@qovery.com.
 
@@ -42,9 +41,9 @@
 </p>
 
 Qovery engine supports a number of different plugins to compose your own deployment flow:
-- **Cloud providers:** [AWS](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/amazon-web-services/), Digital Ocean ([in beta](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/digital-ocean/)), Azure ([vote](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/azure/)), GCP ([vote](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/google-cloud-platform/)), Scaleway ([vote](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/scaleway/))
-- **Build platforms:** [Qovery CI](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/qovery-ci/), Circle CI ([vote](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/circle-ci/)), Gitlab CI ([vote](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/gitlab-ci/)), Github Actions ([vote](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/github-actions/))
-- **Container registries:** [ECR](https://docs.qovery.com/docs/using-qovery/configuration/business/container-registry/elastic-container-registry/), [DockerHub](https://docs.qovery.com/docs/using-qovery/configuration/business/container-registry/docker-hub/), DOCR ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/container-registry/digital-ocean-container-registry/)), ACR ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/container-registry/azure-container-registry/)), SCR ([vote](https://docs.qovery.com/docs/using-qovery/configuration/business/container-registry/scaleway-container-registry/))
+- **Cloud providers:** [AWS](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/amazon-web-services/), Digital Ocean ([in beta](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/digital-ocean/)), Scaleway ([in beta](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/scaleway/)), Azure ([vote](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/azure/)), GCP ([vote](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/google-cloud-platform/))
+- **Build platforms:** [Qovery CI](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/qovery-ci/), Circle CI ([vote](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/circle-ci/)), Gitlab CI ([vote](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/gitlab-ci/)), GitHub Actions ([vote](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/github-actions/))
+- **Container registries:** AWS ECR, DockerHub, Digital Ocean CR, ACR, Scaleway Container Registry
 - **DNS providers:** Cloudflare
 - **Monitoring services:** Datadog ([vote](https://hub.qovery.com/docs/using-qovery/addon/monitoring/datadog/)), Newrelic ([vote](https://hub.qovery.com/docs/using-qovery/addon/monitoring/new-relic/))
 
@@ -145,7 +144,7 @@ Full, comprehensive documentation is available on the Qovery website: https://do
 Please read our [Contributing Guide](./CONTRIBUTING.md) before submitting a Pull Request to the project.
 
 ## Community support
-For general help using Qovery Engine, please refer to [the official Qovery Engine documentation](https://docs.qovery.com). For additional help, you can use one of these channels to ask a question:
+For general help to use Qovery Engine, please refer to [the official Qovery Engine documentation](https://hub.qovery.com/docs). For additional help, you can use one of these channels to ask a question:
 
 - [Discord](https://discord.qovery.com) (For live discussion with the Community and Qovery team)
 - [GitHub](https://github.com/qovery/engine) (Bug reports, Contributions)
@@ -173,7 +172,6 @@ The Qovery Engine is designed to operate as an administrator and takes decisions
 ## License
 
 See the [LICENSE](./LICENSE) file for licensing information.
-
 
 ## Qovery
 

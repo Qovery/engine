@@ -22,7 +22,12 @@ pub trait BuildPlatform: Listen {
     }
     fn is_valid(&self) -> Result<(), EngineError>;
     fn has_cache(&self, build: &Build) -> Result<CacheResult, EngineError>;
-    fn build(&self, build: Build, force_build: bool) -> Result<BuildResult, EngineError>;
+    fn build(
+        &self,
+        build: Build,
+        force_build: bool,
+        is_task_canceled: &dyn Fn() -> bool,
+    ) -> Result<BuildResult, EngineError>;
     fn build_error(&self, build: Build) -> Result<BuildResult, EngineError>;
     fn engine_error_scope(&self) -> EngineErrorScope {
         EngineErrorScope::BuildPlatform(self.id().to_string(), self.name().to_string())

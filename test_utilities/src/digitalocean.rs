@@ -56,6 +56,7 @@ impl Cluster<DO, DoksOptions> for DO {
             cloud_provider,
             dns_provider,
             logger,
+            Box::new(|| false),
         )
     }
 

@@ -62,17 +62,12 @@ fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
-        match environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
-        match environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret =
+            environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger);
+        assert!(matches!(ret, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -130,7 +125,8 @@ fn test_build_cache() {
             PullResult::None => assert!(true),
         };
 
-        let build_result = local_docker.build(app.to_build(), false).unwrap();
+        let cancel_task = || false;
+        let build_result = local_docker.build(app.to_build(), false, &cancel_task).unwrap();
 
         let _ = match docr.push(&build_result.build.image, false) {
             Ok(_) => assert!(true),
@@ -210,18 +206,12 @@ fn digitalocean_doks_deploy_a_not_working_environment_with_no_router() {
 
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
+        let ret = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
 
-        match environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
-
-        match environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
+        let ret =
+            environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger);
+        assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -267,11 +257,8 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let selector = format!("appId={}", environment.applications[0].id);
 
-        match environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
         let ret = get_pods(
             context.clone(),
@@ -283,11 +270,8 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
-        match environment.pause_environment(Kind::Do, &context_for_delete, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.pause_environment(Kind::Do, &context_for_delete, &env_action, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
         let ret = get_pods(
@@ -302,11 +286,8 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
-        match environment.deploy_environment(Kind::Do, &ctx_resume, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.deploy_environment(Kind::Do, &ctx_resume, &env_action, logger.clone());
+        assert!(matches!(ret, TransactionResult::Ok));
 
         let ret = get_pods(
             context.clone(),
@@ -319,11 +300,8 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
         // Cleanup
-        match environment.delete_environment(Kind::Do, &context_for_delete, &env_action, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = environment.delete_environment(Kind::Do, &context_for_delete, &env_action, logger);
+        assert!(matches!(ret, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -391,17 +369,12 @@ fn digitalocean_doks_build_with_buildpacks_and_deploy_a_working_environment() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
-        match environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        assert!(matches!(result, TransactionResult::Ok));
 
-        match environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result =
+            environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger);
+        assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -450,17 +423,12 @@ fn digitalocean_doks_deploy_a_working_environment_with_domain() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        match environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        assert!(matches!(result, TransactionResult::Ok));
 
-        match environment_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result =
+            environment_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger);
+        assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -527,11 +495,8 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        match environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        assert!(matches!(result, TransactionResult::Ok));
 
         match get_pvc(context.clone(), Kind::Do, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
@@ -541,11 +506,8 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
             Err(_) => assert!(false),
         };
 
-        match environment_delete.delete_environment(Kind::Do, &context_for_deletion, &env_action_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment_delete.delete_environment(Kind::Do, &context_for_deletion, &env_action_delete, logger);
+        assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -617,11 +579,8 @@ fn digitalocean_doks_redeploy_same_app() {
         let env_action_redeploy = EnvironmentAction::Environment(environment_redeploy.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        match environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        assert!(matches!(result, TransactionResult::Ok));
 
         match get_pvc(context.clone(), Kind::Do, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
@@ -640,11 +599,9 @@ fn digitalocean_doks_redeploy_same_app() {
             secrets.clone(),
         );
 
-        match environment_redeploy.deploy_environment(Kind::Do, &context_bis, &env_action_redeploy, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result =
+            environment_redeploy.deploy_environment(Kind::Do, &context_bis, &env_action_redeploy, logger.clone());
+        assert!(matches!(result, TransactionResult::Ok));
 
         let (_, number2) = is_pod_restarted_env(
             context.clone(),
@@ -657,11 +614,8 @@ fn digitalocean_doks_redeploy_same_app() {
         // nothing changed in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
 
-        match environment_delete.delete_environment(Kind::Do, &context_for_deletion, &env_action_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment_delete.delete_environment(Kind::Do, &context_for_deletion, &env_action_delete, logger);
+        assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -728,26 +682,18 @@ fn digitalocean_doks_deploy_a_not_working_environment_and_then_working_environme
         let env_action_not_working = EnvironmentAction::Environment(environment_for_not_working.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
-        match environment_for_not_working.deploy_environment(
+        let result = environment_for_not_working.deploy_environment(
             Kind::Do,
             &context_for_not_working,
             &env_action_not_working,
             logger.clone(),
-        ) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
-        match environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-        match environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        );
+        assert!(matches!(result, TransactionResult::UnrecoverableError(_, _)));
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        assert!(matches!(result, TransactionResult::Ok));
+        let result =
+            environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_delete, logger);
+        assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -822,48 +768,39 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
         let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
 
         // OK
-        match environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        assert!(matches!(result, TransactionResult::Ok));
 
         // FAIL and rollback
-        match not_working_env_1.deploy_environment(
+        let result = not_working_env_1.deploy_environment(
             Kind::Do,
             &context_for_not_working_1,
             &env_action_not_working_1,
             logger.clone(),
-        ) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(true),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
+        );
+        assert!(matches!(
+            result,
+            TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)
+        ));
 
         // FAIL and Rollback again
-        match not_working_env_2.deploy_environment(
+        let result = not_working_env_2.deploy_environment(
             Kind::Do,
             &context_for_not_working_2,
             &env_action_not_working_2,
             logger.clone(),
-        ) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(true),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
+        );
+        assert!(matches!(
+            result,
+            TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)
+        ));
 
         // Should be working
-        match environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        assert!(matches!(result, TransactionResult::Ok));
 
-        match delete_env.delete_environment(Kind::Do, &context_for_delete, &env_action_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = delete_env.delete_environment(Kind::Do, &context_for_delete, &env_action_delete, logger);
+        assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -912,151 +849,13 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_no_failover() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
 
-        match environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        assert!(matches!(result, TransactionResult::UnrecoverableError(_, _)));
 
-        match delete_env.delete_environment(Kind::Do, &context_for_delete, &env_action_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = delete_env.delete_environment(Kind::Do, &context_for_delete, &env_action_delete, logger);
+        assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
-            warn!("cannot clean environments, error: {:?}", e);
-        }
-
-        test_name.to_string()
-    })
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[named]
-#[test]
-fn digitalocean_doks_deploy_a_non_working_environment_with_a_working_failover() {
-    let test_name = function_name!();
-    engine_run_test(|| {
-        init();
-
-        let span = span!(Level::INFO, "test", name = test_name,);
-        let _enter = span.enter();
-
-        let logger = logger();
-
-        // context for non working environment
-        let secrets = FuncTestsSecrets::new();
-        let context = context(
-            secrets
-                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
-            secrets
-                .DIGITAL_OCEAN_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
-        );
-        let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
-
-        let environment = test_utilities::common::non_working_environment(&context, test_domain.as_str());
-        let failover_environment = test_utilities::common::working_minimal_environment(&context, test_domain.as_str());
-
-        // context for deletion
-        let context_deletion = context.clone_not_same_execution_id();
-        let mut delete_env =
-            test_utilities::common::working_minimal_environment(&context_deletion, test_domain.as_str());
-        delete_env.action = Action::Delete;
-
-        let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
-        let env_action = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment.clone());
-
-        match environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
-
-        match delete_env.delete_environment(Kind::Do, &context_deletion, &env_action_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-
-        if let Err(e) = clean_environments(
-            &context,
-            vec![environment.clone(), failover_environment.clone()],
-            secrets.clone(),
-            DO_TEST_REGION,
-        ) {
-            warn!("cannot clean environments, error: {:?}", e);
-        }
-
-        test_name.to_string()
-    })
-}
-
-#[cfg(feature = "test-do-self-hosted")]
-#[named]
-#[test]
-fn digitalocean_doks_deploy_a_non_working_environment_with_a_non_working_failover() {
-    let test_name = function_name!();
-    engine_run_test(|| {
-        init();
-
-        let span = span!(Level::INFO, "test", name = test_name,);
-        let _enter = span.enter();
-
-        let logger = logger();
-        let secrets = FuncTestsSecrets::new();
-        let context = context(
-            secrets
-                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
-            secrets
-                .DIGITAL_OCEAN_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
-        );
-        let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
-
-        let environment = test_utilities::common::non_working_environment(&context, test_domain.as_str());
-        let failover_environment = test_utilities::common::non_working_environment(&context, test_domain.as_str());
-
-        let context_for_deletion = context.clone_not_same_execution_id();
-        let mut delete_env =
-            test_utilities::common::non_working_environment(&context_for_deletion, test_domain.as_str());
-        delete_env.action = Action::Delete;
-
-        // environment action initialize
-        let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
-        let env_action = EnvironmentAction::EnvironmentWithFailover(environment.clone(), failover_environment.clone());
-
-        match environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
-
-        match delete_env.delete_environment(Kind::Do, &context_for_deletion, &env_action_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
-
-        if let Err(e) = clean_environments(
-            &context,
-            vec![environment.clone(), failover_environment.clone()],
-            secrets.clone(),
-            DO_TEST_REGION,
-        ) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -1105,20 +904,15 @@ fn digitalocean_doks_deploy_a_working_environment_with_sticky_session() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
-        match environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        assert!(matches!(result, TransactionResult::Ok));
 
         // checking cookie is properly set on the app
         assert!(routers_sessions_are_sticky(environment.routers.clone()));
 
-        match environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result =
+            environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger);
+        assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
