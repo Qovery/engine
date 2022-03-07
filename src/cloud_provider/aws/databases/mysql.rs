@@ -192,7 +192,7 @@ impl Service for MySQL {
         context.insert("namespace", environment.namespace());
 
         let version = &self.matching_correct_version(self.is_managed_service(), event_details.clone())?;
-        context.insert("version", &version.matched_version());
+        context.insert("version", &version.matched_version().to_string());
 
         if self.is_managed_service() {
             let parameter_group_family =
