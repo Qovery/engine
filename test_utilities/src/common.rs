@@ -992,7 +992,7 @@ pub fn test_db(
     let app_id = generate_id();
 
     let database_username = "superuser".to_string();
-    let database_password = generate_password(true);
+    let database_password = generate_id();
     let db_kind_str = db_kind.name().to_string();
     let db_id = generate_id();
     let database_host = format!("{}-{}", db_id, db_kind_str.clone());
