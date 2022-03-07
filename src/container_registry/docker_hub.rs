@@ -129,6 +129,7 @@ impl ContainerRegistry for DockerHub {
             .basic_auth(&self.login, Option::from(&self.password))
             .send();
 
+        // TODO (mzo) no check of existing tags as in others impl ?
         match res {
             Ok(out) => matches!(out.status(), StatusCode::OK),
             Err(e) => {
