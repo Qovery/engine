@@ -193,7 +193,8 @@ impl Service for PostgreSQL {
 
         let version = self
             .matching_correct_version(self.is_managed_service(), event_details.clone())?
-            .matched_version();
+            .matched_version()
+            .to_string();
         context.insert("version", &version);
 
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
