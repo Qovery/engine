@@ -40,9 +40,11 @@ use retry::OperationResult;
 use scaleway_api_rs::apis::Error;
 use scaleway_api_rs::models::ScalewayK8sV1Cluster;
 use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
 use std::env;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 use tera::Context as TeraContext;
 
 #[derive(PartialEq)]
@@ -122,24 +124,24 @@ impl KapsuleOptions {
     }
 }
 
-pub struct Kapsule<'a> {
+pub struct Kapsule {
     context: Context,
     id: String,
     long_id: uuid::Uuid,
     name: String,
     version: String,
     zone: ScwZone,
-    cloud_provider: &'a dyn CloudProvider,
-    dns_provider: &'a dyn DnsProvider,
+    cloud_provider: Arc<Box<dyn CloudProvider>>,
+    dns_provider: Arc<Box<dyn DnsProvider>>,
     object_storage: ScalewayOS,
     nodes_groups: Vec<NodeGroups>,
     template_directory: String,
     options: KapsuleOptions,
     listeners: Listeners,
-    logger: &'a dyn Logger,
+    logger: Box<dyn Logger>,
 }
 
-impl<'a> Kapsule<'a> {
+impl Kapsule {
     pub fn new(
         context: Context,
         id: String,
@@ -147,12 +149,12 @@ impl<'a> Kapsule<'a> {
         name: String,
         version: String,
         zone: ScwZone,
-        cloud_provider: &'a dyn CloudProvider,
-        dns_provider: &'a dyn DnsProvider,
+        cloud_provider: Arc<Box<dyn CloudProvider>>,
+        dns_provider: Arc<Box<dyn DnsProvider>>,
         nodes_groups: Vec<NodeGroups>,
         options: KapsuleOptions,
-        logger: &'a dyn Logger,
-    ) -> Result<Kapsule<'a>, EngineError> {
+        logger: Box<dyn Logger>,
+    ) -> Result<Kapsule, EngineError> {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
 
         for node_group in &nodes_groups {
@@ -189,6 +191,7 @@ impl<'a> Kapsule<'a> {
             context.resource_expiration_in_seconds(),
         );
 
+        let listeners = cloud_provider.listeners().clone();
         Ok(Kapsule {
             context,
             id,
@@ -203,7 +206,7 @@ impl<'a> Kapsule<'a> {
             template_directory,
             options,
             logger,
-            listeners: cloud_provider.listeners().clone(), // copy listeners from CloudProvider
+            listeners,
         })
     }
 
@@ -1714,7 +1717,7 @@ impl<'a> Kapsule<'a> {
     }
 }
 
-impl<'a> Kubernetes for Kapsule<'a> {
+impl Kubernetes for Kapsule {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -1748,15 +1751,15 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 
     fn cloud_provider(&self) -> &dyn CloudProvider {
-        self.cloud_provider
+        self.cloud_provider.as_ref().borrow()
     }
 
     fn dns_provider(&self) -> &dyn DnsProvider {
-        self.dns_provider
+        self.dns_provider.as_ref().borrow()
     }
 
     fn logger(&self) -> &dyn Logger {
-        self.logger
+        self.logger.borrow()
     }
 
     fn config_file_store(&self) -> &dyn ObjectStorage {
@@ -2122,7 +2125,7 @@ impl<'a> Kubernetes for Kapsule<'a> {
     }
 }
 
-impl<'a> Listen for Kapsule<'a> {
+impl Listen for Kapsule {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

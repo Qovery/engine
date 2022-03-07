@@ -20,7 +20,7 @@ use crate::cmd::kubectl::ScalingKind::Statefulset;
 use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_scale_replicas_by_selector, ScalingKind};
 use crate::cmd::structs::LabelsContent;
 use crate::errors::{CommandError, EngineError};
-use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, GeneralStep, Stage, ToTransmitter};
+use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
 use crate::logger::{LogLevel, Logger};
 use crate::models::ProgressLevel::Info;
 use crate::models::{
@@ -105,22 +105,6 @@ pub trait Service: ToTransmitter {
         };
 
         TcpStream::connect(format!("{}:{}", ip, private_port)).is_ok()
-    }
-    fn is_valid(&self) -> Result<(), EngineError> {
-        let binaries = ["kubectl", "helm", "terraform", "aws-iam-authenticator"];
-
-        for binary in binaries.iter() {
-            if !crate::cmd::command::does_binary_exist(binary) {
-                return Err(EngineError::new_missing_required_binary(
-                    self.get_event_details(Stage::General(GeneralStep::ValidateSystemRequirements)),
-                    binary.to_string(),
-                ));
-            }
-        }
-
-        // TODO check lib directories available
-
-        Ok(())
     }
 
     fn progress_scope(&self) -> ProgressScope {
