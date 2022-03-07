@@ -399,6 +399,8 @@ impl Helm {
             "upgrade".to_string(),
             "--kubeconfig".to_string(),
             self.kubernetes_config.to_str().unwrap_or_default().to_string(),
+            "--set".to_string(),
+            "installCRDs=true".to_string(),
             "--create-namespace".to_string(),
             "--install".to_string(),
             "--timeout".to_string(),
