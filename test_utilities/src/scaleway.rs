@@ -63,7 +63,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         let container_registry = Box::new(container_registry_scw(context));
 
         // use LocalDocker
-        let build_platform = Box::new(build_platform_local_docker(context));
+        let build_platform = Box::new(build_platform_local_docker(context, logger.clone()));
 
         // use Scaleway
         let cloud_provider = Scaleway::cloud_provider(context);

@@ -6,6 +6,7 @@ pub type Id = String;
 pub type Name = String;
 
 #[derive(Debug)]
+#[deprecated(note = "errors.EngineError to be used instead")]
 pub struct EngineError {
     pub cause: EngineErrorCause,
     pub scope: EngineErrorScope,
@@ -72,6 +73,7 @@ pub enum EngineErrorCause {
 }
 
 #[derive(Debug)]
+#[deprecated(note = "errors.CommandError to be used instead")]
 pub struct SimpleError {
     pub kind: SimpleErrorKind,
     pub message: Option<String>,

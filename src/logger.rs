@@ -116,25 +116,28 @@ mod tests {
         let test_cases = vec![
             TestCase {
                 log_level: LogLevel::Error,
-                event: EngineEvent::Error(EngineError::new_unknown(
-                    EventDetails::new(
-                        Some(Kind::Scw),
-                        orga_id.clone(),
-                        cluster_id.clone(),
-                        execution_id.clone(),
-                        Some(ScwRegion::Paris.as_str().to_string()),
-                        Stage::Infrastructure(InfrastructureStep::Create),
-                        Transmitter::Kubernetes(cluster_id.to_string(), cluster_name.to_string()),
+                event: EngineEvent::Error(
+                    EngineError::new_unknown(
+                        EventDetails::new(
+                            Some(Kind::Scw),
+                            orga_id.clone(),
+                            cluster_id.clone(),
+                            execution_id.clone(),
+                            Some(ScwRegion::Paris.as_str().to_string()),
+                            Stage::Infrastructure(InfrastructureStep::Create),
+                            Transmitter::Kubernetes(cluster_id.to_string(), cluster_name.to_string()),
+                        ),
+                        qovery_message.to_string(),
+                        user_message.to_string(),
+                        Some(errors::CommandError::new(
+                            safe_message.to_string(),
+                            Some(raw_message.to_string()),
+                        )),
+                        Some(link.clone()),
+                        Some(hint.to_string()),
                     ),
-                    qovery_message.to_string(),
-                    user_message.to_string(),
-                    Some(errors::CommandError::new(
-                        safe_message.to_string(),
-                        Some(raw_message.to_string()),
-                    )),
-                    Some(link.clone()),
-                    Some(hint.to_string()),
-                )),
+                    None,
+                ),
                 description: "Error event",
             },
             TestCase {

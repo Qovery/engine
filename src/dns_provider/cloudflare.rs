@@ -1,7 +1,8 @@
 use std::net::Ipv4Addr;
 
 use crate::dns_provider::{DnsProvider, Kind};
-use crate::error::{EngineError, EngineErrorCause};
+use crate::errors::EngineError;
+use crate::events::{ToTransmitter, Transmitter};
 use crate::models::{Context, Domain};
 
 pub struct Cloudflare {
@@ -72,15 +73,17 @@ impl DnsProvider for Cloudflare {
 
     fn is_valid(&self) -> Result<(), EngineError> {
         if self.cloudflare_api_token.is_empty() || self.cloudflare_email.is_empty() {
-            Err(self.engine_error(
-                EngineErrorCause::User(
-                    "Your Cloudflare account seems to be no longer valid (bad Credentials). \
-                    Please contact your Organization administrator to fix or change the Credentials.",
-                ),
-                format!("bad Cloudflare credentials for {}", self.name_with_id()),
+            Err(EngineError::new_client_invalid_cloud_provider_credentials(
+                self.get_event_details(),
             ))
         } else {
             Ok(())
         }
+    }
+}
+
+impl ToTransmitter for Cloudflare {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::DnsProvider(self.id().to_string(), self.name().to_string())
     }
 }

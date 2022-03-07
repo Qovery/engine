@@ -79,6 +79,25 @@ pub enum Tag {
     NoClusterFound,
     OnlyOneClusterExpected,
     CloudProviderApiMissingInfo,
+    K8sValidateRequiredCPUandBurstableError,
+    TerraformContextUnsupportedParameterValue,
+    ClientServiceFailedToStart,
+    ClientServiceFailedToDeployBeforeStart,
+    DatabaseFailedToStartAfterSeveralRetries,
+    RouterFailedToDeploy,
+    CloudProviderClientInvalidCredentials,
+    VersionNumberParsingError,
+    NotImplementedError,
+    BuilderDockerCannotFindAnyDockerfile,
+    BuilderDockerCannotReadDockerfile,
+    BuilderDockerCannotExtractEnvVarsFromDockerfile,
+    BuilderDockerCannotBuildContainerImage,
+    BuilderBuildpackInvalidLanguageFormat,
+    BuilderBuildpackCannotBuildContainerImage,
+    BuilderGetBuildError,
+    BuilderCloningRepositoryError,
+    DockerPushImageError,
+    DockerPullImageError,
 }
 
 impl From<errors::Tag> for Tag {
@@ -145,6 +164,28 @@ impl From<errors::Tag> for Tag {
             errors::Tag::NoClusterFound => Tag::NoClusterFound,
             errors::Tag::OnlyOneClusterExpected => Tag::OnlyOneClusterExpected,
             errors::Tag::CloudProviderApiMissingInfo => Tag::CloudProviderApiMissingInfo,
+            errors::Tag::K8sValidateRequiredCPUandBurstableError => Tag::K8sValidateRequiredCPUandBurstableError,
+            errors::Tag::TerraformContextUnsupportedParameterValue => Tag::TerraformContextUnsupportedParameterValue,
+            errors::Tag::ClientServiceFailedToStart => Tag::ClientServiceFailedToStart,
+            errors::Tag::ClientServiceFailedToDeployBeforeStart => Tag::ClientServiceFailedToDeployBeforeStart,
+            errors::Tag::DatabaseFailedToStartAfterSeveralRetries => Tag::DatabaseFailedToStartAfterSeveralRetries,
+            errors::Tag::RouterFailedToDeploy => Tag::RouterFailedToDeploy,
+            errors::Tag::CloudProviderClientInvalidCredentials => Tag::CloudProviderClientInvalidCredentials,
+            errors::Tag::VersionNumberParsingError => Tag::VersionNumberParsingError,
+            errors::Tag::NotImplementedError => Tag::NotImplementedError,
+            errors::Tag::TaskCancellationRequested => Tag::CannotPauseClusterTasksAreRunning,
+            errors::Tag::BuilderDockerCannotFindAnyDockerfile => Tag::BuilderDockerCannotFindAnyDockerfile,
+            errors::Tag::BuilderDockerCannotReadDockerfile => Tag::BuilderDockerCannotReadDockerfile,
+            errors::Tag::BuilderDockerCannotExtractEnvVarsFromDockerfile => {
+                Tag::BuilderDockerCannotExtractEnvVarsFromDockerfile
+            }
+            errors::Tag::BuilderDockerCannotBuildContainerImage => Tag::BuilderDockerCannotBuildContainerImage,
+            errors::Tag::BuilderBuildpackInvalidLanguageFormat => Tag::BuilderBuildpackInvalidLanguageFormat,
+            errors::Tag::BuilderBuildpackCannotBuildContainerImage => Tag::BuilderBuildpackCannotBuildContainerImage,
+            errors::Tag::BuilderGetBuildError => Tag::BuilderGetBuildError,
+            errors::Tag::BuilderCloningRepositoryError => Tag::BuilderCloningRepositoryError,
+            errors::Tag::DockerPushImageError => Tag::DockerPushImageError,
+            errors::Tag::DockerPullImageError => Tag::DockerPullImageError,
         }
     }
 }

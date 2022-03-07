@@ -1,5 +1,5 @@
 use crate::cloud_provider::service::{Action, StatefulService, StatelessService};
-use crate::error::EngineError;
+use crate::errors::EngineError;
 use crate::unit_conversion::cpu_string_to_float;
 
 pub struct Environment {
