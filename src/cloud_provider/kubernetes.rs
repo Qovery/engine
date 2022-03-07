@@ -2092,9 +2092,9 @@ mod tests {
 
         let event_details = EventDetails::new(
             Some(Aws),
-            QoveryIdentifier::new(organization_id.to_string()),
-            QoveryIdentifier::new(cluster_id.to_string()),
-            QoveryIdentifier::new(execution_id.to_string()),
+            QoveryIdentifier::new_from_long_id(organization_id.to_string()),
+            QoveryIdentifier::new_from_long_id(cluster_id.to_string()),
+            QoveryIdentifier::new_from_long_id(execution_id.to_string()),
             Some("region_fake".to_string()),
             Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
             Transmitter::Kubernetes(cluster_id.to_string(), format!("{}-name", cluster_id)),

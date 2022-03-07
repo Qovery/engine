@@ -162,9 +162,9 @@ impl Kapsule {
                 let err = EngineError::new_unsupported_instance_type(
                     EventDetails::new(
                         Some(cloud_provider.kind()),
-                        QoveryIdentifier::new(context.organization_id().to_string()),
-                        QoveryIdentifier::new(context.cluster_id().to_string()),
-                        QoveryIdentifier::new(context.execution_id().to_string()),
+                        QoveryIdentifier::new_from_long_id(context.organization_id().to_string()),
+                        QoveryIdentifier::new_from_long_id(context.cluster_id().to_string()),
+                        QoveryIdentifier::new_from_long_id(context.execution_id().to_string()),
                         Some(zone.region_str().to_string()),
                         Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
                         Transmitter::Kubernetes(id, name),

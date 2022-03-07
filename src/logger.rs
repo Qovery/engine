@@ -100,11 +100,11 @@ mod tests {
     #[test]
     fn test_log() {
         // setup:
-        let orga_id = QoveryIdentifier::new(Uuid::new_v4().to_string());
-        let cluster_id = QoveryIdentifier::new(Uuid::new_v4().to_string());
+        let orga_id = QoveryIdentifier::new_from_long_id(Uuid::new_v4().to_string());
+        let cluster_id = QoveryIdentifier::new_from_long_id(Uuid::new_v4().to_string());
         let cluster_name = format!("qovery-{}", cluster_id);
-        let execution_id = QoveryIdentifier::new(Uuid::new_v4().to_string());
-        let app_id = QoveryIdentifier::new(Uuid::new_v4().to_string());
+        let execution_id = QoveryIdentifier::new_from_long_id(Uuid::new_v4().to_string());
+        let app_id = QoveryIdentifier::new_from_long_id(Uuid::new_v4().to_string());
         let app_name = format!("simple-app-{}", app_id);
         let qovery_message = "Qovery message";
         let user_message = "User message";
