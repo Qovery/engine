@@ -180,7 +180,10 @@ impl Service for MongoDB {
 
         context.insert("namespace", environment.namespace());
 
-        let version = self.matching_correct_version(event_details.clone())?.matched_version();
+        let version = self
+            .matching_correct_version(event_details.clone())?
+            .matched_version()
+            .to_string();
         context.insert("version", &version);
 
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {

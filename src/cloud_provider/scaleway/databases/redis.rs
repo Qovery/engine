@@ -177,7 +177,10 @@ impl Service for Redis {
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
 
-        let version = self.matching_correct_version(event_details.clone())?.matched_version();
+        let version = self
+            .matching_correct_version(event_details.clone())?
+            .matched_version()
+            .to_string();
 
         context.insert("namespace", environment.namespace());
         context.insert("version", &version);
