@@ -162,6 +162,10 @@ impl Image {
     pub fn name_with_tag(&self) -> String {
         format!("{}:{}", self.name, self.tag)
     }
+
+    pub fn name_with_latest_tag(&self) -> String {
+        format!("{}:latest", self.name)
+    }
 }
 
 impl Default for Image {
