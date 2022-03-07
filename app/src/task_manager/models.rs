@@ -158,6 +158,7 @@ impl BuildPlatform {
 pub struct CloudProvider {
     pub kind: qovery_engine::cloud_provider::Kind,
     pub id: String,
+    pub long_id: String,
     pub name: String,
     pub zones: Vec<String>,
     pub options: Options,
