@@ -228,7 +228,8 @@ impl ContainerRegistry for DockerHub {
             self.context.execution_id(),
         ));
 
-        match docker_tag_and_push_image(self.kind(), vec![], image.name.clone(), image.tag.clone(), dest.clone()) {
+        let dest_latest_tag = format!("{}/{}:latest", self.login.as_str(), image.name);
+        match docker_tag_and_push_image(self.kind(), vec![], &image, dest.clone(), dest_latest_tag) {
             Ok(_) => {
                 let mut image = image.clone();
                 image.registry_url = Some(dest);
