@@ -16,12 +16,13 @@ use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
-use qovery_engine::engine::Engine;
+use qovery_engine::engine::EngineConfig;
 use qovery_engine::error::EngineError;
 use qovery_engine::logger::Logger;
 use qovery_engine::models::{Context, Domain, Environment, EnvironmentAction, Features, Listener, Metadata};
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Arc;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EngineRequest {
@@ -58,8 +59,7 @@ impl EngineRequest {
         context: &Context,
         progress_listener: Listener,
         logger: Box<dyn Logger>,
-        is_task_canceled: Box<dyn Fn() -> bool>,
-    ) -> Result<Engine, RequestError> {
+    ) -> Result<EngineConfig, RequestError> {
         let mut build_platform = self.build_platform.to_engine_build_platform(&context, logger.clone());
         build_platform.add_listener(progress_listener.clone());
 
@@ -73,8 +73,8 @@ impl EngineRequest {
             .ok_or_else(|| {
                 RequestError::CloudProvider(format!("Invalid cloud provider info: {:?}", self.cloud_provider))
             })?;
-
         cloud_provider.add_listener(progress_listener.clone());
+        let cloud_provider = Arc::new(cloud_provider);
 
         let mut container_registry = self
             .container_registry
@@ -92,15 +92,28 @@ impl EngineRequest {
             .dns_provider
             .to_engine_dns_provider(context.clone())
             .ok_or_else(|| RequestError::DnsProvider(format!("Invalid DNS provider: {:?}", self.dns_provider)))?;
+        let dns_provider = Arc::new(dns_provider);
 
-        Ok(Engine::new(
+        let kubernetes = match self.cloud_provider.kubernetes.to_engine_kubernetes(
+            &context,
+            cloud_provider.clone(),
+            dns_provider.clone(),
+            logger.clone(),
+        ) {
+            Ok(x) => x,
+            Err(e) => {
+                error!("{:?}", e.message);
+                panic!("Can't deploy infrastructure, please check json")
+            }
+        };
+
+        Ok(EngineConfig::new(
             context.clone(),
             build_platform,
             container_registry,
             cloud_provider,
             dns_provider,
-            logger,
-            is_task_canceled,
+            kubernetes,
         ))
     }
 
@@ -226,9 +239,9 @@ impl Kubernetes {
     pub fn to_engine_kubernetes<'a>(
         &self,
         context: &Context,
-        cloud_provider: &'a dyn qovery_engine::cloud_provider::CloudProvider,
-        dns_provider: &'a dyn qovery_engine::dns_provider::DnsProvider,
-        logger: &'a dyn qovery_engine::logger::Logger,
+        cloud_provider: Arc<Box<dyn qovery_engine::cloud_provider::CloudProvider>>,
+        dns_provider: Arc<Box<dyn qovery_engine::dns_provider::DnsProvider>>,
+        logger: Box<dyn qovery_engine::logger::Logger>,
     ) -> Result<Box<dyn qovery_engine::cloud_provider::kubernetes::Kubernetes + 'a>, EngineError> {
         match self.kind {
             qovery_engine::cloud_provider::kubernetes::Kind::Eks => match EKS::new(
@@ -239,7 +252,7 @@ impl Kubernetes {
                 self.version.as_str(),
                 AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
                 cloud_provider.zones().clone(),
-                cloud_provider.as_any().downcast_ref::<AWS>().unwrap(),
+                cloud_provider,
                 dns_provider,
                 serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
@@ -257,7 +270,7 @@ impl Kubernetes {
                 self.version.clone(),
                 qovery_engine::cloud_provider::digitalocean::application::DoRegion::from_str(self.region.as_str())
                     .unwrap(),
-                cloud_provider.as_any().downcast_ref::<DO>().unwrap(),
+                cloud_provider,
                 dns_provider,
                 self.nodes_groups.clone(),
                 serde_json::from_value::<qovery_engine::cloud_provider::digitalocean::kubernetes::DoksOptions>(
@@ -282,7 +295,7 @@ impl Kubernetes {
                     )
                     .as_str(),
                 ),
-                cloud_provider.as_any().downcast_ref::<Scaleway>().unwrap(),
+                cloud_provider,
                 dns_provider,
                 self.nodes_groups.clone(),
                 serde_json::from_value::<qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions>(

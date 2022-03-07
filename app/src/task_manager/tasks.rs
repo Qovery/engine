@@ -1,7 +1,7 @@
-use std::borrow::{Borrow, Cow};
+use std::borrow::Cow;
 use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use chrono::{DateTime, Utc};
 use crossbeam_channel::Sender;
@@ -10,11 +10,12 @@ use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use qovery_engine::logger::Logger;
 use qovery_engine::models::{Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope};
-use qovery_engine::transaction::{RollbackError, TransactionResult};
+use qovery_engine::transaction::{RollbackError, StepName, Transaction, TransactionResult};
 
 use crate::task_manager::models::{Action, Archive, EngineRequest};
 use crate::task_manager::task_manager::{ActionContext, State, Status, Task};
 use qovery_engine::object_storage::ObjectStorage;
+use qovery_engine::transaction::StepName::Waiting;
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
@@ -105,12 +106,10 @@ impl Task for InfrastructureTask {
             sender: self.status_sender.clone(),
         }));
 
-        let engine = match self.request.engine(
-            &self.info_context(),
-            my_progress_listener,
-            logger.clone(),
-            self.cancel_checker(),
-        ) {
+        let engine = match self
+            .request
+            .engine(&self.info_context(), my_progress_listener, logger.clone())
+        {
             Ok(engine) => engine,
             Err(err) => {
                 send_progress(
@@ -126,8 +125,9 @@ impl Task for InfrastructureTask {
             }
         };
 
-        let session = match engine.session() {
-            Ok(session) => session,
+        // check and init the connection to all services
+        let mut tx = match Transaction::new(&engine, logger.clone(), self.cancel_checker(), Box::new(|_| {})) {
+            Ok(transaction) => transaction,
             Err(err) => {
                 send_progress(
                     self,
@@ -143,28 +143,14 @@ impl Task for InfrastructureTask {
             }
         };
 
-        let mut tx = session.transaction();
-        let kubernetes = match self.request.cloud_provider.kubernetes.to_engine_kubernetes(
-            engine.context(),
-            engine.cloud_provider(),
-            engine.dns_provider(),
-            engine.logger(),
-        ) {
-            Ok(x) => x,
-            Err(e) => {
-                error!("{:?}", e.message);
-                panic!("Can't deploy infrastructure, please check json")
-            }
-        };
-
         let _ = match self.request.action {
-            Action::Create => tx.create_kubernetes(kubernetes.borrow()),
-            Action::Pause => tx.pause_kubernetes(kubernetes.borrow()),
-            Action::Delete => tx.delete_kubernetes(kubernetes.borrow()),
+            Action::Create => tx.create_kubernetes(),
+            Action::Pause => tx.pause_kubernetes(),
+            Action::Delete => tx.delete_kubernetes(),
         };
 
         handle_transaction_result(
-            tx.commit(logger.clone()),
+            tx.commit(),
             self,
             &self.request,
             self.action_context(ProgressLevel::Info),
@@ -191,7 +177,9 @@ impl Task for InfrastructureTask {
         info!("infrastructure task {} finished", self.id());
     }
 
-    fn cancel(&self) {}
+    fn cancel(&self) -> bool {
+        false
+    }
 
     fn cancel_checker(&self) -> Box<dyn Fn() -> bool> {
         Box::new(|| false)
@@ -206,6 +194,7 @@ pub struct EnvironmentTask {
     request: EngineRequest,
     status_sender: Sender<Status>,
     cancel_requested: Arc<AtomicBool>,
+    current_step: Arc<RwLock<StepName>>,
 }
 
 impl EnvironmentTask {
@@ -223,6 +212,7 @@ impl EnvironmentTask {
             request,
             status_sender,
             cancel_requested: Arc::new(AtomicBool::from(false)),
+            current_step: Arc::new(RwLock::new(Waiting)),
         }
     }
 
@@ -295,12 +285,10 @@ impl Task for EnvironmentTask {
             sender: self.status_sender.clone(),
         }));
 
-        let engine = match self.request.engine(
-            &self.info_context(),
-            my_progress_listener,
-            logger.clone(),
-            self.cancel_checker(),
-        ) {
+        let engine = match self
+            .request
+            .engine(&self.info_context(), my_progress_listener, logger.clone())
+        {
             Ok(engine) => engine,
             Err(err) => {
                 send_progress(
@@ -317,36 +305,34 @@ impl Task for EnvironmentTask {
             }
         };
 
-        // FIXME - return errors with Sender
-        let session = match engine.session() {
-            Ok(session) => session,
+        let task_status_updater = {
+            let current_step = self.current_step.clone();
+
+            move |step: &StepName| {
+                if let Ok(mut current_step) = current_step.write() {
+                    *current_step = step.clone();
+                }
+            }
+        };
+        let mut tx = match Transaction::new(
+            &engine,
+            logger.clone(),
+            self.cancel_checker(),
+            Box::new(task_status_updater),
+        ) {
+            Ok(transaction) => transaction,
             Err(err) => {
                 send_progress(
                     self,
                     &self.request,
                     self.action_context(ProgressLevel::Error),
-                    Some(format!("failed to get engine session {:?}", err)),
+                    Some(format!("failed to create engine transaction {:?}", err)),
                     true,
                     true,
                     false,
                 );
 
                 return;
-            }
-        };
-
-        let mut tx = session.transaction();
-
-        let kubernetes = match self.request.cloud_provider.kubernetes.to_engine_kubernetes(
-            engine.context(),
-            engine.cloud_provider(),
-            engine.dns_provider(),
-            engine.logger(),
-        ) {
-            Ok(x) => x,
-            Err(e) => {
-                error!("{:?}", e.message);
-                panic!("Can't deploy kubernetes environment, please check the request")
             }
         };
 
@@ -370,17 +356,15 @@ impl Task for EnvironmentTask {
         };
 
         let _ = match self.request.action {
-            Action::Create => tx.deploy_environment(kubernetes.borrow(), &environment_action),
-            Action::Pause => tx.pause_environment(kubernetes.borrow(), &environment_action),
-            Action::Delete => tx.delete_environment(kubernetes.borrow(), &environment_action),
+            Action::Create => tx.deploy_environment(&environment_action),
+            Action::Pause => tx.pause_environment(&environment_action),
+            Action::Delete => tx.delete_environment(&environment_action),
         };
 
-        handle_transaction_result(
-            tx.commit(logger.clone()),
-            self,
-            &self.request,
-            self.action_context(ProgressLevel::Info),
-        );
+        // run the actions
+        let tx_result = tx.commit();
+
+        handle_transaction_result(tx_result, self, &self.request, self.action_context(ProgressLevel::Info));
 
         match qovery_engine::fs::create_workspace_archive(
             engine.context().workspace_root_dir(),
@@ -403,8 +387,15 @@ impl Task for EnvironmentTask {
         info!("environment task {} finished", self.id());
     }
 
-    fn cancel(&self) {
-        self.cancel_requested.store(true, Ordering::Release);
+    fn cancel(&self) -> bool {
+        if let Ok(current_step) = self.current_step.read() {
+            if current_step.can_be_canceled() {
+                self.cancel_requested.store(true, Ordering::Release);
+                return true;
+            }
+        }
+
+        false
     }
 
     fn cancel_checker(&self) -> Box<dyn Fn() -> bool> {

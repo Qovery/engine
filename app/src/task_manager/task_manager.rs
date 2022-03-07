@@ -112,11 +112,11 @@ impl TaskManager {
                 .map_err(|err| error!("Cannot join thread {}: {:?}", thread_name, err));
         }
     }
-    pub fn cancel_current_task(&self) {
+    pub fn cancel_current_task(&self) -> bool {
         let lock = self.current_task.read().unwrap();
         match &*lock {
             Some(task) => task.cancel(),
-            None => {}
+            None => false,
         }
     }
 
@@ -211,7 +211,7 @@ pub trait Task: Send + Sync {
     fn id(&self) -> &str;
     fn send_status(&self, status: Status);
     fn run(&self, logger: Box<dyn Logger>);
-    fn cancel(&self);
+    fn cancel(&self) -> bool;
     fn cancel_checker(&self) -> Box<dyn Fn() -> bool>;
 }
 
@@ -355,7 +355,9 @@ mod tests {
             self.barrier_end.wait();
         }
 
-        fn cancel(&self) {}
+        fn cancel(&self) -> bool {
+            false
+        }
 
         fn cancel_checker(&self) -> Box<dyn Fn() -> bool> {
             Box::new(|| false)
@@ -375,7 +377,9 @@ mod tests {
         }
         fn send_status(&self, _status: Status) {}
         fn run(&self, _logger: Box<dyn Logger>) {}
-        fn cancel(&self) {}
+        fn cancel(&self) -> bool {
+            false
+        }
 
         fn cancel_checker(&self) -> Box<dyn Fn() -> bool> {
             Box::new(|| false)
