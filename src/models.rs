@@ -23,6 +23,7 @@ use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::git;
+use crate::logger::Logger;
 use crate::utilities::get_image_tag;
 
 #[derive(Clone, Debug)]
@@ -91,22 +92,19 @@ pub struct Environment {
 }
 
 impl Environment {
-    pub fn is_valid(&self) -> Result<(), EnvironmentError> {
-        Ok(())
-    }
-
     pub fn to_qe_environment(
         &self,
         context: &Context,
         built_applications: &Vec<Box<dyn crate::cloud_provider::service::Application>>,
         cloud_provider: &dyn CloudProvider,
+        logger: Box<dyn Logger>,
     ) -> crate::cloud_provider::environment::Environment {
         let applications = self
             .applications
             .iter()
             .map(|x| match built_applications.iter().find(|y| x.id.as_str() == y.id()) {
-                Some(app) => x.to_stateless_service(context, app.image().clone(), cloud_provider),
-                _ => x.to_stateless_service(context, x.to_image(), cloud_provider),
+                Some(app) => x.to_stateless_service(context, app.image().clone(), cloud_provider, logger.clone()),
+                _ => x.to_stateless_service(context, x.to_image(), cloud_provider, logger.clone()),
             })
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
@@ -115,7 +113,7 @@ impl Environment {
         let routers = self
             .routers
             .iter()
-            .map(|x| x.to_stateless_service(context, cloud_provider))
+            .map(|x| x.to_stateless_service(context, cloud_provider, logger.clone()))
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
@@ -129,7 +127,7 @@ impl Environment {
         let databases = self
             .databases
             .iter()
-            .map(|x| x.to_stateful_service(context, cloud_provider))
+            .map(|x| x.to_stateful_service(context, cloud_provider, logger.clone()))
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
@@ -221,6 +219,7 @@ impl Application {
         context: &Context,
         image: &Image,
         cloud_provider: &dyn CloudProvider,
+        logger: Box<dyn Logger>,
     ) -> Option<Box<(dyn crate::cloud_provider::service::Application)>> {
         let environment_variables = to_environment_variable(&self.environment_vars);
         let listeners = cloud_provider.listeners().clone();
@@ -242,6 +241,7 @@ impl Application {
                 self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 listeners,
+                logger,
             ))),
             CPKind::Do => Some(Box::new(
                 crate::cloud_provider::digitalocean::application::Application::new(
@@ -260,6 +260,7 @@ impl Application {
                     self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
                     environment_variables,
                     listeners,
+                    logger,
                 ),
             )),
             CPKind::Scw => Some(Box::new(
@@ -279,6 +280,7 @@ impl Application {
                     self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
                     environment_variables,
                     listeners,
+                    logger,
                 ),
             )),
         }
@@ -289,6 +291,7 @@ impl Application {
         context: &Context,
         image: Image,
         cloud_provider: &dyn CloudProvider,
+        logger: Box<dyn Logger>,
     ) -> Option<Box<dyn StatelessService>> {
         let environment_variables = to_environment_variable(&self.environment_vars);
         let listeners = cloud_provider.listeners().clone();
@@ -310,6 +313,7 @@ impl Application {
                 self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 listeners,
+                logger.clone(),
             ))),
             CPKind::Do => Some(Box::new(
                 crate::cloud_provider::digitalocean::application::Application::new(
@@ -328,6 +332,7 @@ impl Application {
                     self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
                     environment_variables,
                     listeners,
+                    logger.clone(),
                 ),
             )),
             CPKind::Scw => Some(Box::new(
@@ -347,6 +352,7 @@ impl Application {
                     self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
                     environment_variables,
                     listeners,
+                    logger.clone(),
                 ),
             )),
         }
@@ -583,6 +589,7 @@ impl Router {
         &self,
         context: &Context,
         cloud_provider: &dyn CloudProvider,
+        logger: Box<dyn Logger>,
     ) -> Option<Box<dyn StatelessService>> {
         let custom_domains = self
             .custom_domains
@@ -616,6 +623,7 @@ impl Router {
                     routes,
                     self.sticky_sessions_enabled,
                     listeners,
+                    logger,
                 ));
                 Some(router)
             }
@@ -631,6 +639,7 @@ impl Router {
                         routes,
                         self.sticky_sessions_enabled,
                         listeners,
+                        logger,
                     ));
                 Some(router)
             }
@@ -645,6 +654,7 @@ impl Router {
                     routes,
                     self.sticky_sessions_enabled,
                     listeners,
+                    logger,
                 ));
                 Some(router)
             }
@@ -701,6 +711,7 @@ impl Database {
         &self,
         context: &Context,
         cloud_provider: &dyn CloudProvider,
+        logger: Box<dyn Logger>,
     ) -> Option<Box<dyn StatefulService>> {
         let database_options = DatabaseOptions {
             mode: self.mode.clone(),
@@ -734,6 +745,7 @@ impl Database {
                         self.database_instance_type.as_str(),
                         database_options,
                         listeners,
+                        logger,
                     ));
 
                     Some(db)
@@ -752,6 +764,7 @@ impl Database {
                         self.database_instance_type.as_str(),
                         database_options,
                         listeners,
+                        logger,
                     ));
 
                     Some(db)
@@ -770,6 +783,7 @@ impl Database {
                         self.database_instance_type.as_str(),
                         database_options,
                         listeners,
+                        logger,
                     ));
 
                     Some(db)
@@ -788,6 +802,7 @@ impl Database {
                         self.database_instance_type.as_str(),
                         database_options,
                         listeners,
+                        logger,
                     ));
 
                     Some(db)
@@ -809,6 +824,7 @@ impl Database {
                             self.database_instance_type.as_str(),
                             database_options,
                             listeners,
+                            logger,
                         ),
                     );
 
@@ -829,6 +845,7 @@ impl Database {
                             self.database_instance_type.as_str(),
                             database_options,
                             listeners,
+                            logger,
                         ));
 
                     Some(db)
@@ -848,6 +865,7 @@ impl Database {
                             self.database_instance_type.as_str(),
                             database_options,
                             listeners,
+                            logger,
                         ));
 
                     Some(db)
@@ -867,6 +885,7 @@ impl Database {
                             self.database_instance_type.as_str(),
                             database_options,
                             listeners,
+                            logger,
                         ));
 
                     Some(db)
@@ -889,12 +908,16 @@ impl Database {
                                 self.database_instance_type.as_str(),
                                 database_options,
                                 listeners,
+                                logger.clone(),
                             ));
 
                         Some(db)
                     }
                     Err(e) => {
-                        error!("{}", format!("error while parsing postgres version, error: {}", e));
+                        error!(
+                            "{}",
+                            format!("error while parsing postgres version, error: {}", e.message())
+                        );
                         None
                     }
                 },
@@ -914,12 +937,16 @@ impl Database {
                                 self.database_instance_type.as_str(),
                                 database_options,
                                 listeners,
+                                logger.clone(),
                             ));
 
                         Some(db)
                     }
                     Err(e) => {
-                        error!("{}", format!("error while parsing mysql version, error: {}", e));
+                        error!(
+                            "{}",
+                            format!("error while parsing mysql version, error: {}", e.message())
+                        );
                         None
                     }
                 },
@@ -938,6 +965,7 @@ impl Database {
                             self.database_instance_type.as_str(),
                             database_options,
                             listeners,
+                            logger.clone(),
                         ));
 
                     Some(db)
@@ -957,6 +985,7 @@ impl Database {
                             self.database_instance_type.as_str(),
                             database_options,
                             listeners,
+                            logger,
                         ));
 
                     Some(db)

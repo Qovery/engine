@@ -3,35 +3,34 @@ extern crate serde_json;
 use reqwest::StatusCode;
 
 use crate::cloud_provider::digitalocean::models::load_balancers::LoadBalancer;
-use crate::error::{SimpleError, SimpleErrorKind};
+use crate::errors::CommandError;
 use crate::utilities::get_header_with_bearer;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 
 pub const DO_LOAD_BALANCER_API_PATH: &str = "https://api.digitalocean.com/v2/load_balancers";
 
-pub fn get_ip_from_do_load_balancer_api_output(json_content: &str) -> Result<Ipv4Addr, SimpleError> {
+pub fn get_ip_from_do_load_balancer_api_output(json_content: &str) -> Result<Ipv4Addr, CommandError> {
     let res_load_balancer = serde_json::from_str::<LoadBalancer>(json_content);
 
     match res_load_balancer {
         Ok(lb) => match Ipv4Addr::from_str(&lb.load_balancer.ip) {
             Ok(ip) => Ok(ip),
-            Err(e) => Err(SimpleError::new(
-                SimpleErrorKind::Other,
+            Err(e) => Err(CommandError::new(
+                e.to_string(),
                 Some(format!(
-                    "Info returned from DO API is not a valid IP, received '{:?}' instead. {:?}",
-                    &lb.load_balancer.ip, e
+                    "Info returned from DO API is not a valid IP, received '{:?}' instead.",
+                    &lb.load_balancer.ip,
                 )),
             )),
         },
-        Err(_) => Err(SimpleError::new(
-            SimpleErrorKind::Other,
-            Some("Error While trying to deserialize json received from Digital Ocean Load Balancer API".to_string()),
+        Err(_) => Err(CommandError::new_from_safe_message(
+            "Error While trying to deserialize json received from Digital Ocean Load Balancer API".to_string(),
         )),
     }
 }
 
-pub fn do_get_load_balancer_ip(token: &str, load_balancer_id: &str) -> Result<Ipv4Addr, SimpleError> {
+pub fn do_get_load_balancer_ip(token: &str, load_balancer_id: &str) -> Result<Ipv4Addr, CommandError> {
     let headers = get_header_with_bearer(token);
     let url = format!("{}/{}", DO_LOAD_BALANCER_API_PATH, load_balancer_id);
     let res = reqwest::blocking::Client::new().get(&url).headers(headers).send();
@@ -42,17 +41,16 @@ pub fn do_get_load_balancer_ip(token: &str, load_balancer_id: &str) -> Result<Ip
                 let content = response.text().unwrap();
                 get_ip_from_do_load_balancer_api_output(content.as_str())
             }
-            _ => Err(SimpleError::new(
-                SimpleErrorKind::Other,
+            _ => Err(CommandError::new(
+                format!("{:?}", response),
                 Some(
-                    format!("Unknown status code received from Digital Ocean Kubernetes API while retrieving load balancer information. {:?}", response),
+                    "Unknown status code received from Digital Ocean Kubernetes API while retrieving load balancer information.".to_string(),
                 ),
             )),
         },
         Err(_) => {
-            Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some("Unable to get a response from Digital Ocean Load Balancer API"),
+            Err(CommandError::new_from_safe_message(
+                "Unable to get a response from Digital Ocean Load Balancer API".to_string(),
             ))
         }
     };

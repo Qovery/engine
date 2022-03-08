@@ -1,18 +1,20 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
+use crate::errors::{CommandError, EngineError};
+use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter};
 use crate::git;
-use crate::models::{Context, Listen};
+use crate::logger::Logger;
+use crate::models::{Context, Listen, QoveryIdentifier};
 use crate::utilities::get_image_tag;
-use git2::{Cred, CredentialType, Error};
+use git2::{Cred, CredentialType};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::path::Path;
 
 pub mod docker;
 pub mod local_docker;
 
-pub trait BuildPlatform: Listen {
+pub trait BuildPlatform: ToTransmitter + Listen {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
@@ -29,15 +31,17 @@ pub trait BuildPlatform: Listen {
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<BuildResult, EngineError>;
     fn build_error(&self, build: Build) -> Result<BuildResult, EngineError>;
-    fn engine_error_scope(&self) -> EngineErrorScope {
-        EngineErrorScope::BuildPlatform(self.id().to_string(), self.name().to_string())
-    }
-    fn engine_error(&self, cause: EngineErrorCause, message: String) -> EngineError {
-        EngineError::new(
-            cause,
-            self.engine_error_scope(),
-            self.context().execution_id(),
-            Some(message),
+    fn logger(&self) -> Box<dyn Logger>;
+    fn get_event_details(&self) -> EventDetails {
+        let context = self.context();
+        EventDetails::new(
+            None,
+            QoveryIdentifier::from(context.organization_id().to_string()),
+            QoveryIdentifier::from(context.cluster_id().to_string()),
+            QoveryIdentifier::from(context.execution_id().to_string()),
+            None,
+            Stage::Environment(EnvironmentStep::Build),
+            self.to_transmitter(),
         )
     }
 }
@@ -49,7 +53,7 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn to_previous_build<P>(&self, clone_repo_into_dir: P) -> Result<Option<Build>, Error>
+    pub fn to_previous_build<P>(&self, clone_repo_into_dir: P) -> Result<Option<Build>, CommandError>
     where
         P: AsRef<Path>,
     {
@@ -64,7 +68,8 @@ impl Build {
                     Cred::userpass_plaintext(creds.login.as_str(), creds.password.as_str()).unwrap(),
                 )],
             },
-        )?;
+        )
+        .map_err(|err| CommandError::new(err.to_string(), Some("Cannot get parent commit ID.".to_string())))?;
 
         let parent_commit_id = match parent_commit_id {
             None => return Ok(None),
@@ -156,6 +161,10 @@ pub struct Image {
 impl Image {
     pub fn name_with_tag(&self) -> String {
         format!("{}:{}", self.name, self.tag)
+    }
+
+    pub fn name_with_latest_tag(&self) -> String {
+        format!("{}:latest", self.name)
     }
 }
 

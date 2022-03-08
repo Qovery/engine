@@ -6,7 +6,7 @@ use tera::Context as TeraContext;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Create, Database, DatabaseOptions,
-    DatabaseType, Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
+    DatabaseType, Delete, Helm, Pause, Service, ServiceType, ServiceVersionCheckResult, StatefulService, Terraform,
 };
 use crate::cloud_provider::utilities::{
     generate_supported_version, get_self_hosted_mongodb_version, get_supported_version_to_use, print_action,
@@ -14,8 +14,9 @@ use crate::cloud_provider::utilities::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
-use crate::error::{EngineError, EngineErrorScope, StringError};
-use crate::events::{EnvironmentStep, Stage, ToTransmitter, Transmitter};
+use crate::errors::{CommandError, EngineError};
+use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
+use crate::logger::Logger;
 use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
@@ -33,6 +34,7 @@ pub struct MongoDB {
     database_instance_type: String,
     options: DatabaseOptions,
     listeners: Listeners,
+    logger: Box<dyn Logger>,
 }
 
 impl MongoDB {
@@ -49,6 +51,7 @@ impl MongoDB {
         database_instance_type: &str,
         options: DatabaseOptions,
         listeners: Listeners,
+        logger: Box<dyn Logger>,
     ) -> Self {
         MongoDB {
             context,
@@ -63,11 +66,21 @@ impl MongoDB {
             database_instance_type: database_instance_type.to_string(),
             options,
             listeners,
+            logger,
         }
     }
 
-    fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
-        check_service_version(get_mongodb_version(self.version(), is_managed_services), self)
+    fn matching_correct_version(
+        &self,
+        is_managed_services: bool,
+        event_details: EventDetails,
+    ) -> Result<ServiceVersionCheckResult, EngineError> {
+        check_service_version(
+            get_mongodb_version(self.version(), is_managed_services),
+            self,
+            event_details,
+            self.logger(),
+        )
     }
 
     fn cloud_provider_name(&self) -> &str {
@@ -155,17 +168,14 @@ impl Service for MongoDB {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
         let mut context = default_tera_context(self, target.kubernetes, target.environment);
 
         // we need the kubernetes config file to store tfstates file in kube secrets
-        let kube_config_file_path = match kubernetes.get_kubeconfig_file_path() {
-            Ok(path) => path,
-            Err(e) => {
-                return Err(e.to_legacy_engine_error());
-            }
-        };
+        let kube_config_file_path = kubernetes.get_kubeconfig_file_path()?;
+
         context.insert("kubeconfig_path", &kube_config_file_path);
 
         kubectl::kubectl_exec_create_namespace_without_labels(
@@ -176,7 +186,10 @@ impl Service for MongoDB {
 
         context.insert("namespace", environment.namespace());
 
-        let version = self.matching_correct_version(self.is_managed_service())?;
+        let version = self
+            .matching_correct_version(self.is_managed_service(), event_details.clone())?
+            .matched_version()
+            .to_string();
         context.insert("version", &version);
 
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
@@ -221,16 +234,12 @@ impl Service for MongoDB {
         Ok(context)
     }
 
-    fn selector(&self) -> Option<String> {
-        Some(format!("app={}", self.sanitized_name()))
+    fn logger(&self) -> &dyn Logger {
+        &*self.logger
     }
 
-    fn engine_error_scope(&self) -> EngineErrorScope {
-        EngineErrorScope::Database(
-            self.id().to_string(),
-            self.service_type().name().to_string(),
-            self.name().to_string(),
-        )
+    fn selector(&self) -> Option<String> {
+        Some(format!("app={}", self.sanitized_name()))
     }
 }
 
@@ -287,24 +296,35 @@ impl Create for MongoDB {
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
-            deploy_stateful_service(target, self, event_details.clone())
+            deploy_stateful_service(target, self, event_details.clone(), &*self.logger)
         })
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()])
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+        self.check_domains(
+            self.listeners.clone(),
+            vec![self.fqdn.as_str()],
+            event_details,
+            self.logger(),
+        )
     }
 
     #[named]
     fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details,
+            self.logger(),
         );
         Ok(())
     }
@@ -313,11 +333,14 @@ impl Create for MongoDB {
 impl Pause for MongoDB {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details,
+            self.logger(),
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
@@ -331,11 +354,14 @@ impl Pause for MongoDB {
 
     #[named]
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details,
+            self.logger(),
         );
 
         Ok(())
@@ -351,10 +377,12 @@ impl Delete for MongoDB {
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
-            delete_stateful_service(target, self, event_details.clone())
+            delete_stateful_service(target, self, event_details.clone(), self.logger())
         })
     }
 
@@ -364,11 +392,14 @@ impl Delete for MongoDB {
 
     #[named]
     fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details,
+            self.logger(),
         );
         Ok(())
     }
@@ -384,7 +415,7 @@ impl Listen for MongoDB {
     }
 }
 
-fn get_mongodb_version(requested_version: String, is_managed_service: bool) -> Result<String, StringError> {
+fn get_mongodb_version(requested_version: String, is_managed_service: bool) -> Result<String, CommandError> {
     if is_managed_service {
         get_managed_mongodb_version(requested_version)
     } else {
@@ -392,7 +423,7 @@ fn get_mongodb_version(requested_version: String, is_managed_service: bool) -> R
     }
 }
 
-fn get_managed_mongodb_version(requested_version: String) -> Result<String, StringError> {
+fn get_managed_mongodb_version(requested_version: String) -> Result<String, CommandError> {
     let mut supported_mongodb_versions = HashMap::new();
 
     // v3.6.0
@@ -410,6 +441,7 @@ fn get_managed_mongodb_version(requested_version: String) -> Result<String, Stri
 mod tests_mongodb {
     use crate::cloud_provider::aws::databases::mongodb::{get_mongodb_version, MongoDB};
     use crate::cloud_provider::service::{Action, DatabaseOptions, Service};
+    use crate::logger::StdIoLogger;
     use crate::models::{Context, DatabaseMode};
 
     #[test]
@@ -418,14 +450,20 @@ mod tests_mongodb {
         assert_eq!(get_mongodb_version("4".to_string(), true).unwrap(), "4.0.0");
         assert_eq!(get_mongodb_version("4.0".to_string(), true).unwrap(), "4.0.0");
         assert_eq!(
-            get_mongodb_version("4.4".to_string(), true).unwrap_err().as_str(),
+            get_mongodb_version("4.4".to_string(), true)
+                .unwrap_err()
+                .message()
+                .as_str(),
             "DocumentDB 4.4 version is not supported"
         );
         // self-hosted version
         assert_eq!(get_mongodb_version("4".to_string(), false).unwrap(), "4.4.4");
         assert_eq!(get_mongodb_version("4.2".to_string(), false).unwrap(), "4.2.12");
         assert_eq!(
-            get_mongodb_version("3.4".to_string(), false).unwrap_err().as_str(),
+            get_mongodb_version("3.4".to_string(), false)
+                .unwrap_err()
+                .message()
+                .as_str(),
             "MongoDB 3.4 version is not supported"
         );
     }
@@ -470,6 +508,7 @@ mod tests_mongodb {
                 publicly_accessible: false,
             },
             vec![],
+            Box::new(StdIoLogger::new()),
         );
         assert_eq!(database.sanitized_name(), db_expected_name);
     }

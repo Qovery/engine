@@ -4,17 +4,20 @@ use qovery_engine::cloud_provider::digitalocean::kubernetes::DoksOptions;
 use qovery_engine::cloud_provider::digitalocean::network::vpc::VpcInitKind;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::models::NodeGroups;
-use qovery_engine::cloud_provider::TerraformStateCredentials;
+use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::docr::DOCR;
-use qovery_engine::engine::Engine;
+use qovery_engine::engine::EngineConfig;
 use qovery_engine::error::EngineError;
 use qovery_engine::models::{Context, Environment};
+use std::sync::Arc;
 
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::common::{Cluster, ClusterDomain};
+use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
+use qovery_engine::cloud_provider::Kind::Do;
+use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::logger::Logger;
 
 pub const DO_KUBERNETES_MAJOR_VERSION: u8 = 1;
@@ -39,24 +42,32 @@ pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
 }
 
 impl Cluster<DO, DoksOptions> for DO {
-    fn docker_cr_engine(context: &Context, logger: Box<dyn Logger>) -> Engine {
+    fn docker_cr_engine(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
         // use DigitalOcean Container Registry
         let container_registry = Box::new(container_registry_digital_ocean(context));
         // use LocalDocker
-        let build_platform = Box::new(build_platform_local_docker(context));
+        let build_platform = Box::new(build_platform_local_docker(context, logger.clone()));
+
         // use Digital Ocean
-        let cloud_provider = DO::cloud_provider(context);
+        let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(Self::cloud_provider(context));
+        let dns_provider: Arc<Box<dyn DnsProvider>> =
+            Arc::new(dns_provider_cloudflare(context, ClusterDomain::Default));
 
-        let dns_provider = Box::new(dns_provider_cloudflare(&context, ClusterDomain::Default));
+        let k = get_environment_test_kubernetes(
+            Do,
+            context,
+            cloud_provider.clone(),
+            dns_provider.clone(),
+            logger.clone(),
+        );
 
-        Engine::new(
+        EngineConfig::new(
             context.clone(),
             build_platform,
             container_registry,
             cloud_provider,
             dns_provider,
-            logger,
-            Box::new(|| false),
+            k,
         )
     }
 

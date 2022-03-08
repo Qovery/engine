@@ -8,6 +8,8 @@ use crate::cmd::command::QoveryCommand;
 use crate::container_registry::docker::{docker_pull_image, docker_tag_and_push_image};
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PullResult, PushResult};
 use crate::error::{cast_simple_error_to_engine_error, EngineErrorCause, SimpleError, SimpleErrorKind};
+use crate::errors::EngineError as NewEngineError;
+use crate::events::{ToTransmitter, Transmitter};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
@@ -112,17 +114,21 @@ impl DOCR {
     }
 
     fn push_image(&self, registry_name: String, dest: String, image: &Image) -> Result<PushResult, EngineError> {
-        let _ =
-            match docker_tag_and_push_image(self.kind(), vec![], image.name.clone(), image.tag.clone(), dest.clone()) {
-                Ok(_) => {}
-                Err(e) => {
-                    return Err(self.engine_error(
-                        EngineErrorCause::Internal,
-                        e.message
-                            .unwrap_or_else(|| "unknown error occurring during docker push".to_string()),
-                    ));
-                }
-            };
+        let dest_latest_tag = format!(
+            "registry.digitalocean.com/{}/{}:latest",
+            registry_name.as_str(),
+            image.name
+        );
+        let _ = match docker_tag_and_push_image(self.kind(), vec![], &image, dest.clone(), dest_latest_tag) {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    e.message
+                        .unwrap_or_else(|| "unknown error occurring during docker push".to_string()),
+                ));
+            }
+        };
 
         let mut image = image.clone();
         image.registry_name = Some(registry_name.clone());
@@ -228,6 +234,12 @@ impl DOCR {
     }
 }
 
+impl ToTransmitter for DOCR {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::ContainerRegistry(self.id().to_string(), self.name().to_string())
+    }
+}
+
 impl ContainerRegistry for DOCR {
     fn context(&self) -> &Context {
         &self.context
@@ -245,7 +257,7 @@ impl ContainerRegistry for DOCR {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), NewEngineError> {
         Ok(())
     }
 

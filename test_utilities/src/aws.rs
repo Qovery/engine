@@ -7,17 +7,20 @@ use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
-use qovery_engine::cloud_provider::TerraformStateCredentials;
+use qovery_engine::cloud_provider::Kind::Aws;
+use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
-use qovery_engine::engine::Engine;
+use qovery_engine::dns_provider::DnsProvider;
+use qovery_engine::engine::EngineConfig;
 use qovery_engine::logger::Logger;
 use qovery_engine::models::Context;
 use std::str::FromStr;
+use std::sync::Arc;
 use tracing::error;
 
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::common::{Cluster, ClusterDomain};
+use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
@@ -61,26 +64,33 @@ pub fn container_registry_docker_hub(context: &Context) -> DockerHub {
 }
 
 impl Cluster<AWS, Options> for AWS {
-    fn docker_cr_engine(context: &Context, logger: Box<dyn Logger>) -> Engine {
+    fn docker_cr_engine(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
         // use ECR
         let container_registry = Box::new(container_registry_ecr(context));
 
         // use LocalDocker
-        let build_platform = Box::new(build_platform_local_docker(context));
+        let build_platform = Box::new(build_platform_local_docker(context, logger.clone()));
 
         // use AWS
-        let cloud_provider = AWS::cloud_provider(context);
+        let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(AWS::cloud_provider(context));
+        let dns_provider: Arc<Box<dyn DnsProvider>> =
+            Arc::new(dns_provider_cloudflare(context, ClusterDomain::Default));
 
-        let dns_provider = Box::new(dns_provider_cloudflare(context, ClusterDomain::Default));
+        let k = get_environment_test_kubernetes(
+            Aws,
+            context,
+            cloud_provider.clone(),
+            dns_provider.clone(),
+            logger.clone(),
+        );
 
-        Engine::new(
+        EngineConfig::new(
             context.clone(),
             build_platform,
             container_registry,
             cloud_provider,
             dns_provider,
-            logger,
-            Box::new(|| false),
+            k,
         )
     }
 

@@ -9,7 +9,6 @@ use qovery_engine::models::{
     Action, Application, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
     GitCredentials, Port, Protocol, Route, Router, Storage, StorageType,
 };
-use qovery_engine::transaction::TransactionResult;
 
 use crate::aws::AWS_KUBERNETES_VERSION;
 use crate::cloudflare::dns_provider_cloudflare;
@@ -34,14 +33,15 @@ use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
 use qovery_engine::cmd::kubectl::kubernetes_get_all_hpas;
 use qovery_engine::cmd::structs::SVCItem;
-use qovery_engine::engine::Engine;
+use qovery_engine::engine::EngineConfig;
 use qovery_engine::errors::CommandError;
 use qovery_engine::logger::Logger;
 use qovery_engine::models::DatabaseMode::CONTAINER;
-use qovery_engine::transaction::DeploymentOption;
+use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 use tracing::{span, Level};
 
 pub enum RegionActivationStatus {
@@ -55,7 +55,7 @@ pub enum ClusterDomain {
 }
 
 pub trait Cluster<T, U> {
-    fn docker_cr_engine(context: &Context, logger: Box<dyn Logger>) -> Engine;
+    fn docker_cr_engine(context: &Context, logger: Box<dyn Logger>) -> EngineConfig;
     fn cloud_provider(context: &Context) -> Box<T>;
     fn kubernetes_nodes() -> Vec<NodeGroups>;
     fn kubernetes_cluster_options(secrets: FuncTestsSecrets, cluster_id: Option<String>) -> U;
@@ -93,26 +93,14 @@ impl Infrastructure for Environment {
         environment_action: &EnvironmentAction,
         logger: Box<dyn Logger>,
     ) -> TransactionResult {
-        let engine: Engine = match provider_kind {
+        let engine: EngineConfig = match provider_kind {
             Kind::Aws => AWS::docker_cr_engine(context, logger.clone()),
             Kind::Do => DO::docker_cr_engine(context, logger.clone()),
             Kind::Scw => Scaleway::docker_cr_engine(context, logger.clone()),
         };
-        let session = engine.session().unwrap();
-        let mut tx = session.transaction();
 
-        let dns_provider = dns_provider_cloudflare(context, ClusterDomain::Default);
-        let cp: Box<dyn CloudProvider>;
-        cp = match provider_kind {
-            Kind::Aws => AWS::cloud_provider(context),
-            Kind::Do => DO::cloud_provider(context),
-            Kind::Scw => Scaleway::cloud_provider(context),
-        };
-        let k;
-        k = get_environment_test_kubernetes(provider_kind, context, cp.as_ref(), &dns_provider, logger.as_ref());
-
+        let mut tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
         let _ = tx.deploy_environment_with_options(
-            k.as_ref(),
             &environment_action,
             DeploymentOption {
                 force_build: true,
@@ -130,26 +118,14 @@ impl Infrastructure for Environment {
         environment_action: &EnvironmentAction,
         logger: Box<dyn Logger>,
     ) -> TransactionResult {
-        let engine: Engine = match provider_kind {
+        let engine: EngineConfig = match provider_kind {
             Kind::Aws => AWS::docker_cr_engine(context, logger.clone()),
             Kind::Do => DO::docker_cr_engine(context, logger.clone()),
             Kind::Scw => Scaleway::docker_cr_engine(context, logger.clone()),
         };
 
-        let session = engine.session().unwrap();
-        let mut tx = session.transaction();
-
-        let dns_provider = dns_provider_cloudflare(context, ClusterDomain::Default);
-        let cp: Box<dyn CloudProvider>;
-        cp = match provider_kind {
-            Kind::Aws => AWS::cloud_provider(context),
-            Kind::Do => DO::cloud_provider(context),
-            Kind::Scw => Scaleway::cloud_provider(context),
-        };
-        let k;
-        k = get_environment_test_kubernetes(provider_kind, context, cp.as_ref(), &dns_provider, logger.as_ref());
-
-        let _ = tx.pause_environment(k.as_ref(), &environment_action);
+        let mut tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+        let _ = tx.pause_environment(&environment_action);
 
         tx.commit()
     }
@@ -161,26 +137,14 @@ impl Infrastructure for Environment {
         environment_action: &EnvironmentAction,
         logger: Box<dyn Logger>,
     ) -> TransactionResult {
-        let engine: Engine = match provider_kind {
+        let engine: EngineConfig = match provider_kind {
             Kind::Aws => AWS::docker_cr_engine(context, logger.clone()),
             Kind::Do => DO::docker_cr_engine(context, logger.clone()),
             Kind::Scw => Scaleway::docker_cr_engine(context, logger.clone()),
         };
 
-        let session = engine.session().unwrap();
-        let mut tx = session.transaction();
-
-        let dns_provider = dns_provider_cloudflare(context, ClusterDomain::Default);
-        let cp: Box<dyn CloudProvider>;
-        cp = match provider_kind {
-            Kind::Aws => AWS::cloud_provider(context),
-            Kind::Do => DO::cloud_provider(context),
-            Kind::Scw => Scaleway::cloud_provider(context),
-        };
-        let k;
-        k = get_environment_test_kubernetes(provider_kind, context, cp.as_ref(), &dns_provider, logger.as_ref());
-
-        let _ = tx.delete_environment(k.as_ref(), &environment_action);
+        let mut tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+        let _ = tx.delete_environment(&environment_action);
 
         tx.commit()
     }
@@ -990,6 +954,7 @@ pub fn test_db(
     let context_for_delete = context.clone_not_same_execution_id();
 
     let app_id = generate_id();
+
     let database_username = "superuser".to_string();
     let database_password = generate_id();
     let db_kind_str = db_kind.name().to_string();
@@ -1148,10 +1113,10 @@ pub fn test_db(
 pub fn get_environment_test_kubernetes<'a>(
     provider_kind: Kind,
     context: &Context,
-    cloud_provider: &'a dyn CloudProvider,
-    dns_provider: &'a dyn DnsProvider,
-    logger: &'a dyn Logger,
-) -> Box<dyn Kubernetes + 'a> {
+    cloud_provider: Arc<Box<dyn CloudProvider>>,
+    dns_provider: Arc<Box<dyn DnsProvider>>,
+    logger: Box<dyn Logger>,
+) -> Box<dyn Kubernetes> {
     let secrets = FuncTestsSecrets::new();
     let k: Box<dyn Kubernetes>;
 
@@ -1245,10 +1210,10 @@ pub fn get_cluster_test_kubernetes<'a>(
     boot_version: String,
     localisation: &str,
     aws_zones: Option<Vec<AwsZones>>,
-    cloud_provider: &'a dyn CloudProvider,
-    dns_provider: &'a dyn DnsProvider,
+    cloud_provider: Arc<Box<dyn CloudProvider>>,
+    dns_provider: Arc<Box<dyn DnsProvider>>,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
-    logger: &'a dyn Logger,
+    logger: Box<dyn Logger>,
 ) -> Box<dyn Kubernetes + 'a> {
     let k: Box<dyn Kubernetes>;
 
@@ -1341,28 +1306,26 @@ pub fn cluster_test(
     let cluster_name = generate_cluster_id(localisation.clone());
     let boot_version = format!("{}.{}", major_boot_version, minor_boot_version.clone());
 
-    let engine;
-    match provider_kind {
-        Kind::Aws => engine = AWS::docker_cr_engine(&context, logger.clone()),
-        Kind::Do => engine = DO::docker_cr_engine(&context, logger.clone()),
-        Kind::Scw => engine = Scaleway::docker_cr_engine(&context, logger.clone()),
+    let engine = match provider_kind {
+        Kind::Aws => AWS::docker_cr_engine(&context, logger.clone()),
+        Kind::Do => DO::docker_cr_engine(&context, logger.clone()),
+        Kind::Scw => Scaleway::docker_cr_engine(&context, logger.clone()),
     };
-    let dns_provider = dns_provider_cloudflare(&context, cluster_domain);
-    let mut deploy_tx = engine.session().unwrap().transaction();
-    let mut delete_tx = engine.session().unwrap().transaction();
-
-    let cp: Box<dyn CloudProvider>;
-    cp = match provider_kind {
-        Kind::Aws => AWS::cloud_provider(&context),
-        Kind::Do => DO::cloud_provider(&context),
-        Kind::Scw => Scaleway::cloud_provider(&context),
-    };
+    let mut deploy_tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+    let mut delete_tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
     let mut aws_zones_string: Vec<String> = Vec::with_capacity(3);
     if aws_zones.is_some() {
         for zone in aws_zones.clone().unwrap() {
             aws_zones_string.push(zone.to_string())
         }
+    };
+
+    let dns_provider = Arc::new(dns_provider_cloudflare(&context, cluster_domain));
+    let cp: Arc<Box<dyn CloudProvider>> = match provider_kind {
+        Kind::Aws => Arc::new(AWS::cloud_provider(&context)),
+        Kind::Do => Arc::new(DO::cloud_provider(&context)),
+        Kind::Scw => Arc::new(Scaleway::cloud_provider(&context)),
     };
 
     let kubernetes = get_cluster_test_kubernetes(
@@ -1374,24 +1337,25 @@ pub fn cluster_test(
         boot_version.clone(),
         localisation.clone(),
         aws_zones.clone(),
-        cp.as_ref(),
-        &dns_provider,
+        cp.clone(),
+        dns_provider.clone(),
         vpc_network_mode.clone(),
-        logger.as_ref(),
+        logger.clone(),
     );
 
     // Deploy
-    if let Err(err) = deploy_tx.create_kubernetes(kubernetes.as_ref()) {
+    if let Err(err) = deploy_tx.create_kubernetes() {
         panic!("{:?}", err)
     }
     assert!(matches!(deploy_tx.commit(), TransactionResult::Ok));
 
     // Deploy env if any
     if let Some(env) = environment_to_deploy {
-        let mut deploy_env_tx = engine.session().unwrap().transaction();
+        let mut deploy_env_tx =
+            Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
         // Deploy env
-        if let Err(err) = deploy_env_tx.deploy_environment(kubernetes.as_ref(), env) {
+        if let Err(err) = deploy_env_tx.deploy_environment(env) {
             panic!("{:?}", err)
         }
 
@@ -1410,17 +1374,18 @@ pub fn cluster_test(
     match test_type {
         ClusterTestType::Classic => {}
         ClusterTestType::WithPause => {
-            let mut pause_tx = engine.session().unwrap().transaction();
-            let mut resume_tx = engine.session().unwrap().transaction();
+            let mut pause_tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+            let mut resume_tx =
+                Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
             // Pause
-            if let Err(err) = pause_tx.pause_kubernetes(kubernetes.as_ref()) {
+            if let Err(err) = pause_tx.pause_kubernetes() {
                 panic!("{:?}", err)
             }
             assert!(matches!(pause_tx.commit(), TransactionResult::Ok));
 
             // Resume
-            if let Err(err) = resume_tx.create_kubernetes(kubernetes.as_ref()) {
+            if let Err(err) = resume_tx.create_kubernetes() {
                 panic!("{:?}", err)
             }
 
@@ -1446,16 +1411,18 @@ pub fn cluster_test(
                 upgrade_to_version.clone(),
                 localisation.clone(),
                 aws_zones,
-                cp.as_ref(),
-                &dns_provider,
+                cp,
+                dns_provider,
                 vpc_network_mode.clone(),
-                logger.as_ref(),
+                logger.clone(),
             );
-            let mut upgrade_tx = engine.session().unwrap().transaction();
-            let mut delete_tx = engine.session().unwrap().transaction();
+            let mut upgrade_tx =
+                Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+            let mut delete_tx =
+                Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
             // Upgrade
-            if let Err(err) = upgrade_tx.create_kubernetes(upgraded_kubernetes.as_ref()) {
+            if let Err(err) = upgrade_tx.create_kubernetes() {
                 panic!("{:?}", err)
             }
             assert!(matches!(upgrade_tx.commit(), TransactionResult::Ok));
@@ -1474,7 +1441,7 @@ pub fn cluster_test(
             }
 
             // Delete
-            if let Err(err) = delete_tx.delete_kubernetes(upgraded_kubernetes.as_ref()) {
+            if let Err(err) = delete_tx.delete_kubernetes() {
                 panic!("{:?}", err)
             }
             assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
@@ -1485,17 +1452,18 @@ pub fn cluster_test(
 
     // Destroy env if any
     if let Some(env) = environment_to_deploy {
-        let mut destroy_env_tx = engine.session().unwrap().transaction();
+        let mut destroy_env_tx =
+            Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
         // Deploy env
-        if let Err(err) = destroy_env_tx.delete_environment(kubernetes.as_ref(), env) {
+        if let Err(err) = destroy_env_tx.delete_environment(env) {
             panic!("{:?}", err)
         }
         assert!(matches!(destroy_env_tx.commit(), TransactionResult::Ok));
     }
 
     // Delete
-    if let Err(err) = delete_tx.delete_kubernetes(kubernetes.as_ref()) {
+    if let Err(err) = delete_tx.delete_kubernetes() {
         panic!("{:?}", err)
     }
     assert!(matches!(delete_tx.commit(), TransactionResult::Ok));

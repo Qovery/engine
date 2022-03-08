@@ -1,47 +1,46 @@
 use std::borrow::Borrow;
+use std::sync::Arc;
 
 use crate::build_platform::BuildPlatform;
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::CloudProvider;
 use crate::container_registry::ContainerRegistry;
 use crate::dns_provider::DnsProvider;
-use crate::error::EngineError;
-use crate::logger::Logger;
+use crate::errors::EngineError;
 use crate::models::Context;
-use crate::session::Session;
 
-pub struct Engine {
+pub struct EngineConfig {
     context: Context,
     build_platform: Box<dyn BuildPlatform>,
     container_registry: Box<dyn ContainerRegistry>,
-    cloud_provider: Box<dyn CloudProvider>,
-    dns_provider: Box<dyn DnsProvider>,
-    logger: Box<dyn Logger>,
-    pub is_task_canceled: Box<dyn Fn() -> bool>,
+    cloud_provider: Arc<Box<dyn CloudProvider>>,
+    dns_provider: Arc<Box<dyn DnsProvider>>,
+    kubernetes: Box<dyn Kubernetes>,
 }
 
-impl Engine {
+impl EngineConfig {
     pub fn new(
         context: Context,
         build_platform: Box<dyn BuildPlatform>,
         container_registry: Box<dyn ContainerRegistry>,
-        cloud_provider: Box<dyn CloudProvider>,
-        dns_provider: Box<dyn DnsProvider>,
-        logger: Box<dyn Logger>,
-        is_task_canceled: Box<dyn Fn() -> bool>,
-    ) -> Engine {
-        Engine {
+        cloud_provider: Arc<Box<dyn CloudProvider>>,
+        dns_provider: Arc<Box<dyn DnsProvider>>,
+        kubernetes: Box<dyn Kubernetes>,
+    ) -> EngineConfig {
+        EngineConfig {
             context,
             build_platform,
             container_registry,
             cloud_provider,
             dns_provider,
-            logger,
-            is_task_canceled,
+            kubernetes,
         }
     }
-}
 
-impl<'a> Engine {
+    pub fn kubernetes(&self) -> &dyn Kubernetes {
+        self.kubernetes.as_ref()
+    }
+
     pub fn context(&self) -> &Context {
         &self.context
     }
@@ -55,15 +54,11 @@ impl<'a> Engine {
     }
 
     pub fn cloud_provider(&self) -> &dyn CloudProvider {
-        self.cloud_provider.borrow()
+        (*self.cloud_provider).borrow()
     }
 
     pub fn dns_provider(&self) -> &dyn DnsProvider {
-        self.dns_provider.borrow()
-    }
-
-    pub fn logger(&self) -> &dyn Logger {
-        self.logger.borrow()
+        (*self.dns_provider).borrow()
     }
 
     pub fn is_valid(&self) -> Result<(), EngineError> {
@@ -73,13 +68,5 @@ impl<'a> Engine {
         self.dns_provider.is_valid()?;
 
         Ok(())
-    }
-
-    /// check and init the connection to all services
-    pub fn session(&'a self) -> Result<Session<'a>, EngineError> {
-        match self.is_valid() {
-            Ok(_) => Ok(Session::<'a> { engine: self }),
-            Err(err) => Err(err),
-        }
     }
 }

@@ -1,3 +1,4 @@
+use crate::build_platform::Image;
 use crate::cmd;
 use crate::cmd::command::QoveryCommand;
 use crate::container_registry::Kind;
@@ -131,11 +132,11 @@ pub fn docker_login(
 pub fn docker_tag_and_push_image(
     container_registry_kind: Kind,
     docker_envs: Vec<(&str, &str)>,
-    image_name: String,
-    image_tag: String,
+    image: &Image,
     dest: String,
+    dest_latest_tag: String,
 ) -> Result<(), SimpleError> {
-    let image_with_tag = format!("{}:{}", image_name, image_tag);
+    let image_with_tag = image.name_with_tag();
     let registry_provider = match container_registry_kind {
         Kind::DockerHub => "DockerHub",
         Kind::Ecr => "AWS ECR",
@@ -161,7 +162,7 @@ pub fn docker_tag_and_push_image(
     }
 
     let mut cmd = QoveryCommand::new("docker", &vec!["push", dest.as_str()], &docker_envs);
-    match retry::retry(Fibonacci::from_millis(5000).take(5), || {
+    let _ = match retry::retry(Fibonacci::from_millis(5000).take(5), || {
         match cmd.exec_with_timeout(
             Duration::minutes(10),
             |line| info!("{}", line),
@@ -187,6 +188,59 @@ pub fn docker_tag_and_push_image(
         )),
         _ => {
             info!("image {} has successfully been pushed", image_with_tag);
+            Ok(())
+        }
+    };
+
+    let image_with_latest_tag = image.name_with_latest_tag();
+    let mut cmd = QoveryCommand::new(
+        "docker",
+        &vec!["tag", &image_with_latest_tag, dest_latest_tag.as_str()],
+        &docker_envs,
+    );
+    match retry::retry(Fibonacci::from_millis(3000).take(5), || match cmd.exec() {
+        Ok(_) => OperationResult::Ok(()),
+        Err(e) => {
+            info!("failed to tag image {}, retrying...", image_with_latest_tag);
+            OperationResult::Retry(e)
+        }
+    }) {
+        Err(Operation { error, .. }) => {
+            return Err(SimpleError::new(
+                SimpleErrorKind::Other,
+                Some(format!("failed to tag image {}: {:?}", image_with_latest_tag, error)),
+            ))
+        }
+        _ => {}
+    }
+
+    let mut cmd = QoveryCommand::new("docker", &vec!["push", dest_latest_tag.as_str()], &docker_envs);
+    match retry::retry(Fibonacci::from_millis(5000).take(5), || {
+        match cmd.exec_with_timeout(
+            Duration::minutes(10),
+            |line| info!("{}", line),
+            |line| error!("{}", line),
+        ) {
+            Ok(_) => OperationResult::Ok(()),
+            Err(e) => {
+                warn!(
+                    "failed to push image {} on {}, {:?} retrying...",
+                    image_with_latest_tag, registry_provider, e
+                );
+                OperationResult::Retry(e)
+            }
+        }
+    }) {
+        Err(Operation { error, .. }) => Err(SimpleError::new(SimpleErrorKind::Other, Some(error.to_string()))),
+        Err(e) => Err(SimpleError::new(
+            SimpleErrorKind::Other,
+            Some(format!(
+                "unknown error while trying to push image {} to {}. {:?}",
+                image_with_latest_tag, registry_provider, e
+            )),
+        )),
+        _ => {
+            info!("image {} has successfully been pushed", image_with_latest_tag);
             Ok(())
         }
     }

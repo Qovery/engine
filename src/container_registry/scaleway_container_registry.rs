@@ -9,6 +9,8 @@ use crate::container_registry::docker::{
 };
 use crate::container_registry::{ContainerRegistry, Kind, PullResult, PushResult};
 use crate::error::{EngineError, EngineErrorCause};
+use crate::errors::EngineError as NewEngineError;
+use crate::events::{ToTransmitter, Transmitter};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
@@ -172,15 +174,9 @@ impl ScalewayCR {
         }
     }
 
-    fn push_image(&self, dest: String, image: &Image) -> Result<PushResult, EngineError> {
+    fn push_image(&self, dest: String, dest_latest_tag: String, image: &Image) -> Result<PushResult, EngineError> {
         // https://www.scaleway.com/en/docs/deploy-an-image-from-registry-to-kubernetes-kapsule/
-        match docker_tag_and_push_image(
-            self.kind(),
-            self.get_docker_envs(),
-            image.name.clone(),
-            image.tag.clone(),
-            dest,
-        ) {
+        match docker_tag_and_push_image(self.kind(), self.get_docker_envs(), &image, dest, dest_latest_tag) {
             Ok(_) => {}
             Err(e) => {
                 return Err(self.engine_error(
@@ -341,6 +337,12 @@ impl ScalewayCR {
     }
 }
 
+impl ToTransmitter for ScalewayCR {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::ContainerRegistry(self.id().to_string(), self.name().to_string())
+    }
+}
+
 impl ContainerRegistry for ScalewayCR {
     fn context(&self) -> &Context {
         &self.context
@@ -358,7 +360,7 @@ impl ContainerRegistry for ScalewayCR {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), NewEngineError> {
         Ok(())
     }
 
@@ -541,7 +543,8 @@ impl ContainerRegistry for ScalewayCR {
             self.context.execution_id(),
         ));
 
-        self.push_image(dest, &image)
+        let dest_latest_tag = format!("{}/{}:latest", registry_url, image.name);
+        self.push_image(dest, dest_latest_tag, &image)
     }
 
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {

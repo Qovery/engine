@@ -5,7 +5,8 @@ extern crate url;
 use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cmd::helm::HelmError;
 use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
-use crate::events::EventDetails;
+use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
+use crate::models::QoveryIdentifier;
 use url::Url;
 
 /// CommandError: command error, mostly returned by third party tools.
@@ -32,7 +33,10 @@ impl CommandError {
     pub fn message(&self) -> String {
         // TODO(benjaminch): To be revamped, not sure how we should deal with safe and unsafe messages.
         if let Some(msg) = &self.message_safe {
-            return format!("{} {}", msg, self.message_raw);
+            // TODO(benjaminch): Handle raw / safe as for event message
+            if self.message_raw != *msg {
+                return format!("{} {}", msg, self.message_raw);
+            }
         }
 
         self.message_raw.to_string()
@@ -82,7 +86,7 @@ impl CommandError {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 /// Tag: unique identifier for an error.
 pub enum Tag {
     /// Unknown: unknown error.
@@ -155,6 +159,8 @@ pub enum Tag {
     K8sNodeIsNotReadyWithTheRequestedVersion,
     /// K8sNodeIsNotReady: represents an error where the given node is not ready.
     K8sNodeIsNotReady,
+    /// K8sValidateRequiredCPUandBurstableError: represents an error validating required CPU and burstable.
+    K8sValidateRequiredCPUandBurstableError,
     /// CannotFindRequiredBinary: represents an error where a required binary is not found on the system.
     CannotFindRequiredBinary,
     /// SubnetsCountShouldBeEven: represents an error where subnets count should be even to have as many public than private subnets.
@@ -173,6 +179,8 @@ pub enum Tag {
     TerraformErrorWhileExecutingPipeline,
     /// TerraformErrorWhileExecutingDestroyPipeline: represents an error while executing Terraform destroying pipeline.
     TerraformErrorWhileExecutingDestroyPipeline,
+    /// TerraformContextUnsupportedParameterValue: represents an error while trying to render terraform context because of unsupported parameter value.
+    TerraformContextUnsupportedParameterValue,
     /// HelmChartsSetupError: represents an error while trying to setup helm charts.
     HelmChartsSetupError,
     /// HelmChartsDeployError: represents an error while trying to deploy helm charts.
@@ -197,8 +205,44 @@ pub enum Tag {
     ObjectStorageCannotCreateBucket,
     /// ObjectStorageCannotPutFileIntoBucket: represents an error while trying to put a file into an object storage bucket.
     ObjectStorageCannotPutFileIntoBucket,
+    /// ClientServiceFailedToStart: represent an error while trying to start a client's service.
+    ClientServiceFailedToStart,
+    /// ClientServiceFailedToDeployBeforeStart: represents an error while trying to deploy a client's service before start.
+    ClientServiceFailedToDeployBeforeStart,
+    /// DatabaseFailedToStartAfterSeveralRetries: represents an error while trying to start a database after several retries.
+    DatabaseFailedToStartAfterSeveralRetries,
+    /// RouterFailedToDeploy: represents an error while trying to deploy a router.
+    RouterFailedToDeploy,
+    /// CloudProviderClientInvalidCredentials: represents an error where client credentials for a cloud providers appear to be invalid.
+    CloudProviderClientInvalidCredentials,
     /// CloudProviderApiMissingInfo: represents an error while expecting mandatory info
     CloudProviderApiMissingInfo,
+    /// ServiceInvalidVersionNumberError: represents an error where the version number is not valid.
+    VersionNumberParsingError,
+    /// NotImplementedError: represents an error where feature / code has not been implemented yet.
+    NotImplementedError,
+    /// TaskCancellationRequested: represents an error where current task cancellation has been requested.
+    TaskCancellationRequested,
+    /// BuilderDockerCannotFindAnyDockerfile: represents an error when trying to get a Dockerfile.
+    BuilderDockerCannotFindAnyDockerfile,
+    /// BuilderDockerCannotReadDockerfile: represents an error while trying to read Dockerfile.
+    BuilderDockerCannotReadDockerfile,
+    /// BuilderDockerCannotExtractEnvVarsFromDockerfile: represents an error while trying to extract ENV vars from Dockerfile.
+    BuilderDockerCannotExtractEnvVarsFromDockerfile,
+    /// BuilderDockerCannotBuildContainerImage: represents an error while trying to build Docker container image.
+    BuilderDockerCannotBuildContainerImage,
+    /// BuilderBuildpackInvalidLanguageFormat: represents an error where buildback requested language has wrong format.
+    BuilderBuildpackInvalidLanguageFormat,
+    /// BuilderBuildpackCannotBuildContainerImage: represents an error while trying to build container image with Buildpack.
+    BuilderBuildpackCannotBuildContainerImage,
+    /// BuilderGetBuildError: represents an error when builder is trying to get parent build.
+    BuilderGetBuildError,
+    /// BuilderCloningRepositoryError: represents an error when builder is trying to clone a git repository.
+    BuilderCloningRepositoryError,
+    /// DockerPushImageError: represents an error when trying to push a docker image.
+    DockerPushImageError,
+    /// DockerPullImageError: represents an error when trying to pull a docker image.
+    DockerPullImageError,
 }
 
 #[derive(Clone, Debug)]
@@ -288,6 +332,40 @@ impl EngineError {
             message,
             link,
             hint_message,
+        }
+    }
+
+    /// Creates new engine error from legacy engine error easing migration.
+    pub fn new_from_legacy_engine_error(e: LegacyEngineError) -> Self {
+        let message = e.message.unwrap_or("".to_string());
+        EngineError {
+            tag: Tag::Unknown,
+            event_details: EventDetails::new(
+                None,
+                QoveryIdentifier::new("".to_string()),
+                QoveryIdentifier::new("".to_string()),
+                QoveryIdentifier::new(e.execution_id.to_string()),
+                None,
+                Stage::General(GeneralStep::UnderMigration),
+                match e.scope {
+                    EngineErrorScope::Engine => Transmitter::Kubernetes("".to_string(), "".to_string()),
+                    EngineErrorScope::BuildPlatform(id, name) => Transmitter::BuildPlatform(id, name),
+                    EngineErrorScope::ContainerRegistry(id, name) => Transmitter::ContainerRegistry(id, name),
+                    EngineErrorScope::CloudProvider(id, name) => Transmitter::CloudProvider(id, name),
+                    EngineErrorScope::Kubernetes(id, name) => Transmitter::Kubernetes(id, name),
+                    EngineErrorScope::DnsProvider(id, name) => Transmitter::DnsProvider(id, name),
+                    EngineErrorScope::ObjectStorage(id, name) => Transmitter::ObjectStorage(id, name),
+                    EngineErrorScope::Environment(id, name) => Transmitter::Environment(id, name),
+                    EngineErrorScope::Database(id, db_type, name) => Transmitter::Database(id, db_type, name),
+                    EngineErrorScope::Application(id, name) => Transmitter::Application(id, name),
+                    EngineErrorScope::Router(id, name) => Transmitter::Router(id, name),
+                },
+            ),
+            qovery_log_message: message.to_string(),
+            user_log_message: message.to_string(),
+            message: None,
+            link: None,
+            hint_message: None,
         }
     }
 
@@ -381,8 +459,6 @@ impl EngineError {
     }
 
     /// Missing API info from the Cloud provider itself
-    ///
-    ///
     ///
     /// Arguments:
     ///
@@ -1228,6 +1304,36 @@ impl EngineError {
         )
     }
 
+    /// Creates new error for kubernetes validate required CPU and burstable.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `total_cpus_raw`: Total CPUs raw format.
+    /// * `cpu_burst_raw`: CPU burst raw.
+    /// * `raw_error`: Raw error message.
+    pub fn new_k8s_validate_required_cpu_and_burstable_error(
+        event_details: EventDetails,
+        total_cpus_raw: String,
+        cpu_burst_raw: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!(
+            "Error while trying to validate required CPU ({}) and burstable ({}).",
+            total_cpus_raw, cpu_burst_raw
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::K8sValidateRequiredCPUandBurstableError,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            Some("Please ensure your configuration is valid.".to_string()),
+        )
+    }
+
     /// Creates new error for kubernetes not being able to get crash looping pods.
     ///
     /// Arguments:
@@ -1444,6 +1550,38 @@ impl EngineError {
         )
     }
 
+    /// Creates new error representing an unsupported value for Terraform context parameter.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `service_type`: Service type.
+    /// * `parameter_name`: Context parameter name.
+    /// * `parameter_value`: Context parameter value.
+    /// * `raw_error`: Raw error message.
+    pub fn new_terraform_unsupported_context_parameter_value(
+        event_details: EventDetails,
+        service_type: String,
+        parameter_name: String,
+        parameter_value: String,
+        raw_error: Option<CommandError>,
+    ) -> EngineError {
+        let message = format!(
+            "{} value `{}` not supported for parameter `{}`",
+            service_type, parameter_value, parameter_name,
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::TerraformContextUnsupportedParameterValue,
+            message.to_string(),
+            message.to_string(),
+            raw_error,
+            None,
+            None,
+        )
+    }
+
     /// Creates new error while setup Helm charts to deploy.
     ///
     /// Arguments:
@@ -1637,11 +1775,11 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `product_name`: Product name for which version is not supported.
-    /// * `raw_error`: Raw error message.
+    /// * `version`: unsupported version raw string.
     pub fn new_unsupported_version_error(
         event_details: EventDetails,
         product_name: String,
-        version: VersionsNumber,
+        version: String,
     ) -> EngineError {
         let message = format!(
             "Error, version `{}` is not supported for `{}`.",
@@ -1739,6 +1877,158 @@ impl EngineError {
         )
     }
 
+    /// Creates new error while trying to start a client service.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `service_id`: Client service ID.
+    /// * `service_name`: Client service name.
+    pub fn new_client_service_failed_to_start_error(
+        event_details: EventDetails,
+        service_id: String,
+        service_name: String,
+    ) -> EngineError {
+        // TODO(benjaminch): Service should probably passed otherwise, either inside event_details or via a new dedicated struct.
+        let message = format!("Service `{}` (id `{}`) failed to start. ⤬", service_name, service_id);
+
+        EngineError::new(
+            event_details,
+            Tag::ClientServiceFailedToStart,
+            message.to_string(),
+            message.to_string(),
+            None,
+            None,
+            Some("Ensure you can run it without issues with `qovery run` and check its logs from the web interface or the CLI with `qovery log`. \
+                This issue often occurs due to ports misconfiguration. Make sure you exposed the correct port (using EXPOSE statement in Dockerfile or via Qovery configuration).".to_string()),
+        )
+    }
+
+    /// Creates new error while trying to deploy a client service before start.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `service_id`: Client service ID.
+    /// * `service_name`: Client service name.
+    pub fn new_client_service_failed_to_deploy_before_start_error(
+        event_details: EventDetails,
+        service_id: String,
+        service_name: String,
+    ) -> EngineError {
+        // TODO(benjaminch): Service should probably passed otherwise, either inside event_details or via a new dedicated struct.
+        let message = format!(
+            "Service `{}` (id `{}`) failed to deploy (before start).",
+            service_name, service_id
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::ClientServiceFailedToDeployBeforeStart,
+            message.to_string(),
+            message.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error while trying to start a client service before start.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `service_id`: Client service ID.
+    /// * `service_type`: Client service type.
+    /// * `raw_error`: Raw error message.
+    pub fn new_database_failed_to_start_after_several_retries(
+        event_details: EventDetails,
+        service_id: String,
+        service_type: String,
+        raw_error: Option<CommandError>,
+    ) -> EngineError {
+        let message = format!(
+            "Database `{}` (id `{}`) failed to start after several retries.",
+            service_type, service_id
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::DatabaseFailedToStartAfterSeveralRetries,
+            message.to_string(),
+            message.to_string(),
+            raw_error,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error while trying to deploy a router.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_router_failed_to_deploy(event_details: EventDetails) -> EngineError {
+        let message = "Router has failed to be deployed.";
+
+        EngineError::new(
+            event_details,
+            Tag::RouterFailedToDeploy,
+            message.to_string(),
+            message.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to connect to user's account with its credentials.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_client_invalid_cloud_provider_credentials(event_details: EventDetails) -> EngineError {
+        let message = "Your cloud provider account seems to be no longer valid (bad credentials).";
+
+        EngineError::new(
+            event_details,
+            Tag::CloudProviderClientInvalidCredentials,
+            message.to_string(),
+            message.to_string(),
+            None,
+            None,
+            Some("Please contact your Organization administrator to fix or change the Credentials.".to_string()),
+        )
+    }
+
+    /// Creates new error when trying to parse a version number.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_version_number`: Raw version number string.
+    /// * `raw_error`: Raw error message.
+    pub fn new_version_number_parsing_error(
+        event_details: EventDetails,
+        raw_version_number: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!(
+            "Error while trying to parse `{}` to a version number.",
+            raw_version_number
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::VersionNumberParsingError,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
     /// Creates new error while trying to get cluster.
     ///
     /// Arguments:
@@ -1799,6 +2089,305 @@ impl EngineError {
             Some(raw_error),
             None,
             Some("Please contact Qovery support for investigation.".to_string()),
+        )
+    }
+
+    /// Current task cancellation has been requested.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_task_cancellation_requested(event_details: EventDetails) -> EngineError {
+        let message = "Task cancellation has been requested.";
+
+        EngineError::new(
+            event_details,
+            Tag::TaskCancellationRequested,
+            message.to_string(),
+            message.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to get Dockerfile.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `location_path`: Dockerfile location path.
+    pub fn new_docker_cannot_find_dockerfile(event_details: EventDetails, location_path: String) -> EngineError {
+        let message = format!("Dockerfile not found at location `{}`.", location_path);
+
+        EngineError::new(
+            event_details,
+            Tag::BuilderDockerCannotFindAnyDockerfile,
+            message.to_string(),
+            message.to_string(),
+            None,
+            None,
+            Some("Your Dockerfile is not present at the specified location, check your settings.".to_string()),
+        )
+    }
+
+    /// Creates new error buildpack invalid language format.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `requested_language`: Requested language.
+    pub fn new_buildpack_invalid_language_format(
+        event_details: EventDetails,
+        requested_language: String,
+    ) -> EngineError {
+        let message = format!(
+            "Cannot build: Invalid buildpacks language format: `{}`.",
+            requested_language
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::BuilderBuildpackInvalidLanguageFormat,
+            message.to_string(),
+            message.to_string(),
+            None,
+            None,
+            Some("Expected format `builder[@version]`.".to_string()),
+        )
+    }
+
+    /// Creates new error when trying to build container.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `container_image_name`: Container image name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_buildpack_cannot_build_container_image(
+        event_details: EventDetails,
+        container_image_name: String,
+        builders: Vec<String>,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = "Cannot find a builder to build application.";
+
+        EngineError::new(
+            event_details,
+            Tag::BuilderBuildpackCannotBuildContainerImage,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            Some(format!(
+                "Qovery can't build your container image {} with one of the following builders: {}. Please do provide a valid Dockerfile to build your application or contact the support.",
+                container_image_name,
+                builders.join(", ")
+            ),),
+        )
+    }
+
+    /// Creates new error when trying to get build.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `commit_id`: Commit ID of build to be retrieved.
+    /// * `raw_error`: Raw error message.
+    pub fn new_builder_get_build_error(
+        event_details: EventDetails,
+        commit_id: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!("Error while trying to get build with commit ID: `{}`.", commit_id);
+
+        EngineError::new(
+            event_details,
+            Tag::BuilderGetBuildError,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when builder is trying to clone a git repository.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `repository_url`: Repository URL.
+    /// * `raw_error`: Raw error message.
+    pub fn new_builder_clone_repository_error(
+        event_details: EventDetails,
+        repository_url: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!("Error while cloning repository `{}`.", repository_url);
+
+        EngineError::new(
+            event_details,
+            Tag::BuilderCloningRepositoryError,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when something went wrong because it's not implemented.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_not_implemented_error(event_details: EventDetails) -> EngineError {
+        let message = "Error, something went wrong because it's not implemented.";
+
+        EngineError::new(
+            event_details,
+            Tag::NotImplementedError,
+            message.to_string(),
+            message.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to push a Docker image.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `image_name`: Docker image name.
+    /// * `repository_url`: Repository URL.
+    /// * `raw_error`: Raw error message.
+    pub fn new_docker_push_image_error(
+        event_details: EventDetails,
+        image_name: String,
+        repository_url: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!(
+            "Error, trying to push Docker image `{}` to repository `{}`.",
+            image_name, repository_url
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::DockerPushImageError,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to pull a Docker image.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `image_name`: Docker image name.
+    /// * `repository_url`: Repository URL.
+    /// * `raw_error`: Raw error message.
+    pub fn new_docker_pull_image_error(
+        event_details: EventDetails,
+        image_name: String,
+        repository_url: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!(
+            "Error, trying to pull Docker image `{}` from repository `{}`.",
+            image_name, repository_url
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::DockerPullImageError,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to read Dockerfile content.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `dockerfile_path`: Dockerfile path.
+    /// * `raw_error`: Raw error message.
+    pub fn new_docker_cannot_read_dockerfile(
+        event_details: EventDetails,
+        dockerfile_path: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!("Can't read Dockerfile `{}`.", dockerfile_path);
+
+        EngineError::new(
+            event_details,
+            Tag::BuilderDockerCannotReadDockerfile,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to extract env vars from Dockerfile.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `dockerfile_path`: Dockerfile path.
+    /// * `raw_error`: Raw error message.
+    pub fn new_docker_cannot_extract_env_vars_from_dockerfile(
+        event_details: EventDetails,
+        dockerfile_path: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!("Can't extract ENV vars from Dockerfile `{}`.", dockerfile_path);
+
+        EngineError::new(
+            event_details,
+            Tag::BuilderDockerCannotExtractEnvVarsFromDockerfile,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to build Docker container.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `container_image_name`: Container image name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_docker_cannot_build_container_image(
+        event_details: EventDetails,
+        container_image_name: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!("Error while building container image `{}`.", container_image_name);
+
+        EngineError::new(
+            event_details,
+            Tag::BuilderDockerCannotBuildContainerImage,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            Some("It looks like there is something wrong in your Dockerfile. Try building the application locally with `docker build --no-cache`.".to_string()),
         )
     }
 }

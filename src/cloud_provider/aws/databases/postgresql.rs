@@ -6,7 +6,7 @@ use tera::Context as TeraContext;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Create, Database, DatabaseOptions,
-    DatabaseType, Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
+    DatabaseType, Delete, Helm, Pause, Service, ServiceType, ServiceVersionCheckResult, StatefulService, Terraform,
 };
 use crate::cloud_provider::utilities::{
     generate_supported_version, get_self_hosted_postgres_version, get_supported_version_to_use,
@@ -15,8 +15,9 @@ use crate::cloud_provider::utilities::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
-use crate::error::{EngineError, EngineErrorScope, StringError};
-use crate::events::{EnvironmentStep, Stage, ToTransmitter, Transmitter};
+use crate::errors::{CommandError, EngineError};
+use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
+use crate::logger::Logger;
 use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
@@ -34,6 +35,7 @@ pub struct PostgreSQL {
     database_instance_type: String,
     options: DatabaseOptions,
     listeners: Listeners,
+    logger: Box<dyn Logger>,
 }
 
 impl PostgreSQL {
@@ -50,6 +52,7 @@ impl PostgreSQL {
         database_instance_type: &str,
         options: DatabaseOptions,
         listeners: Listeners,
+        logger: Box<dyn Logger>,
     ) -> Self {
         PostgreSQL {
             context,
@@ -64,11 +67,21 @@ impl PostgreSQL {
             database_instance_type: database_instance_type.to_string(),
             options,
             listeners,
+            logger,
         }
     }
 
-    fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
-        check_service_version(get_postgres_version(self.version(), is_managed_services), self)
+    fn matching_correct_version(
+        &self,
+        is_managed_services: bool,
+        event_details: EventDetails,
+    ) -> Result<ServiceVersionCheckResult, EngineError> {
+        check_service_version(
+            get_postgres_version(self.version(), is_managed_services),
+            self,
+            event_details,
+            self.logger(),
+        )
     }
 
     fn cloud_provider_name(&self) -> &str {
@@ -161,17 +174,13 @@ impl Service for PostgreSQL {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
 
         // we need the kubernetes config file to store tfstates file in kube secrets
-        let kube_config_file_path = match kubernetes.get_kubeconfig_file_path() {
-            Ok(path) => path,
-            Err(e) => {
-                return Err(e.to_legacy_engine_error());
-            }
-        };
+        let kube_config_file_path = kubernetes.get_kubeconfig_file_path()?;
         context.insert("kubeconfig_path", &kube_config_file_path);
 
         kubectl::kubectl_exec_create_namespace_without_labels(
@@ -182,7 +191,10 @@ impl Service for PostgreSQL {
 
         context.insert("namespace", environment.namespace());
 
-        let version = self.matching_correct_version(self.is_managed_service())?;
+        let version = self
+            .matching_correct_version(self.is_managed_service(), event_details.clone())?
+            .matched_version()
+            .to_string();
         context.insert("version", &version);
 
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
@@ -229,16 +241,12 @@ impl Service for PostgreSQL {
         Ok(context)
     }
 
-    fn selector(&self) -> Option<String> {
-        Some(format!("app={}", self.sanitized_name()))
+    fn logger(&self) -> &dyn Logger {
+        &*self.logger
     }
 
-    fn engine_error_scope(&self) -> EngineErrorScope {
-        EngineErrorScope::Database(
-            self.id().to_string(),
-            self.service_type().name().to_string(),
-            self.name().to_string(),
-        )
+    fn selector(&self) -> Option<String> {
+        Some(format!("app={}", self.sanitized_name()))
     }
 }
 
@@ -285,24 +293,35 @@ impl Create for PostgreSQL {
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
-            deploy_stateful_service(target, self, event_details.clone())
+            deploy_stateful_service(target, self, event_details.clone(), self.logger())
         })
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()])
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+        self.check_domains(
+            self.listeners.clone(),
+            vec![self.fqdn.as_str()],
+            event_details,
+            self.logger(),
+        )
     }
 
     #[named]
     fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details,
+            self.logger(),
         );
 
         Ok(())
@@ -312,11 +331,14 @@ impl Create for PostgreSQL {
 impl Pause for PostgreSQL {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details,
+            self.logger(),
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
@@ -330,11 +352,14 @@ impl Pause for PostgreSQL {
 
     #[named]
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details,
+            self.logger(),
         );
 
         Ok(())
@@ -350,10 +375,12 @@ impl Delete for PostgreSQL {
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
-            delete_stateful_service(target, self, event_details.clone())
+            delete_stateful_service(target, self, event_details.clone(), self.logger())
         })
     }
 
@@ -363,11 +390,14 @@ impl Delete for PostgreSQL {
 
     #[named]
     fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details,
+            self.logger(),
         );
 
         Ok(())
@@ -384,7 +414,7 @@ impl Listen for PostgreSQL {
     }
 }
 
-fn get_postgres_version(requested_version: String, is_managed_service: bool) -> Result<String, StringError> {
+fn get_postgres_version(requested_version: String, is_managed_service: bool) -> Result<String, CommandError> {
     if is_managed_service {
         get_managed_postgres_version(requested_version)
     } else {
@@ -392,7 +422,7 @@ fn get_postgres_version(requested_version: String, is_managed_service: bool) -> 
     }
 }
 
-fn get_managed_postgres_version(requested_version: String) -> Result<String, StringError> {
+fn get_managed_postgres_version(requested_version: String) -> Result<String, CommandError> {
     let mut supported_postgres_versions = HashMap::new();
 
     // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html#PostgreSQL.Concepts
@@ -423,6 +453,7 @@ fn get_managed_postgres_version(requested_version: String) -> Result<String, Str
 mod tests_postgres {
     use crate::cloud_provider::aws::databases::postgresql::{get_postgres_version, PostgreSQL};
     use crate::cloud_provider::service::{Action, DatabaseOptions, Service};
+    use crate::logger::StdIoLogger;
     use crate::models::{Context, DatabaseMode};
 
     #[test]
@@ -431,11 +462,17 @@ mod tests_postgres {
         assert_eq!(get_postgres_version("12".to_string(), true).unwrap(), "12.8");
         assert_eq!(get_postgres_version("12.3".to_string(), true).unwrap(), "12.3");
         assert_eq!(
-            get_postgres_version("12.3.0".to_string(), true).unwrap_err().as_str(),
+            get_postgres_version("12.3.0".to_string(), true)
+                .unwrap_err()
+                .message()
+                .as_str(),
             "Postgresql 12.3.0 version is not supported"
         );
         assert_eq!(
-            get_postgres_version("11.3".to_string(), true).unwrap_err().as_str(),
+            get_postgres_version("11.3".to_string(), true)
+                .unwrap_err()
+                .message()
+                .as_str(),
             "Postgresql 11.3 version is not supported"
         );
         // self-hosted version
@@ -443,7 +480,10 @@ mod tests_postgres {
         assert_eq!(get_postgres_version("12.8".to_string(), false).unwrap(), "12.8.0");
         assert_eq!(get_postgres_version("12.3.0".to_string(), false).unwrap(), "12.3.0");
         assert_eq!(
-            get_postgres_version("1.0".to_string(), false).unwrap_err().as_str(),
+            get_postgres_version("1.0".to_string(), false)
+                .unwrap_err()
+                .message()
+                .as_str(),
             "Postgresql 1.0 version is not supported"
         );
     }
@@ -488,6 +528,7 @@ mod tests_postgres {
                 publicly_accessible: false,
             },
             vec![],
+            Box::new(StdIoLogger::new()),
         );
         assert_eq!(database.sanitized_name(), db_expected_name);
     }
