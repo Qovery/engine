@@ -98,6 +98,7 @@ pub enum Tag {
     BuilderCloningRepositoryError,
     DockerPushImageError,
     DockerPullImageError,
+    BuilderDockerCannotListImages,
 }
 
 impl From<errors::Tag> for Tag {
@@ -186,6 +187,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::BuilderCloningRepositoryError => Tag::BuilderCloningRepositoryError,
             errors::Tag::DockerPushImageError => Tag::DockerPushImageError,
             errors::Tag::DockerPullImageError => Tag::DockerPullImageError,
+            errors::Tag::BuilderDockerCannotListImages => Tag::BuilderDockerCannotListImages,
         }
     }
 }

@@ -231,6 +231,8 @@ pub enum Tag {
     BuilderDockerCannotExtractEnvVarsFromDockerfile,
     /// BuilderDockerCannotBuildContainerImage: represents an error while trying to build Docker container image.
     BuilderDockerCannotBuildContainerImage,
+    /// BuilderDockerCannotListImages: represents an error while trying to list docker images.
+    BuilderDockerCannotListImages,
     /// BuilderBuildpackInvalidLanguageFormat: represents an error where buildback requested language has wrong format.
     BuilderBuildpackInvalidLanguageFormat,
     /// BuilderBuildpackCannotBuildContainerImage: represents an error while trying to build container image with Buildpack.
@@ -2388,6 +2390,26 @@ impl EngineError {
             Some(raw_error),
             None,
             Some("It looks like there is something wrong in your Dockerfile. Try building the application locally with `docker build --no-cache`.".to_string()),
+        )
+    }
+
+    /// Creates new error when trying to list Docker images.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_docker_cannot_list_images(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message = "Error while trying to list docker images.";
+
+        EngineError::new(
+            event_details,
+            Tag::BuilderDockerCannotListImages,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
         )
     }
 }
