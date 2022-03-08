@@ -114,17 +114,11 @@ impl ECR {
         }
     }
 
-    fn push_image(&self, dest: String, image: &Image) -> Result<PushResult, EngineError> {
+    fn push_image(&self, dest: String, dest_latest_tag: String, image: &Image) -> Result<PushResult, EngineError> {
         // READ https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html
         // docker tag e9ae3c220b23 aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
 
-        match docker_tag_and_push_image(
-            self.kind(),
-            self.docker_envs(),
-            image.name.clone(),
-            image.tag.clone(),
-            dest.clone(),
-        ) {
+        match docker_tag_and_push_image(self.kind(), self.docker_envs(), &image, dest.clone(), dest_latest_tag) {
             Ok(_) => {
                 let mut image = image.clone();
                 image.registry_url = Some(dest);
@@ -491,7 +485,8 @@ impl ContainerRegistry for ECR {
             }
         };
 
-        let dest = format!("{}:{}", repository.repository_uri.unwrap(), image.tag.as_str());
+        let repository_uri = repository.repository_uri.unwrap();
+        let dest = format!("{}:{}", repository_uri, image.tag.as_str());
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
@@ -537,7 +532,8 @@ impl ContainerRegistry for ECR {
             self.context.execution_id(),
         ));
 
-        self.push_image(dest, image)
+        let dest_latest_tag = format!("{}:latest", repository_uri);
+        self.push_image(dest, dest_latest_tag, image)
     }
 
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {

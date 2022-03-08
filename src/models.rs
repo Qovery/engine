@@ -92,10 +92,6 @@ pub struct Environment {
 }
 
 impl Environment {
-    pub fn is_valid(&self) -> Result<(), EnvironmentError> {
-        Ok(())
-    }
-
     pub fn to_qe_environment(
         &self,
         context: &Context,
