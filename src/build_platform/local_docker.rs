@@ -208,6 +208,7 @@ impl LocalDocker {
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<BuildResult, EngineError> {
         let name_with_tag = build.image.name_with_tag();
+        let name_with_latest_tag = build.image.name_with_latest_tag();
 
         let args = self.context.docker_build_options();
 
@@ -221,6 +222,9 @@ impl LocalDocker {
             } else {
                 vec!["build", name_with_tag.as_str()]
             };
+
+            // always add 'latest' tag
+            buildpacks_args.extend(vec!["-t", name_with_latest_tag.as_str()]);
 
             for v in args.iter() {
                 for s in v.iter() {
