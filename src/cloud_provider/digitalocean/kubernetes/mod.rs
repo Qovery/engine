@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::env;
 
 use serde::{Deserialize, Serialize};
@@ -51,6 +52,7 @@ use retry::Error::Operation;
 use retry::OperationResult;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
 pub mod cidr;
 pub mod doks_api;
@@ -84,24 +86,24 @@ pub struct DoksOptions {
 
 impl ProviderOptions for DoksOptions {}
 
-pub struct DOKS<'a> {
+pub struct DOKS {
     context: Context,
     id: String,
     long_id: uuid::Uuid,
     name: String,
     version: String,
     region: DoRegion,
-    cloud_provider: &'a dyn CloudProvider,
+    cloud_provider: Arc<Box<dyn CloudProvider>>,
     nodes_groups: Vec<NodeGroups>,
-    dns_provider: &'a dyn DnsProvider,
+    dns_provider: Arc<Box<dyn DnsProvider>>,
     spaces: Spaces,
     template_directory: String,
     options: DoksOptions,
     listeners: Listeners,
-    logger: &'a dyn Logger,
+    logger: Box<dyn Logger>,
 }
 
-impl<'a> DOKS<'a> {
+impl DOKS {
     pub fn new(
         context: Context,
         id: String,
@@ -109,11 +111,11 @@ impl<'a> DOKS<'a> {
         name: String,
         version: String,
         region: DoRegion,
-        cloud_provider: &'a dyn CloudProvider,
-        dns_provider: &'a dyn DnsProvider,
+        cloud_provider: Arc<Box<dyn CloudProvider>>,
+        dns_provider: Arc<Box<dyn DnsProvider>>,
         nodes_groups: Vec<NodeGroups>,
         options: DoksOptions,
-        logger: &'a dyn Logger,
+        logger: Box<dyn Logger>,
     ) -> Result<Self, EngineError> {
         let template_directory = format!("{}/digitalocean/bootstrap", context.lib_root_dir());
 
@@ -149,6 +151,7 @@ impl<'a> DOKS<'a> {
             BucketDeleteStrategy::HardDelete,
         );
 
+        let listeners = cloud_provider.listeners().clone();
         Ok(DOKS {
             context,
             id,
@@ -163,7 +166,7 @@ impl<'a> DOKS<'a> {
             nodes_groups,
             template_directory,
             logger,
-            listeners: cloud_provider.listeners().clone(), // copy listeners from CloudProvider
+            listeners,
         })
     }
 
@@ -1304,7 +1307,7 @@ impl<'a> DOKS<'a> {
     }
 }
 
-impl<'a> Kubernetes for DOKS<'a> {
+impl Kubernetes for DOKS {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -1338,15 +1341,15 @@ impl<'a> Kubernetes for DOKS<'a> {
     }
 
     fn cloud_provider(&self) -> &dyn CloudProvider {
-        self.cloud_provider
+        self.cloud_provider.as_ref().borrow()
     }
 
     fn dns_provider(&self) -> &dyn DnsProvider {
-        self.dns_provider
+        self.dns_provider.as_ref().borrow()
     }
 
     fn logger(&self) -> &dyn Logger {
-        self.logger
+        self.logger.borrow()
     }
 
     fn config_file_store(&self) -> &dyn ObjectStorage {
@@ -1735,7 +1738,7 @@ impl<'a> Kubernetes for DOKS<'a> {
     }
 }
 
-impl<'a> Listen for DOKS<'a> {
+impl Listen for DOKS {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

@@ -1,7 +1,9 @@
 use core::fmt;
+use std::borrow::Borrow;
 use std::env;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
@@ -117,7 +119,7 @@ pub struct Options {
 
 impl ProviderOptions for Options {}
 
-pub struct EKS<'a> {
+pub struct EKS {
     context: Context,
     id: String,
     long_id: uuid::Uuid,
@@ -125,17 +127,17 @@ pub struct EKS<'a> {
     version: String,
     region: AwsRegion,
     zones: Vec<AwsZones>,
-    cloud_provider: &'a dyn CloudProvider,
-    dns_provider: &'a dyn DnsProvider,
+    cloud_provider: Arc<Box<dyn CloudProvider>>,
+    dns_provider: Arc<Box<dyn DnsProvider>>,
     s3: S3,
     nodes_groups: Vec<NodeGroups>,
     template_directory: String,
     options: Options,
     listeners: Listeners,
-    logger: &'a dyn Logger,
+    logger: Box<dyn Logger>,
 }
 
-impl<'a> EKS<'a> {
+impl EKS {
     pub fn new(
         context: Context,
         id: &str,
@@ -144,11 +146,11 @@ impl<'a> EKS<'a> {
         version: &str,
         region: AwsRegion,
         zones: Vec<String>,
-        cloud_provider: &'a dyn CloudProvider,
-        dns_provider: &'a dyn DnsProvider,
+        cloud_provider: Arc<Box<dyn CloudProvider>>,
+        dns_provider: Arc<Box<dyn DnsProvider>>,
         options: Options,
         nodes_groups: Vec<NodeGroups>,
-        logger: &'a dyn Logger,
+        logger: Box<dyn Logger>,
     ) -> Result<Self, EngineError> {
         let event_details = EventDetails::new(
             Some(cloud_provider.kind()),
@@ -203,6 +205,8 @@ impl<'a> EKS<'a> {
             context.resource_expiration_in_seconds(),
         );
 
+        // copy listeners from CloudProvider
+        let listeners = cloud_provider.listeners().clone();
         Ok(EKS {
             context,
             id: id.to_string(),
@@ -218,7 +222,7 @@ impl<'a> EKS<'a> {
             nodes_groups,
             template_directory,
             logger,
-            listeners: cloud_provider.listeners().clone(), // copy listeners from CloudProvider
+            listeners,
         })
     }
 
@@ -1457,7 +1461,7 @@ impl<'a> EKS<'a> {
     }
 }
 
-impl<'a> Kubernetes for EKS<'a> {
+impl Kubernetes for EKS {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -1491,15 +1495,15 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 
     fn cloud_provider(&self) -> &dyn CloudProvider {
-        self.cloud_provider
+        (*self.cloud_provider).borrow()
     }
 
     fn dns_provider(&self) -> &dyn DnsProvider {
-        self.dns_provider
+        (*self.dns_provider).borrow()
     }
 
     fn logger(&self) -> &dyn Logger {
-        self.logger
+        self.logger.borrow()
     }
 
     fn config_file_store(&self) -> &dyn ObjectStorage {
@@ -2002,7 +2006,7 @@ impl<'a> Kubernetes for EKS<'a> {
     }
 }
 
-impl<'a> Listen for EKS<'a> {
+impl Listen for EKS {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

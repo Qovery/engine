@@ -5,7 +5,6 @@ use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::{
     Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction, Port, Protocol,
 };
-use qovery_engine::transaction::TransactionResult;
 use tracing::{span, Level};
 
 use self::test_utilities::aws::{AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
@@ -13,6 +12,7 @@ use self::test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
+use qovery_engine::transaction::TransactionResult;
 use test_utilities::common::{test_db, Infrastructure};
 
 /**
