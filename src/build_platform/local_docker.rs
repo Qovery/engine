@@ -6,6 +6,7 @@ use git2::{Cred, CredentialType};
 use sysinfo::{Disk, DiskExt, SystemExt};
 
 use crate::build_platform::{docker, Build, BuildPlatform, BuildResult, CacheResult, Credentials, Image, Kind};
+use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::QoveryCommand;
 use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EngineEvent, EventDetails, EventMessage, ToTransmitter, Transmitter};
@@ -186,6 +187,7 @@ impl LocalDocker {
 
         match exit_status {
             Ok(_) => Ok(BuildResult { build }),
+            Err(Killed(_)) => Err(EngineError::new_task_cancellation_requested(self.get_event_details())),
             Err(err) => Err(EngineError::new_docker_cannot_build_container_image(
                 self.get_event_details(),
                 self.name_with_id(),
@@ -343,6 +345,7 @@ impl LocalDocker {
 
         match exit_status {
             Ok(_) => Ok(BuildResult { build }),
+            Err(Killed(_)) => Err(EngineError::new_task_cancellation_requested(self.get_event_details())),
             Err(err) => {
                 let error = EngineError::new_buildpack_cannot_build_container_image(
                     self.get_event_details(),
