@@ -363,7 +363,7 @@ impl Helm {
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(envs),
             |line| {
-                info!("{}", line);
+                debug!("{}", line);
             },
             |line| {
                 stderr_msg.push_str(&line);
