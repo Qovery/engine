@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::thread;
 
-use crate::build_platform::{BuildResult, CacheResult};
+use crate::build_platform::BuildResult;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{Application, Service};
 use crate::container_registry::PushResult;
@@ -103,40 +103,24 @@ impl<'a> Transaction<'a> {
     }
 
     fn load_build_app_cache(&self, app: &crate::models::Application) -> Result<(), EngineError> {
-        // do load build cache before building app
-        let build = app.to_build();
-        let _ = match self.engine.build_platform().has_cache(&build) {
-            Ok(CacheResult::MissWithoutParentBuild) => {
-                info!("first build for app {} - cache miss", app.name.as_str());
-            }
-            Ok(CacheResult::Hit) => {
-                info!("cache hit for app {}", app.name.as_str());
-            }
-            Ok(CacheResult::Miss(parent_build)) => {
-                info!("cache miss for app {}", app.name.as_str());
+        let container_registry = self.engine.container_registry();
+        let mut image = app.to_image();
 
-                let container_registry = self.engine.container_registry();
-
-                // pull image from container registry
-                // FIXME: if one day we use something else than LocalDocker to build image
-                // FIXME: we'll need to send the PullResult to the Build implementation
-                let _ = match container_registry.pull(&parent_build.image) {
-                    Ok(pull_result) => pull_result,
-                    Err(err) => {
-                        warn!(
-                            "{}",
-                            err.message.clone().unwrap_or(format!(
-                                "something goes wrong while pulling image from {:?} container registry",
-                                container_registry.kind()
-                            ))
-                        );
-                        return Err(EngineError::new_from_legacy_engine_error(err));
-                    }
-                };
-            }
+        image.tag = String::from("latest");
+        // pull image from container registry
+        // FIXME: if one day we use something else than LocalDocker to build image
+        // FIXME: we'll need to send the PullResult to the Build implementation
+        let _ = match container_registry.pull(&image) {
+            Ok(pull_result) => pull_result,
             Err(err) => {
-                warn!("load build app {} cache error: {}", app.name.as_str(), err.message());
-                return Err(err);
+                warn!(
+                    "{}",
+                    err.message.clone().unwrap_or(format!(
+                        "something goes wrong while pulling image from {:?} container registry",
+                        container_registry.kind()
+                    ))
+                );
+                return Err(EngineError::new_from_legacy_engine_error(err));
             }
         };
 
