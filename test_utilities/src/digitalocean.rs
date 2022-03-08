@@ -43,7 +43,7 @@ impl Cluster<DO, DoksOptions> for DO {
         // use DigitalOcean Container Registry
         let container_registry = Box::new(container_registry_digital_ocean(context));
         // use LocalDocker
-        let build_platform = Box::new(build_platform_local_docker(context));
+        let build_platform = Box::new(build_platform_local_docker(context, logger.clone()));
         // use Digital Ocean
         let cloud_provider = DO::cloud_provider(context);
 

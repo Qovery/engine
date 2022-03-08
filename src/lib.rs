@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 extern crate tera;
 #[macro_use]
 extern crate tracing;

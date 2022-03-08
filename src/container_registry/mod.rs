@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::build_platform::Image;
 use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::models::{Context, Listen};
+use crate::errors::EngineError as NewEngineError;
+use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter};
+use crate::models::{Context, Listen, QoveryIdentifier};
 
 pub mod docker;
 pub mod docker_hub;
@@ -10,7 +12,7 @@ pub mod docr;
 pub mod ecr;
 pub mod scaleway_container_registry;
 
-pub trait ContainerRegistry: Listen {
+pub trait ContainerRegistry: Listen + ToTransmitter {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
@@ -18,7 +20,7 @@ pub trait ContainerRegistry: Listen {
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
     }
-    fn is_valid(&self) -> Result<(), EngineError>;
+    fn is_valid(&self) -> Result<(), NewEngineError>;
     fn on_create(&self) -> Result<(), EngineError>;
     fn on_create_error(&self) -> Result<(), EngineError>;
     fn on_delete(&self) -> Result<(), EngineError>;
@@ -36,6 +38,18 @@ pub trait ContainerRegistry: Listen {
             self.engine_error_scope(),
             self.context().execution_id(),
             Some(message),
+        )
+    }
+    fn get_event_details(&self) -> EventDetails {
+        let context = self.context();
+        EventDetails::new(
+            None,
+            QoveryIdentifier::from(context.organization_id().to_string()),
+            QoveryIdentifier::from(context.cluster_id().to_string()),
+            QoveryIdentifier::from(context.execution_id().to_string()),
+            None,
+            Stage::Environment(EnvironmentStep::Build),
+            self.to_transmitter(),
         )
     }
 }

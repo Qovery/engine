@@ -7,6 +7,8 @@ use crate::cmd::command::QoveryCommand;
 use crate::container_registry::docker::{docker_pull_image, docker_tag_and_push_image};
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PullResult, PushResult};
 use crate::error::EngineErrorCause;
+use crate::errors::EngineError as NewEngineError;
+use crate::events::{ToTransmitter, Transmitter};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
@@ -72,6 +74,12 @@ impl DockerHub {
     }
 }
 
+impl ToTransmitter for DockerHub {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::ContainerRegistry(self.id().to_string(), self.name().to_string())
+    }
+}
+
 impl ContainerRegistry for DockerHub {
     fn context(&self) -> &Context {
         &self.context
@@ -89,16 +97,7 @@ impl ContainerRegistry for DockerHub {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
-        // check the version of docker and print it as info
-        let mut output_from_cmd = String::new();
-        let mut cmd = QoveryCommand::new("docker", &vec!["--version"], &vec![]);
-        let _ = cmd.exec_with_output(
-            |r_out| output_from_cmd.push_str(&r_out),
-            |r_err| error!("Error executing docker command {}", r_err),
-        );
-
-        info!("Using Docker: {}", output_from_cmd);
+    fn is_valid(&self) -> Result<(), NewEngineError> {
         Ok(())
     }
 

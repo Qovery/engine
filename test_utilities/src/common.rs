@@ -120,7 +120,7 @@ impl Infrastructure for Environment {
             },
         );
 
-        tx.commit()
+        tx.commit(logger.clone())
     }
 
     fn pause_environment(
@@ -151,7 +151,7 @@ impl Infrastructure for Environment {
 
         let _ = tx.pause_environment(k.as_ref(), &environment_action);
 
-        tx.commit()
+        tx.commit(logger.clone())
     }
 
     fn delete_environment(
@@ -182,7 +182,7 @@ impl Infrastructure for Environment {
 
         let _ = tx.delete_environment(k.as_ref(), &environment_action);
 
-        tx.commit()
+        tx.commit(logger.clone())
     }
 }
 
@@ -990,8 +990,9 @@ pub fn test_db(
     let context_for_delete = context.clone_not_same_execution_id();
 
     let app_id = generate_id();
+
     let database_username = "superuser".to_string();
-    let database_password = generate_password(true);
+    let database_password = generate_id();
     let db_kind_str = db_kind.name().to_string();
     let db_id = generate_id();
     let database_host = format!("{}-{}", db_id, db_kind_str.clone());
@@ -1384,7 +1385,7 @@ pub fn cluster_test(
     if let Err(err) = deploy_tx.create_kubernetes(kubernetes.as_ref()) {
         panic!("{:?}", err)
     }
-    assert!(matches!(deploy_tx.commit(), TransactionResult::Ok));
+    assert!(matches!(deploy_tx.commit(logger.clone()), TransactionResult::Ok));
 
     // Deploy env if any
     if let Some(env) = environment_to_deploy {
@@ -1395,7 +1396,7 @@ pub fn cluster_test(
             panic!("{:?}", err)
         }
 
-        assert!(matches!(deploy_env_tx.commit(), TransactionResult::Ok));
+        assert!(matches!(deploy_env_tx.commit(logger.clone()), TransactionResult::Ok));
     }
 
     if let Err(err) = metrics_server_test(
@@ -1417,14 +1418,14 @@ pub fn cluster_test(
             if let Err(err) = pause_tx.pause_kubernetes(kubernetes.as_ref()) {
                 panic!("{:?}", err)
             }
-            assert!(matches!(pause_tx.commit(), TransactionResult::Ok));
+            assert!(matches!(pause_tx.commit(logger.clone()), TransactionResult::Ok));
 
             // Resume
             if let Err(err) = resume_tx.create_kubernetes(kubernetes.as_ref()) {
                 panic!("{:?}", err)
             }
 
-            assert!(matches!(resume_tx.commit(), TransactionResult::Ok));
+            assert!(matches!(resume_tx.commit(logger.clone()), TransactionResult::Ok));
 
             if let Err(err) = metrics_server_test(
                 kubernetes
@@ -1458,7 +1459,7 @@ pub fn cluster_test(
             if let Err(err) = upgrade_tx.create_kubernetes(upgraded_kubernetes.as_ref()) {
                 panic!("{:?}", err)
             }
-            assert!(matches!(upgrade_tx.commit(), TransactionResult::Ok));
+            assert!(matches!(upgrade_tx.commit(logger.clone()), TransactionResult::Ok));
 
             if let Err(err) = metrics_server_test(
                 upgraded_kubernetes
@@ -1477,7 +1478,7 @@ pub fn cluster_test(
             if let Err(err) = delete_tx.delete_kubernetes(upgraded_kubernetes.as_ref()) {
                 panic!("{:?}", err)
             }
-            assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
+            assert!(matches!(delete_tx.commit(logger.clone()), TransactionResult::Ok));
 
             return test_name.to_string();
         }
@@ -1491,14 +1492,14 @@ pub fn cluster_test(
         if let Err(err) = destroy_env_tx.delete_environment(kubernetes.as_ref(), env) {
             panic!("{:?}", err)
         }
-        assert!(matches!(destroy_env_tx.commit(), TransactionResult::Ok));
+        assert!(matches!(destroy_env_tx.commit(logger.clone()), TransactionResult::Ok));
     }
 
     // Delete
     if let Err(err) = delete_tx.delete_kubernetes(kubernetes.as_ref()) {
         panic!("{:?}", err)
     }
-    assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
+    assert!(matches!(delete_tx.commit(logger.clone()), TransactionResult::Ok));
 
     test_name.to_string()
 }

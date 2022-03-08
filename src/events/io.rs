@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use crate::cloud_provider::io::Kind;
 use crate::errors::io::EngineError;
 use crate::events;
@@ -7,33 +9,53 @@ use serde_derive::{Deserialize, Serialize};
 #[serde(tag = "type")]
 #[serde(rename_all = "lowercase")]
 pub enum EngineEvent {
+    Debug {
+        details: EventDetails,
+        message: EventMessage,
+    },
+    Info {
+        details: EventDetails,
+        message: EventMessage,
+    },
+    Warning {
+        details: EventDetails,
+        message: EventMessage,
+    },
     Error {
         error: EngineError,
+        message: Option<EventMessage>,
     },
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Waiting {
         details: EventDetails,
         message: EventMessage,
     },
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Deploying {
         details: EventDetails,
         message: EventMessage,
     },
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Pausing {
         details: EventDetails,
         message: EventMessage,
     },
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Deleting {
         details: EventDetails,
         message: EventMessage,
     },
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Deployed {
         details: EventDetails,
         message: EventMessage,
     },
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Paused {
         details: EventDetails,
         message: EventMessage,
     },
+    #[deprecated(note = "event status is carried by EventDetails directly")]
     Deleted {
         details: EventDetails,
         message: EventMessage,
@@ -43,8 +65,24 @@ pub enum EngineEvent {
 impl From<events::EngineEvent> for EngineEvent {
     fn from(event: events::EngineEvent) -> Self {
         match event {
-            events::EngineEvent::Error(e) => EngineEvent::Error {
+            events::EngineEvent::Debug(d, m) => EngineEvent::Debug {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
+            events::EngineEvent::Info(d, m) => EngineEvent::Info {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
+            events::EngineEvent::Warning(d, m) => EngineEvent::Warning {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
+            events::EngineEvent::Error(e, m) => EngineEvent::Error {
                 error: EngineError::from(e),
+                message: match m {
+                    Some(msg) => Some(EventMessage::from(msg)),
+                    None => None,
+                },
             },
             events::EngineEvent::Waiting(d, m) => EngineEvent::Waiting {
                 details: EventDetails::from(d),
@@ -118,6 +156,7 @@ pub enum GeneralStep {
     RetrieveClusterConfig,
     RetrieveClusterResources,
     ValidateSystemRequirements,
+    UnderMigration,
 }
 
 impl From<events::GeneralStep> for GeneralStep {
@@ -126,6 +165,7 @@ impl From<events::GeneralStep> for GeneralStep {
             events::GeneralStep::RetrieveClusterConfig => GeneralStep::RetrieveClusterConfig,
             events::GeneralStep::RetrieveClusterResources => GeneralStep::RetrieveClusterResources,
             events::GeneralStep::ValidateSystemRequirements => GeneralStep::ValidateSystemRequirements,
+            events::GeneralStep::UnderMigration => GeneralStep::UnderMigration,
         }
     }
 }

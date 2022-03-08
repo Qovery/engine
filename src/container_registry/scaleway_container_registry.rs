@@ -9,6 +9,8 @@ use crate::container_registry::docker::{
 };
 use crate::container_registry::{ContainerRegistry, Kind, PullResult, PushResult};
 use crate::error::{EngineError, EngineErrorCause};
+use crate::errors::EngineError as NewEngineError;
+use crate::events::{ToTransmitter, Transmitter};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
@@ -341,6 +343,12 @@ impl ScalewayCR {
     }
 }
 
+impl ToTransmitter for ScalewayCR {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::ContainerRegistry(self.id().to_string(), self.name().to_string())
+    }
+}
+
 impl ContainerRegistry for ScalewayCR {
     fn context(&self) -> &Context {
         &self.context
@@ -358,7 +366,7 @@ impl ContainerRegistry for ScalewayCR {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), NewEngineError> {
         Ok(())
     }
 
