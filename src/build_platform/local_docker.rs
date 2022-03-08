@@ -1,3 +1,4 @@
+use std::io::{Error, ErrorKind};
 use std::path::Path;
 use std::{env, fs};
 
@@ -6,6 +7,7 @@ use git2::{Cred, CredentialType};
 use sysinfo::{Disk, DiskExt, SystemExt};
 
 use crate::build_platform::{docker, Build, BuildPlatform, BuildResult, CacheResult, Credentials, Image, Kind};
+use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::QoveryCommand;
 use crate::errors::{CommandError, EngineError, Tag};
@@ -209,8 +211,9 @@ impl LocalDocker {
 
         let args = self.context.docker_build_options();
 
-        let mut exit_status: Result<(), CommandError> =
-            Err(CommandError::new_from_safe_message("No builder names".to_string()));
+        let mut exit_status: Result<(), command::CommandError> = Err(command::CommandError::ExecutionError(
+            Error::new(ErrorKind::InvalidData, "No builder names".to_string()),
+        ));
 
         for builder_name in BUILDPACKS_BUILDERS.iter() {
             let mut buildpacks_args = if !use_build_cache {
@@ -297,45 +300,40 @@ impl LocalDocker {
 
             // buildpacks build
             let mut cmd = QoveryCommand::new("pack", &buildpacks_args, &self.get_docker_host_envs());
-            exit_status = cmd
-                .exec_with_abort(
-                    Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
-                    |line| {
-                        self.logger.log(
-                            LogLevel::Info,
-                            EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
-                        );
+            exit_status = cmd.exec_with_abort(
+                Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
+                |line| {
+                    self.logger.log(
+                        LogLevel::Info,
+                        EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
+                    );
 
-                        lh.deployment_in_progress(ProgressInfo::new(
-                            ProgressScope::Application {
-                                id: build.image.application_id.clone(),
-                            },
-                            ProgressLevel::Info,
-                            Some(line),
-                            self.context.execution_id(),
-                        ));
-                    },
-                    |line| {
-                        self.logger.log(
-                            LogLevel::Warning,
-                            EngineEvent::Warning(
-                                self.get_event_details(),
-                                EventMessage::new_from_safe(line.to_string()),
-                            ),
-                        );
+                    lh.deployment_in_progress(ProgressInfo::new(
+                        ProgressScope::Application {
+                            id: build.image.application_id.clone(),
+                        },
+                        ProgressLevel::Info,
+                        Some(line),
+                        self.context.execution_id(),
+                    ));
+                },
+                |line| {
+                    self.logger.log(
+                        LogLevel::Warning,
+                        EngineEvent::Warning(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
+                    );
 
-                        lh.deployment_in_progress(ProgressInfo::new(
-                            ProgressScope::Application {
-                                id: build.image.application_id.clone(),
-                            },
-                            ProgressLevel::Warn,
-                            Some(line),
-                            self.context.execution_id(),
-                        ));
-                    },
-                    is_task_canceled,
-                )
-                .map_err(|err| CommandError::new(format!("{:?}", err), None));
+                    lh.deployment_in_progress(ProgressInfo::new(
+                        ProgressScope::Application {
+                            id: build.image.application_id.clone(),
+                        },
+                        ProgressLevel::Warn,
+                        Some(line),
+                        self.context.execution_id(),
+                    ));
+                },
+                is_task_canceled,
+            );
 
             if exit_status.is_ok() {
                 // quit now if the builder successfully build the app
