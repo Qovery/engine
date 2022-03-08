@@ -104,8 +104,16 @@ impl LocalDocker {
         }
 
         let name_with_tag = build.image.name_with_tag();
+        let name_with_latest_tag = build.image.name_with_latest_tag();
 
-        docker_args.extend(vec!["-f", dockerfile_complete_path, "-t", name_with_tag.as_str()]);
+        docker_args.extend(vec![
+            "-f",
+            dockerfile_complete_path,
+            "-t",
+            name_with_tag.as_str(),
+            "-t",
+            name_with_latest_tag.as_str(),
+        ]);
 
         let dockerfile_content = self.get_dockerfile_content(dockerfile_complete_path)?;
         let env_var_args = match docker::match_used_env_var_args(env_var_args, dockerfile_content) {

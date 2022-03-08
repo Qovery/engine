@@ -314,6 +314,8 @@ impl Helm {
         let mut args_string: Vec<String> = vec![
             "diff".to_string(),
             "upgrade".to_string(),
+            "--set".to_string(),
+            "installCRDs=true".to_string(),
             "--kubeconfig".to_string(),
             self.kubernetes_config.to_str().unwrap_or_default().to_string(),
             "--install".to_string(),

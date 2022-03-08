@@ -114,17 +114,21 @@ impl DOCR {
     }
 
     fn push_image(&self, registry_name: String, dest: String, image: &Image) -> Result<PushResult, EngineError> {
-        let _ =
-            match docker_tag_and_push_image(self.kind(), vec![], image.name.clone(), image.tag.clone(), dest.clone()) {
-                Ok(_) => {}
-                Err(e) => {
-                    return Err(self.engine_error(
-                        EngineErrorCause::Internal,
-                        e.message
-                            .unwrap_or_else(|| "unknown error occurring during docker push".to_string()),
-                    ));
-                }
-            };
+        let dest_latest_tag = format!(
+            "registry.digitalocean.com/{}/{}:latest",
+            registry_name.as_str(),
+            image.name
+        );
+        let _ = match docker_tag_and_push_image(self.kind(), vec![], &image, dest.clone(), dest_latest_tag) {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(self.engine_error(
+                    EngineErrorCause::Internal,
+                    e.message
+                        .unwrap_or_else(|| "unknown error occurring during docker push".to_string()),
+                ));
+            }
+        };
 
         let mut image = image.clone();
         image.registry_name = Some(registry_name.clone());
