@@ -417,12 +417,18 @@ pub fn generate_id() -> String {
     uuid
 }
 
-pub fn generate_password(allow_using_symbols: bool) -> String {
+pub fn generate_password(provider_kind: Kind, db_mode: DatabaseMode) -> String {
     // core special chars set: !#$%&*+-=?_
     // we will keep only those and exclude others
     let forbidden_chars = vec![
         '"', '\'', '(', ')', ',', '.', '/', ':', ';', '<', '>', '@', '[', '\\', ']', '^', '`', '{', '|', '}', '~',
     ];
+
+    let allow_using_symbols = provider_kind == Kind::Scw && db_mode == DatabaseMode::MANAGED;
+    if !allow_using_symbols {
+        return generate_id();
+    };
+
     let pg = PasswordGenerator::new()
         .length(32)
         .numbers(true)
