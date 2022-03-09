@@ -353,6 +353,10 @@ impl<'a> Transaction<'a> {
                     };
                 }
                 Step::BuildEnvironment(environment_action, option) => {
+                    if (self.is_transaction_aborted)() {
+                        return TransactionResult::Canceled;
+                    }
+
                     // build applications
                     let target_environment = match environment_action {
                         EnvironmentAction::Environment(te) => te,
@@ -404,6 +408,10 @@ impl<'a> Transaction<'a> {
                     applications_by_environment.insert(target_environment, applications);
                 }
                 Step::DeployEnvironment(environment_action) => {
+                    if (self.is_transaction_aborted)() {
+                        return TransactionResult::Canceled;
+                    }
+
                     // deploy complete environment
                     match self.commit_environment(environment_action, &applications_by_environment, |qe_env| {
                         self.engine.kubernetes().deploy_environment(qe_env)
@@ -416,6 +424,10 @@ impl<'a> Transaction<'a> {
                     };
                 }
                 Step::PauseEnvironment(environment_action) => {
+                    if (self.is_transaction_aborted)() {
+                        return TransactionResult::Canceled;
+                    }
+
                     // pause complete environment
                     match self.commit_environment(environment_action, &applications_by_environment, |qe_env| {
                         self.engine.kubernetes().pause_environment(qe_env)
@@ -428,6 +440,10 @@ impl<'a> Transaction<'a> {
                     };
                 }
                 Step::DeleteEnvironment(environment_action) => {
+                    if (self.is_transaction_aborted)() {
+                        return TransactionResult::Canceled;
+                    }
+
                     // delete complete environment
                     match self.commit_environment(environment_action, &applications_by_environment, |qe_env| {
                         self.engine.kubernetes().delete_environment(qe_env)

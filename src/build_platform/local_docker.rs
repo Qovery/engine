@@ -1,3 +1,4 @@
+use std::io::{Error, ErrorKind};
 use std::path::Path;
 use std::{env, fs};
 
@@ -6,6 +7,8 @@ use git2::{Cred, CredentialType};
 use sysinfo::{Disk, DiskExt, SystemExt};
 
 use crate::build_platform::{docker, Build, BuildPlatform, BuildResult, CacheResult, Credentials, Image, Kind};
+use crate::cmd::command;
+use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::QoveryCommand;
 use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EngineEvent, EventDetails, EventMessage, ToTransmitter, Transmitter};
@@ -186,6 +189,7 @@ impl LocalDocker {
 
         match exit_status {
             Ok(_) => Ok(BuildResult { build }),
+            Err(Killed(_)) => Err(EngineError::new_task_cancellation_requested(self.get_event_details())),
             Err(err) => Err(EngineError::new_docker_cannot_build_container_image(
                 self.get_event_details(),
                 self.name_with_id(),
@@ -204,11 +208,13 @@ impl LocalDocker {
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<BuildResult, EngineError> {
         let name_with_tag = build.image.name_with_tag();
+        let name_with_latest_tag = build.image.name_with_latest_tag();
 
         let args = self.context.docker_build_options();
 
-        let mut exit_status: Result<(), CommandError> =
-            Err(CommandError::new_from_safe_message("No builder names".to_string()));
+        let mut exit_status: Result<(), command::CommandError> = Err(command::CommandError::ExecutionError(
+            Error::new(ErrorKind::InvalidData, "No builder names".to_string()),
+        ));
 
         for builder_name in BUILDPACKS_BUILDERS.iter() {
             let mut buildpacks_args = if !use_build_cache {
@@ -216,6 +222,9 @@ impl LocalDocker {
             } else {
                 vec!["build", name_with_tag.as_str()]
             };
+
+            // always add 'latest' tag
+            buildpacks_args.extend(vec!["-t", name_with_latest_tag.as_str()]);
 
             for v in args.iter() {
                 for s in v.iter() {
@@ -295,45 +304,40 @@ impl LocalDocker {
 
             // buildpacks build
             let mut cmd = QoveryCommand::new("pack", &buildpacks_args, &self.get_docker_host_envs());
-            exit_status = cmd
-                .exec_with_abort(
-                    Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
-                    |line| {
-                        self.logger.log(
-                            LogLevel::Info,
-                            EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
-                        );
+            exit_status = cmd.exec_with_abort(
+                Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
+                |line| {
+                    self.logger.log(
+                        LogLevel::Info,
+                        EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
+                    );
 
-                        lh.deployment_in_progress(ProgressInfo::new(
-                            ProgressScope::Application {
-                                id: build.image.application_id.clone(),
-                            },
-                            ProgressLevel::Info,
-                            Some(line),
-                            self.context.execution_id(),
-                        ));
-                    },
-                    |line| {
-                        self.logger.log(
-                            LogLevel::Warning,
-                            EngineEvent::Warning(
-                                self.get_event_details(),
-                                EventMessage::new_from_safe(line.to_string()),
-                            ),
-                        );
+                    lh.deployment_in_progress(ProgressInfo::new(
+                        ProgressScope::Application {
+                            id: build.image.application_id.clone(),
+                        },
+                        ProgressLevel::Info,
+                        Some(line),
+                        self.context.execution_id(),
+                    ));
+                },
+                |line| {
+                    self.logger.log(
+                        LogLevel::Warning,
+                        EngineEvent::Warning(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
+                    );
 
-                        lh.deployment_in_progress(ProgressInfo::new(
-                            ProgressScope::Application {
-                                id: build.image.application_id.clone(),
-                            },
-                            ProgressLevel::Warn,
-                            Some(line),
-                            self.context.execution_id(),
-                        ));
-                    },
-                    is_task_canceled,
-                )
-                .map_err(|err| CommandError::new(format!("{:?}", err), None));
+                    lh.deployment_in_progress(ProgressInfo::new(
+                        ProgressScope::Application {
+                            id: build.image.application_id.clone(),
+                        },
+                        ProgressLevel::Warn,
+                        Some(line),
+                        self.context.execution_id(),
+                    ));
+                },
+                is_task_canceled,
+            );
 
             if exit_status.is_ok() {
                 // quit now if the builder successfully build the app
@@ -343,6 +347,7 @@ impl LocalDocker {
 
         match exit_status {
             Ok(_) => Ok(BuildResult { build }),
+            Err(Killed(_)) => Err(EngineError::new_task_cancellation_requested(self.get_event_details())),
             Err(err) => {
                 let error = EngineError::new_buildpack_cannot_build_container_image(
                     self.get_event_details(),
