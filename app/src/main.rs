@@ -596,7 +596,7 @@ fn spawn_task_poller(
             // We wait for the task to finish as we don't want the engine to queue them
             loop {
                 // Wait to receive a cancel
-                if let Ok(cancel_msg) = task_cancel_subscription.next_timeout(Duration::from_secs(10)) {
+                if let Ok(cancel_msg) = task_cancel_subscription.next_timeout(Duration::from_secs(5)) {
                     info!("Engine received cancel notification for task: {}", &task_id);
                     let is_cancel_accepted = task_manager.cancel_current_task();
                     let subject = Subject {
