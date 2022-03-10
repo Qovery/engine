@@ -3,6 +3,7 @@ pub mod io;
 extern crate url;
 
 use crate::cloud_provider::utilities::VersionsNumber;
+use crate::cmd;
 use crate::cmd::helm::HelmError;
 use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
 use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
@@ -52,6 +53,17 @@ impl CommandError {
         CommandError {
             message_raw,
             message_safe,
+        }
+    }
+
+    /// Creates a new CommandError from legacy command error.
+    pub fn new_from_legacy_command_error(
+        legacy_command_error: cmd::command::CommandError,
+        safe_message: Option<String>,
+    ) -> Self {
+        CommandError {
+            message_raw: legacy_command_error.to_string(),
+            message_safe: safe_message,
         }
     }
 
@@ -245,6 +257,22 @@ pub enum Tag {
     DockerPushImageError,
     /// DockerPullImageError: represents an error when trying to pull a docker image.
     DockerPullImageError,
+    /// ContainerRegistryRepositoryCreationError: represents an error when trying to create a repository.
+    ContainerRegistryRepositoryCreationError,
+    /// ContainerRegistryRepositorySetLifecycleError: represents an error when trying to set repository lifecycle policy.
+    ContainerRegistryRepositorySetLifecycleError,
+    /// ContainerRegistryGetCredentialsError: represents an error when trying to get container registry credentials.
+    ContainerRegistryGetCredentialsError,
+    /// ContainerRegistryDeleteImageError: represents an error while trying to delete an image.
+    ContainerRegistryDeleteImageError,
+    /// ContainerRegistryImageDoesntExist: represents an error, image doesn't exist in the registry.
+    ContainerRegistryImageDoesntExist,
+    /// ContainerRegistryImageUnreachableAfterPush: represents an error when image has been pushed but is unreachable.
+    ContainerRegistryImageUnreachableAfterPush,
+    /// ContainerRegistryRepositoryDoesntExist: represents an error, repository doesn't exist.
+    ContainerRegistryRepositoryDoesntExist,
+    /// ContainerRegistryDeleteRepositoryError: represents an error while trying to delete a repository.
+    ContainerRegistryDeleteRepositoryError,
 }
 
 #[derive(Clone, Debug)]
@@ -2390,6 +2418,215 @@ impl EngineError {
             Some(raw_error),
             None,
             Some("It looks like there is something wrong in your Dockerfile. Try building the application locally with `docker build --no-cache`.".to_string()),
+        )
+    }
+
+    /// Creates new error when trying to create a new container registry namespace.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `repository_name`: Container repository name.
+    /// * `registry_name`: Registry to be created.
+    /// * `raw_error`: Raw error message.
+    pub fn new_container_registry_namespace_creation_error(
+        event_details: EventDetails,
+        repository_name: String,
+        registry_name: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!(
+            "Error, trying to create registry `{}` in `{}`.",
+            registry_name, repository_name
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryRepositoryCreationError,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to set container repository lifecycle policy.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `repository_name`: Repository name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_container_registry_repository_set_lifecycle_policy_error(
+        event_details: EventDetails,
+        repository_name: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!(
+            "Error, trying to set lifecycle policy repository `{}`.",
+            repository_name,
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryRepositorySetLifecycleError,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to get container registry credentials.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `repository_name`: Repository name.
+    pub fn new_container_registry_get_credentials_error(
+        event_details: EventDetails,
+        repository_name: String,
+    ) -> EngineError {
+        let message = format!(
+            "Failed to retrieve credentials and endpoint URL from container registry `{}`.",
+            repository_name,
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryGetCredentialsError,
+            message.to_string(),
+            message.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to delete an image.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `image_name`: Image name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_container_registry_delete_image_error(
+        event_details: EventDetails,
+        image_name: String,
+        raw_error: Option<CommandError>,
+    ) -> EngineError {
+        let message = format!("Failed to delete image `{}`.", image_name,);
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryDeleteImageError,
+            message.to_string(),
+            message.to_string(),
+            raw_error,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to get image from a registry.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `image_name`: Image name.
+    pub fn new_container_registry_image_doesnt_exist(
+        event_details: EventDetails,
+        image_name: String,
+        raw_error: Option<CommandError>,
+    ) -> EngineError {
+        let message = format!("Image `{}` doesn't exists.", image_name,);
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryImageDoesntExist,
+            message.to_string(),
+            message.to_string(),
+            raw_error,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when image is unreachable after push.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `image_name`: Image name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_container_registry_image_unreachable_after_push(
+        event_details: EventDetails,
+        image_name: String,
+    ) -> EngineError {
+        let message = format!(
+            "Image `{}` has been pushed on registry namespace but is not yet available after some time.",
+            image_name,
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryImageUnreachableAfterPush,
+            message.to_string(),
+            message.to_string(),
+            None,
+            None,
+            Some("Please try to redeploy in a few minutes.".to_string()),
+        )
+    }
+
+    /// Creates new error when trying to get image from a registry.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `repository_name`: Repository name.
+    pub fn new_container_registry_repository_doesnt_exist(
+        event_details: EventDetails,
+        repository_name: String,
+        raw_error: Option<CommandError>,
+    ) -> EngineError {
+        let message = format!("Repository `{}` doesn't exists.", repository_name,);
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryRepositoryDoesntExist,
+            message.to_string(),
+            message.to_string(),
+            raw_error,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to delete repository.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `repository_name`: Repository name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_container_registry_delete_repository_error(
+        event_details: EventDetails,
+        repository_name: String,
+        raw_error: Option<CommandError>,
+    ) -> EngineError {
+        let message = format!("Failed to delete repository `{}`.", repository_name,);
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryDeleteRepositoryError,
+            message.to_string(),
+            message.to_string(),
+            raw_error,
+            None,
+            None,
         )
     }
 

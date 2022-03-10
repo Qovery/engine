@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::build_platform::Image;
-use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::errors::EngineError as NewEngineError;
+use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter};
+use crate::logger::Logger;
 use crate::models::{Context, Listen, QoveryIdentifier};
 
 pub mod docker;
@@ -20,7 +20,7 @@ pub trait ContainerRegistry: Listen + ToTransmitter {
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
     }
-    fn is_valid(&self) -> Result<(), NewEngineError>;
+    fn is_valid(&self) -> Result<(), EngineError>;
     fn on_create(&self) -> Result<(), EngineError>;
     fn on_create_error(&self) -> Result<(), EngineError>;
     fn on_delete(&self) -> Result<(), EngineError>;
@@ -29,17 +29,7 @@ pub trait ContainerRegistry: Listen + ToTransmitter {
     fn pull(&self, image: &Image) -> Result<PullResult, EngineError>;
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError>;
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError>;
-    fn engine_error_scope(&self) -> EngineErrorScope {
-        EngineErrorScope::ContainerRegistry(self.id().to_string(), self.name().to_string())
-    }
-    fn engine_error(&self, cause: EngineErrorCause, message: String) -> EngineError {
-        EngineError::new(
-            cause,
-            self.engine_error_scope(),
-            self.context().execution_id(),
-            Some(message),
-        )
-    }
+    fn logger(&self) -> &dyn Logger;
     fn get_event_details(&self) -> EventDetails {
         let context = self.context();
         EventDetails::new(

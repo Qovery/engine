@@ -2,14 +2,15 @@ extern crate digitalocean;
 
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
 
 use crate::build_platform::Image;
 use crate::cmd::command::QoveryCommand;
 use crate::container_registry::docker::{docker_pull_image, docker_tag_and_push_image};
 use crate::container_registry::{ContainerRegistry, EngineError, Kind, PullResult, PushResult};
-use crate::error::{cast_simple_error_to_engine_error, EngineErrorCause, SimpleError, SimpleErrorKind};
-use crate::errors::EngineError as NewEngineError;
-use crate::events::{ToTransmitter, Transmitter};
+use crate::errors::CommandError;
+use crate::events::{EngineEvent, EventDetails, EventMessage, ToTransmitter, Transmitter};
+use crate::logger::{LogLevel, Logger};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
@@ -30,34 +31,36 @@ pub struct DOCR {
     pub api_key: String,
     pub id: String,
     pub listeners: Listeners,
+    pub logger: Box<dyn Logger>,
 }
 
 impl DOCR {
-    pub fn new(context: Context, id: &str, name: &str, api_key: &str) -> Self {
+    pub fn new(context: Context, id: &str, name: &str, api_key: &str, logger: Box<dyn Logger>) -> Self {
         DOCR {
             context,
             name: name.into(),
             api_key: api_key.into(),
             id: id.into(),
             listeners: vec![],
+            logger,
         }
     }
 
     fn get_registry_name(&self, image: &Image) -> Result<String, EngineError> {
+        let event_details = self.get_event_details();
+
         let registry_name = match image.registry_name.as_ref() {
             // DOCR does not support upper cases
             Some(registry_name) => registry_name.to_lowercase(),
-            None => cast_simple_error_to_engine_error(
-                self.engine_error_scope(),
-                self.context().execution_id(),
-                get_current_registry_name(self.api_key.as_str()),
-            )?,
+            None => get_current_registry_name(self.api_key.as_str(), event_details, self.logger())?,
         };
 
         Ok(registry_name)
     }
 
     fn create_repository(&self, image: &Image) -> Result<(), EngineError> {
+        let event_details = self.get_event_details();
+
         let registry_name = match image.registry_name.as_ref() {
             // DOCR does not support upper cases
             Some(registry_name) => registry_name.to_lowercase(),
@@ -85,50 +88,76 @@ impl DOCR {
                         StatusCode::OK => Ok(()),
                         StatusCode::CREATED => Ok(()),
                         status => {
-                            warn!("status from DO registry API {}", status);
-                            return Err(self.engine_error(
-                                EngineErrorCause::Internal,
-                                format!(
-                                    "Bad status code : {} returned by the DO registry API for creating DO CR {}",
+                            return Err(EngineError::new_container_registry_namespace_creation_error(
+                                event_details.clone(),
+                                self.name_with_id(),
+                                registry_name.to_string(),
+                                CommandError::new_from_safe_message(format!(
+                                    "Bad status code: `{}` returned by the DO registry API for creating DOCR `{}`.",
                                     status,
                                     registry_name.as_str(),
-                                ),
+                                )),
                             ));
                         }
                     },
                     Err(e) => {
-                        return Err(self.engine_error(
-                            EngineErrorCause::Internal,
-                            format!("failed to create DOCR repository {} : {:?}", registry_name.as_str(), e,),
+                        return Err(EngineError::new_container_registry_namespace_creation_error(
+                            event_details.clone(),
+                            self.name_with_id(),
+                            registry_name.to_string(),
+                            CommandError::new(
+                                e.to_string(),
+                                Some(format!(
+                                    "Failed to create DOCR repository `{}`.",
+                                    registry_name.as_str(),
+                                )),
+                            ),
                         ));
                     }
                 }
             }
             Err(e) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!("Unable to initialize DO Registry {} : {:?}", registry_name.as_str(), e,),
+                return Err(EngineError::new_container_registry_namespace_creation_error(
+                    event_details.clone(),
+                    self.name_with_id(),
+                    registry_name.to_string(),
+                    CommandError::new(
+                        e.to_string(),
+                        Some(format!(
+                            "Failed to create DOCR repository `{}`.",
+                            registry_name.as_str(),
+                        )),
+                    ),
                 ));
             }
         }
     }
 
     fn push_image(&self, registry_name: String, dest: String, image: &Image) -> Result<PushResult, EngineError> {
+        let event_details = self.get_event_details();
+
         let dest_latest_tag = format!(
             "registry.digitalocean.com/{}/{}:latest",
             registry_name.as_str(),
             image.name
         );
-        let _ = match docker_tag_and_push_image(self.kind(), vec![], &image, dest.clone(), dest_latest_tag) {
-            Ok(_) => {}
-            Err(e) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    e.message
-                        .unwrap_or_else(|| "unknown error occurring during docker push".to_string()),
-                ));
-            }
-        };
+
+        if let Err(e) = docker_tag_and_push_image(
+            self.kind(),
+            vec![],
+            image,
+            dest.clone(),
+            dest_latest_tag.clone(),
+            event_details.clone(),
+            self.logger(),
+        ) {
+            return Err(EngineError::new_docker_push_image_error(
+                event_details,
+                image.name.to_string(),
+                dest.to_string(),
+                e,
+            ));
+        }
 
         let mut image = image.clone();
         image.registry_name = Some(registry_name.clone());
@@ -140,15 +169,23 @@ impl DOCR {
             match self.does_image_exists(&image) {
                 true => OperationResult::Ok(&image),
                 false => {
-                    warn!("image is not yet available on Digital Ocean Registry, retrying in a few seconds...");
+                    self.logger.log(
+                        LogLevel::Warning,
+                        EngineEvent::Warning(
+                            self.get_event_details(),
+                            EventMessage::new_from_safe(
+                                "Image is not yet available on DOCR, retrying in a few seconds...".to_string(),
+                            ),
+                        ),
+                    );
                     OperationResult::Retry(())
                 }
             }
         });
 
-        let image_not_reachable = Err(self.engine_error(
-            EngineErrorCause::Internal,
-            "image has been pushed on Digital Ocean Registry but is not yet available after 2min. Please try to redeploy in a few minutes".to_string(),
+        let image_not_reachable = Err(EngineError::new_container_registry_image_unreachable_after_push(
+            event_details.clone(),
+            image.name.to_string(),
         ));
         match result {
             Ok(_) => Ok(PushResult { image }),
@@ -167,6 +204,8 @@ impl DOCR {
     }
 
     pub fn delete_repository(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details();
+
         let headers = utilities::get_header_with_bearer(&self.api_key);
         let res = reqwest::blocking::Client::new()
             .delete(CR_API_PATH)
@@ -177,26 +216,32 @@ impl DOCR {
             Ok(out) => match out.status() {
                 StatusCode::NO_CONTENT => Ok(()),
                 status => {
-                    warn!("delete status from DO registry API {}", status);
-                    return Err(self.engine_error(
-                        EngineErrorCause::Internal,
-                        format!(
-                            "Bad status code : {} returned by the DO registry API for deleting DOCR repository",
+                    return Err(EngineError::new_container_registry_delete_repository_error(
+                        event_details.clone(),
+                        "default".to_string(), // DO has only one repository
+                        Some(CommandError::new_from_safe_message(format!(
+                            "Bad status code: `{}` returned by the DO registry API for deleting DOCR.",
                             status,
-                        ),
+                        ))),
                     ));
                 }
             },
             Err(e) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    format!("No response from the Digital Ocean API : {:?}", e),
+                return Err(EngineError::new_container_registry_delete_repository_error(
+                    event_details.clone(),
+                    "default".to_string(), // DO has only one repository
+                    Some(CommandError::new(
+                        e.to_string(),
+                        Some("No response from the Digital Ocean API.".to_string()),
+                    )),
                 ));
             }
         }
     }
 
     pub fn exec_docr_login(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details();
+
         let mut cmd = QoveryCommand::new(
             "doctl",
             &vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
@@ -205,18 +250,16 @@ impl DOCR {
 
         match cmd.exec() {
             Ok(_) => Ok(()),
-            Err(_) => Err(self.engine_error(
-                EngineErrorCause::User(
-                    "Your DOCR account seems to be no longer valid (bad Credentials). \
-                Please contact your Organization administrator to fix or change the Credentials.",
-                ),
-                format!("failed to login to DOCR {}", self.name_with_id()),
+            Err(_) => Err(EngineError::new_client_invalid_cloud_provider_credentials(
+                event_details,
             )),
         }
     }
 
     fn pull_image(&self, registry_name: String, dest: String, image: &Image) -> Result<PullResult, EngineError> {
-        match docker_pull_image(self.kind(), vec![], dest.clone()) {
+        let event_details = self.get_event_details();
+
+        match docker_pull_image(self.kind(), vec![], dest.clone(), event_details.clone(), self.logger()) {
             Ok(_) => {
                 let mut image = image.clone();
                 image.registry_name = Some(registry_name.clone());
@@ -225,10 +268,11 @@ impl DOCR {
                 image.registry_url = Some(dest);
                 Ok(PullResult::Some(image))
             }
-            Err(e) => Err(self.engine_error(
-                EngineErrorCause::Internal,
-                e.message
-                    .unwrap_or_else(|| "unknown error occurring during docker pull".to_string()),
+            Err(e) => Err(EngineError::new_docker_pull_image_error(
+                event_details,
+                image.name.to_string(),
+                dest.to_string(),
+                e,
             )),
         }
     }
@@ -257,7 +301,7 @@ impl ContainerRegistry for DOCR {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), NewEngineError> {
+    fn is_valid(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
@@ -278,10 +322,12 @@ impl ContainerRegistry for DOCR {
     }
 
     fn does_image_exists(&self, image: &Image) -> bool {
+        let event_details = self.get_event_details();
+
         let registry_name = match self.get_registry_name(image) {
             Ok(registry_name) => registry_name,
             Err(err) => {
-                warn!("{:?}", err);
+                self.logger.log(LogLevel::Error, EngineEvent::Error(err, None));
                 return false;
             }
         };
@@ -302,18 +348,38 @@ impl ContainerRegistry for DOCR {
             Ok(output) => match output.status() {
                 StatusCode::OK => output.text(),
                 _ => {
-                    error!(
-                        "While tyring to get all tags for image: {}, maybe this image not exist !",
-                        &image.name
+                    self.logger.log(
+                        LogLevel::Error,
+                        EngineEvent::Error(
+                            EngineError::new_container_registry_image_doesnt_exist(
+                                event_details.clone(),
+                                image.name.to_string(),
+                                Some(CommandError::new_from_safe_message(format!(
+                                    "While tyring to get all tags for image: `{}`, maybe this image not exist !",
+                                    image.name.to_string()
+                                ))),
+                            ),
+                            None,
+                        ),
                     );
 
                     return false;
                 }
             },
             Err(_) => {
-                error!(
-                    "While trying to communicate with DigitalOcean API to retrieve all tags for image {}",
-                    &image.name
+                self.logger.log(
+                    LogLevel::Error,
+                    EngineEvent::Error(
+                        EngineError::new_container_registry_image_doesnt_exist(
+                            event_details.clone(),
+                            image.name.to_string(),
+                            Some(CommandError::new_from_safe_message(format!(
+                                "While trying to communicate with DigitalOcean API to retrieve all tags for image `{}`.",
+                                image.name.to_string()
+                            ))),
+                        ),
+                        None,
+                    ),
                 );
 
                 return false;
@@ -334,9 +400,22 @@ impl ContainerRegistry for DOCR {
                         false
                     }
                     Err(_) => {
-                        error!(
-                            "Unable to deserialize tags from DigitalOcean API for image {}",
-                            &image.tag
+                        self.logger.log(
+                            LogLevel::Error,
+                            EngineEvent::Error(
+                                EngineError::new_container_registry_image_doesnt_exist(
+                                    event_details.clone(),
+                                    image.name.to_string(),
+                                    Some(CommandError::new(
+                                        out.to_string(),
+                                        Some(format!(
+                                            "Unable to deserialize tags from DigitalOcean API for image {}",
+                                            &image.tag.to_string(),
+                                        )),
+                                    )),
+                                ),
+                                None,
+                            ),
                         );
 
                         false
@@ -344,9 +423,19 @@ impl ContainerRegistry for DOCR {
                 }
             }
             _ => {
-                error!(
-                    "while retrieving tags for image {} Unable to get output from DigitalOcean API",
-                    &image.name
+                self.logger.log(
+                    LogLevel::Error,
+                    EngineEvent::Error(
+                        EngineError::new_container_registry_image_doesnt_exist(
+                            event_details.clone(),
+                            image.name.to_string(),
+                            Some(CommandError::new_from_safe_message(format!(
+                                "While retrieving tags for image `{}` Unable to get output from DigitalOcean API.",
+                                image.name.to_string()
+                            ))),
+                        ),
+                        None,
+                    ),
                 );
 
                 false
@@ -355,11 +444,19 @@ impl ContainerRegistry for DOCR {
     }
 
     fn pull(&self, image: &Image) -> Result<PullResult, EngineError> {
+        let event_details = self.get_event_details();
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         if !self.does_image_exists(image) {
             let info_message = format!("image {:?} does not exist in DOCR {} repository", image, self.name());
-            info!("{}", info_message.as_str());
+
+            self.logger.log(
+                LogLevel::Info,
+                EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(info_message.to_string()),
+                ),
+            );
 
             listeners_helper.deployment_in_progress(ProgressInfo::new(
                 ProgressScope::Application {
@@ -374,7 +471,14 @@ impl ContainerRegistry for DOCR {
         }
 
         let info_message = format!("pull image {:?} from DOCR {} repository", image, self.name());
-        info!("{}", info_message.as_str());
+
+        self.logger.log(
+            LogLevel::Info,
+            EngineEvent::Info(
+                event_details.clone(),
+                EventMessage::new_from_safe(info_message.to_string()),
+            ),
+        );
 
         listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Application {
@@ -401,11 +505,27 @@ impl ContainerRegistry for DOCR {
 
     // https://www.digitalocean.com/docs/images/container-registry/how-to/use-registry-docker-kubernetes/
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
+        let event_details = self.get_event_details();
         let registry_name = self.get_registry_name(image)?;
 
         match self.create_repository(image) {
-            Ok(_) => info!("DOCR {} has been created", registry_name.as_str()),
-            Err(_) => warn!("DOCR {} already exists", registry_name.as_str()),
+            Ok(_) => self.logger.log(
+                LogLevel::Info,
+                EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(format!("DOCR {} has been created", registry_name.as_str())),
+                ),
+            ),
+            Err(e) => self.logger.log(
+                LogLevel::Error,
+                EngineEvent::Error(
+                    e.clone(),
+                    Some(EventMessage::new_from_safe(format!(
+                        "DOCR {} already exists",
+                        registry_name.as_str()
+                    ))),
+                ),
+            ),
         };
 
         let _ = self.exec_docr_login()?;
@@ -426,7 +546,13 @@ impl ContainerRegistry for DOCR {
                 registry_name.as_str()
             );
 
-            info!("{}", info_message.as_str());
+            self.logger.log(
+                LogLevel::Info,
+                EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(info_message.to_string()),
+                ),
+            );
 
             listeners_helper.deployment_in_progress(ProgressInfo::new(
                 ProgressScope::Application {
@@ -451,6 +577,14 @@ impl ContainerRegistry for DOCR {
             image, registry_name
         );
 
+        self.logger.log(
+            LogLevel::Info,
+            EngineEvent::Info(
+                event_details.clone(),
+                EventMessage::new_from_safe(info_message.to_string()),
+            ),
+        );
+
         listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Application {
                 id: image.application_id.clone(),
@@ -466,6 +600,10 @@ impl ContainerRegistry for DOCR {
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {
         Ok(PushResult { image: image.clone() })
     }
+
+    fn logger(&self) -> &dyn Logger {
+        self.logger.borrow()
+    }
 }
 
 impl Listen for DOCR {
@@ -478,7 +616,7 @@ impl Listen for DOCR {
     }
 }
 
-pub fn subscribe_kube_cluster_to_container_registry(api_key: &str, cluster_uuid: &str) -> Result<(), SimpleError> {
+pub fn subscribe_kube_cluster_to_container_registry(api_key: &str, cluster_uuid: &str) -> Result<(), CommandError> {
     let headers = utilities::get_header_with_bearer(api_key);
     let cluster_ids = DoApiSubscribeToKubeCluster {
         cluster_uuids: vec![cluster_uuid.to_string()],
@@ -496,31 +634,28 @@ pub fn subscribe_kube_cluster_to_container_registry(api_key: &str, cluster_uuid:
             match res {
                 Ok(output) => match output.status() {
                     StatusCode::NO_CONTENT => Ok(()),
-                    status => {
-                        warn!("status from DO registry API {}", status);
-                        Err(SimpleError::new(SimpleErrorKind::Other, Some("Incorrect Status received from Digital Ocean when tyring to subscribe repository to cluster")))
-                    }
+                    status => Err(CommandError::new_from_safe_message(
+                        format!("Incorrect Status `{}` received from Digital Ocean when tyring to subscribe repository to cluster", status)),
+                    ),
                 },
-                Err(e) => {
-                    error!("{:?}", e);
-                    Err(SimpleError::new(
-                        SimpleErrorKind::Other,
-                        Some("Unable to call Digital Ocean when tyring to subscribe repository to cluster"),
-                    ))
-                }
+                Err(e) => Err(CommandError::new(
+                    e.to_string(),
+                    Some("Unable to call Digital Ocean when tyring to subscribe repository to cluster".to_string()),
+                )),
             }
         }
-        Err(e) => {
-            error!("{:?}", e);
-            Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some("Unable to Serialize digital ocean cluster uuids"),
-            ))
-        }
+        Err(e) => Err(CommandError::new(
+            e.to_string(),
+            Some("Unable to Serialize digital ocean cluster uuids".to_string()),
+        )),
     };
 }
 
-pub fn get_current_registry_name(api_key: &str) -> Result<String, SimpleError> {
+pub fn get_current_registry_name(
+    api_key: &str,
+    event_details: EventDetails,
+    logger: &dyn Logger,
+) -> Result<String, EngineError> {
     let headers = utilities::get_header_with_bearer(api_key);
     let res = reqwest::blocking::Client::new()
         .get(CR_API_PATH)
@@ -535,29 +670,45 @@ pub fn get_current_registry_name(api_key: &str) -> Result<String, SimpleError> {
 
                 match res_registry {
                     Ok(registry) => Ok(registry.registry.name),
-                    Err(err) => Err(SimpleError::new(
-                        SimpleErrorKind::Other,
-                        Some(format!(
-                            "An error occurred while deserializing JSON coming from Digital Ocean API: error: {:?}",
-                            err
+                    Err(err) => Err(EngineError::new_container_registry_repository_doesnt_exist(
+                        event_details.clone(),
+                        "default".to_string(), // DO has only one repository
+                        Some(CommandError::new(
+                            err.to_string(),
+                            Some(
+                                "An error occurred while deserializing JSON coming from Digital Ocean API.".to_string(),
+                            ),
                         )),
                     )),
                 }
             }
             status => {
-                warn!("status from Digital Ocean Registry API {}", status);
-                Err(SimpleError::new(
-                    SimpleErrorKind::Other,
-                    Some("Incorrect Status received from Digital Ocean when tyring to get container registry"),
+                Err(EngineError::new_container_registry_repository_doesnt_exist(
+                    event_details.clone(),
+                    "default".to_string(), // DO has only one repository
+                    Some(CommandError::new(
+                        format!("Status: {}", status),
+                        Some(
+                            "Incorrect Status received from Digital Ocean when tyring to get container registry."
+                                .to_string(),
+                        ),
+                    )),
                 ))
             }
         },
         Err(e) => {
-            error!("{:?}", e);
-            Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some("Unable to call Digital Ocean when tyring to fetch the container registry name"),
-            ))
+            let err = EngineError::new_container_registry_repository_doesnt_exist(
+                event_details.clone(),
+                "default".to_string(), // DO has only one repository
+                Some(CommandError::new(
+                    e.to_string(),
+                    Some("Unable to call Digital Ocean when tyring to fetch the container registry name.".to_string()),
+                )),
+            );
+
+            logger.log(LogLevel::Error, EngineEvent::Error(err.clone(), None));
+
+            Err(err)
         }
     };
 }
