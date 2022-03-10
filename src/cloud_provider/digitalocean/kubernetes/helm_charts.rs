@@ -329,6 +329,10 @@ pub fn do_helm_charts(
             values_files: vec![chart_path("chart_values/kube-prometheus-stack.yaml")],
             values: vec![
                 ChartSetValue {
+                    key: "installCRDs".to_string(),
+                    value: "true".to_string(),
+                },
+                ChartSetValue {
                     key: "nameOverride".to_string(),
                     value: "prometheus-operator".to_string(),
                 },
