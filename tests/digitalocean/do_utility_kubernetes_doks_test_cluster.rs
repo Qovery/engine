@@ -3,6 +3,7 @@ extern crate test_utilities;
 use self::test_utilities::utilities::{context, engine_run_test, init, logger, FuncTestsSecrets};
 use ::function_name::named;
 use qovery_engine::cloud_provider::digitalocean::DO;
+use test_utilities::digitalocean::{do_default_engine_config, DO_KUBERNETES_VERSION, DO_TEST_REGION};
 use tracing::{span, Level};
 
 use self::test_utilities::common::Cluster;
@@ -36,7 +37,7 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
 
         let logger = logger();
         let context = context(organization_id.as_str(), cluster_id.as_str());
-        let engine = DO::docker_cr_engine(&context, logger.clone());
+        let engine = do_default_engine_config(&context, logger.clone());
         let mut tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
         // Deploy
@@ -78,7 +79,7 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
 
         let logger = logger();
         let context = context(organization_id.as_str(), cluster_id.as_str());
-        let engine = DO::docker_cr_engine(&context, logger.clone());
+        let engine = do_default_engine_config(&context, logger.clone());
         let mut tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
         // Destroy

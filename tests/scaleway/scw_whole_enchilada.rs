@@ -37,11 +37,10 @@ fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
             logger,
             zone.as_str(),
             None,
-            secrets.clone(),
             ClusterTestType::Classic,
             SCW_KUBERNETES_MAJOR_VERSION,
             SCW_KUBERNETES_MINOR_VERSION,
-            ClusterDomain::Custom(cluster_domain),
+            &ClusterDomain::Custom(cluster_domain),
             None,
             Some(&env_action),
         )

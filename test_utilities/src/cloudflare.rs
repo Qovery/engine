@@ -4,10 +4,10 @@ use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::models::{Context, Domain};
 
-pub fn dns_provider_cloudflare(context: &Context, domain: ClusterDomain) -> Box<dyn DnsProvider> {
+pub fn dns_provider_cloudflare(context: &Context, domain: &ClusterDomain) -> Box<dyn DnsProvider> {
     let secrets = FuncTestsSecrets::new();
     let domain = Domain::new(match domain {
-        ClusterDomain::Custom(domain) => domain,
+        ClusterDomain::Custom(domain) => domain.to_string(),
         ClusterDomain::Default => secrets.CLOUDFLARE_DOMAIN.expect("CLOUDFLARE_DOMAIN is not set"),
     });
     Box::new(Cloudflare::new(

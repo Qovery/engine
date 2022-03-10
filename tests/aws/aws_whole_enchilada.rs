@@ -43,11 +43,10 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             logger(),
             &region,
             Some(aws_zones),
-            secrets.clone(),
             ClusterTestType::Classic,
             AWS_KUBERNETES_MAJOR_VERSION,
             AWS_KUBERNETES_MINOR_VERSION,
-            ClusterDomain::Custom(cluster_domain),
+            &ClusterDomain::Custom(cluster_domain),
             Some(WithNatGateways),
             Some(&env_action),
         )

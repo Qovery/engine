@@ -1,5 +1,6 @@
 use const_format::formatcp;
 use qovery_engine::build_platform::Image;
+use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DoksOptions;
 use qovery_engine::cloud_provider::digitalocean::network::vpc::VpcInitKind;
 use qovery_engine::cloud_provider::digitalocean::DO;
@@ -41,8 +42,26 @@ pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
     )
 }
 
+pub fn do_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
+    DO::docker_cr_engine(
+        &context,
+        logger,
+        DO_TEST_REGION.to_string().as_str(),
+        DO_KUBERNETES_VERSION.to_string(),
+        &ClusterDomain::Default,
+        None,
+    )
+}
+
 impl Cluster<DO, DoksOptions> for DO {
-    fn docker_cr_engine(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
+    fn docker_cr_engine(
+        context: &Context,
+        logger: Box<dyn Logger>,
+        localisation: &str,
+        kubernetes_version: String,
+        cluster_domain: &ClusterDomain,
+        vpc_network_mode: Option<VpcQoveryNetworkMode>,
+    ) -> EngineConfig {
         // use DigitalOcean Container Registry
         let container_registry = Box::new(container_registry_digital_ocean(context));
         // use LocalDocker
@@ -50,8 +69,7 @@ impl Cluster<DO, DoksOptions> for DO {
 
         // use Digital Ocean
         let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(Self::cloud_provider(context));
-        let dns_provider: Arc<Box<dyn DnsProvider>> =
-            Arc::new(dns_provider_cloudflare(context, ClusterDomain::Default));
+        let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_cloudflare(context, cluster_domain));
 
         let k = get_environment_test_kubernetes(
             Do,
@@ -59,6 +77,8 @@ impl Cluster<DO, DoksOptions> for DO {
             cloud_provider.clone(),
             dns_provider.clone(),
             logger.clone(),
+            localisation,
+            kubernetes_version.as_str(),
         );
 
         EngineConfig::new(
