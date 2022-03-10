@@ -270,6 +270,7 @@ pub enum State {
     DeploymentError,
     PauseError,
     DeleteError,
+    Canceling,
     Canceled,
 }
 

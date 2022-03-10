@@ -391,6 +391,25 @@ impl Task for EnvironmentTask {
         if let Ok(current_step) = self.current_step.read() {
             if current_step.can_be_canceled() {
                 self.cancel_requested.store(true, Ordering::Release);
+
+                self.send_status(Status::new(
+                    State::Canceled,
+                    Some("Cancel request received, going to abort the deployment".to_string()),
+                    ActionContext::new(
+                        ProgressScope::Environment {
+                            id: self
+                                .request
+                                .target_environment
+                                .as_ref()
+                                .map(|env| env.id.clone())
+                                .unwrap_or_default(),
+                        },
+                        ProgressLevel::Info,
+                        self.id().to_string(),
+                        *self.created_at(),
+                    ),
+                ));
+
                 return true;
             }
         }
