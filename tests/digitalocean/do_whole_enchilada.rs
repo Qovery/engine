@@ -39,11 +39,10 @@ fn create_upgrade_and_destroy_doks_cluster_with_env_in_ams_3() {
             logger,
             region.as_str(),
             None,
-            secrets.clone(),
             ClusterTestType::Classic,
             DO_KUBERNETES_MAJOR_VERSION,
             DO_KUBERNETES_MINOR_VERSION,
-            ClusterDomain::Custom(cluster_domain),
+            &ClusterDomain::Custom(cluster_domain),
             None,
             Some(&env_action),
         )

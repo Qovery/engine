@@ -13,7 +13,7 @@ use qovery_engine::models::{Action, Clone2, EnvironmentAction, Port, Protocol, S
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
 use std::time::SystemTime;
-use test_utilities::aws::container_registry_ecr;
+use test_utilities::aws::{aws_default_engine_config, container_registry_ecr, AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
 use test_utilities::utilities::{build_platform_local_docker, context, init, kubernetes_config_path};
 use tracing::{span, Level};
 
@@ -45,7 +45,10 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
                 .expect("AWS_TEST_CLUSTER_ID is not set")
                 .as_str(),
         );
+        let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
+
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -62,10 +65,16 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment_for_delete.delete_environment(Kind::Aws, &context_for_delete, &ea_delete, logger);
+        let ret = environment_for_delete.delete_environment(
+            Kind::Aws,
+            &context_for_delete,
+            &ea_delete,
+            logger,
+            &engine_config_for_delete,
+        );
         assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
@@ -95,6 +104,7 @@ fn test_build_cache() {
                 .expect("AWS_TEST_CLUSTER_ID is not set")
                 .as_str(),
         );
+        let engine_config = aws_default_engine_config(&context, logger());
 
         let environment = test_utilities::common::working_minimal_environment(
             &context,
@@ -187,7 +197,10 @@ fn deploy_a_working_environment_and_pause_it_eks() {
                 .expect("AWS_TEST_CLUSTER_ID is not set")
                 .as_str(),
         );
+        let engine_config = aws_default_engine_config(&context, logger.clone());
+
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
         let environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -200,7 +213,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let selector = format!("appId={}", environment.clone().applications[0].id);
 
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
         let ret = get_pods(
@@ -213,7 +226,13 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
-        let ret = environment.pause_environment(Kind::Aws, &context_for_delete, &ea, logger.clone());
+        let ret = environment.pause_environment(
+            Kind::Aws,
+            &context_for_delete,
+            &ea,
+            logger.clone(),
+            &engine_config_for_delete,
+        );
         assert!(matches!(ret, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
@@ -264,7 +283,8 @@ fn deploy_a_working_environment_and_pause_it_eks() {
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
-        let ret = environment.deploy_environment(Kind::Aws, &ctx_resume, &ea, logger.clone());
+        let engine_config_resume = aws_default_engine_config(&ctx_resume, logger.clone());
+        let ret = environment.deploy_environment(Kind::Aws, &ctx_resume, &ea, logger.clone(), &engine_config_resume);
         assert!(matches!(ret, TransactionResult::Ok));
 
         let ret = get_pods(
@@ -317,7 +337,8 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         assert!(filtered_pdb);
 
         // Cleanup
-        let ret = environment.delete_environment(Kind::Aws, &context_for_delete, &ea, logger);
+        let ret =
+            environment.delete_environment(Kind::Aws, &context_for_delete, &ea, logger, &engine_config_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
@@ -348,7 +369,9 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
                 .expect("AWS_TEST_CLUSTER_ID is not set")
                 .as_str(),
         );
+        let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
 
         let mut environment = test_utilities::common::non_working_environment(
             &context,
@@ -365,10 +388,16 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
 
-        let ret = environment_delete.delete_environment(Kind::Aws, &context_for_delete, &ea_delete, logger);
+        let ret = environment_delete.delete_environment(
+            Kind::Aws,
+            &context_for_delete,
+            &ea_delete,
+            logger,
+            &engine_config_for_delete,
+        );
         assert!(matches!(
             ret,
             TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
@@ -403,7 +432,9 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
                 .expect("AWS_TEST_CLUSTER_ID is not set")
                 .as_str(),
         );
+        let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
+        let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -437,10 +468,16 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment_delete.delete_environment(Kind::Aws, &context_for_deletion, &ea_delete, logger);
+        let ret = environment_delete.delete_environment(
+            Kind::Aws,
+            &context_for_deletion,
+            &ea_delete,
+            logger,
+            &engine_config_for_deletion,
+        );
         assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
@@ -472,7 +509,9 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
                 .expect("AWS_TEST_CLUSTER_ID is not set")
                 .as_str(),
         );
+        let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
+        let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -506,10 +545,16 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment_delete.delete_environment(Kind::Aws, &context_for_deletion, &ea_delete, logger);
+        let ret = environment_delete.delete_environment(
+            Kind::Aws,
+            &context_for_deletion,
+            &ea_delete,
+            logger,
+            &engine_config_for_deletion,
+        );
         assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
@@ -541,7 +586,9 @@ fn deploy_a_working_environment_with_domain() {
                 .expect("AWS_TEST_CLUSTER_ID is not set")
                 .as_str(),
         );
+        let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
+        let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
         let environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -556,10 +603,16 @@ fn deploy_a_working_environment_with_domain() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment_delete.delete_environment(Kind::Aws, &context_for_deletion, &ea_delete, logger);
+        let ret = environment_delete.delete_environment(
+            Kind::Aws,
+            &context_for_deletion,
+            &ea_delete,
+            logger,
+            &engine_config_for_deletion,
+        );
         assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
@@ -591,7 +644,9 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
                 .expect("AWS_TEST_CLUSTER_ID is not set")
                 .as_str(),
         );
+        let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
+        let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
 
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
@@ -625,7 +680,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
         match get_pvc(context.clone(), Kind::Aws, environment.clone(), secrets.clone()) {
@@ -636,7 +691,13 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
             Err(_) => assert!(false),
         };
 
-        let ret = environment_delete.delete_environment(Kind::Aws, &context_for_deletion, &ea_delete, logger);
+        let ret = environment_delete.delete_environment(
+            Kind::Aws,
+            &context_for_deletion,
+            &ea_delete,
+            logger,
+            &engine_config_for_deletion,
+        );
         assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
@@ -669,8 +730,11 @@ fn redeploy_same_app_with_ebs() {
                 .expect("AWS_TEST_CLUSTER_ID is not set")
                 .as_str(),
         );
+        let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_bis = context.clone_not_same_execution_id();
+        let engine_config_bis = aws_default_engine_config(&context_bis, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
+        let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
 
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
@@ -707,7 +771,7 @@ fn redeploy_same_app_with_ebs() {
         let ea2 = EnvironmentAction::Environment(environment_redeploy.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
         match get_pvc(context.clone(), Kind::Aws, environment.clone(), secrets.clone()) {
@@ -727,7 +791,8 @@ fn redeploy_same_app_with_ebs() {
             secrets.clone(),
         );
 
-        let ret = environment_redeploy.deploy_environment(Kind::Aws, &context_bis, &ea2, logger.clone());
+        let ret =
+            environment_redeploy.deploy_environment(Kind::Aws, &context_bis, &ea2, logger.clone(), &engine_config_bis);
         assert!(matches!(ret, TransactionResult::Ok));
 
         let (_, number2) = is_pod_restarted_env(
@@ -739,7 +804,13 @@ fn redeploy_same_app_with_ebs() {
         );
         //nothing change in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
-        let ret = environment_delete.delete_environment(Kind::Aws, &context_for_deletion, &ea_delete, logger);
+        let ret = environment_delete.delete_environment(
+            Kind::Aws,
+            &context_for_deletion,
+            &ea_delete,
+            logger,
+            &engine_config_for_deletion,
+        );
         assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
@@ -771,8 +842,11 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
                 .expect("AWS_TEST_CLUSTER_ID is not set")
                 .as_str(),
         );
+        let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_not_working = context.clone_not_same_execution_id();
+        let engine_config_for_not_working = aws_default_engine_config(&context_for_not_working, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
 
         // env part generation
         let environment = test_utilities::common::working_minimal_environment(
@@ -808,13 +882,20 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
             &context_for_not_working,
             &ea_not_working,
             logger.clone(),
+            &engine_config_for_not_working,
         );
         assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
 
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment_for_delete.delete_environment(Kind::Aws, &context_for_delete, &ea_delete, logger);
+        let ret = environment_for_delete.delete_environment(
+            Kind::Aws,
+            &context_for_delete,
+            &ea_delete,
+            logger,
+            &engine_config_for_delete,
+        );
         assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
@@ -850,6 +931,7 @@ fn deploy_ok_fail_fail_ok_environment() {
                 .expect("AWS_TEST_CLUSTER_ID is not set")
                 .as_str(),
         );
+        let engine_config = aws_default_engine_config(&context, logger.clone());
         let environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -860,6 +942,7 @@ fn deploy_ok_fail_fail_ok_environment() {
 
         // not working 1
         let context_for_not_working_1 = context.clone_not_same_execution_id();
+        let engine_config_for_not_working_1 = aws_default_engine_config(&context_for_not_working_1, logger.clone());
         let mut not_working_env_1 = environment.clone();
         not_working_env_1.applications = not_working_env_1
             .applications
@@ -875,10 +958,12 @@ fn deploy_ok_fail_fail_ok_environment() {
 
         // not working 2
         let context_for_not_working_2 = context.clone_not_same_execution_id();
+        let engine_config_for_not_working_2 = aws_default_engine_config(&context_for_not_working_2, logger.clone());
         let not_working_env_2 = not_working_env_1.clone();
 
         // work for delete
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
@@ -888,7 +973,7 @@ fn deploy_ok_fail_fail_ok_environment() {
         let ea_delete = EnvironmentAction::Environment(delete_env.clone());
 
         // OK
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
         // FAIL and rollback
@@ -897,6 +982,7 @@ fn deploy_ok_fail_fail_ok_environment() {
             &context_for_not_working_1,
             &ea_not_working_1,
             logger.clone(),
+            &engine_config_for_not_working_1,
         );
         assert!(matches!(
             ret,
@@ -909,6 +995,7 @@ fn deploy_ok_fail_fail_ok_environment() {
             &context_for_not_working_2,
             &ea_not_working_2,
             logger.clone(),
+            &engine_config_for_not_working_2,
         );
         assert!(matches!(
             ret,
@@ -916,10 +1003,16 @@ fn deploy_ok_fail_fail_ok_environment() {
         ));
 
         // Should be working
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = delete_env.delete_environment(Kind::Aws, &context_for_delete, &ea_delete, logger);
+        let ret = delete_env.delete_environment(
+            Kind::Aws,
+            &context_for_delete,
+            &ea_delete,
+            logger,
+            &engine_config_for_delete,
+        );
         assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
@@ -951,6 +1044,7 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
                 .expect("AWS_TEST_CLUSTER_ID is not set")
                 .as_str(),
         );
+        let engine_config = aws_default_engine_config(&context, logger.clone());
         let environment = test_utilities::common::non_working_environment(
             &context,
             secrets
@@ -960,16 +1054,23 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
         );
 
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(delete_env.clone());
 
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone());
+        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
 
-        let ret = delete_env.delete_environment(Kind::Aws, &context_for_delete, &ea_delete, logger);
+        let ret = delete_env.delete_environment(
+            Kind::Aws,
+            &context_for_delete,
+            &ea_delete,
+            logger,
+            &engine_config_for_delete,
+        );
         assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
@@ -1001,7 +1102,9 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
                 .expect("AWS_TEST_CLUSTER_ID is not set in secrets")
                 .as_str(),
         );
+        let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
         let environment = test_utilities::common::environment_only_http_server_router_with_sticky_session(
             &context,
             secrets
@@ -1017,14 +1120,19 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
-        let ret = environment.deploy_environment(Kind::Aws, &context, &env_action, logger.clone());
+        let ret = environment.deploy_environment(Kind::Aws, &context, &env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
         // checking if cookie is properly set on the app
         assert!(routers_sessions_are_sticky(environment.routers.clone()));
 
-        let ret =
-            environment_for_delete.delete_environment(Kind::Aws, &context_for_delete, &env_action_for_delete, logger);
+        let ret = environment_for_delete.delete_environment(
+            Kind::Aws,
+            &context_for_delete,
+            &env_action_for_delete,
+            logger,
+            &engine_config_for_delete,
+        );
         assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()

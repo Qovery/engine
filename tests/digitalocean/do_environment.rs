@@ -14,7 +14,7 @@ use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
 use std::time::SystemTime;
 use test_utilities::common::Infrastructure;
-use test_utilities::digitalocean::container_registry_digital_ocean;
+use test_utilities::digitalocean::{container_registry_digital_ocean, do_default_engine_config, DO_KUBERNETES_VERSION};
 use test_utilities::utilities::{build_platform_local_docker, context};
 use tracing::{span, warn, Level};
 
@@ -44,7 +44,9 @@ fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
         );
+        let engine_config = do_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = do_default_engine_config(&context_for_delete, logger.clone());
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -62,11 +64,16 @@ fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
-        let ret = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        let ret = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret =
-            environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger);
+        let ret = environment_for_delete.delete_environment(
+            Kind::Do,
+            &context_for_delete,
+            &env_action_for_delete,
+            logger,
+            &engine_config_for_delete,
+        );
         assert!(matches!(ret, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
@@ -98,6 +105,7 @@ fn test_build_cache() {
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
         );
+        let engine_config = do_default_engine_config(&context, logger());
 
         let environment = test_utilities::common::working_minimal_environment(
             &context,
@@ -189,7 +197,9 @@ fn digitalocean_doks_deploy_a_not_working_environment_with_no_router() {
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
         );
+        let engine_config = do_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = do_default_engine_config(&context_for_delete, logger.clone());
 
         let mut environment = test_utilities::common::non_working_environment(
             &context,
@@ -206,11 +216,16 @@ fn digitalocean_doks_deploy_a_not_working_environment_with_no_router() {
 
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
-        let ret = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        let ret = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
 
-        let ret =
-            environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger);
+        let ret = environment_for_delete.delete_environment(
+            Kind::Do,
+            &context_for_delete,
+            &env_action_for_delete,
+            logger,
+            &engine_config_for_delete,
+        );
         assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
@@ -244,7 +259,9 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
         );
+        let engine_config = do_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = do_default_engine_config(&context_for_delete, logger.clone());
         let environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -257,7 +274,7 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let selector = format!("appId={}", environment.applications[0].id);
 
-        let ret = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        let ret = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
         let ret = get_pods(
@@ -270,7 +287,13 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
-        let ret = environment.pause_environment(Kind::Do, &context_for_delete, &env_action, logger.clone());
+        let ret = environment.pause_environment(
+            Kind::Do,
+            &context_for_delete,
+            &env_action,
+            logger.clone(),
+            &engine_config_for_delete,
+        );
         assert!(matches!(ret, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
@@ -286,7 +309,14 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
-        let ret = environment.deploy_environment(Kind::Do, &ctx_resume, &env_action, logger.clone());
+        let engine_config_resume = do_default_engine_config(&ctx_resume, logger.clone());
+        let ret = environment.deploy_environment(
+            Kind::Do,
+            &ctx_resume,
+            &env_action,
+            logger.clone(),
+            &engine_config_resume,
+        );
         assert!(matches!(ret, TransactionResult::Ok));
 
         let ret = get_pods(
@@ -300,7 +330,13 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
         // Cleanup
-        let ret = environment.delete_environment(Kind::Do, &context_for_delete, &env_action, logger);
+        let ret = environment.delete_environment(
+            Kind::Do,
+            &context_for_delete,
+            &env_action,
+            logger,
+            &engine_config_for_delete,
+        );
         assert!(matches!(ret, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
@@ -334,7 +370,9 @@ fn digitalocean_doks_build_with_buildpacks_and_deploy_a_working_environment() {
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
         );
+        let engine_config = do_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = do_default_engine_config(&context_for_delete, logger.clone());
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -369,11 +407,16 @@ fn digitalocean_doks_build_with_buildpacks_and_deploy_a_working_environment() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
-        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result =
-            environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger);
+        let result = environment_for_delete.delete_environment(
+            Kind::Do,
+            &context_for_delete,
+            &env_action_for_delete,
+            logger,
+            &engine_config_for_delete,
+        );
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
@@ -407,7 +450,9 @@ fn digitalocean_doks_deploy_a_working_environment_with_domain() {
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
         );
+        let engine_config = do_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = do_default_engine_config(&context_for_delete, logger.clone());
         let environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -423,11 +468,16 @@ fn digitalocean_doks_deploy_a_working_environment_with_domain() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result =
-            environment_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger);
+        let result = environment_delete.delete_environment(
+            Kind::Do,
+            &context_for_delete,
+            &env_action_for_delete,
+            logger,
+            &engine_config_for_delete,
+        );
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
@@ -461,8 +511,9 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
         );
+        let engine_config = do_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-
+        let engine_config_for_deletion = do_default_engine_config(&context_for_deletion, logger.clone());
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -495,7 +546,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
 
         match get_pvc(context.clone(), Kind::Do, environment.clone(), secrets.clone()) {
@@ -506,7 +557,13 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
             Err(_) => assert!(false),
         };
 
-        let result = environment_delete.delete_environment(Kind::Do, &context_for_deletion, &env_action_delete, logger);
+        let result = environment_delete.delete_environment(
+            Kind::Do,
+            &context_for_deletion,
+            &env_action_delete,
+            logger,
+            &engine_config_for_deletion,
+        );
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
@@ -540,8 +597,11 @@ fn digitalocean_doks_redeploy_same_app() {
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
         );
+        let engine_config = do_default_engine_config(&context, logger.clone());
         let context_bis = context.clone_not_same_execution_id();
+        let engine_config_bis = do_default_engine_config(&context_bis, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
+        let engine_config_for_deletion = do_default_engine_config(&context_for_deletion, logger.clone());
 
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
@@ -579,7 +639,7 @@ fn digitalocean_doks_redeploy_same_app() {
         let env_action_redeploy = EnvironmentAction::Environment(environment_redeploy.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
 
         match get_pvc(context.clone(), Kind::Do, environment.clone(), secrets.clone()) {
@@ -599,8 +659,13 @@ fn digitalocean_doks_redeploy_same_app() {
             secrets.clone(),
         );
 
-        let result =
-            environment_redeploy.deploy_environment(Kind::Do, &context_bis, &env_action_redeploy, logger.clone());
+        let result = environment_redeploy.deploy_environment(
+            Kind::Do,
+            &context_bis,
+            &env_action_redeploy,
+            logger.clone(),
+            &engine_config_bis,
+        );
         assert!(matches!(result, TransactionResult::Ok));
 
         let (_, number2) = is_pod_restarted_env(
@@ -614,7 +679,13 @@ fn digitalocean_doks_redeploy_same_app() {
         // nothing changed in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
 
-        let result = environment_delete.delete_environment(Kind::Do, &context_for_deletion, &env_action_delete, logger);
+        let result = environment_delete.delete_environment(
+            Kind::Do,
+            &context_for_deletion,
+            &env_action_delete,
+            logger,
+            &engine_config_for_deletion,
+        );
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
@@ -648,8 +719,11 @@ fn digitalocean_doks_deploy_a_not_working_environment_and_then_working_environme
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
         );
+        let engine_config = do_default_engine_config(&context, logger.clone());
         let context_for_not_working = context.clone_not_same_execution_id();
+        let engine_config_for_not_working = do_default_engine_config(&context_for_not_working, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = do_default_engine_config(&context_for_delete, logger.clone());
 
         // env part generation
         let environment = test_utilities::common::working_minimal_environment(
@@ -687,12 +761,18 @@ fn digitalocean_doks_deploy_a_not_working_environment_and_then_working_environme
             &context_for_not_working,
             &env_action_not_working,
             logger.clone(),
+            &engine_config_for_not_working,
         );
         assert!(matches!(result, TransactionResult::UnrecoverableError(_, _)));
-        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
-        let result =
-            environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_delete, logger);
+        let result = environment_for_delete.delete_environment(
+            Kind::Do,
+            &context_for_delete,
+            &env_action_delete,
+            logger,
+            &engine_config_for_delete,
+        );
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
@@ -729,6 +809,7 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
         );
+        let engine_config = do_default_engine_config(&context, logger.clone());
         let environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -740,6 +821,7 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
 
         // not working 1
         let context_for_not_working_1 = context.clone_not_same_execution_id();
+        let engine_config_for_not_working_1 = do_default_engine_config(&context_for_not_working_1, logger.clone());
         let mut not_working_env_1 = environment.clone();
         not_working_env_1.applications = not_working_env_1
             .applications
@@ -755,10 +837,12 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
 
         // not working 2
         let context_for_not_working_2 = context.clone_not_same_execution_id();
+        let engine_config_for_not_working_2 = do_default_engine_config(&context_for_not_working_2, logger.clone());
         let not_working_env_2 = not_working_env_1.clone();
 
         // work for delete
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = do_default_engine_config(&context_for_delete, logger.clone());
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
@@ -768,7 +852,7 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
         let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
 
         // OK
-        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
 
         // FAIL and rollback
@@ -777,6 +861,7 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
             &context_for_not_working_1,
             &env_action_not_working_1,
             logger.clone(),
+            &engine_config_for_not_working_1,
         );
         assert!(matches!(
             result,
@@ -789,6 +874,7 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
             &context_for_not_working_2,
             &env_action_not_working_2,
             logger.clone(),
+            &engine_config_for_not_working_2,
         );
         assert!(matches!(
             result,
@@ -796,10 +882,16 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
         ));
 
         // Should be working
-        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result = delete_env.delete_environment(Kind::Do, &context_for_delete, &env_action_delete, logger);
+        let result = delete_env.delete_environment(
+            Kind::Do,
+            &context_for_delete,
+            &env_action_delete,
+            logger,
+            &engine_config_for_delete,
+        );
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
@@ -833,6 +925,7 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_no_failover() {
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
         );
+        let engine_config = do_default_engine_config(&context, logger.clone());
         let environment = test_utilities::common::non_working_environment(
             &context,
             secrets
@@ -843,16 +936,23 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_no_failover() {
         );
 
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = do_default_engine_config(&context_for_delete, logger.clone());
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
 
-        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::UnrecoverableError(_, _)));
 
-        let result = delete_env.delete_environment(Kind::Do, &context_for_delete, &env_action_delete, logger);
+        let result = delete_env.delete_environment(
+            Kind::Do,
+            &context_for_delete,
+            &env_action_delete,
+            logger,
+            &engine_config_for_delete,
+        );
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
@@ -888,7 +988,9 @@ fn digitalocean_doks_deploy_a_working_environment_with_sticky_session() {
                 .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set in secrets")
                 .as_str(),
         );
+        let engine_config = do_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = do_default_engine_config(&context_for_delete, logger.clone());
         let environment = test_utilities::common::environment_only_http_server_router_with_sticky_session(
             &context,
             secrets
@@ -904,14 +1006,19 @@ fn digitalocean_doks_deploy_a_working_environment_with_sticky_session() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
-        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone());
+        let result = environment.deploy_environment(Kind::Do, &context, &env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
 
         // checking cookie is properly set on the app
         assert!(routers_sessions_are_sticky(environment.routers.clone()));
 
-        let result =
-            environment_for_delete.delete_environment(Kind::Do, &context_for_delete, &env_action_for_delete, logger);
+        let result = environment_for_delete.delete_environment(
+            Kind::Do,
+            &context_for_delete,
+            &env_action_for_delete,
+            logger,
+            &engine_config_for_delete,
+        );
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {

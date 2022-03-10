@@ -65,8 +65,26 @@ pub fn container_registry_docker_hub(context: &Context) -> DockerHub {
     )
 }
 
+pub fn aws_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
+    AWS::docker_cr_engine(
+        &context,
+        logger,
+        AWS_TEST_REGION.to_string().as_str(),
+        AWS_KUBERNETES_VERSION.to_string(),
+        &ClusterDomain::Default,
+        None,
+    )
+}
+
 impl Cluster<AWS, Options> for AWS {
-    fn docker_cr_engine(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
+    fn docker_cr_engine(
+        context: &Context,
+        logger: Box<dyn Logger>,
+        localisation: &str,
+        kubernetes_version: String,
+        cluster_domain: &ClusterDomain,
+        vpc_network_mode: Option<VpcQoveryNetworkMode>,
+    ) -> EngineConfig {
         // use ECR
         let container_registry = Box::new(container_registry_ecr(context));
 
@@ -75,8 +93,7 @@ impl Cluster<AWS, Options> for AWS {
 
         // use AWS
         let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(AWS::cloud_provider(context));
-        let dns_provider: Arc<Box<dyn DnsProvider>> =
-            Arc::new(dns_provider_cloudflare(context, ClusterDomain::Default));
+        let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_cloudflare(context, cluster_domain));
 
         let k = get_environment_test_kubernetes(
             Aws,
@@ -84,6 +101,8 @@ impl Cluster<AWS, Options> for AWS {
             cloud_provider.clone(),
             dns_provider.clone(),
             logger.clone(),
+            localisation,
+            kubernetes_version.as_str(),
         );
 
         EngineConfig::new(
