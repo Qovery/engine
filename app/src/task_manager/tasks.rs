@@ -393,7 +393,7 @@ impl Task for EnvironmentTask {
                 self.cancel_requested.store(true, Ordering::Release);
 
                 self.send_status(Status::new(
-                    State::Canceled,
+                    State::Canceling,
                     Some("Cancel request received, going to abort the deployment".to_string()),
                     ActionContext::new(
                         ProgressScope::Environment {
