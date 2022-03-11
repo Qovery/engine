@@ -100,6 +100,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             logger.clone(),
             localisation,
             kubernetes_version.as_str(),
+            vpc_network_mode,
         );
 
         EngineConfig::new(

@@ -72,16 +72,10 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        let result = environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone(), &engine_config);
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result = environment_delete.delete_environment(
-            Kind::Scw,
-            &context_for_deletion,
-            &env_action_delete,
-            logger,
-            &engine_config_for_deletion,
-        );
+        let result = environment_delete.delete_environment(&env_action_delete, logger, &engine_config_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
         // delete images created during test from registries
@@ -138,10 +132,10 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        let result = environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone(), &engine_config);
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result = environment.pause_environment(Kind::Scw, &context, &env_action, logger.clone(), &engine_config);
+        let result = environment.pause_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this db
@@ -156,13 +150,8 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
-        let result = environment_delete.delete_environment(
-            Kind::Scw,
-            &context_for_deletion,
-            &env_action_delete,
-            logger.clone(),
-            &engine_config_for_deletion,
-        );
+        let result =
+            environment_delete.delete_environment(&env_action_delete, logger.clone(), &engine_config_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
         // delete images created during test from registries
@@ -228,16 +217,11 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
 
-        let result = environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone(), &engine_config);
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result = environment_delete.delete_environment(
-            Kind::Scw,
-            &context_for_deletion,
-            &env_action_for_deletion,
-            logger,
-            &engine_config_for_deletion,
-        );
+        let result =
+            environment_delete.delete_environment(&env_action_for_deletion, logger, &engine_config_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
         // delete images created during test from registries
@@ -371,12 +355,10 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let env_action = EnvironmentAction::Environment(environment.clone());
         let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        let result = environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone(), &engine_config);
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
 
         let result = environment_to_redeploy.deploy_environment(
-            Kind::Scw,
-            &context_for_redeploy,
             &env_action_redeploy,
             logger.clone(),
             &engine_config_for_redeploy,
@@ -396,13 +378,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             (false, _) => assert!(false),
         }
 
-        let result = environment_delete.delete_environment(
-            Kind::Scw,
-            &context_for_delete,
-            &env_action_delete,
-            logger,
-            &engine_config_for_delete,
-        );
+        let result = environment_delete.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
         assert!(matches!(
             result,
             TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)

@@ -80,6 +80,7 @@ impl Cluster<DO, DoksOptions> for DO {
             logger.clone(),
             localisation,
             kubernetes_version.as_str(),
+            vpc_network_mode,
         );
 
         EngineConfig::new(

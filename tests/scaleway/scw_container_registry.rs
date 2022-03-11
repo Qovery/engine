@@ -4,6 +4,7 @@ use self::test_utilities::utilities::{context, FuncTestsSecrets};
 use qovery_engine::build_platform::Image;
 use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
+use test_utilities::utilities::logger;
 use tracing::debug;
 use uuid::Uuid;
 
@@ -45,6 +46,7 @@ fn test_get_registry_namespace() {
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
+            logger(),
         );
 
         let image = Image {
@@ -103,6 +105,7 @@ fn test_create_registry_namespace() {
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
+            logger(),
         );
 
         let image = Image {
@@ -154,6 +157,7 @@ fn test_delete_registry_namespace() {
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
+            logger(),
         );
 
         let image = Image {
@@ -200,6 +204,7 @@ fn test_get_or_create_registry_namespace() {
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
+            logger(),
         );
 
         let image = Image {

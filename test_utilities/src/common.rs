@@ -70,24 +70,18 @@ pub trait Cluster<T, U> {
 pub trait Infrastructure {
     fn deploy_environment(
         &self,
-        provider_kind: Kind,
-        context: &Context,
         environment_action: &EnvironmentAction,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult;
     fn pause_environment(
         &self,
-        provider_kind: Kind,
-        context: &Context,
         environment_action: &EnvironmentAction,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult;
     fn delete_environment(
         &self,
-        provider_kind: Kind,
-        context: &Context,
         environment_action: &EnvironmentAction,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
@@ -97,8 +91,6 @@ pub trait Infrastructure {
 impl Infrastructure for Environment {
     fn deploy_environment(
         &self,
-        provider_kind: Kind,
-        context: &Context,
         environment_action: &EnvironmentAction,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
@@ -117,8 +109,6 @@ impl Infrastructure for Environment {
 
     fn pause_environment(
         &self,
-        provider_kind: Kind,
-        context: &Context,
         environment_action: &EnvironmentAction,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
@@ -131,8 +121,6 @@ impl Infrastructure for Environment {
 
     fn delete_environment(
         &self,
-        provider_kind: Kind,
-        context: &Context,
         environment_action: &EnvironmentAction,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
@@ -1087,7 +1075,7 @@ pub fn test_db(
             &context,
             logger.clone(),
             localisation.as_str(),
-            kubernetes_version,
+            kubernetes_version.clone(),
             &ClusterDomain::Default,
             None,
         ),
@@ -1095,7 +1083,7 @@ pub fn test_db(
             &context,
             logger.clone(),
             localisation.as_str(),
-            kubernetes_version,
+            kubernetes_version.clone(),
             &ClusterDomain::Default,
             None,
         ),
@@ -1103,13 +1091,13 @@ pub fn test_db(
             &context,
             logger.clone(),
             localisation.as_str(),
-            kubernetes_version,
+            kubernetes_version.clone(),
             &ClusterDomain::Default,
             None,
         ),
     };
 
-    let ret = environment.deploy_environment(provider_kind.clone(), &context, &ea, logger.clone(), &engine_config);
+    let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
     assert!(matches!(ret, TransactionResult::Ok));
 
     match database_mode.clone() {
@@ -1172,13 +1160,34 @@ pub fn test_db(
         }
     }
 
-    let ret = environment_delete.delete_environment(
-        provider_kind.clone(),
-        &context_for_delete,
-        &ea_delete,
-        logger,
-        &engine_config,
-    );
+    let engine_config_for_delete = match provider_kind {
+        Kind::Aws => AWS::docker_cr_engine(
+            &context_for_delete,
+            logger.clone(),
+            localisation.as_str(),
+            kubernetes_version,
+            &ClusterDomain::Default,
+            None,
+        ),
+        Kind::Do => DO::docker_cr_engine(
+            &context_for_delete,
+            logger.clone(),
+            localisation.as_str(),
+            kubernetes_version,
+            &ClusterDomain::Default,
+            None,
+        ),
+        Kind::Scw => Scaleway::docker_cr_engine(
+            &context_for_delete,
+            logger.clone(),
+            localisation.as_str(),
+            kubernetes_version,
+            &ClusterDomain::Default,
+            None,
+        ),
+    };
+
+    let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
     assert!(matches!(ret, TransactionResult::Ok));
 
     return test_name.to_string();
@@ -1192,6 +1201,7 @@ pub fn get_environment_test_kubernetes<'a>(
     logger: Box<dyn Logger>,
     localisation: &str,
     kubernetes_version: &str,
+    vpc_network_mode: Option<VpcQoveryNetworkMode>,
 ) -> Box<dyn Kubernetes> {
     let secrets = FuncTestsSecrets::new();
     let k: Box<dyn Kubernetes>;
@@ -1199,6 +1209,10 @@ pub fn get_environment_test_kubernetes<'a>(
     match provider_kind {
         Kind::Aws => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
+            let mut options = AWS::kubernetes_cluster_options(secrets, None);
+            if vpc_network_mode.is_some() {
+                options.vpc_qovery_network_mode = vpc_network_mode.expect("No vpc network mode");
+            }
             k = Box::new(
                 EKS::new(
                     context.clone(),
@@ -1210,7 +1224,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     region.get_zones_to_string(),
                     cloud_provider,
                     dns_provider,
-                    AWS::kubernetes_cluster_options(secrets.clone(), None),
+                    options,
                     AWS::kubernetes_nodes(),
                     logger,
                 )
@@ -1280,7 +1294,9 @@ pub fn get_cluster_test_kubernetes<'a>(
         Kind::Aws => {
             let mut options = AWS::kubernetes_cluster_options(secrets, None);
             let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
-            options.vpc_qovery_network_mode = vpc_network_mode.unwrap();
+            if vpc_network_mode.is_some() {
+                options.vpc_qovery_network_mode = vpc_network_mode.expect("No vpc network mode");
+            }
             let aws_zones = aws_zones.unwrap().into_iter().map(|zone| zone.to_string()).collect();
             k = Box::new(
                 EKS::new(
