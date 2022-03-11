@@ -8,17 +8,17 @@ use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::engine::EngineConfig;
-use qovery_engine::error::EngineError;
 use qovery_engine::models::{Context, Environment};
 use std::sync::Arc;
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
-use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
+use crate::utilities::{build_platform_local_docker, logger, FuncTestsSecrets};
 use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::Kind::Do;
 use qovery_engine::dns_provider::DnsProvider;
+use qovery_engine::errors::EngineError;
 use qovery_engine::logger::Logger;
 
 pub const DO_KUBERNETES_MAJOR_VERSION: u8 = 1;
@@ -39,6 +39,7 @@ pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
         DOCR_ID,
         "default-docr-registry-qovery-do-test",
         secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
+        logger(),
     )
 }
 
@@ -173,6 +174,7 @@ pub fn clean_environments(
             .DIGITAL_OCEAN_TOKEN
             .as_ref()
             .expect("DIGITAL_OCEAN_TOKEN is not set in secrets"),
+        logger(),
     );
 
     // delete images created in registry
