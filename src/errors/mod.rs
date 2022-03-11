@@ -342,9 +342,9 @@ impl EngineError {
             tag: Tag::Unknown,
             event_details: EventDetails::new(
                 None,
-                QoveryIdentifier::new("".to_string()),
-                QoveryIdentifier::new("".to_string()),
-                QoveryIdentifier::new(e.execution_id.to_string()),
+                QoveryIdentifier::new_from_long_id("".to_string()),
+                QoveryIdentifier::new_from_long_id("".to_string()),
+                QoveryIdentifier::new_from_long_id(e.execution_id.to_string()),
                 None,
                 Stage::General(GeneralStep::UnderMigration),
                 match e.scope {
