@@ -415,7 +415,15 @@ impl BuildPlatform for LocalDocker {
     }
 
     fn has_cache(&self, build: &Build) -> Result<CacheResult, EngineError> {
-        info!("LocalDocker.has_cache() called for {}", self.name());
+        let event_details = self.get_event_details();
+
+        self.logger.log(
+            LogLevel::Info,
+            EngineEvent::Info(
+                event_details.clone(),
+                EventMessage::new_from_safe("LocalDocker.has_cache() called".to_string()),
+            ),
+        );
 
         // Check if a local cache layers for the container image exists.
         let repository_root_path = self.get_repository_build_root_path(&build)?;
@@ -430,13 +438,34 @@ impl BuildPlatform for LocalDocker {
         };
 
         // check if local layers exist
-        let mut cmd = QoveryCommand::new("docker", &["images", "-q", parent_build.image.name.as_str()], &[]);
+        let cmd_bin = "docker";
+        let image_name = parent_build.image.name.clone();
+        let cmd_args = vec!["images", "-q", &image_name];
+        let mut cmd = QoveryCommand::new(cmd_bin, &cmd_args.clone(), &[]);
 
         let mut result = CacheResult::Miss(parent_build);
         let _ = cmd.exec_with_timeout(
             Duration::minutes(1), // `docker images` command can be slow with tons of images - it's probably not indexed
             |_| result = CacheResult::Hit, // if a line is returned, then the image is locally present
-            |r_err| error!("Error executing docker command {}", r_err),
+            |r_err| {
+                self.logger.log(
+                    LogLevel::Error,
+                    EngineEvent::Error(
+                        EngineError::new_docker_cannot_list_images(
+                            event_details.clone(),
+                            CommandError::new_from_command_line(
+                                "Cannot list docker images".to_string(),
+                                cmd_bin.to_string(),
+                                cmd_args.clone().into_iter().map(|v| v.to_string()).collect(),
+                                vec![],
+                                None,
+                                Some(r_err.to_string()),
+                            ),
+                        ),
+                        None,
+                    ),
+                )
+            },
         );
 
         Ok(result)
