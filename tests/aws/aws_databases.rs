@@ -68,16 +68,10 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
+        let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment_delete.delete_environment(
-            Kind::Aws,
-            &context_for_deletion,
-            &ea_delete,
-            logger,
-            &engine_config_for_deletion,
-        );
+        let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
@@ -129,10 +123,10 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
+        let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment.pause_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
+        let ret = environment.pause_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this db
@@ -147,13 +141,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
-        let ret = environment_delete.delete_environment(
-            Kind::Aws,
-            &context_for_deletion,
-            &ea_delete,
-            logger,
-            &engine_config_for_deletion,
-        );
+        let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
@@ -215,7 +203,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
 
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
+        let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
         // TODO: should be uncommented as soon as cert-manager is fixed
@@ -225,13 +213,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             assert_eq!(con, true);
         }*/
 
-        let ret = environment_delete.delete_environment(
-            Kind::Aws,
-            &context_for_deletion,
-            &ea_for_deletion,
-            logger,
-            &engine_config_for_deletion,
-        );
+        let ret = environment_delete.delete_environment(&ea_for_deletion, logger, &engine_config_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
         return test_name.to_string();
@@ -343,16 +325,10 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let ea = EnvironmentAction::Environment(environment.clone());
         let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
 
-        let ret = environment.deploy_environment(Kind::Aws, &context, &ea, logger.clone(), &engine_config);
+        let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment_to_redeploy.deploy_environment(
-            Kind::Aws,
-            &context_for_redeploy,
-            &ea_redeploy,
-            logger.clone(),
-            &engine_config_for_redeploy,
-        );
+        let ret = environment_to_redeploy.deploy_environment(&ea_redeploy, logger.clone(), &engine_config_for_redeploy);
         assert!(matches!(ret, TransactionResult::Ok));
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
@@ -368,13 +344,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             (false, _) => assert!(false),
         }
 
-        let ret = environment_delete.delete_environment(
-            Kind::Aws,
-            &context_for_delete,
-            &ea_delete,
-            logger,
-            &engine_config_for_delete,
-        );
+        let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
         assert!(matches!(
             ret,
             TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
