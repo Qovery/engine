@@ -1,10 +1,9 @@
 use std::net::Ipv4Addr;
 
+use crate::errors::EngineError;
+use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter};
 use serde::{Deserialize, Serialize};
 
-use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::errors::EngineError as NewEngineError;
-use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter};
 use crate::models::{Context, Domain, QoveryIdentifier};
 
 pub mod cloudflare;
@@ -22,18 +21,7 @@ pub trait DnsProvider: ToTransmitter {
     fn token(&self) -> &str;
     fn domain(&self) -> &Domain;
     fn resolvers(&self) -> Vec<Ipv4Addr>;
-    fn is_valid(&self) -> Result<(), NewEngineError>;
-    fn engine_error_scope(&self) -> EngineErrorScope {
-        EngineErrorScope::DnsProvider(self.id().to_string(), self.name().to_string())
-    }
-    fn engine_error(&self, cause: EngineErrorCause, message: String) -> EngineError {
-        EngineError::new(
-            cause,
-            self.engine_error_scope(),
-            self.context().execution_id(),
-            Some(message),
-        )
-    }
+    fn is_valid(&self) -> Result<(), EngineError>;
     fn get_event_details(&self) -> EventDetails {
         let context = self.context();
         EventDetails::new(
