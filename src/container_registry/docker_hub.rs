@@ -1,14 +1,15 @@
 extern crate reqwest;
 
 use reqwest::StatusCode;
+use std::borrow::Borrow;
 
 use crate::build_platform::Image;
 use crate::cmd::command::QoveryCommand;
 use crate::container_registry::docker::{docker_pull_image, docker_tag_and_push_image};
-use crate::container_registry::{ContainerRegistry, EngineError, Kind, PullResult, PushResult};
-use crate::error::EngineErrorCause;
-use crate::errors::EngineError as NewEngineError;
-use crate::events::{ToTransmitter, Transmitter};
+use crate::container_registry::{ContainerRegistry, Kind, PullResult, PushResult};
+use crate::errors::{CommandError, EngineError};
+use crate::events::{EngineEvent, EventMessage, ToTransmitter, Transmitter};
+use crate::logger::{LogLevel, Logger};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
@@ -20,10 +21,11 @@ pub struct DockerHub {
     login: String,
     password: String,
     listeners: Listeners,
+    logger: Box<dyn Logger>,
 }
 
 impl DockerHub {
-    pub fn new(context: Context, id: &str, name: &str, login: &str, password: &str) -> Self {
+    pub fn new(context: Context, id: &str, name: &str, login: &str, password: &str, logger: Box<dyn Logger>) -> Self {
         DockerHub {
             context,
             id: id.to_string(),
@@ -31,10 +33,13 @@ impl DockerHub {
             login: login.to_string(),
             password: password.to_string(),
             listeners: vec![],
+            logger,
         }
     }
 
     pub fn exec_docker_login(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details();
+
         let envs = match self.context.docker_tcp_socket() {
             Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
             None => vec![],
@@ -48,27 +53,25 @@ impl DockerHub {
 
         match cmd.exec() {
             Ok(_) => Ok(()),
-            Err(_) => Err(self.engine_error(
-                EngineErrorCause::User(
-                    "Your DockerHub account seems to be no longer valid (bad Credentials). \
-                Please contact your Organization administrator to fix or change the Credentials.",
-                ),
-                format!("failed to login to DockerHub {}", self.name_with_id()),
+            Err(_) => Err(EngineError::new_client_invalid_cloud_provider_credentials(
+                event_details,
             )),
         }
     }
 
     fn pull_image(&self, dest: String, image: &Image) -> Result<PullResult, EngineError> {
-        match docker_pull_image(self.kind(), vec![], dest.clone()) {
+        let event_details = self.get_event_details();
+        match docker_pull_image(self.kind(), vec![], dest.clone(), event_details.clone(), self.logger()) {
             Ok(_) => {
                 let mut image = image.clone();
                 image.registry_url = Some(dest);
                 Ok(PullResult::Some(image))
             }
-            Err(e) => Err(self.engine_error(
-                EngineErrorCause::Internal,
-                e.message
-                    .unwrap_or_else(|| "unknown error occurring during docker pull".to_string()),
+            Err(e) => Err(EngineError::new_docker_pull_image_error(
+                event_details,
+                image.name.to_string(),
+                dest.to_string(),
+                e,
             )),
         }
     }
@@ -97,7 +100,7 @@ impl ContainerRegistry for DockerHub {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), NewEngineError> {
+    fn is_valid(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
@@ -118,6 +121,7 @@ impl ContainerRegistry for DockerHub {
     }
 
     fn does_image_exists(&self, image: &Image) -> bool {
+        let event_details = self.get_event_details();
         use reqwest::blocking::Client;
         let client = Client::new();
         let path = format!(
@@ -133,13 +137,27 @@ impl ContainerRegistry for DockerHub {
         match res {
             Ok(out) => matches!(out.status(), StatusCode::OK),
             Err(e) => {
-                error!("While trying to retrieve if DockerHub repository exist {:?}", e);
+                self.logger.log(
+                    LogLevel::Error,
+                    EngineEvent::Error(
+                        EngineError::new_container_registry_repository_doesnt_exist(
+                            event_details.clone(),
+                            image.name.to_string(),
+                            Some(CommandError::new(
+                                e.to_string(),
+                                Some("Error while trying to retrieve if DockerHub repository exist.".to_string()),
+                            )),
+                        ),
+                        None,
+                    ),
+                );
                 false
             }
         }
     }
 
     fn pull(&self, image: &Image) -> Result<PullResult, EngineError> {
+        let event_details = self.get_event_details();
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         if !self.does_image_exists(image) {
@@ -148,7 +166,14 @@ impl ContainerRegistry for DockerHub {
                 image,
                 self.name()
             );
-            info!("{}", info_message.as_str());
+
+            self.logger.log(
+                LogLevel::Info,
+                EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(info_message.to_string()),
+                ),
+            );
 
             listeners_helper.deployment_in_progress(ProgressInfo::new(
                 ProgressScope::Application {
@@ -163,7 +188,14 @@ impl ContainerRegistry for DockerHub {
         }
 
         let info_message = format!("pull image {:?} from DockerHub {} repository", image, self.name());
-        info!("{}", info_message.as_str());
+
+        self.logger.log(
+            LogLevel::Info,
+            EngineEvent::Info(
+                event_details.clone(),
+                EventMessage::new_from_safe(info_message.to_string()),
+            ),
+        );
 
         listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Application {
@@ -183,6 +215,8 @@ impl ContainerRegistry for DockerHub {
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
+        let event_details = self.get_event_details();
+
         let _ = self.exec_docker_login()?;
 
         let dest = format!("{}/{}", self.login.as_str(), image.name_with_tag().as_str());
@@ -196,7 +230,13 @@ impl ContainerRegistry for DockerHub {
                 self.name()
             );
 
-            info!("{}", info_message.as_str());
+            self.logger.log(
+                LogLevel::Info,
+                EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(info_message.to_string()),
+                ),
+            );
 
             listeners_helper.deployment_in_progress(ProgressInfo::new(
                 ProgressScope::Application {
@@ -219,6 +259,14 @@ impl ContainerRegistry for DockerHub {
             self.name()
         );
 
+        self.logger.log(
+            LogLevel::Info,
+            EngineEvent::Info(
+                event_details.clone(),
+                EventMessage::new_from_safe(info_message.to_string()),
+            ),
+        );
+
         listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Application {
                 id: image.application_id.clone(),
@@ -229,22 +277,35 @@ impl ContainerRegistry for DockerHub {
         ));
 
         let dest_latest_tag = format!("{}/{}:latest", self.login.as_str(), image.name);
-        match docker_tag_and_push_image(self.kind(), vec![], &image, dest.clone(), dest_latest_tag) {
+        match docker_tag_and_push_image(
+            self.kind(),
+            vec![],
+            &image,
+            dest.clone(),
+            dest_latest_tag,
+            event_details.clone(),
+            self.logger(),
+        ) {
             Ok(_) => {
                 let mut image = image.clone();
                 image.registry_url = Some(dest);
                 Ok(PushResult { image })
             }
-            Err(e) => Err(self.engine_error(
-                EngineErrorCause::Internal,
-                e.message
-                    .unwrap_or_else(|| "unknown error occurring during docker push".to_string()),
+            Err(e) => Err(EngineError::new_docker_push_image_error(
+                event_details.clone(),
+                image.name.to_string(),
+                dest.to_string(),
+                e,
             )),
         }
     }
 
     fn push_error(&self, _image: &Image) -> Result<PushResult, EngineError> {
         unimplemented!()
+    }
+
+    fn logger(&self) -> &dyn Logger {
+        self.logger.borrow()
     }
 }
 

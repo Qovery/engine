@@ -99,6 +99,14 @@ pub enum Tag {
     DockerPushImageError,
     DockerPullImageError,
     BuilderDockerCannotListImages,
+    ContainerRegistryRepositoryCreationError,
+    ContainerRegistryRepositorySetLifecycleError,
+    ContainerRegistryGetCredentialsError,
+    ContainerRegistryImageDoesntExist,
+    ContainerRegistryImageUnreachableAfterPush,
+    ContainerRegistryRepositoryDoesntExist,
+    ContainerRegistryDeleteRepositoryError,
+    ContainerRegistryDeleteImageError,
 }
 
 impl From<errors::Tag> for Tag {
@@ -187,6 +195,16 @@ impl From<errors::Tag> for Tag {
             errors::Tag::BuilderCloningRepositoryError => Tag::BuilderCloningRepositoryError,
             errors::Tag::DockerPushImageError => Tag::DockerPushImageError,
             errors::Tag::DockerPullImageError => Tag::DockerPullImageError,
+            errors::Tag::ContainerRegistryRepositoryCreationError => Tag::ContainerRegistryRepositoryCreationError,
+            errors::Tag::ContainerRegistryRepositorySetLifecycleError => {
+                Tag::ContainerRegistryRepositorySetLifecycleError
+            }
+            errors::Tag::ContainerRegistryGetCredentialsError => Tag::ContainerRegistryGetCredentialsError,
+            errors::Tag::ContainerRegistryDeleteImageError => Tag::ContainerRegistryDeleteImageError,
+            errors::Tag::ContainerRegistryImageDoesntExist => Tag::ContainerRegistryImageDoesntExist,
+            errors::Tag::ContainerRegistryImageUnreachableAfterPush => Tag::ContainerRegistryImageUnreachableAfterPush,
+            errors::Tag::ContainerRegistryRepositoryDoesntExist => Tag::ContainerRegistryRepositoryDoesntExist,
+            errors::Tag::ContainerRegistryDeleteRepositoryError => Tag::ContainerRegistryDeleteRepositoryError,
             errors::Tag::BuilderDockerCannotListImages => Tag::BuilderDockerCannotListImages,
         }
     }
