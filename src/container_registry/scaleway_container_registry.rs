@@ -1,6 +1,7 @@
 extern crate scaleway_api_rs;
 
 use crate::cloud_provider::scaleway::application::ScwZone;
+use std::borrow::Borrow;
 
 use self::scaleway_api_rs::models::scaleway_registry_v1_namespace::Status;
 use crate::build_platform::Image;
@@ -8,9 +9,9 @@ use crate::container_registry::docker::{
     docker_login, docker_manifest_inspect, docker_pull_image, docker_tag_and_push_image,
 };
 use crate::container_registry::{ContainerRegistry, Kind, PullResult, PushResult};
-use crate::error::{EngineError, EngineErrorCause};
-use crate::errors::EngineError as NewEngineError;
-use crate::events::{ToTransmitter, Transmitter};
+use crate::errors::{CommandError, EngineError};
+use crate::events::{EngineEvent, EventMessage, ToTransmitter, Transmitter};
+use crate::logger::{LogLevel, Logger};
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
@@ -29,6 +30,7 @@ pub struct ScalewayCR {
     secret_token: String,
     zone: ScwZone,
     listeners: Listeners,
+    logger: Box<dyn Logger>,
 }
 
 impl ScalewayCR {
@@ -39,6 +41,7 @@ impl ScalewayCR {
         secret_token: &str,
         default_project_id: &str,
         zone: ScwZone,
+        logger: Box<dyn Logger>,
     ) -> ScalewayCR {
         ScalewayCR {
             context,
@@ -49,6 +52,7 @@ impl ScalewayCR {
             secret_token: secret_token.to_string(),
             zone,
             listeners: Vec::new(),
+            logger,
         }
     }
 
@@ -86,9 +90,15 @@ impl ScalewayCR {
         )) {
             Ok(res) => res.namespaces,
             Err(e) => {
-                error!(
-                    "Error while interacting with Scaleway API (list_namespaces), error: {}, image: {}",
-                    e, &image.name
+                self.logger.log(
+                    LogLevel::Warning,
+                    EngineEvent::Warning(
+                        self.get_event_details(),
+                        EventMessage::new(
+                            "Error while interacting with Scaleway API (list_namespaces).".to_string(),
+                            Some(format!("error: {}, image: {}", e, &image.name)),
+                        ),
+                    ),
                 );
                 return None;
             }
@@ -123,9 +133,15 @@ impl ScalewayCR {
         )) {
             Ok(res) => res.images,
             Err(e) => {
-                error!(
-                    "Error while interacting with Scaleway API (list_images), error: {}, image: {}",
-                    e, &image.name
+                self.logger.log(
+                    LogLevel::Warning,
+                    EngineEvent::Warning(
+                        self.get_event_details(),
+                        EventMessage::new(
+                            "Error while interacting with Scaleway API (list_namespaces).".to_string(),
+                            Some(format!("error: {}, image: {}", e, &image.name)),
+                        ),
+                    ),
                 );
                 return None;
             }
@@ -145,13 +161,20 @@ impl ScalewayCR {
     }
 
     pub fn delete_image(&self, image: &Image) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Image, EngineError> {
+        let event_details = self.get_event_details();
+
         // https://developers.scaleway.com/en/products/registry/api/#delete-67dbf7
         let image_to_delete = self.get_image(image);
         if image_to_delete.is_none() {
-            let message = format!("While tyring to delete image {}, image doesn't exist", &image.name,);
-            error!("{}", message);
+            let err = EngineError::new_container_registry_image_doesnt_exist(
+                event_details.clone(),
+                image.name.to_string(),
+                None,
+            );
 
-            return Err(self.engine_error(EngineErrorCause::Internal, message));
+            self.logger.log(LogLevel::Error, EngineEvent::Error(err.clone(), None));
+
+            return Err(err);
         }
 
         let image_to_delete = image_to_delete.unwrap();
@@ -163,43 +186,61 @@ impl ScalewayCR {
         )) {
             Ok(res) => Ok(res),
             Err(e) => {
-                let message = format!(
-                    "Error while interacting with Scaleway API (delete_image), error: {}, image: {}",
-                    e, &image.name
+                let err = EngineError::new_container_registry_delete_image_error(
+                    event_details.clone(),
+                    image.name.to_string(),
+                    Some(CommandError::new(e.to_string(), None)),
                 );
 
-                error!("{}", message);
-                Err(self.engine_error(EngineErrorCause::Internal, message))
+                self.logger.log(LogLevel::Error, EngineEvent::Error(err.clone(), None));
+
+                Err(err)
             }
         }
     }
 
     fn push_image(&self, dest: String, dest_latest_tag: String, image: &Image) -> Result<PushResult, EngineError> {
         // https://www.scaleway.com/en/docs/deploy-an-image-from-registry-to-kubernetes-kapsule/
-        match docker_tag_and_push_image(self.kind(), self.get_docker_envs(), &image, dest, dest_latest_tag) {
-            Ok(_) => {}
-            Err(e) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    e.message
-                        .unwrap_or_else(|| "unknown error occurring during docker push".to_string()),
-                ))
-            }
-        };
+        let event_details = self.get_event_details();
+
+        if let Err(e) = docker_tag_and_push_image(
+            self.kind(),
+            self.get_docker_envs(),
+            image,
+            dest.to_string(),
+            dest_latest_tag.to_string(),
+            event_details.clone(),
+            self.logger(),
+        ) {
+            return Err(EngineError::new_docker_push_image_error(
+                event_details,
+                image.name.to_string(),
+                dest.to_string(),
+                e,
+            ));
+        }
 
         let result = retry::retry(Fibonacci::from_millis(10000).take(10), || {
             match self.does_image_exists(image) {
                 true => OperationResult::Ok(&image),
                 false => {
-                    warn!("image is not yet available on Scaleway Registry Namespace, retrying in a few seconds...");
+                    self.logger.log(
+                        LogLevel::Warning,
+                        EngineEvent::Warning(
+                            self.get_event_details(),
+                            EventMessage::new_from_safe(
+                                "Image is not yet available on Scaleway Registry Namespace, retrying in a few seconds...".to_string(),
+                            ),
+                        ),
+                    );
                     OperationResult::Retry(())
                 }
             }
         });
 
-        let image_not_reachable = Err(self.engine_error(
-            EngineErrorCause::Internal,
-            "image has been pushed on Scaleway Registry Namespace but is not yet available after 4min. Please try to redeploy in a few minutes".to_string(),
+        let image_not_reachable = Err(EngineError::new_container_registry_image_unreachable_after_push(
+            event_details.clone(),
+            image.name.to_string(),
         ));
 
         match result {
@@ -210,16 +251,22 @@ impl ScalewayCR {
     }
 
     fn pull_image(&self, dest: String, image: &Image) -> Result<PullResult, EngineError> {
-        match docker_pull_image(self.kind(), self.get_docker_envs(), dest) {
-            Ok(_) => {}
-            Err(e) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::Internal,
-                    e.message
-                        .unwrap_or_else(|| "unknown error occurring during docker pull".to_string()),
-                ))
-            }
-        };
+        let event_details = self.get_event_details();
+
+        if let Err(e) = docker_pull_image(
+            self.kind(),
+            self.get_docker_envs(),
+            dest.to_string(),
+            event_details.clone(),
+            self.logger(),
+        ) {
+            return Err(EngineError::new_docker_pull_image_error(
+                event_details,
+                image.name.to_string(),
+                dest.to_string(),
+                e,
+            ));
+        }
 
         Ok(PullResult::Some(image.clone()))
     }
@@ -228,6 +275,8 @@ impl ScalewayCR {
         &self,
         image: &Image,
     ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, EngineError> {
+        let event_details = self.get_event_details();
+
         // https://developers.scaleway.com/en/products/registry/api/#post-7a8fcc
         match block_on(scaleway_api_rs::apis::namespaces_api::create_namespace(
             &self.get_configuration(),
@@ -242,13 +291,17 @@ impl ScalewayCR {
         )) {
             Ok(res) => Ok(res),
             Err(e) => {
-                let message = format!(
-                    "Error while interacting with Scaleway API (create_namespace), error: {}, image: {}",
-                    e, &image.name
+                let error = EngineError::new_container_registry_namespace_creation_error(
+                    event_details.clone(),
+                    image.name.clone(),
+                    self.name_with_id(),
+                    CommandError::new(e.to_string(), Some("Can't create SCW repository".to_string())),
                 );
 
-                error!("{}", message);
-                Err(self.engine_error(EngineErrorCause::Internal, message))
+                self.logger
+                    .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
+
+                Err(error)
             }
         }
     }
@@ -258,15 +311,23 @@ impl ScalewayCR {
         image: &Image,
     ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, EngineError> {
         // https://developers.scaleway.com/en/products/registry/api/#delete-c1ac9b
+        let event_details = self.get_event_details();
         let registry_to_delete = self.get_registry_namespace(image);
+        let repository_name = match image.registry_name.as_ref() {
+            None => "unknown",
+            Some(name) => name,
+        };
         if registry_to_delete.is_none() {
-            let message = format!(
-                "While tyring to delete registry namespace for image {}, registry namespace doesn't exist",
-                &image.name,
+            let error = EngineError::new_container_registry_repository_doesnt_exist(
+                event_details.clone(),
+                repository_name.to_string(),
+                None,
             );
-            error!("{}", message);
 
-            return Err(self.engine_error(EngineErrorCause::Internal, message));
+            self.logger
+                .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
+
+            return Err(error);
         }
 
         let registry_to_delete = registry_to_delete.unwrap();
@@ -278,13 +339,16 @@ impl ScalewayCR {
         )) {
             Ok(res) => Ok(res),
             Err(e) => {
-                let message = format!(
-                    "Error while interacting with Scaleway API (delete_namespace), error: {}, image: {}",
-                    e, &image.name
+                let error = EngineError::new_container_registry_delete_repository_error(
+                    event_details.clone(),
+                    repository_name.to_string(),
+                    Some(CommandError::new(e.to_string(), None)),
                 );
 
-                error!("{}", message);
-                Err(self.engine_error(EngineErrorCause::Internal, message))
+                self.logger
+                    .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
+
+                return Err(error);
             }
         }
     }
@@ -294,9 +358,16 @@ impl ScalewayCR {
         image: &Image,
     ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, EngineError> {
         // check if the repository already exists
+        let event_details = self.get_event_details();
         let registry_namespace = self.get_registry_namespace(&image);
         if let Some(namespace) = registry_namespace {
-            info!("Scaleway registry namespace {} already exists", image.name.as_str());
+            self.logger.log(
+                LogLevel::Info,
+                EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(format!("SCW repository {} already exists", image.name.as_str())),
+                ),
+            );
             return Ok(namespace);
         }
 
@@ -315,21 +386,20 @@ impl ScalewayCR {
     }
 
     fn exec_docker_login(&self, registry_url: &String) -> Result<(), EngineError> {
+        let event_details = self.get_event_details();
         if docker_login(
             Kind::ScalewayCr,
             self.get_docker_envs(),
             self.login.clone(),
             self.secret_token.clone(),
             registry_url.clone(),
+            event_details.clone(),
+            self.logger(),
         )
         .is_err()
         {
-            return Err(self.engine_error(
-                EngineErrorCause::User(
-                    "Your Scaleway account seems to be no longer valid (bad Credentials). \
-                Please contact your Organization administrator to fix or change the Credentials.",
-                ),
-                format!("failed to login to Scaleway {}", self.name_with_id()),
+            return Err(EngineError::new_client_invalid_cloud_provider_credentials(
+                event_details,
             ));
         };
 
@@ -360,7 +430,7 @@ impl ContainerRegistry for ScalewayCR {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), NewEngineError> {
+    fn is_valid(&self) -> Result<(), EngineError> {
         Ok(())
     }
 
@@ -381,6 +451,7 @@ impl ContainerRegistry for ScalewayCR {
     }
 
     fn does_image_exists(&self, image: &Image) -> bool {
+        let event_details = self.get_event_details();
         let registry_url = image
             .registry_url
             .as_ref()
@@ -393,6 +464,8 @@ impl ContainerRegistry for ScalewayCR {
             self.login.clone(),
             self.secret_token.clone(),
             registry_url.clone(),
+            event_details.clone(),
+            self.logger(),
         ) {
             return false;
         }
@@ -403,11 +476,14 @@ impl ContainerRegistry for ScalewayCR {
             image.name.clone(),
             image.tag.clone(),
             registry_url,
+            event_details.clone(),
+            self.logger(),
         )
-        .is_some()
+        .is_ok()
     }
 
     fn pull(&self, image: &Image) -> Result<PullResult, EngineError> {
+        let event_details = self.get_event_details();
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         let mut image = image.clone();
@@ -415,9 +491,15 @@ impl ContainerRegistry for ScalewayCR {
 
         match self.get_or_create_registry_namespace(&image) {
             Ok(registry) => {
-                info!(
-                    "Scaleway registry namespace for {} has been created",
-                    image.name.as_str()
+                self.logger.log(
+                    LogLevel::Info,
+                    EngineEvent::Info(
+                        event_details.clone(),
+                        EventMessage::new_from_safe(format!(
+                            "Scaleway registry namespace for {} has been created",
+                            image.name.as_str()
+                        )),
+                    ),
                 );
                 image.registry_name = Some(image.name.clone()); // Note: Repository namespace should have the same name as the image name
                 image.registry_url = registry.endpoint.clone();
@@ -426,18 +508,21 @@ impl ContainerRegistry for ScalewayCR {
                 registry_url = registry.endpoint.unwrap_or_else(|| "undefined".to_string());
             }
             Err(e) => {
-                error!(
-                    "Scaleway registry namespace for {} cannot be created, error: {:?}",
-                    image.name.as_str(),
-                    e
-                );
+                self.logger.log(LogLevel::Error, EngineEvent::Error(e.clone(), None));
                 return Err(e);
             }
         }
 
         if !self.does_image_exists(&image) {
-            let info_message = format!("image {:?} does not exist in SCR {} repository", image, self.name());
-            info!("{}", info_message.as_str());
+            let info_message = format!("Image {:?} does not exist in SCR {} repository", image, self.name());
+
+            self.logger.log(
+                LogLevel::Info,
+                EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(info_message.to_string()),
+                ),
+            );
 
             listeners_helper.deployment_in_progress(ProgressInfo::new(
                 ProgressScope::Application {
@@ -452,7 +537,14 @@ impl ContainerRegistry for ScalewayCR {
         }
 
         let info_message = format!("pull image {:?} from SCR {} repository", image, self.name());
-        info!("{}", info_message.as_str());
+
+        self.logger.log(
+            LogLevel::Info,
+            EngineEvent::Info(
+                event_details.clone(),
+                EventMessage::new_from_safe(info_message.to_string()),
+            ),
+        );
 
         listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Application {
@@ -472,16 +564,13 @@ impl ContainerRegistry for ScalewayCR {
     }
 
     fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
+        let event_details = self.get_event_details();
         let mut image = image.clone();
         let registry_url: String;
         let registry_name: String;
 
         match self.get_or_create_registry_namespace(&image) {
             Ok(registry) => {
-                info!(
-                    "Scaleway registry namespace for {} has been created",
-                    image.name.as_str()
-                );
                 image.registry_name = Some(image.name.clone()); // Note: Repository namespace should have the same name as the image name
                 image.registry_url = registry.endpoint.clone();
                 image.registry_secret = Some(self.secret_token.clone());
@@ -490,11 +579,7 @@ impl ContainerRegistry for ScalewayCR {
                 registry_name = registry.name.unwrap();
             }
             Err(e) => {
-                error!(
-                    "Scaleway registry namespace for {} cannot be created, error: {:?}",
-                    image.name.as_str(),
-                    e
-                );
+                self.logger.log(LogLevel::Error, EngineEvent::Error(e.clone(), None));
                 return Err(e);
             }
         }
@@ -512,7 +597,13 @@ impl ContainerRegistry for ScalewayCR {
                 image, registry_name,
             );
 
-            info!("{}", info_message.as_str());
+            self.logger.log(
+                LogLevel::Info,
+                EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(info_message.to_string()),
+                ),
+            );
 
             listeners_helper.deployment_in_progress(ProgressInfo::new(
                 ProgressScope::Application {
@@ -532,7 +623,13 @@ impl ContainerRegistry for ScalewayCR {
             self.name()
         );
 
-        info!("{}", info_message.as_str());
+        self.logger.log(
+            LogLevel::Info,
+            EngineEvent::Info(
+                event_details.clone(),
+                EventMessage::new_from_safe(info_message.to_string()),
+            ),
+        );
 
         listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Application {
@@ -549,6 +646,10 @@ impl ContainerRegistry for ScalewayCR {
 
     fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {
         Ok(PushResult { image: image.clone() })
+    }
+
+    fn logger(&self) -> &dyn Logger {
+        self.logger.borrow()
     }
 }
 

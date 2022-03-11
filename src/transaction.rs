@@ -113,14 +113,17 @@ impl<'a> Transaction<'a> {
         let _ = match container_registry.pull(&image) {
             Ok(pull_result) => pull_result,
             Err(err) => {
-                warn!(
-                    "{}",
-                    err.message.clone().unwrap_or(format!(
-                        "something goes wrong while pulling image from {:?} container registry",
-                        container_registry.kind()
-                    ))
+                self.logger.log(
+                    LogLevel::Error,
+                    EngineEvent::Error(
+                        err.clone(),
+                        Some(EventMessage::new_from_safe(
+                            "Something goes wrong while pulling image from container registry".to_string(),
+                        )),
+                    ),
                 );
-                return Err(EngineError::new_from_legacy_engine_error(err));
+
+                return Err(err);
             }
         };
 
@@ -208,8 +211,15 @@ impl<'a> Transaction<'a> {
             match result {
                 Ok(tuple) => results.push(tuple),
                 Err(err) => {
-                    error!("error pushing docker image {:?}", err);
-                    return Err(EngineError::new_from_legacy_engine_error(err));
+                    self.logger.log(
+                        LogLevel::Error,
+                        EngineEvent::Error(
+                            err.clone(),
+                            Some(EventMessage::new_from_safe("Error pushing docker image".to_string())),
+                        ),
+                    );
+
+                    return Err(err);
                 }
             }
         }

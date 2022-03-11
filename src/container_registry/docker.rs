@@ -2,7 +2,9 @@ use crate::build_platform::Image;
 use crate::cmd;
 use crate::cmd::command::QoveryCommand;
 use crate::container_registry::Kind;
-use crate::error::{SimpleError, SimpleErrorKind};
+use crate::errors::CommandError;
+use crate::events::{EngineEvent, EventDetails, EventMessage};
+use crate::logger::{LogLevel, Logger};
 use chrono::Duration;
 use retry::delay::Fibonacci;
 use retry::Error::Operation;
@@ -39,7 +41,9 @@ pub fn docker_manifest_inspect(
     image_name: String,
     image_tag: String,
     registry_url: String,
-) -> Option<DockerImageManifest> {
+    event_details: EventDetails,
+    logger: &dyn Logger,
+) -> Result<DockerImageManifest, CommandError> {
     let image_with_tag = format!("{}:{}", image_name, image_tag);
     let registry_provider = match container_registry_kind {
         Kind::DockerHub => "DockerHub",
@@ -63,26 +67,44 @@ pub fn docker_manifest_inspect(
         Ok(_) => {
             let joined = raw_output.join("");
             match serde_json::from_str(&joined) {
-                Ok(extracted_manifest) => Some(extracted_manifest),
+                Ok(extracted_manifest) => Ok(extracted_manifest),
                 Err(e) => {
-                    error!(
-                        "error while trying to deserialize manifest image manifest for image {} in {} ({}): {:?}",
-                        image_with_tag, registry_provider, registry_url, e,
+                    let error = CommandError::new(
+                        e.to_string(),
+                        Some(format!(
+                            "Error while trying to deserialize manifest image manifest for image {} in {} ({}).",
+                            image_with_tag, registry_provider, registry_url,
+                        )),
                     );
-                    None
+
+                    logger.log(
+                        LogLevel::Warning,
+                        EngineEvent::Warning(event_details.clone(), EventMessage::from(error.clone())),
+                    );
+
+                    Err(error)
                 }
             }
         }
         Err(e) => {
-            error!(
-                "error while trying to inspect image manifest for image {} in {} ({}), command `{}`: {:?}",
-                image_with_tag,
-                registry_provider,
-                registry_url,
-                cmd::command::command_to_string(binary, &args, &envs),
-                e,
+            let error = CommandError::new(
+                format!(
+                    "Command `{}`: {:?}",
+                    cmd::command::command_to_string(binary, &args, &envs),
+                    e
+                ),
+                Some(format!(
+                    "Error while trying to inspect image manifest for image {} in {} ({}).",
+                    image_with_tag, registry_provider, registry_url,
+                )),
             );
-            None
+
+            logger.log(
+                LogLevel::Warning,
+                EngineEvent::Warning(event_details.clone(), EventMessage::from(error.clone())),
+            );
+
+            Err(error)
         }
     };
 }
@@ -93,7 +115,9 @@ pub fn docker_login(
     registry_login: String,
     registry_pass: String,
     registry_url: String,
-) -> Result<(), SimpleError> {
+    event_details: EventDetails,
+    logger: &dyn Logger,
+) -> Result<(), CommandError> {
     let registry_provider = match container_registry_kind {
         Kind::DockerHub => "DockerHub",
         Kind::Ecr => "AWS ECR",
@@ -115,16 +139,24 @@ pub fn docker_login(
     match cmd.exec() {
         Ok(_) => Ok(()),
         Err(e) => {
-            let error_message = format!(
-                "error while trying to login to registry {} {}, command `{}`: {:?}",
-                registry_provider,
-                registry_url,
-                cmd::command::command_to_string(binary, &args, &docker_envs),
-                e,
+            let err = CommandError::new(
+                format!(
+                    "Command `{}`: {:?}",
+                    cmd::command::command_to_string(binary, &args, &docker_envs),
+                    e,
+                ),
+                Some(format!(
+                    "Error while trying to login to registry {} {}.",
+                    registry_provider, registry_url,
+                )),
             );
-            error!("{}", error_message);
 
-            Err(SimpleError::new(SimpleErrorKind::Other, Some(error_message)))
+            logger.log(
+                LogLevel::Warning,
+                EngineEvent::Warning(event_details.clone(), EventMessage::from(err.clone())),
+            );
+
+            Err(err)
         }
     }
 }
@@ -135,7 +167,9 @@ pub fn docker_tag_and_push_image(
     image: &Image,
     dest: String,
     dest_latest_tag: String,
-) -> Result<(), SimpleError> {
+    event_details: EventDetails,
+    logger: &dyn Logger,
+) -> Result<(), CommandError> {
     let image_with_tag = image.name_with_tag();
     let registry_provider = match container_registry_kind {
         Kind::DockerHub => "DockerHub",
@@ -144,50 +178,114 @@ pub fn docker_tag_and_push_image(
         Kind::ScalewayCr => "Scaleway Registry",
     };
 
-    let mut cmd = QoveryCommand::new("docker", &vec!["tag", &image_with_tag, dest.as_str()], &docker_envs);
+    let binary = "docker";
+    let args = vec!["tag", &image_with_tag, dest.as_str()];
+    let mut cmd = QoveryCommand::new(binary, &args, &docker_envs);
     match retry::retry(Fibonacci::from_millis(3000).take(5), || match cmd.exec() {
         Ok(_) => OperationResult::Ok(()),
         Err(e) => {
-            info!("failed to tag image {}, retrying...", image_with_tag);
+            logger.log(
+                LogLevel::Warning,
+                EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new(
+                        format!("Failed to tag image `{}`, retrying...", image_with_tag),
+                        Some(format!(
+                            "Command `{}`: {:?}",
+                            cmd::command::command_to_string(binary, &args, &docker_envs),
+                            e
+                        )),
+                    ),
+                ),
+            );
+
             OperationResult::Retry(e)
         }
     }) {
         Err(Operation { error, .. }) => {
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some(format!("failed to tag image {}: {:?}", image_with_tag, error)),
-            ))
+            logger.log(
+                LogLevel::Warning,
+                EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::from(CommandError::new_from_legacy_command_error(
+                        error,
+                        Some(format!("Error while trying to tag docker image `{}`", image_with_tag)),
+                    )),
+                ),
+            );
         }
-        _ => {}
+        Err(retry::Error::Internal(msg)) => {
+            logger.log(
+                LogLevel::Warning,
+                EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::from(CommandError::new(
+                        msg,
+                        Some(format!("Error while trying to tag docker image `{}`", image_with_tag)),
+                    )),
+                ),
+            );
+        }
+        Ok(_) => {}
     }
 
     let mut cmd = QoveryCommand::new("docker", &vec!["push", dest.as_str()], &docker_envs);
     let _ = match retry::retry(Fibonacci::from_millis(5000).take(5), || {
         match cmd.exec_with_timeout(
             Duration::minutes(10),
-            |line| info!("{}", line),
-            |line| error!("{}", line),
+            |line| {
+                logger.log(
+                    LogLevel::Info,
+                    EngineEvent::Info(event_details.clone(), EventMessage::new(line, None)),
+                )
+            },
+            |line| {
+                logger.log(
+                    LogLevel::Warning,
+                    EngineEvent::Warning(event_details.clone(), EventMessage::new(line, None)),
+                )
+            },
         ) {
             Ok(_) => OperationResult::Ok(()),
             Err(e) => {
-                warn!(
-                    "failed to push image {} on {}, {:?} retrying...",
-                    image_with_tag, registry_provider, e
+                logger.log(
+                    LogLevel::Warning,
+                    EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new(
+                            format!(
+                                "Failed to push image `{}` on `{}`, retrying ...",
+                                image_with_tag, registry_provider
+                            ),
+                            Some(format!("{:?}", e)),
+                        ),
+                    ),
                 );
+
                 OperationResult::Retry(e)
             }
         }
     }) {
-        Err(Operation { error, .. }) => Err(SimpleError::new(SimpleErrorKind::Other, Some(error.to_string()))),
-        Err(e) => Err(SimpleError::new(
-            SimpleErrorKind::Other,
-            Some(format!(
-                "unknown error while trying to push image {} to {}. {:?}",
-                image_with_tag, registry_provider, e
-            )),
+        Err(Operation { error, .. }) => Err(CommandError::new_from_legacy_command_error(
+            error,
+            Some(format!("Failed to push docker image `{}`", image_with_tag)),
+        )),
+        Err(retry::Error::Internal(msg)) => Err(CommandError::new(
+            msg,
+            Some(format!("Failed to push docker image `{}`", image_with_tag)),
         )),
         _ => {
-            info!("image {} has successfully been pushed", image_with_tag);
+            logger.log(
+                LogLevel::Info,
+                EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(format!(
+                        "Image {} has successfully been pushed on `{}`",
+                        image_with_tag, registry_provider
+                    )),
+                ),
+            );
+
             Ok(())
         }
     };
@@ -201,14 +299,29 @@ pub fn docker_tag_and_push_image(
     match retry::retry(Fibonacci::from_millis(3000).take(5), || match cmd.exec() {
         Ok(_) => OperationResult::Ok(()),
         Err(e) => {
-            info!("failed to tag image {}, retrying...", image_with_latest_tag);
+            logger.log(
+                LogLevel::Warning,
+                EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new(
+                        format!("Failed to tag image `{}`, retrying ...", image_with_latest_tag),
+                        Some(format!("{:?}", e)),
+                    ),
+                ),
+            );
             OperationResult::Retry(e)
         }
     }) {
         Err(Operation { error, .. }) => {
-            return Err(SimpleError::new(
-                SimpleErrorKind::Other,
-                Some(format!("failed to tag image {}: {:?}", image_with_latest_tag, error)),
+            return Err(CommandError::new_from_legacy_command_error(
+                error,
+                Some(format!("Failed to tag docker image `{}`", image_with_tag)),
+            ))
+        }
+        Err(retry::Error::Internal(msg)) => {
+            return Err(CommandError::new(
+                msg,
+                Some(format!("Failed to tag docker image `{}`", image_with_tag)),
             ))
         }
         _ => {}
@@ -218,29 +331,54 @@ pub fn docker_tag_and_push_image(
     match retry::retry(Fibonacci::from_millis(5000).take(5), || {
         match cmd.exec_with_timeout(
             Duration::minutes(10),
-            |line| info!("{}", line),
-            |line| error!("{}", line),
+            |line| {
+                logger.log(
+                    LogLevel::Info,
+                    EngineEvent::Info(event_details.clone(), EventMessage::new(line, None)),
+                )
+            },
+            |line| {
+                logger.log(
+                    LogLevel::Warning,
+                    EngineEvent::Warning(event_details.clone(), EventMessage::new(line, None)),
+                )
+            },
         ) {
             Ok(_) => OperationResult::Ok(()),
             Err(e) => {
-                warn!(
-                    "failed to push image {} on {}, {:?} retrying...",
-                    image_with_latest_tag, registry_provider, e
+                logger.log(
+                    LogLevel::Warning,
+                    EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new(
+                            format!(
+                                "Failed to push image {} on {}, retrying...",
+                                image_with_tag, registry_provider
+                            ),
+                            Some(format!("{:?}", e)),
+                        ),
+                    ),
                 );
                 OperationResult::Retry(e)
             }
         }
     }) {
-        Err(Operation { error, .. }) => Err(SimpleError::new(SimpleErrorKind::Other, Some(error.to_string()))),
-        Err(e) => Err(SimpleError::new(
-            SimpleErrorKind::Other,
+        Err(Operation { error, .. }) => Err(CommandError::new(error.to_string(), None)),
+        Err(e) => Err(CommandError::new(
+            format!("{:?}", e),
             Some(format!(
-                "unknown error while trying to push image {} to {}. {:?}",
-                image_with_latest_tag, registry_provider, e
+                "Unknown error while trying to push image {} to {}.",
+                image_with_tag, registry_provider,
             )),
         )),
         _ => {
-            info!("image {} has successfully been pushed", image_with_latest_tag);
+            logger.log(
+                LogLevel::Info,
+                EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(format!("image {} has successfully been pushed", image_with_tag)),
+                ),
+            );
             Ok(())
         }
     }
@@ -250,7 +388,9 @@ pub fn docker_pull_image(
     container_registry_kind: Kind,
     docker_envs: Vec<(&str, &str)>,
     dest: String,
-) -> Result<(), SimpleError> {
+    event_details: EventDetails,
+    logger: &dyn Logger,
+) -> Result<(), CommandError> {
     let registry_provider = match container_registry_kind {
         Kind::DockerHub => "DockerHub",
         Kind::Ecr => "AWS ECR",
@@ -262,36 +402,59 @@ pub fn docker_pull_image(
     match retry::retry(Fibonacci::from_millis(5000).take(5), || {
         match cmd.exec_with_timeout(
             Duration::minutes(10),
-            |line| info!("{}", line),
-            |line| error!("{}", line),
+            |line| {
+                logger.log(
+                    LogLevel::Info,
+                    EngineEvent::Info(event_details.clone(), EventMessage::new(line, None)),
+                )
+            },
+            |line| {
+                logger.log(
+                    LogLevel::Warning,
+                    EngineEvent::Warning(event_details.clone(), EventMessage::new(line, None)),
+                )
+            },
         ) {
             Ok(_) => OperationResult::Ok(()),
             Err(e) => {
-                warn!(
-                    "failed to pull image from {} registry {}, {:?} retrying...",
-                    registry_provider,
-                    dest.as_str(),
-                    e,
+                logger.log(
+                    LogLevel::Warning,
+                    EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new(
+                            format!(
+                                "failed to pull image from {} registry {}, retrying...",
+                                registry_provider,
+                                dest.as_str(),
+                            ),
+                            Some(format!("{:?}", e)),
+                        ),
+                    ),
                 );
                 OperationResult::Retry(e)
             }
         }
     }) {
-        Err(Operation { error, .. }) => Err(SimpleError::new(SimpleErrorKind::Other, Some(error.to_string()))),
-        Err(e) => Err(SimpleError::new(
-            SimpleErrorKind::Other,
+        Err(Operation { error, .. }) => Err(CommandError::new(error.to_string(), None)),
+        Err(e) => Err(CommandError::new(
+            format!("{:?}", e),
             Some(format!(
-                "unknown error while trying to pull image {} from {} registry. {:?}",
+                "Unknown error while trying to pull image {} from {} registry.",
                 dest.as_str(),
                 registry_provider,
-                e,
             )),
         )),
         _ => {
-            info!(
-                "image {} has successfully been pulled from {} registry",
-                dest.as_str(),
-                registry_provider,
+            logger.log(
+                LogLevel::Info,
+                EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(format!(
+                        "Image {} has successfully been pulled from {} registry",
+                        dest.as_str(),
+                        registry_provider,
+                    )),
+                ),
             );
             Ok(())
         }
