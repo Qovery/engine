@@ -108,6 +108,25 @@ fn create_and_destroy_eks_cluster_in_us_east_2() {
     );
 }
 
+#[cfg(feature = "test-aws-infra")]
+#[named]
+#[test]
+fn create_pause_and_destroy_eks_cluster_in_us_east_2() {
+    let secrets = FuncTestsSecrets::new();
+    let region = "us-east-2".to_string();
+    let aws_region = AwsRegion::from_str(&region).expect("Wasn't able to convert the desired region");
+    create_and_destroy_eks_cluster(
+        region,
+        AwsRegion::get_zones(&aws_region),
+        secrets,
+        ClusterTestType::WithPause,
+        AWS_KUBERNETES_MAJOR_VERSION,
+        AWS_KUBERNETES_MINOR_VERSION,
+        WithoutNatGateways,
+        function_name!(),
+    );
+}
+
 // only enable this test manually when we want to perform and validate upgrade process
 #[cfg(feature = "test-aws-infra")]
 #[named]
