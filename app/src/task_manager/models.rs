@@ -78,7 +78,7 @@ impl EngineRequest {
 
         let mut container_registry = self
             .container_registry
-            .to_engine_container_registry(context.clone())
+            .to_engine_container_registry(context.clone(), logger.clone())
             .ok_or_else(|| {
                 RequestError::ContainerRegistry(format!(
                     "Invalid container registry info: {:?}",
@@ -324,6 +324,7 @@ impl ContainerRegistry {
     pub fn to_engine_container_registry(
         &self,
         context: Context,
+        logger: Box<dyn qovery_engine::logger::Logger>,
     ) -> Option<Box<dyn qovery_engine::container_registry::ContainerRegistry>> {
         match self.kind {
             qovery_engine::container_registry::Kind::DockerHub => Some(Box::new(DockerHub::new(
@@ -332,6 +333,7 @@ impl ContainerRegistry {
                 self.name.as_str(),
                 self.options.login.as_ref()?.as_str(),
                 self.options.password.as_ref()?.as_str(),
+                logger,
             ))),
             qovery_engine::container_registry::Kind::Ecr => Some(Box::new(ECR::new(
                 context,
@@ -340,12 +342,14 @@ impl ContainerRegistry {
                 self.options.access_key_id.as_ref()?.as_str(),
                 self.options.secret_access_key.as_ref()?.as_str(),
                 self.options.region.as_ref()?.as_str(),
+                logger,
             ))),
             qovery_engine::container_registry::Kind::Docr => Some(Box::new(DOCR::new(
                 context,
                 self.id.as_str(),
                 self.name.as_str(),
                 self.options.token.as_ref()?.as_str(),
+                logger,
             ))),
             qovery_engine::container_registry::Kind::ScalewayCr => Some(Box::new(ScalewayCR::new(
                 context,
@@ -363,6 +367,7 @@ impl ContainerRegistry {
                     )
                     .as_str(),
                 ),
+                logger,
             ))),
         }
     }
