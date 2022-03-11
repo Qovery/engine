@@ -32,19 +32,6 @@ pub enum CommandError {
     Killed(String),
 }
 
-impl CommandError {
-    pub fn to_string(&self) -> String {
-        match self {
-            ExecutionError(err) => format!("Execution error: {}", err.to_string()),
-            ExitStatusError(exit_status) => {
-                format!("Execution error: exit status {}", exit_status.to_string())
-            }
-            TimeoutError(msg) => format!("Execution error: timeout, {}", msg.to_string()),
-            Killed(msg) => format!("Execution error: killed, {}", msg.to_string()),
-        }
-    }
-}
-
 pub struct QoveryCommand {
     command: Command,
 }
