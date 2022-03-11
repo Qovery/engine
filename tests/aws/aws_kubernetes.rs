@@ -104,8 +104,6 @@ fn create_pause_and_destroy_eks_cluster_in_us_east_2() {
     let aws_region = AwsRegion::from_str(&region).expect("Wasn't able to convert the desired region");
     create_and_destroy_eks_cluster(
         region,
-        AwsRegion::get_zones(&aws_region),
-        secrets,
         ClusterTestType::WithPause,
         AWS_KUBERNETES_MAJOR_VERSION,
         AWS_KUBERNETES_MINOR_VERSION,
