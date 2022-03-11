@@ -394,6 +394,7 @@ fn private_postgresql_v10_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v10_deploy_a_working_dev_environment() {
     test_postgresql_configuration("10", function_name!(), CONTAINER, true);
 }
@@ -408,6 +409,7 @@ fn private_postgresql_v11_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v11_deploy_a_working_dev_environment() {
     test_postgresql_configuration("11", function_name!(), CONTAINER, true);
 }
@@ -422,6 +424,7 @@ fn private_postgresql_v12_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v12_deploy_a_working_dev_environment() {
     test_postgresql_configuration("12", function_name!(), CONTAINER, true);
 }
@@ -546,6 +549,7 @@ fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_mongodb_v3_6_deploy_a_working_dev_environment() {
     test_mongodb_configuration("3.6", function_name!(), CONTAINER, true);
 }
@@ -560,6 +564,7 @@ fn private_mongodb_v4_0_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_mongodb_v4_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.0", function_name!(), CONTAINER, true);
 }
@@ -574,6 +579,7 @@ fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_mongodb_v4_2_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.2", function_name!(), CONTAINER, true);
 }
@@ -603,6 +609,7 @@ fn private_mongodb_v3_6_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn public_mongodb_v3_6_deploy_a_working_prod_environment() {
     test_mongodb_configuration("3.6", function_name!(), MANAGED, true);
 }
@@ -617,6 +624,7 @@ fn private_mongodb_v4_0_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn public_mongodb_v4_0_deploy_a_working_prod_environment() {
     test_mongodb_configuration("4.0", function_name!(), MANAGED, true);
 }
@@ -670,6 +678,7 @@ fn private_mysql_v5_7_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_mysql_v5_7_deploy_a_working_dev_environment() {
     test_mysql_configuration("5.7", function_name!(), CONTAINER, true);
 }
@@ -766,6 +775,7 @@ fn private_redis_v5_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_redis_v5_deploy_a_working_dev_environment() {
     test_redis_configuration("5", function_name!(), CONTAINER, true);
 }
@@ -795,6 +805,7 @@ fn private_redis_v5_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn public_redis_v5_deploy_a_working_prod_environment() {
     test_redis_configuration("5", function_name!(), MANAGED, true);
 }
@@ -809,6 +820,7 @@ fn private_redis_v6_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn public_redis_v6_deploy_a_working_prod_environment() {
     test_redis_configuration("6", function_name!(), MANAGED, true);
 }
