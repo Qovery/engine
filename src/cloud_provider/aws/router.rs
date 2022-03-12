@@ -468,7 +468,7 @@ impl Delete for Router {
             event_details.clone(),
             self.logger(),
         );
-        delete_router(target, self, false, event_details)
+        delete_router(target, self, event_details)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -486,6 +486,6 @@ impl Delete for Router {
             event_details.clone(),
             self.logger(),
         );
-        delete_router(target, self, true, event_details)
+        delete_router(target, self, event_details)
     }
 }
