@@ -543,11 +543,8 @@ impl<'a> Transaction<'a> {
     where
         F: Fn(&crate::cloud_provider::environment::Environment) -> Result<(), EngineError>,
     {
-        let target_environment = match environment_action {
-            EnvironmentAction::Environment(te) => te,
-        };
-
         let empty_vec = Vec::with_capacity(0);
+        let EnvironmentAction::Environment(target_environment) = environment_action;
         let built_applications = match applications_by_environment.get(target_environment) {
             Some(applications) => applications,
             None => &empty_vec,
@@ -566,7 +563,7 @@ impl<'a> Transaction<'a> {
         fn send_progress<T>(
             kubernetes: &dyn Kubernetes,
             action: &Action,
-            service: &Box<T>,
+            service: &T,
             execution_id: &str,
             is_error: bool,
         ) where
