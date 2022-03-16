@@ -119,6 +119,8 @@ pub enum Tag {
     UnsupportedZone,
     /// CannotRetrieveKubernetesConfigFile: represents an error while trying to retrieve Kubernetes config file.
     CannotRetrieveClusterConfigFile,
+    /// CannotCreateFile: represents an error while trying to create a file.
+    CannotCreateFile,
     /// CannotGetClusterNodes: represents an error while trying to get cluster's nodes.
     CannotGetClusterNodes,
     /// NotEnoughResourcesToDeployEnvironment: represents an error when trying to deploy an environment but there are not enough resources available on the cluster.
@@ -623,10 +625,29 @@ impl EngineError {
         event_details: EventDetails,
         error_message: CommandError,
     ) -> EngineError {
-        let message = "Cannot retrieve Kubernetes instance type is not supported";
+        let message = "Cannot retrieve Kubernetes kubeconfig";
         EngineError::new(
             event_details,
             Tag::CannotRetrieveClusterConfigFile,
+            message.to_string(),
+            message.to_string(),
+            Some(error_message),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for file we can't create.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error_message`: Raw error message.
+    pub fn new_cannot_create_file(event_details: EventDetails, error_message: CommandError) -> EngineError {
+        let message = "Cannot create file";
+        EngineError::new(
+            event_details,
+            Tag::CannotCreateFile,
             message.to_string(),
             message.to_string(),
             Some(error_message),

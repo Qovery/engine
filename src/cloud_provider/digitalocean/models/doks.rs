@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Default, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Default, Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct DoksList {
     pub kubernetes_clusters: Vec<KubernetesCluster>,
 }
 
-#[derive(Default, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Default, Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct KubernetesCluster {
     pub id: String,
     pub name: String,
