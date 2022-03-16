@@ -24,6 +24,7 @@ use dirs::home_dir;
 use dotenv::dotenv;
 use tracing::error;
 use tracing_subscriber::{fmt::time::ChronoUtc, prelude::*, EnvFilter};
+use url::Url;
 use uuid::Uuid;
 
 use qovery_engine::cmd;
@@ -57,7 +58,7 @@ fn to_engine_task(
     msg: Message,
     workspace_root_dir: &str,
     lib_root_dir: &str,
-    docker_tcp_socket: &Option<String>,
+    docker_tcp_socket: &Option<Url>,
     task_selector: &TaskSelector,
     status_sender: Sender<Status>,
 ) -> Result<Box<dyn Task>, serde_json::Error> {
@@ -185,7 +186,7 @@ pub fn main() -> io::Result<()> {
     let nats_password = std::env::var("QOVERY_NATS_PASSWORD");
     let test_cluster_env_var = std::env::var("TEST_CLUSTER");
     let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or_else(|_| "lib".to_string());
-    let docker_host = env::var("DOCKER_HOST").ok();
+    let docker_host = env::var("DOCKER_HOST").map(|val| Url::parse(&val).unwrap()).ok();
     let workspace_root_dir = env::var("WORKSPACE_ROOT_DIR")
         .unwrap_or(format!("{}/.qovery-workspace", home_dir().unwrap().to_str().unwrap()));
 
@@ -337,7 +338,7 @@ pub fn using_json_path_parameter(
     lib_root_dir: String,
     test_cluster: bool,
     deployment_type: TaskSelector,
-    docker_host: Option<String>,
+    docker_host: Option<Url>,
 ) -> Result<(), Error> {
     // check if file json config file exist
     if !Path::new(&deploy_from_file).exists() {
@@ -388,7 +389,7 @@ fn using_nats_server(
     nats_credentials: Option<(String, String)>,
     workspace_root_dir: String,
     lib_root_dir: String,
-    docker_host: Option<String>,
+    docker_host: Option<Url>,
     mode: Mode,
     task_selector: TaskSelector,
 ) -> Result<(), Error> {
@@ -515,7 +516,7 @@ fn spawn_task_poller(
     task_selector: TaskSelector,
     mode: Mode,
     workspace_root_dir: String,
-    docker_host: Option<String>,
+    docker_host: Option<Url>,
     lib_root_dir: String,
     engine_name: String,
     sig_term_tx: Sender<bool>,

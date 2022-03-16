@@ -29,6 +29,7 @@ dirs = "3.0.1"
 openssl-sys = "0.9"
 openssl = { version = "0.10", features = ["vendored"] }
 evmap = "10.0.2"
+url = "2.2.2"
 
 # Webserver (For Prometheus, Healthcheck, ...)
 tokio = { version = "1.1.0", features = ["net", "rt-multi-thread"] }

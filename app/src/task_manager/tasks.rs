@@ -6,6 +6,7 @@ use std::sync::{Arc, RwLock};
 use chrono::{DateTime, Utc};
 use crossbeam_channel::Sender;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
+use url::Url;
 
 use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use qovery_engine::logger::Logger;
@@ -21,7 +22,7 @@ use qovery_engine::transaction::StepName::Waiting;
 pub struct InfrastructureTask {
     workspace_root_dir: String,
     lib_root_dir: String,
-    docker_host: Option<String>,
+    docker_host: Option<Url>,
     request: EngineRequest,
     status_sender: Sender<Status>,
 }
@@ -32,7 +33,7 @@ impl InfrastructureTask {
         status_sender: Sender<Status>,
         workspace_root_dir: String,
         lib_root_dir: String,
-        docker_host: Option<String>,
+        docker_host: Option<Url>,
     ) -> Self {
         InfrastructureTask {
             workspace_root_dir,
@@ -190,7 +191,7 @@ impl Task for InfrastructureTask {
 pub struct EnvironmentTask {
     workspace_root_dir: String,
     lib_root_dir: String,
-    docker_host: Option<String>,
+    docker_host: Option<Url>,
     request: EngineRequest,
     status_sender: Sender<Status>,
     cancel_requested: Arc<AtomicBool>,
@@ -203,7 +204,7 @@ impl EnvironmentTask {
         status_sender: Sender<Status>,
         workspace_root_dir: String,
         lib_root_dir: String,
-        docker_host: Option<String>,
+        docker_host: Option<Url>,
     ) -> Self {
         EnvironmentTask {
             workspace_root_dir,

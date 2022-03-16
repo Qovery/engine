@@ -11,7 +11,6 @@ use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
-use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
@@ -148,7 +147,8 @@ impl BuildPlatform {
     ) -> Box<dyn qovery_engine::build_platform::BuildPlatform> {
         Box::new(match self.kind {
             qovery_engine::build_platform::Kind::LocalDocker => {
-                LocalDocker::new(context.clone(), self.id.as_str(), self.name.as_str(), logger)
+                // FIXME: Remove the unwrap by propagating errors above
+                LocalDocker::new(context.clone(), self.id.as_str(), self.name.as_str(), logger).unwrap()
             }
         })
     }
@@ -327,14 +327,6 @@ impl ContainerRegistry {
         logger: Box<dyn qovery_engine::logger::Logger>,
     ) -> Option<Box<dyn qovery_engine::container_registry::ContainerRegistry>> {
         match self.kind {
-            qovery_engine::container_registry::Kind::DockerHub => Some(Box::new(DockerHub::new(
-                context,
-                self.id.as_str(),
-                self.name.as_str(),
-                self.options.login.as_ref()?.as_str(),
-                self.options.password.as_ref()?.as_str(),
-                logger,
-            ))),
             qovery_engine::container_registry::Kind::Ecr => Some(Box::new(ECR::new(
                 context,
                 self.id.as_str(),
