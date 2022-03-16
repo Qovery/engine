@@ -254,6 +254,8 @@ pub enum Tag {
     BuilderGetBuildError,
     /// BuilderCloningRepositoryError: represents an error when builder is trying to clone a git repository.
     BuilderCloningRepositoryError,
+    /// DockerError: represents an error when trying to use docker cli.
+    DockerError,
     /// DockerPushImageError: represents an error when trying to push a docker image.
     DockerPushImageError,
     /// DockerPullImageError: represents an error when trying to pull a docker image.
@@ -2296,7 +2298,7 @@ impl EngineError {
     pub fn new_docker_error(event_details: EventDetails, error: DockerError) -> EngineError {
         EngineError::new(
             event_details,
-            Tag::HelmChartUninstallError,
+            Tag::DockerError,
             error.to_string(),
             error.to_string(),
             None,

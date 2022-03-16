@@ -133,6 +133,7 @@ impl LocalDocker {
                 .map(|(k, v)| (k.as_str(), v.as_str()))
                 .collect::<Vec<_>>(),
             &image_cache,
+            true,
             |line| {
                 self.logger.log(
                     LogLevel::Info,
@@ -385,12 +386,7 @@ impl BuildPlatform for LocalDocker {
         Ok(())
     }
 
-    fn build(
-        &self,
-        build: Build,
-        _force_build: bool,
-        is_task_canceled: &dyn Fn() -> bool,
-    ) -> Result<BuildResult, EngineError> {
+    fn build(&self, build: Build, is_task_canceled: &dyn Fn() -> bool) -> Result<BuildResult, EngineError> {
         let event_details = self.get_event_details();
 
         self.logger.log(

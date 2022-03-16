@@ -223,6 +223,7 @@ impl Docker {
         image_to_build: &ContainerImage,
         build_args: &[(&str, &str)],
         cache: &ContainerImage,
+        push_after_build: bool,
         stdout_output: Stdout,
         stderr_output: Stderr,
         timeout: Duration,
@@ -264,6 +265,7 @@ impl Docker {
                 image_to_build,
                 build_args,
                 cache,
+                push_after_build,
                 stdout_output,
                 stderr_output,
                 timeout,
@@ -276,6 +278,7 @@ impl Docker {
                 image_to_build,
                 build_args,
                 cache,
+                push_after_build,
                 stdout_output,
                 stderr_output,
                 timeout,
@@ -291,6 +294,7 @@ impl Docker {
         image_to_build: &ContainerImage,
         build_args: &[(&str, &str)],
         cache: &ContainerImage,
+        push_after_build: bool,
         stdout_output: Stdout,
         stderr_output: Stderr,
         timeout: Duration,
@@ -330,7 +334,7 @@ impl Docker {
 
         args_string.push(context.to_str().unwrap_or_default().to_string());
 
-        docker_exec(
+        let _ = docker_exec(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(&vec![]),
             Some(timeout),
@@ -339,7 +343,10 @@ impl Docker {
             stderr_output,
         )?;
 
-        // TODO: do a docker push of the cache image
+        if push_after_build {
+            let _ = self.push(image_to_build, |_| {}, |_| {}, timeout, should_abort)?;
+        }
+
         Ok(())
     }
 
@@ -350,6 +357,7 @@ impl Docker {
         image_to_build: &ContainerImage,
         build_args: &[(&str, &str)],
         cache: &ContainerImage,
+        push_after_build: bool,
         stdout_output: Stdout,
         stderr_output: Stderr,
         timeout: Duration,
@@ -366,7 +374,11 @@ impl Docker {
             "build".to_string(),
             "--progress=plain".to_string(),
             "--network=host".to_string(),
-            "--output=type=registry".to_string(), // tell buildkit to load the image into docker after build
+            if push_after_build {
+                "--output=type=registry".to_string() // tell buildkit to push image to registry
+            } else {
+                "--output=type=docker".to_string() // tell buildkit to load the image into docker after build
+            },
             "--cache-from".to_string(),
             format!("type=registry,ref={}", cache.image_name()),
             // Disabled for now, because private ECR does not support it ...
@@ -457,8 +469,8 @@ pub fn to_engine_error(event_details: &EventDetails, error: DockerError) -> Engi
 }
 
 // start a local registry to run this test
-// docker run --rm --ti -p 5000:5000 --name registry registry:2
-//#[cfg(feature = "test-with-docker")]
+// docker run --rm -ti -p 5000:5000 --name registry registry:2
+#[cfg(feature = "test-with-docker")]
 #[cfg(test)]
 mod tests {
     use crate::cmd::docker::{ContainerImage, Docker, DockerError};
@@ -538,6 +550,7 @@ mod tests {
             &image_to_build,
             &vec![],
             &image_cache,
+            false,
             |msg| println!("{}", msg),
             |msg| eprintln!("{}", msg),
             Duration::max_value(),
@@ -553,6 +566,7 @@ mod tests {
             &image_to_build,
             &vec![],
             &image_cache,
+            false,
             |msg| println!("{}", msg),
             |msg| eprintln!("{}", msg),
             Duration::max_value(),
@@ -585,6 +599,7 @@ mod tests {
             &image_to_build,
             &vec![],
             &image_cache,
+            false,
             |msg| println!("{}", msg),
             |msg| eprintln!("{}", msg),
             Duration::max_value(),
@@ -599,6 +614,7 @@ mod tests {
             &image_to_build,
             &vec![],
             &image_cache,
+            false,
             |msg| println!("{}", msg),
             |msg| eprintln!("{}", msg),
             Duration::max_value(),
@@ -608,16 +624,59 @@ mod tests {
         assert!(matches!(ret, Ok(_)));
     }
 
-    /*
     #[test]
-    fn test_binary_exist() {
-        let image = Image {
-            registry: Url::parse("https://docker.io").unwrap(),
-            name: "nats".to_string(),
-            tags: vec!["latest".to_string()],
+    fn test_push() {
+        // start a local registry to run this test
+        // docker run --rm -d -p 5000:5000 --name registry registry:2
+        let docker = Docker::new_with_options(true, None).unwrap();
+        let image_to_build = ContainerImage {
+            registry: private_registry_url(),
+            name: "erebe/alpine".to_string(),
+            tags: vec!["3.15".to_string()],
         };
-        let docker = Docker::new(None);
-        let ret = docker.does_image_exist_locally(&image);
-        let ret = docker.does_image_exist_remotely(&image);
-    }*/
+        let image_cache = ContainerImage {
+            registry: private_registry_url(),
+            name: "erebe/alpine".to_string(),
+            tags: vec!["cache".to_string()],
+        };
+
+        // It should work
+        let ret = docker.build_with_buildkit(
+            Path::new("tests/docker/multi_stage_simple/Dockerfile"),
+            Path::new("tests/docker/multi_stage_simple/"),
+            &image_to_build,
+            &vec![],
+            &image_cache,
+            false,
+            |msg| println!("{}", msg),
+            |msg| eprintln!("{}", msg),
+            Duration::max_value(),
+            &|| false,
+        );
+        assert!(matches!(ret, Ok(_)));
+
+        let ret = docker.does_image_exist_locally(&image_to_build);
+        assert!(matches!(ret, Ok(true)));
+
+        let ret = docker.does_image_exist_remotely(&image_to_build);
+        assert!(matches!(ret, Ok(false)));
+
+        let ret = docker.push(
+            &image_to_build,
+            |msg| println!("{}", msg),
+            |msg| eprintln!("{}", msg),
+            Duration::max_value(),
+            &|| false,
+        );
+        assert!(matches!(ret, Ok(_)));
+
+        let ret = docker.pull(
+            &image_to_build,
+            |msg| println!("{}", msg),
+            |msg| eprintln!("{}", msg),
+            Duration::max_value(),
+            &|| false,
+        );
+        assert!(matches!(ret, Ok(_)));
+    }
 }

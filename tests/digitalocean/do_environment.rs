@@ -11,8 +11,8 @@ use qovery_engine::models::{Action, CloneForTest, EnvironmentAction, Port, Proto
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
 use test_utilities::common::Infrastructure;
-use test_utilities::digitalocean::{container_registry_digital_ocean, do_default_engine_config, DO_KUBERNETES_VERSION};
-use test_utilities::utilities::{build_platform_local_docker, context};
+use test_utilities::digitalocean::do_default_engine_config;
+use test_utilities::utilities::context;
 use tracing::{span, warn, Level};
 
 // Note: All those tests relies on a test cluster running on DigitalOcean infrastructure.
@@ -605,7 +605,6 @@ fn digitalocean_doks_deploy_a_not_working_environment_and_then_working_environme
         let env_action_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
         let result = environment_for_not_working.deploy_environment(
-
             &env_action_not_working,
             logger.clone(),
             &engine_config_for_not_working,

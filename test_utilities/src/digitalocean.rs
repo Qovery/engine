@@ -1,5 +1,4 @@
 use const_format::formatcp;
-use qovery_engine::build_platform::Image;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DoksOptions;
 use qovery_engine::cloud_provider::digitalocean::network::vpc::VpcInitKind;
@@ -17,7 +16,6 @@ use crate::utilities::{build_platform_local_docker, logger, FuncTestsSecrets};
 use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::Kind::Do;
-use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::errors::EngineError;
 use qovery_engine::logger::Logger;
@@ -164,11 +162,11 @@ impl Cluster<DO, DoksOptions> for DO {
 
 pub fn clean_environments(
     context: &Context,
-    environments: Vec<Environment>,
+    _environments: Vec<Environment>,
     secrets: FuncTestsSecrets,
     _region: DoRegion,
 ) -> Result<(), EngineError> {
-    let do_cr = DOCR::new(
+    let _do_cr = DOCR::new(
         context.clone(),
         "test",
         "test",

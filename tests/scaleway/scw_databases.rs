@@ -15,9 +15,8 @@ use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
 use test_utilities::common::test_db;
 use test_utilities::common::{database_test_environment, Infrastructure};
 use test_utilities::scaleway::{
-    clean_environments, scw_default_engine_config, SCW_KUBERNETES_VERSION, SCW_MANAGED_DATABASE_DISK_TYPE,
-    SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
-    SCW_TEST_ZONE,
+    clean_environments, scw_default_engine_config, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
+    SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,
 };
 
 /**

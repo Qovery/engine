@@ -13,9 +13,8 @@ use test_utilities::utilities::{
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
 use test_utilities::common::{database_test_environment, test_db, Infrastructure};
 use test_utilities::digitalocean::{
-    clean_environments, do_default_engine_config, DO_KUBERNETES_VERSION, DO_MANAGED_DATABASE_DISK_TYPE,
-    DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_SELF_HOSTED_DATABASE_DISK_TYPE, DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
-    DO_TEST_REGION,
+    clean_environments, do_default_engine_config, DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE,
+    DO_SELF_HOSTED_DATABASE_DISK_TYPE, DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE, DO_TEST_REGION,
 };
 
 /**

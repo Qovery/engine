@@ -10,9 +10,8 @@ use qovery_engine::cmd::kubectl::kubernetes_get_all_pdbs;
 use qovery_engine::models::{Action, CloneForTest, EnvironmentAction, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
-use std::time::SystemTime;
-use test_utilities::aws::{aws_default_engine_config, container_registry_ecr, AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
-use test_utilities::utilities::{build_platform_local_docker, context, init, kubernetes_config_path};
+use test_utilities::aws::aws_default_engine_config;
+use test_utilities::utilities::{context, init, kubernetes_config_path};
 use tracing::{span, Level};
 
 // TODO:
@@ -734,8 +733,6 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         let ea_delete = EnvironmentAction::Environment(environment_for_delete.clone());
 
         let ret = environment_for_not_working.deploy_environment(
-            Kind::Aws,
-            &context_for_not_working,
             &ea_not_working,
             logger.clone(),
             &engine_config_for_not_working,

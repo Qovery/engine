@@ -11,8 +11,7 @@ use qovery_engine::models::{Action, CloneForTest, EnvironmentAction, Port, Proto
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
 use test_utilities::common::Infrastructure;
-use test_utilities::scaleway::{container_registry_scw, scw_default_engine_config, SCW_KUBERNETES_VERSION};
-use test_utilities::utilities::build_platform_local_docker;
+use test_utilities::scaleway::scw_default_engine_config;
 use tracing::{span, warn, Level};
 
 // Note: All those tests relies on a test cluster running on Scaleway infrastructure.

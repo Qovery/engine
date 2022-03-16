@@ -1,13 +1,11 @@
 use std::thread;
 
-use crate::build_platform::BuildResult;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::Service;
 use crate::engine::EngineConfig;
 use crate::errors::{EngineError, Tag};
 use crate::events::{EngineEvent, EventMessage};
 use crate::logger::{LogLevel, Logger};
-use crate::models;
 use crate::models::{
     Action, Environment, EnvironmentAction, EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel,
     ProgressScope,
@@ -124,13 +122,11 @@ impl<'a> Transaction<'a> {
         let _ = cr_registry.create_registry()?;
         let registry = self.engine.container_registry().login()?;
 
-        let mut built_apps: Vec<(&models::Application, BuildResult)> = Vec::with_capacity(apps_to_build.len());
         for app in apps_to_build.into_iter() {
             let app_build = app.to_build(&registry);
 
             // If image already exist in the registry, skip the build
             if !option.force_build && cr_registry.does_image_exists(&app_build.image) {
-                built_apps.push((app, BuildResult::new(app_build)));
                 continue;
             }
 
@@ -138,12 +134,10 @@ impl<'a> Transaction<'a> {
             let _ = self.engine.container_registry().create_repository(&app.name)?;
 
             // Ok now everything is setup, we can try to build the app
-            let build_result =
-                self.engine
-                    .build_platform()
-                    .build(app_build, option.force_build, &self.is_transaction_aborted)?;
-
-            built_apps.push((app, build_result));
+            let _ = self
+                .engine
+                .build_platform()
+                .build(app_build, &self.is_transaction_aborted)?;
         }
 
         Ok(())
