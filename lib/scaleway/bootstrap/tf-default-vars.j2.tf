@@ -69,6 +69,12 @@ variable "scaleway_secret_key" {
 
 # Kubernetes
 
+variable "kubernetes_full_cluster_id" {
+  description = "Kubernetes full cluster id"
+  default     = "{{ kubernetes_full_cluster_id }}"
+  type        = string
+}
+
 variable "kubernetes_cluster_id" {
   description = "Kubernetes cluster id"
   default     = "{{ kubernetes_cluster_id }}"
