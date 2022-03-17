@@ -6,7 +6,7 @@ use chrono::Utc;
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::models::{
-    Action, Application, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
+    Action, Application, CloneForTest, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
     GitCredentials, Port, Protocol, Route, Router, Storage, StorageType,
 };
 

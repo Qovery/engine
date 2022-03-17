@@ -2,11 +2,9 @@ extern crate test_utilities;
 
 use self::test_utilities::utilities::{context, engine_run_test, init, logger, FuncTestsSecrets};
 use ::function_name::named;
-use test_utilities::scaleway::{scw_default_engine_config, SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
+use test_utilities::scaleway::scw_default_engine_config;
 use tracing::{span, Level};
 
-use self::test_utilities::common::Cluster;
-use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::transaction::{Transaction, TransactionResult};
 
 // Warning: This test shouldn't be ran by CI

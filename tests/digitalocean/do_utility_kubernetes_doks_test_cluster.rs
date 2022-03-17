@@ -2,11 +2,9 @@ extern crate test_utilities;
 
 use self::test_utilities::utilities::{context, engine_run_test, init, logger, FuncTestsSecrets};
 use ::function_name::named;
-use qovery_engine::cloud_provider::digitalocean::DO;
-use test_utilities::digitalocean::{do_default_engine_config, DO_KUBERNETES_VERSION, DO_TEST_REGION};
+use test_utilities::digitalocean::do_default_engine_config;
 use tracing::{span, Level};
 
-use self::test_utilities::common::Cluster;
 use qovery_engine::transaction::{Transaction, TransactionResult};
 
 // Warning: This test shouldn't be ran by CI

@@ -10,20 +10,18 @@ use rusoto_ecr::{
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use crate::build_platform::Image;
-use crate::cmd::command::QoveryCommand;
-use crate::container_registry::docker::{docker_pull_image, docker_tag_and_push_image};
-use crate::container_registry::{ContainerRegistry, Kind, PullResult, PushResult};
+use crate::cmd::docker::{to_engine_error, Docker};
+use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventMessage, ToTransmitter, Transmitter};
 use crate::logger::{LogLevel, Logger};
-use crate::models::{
-    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-};
+use crate::models::{Context, Listen, Listener, Listeners};
 use crate::runtime::block_on;
 use retry::delay::Fixed;
 use retry::Error::Operation;
 use retry::OperationResult;
 use serde_json::json;
+use url::Url;
 
 pub struct ECR {
     context: Context,
@@ -75,9 +73,9 @@ impl ECR {
         EcrClient::new_with_client(self.client(), self.region.clone())
     }
 
-    fn get_repository(&self, image: &Image) -> Option<Repository> {
+    fn get_repository(&self, repository_name: &str) -> Option<Repository> {
         let mut drr = DescribeRepositoriesRequest::default();
-        drr.repository_names = Some(vec![image.name.to_string()]);
+        drr.repository_names = Some(vec![repository_name.to_string()]);
 
         let r = block_on(self.ecr_client().describe_repositories(drr));
 
@@ -93,7 +91,7 @@ impl ECR {
 
     fn get_image(&self, image: &Image) -> Option<ImageDetail> {
         let mut dir = DescribeImagesRequest::default();
-        dir.repository_name = image.name.to_string();
+        dir.repository_name = image.name().to_string();
 
         let mut image_identifier = ImageIdentifier::default();
         image_identifier.image_tag = Some(image.tag.to_string());
@@ -111,71 +109,8 @@ impl ECR {
         }
     }
 
-    fn docker_envs(&self) -> Vec<(&str, &str)> {
-        match self.context.docker_tcp_socket() {
-            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
-            None => vec![],
-        }
-    }
-
-    fn push_image(&self, dest: String, dest_latest_tag: String, image: &Image) -> Result<PushResult, EngineError> {
-        // READ https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-push-ecr-image.html
-        // docker tag e9ae3c220b23 aws_account_id.dkr.ecr.region.amazonaws.com/my-web-app
+    fn create_repository(&self, repository_name: &str) -> Result<Repository, EngineError> {
         let event_details = self.get_event_details();
-
-        match docker_tag_and_push_image(
-            self.kind(),
-            self.docker_envs(),
-            &image,
-            dest.clone(),
-            dest_latest_tag,
-            event_details.clone(),
-            self.logger(),
-        ) {
-            Ok(_) => {
-                let mut image = image.clone();
-                image.registry_url = Some(dest);
-                Ok(PushResult { image })
-            }
-            Err(e) => Err(EngineError::new_docker_push_image_error(
-                event_details,
-                image.name.to_string(),
-                dest.to_string(),
-                e,
-            )),
-        }
-    }
-
-    fn pull_image(&self, dest: String, image: &Image) -> Result<PullResult, EngineError> {
-        // READ https://docs.aws.amazon.com/AmazonECR/latest/userguide/docker-pull-ecr-image.html
-        // docker pull aws_account_id.dkr.ecr.us-west-2.amazonaws.com/amazonlinux:latest
-        let event_details = self.get_event_details();
-
-        match docker_pull_image(
-            self.kind(),
-            self.docker_envs(),
-            dest.clone(),
-            event_details.clone(),
-            self.logger(),
-        ) {
-            Ok(_) => {
-                let mut image = image.clone();
-                image.registry_url = Some(dest);
-                Ok(PullResult::Some(image))
-            }
-            Err(e) => Err(EngineError::new_docker_pull_image_error(
-                event_details,
-                image.name.to_string(),
-                dest.to_string(),
-                e,
-            )),
-        }
-    }
-
-    fn create_repository(&self, image: &Image) -> Result<Repository, EngineError> {
-        let event_details = self.get_event_details();
-        let repository_name = image.name.as_str();
-
         self.logger().log(
             LogLevel::Info,
             EngineEvent::Info(
@@ -314,7 +249,7 @@ impl ECR {
         });
 
         let plp = PutLifecyclePolicyRequest {
-            repository_name: image.name.clone(),
+            repository_name: repository_name.to_string(),
             lifecycle_policy_text: lifecycle_policy_text.to_string(),
             ..Default::default()
         };
@@ -327,27 +262,27 @@ impl ECR {
                     CommandError::new_from_safe_message(err.to_string()),
                 ),
             ),
-            _ => Ok(self.get_repository(image).expect("cannot get repository")),
+            _ => Ok(self.get_repository(repository_name).expect("cannot get repository")),
         }
     }
 
-    fn get_or_create_repository(&self, image: &Image) -> Result<Repository, EngineError> {
+    fn get_or_create_repository(&self, repository_name: &str) -> Result<Repository, EngineError> {
         let event_details = self.get_event_details();
 
         // check if the repository already exists
-        let repository = self.get_repository(image);
+        let repository = self.get_repository(repository_name);
         if repository.is_some() {
             self.logger.log(
                 LogLevel::Info,
                 EngineEvent::Info(
                     event_details.clone(),
-                    EventMessage::new_from_safe(format!("ECR repository {} already exists", image.name.as_str())),
+                    EventMessage::new_from_safe(format!("ECR repository {} already exists", repository_name)),
                 ),
             );
             return Ok(repository.unwrap());
         }
 
-        self.create_repository(image)
+        self.create_repository(repository_name)
     }
 
     fn get_credentials(&self) -> Result<ECRCredentials, EngineError> {
@@ -391,32 +326,6 @@ impl ECR {
 
         Ok(ECRCredentials::new(access_token, password, endpoint_url))
     }
-
-    fn exec_docker_login(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details();
-        let credentials = self.get_credentials()?;
-
-        let mut cmd = QoveryCommand::new(
-            "docker",
-            &vec![
-                "login",
-                "-u",
-                credentials.access_token.as_str(),
-                "-p",
-                credentials.password.as_str(),
-                credentials.endpoint_url.as_str(),
-            ],
-            &self.docker_envs(),
-        );
-
-        if let Err(_) = cmd.exec() {
-            return Err(EngineError::new_client_invalid_cloud_provider_credentials(
-                event_details.clone(),
-            ));
-        };
-
-        Ok(())
-    }
 }
 
 impl ToTransmitter for ECR {
@@ -454,194 +363,39 @@ impl ContainerRegistry for ECR {
         }
     }
 
-    fn on_create(&self) -> Result<(), EngineError> {
-        self.logger.log(
-            LogLevel::Info,
-            EngineEvent::Info(
-                self.get_event_details(),
-                EventMessage::new_from_safe("ECR.on_create() called".to_string()),
-            ),
-        );
+    fn login(&self) -> Result<ContainerRegistryInfo, EngineError> {
+        let event_details = self.get_event_details();
+        let credentials = self.get_credentials()?;
+        let docker = Docker::new(self.context.docker_tcp_socket().clone())
+            .map_err(|err| to_engine_error(&event_details, err))?;
+        let mut registry_url = Url::parse(credentials.endpoint_url.as_str()).unwrap();
+        let _ = registry_url.set_username(&credentials.access_token);
+        let _ = registry_url.set_password(Some(&credentials.password));
+
+        let _ = docker
+            .login(&registry_url)
+            .map_err(|err| to_engine_error(&event_details, err))?;
+
+        Ok(ContainerRegistryInfo {
+            endpoint: registry_url,
+            registry_name: self.name.to_string(),
+            registry_docker_json_config: None,
+            get_image_name: Box::new(|img_name| img_name.to_string()),
+        })
+    }
+
+    fn create_registry(&self) -> Result<(), EngineError> {
+        // Nothing to do, ECR require to create only repository
         Ok(())
     }
 
-    fn on_create_error(&self) -> Result<(), EngineError> {
-        self.logger.log(
-            LogLevel::Info,
-            EngineEvent::Info(
-                self.get_event_details(),
-                EventMessage::new_from_safe("ECR.on_create_error() called".to_string()),
-            ),
-        );
-
-        unimplemented!()
-    }
-
-    fn on_delete(&self) -> Result<(), EngineError> {
-        self.logger.log(
-            LogLevel::Info,
-            EngineEvent::Info(
-                self.get_event_details(),
-                EventMessage::new_from_safe("ECR.on_delete() called".to_string()),
-            ),
-        );
-        unimplemented!()
-    }
-
-    fn on_delete_error(&self) -> Result<(), EngineError> {
-        self.logger.log(
-            LogLevel::Info,
-            EngineEvent::Info(
-                self.get_event_details(),
-                EventMessage::new_from_safe("ECR.on_delete_error() called".to_string()),
-            ),
-        );
-        unimplemented!()
+    fn create_repository(&self, name: &str) -> Result<(), EngineError> {
+        let _ = self.get_or_create_repository(name)?;
+        Ok(())
     }
 
     fn does_image_exists(&self, image: &Image) -> bool {
         self.get_image(image).is_some()
-    }
-
-    fn pull(&self, image: &Image) -> Result<PullResult, EngineError> {
-        let event_details = self.get_event_details();
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-
-        if !self.does_image_exists(image) {
-            let info_message = format!(
-                "image `{}` does not exist in ECR {} repository",
-                image.name_with_tag(),
-                self.name()
-            );
-
-            self.logger.log(
-                LogLevel::Info,
-                EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(info_message.to_string()),
-                ),
-            );
-
-            listeners_helper.deployment_in_progress(ProgressInfo::new(
-                ProgressScope::Application {
-                    id: image.application_id.clone(),
-                },
-                ProgressLevel::Info,
-                Some(info_message),
-                self.context.execution_id(),
-            ));
-
-            return Ok(PullResult::None);
-        }
-
-        let info_message = format!(
-            "pull image `{:?}` from ECR {} repository",
-            image.name_with_tag(),
-            self.name()
-        );
-
-        self.logger.log(
-            LogLevel::Info,
-            EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe(info_message.to_string()),
-            ),
-        );
-
-        listeners_helper.deployment_in_progress(ProgressInfo::new(
-            ProgressScope::Application {
-                id: image.application_id.clone(),
-            },
-            ProgressLevel::Info,
-            Some(info_message),
-            self.context.execution_id(),
-        ));
-
-        let _ = self.exec_docker_login()?;
-
-        let repository = self.get_or_create_repository(image)?;
-
-        let dest = format!("{}:{}", repository.repository_uri.unwrap(), image.tag.as_str());
-
-        // pull image
-        self.pull_image(dest, image)
-    }
-
-    fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError> {
-        let _ = self.exec_docker_login()?;
-
-        let repository = if force_push {
-            self.create_repository(image)
-        } else {
-            self.get_or_create_repository(image)
-        }?;
-
-        let repository_uri = repository.repository_uri.expect("Error getting repository URI");
-        let dest = format!("{}:{}", repository_uri, image.tag.as_str());
-
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-
-        if !force_push && self.does_image_exists(image) {
-            // check if image does exist - if yes, do not upload it again
-            let info_message = format!(
-                "image {} found on ECR {} repository, container build is not required",
-                image.name_with_tag(),
-                self.name()
-            );
-
-            self.logger.log(
-                LogLevel::Info,
-                EngineEvent::Info(
-                    self.get_event_details(),
-                    EventMessage::new_from_safe(info_message.to_string()),
-                ),
-            );
-
-            listeners_helper.deployment_in_progress(ProgressInfo::new(
-                ProgressScope::Application {
-                    id: image.application_id.clone(),
-                },
-                ProgressLevel::Info,
-                Some(info_message),
-                self.context.execution_id(),
-            ));
-
-            let mut image = image.clone();
-            image.registry_url = Some(dest);
-
-            return Ok(PushResult { image });
-        }
-
-        let info_message = format!(
-            "image `{}` does not exist on ECR {} repository, starting image upload",
-            image.name_with_tag(),
-            self.name()
-        );
-
-        self.logger.log(
-            LogLevel::Info,
-            EngineEvent::Info(
-                self.get_event_details(),
-                EventMessage::new_from_safe(info_message.to_string()),
-            ),
-        );
-
-        listeners_helper.deployment_in_progress(ProgressInfo::new(
-            ProgressScope::Application {
-                id: image.application_id.clone(),
-            },
-            ProgressLevel::Info,
-            Some(info_message),
-            self.context.execution_id(),
-        ));
-
-        let dest_latest_tag = format!("{}:latest", repository_uri);
-        self.push_image(dest, dest_latest_tag, image)
-    }
-
-    fn push_error(&self, image: &Image) -> Result<PushResult, EngineError> {
-        // TODO change this
-        Ok(PushResult { image: image.clone() })
     }
 
     fn logger(&self) -> &dyn Logger {

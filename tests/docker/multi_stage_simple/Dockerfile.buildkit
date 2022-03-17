@@ -1,0 +1,10 @@
+FROM golang:1.16 AS build
+
+# ../ is not valid if using old docker engine, only allowed with buildkit
+COPY ../hello.go /go/src/project/hello.go
+WORKDIR /go/src/project
+RUN go build hello.go
+
+FROM scratch
+COPY --from=build /go/src/project/hello /bin/hello
+ENTRYPOINT ["/bin/hello"]
