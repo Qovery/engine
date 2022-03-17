@@ -2,10 +2,8 @@ use crate::cmd::command::{CommandError, QoveryCommand};
 use crate::errors::EngineError;
 use crate::events::EventDetails;
 use chrono::Duration;
-use std::env;
 use std::path::Path;
 use std::process::ExitStatus;
-use std::time::{SystemTime, UNIX_EPOCH};
 use url::Url;
 
 #[derive(thiserror::Error, Debug)]
@@ -101,25 +99,14 @@ impl Docker {
 
         // In order to be able to use --cache-from --cache-to for buildkit,
         // we need to create our specific builder, which is not the default one (aka: the docker one)
-        let builder_name = if env::var_os("CI").is_some() {
-            format!(
-                "qovery-engine-{}",
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("invalid timestamp")
-                    .as_secs()
-            )
-        } else {
-            "qovery-engine".to_string()
-        };
-
         let args = vec![
             "buildx",
             "create",
             "--name",
-            &builder_name,
+            "qovery-engine",
             "--driver-opt",
             "network=host",
+            "--bootstrap",
             "--use",
         ];
         let _ = docker_exec(
@@ -484,7 +471,7 @@ pub fn to_engine_error(event_details: &EventDetails, error: DockerError) -> Engi
 
 // start a local registry to run this test
 // docker run --rm -ti -p 5000:5000 --name registry registry:2
-#[cfg(feature = "test-with-docker")]
+//#[cfg(feature = "test-with-docker")]
 #[cfg(test)]
 mod tests {
     use crate::cmd::docker::{ContainerImage, Docker, DockerError};
