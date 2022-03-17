@@ -183,10 +183,52 @@ impl<'a> Transaction<'a> {
         Ok(())
     }
 
-    /// This function is a wrapper to correctly revert all changes of an attempted deployment AND
-    /// if a failover environment is provided, then rollback.
-    fn rollback_environment(&self, _environment_action: &EnvironmentAction) -> Result<(), RollbackError> {
-        Ok(())
+    // Warning: This function function does not revert anything, it just there to grab info from kube and services if it fails
+    // FIXME: Cleanup this, qe_environment should not be rebuilt at this step
+    fn rollback_environment(&self, environment_action: &EnvironmentAction) -> Result<(), RollbackError> {
+        let registry_info = self
+            .engine
+            .container_registry()
+            .login()
+            .map_err(|err| RollbackError::CommitError(err))?;
+
+        let qe_environment = |environment: &Environment| {
+            let qe_environment = environment.to_qe_environment(
+                self.engine.context(),
+                self.engine.cloud_provider(),
+                &registry_info,
+                self.logger.clone(),
+            );
+
+            qe_environment
+        };
+
+        match environment_action {
+            EnvironmentAction::Environment(te) => {
+                // revert changes but there is no failover environment
+                let target_qe_environment = qe_environment(te);
+
+                let action = match te.action {
+                    Action::Create => self
+                        .engine
+                        .kubernetes()
+                        .deploy_environment_error(&target_qe_environment),
+                    Action::Pause => self.engine.kubernetes().pause_environment_error(&target_qe_environment),
+                    Action::Delete => self
+                        .engine
+                        .kubernetes()
+                        .delete_environment_error(&target_qe_environment),
+                    Action::Nothing => Ok(()),
+                };
+
+                let _ = match action {
+                    Ok(_) => {}
+                    Err(err) => return Err(RollbackError::CommitError(err)),
+                };
+
+                Err(RollbackError::NoFailoverEnvironment)
+            }
+        }
     }
 
     pub fn commit(mut self) -> TransactionResult {

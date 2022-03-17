@@ -106,6 +106,7 @@ impl Docker {
             "qovery-engine",
             "--driver-opt",
             "network=host",
+            "--bootstrap",
             "--use",
         ];
         let _ = docker_exec(

@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 chrono = "0.4.19"
 cmd_lib = "1.0.13"
-git2 = "0.13.25"
+git2 = "0.14.2"
 walkdir = "2.3.2"
 itertools = "0.10.0"
 base64 = "0.13.0"

@@ -3,7 +3,7 @@ replicaCount: 1
 image:
   repository: qoveryrd/pleco
   pullPolicy: IfNotPresent
-  plecoImageTag: "0.10.4"
+  plecoImageTag: "0.11.1"
 
 cloudProvider: ""
 
