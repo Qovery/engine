@@ -653,17 +653,13 @@ impl DOKS {
         }
 
         // push config file to object storage
+        let kubeconfig_path = &self.get_kubeconfig_file_path()?;
+        let kubeconfig_path = Path::new(kubeconfig_path);
         let kubeconfig_name = format!("{}.yaml", self.id());
         if let Err(e) = self.spaces.put(
             self.kubeconfig_bucket_name().as_str(),
             kubeconfig_name.as_str(),
-            format!(
-                "{}/{}/{}",
-                temp_dir.as_str(),
-                self.kubeconfig_bucket_name().as_str(),
-                kubeconfig_name.as_str()
-            )
-            .as_str(),
+            kubeconfig_path.to_str().expect("No path for Kubeconfig"),
         ) {
             let error = EngineError::new_object_storage_cannot_put_file_into_bucket_error(
                 event_details.clone(),
@@ -696,9 +692,6 @@ impl DOKS {
         };
 
         // kubernetes helm deployments on the cluster
-        let kubeconfig_path = &self.get_kubeconfig_file_path()?;
-        let kubeconfig_path = Path::new(kubeconfig_path);
-
         let credentials_environment_variables: Vec<(String, String)> = self
             .cloud_provider
             .credentials_environment_variables()
@@ -911,7 +904,7 @@ impl DOKS {
     fn delete(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
         let listeners_helper = ListenersHelper::new(&self.listeners);
-        let mut skip_kubernetes_step = false;
+        let skip_kubernetes_step = false;
         self.send_to_customer(
             format!("Preparing to delete DOKS cluster {} with id {}", self.name(), self.id()).as_str(),
             &listeners_helper,
@@ -961,23 +954,6 @@ impl DOKS {
             ));
         }
 
-        let kubernetes_config_file_path = match self.get_kubeconfig_file_path() {
-            Ok(x) => x,
-            Err(e) => {
-                let safe_message = "Skipping Kubernetes uninstall because it can't be reached.";
-                self.logger().log(
-                    LogLevel::Warning,
-                    EngineEvent::Deleting(
-                        event_details.clone(),
-                        EventMessage::new(safe_message.to_string(), Some(e.message())),
-                    ),
-                );
-
-                skip_kubernetes_step = true;
-                "".to_string()
-            }
-        };
-
         // should apply before destroy to be sure destroy will compute on all resources
         // don't exit on failure, it can happen if we resume a destroy process
         let message = format!(
@@ -1009,6 +985,9 @@ impl DOKS {
             );
         };
 
+        let kubeconfig_path = &self.get_kubeconfig_file_path()?;
+        let kubeconfig_path = Path::new(kubeconfig_path);
+
         if !skip_kubernetes_step {
             // should make the diff between all namespaces and qovery managed namespaces
             let message = format!(
@@ -1023,7 +1002,7 @@ impl DOKS {
             self.send_to_customer(&message, &listeners_helper);
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
-                &kubernetes_config_file_path,
+                &kubeconfig_path,
                 self.cloud_provider().credentials_environment_variables(),
             );
 
@@ -1042,7 +1021,7 @@ impl DOKS {
 
                     for namespace_to_delete in namespaces_to_delete.iter() {
                         match cmd::kubectl::kubectl_exec_delete_namespace(
-                            &kubernetes_config_file_path,
+                            &kubeconfig_path,
                             namespace_to_delete,
                             self.cloud_provider().credentials_environment_variables(),
                         ) {
@@ -1101,7 +1080,7 @@ impl DOKS {
 
             // delete custom metrics api to avoid stale namespaces on deletion
             let helm = Helm::new(
-                &kubernetes_config_file_path,
+                &kubeconfig_path,
                 &self.cloud_provider.credentials_environment_variables(),
             )
             .map_err(|e| to_engine_error(&event_details, e))?;
@@ -1111,7 +1090,7 @@ impl DOKS {
 
             // required to avoid namespace stuck on deletion
             uninstall_cert_manager(
-                &kubernetes_config_file_path,
+                &kubeconfig_path,
                 self.cloud_provider().credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
@@ -1165,7 +1144,7 @@ impl DOKS {
 
             for qovery_namespace in qovery_namespaces.iter() {
                 let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
-                    &kubernetes_config_file_path,
+                    &kubeconfig_path,
                     qovery_namespace,
                     self.cloud_provider().credentials_environment_variables(),
                 );

@@ -14,6 +14,7 @@ use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, logger, FuncTestsSecrets};
 
 use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
+use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::Kind::Scw;
@@ -61,8 +62,26 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
     )
 }
 
+pub fn scw_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
+    Scaleway::docker_cr_engine(
+        &context,
+        logger,
+        SCW_TEST_ZONE.to_string().as_str(),
+        SCW_KUBERNETES_VERSION.to_string(),
+        &ClusterDomain::Default,
+        None,
+    )
+}
+
 impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
-    fn docker_cr_engine(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
+    fn docker_cr_engine(
+        context: &Context,
+        logger: Box<dyn Logger>,
+        localisation: &str,
+        kubernetes_version: String,
+        cluster_domain: &ClusterDomain,
+        vpc_network_mode: Option<VpcQoveryNetworkMode>,
+    ) -> EngineConfig {
         // use Scaleway CR
         let container_registry = Box::new(container_registry_scw(context));
 
@@ -71,8 +90,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
 
         // use Scaleway
         let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(Self::cloud_provider(context));
-        let dns_provider: Arc<Box<dyn DnsProvider>> =
-            Arc::new(dns_provider_cloudflare(context, ClusterDomain::Default));
+        let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_cloudflare(context, cluster_domain));
 
         let cluster = get_environment_test_kubernetes(
             Scw,
@@ -80,6 +98,9 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             cloud_provider.clone(),
             dns_provider.clone(),
             logger.clone(),
+            localisation,
+            kubernetes_version.as_str(),
+            vpc_network_mode,
         );
 
         EngineConfig::new(

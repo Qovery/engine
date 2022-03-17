@@ -13,7 +13,6 @@ use test_utilities::common::{cluster_test, ClusterTestType};
 #[cfg(feature = "test-do-infra")]
 fn create_and_destroy_doks_cluster(
     region: DoRegion,
-    secrets: FuncTestsSecrets,
     test_type: ClusterTestType,
     major_boot_version: u8,
     minor_boot_version: u8,
@@ -27,11 +26,10 @@ fn create_and_destroy_doks_cluster(
             logger(),
             region.as_str(),
             None,
-            secrets,
             test_type,
             major_boot_version,
             minor_boot_version,
-            ClusterDomain::Default,
+            &ClusterDomain::Default,
             None,
             None,
         )
@@ -43,10 +41,8 @@ fn create_and_destroy_doks_cluster(
 #[test]
 fn create_and_destroy_doks_cluster_ams_3() {
     let region = DoRegion::Amsterdam3;
-    let secrets = FuncTestsSecrets::new();
     create_and_destroy_doks_cluster(
         region,
-        secrets,
         ClusterTestType::Classic,
         DO_KUBERNETES_MAJOR_VERSION,
         DO_KUBERNETES_MINOR_VERSION,
@@ -60,10 +56,8 @@ fn create_and_destroy_doks_cluster_ams_3() {
 #[ignore]
 fn create_upgrade_and_destroy_doks_cluster_in_nyc_3() {
     let region = DoRegion::NewYorkCity3;
-    let secrets = FuncTestsSecrets::new();
     create_and_destroy_doks_cluster(
         region,
-        secrets,
         ClusterTestType::WithUpgrade,
         DO_KUBERNETES_MAJOR_VERSION,
         DO_KUBERNETES_MINOR_VERSION,

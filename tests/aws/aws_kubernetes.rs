@@ -9,14 +9,13 @@ use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
 use qovery_engine::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use qovery_engine::cloud_provider::Kind;
+use std::borrow::Borrow;
 use std::str::FromStr;
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 
 #[cfg(feature = "test-aws-infra")]
 fn create_and_destroy_eks_cluster(
     region: String,
-    zones: Vec<AwsZones>,
-    secrets: FuncTestsSecrets,
     test_type: ClusterTestType,
     major_boot_version: u8,
     minor_boot_version: u8,
@@ -25,6 +24,7 @@ fn create_and_destroy_eks_cluster(
 ) {
     engine_run_test(|| {
         let region = AwsRegion::from_str(region.as_str()).expect("Wasn't able to convert the desired region");
+        let zones = region.get_zones();
         cluster_test(
             test_name,
             Kind::Aws,
@@ -35,11 +35,10 @@ fn create_and_destroy_eks_cluster(
             logger(),
             region.to_aws_format().as_str(),
             Some(zones),
-            secrets,
             test_type,
             major_boot_version,
             minor_boot_version,
-            ClusterDomain::Default,
+            &ClusterDomain::Default,
             Option::from(vpc_network_mode),
             None,
         )
@@ -55,13 +54,9 @@ fn create_and_destroy_eks_cluster(
 #[named]
 #[test]
 fn create_and_destroy_eks_cluster_without_nat_gw_in_eu_west_3() {
-    let secrets = FuncTestsSecrets::new();
-    let region = secrets.AWS_DEFAULT_REGION.clone().expect("AWS region was not found");
-    let aws_region = AwsRegion::from_str(region.as_str()).expect("Wasn't able to convert the desired region");
+    let region = "eu-west-3".to_string();
     create_and_destroy_eks_cluster(
         region,
-        AwsRegion::get_zones(&aws_region),
-        secrets,
         ClusterTestType::Classic,
         AWS_KUBERNETES_MAJOR_VERSION,
         AWS_KUBERNETES_MINOR_VERSION,
@@ -74,13 +69,9 @@ fn create_and_destroy_eks_cluster_without_nat_gw_in_eu_west_3() {
 #[named]
 #[test]
 fn create_and_destroy_eks_cluster_with_nat_gw_in_eu_west_3() {
-    let secrets = FuncTestsSecrets::new();
-    let region = secrets.AWS_DEFAULT_REGION.clone().expect("AWS region was not found");
-    let aws_region = AwsRegion::from_str(&region).expect("Wasn't able to convert the desired region");
+    let region = "eu-west-3".to_string();
     create_and_destroy_eks_cluster(
         region,
-        AwsRegion::get_zones(&aws_region),
-        secrets,
         ClusterTestType::Classic,
         AWS_KUBERNETES_MAJOR_VERSION,
         AWS_KUBERNETES_MINOR_VERSION,
@@ -93,13 +84,9 @@ fn create_and_destroy_eks_cluster_with_nat_gw_in_eu_west_3() {
 #[named]
 #[test]
 fn create_and_destroy_eks_cluster_in_us_east_2() {
-    let secrets = FuncTestsSecrets::new();
     let region = "us-east-2".to_string();
-    let aws_region = AwsRegion::from_str(&region).expect("Wasn't able to convert the desired region");
     create_and_destroy_eks_cluster(
         region,
-        AwsRegion::get_zones(&aws_region),
-        secrets,
         ClusterTestType::Classic,
         AWS_KUBERNETES_MAJOR_VERSION,
         AWS_KUBERNETES_MINOR_VERSION,
@@ -117,8 +104,6 @@ fn create_pause_and_destroy_eks_cluster_in_us_east_2() {
     let aws_region = AwsRegion::from_str(&region).expect("Wasn't able to convert the desired region");
     create_and_destroy_eks_cluster(
         region,
-        AwsRegion::get_zones(&aws_region),
-        secrets,
         ClusterTestType::WithPause,
         AWS_KUBERNETES_MAJOR_VERSION,
         AWS_KUBERNETES_MINOR_VERSION,
@@ -133,14 +118,9 @@ fn create_pause_and_destroy_eks_cluster_in_us_east_2() {
 #[test]
 #[ignore]
 fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
-    let secrets = FuncTestsSecrets::new();
-    let region = secrets.AWS_DEFAULT_REGION.clone().expect("AWS region was not found");
-    let aws_region = AwsRegion::from_str(&region).expect("Wasn't able to convert the desired region");
-
+    let region = "eu-west-3".to_string();
     create_and_destroy_eks_cluster(
         region,
-        AwsRegion::get_zones(&aws_region),
-        secrets,
         ClusterTestType::WithUpgrade,
         AWS_KUBERNETES_MAJOR_VERSION,
         AWS_KUBERNETES_MINOR_VERSION,
