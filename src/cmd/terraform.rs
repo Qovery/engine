@@ -200,11 +200,11 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Co
     cmd.set_current_dir(root_dir);
 
     let result = cmd.exec_with_output(
-        |line| {
+        &mut |line| {
             info!("{}", line);
             stdout.push(line);
         },
-        |line| {
+        &mut |line| {
             error!("{}", line);
             stderr.push(line);
         },

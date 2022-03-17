@@ -75,16 +75,16 @@ impl QoveryCommand {
     pub fn exec(&mut self) -> Result<(), CommandError> {
         self.exec_with_abort(
             Duration::max_value(),
-            |line| info!("{}", line),
-            |line| warn!("{}", line),
+            &mut |line| info!("{}", line),
+            &mut |line| warn!("{}", line),
             || false,
         )
     }
 
     pub fn exec_with_output<STDOUT, STDERR>(
         &mut self,
-        stdout_output: STDOUT,
-        stderr_output: STDERR,
+        stdout_output: &mut STDOUT,
+        stderr_output: &mut STDERR,
     ) -> Result<(), CommandError>
     where
         STDOUT: FnMut(String),
@@ -96,8 +96,8 @@ impl QoveryCommand {
     pub fn exec_with_timeout<STDOUT, STDERR>(
         &mut self,
         timeout: Duration,
-        stdout_output: STDOUT,
-        stderr_output: STDERR,
+        stdout_output: &mut STDOUT,
+        stderr_output: &mut STDERR,
     ) -> Result<(), CommandError>
     where
         STDOUT: FnMut(String),
@@ -109,8 +109,8 @@ impl QoveryCommand {
     pub fn exec_with_abort<STDOUT, STDERR, F>(
         &mut self,
         timeout: Duration,
-        mut stdout_output: STDOUT,
-        mut stderr_output: STDERR,
+        stdout_output: &mut STDOUT,
+        stderr_output: &mut STDERR,
         should_be_killed: F,
     ) -> Result<(), CommandError>
     where
@@ -222,10 +222,9 @@ impl QoveryCommand {
 pub fn run_version_command_for(binary_name: &str) -> String {
     let mut output_from_cmd = String::new();
     let mut cmd = QoveryCommand::new(binary_name, &vec!["--version"], Default::default());
-    let _ = cmd.exec_with_output(
-        |r_out| output_from_cmd.push_str(&r_out),
-        |r_err| error!("Error executing {}: {}", binary_name, r_err),
-    );
+    let _ = cmd.exec_with_output(&mut |r_out| output_from_cmd.push_str(&r_out), &mut |r_err| {
+        error!("Error executing {}: {}", binary_name, r_err)
+    });
 
     output_from_cmd
 }
@@ -283,17 +282,17 @@ mod tests {
     #[test]
     fn test_command_with_timeout() {
         let mut cmd = QoveryCommand::new("sleep", &vec!["120"], &vec![]);
-        let ret = cmd.exec_with_timeout(Duration::seconds(2), |_| {}, |_| {});
+        let ret = cmd.exec_with_timeout(Duration::seconds(2), &mut |_| {}, &mut |_| {});
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
 
         let mut cmd = QoveryCommand::new("sh", &vec!["-c", "cat /dev/urandom | grep -a --null-data ."], &vec![]);
-        let ret = cmd.exec_with_timeout(Duration::seconds(2), |_| {}, |_| {});
+        let ret = cmd.exec_with_timeout(Duration::seconds(2), &mut |_| {}, &mut |_| {});
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
 
         let mut cmd = QoveryCommand::new("sleep", &vec!["1"], &vec![]);
-        let ret = cmd.exec_with_timeout(Duration::seconds(2), |_| {}, |_| {});
+        let ret = cmd.exec_with_timeout(Duration::seconds(2), &mut |_| {}, &mut |_| {});
         assert_eq!(ret.is_ok(), true);
     }
 
@@ -315,7 +314,7 @@ mod tests {
 
         let cmd_killer = move || should_kill2.load(Ordering::Acquire);
         barrier.wait();
-        let ret = cmd.exec_with_abort(Duration::max_value(), |_| {}, |_| {}, cmd_killer);
+        let ret = cmd.exec_with_abort(Duration::max_value(), &mut |_| {}, &mut |_| {}, cmd_killer);
 
         assert!(matches!(ret, Err(CommandError::Killed(_))));
     }
