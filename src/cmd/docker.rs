@@ -88,8 +88,8 @@ impl Docker {
             &docker.get_all_envs(&vec![]),
             Some(Duration::max_value()),
             &|| false,
-            |_| {},
-            |_| {},
+            &mut |_| {},
+            &mut |_| {},
         );
         if let Err(_) = buildx_cmd_exist {
             return Err(DockerError::InvalidConfig(format!(
@@ -106,6 +106,7 @@ impl Docker {
             "qovery-engine",
             "--driver-opt",
             "network=host",
+            "--bootstrap",
             "--use",
         ];
         let _ = docker_exec(
@@ -113,8 +114,8 @@ impl Docker {
             &docker.get_all_envs(&vec![]),
             Some(Duration::max_value()),
             &|| false,
-            |_| {},
-            |_| {},
+            &mut |_| {},
+            &mut |_| {},
         );
 
         Ok(docker)
@@ -150,8 +151,8 @@ impl Docker {
             &self.get_all_envs(&vec![]),
             None,
             &|| false,
-            |line| info!("{}", line),
-            |line| warn!("{}", line),
+            &mut |line| info!("{}", line),
+            &mut |line| warn!("{}", line),
         )?;
 
         Ok(())
@@ -165,8 +166,8 @@ impl Docker {
             &self.get_all_envs(&vec![]),
             None,
             &|| false,
-            |line| info!("{}", line),
-            |line| warn!("{}", line),
+            &mut |line| info!("{}", line),
+            &mut |line| warn!("{}", line),
         );
 
         Ok(matches!(ret, Ok(_)))
@@ -181,8 +182,8 @@ impl Docker {
             &self.get_all_envs(&vec![]),
             None,
             &|| false,
-            |line| info!("{}", line),
-            |line| warn!("{}", line),
+            &mut |line| info!("{}", line),
+            &mut |line| warn!("{}", line),
         );
 
         match ret {
@@ -195,8 +196,8 @@ impl Docker {
     pub fn pull<Stdout, Stderr>(
         &self,
         image: &ContainerImage,
-        stdout_output: Stdout,
-        stderr_output: Stderr,
+        stdout_output: &mut Stdout,
+        stderr_output: &mut Stderr,
         timeout: Duration,
         should_abort: &dyn Fn() -> bool,
     ) -> Result<(), DockerError>
@@ -224,8 +225,8 @@ impl Docker {
         build_args: &[(&str, &str)],
         cache: &ContainerImage,
         push_after_build: bool,
-        stdout_output: Stdout,
-        stderr_output: Stderr,
+        stdout_output: &mut Stdout,
+        stderr_output: &mut Stderr,
         timeout: Duration,
         should_abort: &dyn Fn() -> bool,
     ) -> Result<(), DockerError>
@@ -295,8 +296,8 @@ impl Docker {
         build_args: &[(&str, &str)],
         cache: &ContainerImage,
         push_after_build: bool,
-        stdout_output: Stdout,
-        stderr_output: Stderr,
+        stdout_output: &mut Stdout,
+        stderr_output: &mut Stderr,
         timeout: Duration,
         should_abort: &dyn Fn() -> bool,
     ) -> Result<(), DockerError>
@@ -307,7 +308,7 @@ impl Docker {
         info!("Docker build {:?}", image_to_build.image_name());
 
         // Best effort to pull the cache, if it does not exist that's ok too
-        let _ = self.pull(cache, |_| {}, |_| {}, timeout, should_abort);
+        let _ = self.pull(cache, stdout_output, stderr_output, timeout, should_abort);
 
         let mut args_string: Vec<String> = vec![
             "build".to_string(),
@@ -344,7 +345,7 @@ impl Docker {
         )?;
 
         if push_after_build {
-            let _ = self.push(image_to_build, |_| {}, |_| {}, timeout, should_abort)?;
+            let _ = self.push(image_to_build, stdout_output, stderr_output, timeout, should_abort)?;
         }
 
         Ok(())
@@ -358,8 +359,8 @@ impl Docker {
         build_args: &[(&str, &str)],
         cache: &ContainerImage,
         push_after_build: bool,
-        stdout_output: Stdout,
-        stderr_output: Stderr,
+        stdout_output: &mut Stdout,
+        stderr_output: &mut Stderr,
         timeout: Duration,
         should_abort: &dyn Fn() -> bool,
     ) -> Result<(), DockerError>
@@ -414,8 +415,8 @@ impl Docker {
     pub fn push<Stdout, Stderr>(
         &self,
         image: &ContainerImage,
-        stdout_output: Stdout,
-        stderr_output: Stderr,
+        stdout_output: &mut Stdout,
+        stderr_output: &mut Stderr,
         timeout: Duration,
         should_abort: &dyn Fn() -> bool,
     ) -> Result<(), DockerError>
@@ -444,8 +445,8 @@ fn docker_exec<F, X>(
     envs: &[(&str, &str)],
     timeout: Option<Duration>,
     should_abort: &dyn Fn() -> bool,
-    stdout_output: F,
-    stderr_output: X,
+    stdout_output: &mut F,
+    stderr_output: &mut X,
 ) -> Result<(), DockerError>
 where
     F: FnMut(String),
@@ -494,8 +495,8 @@ mod tests {
         };
         let ret = docker.pull(
             &image,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
             Duration::max_value(),
             &|| false,
         );
@@ -510,8 +511,8 @@ mod tests {
 
         let ret = docker.pull(
             &image,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
             Duration::max_value(),
             &|| false,
         );
@@ -520,8 +521,8 @@ mod tests {
         // Should timeout
         let ret = docker.pull(
             &image,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
             Duration::seconds(1),
             &|| false,
         );
@@ -551,8 +552,8 @@ mod tests {
             &vec![],
             &image_cache,
             false,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
             Duration::max_value(),
             &|| false,
         );
@@ -567,8 +568,8 @@ mod tests {
             &vec![],
             &image_cache,
             false,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
             Duration::max_value(),
             &|| false,
         );
@@ -600,8 +601,8 @@ mod tests {
             &vec![],
             &image_cache,
             false,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
             Duration::max_value(),
             &|| false,
         );
@@ -615,8 +616,8 @@ mod tests {
             &vec![],
             &image_cache,
             false,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
             Duration::max_value(),
             &|| false,
         );
@@ -648,8 +649,8 @@ mod tests {
             &vec![],
             &image_cache,
             false,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
             Duration::max_value(),
             &|| false,
         );
@@ -663,8 +664,8 @@ mod tests {
 
         let ret = docker.push(
             &image_to_build,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
             Duration::max_value(),
             &|| false,
         );
@@ -672,8 +673,8 @@ mod tests {
 
         let ret = docker.pull(
             &image_to_build,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
             Duration::max_value(),
             &|| false,
         );

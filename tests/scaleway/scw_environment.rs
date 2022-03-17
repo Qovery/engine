@@ -10,6 +10,8 @@ use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::{Action, CloneForTest, EnvironmentAction, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
+use std::thread;
+use std::time::Duration;
 use test_utilities::common::Infrastructure;
 use test_utilities::scaleway::scw_default_engine_config;
 use tracing::{span, warn, Level};
@@ -953,6 +955,8 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
         let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
 
+        // let time for nginx to reload the config
+        thread::sleep(Duration::from_secs(5));
         // checking cookie is properly set on the app
         assert!(routers_sessions_are_sticky(environment.routers.clone()));
 

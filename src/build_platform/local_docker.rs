@@ -134,7 +134,7 @@ impl LocalDocker {
                 .collect::<Vec<_>>(),
             &image_cache,
             true,
-            |line| {
+            &mut |line| {
                 self.logger.log(
                     LogLevel::Info,
                     EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
@@ -149,7 +149,7 @@ impl LocalDocker {
                     self.context.execution_id(),
                 ));
             },
-            |line| {
+            &mut |line| {
                 self.logger.log(
                     LogLevel::Info,
                     EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
@@ -278,7 +278,7 @@ impl LocalDocker {
             let mut cmd = QoveryCommand::new("pack", &buildpacks_args, &self.get_docker_host_envs());
             exit_status = cmd.exec_with_abort(
                 Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
-                |line| {
+                &mut |line| {
                     self.logger.log(
                         LogLevel::Info,
                         EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
@@ -293,7 +293,7 @@ impl LocalDocker {
                         self.context.execution_id(),
                     ));
                 },
-                |line| {
+                &mut |line| {
                     self.logger.log(
                         LogLevel::Warning,
                         EngineEvent::Warning(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
@@ -682,7 +682,7 @@ fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<(), CommandError> {
     let mut errored_commands = vec![];
     for prune in all_prunes_commands {
         let mut cmd = QoveryCommand::new("docker", &prune, &envs);
-        if let Err(e) = cmd.exec_with_timeout(Duration::minutes(BUILD_DURATION_TIMEOUT_MIN), |_| {}, |_| {}) {
+        if let Err(e) = cmd.exec_with_timeout(Duration::minutes(BUILD_DURATION_TIMEOUT_MIN), &mut |_| {}, &mut |_| {}) {
             errored_commands.push(format!("{} {:?}", prune[0], e));
         }
     }

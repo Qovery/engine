@@ -26,6 +26,7 @@ pub struct DOCR {
     pub name: String,
     pub api_key: String,
     pub id: String,
+    pub registry_info: Option<ContainerRegistryInfo>,
     pub listeners: Listeners,
     pub logger: Box<dyn Logger>,
 }
@@ -37,6 +38,7 @@ impl DOCR {
             name: name.into(),
             api_key: api_key.into(),
             id: id.into(),
+            registry_info: None,
             listeners: vec![],
             logger,
         }

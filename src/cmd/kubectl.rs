@@ -32,8 +32,8 @@ pub enum PodCondition {
 pub fn kubectl_exec_with_output<F, X>(
     args: Vec<&str>,
     envs: Vec<(&str, &str)>,
-    stdout_output: F,
-    stderr_output: X,
+    stdout_output: &mut F,
+    stderr_output: &mut X,
 ) -> Result<(), CommandError>
 where
     F: FnMut(String),
@@ -82,8 +82,8 @@ where
             "-o=custom-columns=:.status.containerStatuses..restartCount",
         ],
         _envs,
-        |line| output_vec.push(line),
-        |line| error!("{}", line),
+        &mut |line| output_vec.push(line),
+        &mut |line| error!("{}", line),
     )?;
 
     let output_string: String = output_vec.join("");
@@ -109,8 +109,8 @@ where
     let _ = kubectl_exec_with_output(
         cmd_args.clone(),
         envs.clone(),
-        |line| output_vec.push(line),
-        |line| err_output_vec.push(line),
+        &mut |line| output_vec.push(line),
+        &mut |line| err_output_vec.push(line),
     )?;
 
     let output_string: String = output_vec.join("\n");
@@ -368,8 +368,8 @@ where
     let result = kubectl_exec_with_output(
         vec!["get", "namespace", namespace],
         _envs,
-        |out| info!("{:?}", out),
-        |out| warn!("{:?}", out),
+        &mut |out| info!("{:?}", out),
+        &mut |out| warn!("{:?}", out),
     );
 
     result.is_ok()
@@ -398,8 +398,8 @@ where
         let _ = kubectl_exec_with_output(
             vec!["create", "namespace", namespace],
             _envs,
-            |line| info!("{}", line),
-            |line| error!("{}", line),
+            &mut |line| info!("{}", line),
+            &mut |line| error!("{}", line),
         )?;
     }
 
@@ -450,7 +450,9 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs.clone());
 
-    let _ = kubectl_exec_with_output(command_args, _envs, |line| info!("{}", line), |line| error!("{}", line))?;
+    let _ = kubectl_exec_with_output(command_args, _envs, &mut |line| info!("{}", line), &mut |line| {
+        error!("{}", line)
+    })?;
 
     Ok(())
 }
@@ -539,8 +541,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["delete", "namespace", namespace],
         _envs,
-        |line| info!("{}", line),
-        |line| error!("{}", line),
+        &mut |line| info!("{}", line),
+        &mut |line| error!("{}", line),
     )?;
 
     Ok(())
@@ -561,8 +563,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["delete", "crd", crd_name],
         _envs,
-        |line| info!("{}", line),
-        |line| error!("{}", line),
+        &mut |line| info!("{}", line),
+        &mut |line| error!("{}", line),
     )?;
 
     Ok(())
@@ -584,8 +586,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["-n", namespace, "delete", "secret", secret],
         _envs,
-        |line| info!("{}", line),
-        |line| error!("{}", line),
+        &mut |line| info!("{}", line),
+        &mut |line| error!("{}", line),
     )?;
 
     Ok(())
@@ -608,8 +610,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["logs", "--tail", "1000", "-n", namespace, "-l", selector],
         _envs,
-        |line| output_vec.push(line),
-        |line| error!("{}", line),
+        &mut |line| output_vec.push(line),
+        &mut |line| error!("{}", line),
     )?;
 
     Ok(output_vec)
@@ -632,8 +634,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["describe", "pod", "-n", namespace, "-l", selector],
         _envs,
-        |line| output_vec.push(line),
-        |line| error!("{}", line),
+        &mut |line| output_vec.push(line),
+        &mut |line| error!("{}", line),
     )?;
 
     Ok(output_vec.join("\n"))
@@ -686,8 +688,8 @@ where
     kubectl_exec_with_output(
         args,
         environment_variables.clone(),
-        |line| info!("{}", line),
-        |line| error!("{}", line),
+        &mut |line| info!("{}", line),
+        &mut |line| error!("{}", line),
     )
 }
 
@@ -829,7 +831,7 @@ where
     let args = vec!["get", "event", arg_namespace.as_str(), "--sort-by='.lastTimestamp'"];
 
     let mut result_ok = String::new();
-    match kubectl_exec_with_output(args, environment_variables, |line| result_ok = line, |_| {}) {
+    match kubectl_exec_with_output(args, environment_variables, &mut |line| result_ok = line, &mut |_| {}) {
         Ok(()) => Ok(result_ok),
         Err(err) => Err(err),
     }
@@ -929,8 +931,8 @@ where
             &replicas_count.to_string(),
         ],
         _envs,
-        |_| {},
-        |_| {},
+        &mut |_| {},
+        &mut |_| {},
     )
 }
 
@@ -976,16 +978,16 @@ where
             selector,
         ],
         _envs.clone(),
-        |_| {},
-        |_| {},
+        &mut |_| {},
+        &mut |_| {},
     )?;
 
     // deleting pdb in order to be able to upgrade kubernetes version
     kubectl_exec_with_output(
         vec!["-n", namespace, "delete", "pdb", "--selector", selector],
         _envs,
-        |_| {},
-        |_| {},
+        &mut |_| {},
+        &mut |_| {},
     )?;
 
     let condition = match replicas_count {
@@ -1029,8 +1031,8 @@ where
             "--timeout=300s",
         ],
         complete_envs,
-        |out| info!("{:?}", out),
-        |out| warn!("{:?}", out),
+        &mut |out| info!("{:?}", out),
+        &mut |out| warn!("{:?}", out),
     )
 }
 
@@ -1175,8 +1177,8 @@ where
             pod_to_be_deleted.metadata.namespace.as_str(),
         ],
         complete_envs,
-        |_| {},
-        |_| {},
+        &mut |_| {},
+        &mut |_| {},
     ) {
         Ok(_) => Ok(pod_to_be_deleted),
         Err(e) => Err(CommandError::new(e.message(), None)),
@@ -1196,8 +1198,8 @@ where
     let _ = kubectl_exec_with_output(
         args.clone(),
         _envs.clone(),
-        |line| output_vec.push(line),
-        |line| error!("{}", line),
+        &mut |line| output_vec.push(line),
+        &mut |line| error!("{}", line),
     )?;
 
     let output_string: String = output_vec.join("");
