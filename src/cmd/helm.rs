@@ -133,8 +133,8 @@ impl Helm {
         match helm_exec_with_output(
             &args,
             &self.get_all_envs(envs),
-            |line| stdout.push_str(&line),
-            |line| stderr.push_str(&line),
+            &mut |line| stdout.push_str(&line),
+            &mut |line| stderr.push_str(&line),
         ) {
             Err(_) if stderr.contains("release: not found") => Err(ReleaseDoesNotExist(chart.name.clone())),
             Err(err) => {
@@ -173,7 +173,9 @@ impl Helm {
         ];
 
         let mut stderr = String::new();
-        match helm_exec_with_output(&args, &self.get_all_envs(envs), |_| {}, |line| stderr.push_str(&line)) {
+        match helm_exec_with_output(&args, &self.get_all_envs(envs), &mut |_| {}, &mut |line| {
+            stderr.push_str(&line)
+        }) {
             Err(err) => {
                 stderr.push_str(&err.message());
                 let error = CommandError::new(stderr, err.message_safe());
@@ -206,7 +208,9 @@ impl Helm {
         ];
 
         let mut stderr = String::new();
-        match helm_exec_with_output(&args, &self.get_all_envs(envs), |_| {}, |line| stderr.push_str(&line)) {
+        match helm_exec_with_output(&args, &self.get_all_envs(envs), &mut |_| {}, &mut |line| {
+            stderr.push_str(&line)
+        }) {
             Err(err) => {
                 stderr.push_str(&err.message());
                 let error = CommandError::new(stderr, err.message_safe());
@@ -260,8 +264,8 @@ impl Helm {
         if let Err(cmd_error) = helm_exec_with_output(
             &helm_args,
             &self.get_all_envs(envs),
-            |line| output_string.push(line),
-            |line| error!("{}", line),
+            &mut |line| output_string.push(line),
+            &mut |line| error!("{}", line),
         ) {
             return Err(HelmError::CmdError("none".to_string(), LIST, cmd_error));
         }
@@ -362,10 +366,10 @@ impl Helm {
         let helm_ret = helm_exec_with_output(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(envs),
-            |line| {
+            &mut |line| {
                 debug!("{}", line);
             },
-            |line| {
+            &mut |line| {
                 stderr_msg.push_str(&line);
                 warn!("chart {}: {}", chart.name, line);
             },
@@ -470,10 +474,10 @@ impl Helm {
         let helm_ret = helm_exec_with_output(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(envs),
-            |line| {
+            &mut |line| {
                 info!("{}", line);
             },
-            |line| {
+            &mut |line| {
                 warn!("chart {}: {}", chart.name, line);
                 error_message.push(line);
             },
@@ -530,15 +534,15 @@ impl Helm {
     }
 }
 
-fn helm_exec_with_output<F, X>(
+fn helm_exec_with_output<STDOUT, STDERR>(
     args: &[&str],
     envs: &[(&str, &str)],
-    stdout_output: F,
-    stderr_output: X,
+    stdout_output: &mut STDOUT,
+    stderr_output: &mut STDERR,
 ) -> Result<(), CommandError>
 where
-    F: FnMut(String),
-    X: FnMut(String),
+    STDOUT: FnMut(String),
+    STDERR: FnMut(String),
 {
     // Note: Helm CLI use spf13/cobra lib for the CLI; One function is mainly used to return an error if a command failed.
     // Helm returns an error each time a command does not succeed as they want. Which leads to handling error with status code 1
@@ -609,7 +613,12 @@ mod tests {
     #[test]
     fn check_version() {
         let mut output = String::new();
-        let _ = helm_exec_with_output(&vec!["version"], &vec![], |line| output.push_str(&line), |_line| {});
+        let _ = helm_exec_with_output(
+            &vec!["version"],
+            &vec![],
+            &mut |line| output.push_str(&line),
+            &mut |_line| {},
+        );
         assert!(output.contains("Version:\"v3.7.2\""));
     }
 

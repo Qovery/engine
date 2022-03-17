@@ -447,8 +447,8 @@ impl HelmChart for CoreDNSConfigChart {
                     format!("meta.helm.sh/release-name={}", self.chart_info.name).as_str(),
                 ],
                 environment_variables.clone(),
-                |_| {},
-                |_| {},
+                &mut |_| {},
+                &mut |_| {},
             )?;
             kubectl_exec_with_output(
                 vec![
@@ -461,8 +461,8 @@ impl HelmChart for CoreDNSConfigChart {
                     "meta.helm.sh/release-namespace=kube-system",
                 ],
                 environment_variables.clone(),
-                |_| {},
-                |_| {},
+                &mut |_| {},
+                &mut |_| {},
             )?;
             kubectl_exec_with_output(
                 vec![
@@ -475,8 +475,8 @@ impl HelmChart for CoreDNSConfigChart {
                     "app.kubernetes.io/managed-by=Helm",
                 ],
                 environment_variables.clone(),
-                |_| {},
-                |_| {},
+                &mut |_| {},
+                &mut |_| {},
             )?;
             Ok(())
         };

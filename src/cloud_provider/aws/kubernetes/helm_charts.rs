@@ -1266,8 +1266,8 @@ impl HelmChart for AwsVpcCniChart {
                         kubectl_exec_with_output(
                             args.clone(),
                             environment_variables.clone(),
-                            |out| stdout = format!("{}\n{}", stdout, out),
-                            |out| stderr = format!("{}\n{}", stderr, out),
+                            &mut |out| stdout = format!("{}\n{}", stdout, out),
+                            &mut |out| stderr = format!("{}\n{}", stderr, out),
                         )?;
 
                         let args = vec![
@@ -1285,8 +1285,8 @@ impl HelmChart for AwsVpcCniChart {
                         kubectl_exec_with_output(
                             args.clone(),
                             environment_variables.clone(),
-                            |out| stdout = format!("{}\n{}", stdout, out),
-                            |out| stderr = format!("{}\n{}", stderr, out),
+                            &mut |out| stdout = format!("{}\n{}", stdout, out),
+                            &mut |out| stderr = format!("{}\n{}", stderr, out),
                         )?;
 
                         let args = vec![
@@ -1304,8 +1304,8 @@ impl HelmChart for AwsVpcCniChart {
                         kubectl_exec_with_output(
                             args.clone(),
                             environment_variables.clone(),
-                            |out| stdout = format!("{}\n{}", stdout, out),
-                            |out| stderr = format!("{}\n{}", stderr, out),
+                            &mut |out| stdout = format!("{}\n{}", stdout, out),
+                            &mut |out| stderr = format!("{}\n{}", stderr, out),
                         )?;
 
                         Ok(())
