@@ -7,9 +7,8 @@ use self::test_utilities::utilities::{
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
-use qovery_engine::cloud_provider::aws::regions::{AwsRegion, AwsZones};
+use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::Kind;
-use std::borrow::Borrow;
 use std::str::FromStr;
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 

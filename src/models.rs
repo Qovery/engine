@@ -2,16 +2,15 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::net::Ipv4Addr;
-use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use git2::{Cred, CredentialType, Error};
 use itertools::Itertools;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 use crate::build_platform::{Build, BuildOptions, Credentials, GitRepository, Image, SshKey};
 use crate::cloud_provider::aws::databases::mongodb::MongoDB;
@@ -22,7 +21,7 @@ use crate::cloud_provider::service::{DatabaseOptions, StatefulService, Stateless
 use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
-use crate::git;
+use crate::container_registry::ContainerRegistryInfo;
 use crate::logger::Logger;
 use crate::utilities::get_image_tag;
 
@@ -102,17 +101,14 @@ impl Environment {
     pub fn to_qe_environment(
         &self,
         context: &Context,
-        built_applications: &Vec<Box<dyn crate::cloud_provider::service::Application>>,
         cloud_provider: &dyn CloudProvider,
+        container_registry: &ContainerRegistryInfo,
         logger: Box<dyn Logger>,
     ) -> crate::cloud_provider::environment::Environment {
         let applications = self
             .applications
             .iter()
-            .map(|x| match built_applications.iter().find(|y| x.id.as_str() == y.id()) {
-                Some(app) => x.to_stateless_service(context, app.image().clone(), cloud_provider, logger.clone()),
-                _ => x.to_stateless_service(context, x.to_image(), cloud_provider, logger.clone()),
-            })
+            .map(|x| x.to_stateless_service(context, x.to_image(container_registry), cloud_provider, logger.clone()))
             .filter(|x| x.is_some())
             .map(|x| x.unwrap())
             .collect::<Vec<_>>();
@@ -365,52 +361,24 @@ impl Application {
         }
     }
 
-    pub fn to_image(&self) -> Image {
-        self.to_image_with_commit(&self.commit_id)
-    }
-
-    pub fn to_image_from_parent_commit<P>(&self, clone_repo_into_dir: P) -> Result<Option<Image>, Error>
-    where
-        P: AsRef<Path>,
-    {
-        let parent_commit_id = git::get_parent_commit_id(
-            self.git_url.as_str(),
-            self.commit_id.as_str(),
-            clone_repo_into_dir,
-            &|_| match &self.git_credentials {
-                None => vec![],
-                Some(creds) => vec![(
-                    CredentialType::USER_PASS_PLAINTEXT,
-                    Cred::userpass_plaintext(creds.login.as_str(), creds.access_token.as_str()).unwrap(),
-                )],
-            },
-        )?;
-
-        Ok(match parent_commit_id {
-            Some(id) => Some(self.to_image_with_commit(&id)),
-            None => None,
-        })
-    }
-
-    pub fn to_image_with_commit(&self, commit_id: &String) -> Image {
+    pub fn to_image(&self, cr_info: &ContainerRegistryInfo) -> Image {
         Image {
             application_id: self.id.clone(),
-            name: self.name.clone(),
+            name: (cr_info.get_image_name)(&self.name),
             tag: get_image_tag(
                 &self.root_path,
                 &self.dockerfile_path,
                 &self.environment_vars,
-                commit_id,
+                &self.commit_id,
             ),
             commit_id: self.commit_id.clone(),
-            registry_name: None,
-            registry_secret: None,
-            registry_url: None,
-            registry_docker_json_config: None,
+            registry_name: cr_info.registry_name.clone(),
+            registry_url: cr_info.endpoint.clone(),
+            registry_docker_json_config: cr_info.registry_docker_json_config.clone(),
         }
     }
 
-    pub fn to_build(&self) -> Build {
+    pub fn to_build(&self, registry_url: &ContainerRegistryInfo) -> Build {
         // Retrieve ssh keys from env variables
         const ENV_GIT_PREFIX: &str = "GIT_SSH_KEY";
         let env_ssh_keys: Vec<(String, String)> = self
@@ -471,7 +439,7 @@ impl Application {
                 root_path: self.root_path.clone(),
                 buildpack_language: self.buildpack_language.clone(),
             },
-            image: self.to_image(),
+            image: self.to_image(registry_url),
             options: BuildOptions {
                 environment_variables: self
                     .environment_vars
@@ -1159,7 +1127,7 @@ pub struct Context {
     workspace_root_dir: String,
     lib_root_dir: String,
     test_cluster: bool,
-    docker_host: Option<String>,
+    docker_host: Option<Url>,
     features: Vec<Features>,
     metadata: Option<Metadata>,
 }
@@ -1172,13 +1140,13 @@ pub enum Features {
 
 // trait used to reimplement clone without same fields
 // this trait is used for Context struct
-pub trait Clone2 {
+pub trait CloneForTest {
     fn clone_not_same_execution_id(&self) -> Self;
 }
 
 // for test we need to clone context but to change the directory workspace used
 // to to this we just have to suffix the execution id in tests
-impl Clone2 for Context {
+impl CloneForTest for Context {
     fn clone_not_same_execution_id(&self) -> Context {
         let mut new = self.clone();
         let suffix = rand::thread_rng()
@@ -1199,7 +1167,7 @@ impl Context {
         workspace_root_dir: String,
         lib_root_dir: String,
         test_cluster: bool,
-        docker_host: Option<String>,
+        docker_host: Option<Url>,
         features: Vec<Features>,
         metadata: Option<Metadata>,
     ) -> Self {
@@ -1236,8 +1204,8 @@ impl Context {
         self.lib_root_dir.as_str()
     }
 
-    pub fn docker_tcp_socket(&self) -> Option<&String> {
-        self.docker_host.as_ref()
+    pub fn docker_tcp_socket(&self) -> &Option<Url> {
+        &self.docker_host
     }
 
     pub fn metadata(&self) -> Option<&Metadata> {
@@ -1276,16 +1244,6 @@ impl Context {
         }
     }
 
-    pub fn docker_build_options(&self) -> Option<Vec<String>> {
-        match &self.metadata {
-            Some(meta) => meta
-                .docker_build_options
-                .clone()
-                .map(|b| b.split(' ').map(|x| x.to_string()).collect()),
-            _ => None,
-        }
-    }
-
     // Qovery features
     pub fn is_feature_enabled(&self, name: &Features) -> bool {
         for feature in &self.features {
@@ -1303,7 +1261,6 @@ impl Context {
 pub struct Metadata {
     pub dry_run_deploy: Option<bool>,
     pub resource_expiration_in_seconds: Option<u32>,
-    pub docker_build_options: Option<String>,
     pub forced_upgrade: Option<bool>,
     pub disable_pleco: Option<bool>,
 }
@@ -1312,14 +1269,12 @@ impl Metadata {
     pub fn new(
         dry_run_deploy: Option<bool>,
         resource_expiration_in_seconds: Option<u32>,
-        docker_build_options: Option<String>,
         forced_upgrade: Option<bool>,
         disable_pleco: Option<bool>,
     ) -> Self {
         Metadata {
             dry_run_deploy,
             resource_expiration_in_seconds,
-            docker_build_options,
             forced_upgrade,
             disable_pleco,
         }

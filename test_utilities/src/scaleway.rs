@@ -18,6 +18,7 @@ use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::Kind::Scw;
+use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::errors::EngineError;
 use qovery_engine::logger::Logger;
@@ -239,8 +240,14 @@ pub fn clean_environments(
     );
 
     // delete images created in registry
+    let registry_url = container_registry_client.login()?;
     for env in environments.iter() {
-        for image in env.applications.iter().map(|a| a.to_image()).collect::<Vec<Image>>() {
+        for image in env
+            .applications
+            .iter()
+            .map(|a| a.to_image(&registry_url))
+            .collect::<Vec<Image>>()
+        {
             if let Err(e) = container_registry_client.delete_image(&image) {
                 return Err(e);
             }
