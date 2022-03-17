@@ -4,6 +4,7 @@ extern crate url;
 
 use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cmd;
+use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
 use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
 use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
@@ -253,6 +254,8 @@ pub enum Tag {
     BuilderGetBuildError,
     /// BuilderCloningRepositoryError: represents an error when builder is trying to clone a git repository.
     BuilderCloningRepositoryError,
+    /// DockerError: represents an error when trying to use docker cli.
+    DockerError,
     /// DockerPushImageError: represents an error when trying to push a docker image.
     DockerPushImageError,
     /// DockerPullImageError: represents an error when trying to pull a docker image.
@@ -2280,6 +2283,24 @@ impl EngineError {
             Tag::NotImplementedError,
             message.to_string(),
             message.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from an Docker error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_docker_error(event_details: EventDetails, error: DockerError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::DockerError,
+            error.to_string(),
+            error.to_string(),
             None,
             None,
             None,
