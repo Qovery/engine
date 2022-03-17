@@ -1,6 +1,6 @@
 ARG BIN_DEST_FOLDER="/binaries"
 
-FROM rust:1.58.1-slim-bullseye as build
+FROM rust:1.59.0-slim-bullseye as build
 
 ARG BIN_DEST_FOLDER
 ARG SCCACHE_REDIS
@@ -38,7 +38,7 @@ ENV TF_PLUGIN_CACHE_DIR=$HOME_DIR/.terraform.d/plugin-cache
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 ENV ARCHIVE_BUCKET_NAME=qovery-engine-deployment-archive
 
-RUN apt-get -y install curl &&\
+RUN apt-get update && apt-get -y install curl gnupg lsb-release &&\
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg &&\
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null &&\
     apt-get update &&\
