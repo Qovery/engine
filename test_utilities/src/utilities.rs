@@ -80,7 +80,6 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
                 None => Some(7200),
             }
         },
-        docker_build_options: Some("--network host".to_string()),
         forced_upgrade: Option::from({
             match env::var_os("forced_upgrade") {
                 Some(_) => true,
@@ -363,7 +362,7 @@ impl FuncTestsSecrets {
 }
 
 pub fn build_platform_local_docker(context: &Context, logger: Box<dyn Logger>) -> LocalDocker {
-    LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker", logger)
+    LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker", logger).unwrap()
 }
 
 pub fn init() -> Instant {

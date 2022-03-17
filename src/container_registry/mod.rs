@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 use crate::build_platform::Image;
 use crate::errors::EngineError;
@@ -6,8 +7,6 @@ use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter};
 use crate::logger::Logger;
 use crate::models::{Context, Listen, QoveryIdentifier};
 
-pub mod docker;
-pub mod docker_hub;
 pub mod docr;
 pub mod ecr;
 pub mod scaleway_container_registry;
@@ -21,14 +20,26 @@ pub trait ContainerRegistry: Listen + ToTransmitter {
         format!("{} ({})", self.name(), self.id())
     }
     fn is_valid(&self) -> Result<(), EngineError>;
-    fn on_create(&self) -> Result<(), EngineError>;
-    fn on_create_error(&self) -> Result<(), EngineError>;
-    fn on_delete(&self) -> Result<(), EngineError>;
-    fn on_delete_error(&self) -> Result<(), EngineError>;
+
+    // Login into the registry and setup everything for it
+    // mainly getting creds and calling docker login behind the hood
+    // It is poart of the ContainerRegistry only because DigitalOcean require to call doctl
+    // and that we can't get credentials directly
+    fn login(&self) -> Result<ContainerRegistryInfo, EngineError>;
+
+    // Some provider require specific action in order to allow container registry
+    // For now it is only digital ocean, that require 2 steps to have registries
+    fn create_registry(&self) -> Result<(), EngineError>;
+
+    // Call to create a specific repository in the registry
+    // i.e: docker.io/erebe or docker.io/qovery
+    // All providers requires action for that
+    // The convention for us is that we create one per application
+    fn create_repository(&self, repository_name: &str) -> Result<(), EngineError>;
+
+    // Check on the registry if a specific image already exist
     fn does_image_exists(&self, image: &Image) -> bool;
-    fn pull(&self, image: &Image) -> Result<PullResult, EngineError>;
-    fn push(&self, image: &Image, force_push: bool) -> Result<PushResult, EngineError>;
-    fn push_error(&self, image: &Image) -> Result<PushResult, EngineError>;
+
     fn logger(&self) -> &dyn Logger;
     fn get_event_details(&self) -> EventDetails {
         let context = self.context();
@@ -44,6 +55,17 @@ pub trait ContainerRegistry: Listen + ToTransmitter {
     }
 }
 
+pub struct ContainerRegistryInfo {
+    pub endpoint: Url, // Contains username and password if necessary
+    pub registry_name: String,
+    pub registry_docker_json_config: Option<String>,
+    // give it the name of your image, and it returns the full name with prefix if needed
+    // i.e: for DigitalOcean => registry_name/image_name
+    // i.e: fo scaleway => image_name/image_name
+    // i.e: for AWS => image_name
+    pub get_image_name: Box<dyn Fn(&str) -> String>,
+}
+
 pub struct PushResult {
     pub image: Image,
 }
@@ -56,7 +78,6 @@ pub enum PullResult {
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
-    DockerHub,
     Ecr,
     Docr,
     ScalewayCr,
