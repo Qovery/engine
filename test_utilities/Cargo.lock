@@ -2147,6 +2147,7 @@ dependencies = [
  "tracing-subscriber",
  "trust-dns-resolver",
  "url 2.2.2",
+ "urlencoding",
  "uuid 0.8.2",
  "walkdir",
 ]
@@ -3319,8 +3320,10 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "time 0.2.24",
+ "tokio 1.10.0",
  "tracing",
  "tracing-subscriber",
+ "url 2.2.2",
  "uuid 0.8.2",
 ]
 
@@ -3956,6 +3959,12 @@ dependencies = [
  "serde",
  "url 1.7.2",
 ]
+
+[[package]]
+name = "urlencoding"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68b90931029ab9b034b300b797048cf23723400aa757e8a2bfb9d748102f9821"
 
 [[package]]
 name = "uuid"

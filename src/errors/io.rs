@@ -97,6 +97,7 @@ pub enum Tag {
     BuilderBuildpackCannotBuildContainerImage,
     BuilderGetBuildError,
     BuilderCloningRepositoryError,
+    DockerError,
     DockerPushImageError,
     DockerPullImageError,
     BuilderDockerCannotListImages,
@@ -208,6 +209,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::ContainerRegistryRepositoryDoesntExist => Tag::ContainerRegistryRepositoryDoesntExist,
             errors::Tag::ContainerRegistryDeleteRepositoryError => Tag::ContainerRegistryDeleteRepositoryError,
             errors::Tag::BuilderDockerCannotListImages => Tag::BuilderDockerCannotListImages,
+            errors::Tag::DockerError => Tag::DockerError,
         }
     }
 }

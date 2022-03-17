@@ -1,7 +1,6 @@
 use std::borrow::Borrow;
 use std::env;
 use std::fs::File;
-use std::os::unix::fs::PermissionsExt;
 
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
