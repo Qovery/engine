@@ -471,7 +471,7 @@ pub fn to_engine_error(event_details: &EventDetails, error: DockerError) -> Engi
 
 // start a local registry to run this test
 // docker run --rm -ti -p 5000:5000 --name registry registry:2
-//#[cfg(feature = "test-with-docker")]
+#[cfg(feature = "test-with-docker")]
 #[cfg(test)]
 mod tests {
     use crate::cmd::docker::{ContainerImage, Docker, DockerError};
