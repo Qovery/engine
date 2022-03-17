@@ -535,11 +535,7 @@ pub fn scale_down_application(
     })
 }
 
-pub fn delete_router<T>(
-    target: &DeploymentTarget,
-    service: &T,
-    event_details: EventDetails,
-) -> Result<(), EngineError>
+pub fn delete_router<T>(target: &DeploymentTarget, service: &T, event_details: EventDetails) -> Result<(), EngineError>
 where
     T: Router,
 {
