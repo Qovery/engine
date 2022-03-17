@@ -6,13 +6,10 @@ use self::test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_pvc, init, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
 use ::function_name::named;
-use qovery_engine::build_platform::{BuildPlatform, CacheResult};
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::container_registry::{ContainerRegistry, PullResult};
-use qovery_engine::models::{Action, Clone2, EnvironmentAction, Port, Protocol, Storage, StorageType};
+use qovery_engine::models::{Action, CloneForTest, EnvironmentAction, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
-use std::time::SystemTime;
 use test_utilities::common::Infrastructure;
 use test_utilities::scaleway::{container_registry_scw, scw_default_engine_config, SCW_KUBERNETES_VERSION};
 use test_utilities::utilities::build_platform_local_docker;
@@ -78,97 +75,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
         }
 
         test_name.to_string()
-    })
-}
-
-#[cfg(feature = "test-scw-self-hosted")]
-#[named]
-#[test]
-fn test_build_cache() {
-    let test_name = function_name!();
-    engine_run_test(|| {
-        init();
-        let span = span!(Level::INFO, "test", name = test_name);
-        let _enter = span.enter();
-
-        let secrets = FuncTestsSecrets::new();
-        let context = context(
-            secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
-        );
-
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
-
-        let scr = container_registry_scw(&context);
-        let local_docker = build_platform_local_docker(&context, logger());
-        let app = environment.applications.first().unwrap();
-        let image = app.to_image();
-
-        let app_build = app.to_build();
-        let _ = match local_docker.has_cache(&app_build) {
-            Ok(CacheResult::Hit) => assert!(false),
-            Ok(CacheResult::Miss(_)) => assert!(true),
-            Ok(CacheResult::MissWithoutParentBuild) => assert!(false),
-            Err(_) => assert!(false),
-        };
-
-        let _ = match scr.pull(&image).unwrap() {
-            PullResult::Some(_) => assert!(false),
-            PullResult::None => assert!(true),
-        };
-
-        let cancel_task = || false;
-        let build_result = local_docker.build(app.to_build(), false, &cancel_task).unwrap();
-
-        let _ = match scr.push(&build_result.build.image, false) {
-            Ok(_) => assert!(true),
-            Err(_) => assert!(false),
-        };
-
-        // TODO clean local docker cache
-
-        let start_pull_time = SystemTime::now();
-        let _ = match scr.pull(&build_result.build.image).unwrap() {
-            PullResult::Some(_) => assert!(true),
-            PullResult::None => assert!(false),
-        };
-
-        let pull_duration = SystemTime::now().duration_since(start_pull_time).unwrap();
-
-        let _ = match local_docker.has_cache(&build_result.build) {
-            Ok(CacheResult::Hit) => assert!(true),
-            Ok(CacheResult::Miss(_)) => assert!(false),
-            Ok(CacheResult::MissWithoutParentBuild) => assert!(false),
-            Err(_) => assert!(false),
-        };
-
-        let start_pull_time = SystemTime::now();
-        let _ = match scr.pull(&image).unwrap() {
-            PullResult::Some(_) => assert!(true),
-            PullResult::None => assert!(false),
-        };
-
-        let pull_duration_2 = SystemTime::now().duration_since(start_pull_time).unwrap();
-
-        if pull_duration_2.as_millis() > pull_duration.as_millis() {
-            assert!(false);
-        }
-
-        return test_name.to_string();
     })
 }
 

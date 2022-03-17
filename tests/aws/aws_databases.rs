@@ -3,7 +3,7 @@ extern crate test_utilities;
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::{
-    Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction, Port, Protocol,
+    Action, CloneForTest, Database, DatabaseKind, DatabaseMode, EnvironmentAction, Port, Protocol,
 };
 use test_utilities::aws::{aws_default_engine_config, AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
 use tracing::{span, Level};

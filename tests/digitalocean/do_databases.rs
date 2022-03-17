@@ -3,7 +3,7 @@ use tracing::{span, warn, Level};
 
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
 use qovery_engine::models::{
-    Action, Clone2, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction, Port, Protocol,
+    Action, CloneForTest, Database, DatabaseKind, DatabaseMode, EnvironmentAction, Port, Protocol,
 };
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
@@ -11,7 +11,7 @@ use test_utilities::utilities::{
 };
 
 use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
-use test_utilities::common::{database_test_environment, test_db, working_minimal_environment, Infrastructure};
+use test_utilities::common::{database_test_environment, test_db, Infrastructure};
 use test_utilities::digitalocean::{
     clean_environments, do_default_engine_config, DO_KUBERNETES_VERSION, DO_MANAGED_DATABASE_DISK_TYPE,
     DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_SELF_HOSTED_DATABASE_DISK_TYPE, DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
@@ -437,7 +437,6 @@ fn private_postgresql_v10_deploy_a_working_dev_environment() {
 #[ignore]
 #[named]
 #[test]
-#[ignore]
 fn public_postgresql_v10_deploy_a_working_dev_environment() {
     test_postgresql_configuration("10", function_name!(), CONTAINER, true);
 }
@@ -454,7 +453,6 @@ fn private_postgresql_v11_deploy_a_working_dev_environment() {
 #[ignore]
 #[named]
 #[test]
-#[ignore]
 fn public_postgresql_v11_deploy_a_working_dev_environment() {
     test_postgresql_configuration("11", function_name!(), CONTAINER, true);
 }

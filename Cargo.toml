@@ -30,6 +30,7 @@ function_name = "0.2.0"
 thiserror = "1.0.30"
 strum = "0.23"
 strum_macros = "0.23"
+urlencoding = "2.1.0"
 
 # FIXME use https://crates.io/crates/blocking instead of runtime.rs
 

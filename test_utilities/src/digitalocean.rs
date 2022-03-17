@@ -17,6 +17,7 @@ use crate::utilities::{build_platform_local_docker, logger, FuncTestsSecrets};
 use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::Kind::Do;
+use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::errors::EngineError;
 use qovery_engine::logger::Logger;
@@ -37,7 +38,7 @@ pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
     DOCR::new(
         context.clone(),
         DOCR_ID,
-        "default-docr-registry-qovery-do-test",
+        DOCR_ID,
         secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
         logger(),
     )
@@ -178,14 +179,23 @@ pub fn clean_environments(
         logger(),
     );
 
+    // FIXME: re-enable it, or let pleco do its job ?
+    /*
     // delete images created in registry
+    let registry_url = do_cr.login()?;
     for env in environments.iter() {
-        for image in env.applications.iter().map(|a| a.to_image()).collect::<Vec<Image>>() {
-            if let Err(e) = do_cr.delete_image(&image) {
-                return Err(e);
-            }
+        for image in env
+            .applications
+            .iter()
+            .map(|a| a.to_image(&registry_url))
+            .collect::<Vec<Image>>()
+        {
+            //if let Err(e) = do_cr.delete_registry(&image.name) {
+            //    return Err(e);
+            //}
         }
     }
+     */
 
     Ok(())
 }

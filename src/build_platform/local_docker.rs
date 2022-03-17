@@ -6,10 +6,11 @@ use chrono::Duration;
 use git2::{Cred, CredentialType};
 use sysinfo::{Disk, DiskExt, SystemExt};
 
-use crate::build_platform::{docker, Build, BuildPlatform, BuildResult, CacheResult, Credentials, Image, Kind};
+use crate::build_platform::{docker, Build, BuildPlatform, BuildResult, Credentials, Kind};
 use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::QoveryCommand;
+use crate::cmd::docker::{ContainerImage, Docker, DockerError};
 use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EngineEvent, EventDetails, EventMessage, ToTransmitter, Transmitter};
 use crate::fs::workspace_directory;
@@ -32,6 +33,7 @@ const BUILDPACKS_BUILDERS: [&str; 1] = [
 /// use Docker in local
 pub struct LocalDocker {
     context: Context,
+    docker: Docker,
     id: String,
     name: String,
     listeners: Listeners,
@@ -39,31 +41,25 @@ pub struct LocalDocker {
 }
 
 impl LocalDocker {
-    pub fn new(context: Context, id: &str, name: &str, logger: Box<dyn Logger>) -> Self {
-        LocalDocker {
+    pub fn new(
+        context: Context,
+        id: &str,
+        name: &str,
+        logger: Box<dyn Logger>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let docker = Docker::new_with_options(true, context.docker_tcp_socket().clone())?;
+        Ok(LocalDocker {
             context,
+            docker,
             id: id.to_string(),
             name: name.to_string(),
             listeners: vec![],
             logger,
-        }
-    }
-
-    fn image_does_exist(&self, image: &Image) -> Result<bool, EngineError> {
-        let mut cmd = QoveryCommand::new(
-            "docker",
-            &vec!["image", "inspect", image.name_with_tag().as_str()],
-            &self.get_docker_host_envs(),
-        );
-
-        Ok(matches!(cmd.exec(), Ok(_)))
+        })
     }
 
     fn get_docker_host_envs(&self) -> Vec<(&str, &str)> {
-        match self.context.docker_tcp_socket() {
-            Some(tcp_socket) => vec![("DOCKER_HOST", tcp_socket.as_str())],
-            None => vec![],
-        }
+        vec![]
     }
 
     /// Read Dockerfile content from location path and return an array of bytes
@@ -89,34 +85,20 @@ impl LocalDocker {
         dockerfile_complete_path: &str,
         into_dir_docker_style: &str,
         env_var_args: Vec<String>,
-        use_build_cache: bool,
         lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<BuildResult, EngineError> {
-        let mut docker_args = if !use_build_cache {
-            vec!["build", "--no-cache"]
-        } else {
-            vec!["build"]
+        let image_to_build = ContainerImage {
+            registry: build.image.registry_url.clone(),
+            name: build.image.name(),
+            tags: vec![build.image.tag.clone(), "latest".to_string()],
         };
 
-        let args = self.context.docker_build_options();
-        for v in args.iter() {
-            for s in v.iter() {
-                docker_args.push(String::as_str(s));
-            }
-        }
-
-        let name_with_tag = build.image.name_with_tag();
-        let name_with_latest_tag = build.image.name_with_latest_tag();
-
-        docker_args.extend(vec![
-            "-f",
-            dockerfile_complete_path,
-            "-t",
-            name_with_tag.as_str(),
-            "-t",
-            name_with_latest_tag.as_str(),
-        ]);
+        let image_cache = ContainerImage {
+            registry: build.image.registry_url.clone(),
+            name: build.image.name(),
+            tags: vec!["latest".to_string()],
+        };
 
         let dockerfile_content = self.get_dockerfile_content(dockerfile_complete_path)?;
         let env_var_args = match docker::match_used_env_var_args(env_var_args, dockerfile_content) {
@@ -133,27 +115,24 @@ impl LocalDocker {
             }
         };
 
-        let mut docker_args = if env_var_args.is_empty() {
-            docker_args
-        } else {
-            let mut build_args = vec![];
+        // FIXME: pass a Vec<(key, value)> instead of spliting always the string
+        let env_vars = env_var_args
+            .into_iter()
+            .map(|val| {
+                let (key, value) = val.rsplit_once('=').unwrap();
+                (key.to_string(), value.to_string())
+            })
+            .collect::<Vec<_>>();
 
-            env_var_args.iter().for_each(|arg_value| {
-                build_args.push("--build-arg");
-                build_args.push(arg_value.as_str());
-            });
-
-            docker_args.extend(build_args);
-            docker_args
-        };
-
-        docker_args.push(into_dir_docker_style);
-
-        // docker build
-        let mut cmd = QoveryCommand::new("docker", &docker_args, &self.get_docker_host_envs());
-
-        let exit_status = cmd.exec_with_abort(
-            Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
+        let exit_status = self.docker.build(
+            &Path::new(dockerfile_complete_path),
+            &Path::new(into_dir_docker_style),
+            &image_to_build,
+            &env_vars
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect::<Vec<_>>(),
+            &image_cache,
             |line| {
                 self.logger.log(
                     LogLevel::Info,
@@ -171,25 +150,26 @@ impl LocalDocker {
             },
             |line| {
                 self.logger.log(
-                    LogLevel::Warning,
-                    EngineEvent::Warning(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
+                    LogLevel::Info,
+                    EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
                 );
 
                 lh.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Application {
                         id: build.image.application_id.clone(),
                     },
-                    ProgressLevel::Warn,
+                    ProgressLevel::Info,
                     Some(line),
                     self.context.execution_id(),
                 ));
             },
+            Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
             is_task_canceled,
         );
 
         match exit_status {
             Ok(_) => Ok(BuildResult { build }),
-            Err(Killed(_)) => Err(EngineError::new_task_cancellation_requested(self.get_event_details())),
+            Err(DockerError::Aborted(_)) => Err(EngineError::new_task_cancellation_requested(self.get_event_details())),
             Err(err) => Err(EngineError::new_docker_cannot_build_container_image(
                 self.get_event_details(),
                 self.name_with_id(),
@@ -207,10 +187,8 @@ impl LocalDocker {
         lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<BuildResult, EngineError> {
-        let name_with_tag = build.image.name_with_tag();
-        let name_with_latest_tag = build.image.name_with_latest_tag();
-
-        let args = self.context.docker_build_options();
+        let name_with_tag = build.image.full_image_name_with_tag();
+        let name_with_latest_tag = format!("{}:latest", build.image.full_image_name());
 
         let mut exit_status: Result<(), command::CommandError> = Err(command::CommandError::ExecutionError(
             Error::new(ErrorKind::InvalidData, "No builder names".to_string()),
@@ -218,20 +196,13 @@ impl LocalDocker {
 
         for builder_name in BUILDPACKS_BUILDERS.iter() {
             let mut buildpacks_args = if !use_build_cache {
-                vec!["build", name_with_tag.as_str(), "--clear-cache"]
+                vec!["build", "--publish", name_with_tag.as_str(), "--clear-cache"]
             } else {
-                vec!["build", name_with_tag.as_str()]
+                vec!["build", "--publish", name_with_tag.as_str()]
             };
 
             // always add 'latest' tag
             buildpacks_args.extend(vec!["-t", name_with_latest_tag.as_str()]);
-
-            for v in args.iter() {
-                for s in v.iter() {
-                    buildpacks_args.push(String::as_str(s));
-                }
-            }
-
             buildpacks_args.extend(vec!["--path", into_dir_docker_style]);
 
             let mut buildpacks_args = if env_var_args.is_empty() {
@@ -414,67 +385,10 @@ impl BuildPlatform for LocalDocker {
         Ok(())
     }
 
-    fn has_cache(&self, build: &Build) -> Result<CacheResult, EngineError> {
-        let event_details = self.get_event_details();
-
-        self.logger.log(
-            LogLevel::Info,
-            EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe("LocalDocker.has_cache() called".to_string()),
-            ),
-        );
-
-        // Check if a local cache layers for the container image exists.
-        let repository_root_path = self.get_repository_build_root_path(&build)?;
-
-        let parent_build = build.to_previous_build(repository_root_path).map_err(|err| {
-            EngineError::new_builder_get_build_error(self.get_event_details(), build.image.commit_id.to_string(), err)
-        })?;
-
-        let parent_build = match parent_build {
-            Some(parent_build) => parent_build,
-            None => return Ok(CacheResult::MissWithoutParentBuild),
-        };
-
-        // check if local layers exist
-        let cmd_bin = "docker";
-        let image_name = parent_build.image.name.clone();
-        let cmd_args = vec!["images", "-q", &image_name];
-        let mut cmd = QoveryCommand::new(cmd_bin, &cmd_args.clone(), &[]);
-
-        let mut result = CacheResult::Miss(parent_build);
-        let _ = cmd.exec_with_timeout(
-            Duration::minutes(1), // `docker images` command can be slow with tons of images - it's probably not indexed
-            |_| result = CacheResult::Hit, // if a line is returned, then the image is locally present
-            |r_err| {
-                self.logger.log(
-                    LogLevel::Error,
-                    EngineEvent::Error(
-                        EngineError::new_docker_cannot_list_images(
-                            event_details.clone(),
-                            CommandError::new_from_command_line(
-                                "Cannot list docker images".to_string(),
-                                cmd_bin.to_string(),
-                                cmd_args.clone().into_iter().map(|v| v.to_string()).collect(),
-                                vec![],
-                                None,
-                                Some(r_err.to_string()),
-                            ),
-                        ),
-                        None,
-                    ),
-                )
-            },
-        );
-
-        Ok(result)
-    }
-
     fn build(
         &self,
         build: Build,
-        force_build: bool,
+        _force_build: bool,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<BuildResult, EngineError> {
         let event_details = self.get_event_details();
@@ -492,22 +406,6 @@ impl BuildPlatform for LocalDocker {
         }
 
         let listeners_helper = ListenersHelper::new(&self.listeners);
-
-        if !force_build && self.image_does_exist(&build.image)? {
-            self.logger.log(
-                LogLevel::Info,
-                EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(format!(
-                        "Image `{}` found on repository, container build is not required",
-                        build.image.name_with_tag()
-                    )),
-                ),
-            );
-
-            return Ok(BuildResult { build });
-        }
-
         let repository_root_path = self.get_repository_build_root_path(&build)?;
 
         self.logger.log(
@@ -551,6 +449,7 @@ impl BuildPlatform for LocalDocker {
         if is_task_canceled() {
             return Err(EngineError::new_task_cancellation_requested(event_details.clone()));
         }
+
         if let Err(clone_error) = git::clone_at_commit(
             &build.git_repository.url,
             &build.git_repository.commit_id,
@@ -669,7 +568,6 @@ impl BuildPlatform for LocalDocker {
                 dockerfile_absolute_path.as_str(),
                 build_context_path.as_str(),
                 env_var_args,
-                !disable_build_cache,
                 &listeners_helper,
                 is_task_canceled,
             )
@@ -712,38 +610,6 @@ impl BuildPlatform for LocalDocker {
         );
 
         result
-    }
-
-    fn build_error(&self, build: Build) -> Result<BuildResult, EngineError> {
-        let event_details = self.get_event_details();
-        self.logger.log(
-            LogLevel::Warning,
-            EngineEvent::Warning(
-                event_details.clone(),
-                EventMessage::new_from_safe(format!("LocalDocker.build_error() called for {}", self.name())),
-            ),
-        );
-
-        let listener_helper = ListenersHelper::new(&self.listeners);
-
-        // FIXME
-        let message = String::from("something goes wrong (not implemented)");
-
-        listener_helper.error(ProgressInfo::new(
-            ProgressScope::Application {
-                id: build.image.application_id,
-            },
-            ProgressLevel::Error,
-            Some(message.as_str()),
-            self.context.execution_id(),
-        ));
-
-        let err = EngineError::new_not_implemented_error(event_details);
-
-        self.logger.log(LogLevel::Error, EngineEvent::Error(err.clone(), None));
-
-        // FIXME
-        Err(err)
     }
 
     fn logger(&self) -> Box<dyn Logger> {
@@ -814,6 +680,7 @@ fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<(), CommandError> {
         vec!["image", "prune", "-a", "-f"],
         vec!["builder", "prune", "-a", "-f"],
         vec!["volume", "prune", "-f"],
+        vec!["buildx", "prune", "-a", "-f"],
     ];
 
     let mut errored_commands = vec![];
