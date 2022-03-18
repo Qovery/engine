@@ -327,40 +327,49 @@ impl ContainerRegistry {
         logger: Box<dyn qovery_engine::logger::Logger>,
     ) -> Option<Box<dyn qovery_engine::container_registry::ContainerRegistry>> {
         match self.kind {
-            qovery_engine::container_registry::Kind::Ecr => Some(Box::new(ECR::new(
-                context,
-                self.id.as_str(),
-                self.name.as_str(),
-                self.options.access_key_id.as_ref()?.as_str(),
-                self.options.secret_access_key.as_ref()?.as_str(),
-                self.options.region.as_ref()?.as_str(),
-                logger,
-            ))),
-            qovery_engine::container_registry::Kind::Docr => Some(Box::new(DOCR::new(
-                context,
-                self.id.as_str(),
-                self.name.as_str(),
-                self.options.token.as_ref()?.as_str(),
-                logger,
-            ))),
-            qovery_engine::container_registry::Kind::ScalewayCr => Some(Box::new(ScalewayCR::new(
-                context,
-                self.id.as_str(),
-                self.name.as_str(),
-                self.options.scaleway_secret_key.as_ref()?.as_str(),
-                self.options.scaleway_project_id.as_ref()?.as_str(),
-                qovery_engine::cloud_provider::scaleway::application::ScwZone::from_str(
+            qovery_engine::container_registry::Kind::Ecr => Some(Box::new(
+                ECR::new(
+                    context,
+                    self.id.as_str(),
+                    self.name.as_str(),
+                    self.options.access_key_id.as_ref()?.as_str(),
+                    self.options.secret_access_key.as_ref()?.as_str(),
                     self.options.region.as_ref()?.as_str(),
+                    logger,
                 )
-                .expect(
-                    format!(
-                        "cannot parse `{}`, it doesn't seem to be a valid SCW zone",
+                .ok()?,
+            )),
+            qovery_engine::container_registry::Kind::Docr => Some(Box::new(
+                DOCR::new(
+                    context,
+                    self.id.as_str(),
+                    self.name.as_str(),
+                    self.options.token.as_ref()?.as_str(),
+                    logger,
+                )
+                .ok()?,
+            )),
+            qovery_engine::container_registry::Kind::ScalewayCr => Some(Box::new(
+                ScalewayCR::new(
+                    context,
+                    self.id.as_str(),
+                    self.name.as_str(),
+                    self.options.scaleway_secret_key.as_ref()?.as_str(),
+                    self.options.scaleway_project_id.as_ref()?.as_str(),
+                    qovery_engine::cloud_provider::scaleway::application::ScwZone::from_str(
                         self.options.region.as_ref()?.as_str(),
                     )
-                    .as_str(),
-                ),
-                logger,
-            ))),
+                    .expect(
+                        format!(
+                            "cannot parse `{}`, it doesn't seem to be a valid SCW zone",
+                            self.options.region.as_ref()?.as_str(),
+                        )
+                        .as_str(),
+                    ),
+                    logger,
+                )
+                .ok()?,
+            )),
         }
     }
 }
