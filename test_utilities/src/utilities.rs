@@ -9,14 +9,12 @@ use curl::easy::Easy;
 use dirs::home_dir;
 use gethostname;
 use std::collections::BTreeMap;
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::str::FromStr;
 
 use passwords::PasswordGenerator;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::doks_api::get_do_kubeconfig_by_cluster_name;
-use qovery_engine::errors::EngineError;
-use qovery_engine::events::EventDetails;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use retry::delay::Fibonacci;
@@ -48,15 +46,12 @@ use crate::digitalocean::{
     DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_SELF_HOSTED_DATABASE_DISK_TYPE,
     DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
 };
-use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cmd::command::QoveryCommand;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::errors::CommandError;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::models::DatabaseMode::MANAGED;
-use qovery_engine::object_storage::spaces::{BucketDeleteStrategy, Spaces};
-use qovery_engine::object_storage::ObjectStorage;
 use qovery_engine::runtime::block_on;
 use time::Instant;
 
