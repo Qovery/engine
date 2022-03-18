@@ -49,6 +49,7 @@ impl ContainerImage {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Docker {
     use_buildkit: bool,
     common_envs: Vec<(String, String)>,
