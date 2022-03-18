@@ -7,9 +7,8 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 use crate::cmd::command::CommandError::{ExecutionError, ExitStatusError, Killed, TimeoutError};
 use crate::cmd::command::CommandOutputType::{STDERR, STDOUT};
 
-use chrono::Duration;
 use itertools::Itertools;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use timeout_readwrite::TimeoutReader;
 
 enum CommandOutputType {
@@ -45,6 +44,63 @@ impl CommandError {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum AbortReason {
+    Timeout(Duration),
+    Canceled(String),
+}
+pub struct CommandKiller<'a> {
+    should_abort: Box<dyn Fn() -> Option<AbortReason> + 'a>,
+}
+
+impl<'a> CommandKiller<'a> {
+    pub fn never() -> CommandKiller<'a> {
+        CommandKiller {
+            should_abort: Box::new(|| None),
+        }
+    }
+
+    pub fn from_timeout(timeout: Duration) -> CommandKiller<'a> {
+        let now = Instant::now();
+        CommandKiller {
+            should_abort: Box::new(move || {
+                if now.elapsed() >= timeout {
+                    return Some(AbortReason::Timeout(timeout));
+                }
+
+                None
+            }),
+        }
+    }
+
+    pub fn from_cancelable(is_canceled: &'a dyn Fn() -> bool) -> CommandKiller<'a> {
+        CommandKiller {
+            should_abort: Box::new(move || {
+                if is_canceled() {
+                    return Some(AbortReason::Canceled("Task canceled".to_string()));
+                }
+                None
+            }),
+        }
+    }
+
+    pub fn from(timeout: Duration, is_canceled: &'a dyn Fn() -> bool) -> CommandKiller<'a> {
+        let has_timeout = Self::from_timeout(timeout);
+        let is_canceled = Self::from_cancelable(is_canceled);
+        CommandKiller {
+            should_abort: Box::new(move || {
+                (is_canceled.should_abort)()?;
+                (has_timeout.should_abort)()?;
+                None
+            }),
+        }
+    }
+
+    pub fn should_abort(&self) -> Option<AbortReason> {
+        (self.should_abort)()
+    }
+}
+
 pub struct QoveryCommand {
     command: Command,
 }
@@ -74,10 +130,9 @@ impl QoveryCommand {
 
     pub fn exec(&mut self) -> Result<(), CommandError> {
         self.exec_with_abort(
-            Duration::max_value(),
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
-            || false,
+            &CommandKiller::never(),
         )
     }
 
@@ -90,36 +145,19 @@ impl QoveryCommand {
         STDOUT: FnMut(String),
         STDERR: FnMut(String),
     {
-        self.exec_with_abort(Duration::max_value(), stdout_output, stderr_output, || false)
+        self.exec_with_abort(stdout_output, stderr_output, &CommandKiller::never())
     }
 
-    pub fn exec_with_timeout<STDOUT, STDERR>(
+    pub fn exec_with_abort<STDOUT, STDERR>(
         &mut self,
-        timeout: Duration,
         stdout_output: &mut STDOUT,
         stderr_output: &mut STDERR,
+        abort_notifier: &CommandKiller,
     ) -> Result<(), CommandError>
     where
         STDOUT: FnMut(String),
         STDERR: FnMut(String),
     {
-        self.exec_with_abort(timeout, stdout_output, stderr_output, || false)
-    }
-
-    pub fn exec_with_abort<STDOUT, STDERR, F>(
-        &mut self,
-        timeout: Duration,
-        stdout_output: &mut STDOUT,
-        stderr_output: &mut STDERR,
-        should_be_killed: F,
-    ) -> Result<(), CommandError>
-    where
-        STDOUT: FnMut(String),
-        STDERR: FnMut(String),
-        F: Fn() -> bool,
-    {
-        assert!(timeout.num_seconds() > 0, "Timeout cannot be a 0 or negative duration");
-
         info!("command: {:?}", self.command);
         let mut cmd_handle = self
             .command
@@ -128,10 +166,8 @@ impl QoveryCommand {
             .spawn()
             .map_err(ExecutionError)?;
 
-        let process_start_time = Instant::now();
-
         // Read stdout/stderr until timeout is reached
-        let reader_timeout = std::time::Duration::from_secs(10.min(timeout.num_seconds() as u64));
+        let reader_timeout = std::time::Duration::from_secs(5);
         let stdout = cmd_handle.stdout.take().ok_or(ExecutionError(Error::new(
             ErrorKind::BrokenPipe,
             "Cannot get stdout for command",
@@ -160,11 +196,7 @@ impl QoveryCommand {
                 STDERR(Err(err)) => error!("Error on stderr of cmd {:?}: {:?}", self.command, err),
             }
 
-            if should_be_killed() {
-                break;
-            }
-
-            if (process_start_time.elapsed().as_secs() as i64) >= timeout.num_seconds() {
+            if abort_notifier.should_abort().is_some() {
                 break;
             }
         }
@@ -180,23 +212,24 @@ impl QoveryCommand {
                 }
                 Ok(None) => {
                     // Does the process should be killed ?
-                    if should_be_killed() {
-                        let msg = format!("Killing process {:?}", self.command);
-                        warn!("{}", msg);
-                        Self::kill(&mut cmd_handle);
-                        return Err(Killed(msg));
-                    }
-
-                    // Does the timeout has been reached ?
-                    if (process_start_time.elapsed().as_secs() as i64) >= timeout.num_seconds() {
-                        let msg = format!(
-                            "Killing process {:?} due to timeout {}m reached",
-                            self.command,
-                            timeout.num_minutes()
-                        );
-                        warn!("{}", msg);
-                        Self::kill(&mut cmd_handle);
-                        return Err(TimeoutError(msg));
+                    match abort_notifier.should_abort() {
+                        None => {}
+                        Some(AbortReason::Timeout(timeout)) => {
+                            let msg = format!(
+                                "Killing process {:?} due to timeout {}s reached",
+                                self.command,
+                                timeout.as_secs()
+                            );
+                            warn!("{}", msg);
+                            Self::kill(&mut cmd_handle);
+                            return Err(TimeoutError(msg));
+                        }
+                        Some(AbortReason::Canceled(_)) => {
+                            let msg = format!("Killing process {:?}", self.command);
+                            warn!("{}", msg);
+                            Self::kill(&mut cmd_handle);
+                            return Err(Killed(msg));
+                        }
                     }
                 }
                 Err(err) => return Err(ExecutionError(err)),
@@ -252,10 +285,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::cmd::command::{does_binary_exist, run_version_command_for, CommandError, QoveryCommand};
-    use chrono::Duration;
+    use crate::cmd::command::{does_binary_exist, run_version_command_for, CommandError, CommandKiller, QoveryCommand};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Barrier};
+    use std::time::Duration;
     use std::{thread, time};
 
     #[test]
@@ -282,17 +315,29 @@ mod tests {
     #[test]
     fn test_command_with_timeout() {
         let mut cmd = QoveryCommand::new("sleep", &vec!["120"], &vec![]);
-        let ret = cmd.exec_with_timeout(Duration::seconds(2), &mut |_| {}, &mut |_| {});
+        let ret = cmd.exec_with_abort(
+            &mut |_| {},
+            &mut |_| {},
+            &CommandKiller::from_timeout(Duration::from_secs(2)),
+        );
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
 
         let mut cmd = QoveryCommand::new("sh", &vec!["-c", "cat /dev/urandom | grep -a --null-data ."], &vec![]);
-        let ret = cmd.exec_with_timeout(Duration::seconds(2), &mut |_| {}, &mut |_| {});
+        let ret = cmd.exec_with_abort(
+            &mut |_| {},
+            &mut |_| {},
+            &CommandKiller::from_timeout(Duration::from_secs(2)),
+        );
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
 
         let mut cmd = QoveryCommand::new("sleep", &vec!["1"], &vec![]);
-        let ret = cmd.exec_with_timeout(Duration::seconds(2), &mut |_| {}, &mut |_| {});
+        let ret = cmd.exec_with_abort(
+            &mut |_| {},
+            &mut |_| {},
+            &CommandKiller::from_timeout(Duration::from_secs(2)),
+        );
         assert_eq!(ret.is_ok(), true);
     }
 
@@ -313,8 +358,9 @@ mod tests {
         });
 
         let cmd_killer = move || should_kill2.load(Ordering::Acquire);
+        let cmd_killer = CommandKiller::from_cancelable(&cmd_killer);
         barrier.wait();
-        let ret = cmd.exec_with_abort(Duration::max_value(), &mut |_| {}, &mut |_| {}, cmd_killer);
+        let ret = cmd.exec_with_abort(&mut |_| {}, &mut |_| {}, &cmd_killer);
 
         assert!(matches!(ret, Err(CommandError::Killed(_))));
     }

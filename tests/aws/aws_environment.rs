@@ -951,7 +951,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // let time for nginx to reload the config
-        thread::sleep(Duration::from_secs(5));
+        thread::sleep(Duration::from_secs(10));
         // checking if cookie is properly set on the app
         assert!(routers_sessions_are_sticky(environment.routers.clone()));
 
