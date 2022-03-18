@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use chrono::Duration;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::de::DeserializeOwned;
@@ -41,7 +40,7 @@ where
 {
     let mut cmd = QoveryCommand::new("kubectl", &args, &envs);
 
-    if let Err(err) = cmd.exec_with_timeout(Duration::max_value(), stdout_output, stderr_output) {
+    if let Err(err) = cmd.exec_with_output(stdout_output, stderr_output) {
         let args_string = args.join(" ");
         let msg = format!("Error on command: kubectl {}. {:?}", args_string, &err);
         error!("{}", &msg);
