@@ -55,12 +55,13 @@ impl DOCR {
             name: name.to_string(),
             api_key: api_key.into(),
             id: id.into(),
-            registry_info,
             listeners: vec![],
             logger,
+            registry_info,
         };
 
         let event_details = cr.get_event_details();
+
         if cr.context.docker.login(&cr.registry_info.endpoint).is_err() {
             return Err(EngineError::new_client_invalid_cloud_provider_credentials(
                 event_details,

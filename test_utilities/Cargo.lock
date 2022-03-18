@@ -3320,6 +3320,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "time 0.2.24",
+ "tokio 1.10.0",
  "tracing",
  "tracing-subscriber",
  "url 2.2.2",

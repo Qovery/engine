@@ -384,7 +384,7 @@ impl Delete for Application {
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
-            delete_stateless_service(target, self, false, event_details.clone())
+            delete_stateless_service(target, self, event_details.clone())
         })
     }
 
@@ -405,7 +405,7 @@ impl Delete for Application {
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
-            delete_stateless_service(target, self, true, event_details.clone())
+            delete_stateless_service(target, self, event_details.clone())
         })
     }
 }
