@@ -240,7 +240,10 @@ impl Service for Application {
         context.insert("environment_variables", &environment_variables);
         context.insert("ports", &self.ports);
         context.insert("is_registry_secret", &true);
-        context.insert("registry_secret", self.image.registry_host());
+
+        // This is specific to digital ocean as it is them that create the registry secret
+        // we don't have the hand on it
+        context.insert("registry_secret", &self.image.registry_name);
 
         let storage = self
             .storage
