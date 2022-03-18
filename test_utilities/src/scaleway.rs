@@ -242,7 +242,7 @@ pub fn clean_environments(
     .unwrap();
 
     // delete images created in registry
-    let registry_url = container_registry_client.login()?;
+    let registry_url = container_registry_client.registry_info();
     for env in environments.iter() {
         for image in env
             .applications

@@ -12,7 +12,7 @@ use crate::errors::CommandError;
 use crate::events::{EngineEvent, EventDetails, ToTransmitter, Transmitter};
 use crate::logger::{LogLevel, Logger};
 use crate::models::{Context, Listen, Listener, Listeners};
-use crate::{cmd, utilities};
+use crate::utilities;
 use url::Url;
 
 const CR_API_PATH: &str = "https://api.digitalocean.com/v2/registry";
@@ -27,7 +27,7 @@ pub struct DOCR {
     pub name: String,
     pub api_key: String,
     pub id: String,
-    pub registry_info: ContainerRegistryInfo,
+    pub registry_info: Option<ContainerRegistryInfo>,
     pub listeners: Listeners,
     pub logger: Box<dyn Logger>,
 }
@@ -56,15 +56,15 @@ impl DOCR {
             name: name.to_string(),
             api_key: api_key.into(),
             id: id.into(),
-            registry_info,
             listeners: vec![],
             logger,
+            registry_info: Some(registry_info),
         };
 
         let event_details = cr.get_event_details();
         let docker =
             Docker::new(cr.context.docker_tcp_socket().clone()).map_err(|err| to_engine_error(&event_details, err))?;
-        if docker.login(&cr.registry_info.endpoint).is_err() {
+        if docker.login(&cr.registry_info.as_ref().unwrap().endpoint).is_err() {
             return Err(EngineError::new_client_invalid_cloud_provider_credentials(
                 event_details,
             ));
@@ -224,21 +224,9 @@ impl ContainerRegistry for DOCR {
         Ok(())
     }
 
-    fn login(&self) -> Result<&ContainerRegistryInfo, EngineError> {
-        let mut registry = Url::parse(&format!("https://{}", CR_REGISTRY_DOMAIN)).unwrap();
-        let _ = registry.set_username(&self.api_key);
-        let _ = registry.set_password(Some(&self.api_key));
-
-        let docker = cmd::docker::Docker::new(self.context.docker_tcp_socket().clone()).unwrap();
-        docker.login(&registry);
-
-        let registry_name = self.name.clone();
-        Ok(&ContainerRegistryInfo {
-            endpoint: Url::parse(&format!("https://{}", CR_REGISTRY_DOMAIN)).unwrap(),
-            registry_name: self.name.to_string(),
-            registry_docker_json_config: None,
-            get_image_name: Box::new(move |img_name| format!("{}/{}", registry_name, img_name)),
-        })
+    fn registry_info(&self) -> &ContainerRegistryInfo {
+        // At this point the registry info should be initialize, so unwrap is safe
+        self.registry_info.as_ref().unwrap()
     }
 
     fn create_registry(&self) -> Result<(), EngineError> {
