@@ -61,6 +61,7 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
         SCW_TEST_ZONE,
         logger(),
     )
+    .unwrap()
 }
 
 pub fn scw_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
@@ -237,7 +238,8 @@ pub fn clean_environments(
         project_id.as_str(),
         zone,
         logger(),
-    );
+    )
+    .unwrap();
 
     // delete images created in registry
     let registry_url = container_registry_client.login()?;

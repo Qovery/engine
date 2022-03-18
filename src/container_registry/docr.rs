@@ -6,6 +6,7 @@ use std::borrow::Borrow;
 
 use crate::build_platform::Image;
 use crate::cmd::command::QoveryCommand;
+use crate::cmd::docker::{to_engine_error, Docker};
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, EngineError, Kind};
 use crate::errors::CommandError;
 use crate::events::{EngineEvent, EventDetails, ToTransmitter, Transmitter};
@@ -26,22 +27,49 @@ pub struct DOCR {
     pub name: String,
     pub api_key: String,
     pub id: String,
-    pub registry_info: Option<ContainerRegistryInfo>,
+    pub registry_info: ContainerRegistryInfo,
     pub listeners: Listeners,
     pub logger: Box<dyn Logger>,
 }
 
 impl DOCR {
-    pub fn new(context: Context, id: &str, name: &str, api_key: &str, logger: Box<dyn Logger>) -> Self {
-        DOCR {
+    pub fn new(
+        context: Context,
+        id: &str,
+        name: &str,
+        api_key: &str,
+        logger: Box<dyn Logger>,
+    ) -> Result<Self, EngineError> {
+        let registry_name = name.to_string();
+        let mut registry = Url::parse(&format!("https://{}", CR_REGISTRY_DOMAIN)).unwrap();
+        let _ = registry.set_username(&api_key);
+        let _ = registry.set_password(Some(&api_key));
+        let registry_info = ContainerRegistryInfo {
+            endpoint: registry,
+            registry_name: name.to_string(),
+            registry_docker_json_config: None,
+            get_image_name: Box::new(move |img_name| format!("{}/{}", registry_name, img_name)),
+        };
+
+        let cr = DOCR {
             context,
-            name: name.into(),
+            name: name.to_string(),
             api_key: api_key.into(),
             id: id.into(),
-            registry_info: None,
+            registry_info,
             listeners: vec![],
             logger,
+        };
+
+        let event_details = cr.get_event_details();
+        let docker =
+            Docker::new(cr.context.docker_tcp_socket().clone()).map_err(|err| to_engine_error(&event_details, err))?;
+        if docker.login(&cr.registry_info.endpoint).is_err() {
+            return Err(EngineError::new_client_invalid_cloud_provider_credentials(
+                event_details,
+            ));
         }
+        Ok(cr)
     }
 
     fn create_registry(&self, registry_name: &str) -> Result<(), EngineError> {
@@ -196,15 +224,8 @@ impl ContainerRegistry for DOCR {
         Ok(())
     }
 
-    fn login(&self) -> Result<ContainerRegistryInfo, EngineError> {
-        let _ = self.exec_docr_login()?;
-        let registry_name = self.name.clone();
-        Ok(ContainerRegistryInfo {
-            endpoint: Url::parse(&format!("https://{}", CR_REGISTRY_DOMAIN)).unwrap(),
-            registry_name: self.name.to_string(),
-            registry_docker_json_config: None,
-            get_image_name: Box::new(move |img_name| format!("{}/{}", registry_name, img_name)),
-        })
+    fn login(&self) -> Result<&ContainerRegistryInfo, EngineError> {
+        Ok(&self.registry_info)
     }
 
     fn create_registry(&self) -> Result<(), EngineError> {

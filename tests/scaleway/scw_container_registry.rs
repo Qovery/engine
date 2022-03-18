@@ -46,7 +46,8 @@ fn test_get_registry_namespace() {
             scw_default_project_id.as_str(),
             region,
             logger(),
-        );
+        )
+        .unwrap();
 
         let image = registry_name.to_string();
         container_registry
@@ -95,7 +96,8 @@ fn test_create_registry_namespace() {
             scw_default_project_id.as_str(),
             region,
             logger(),
-        );
+        )
+        .unwrap();
 
         let image = registry_name.to_string();
 
@@ -138,7 +140,8 @@ fn test_delete_registry_namespace() {
             scw_default_project_id.as_str(),
             region,
             logger(),
-        );
+        )
+        .unwrap();
 
         let image = registry_name.to_string();
         container_registry
@@ -175,7 +178,8 @@ fn test_get_or_create_registry_namespace() {
             scw_default_project_id.as_str(),
             region,
             logger(),
-        );
+        )
+        .unwrap();
 
         let image = registry_name.to_string();
         container_registry
