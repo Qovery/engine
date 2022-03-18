@@ -11,7 +11,7 @@ use crate::errors::CommandError;
 use crate::events::{EngineEvent, EventDetails, ToTransmitter, Transmitter};
 use crate::logger::{LogLevel, Logger};
 use crate::models::{Context, Listen, Listener, Listeners};
-use crate::utilities;
+use crate::{cmd, utilities};
 use url::Url;
 
 const CR_API_PATH: &str = "https://api.digitalocean.com/v2/registry";
@@ -197,7 +197,13 @@ impl ContainerRegistry for DOCR {
     }
 
     fn login(&self) -> Result<ContainerRegistryInfo, EngineError> {
-        let _ = self.exec_docr_login()?;
+        let mut registry = Url::parse(&format!("https://{}", CR_REGISTRY_DOMAIN)).unwrap();
+        let _ = registry.set_username(&self.api_key);
+        let _ = registry.set_password(Some(&self.api_key));
+
+        let docker = cmd::docker::Docker::new(self.context.docker_tcp_socket().clone()).unwrap();
+        docker.login(&registry);
+
         let registry_name = self.name.clone();
         Ok(ContainerRegistryInfo {
             endpoint: Url::parse(&format!("https://{}", CR_REGISTRY_DOMAIN)).unwrap(),
