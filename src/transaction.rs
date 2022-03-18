@@ -382,11 +382,6 @@ impl<'a> Transaction<'a> {
         let execution_id = self.engine.context().execution_id();
         let lh = ListenersHelper::new(self.engine.kubernetes().listeners());
 
-        // 100 ms sleep to avoid race condition on last service status update
-        // Otherwise, the last status sent to the CORE is (sometimes) not the right one.
-        // Even by storing data at the micro seconds precision
-        thread::sleep(std::time::Duration::from_millis(100));
-
         match result {
             Err(err) => {
                 warn!("infrastructure ROLLBACK STARTED! an error occurred {:?}", err);

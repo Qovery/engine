@@ -26,7 +26,7 @@ pub struct DOCR {
     pub name: String,
     pub api_key: String,
     pub id: String,
-    pub registry_info: Option<ContainerRegistryInfo>,
+    pub registry_info: ContainerRegistryInfo,
     pub listeners: Listeners,
     pub logger: Box<dyn Logger>,
 }
@@ -57,7 +57,7 @@ impl DOCR {
             id: id.into(),
             listeners: vec![],
             logger,
-            registry_info: Some(registry_info),
+            registry_info,
         };
 
         let event_details = cr.get_event_details();
@@ -223,8 +223,7 @@ impl ContainerRegistry for DOCR {
     }
 
     fn registry_info(&self) -> &ContainerRegistryInfo {
-        // At this point the registry info should be initialize, so unwrap is safe
-        self.registry_info.as_ref().unwrap()
+        &self.registry_info
     }
 
     fn create_registry(&self) -> Result<(), EngineError> {

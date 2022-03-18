@@ -194,12 +194,12 @@ impl Service for Router {
         Ok(context)
     }
 
-    fn selector(&self) -> Option<String> {
-        Some(format!("routerId={}", self.id))
-    }
-
     fn logger(&self) -> &dyn Logger {
         &*self.logger
+    }
+
+    fn selector(&self) -> Option<String> {
+        Some(format!("routerId={}", self.id))
     }
 }
 
