@@ -1,5 +1,6 @@
 use std::borrow::Borrow;
 use std::env;
+use std::fs::File;
 
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
@@ -8,7 +9,7 @@ use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::digitalocean::application::DoRegion;
 use crate::cloud_provider::digitalocean::do_api_common::{do_get_from_api, DoApiType};
 use crate::cloud_provider::digitalocean::kubernetes::doks_api::{
-    get_do_latest_doks_slug_from_api, get_doks_info_from_name,
+    get_do_kubeconfig_by_cluster_name, get_do_latest_doks_slug_from_api, get_doks_info_from_name,
 };
 use crate::cloud_provider::digitalocean::kubernetes::helm_charts::{do_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::digitalocean::kubernetes::node::DoInstancesType;
@@ -36,14 +37,17 @@ use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_mana
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+use crate::events::{
+    EngineEvent, EnvironmentStep, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter,
+};
 use crate::logger::{LogLevel, Logger};
 use crate::models::{
     Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope, QoveryIdentifier, ToHelmString,
+    ProgressScope, QoveryIdentifier, StringPath, ToHelmString,
 };
 use crate::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use crate::object_storage::ObjectStorage;
+use crate::runtime::block_on;
 use crate::string::terraform_list_format;
 use crate::{cmd, dns_provider};
 use ::function_name::named;
@@ -53,6 +57,7 @@ use retry::OperationResult;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
 
 pub mod cidr;
 pub mod doks_api;
@@ -613,25 +618,6 @@ impl DOKS {
             ),
         };
 
-        // Kubeconfig bucket
-        self.logger().log(
-            LogLevel::Info,
-            EngineEvent::Deploying(
-                event_details.clone(),
-                EventMessage::new_from_safe("Create Qovery managed object storage buckets".to_string()),
-            ),
-        );
-        if let Err(e) = self.spaces.create_bucket(self.kubeconfig_bucket_name().as_str()) {
-            let error = EngineError::new_object_storage_cannot_create_bucket_error(
-                event_details.clone(),
-                self.kubeconfig_bucket_name(),
-                CommandError::new(e.message.unwrap_or("No error message".to_string()), None),
-            );
-            self.logger()
-                .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
-            return Err(error);
-        }
-
         // Logs bucket
         if let Err(e) = self.spaces.create_bucket(self.logs_bucket_name().as_str()) {
             let error = EngineError::new_object_storage_cannot_create_bucket_error(
@@ -652,25 +638,8 @@ impl DOKS {
             ));
         }
 
-        // push config file to object storage
         let kubeconfig_path = &self.get_kubeconfig_file_path()?;
         let kubeconfig_path = Path::new(kubeconfig_path);
-        let kubeconfig_name = format!("{}.yaml", self.id());
-        if let Err(e) = self.spaces.put(
-            self.kubeconfig_bucket_name().as_str(),
-            kubeconfig_name.as_str(),
-            kubeconfig_path.to_str().expect("No path for Kubeconfig"),
-        ) {
-            let error = EngineError::new_object_storage_cannot_put_file_into_bucket_error(
-                event_details.clone(),
-                self.logs_bucket_name(),
-                kubeconfig_name.to_string(),
-                CommandError::new(e.message.unwrap_or("No error message".to_string()), None),
-            );
-            self.logger()
-                .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
-            return Err(error);
-        }
 
         match self.check_workers_on_create() {
             Ok(_) => {
@@ -1714,6 +1683,134 @@ impl Kubernetes for DOKS {
             self.logger(),
         );
         Ok(())
+    }
+
+    fn get_kubeconfig_file_path(&self) -> Result<String, EngineError> {
+        let (path, _) = self.get_kubeconfig_file()?;
+        Ok(path)
+    }
+
+    fn get_kubeconfig_file(&self) -> Result<(String, File), EngineError> {
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+        let bucket_name = format!("qovery-kubeconfigs-{}", self.id());
+        let object_key = self.get_kubeconfig_filename();
+        let stage = Stage::General(GeneralStep::RetrieveClusterConfig);
+
+        // check if kubeconfig locally exists
+        let local_kubeconfig = match self.get_temp_dir(event_details.clone()) {
+            Ok(x) => {
+                let local_kubeconfig_folder_path = format!("{}/{}", &x, &bucket_name);
+                let local_kubeconfig_generated = format!("{}/{}", &local_kubeconfig_folder_path, &object_key);
+                if Path::new(&local_kubeconfig_generated).exists() {
+                    match File::open(&local_kubeconfig_generated) {
+                        Ok(_) => Some(local_kubeconfig_generated),
+                        Err(err) => {
+                            self.logger().log(
+                                LogLevel::Debug,
+                                EngineEvent::Debug(
+                                    self.get_event_details(stage.clone()),
+                                    EventMessage::new(
+                                        err.to_string(),
+                                        Some(
+                                            format!("Error, couldn't open {} file", &local_kubeconfig_generated,)
+                                                .to_string(),
+                                        ),
+                                    ),
+                                ),
+                            );
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            }
+            Err(_) => None,
+        };
+
+        // otherwise, try to get it from digital ocean api
+        let result = match local_kubeconfig {
+            Some(local_kubeconfig_generated) => match File::open(&local_kubeconfig_generated) {
+                Ok(file) => Ok((StringPath::from(&local_kubeconfig_generated), file)),
+                Err(e) => Err(EngineError::new_cannot_retrieve_cluster_config_file(
+                    event_details.clone(),
+                    CommandError::new(e.to_string(), Some(e.to_string())),
+                )),
+            },
+            None => {
+                let kubeconfig = match get_do_kubeconfig_by_cluster_name(self.cloud_provider.token(), self.name()) {
+                    Ok(kubeconfig) => Ok(kubeconfig),
+                    Err(e) => Err(EngineError::new_cannot_retrieve_cluster_config_file(
+                        event_details.clone(),
+                        CommandError::new(e.message(), Some(e.message())),
+                    )),
+                }
+                .expect("Unable to get kubeconfig");
+
+                let workspace_directory = crate::fs::workspace_directory(
+                    self.context().workspace_root_dir(),
+                    self.context().execution_id(),
+                    format!("object-storage/scaleway_os/{}", self.name()),
+                )
+                .map_err(|err| {
+                    EngineError::new_cannot_retrieve_cluster_config_file(
+                        event_details.clone(),
+                        CommandError::new(err.to_string(), Some(err.to_string())),
+                    )
+                })
+                .expect("Unable to create directory");
+
+                let file_path = format!(
+                    "{}/{}/{}",
+                    workspace_directory,
+                    format!("qovery-kubeconfigs-{}", self.id()),
+                    format!("{}.yaml", self.id())
+                );
+                let path = Path::new(file_path.as_str());
+                let parent_dir = path.parent().unwrap();
+                let _ = block_on(tokio::fs::create_dir_all(parent_dir));
+
+                match block_on(
+                    tokio::fs::OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(path),
+                ) {
+                    Ok(mut created_file) => match kubeconfig.is_some() {
+                        false => Err(EngineError::new_cannot_create_file(
+                            event_details.clone(),
+                            CommandError::new(
+                                "No kubeconfig found".to_string(),
+                                Some("No kubeconfig found".to_string()),
+                            ),
+                        )),
+                        true => match block_on(created_file.write_all(kubeconfig.unwrap().as_bytes())) {
+                            Ok(_) => {
+                                let file = File::open(path).unwrap();
+                                Ok((file_path, file))
+                            }
+                            Err(e) => Err(EngineError::new_cannot_retrieve_cluster_config_file(
+                                event_details.clone(),
+                                CommandError::new(e.to_string(), Some(e.to_string())),
+                            )),
+                        },
+                    },
+                    Err(e) => Err(EngineError::new_cannot_create_file(
+                        event_details.clone(),
+                        CommandError::new(e.to_string(), Some(e.to_string())),
+                    )),
+                }
+            }
+        };
+
+        match result {
+            Err(e) => Err(EngineError::new_cannot_retrieve_cluster_config_file(
+                event_details.clone(),
+                CommandError::new(e.message(), Some(e.message())),
+            )),
+            Ok((file_path, file)) => Ok((file_path, file)),
+        }
     }
 }
 

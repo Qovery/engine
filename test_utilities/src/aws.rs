@@ -9,7 +9,6 @@ use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
 use qovery_engine::cloud_provider::Kind::Aws;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
-use qovery_engine::container_registry::docker_hub::DockerHub;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::EngineConfig;
@@ -52,17 +51,7 @@ pub fn container_registry_ecr(context: &Context) -> ECR {
         secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
         logger(),
     )
-}
-
-pub fn container_registry_docker_hub(context: &Context) -> DockerHub {
-    DockerHub::new(
-        context.clone(),
-        "my-docker-hub-id-123",
-        "my-default-docker-hub",
-        "qoveryrd",
-        "3b9481fe-74e7-4d7b-bc08-e147c9fd4f24",
-        logger(),
-    )
+    .unwrap()
 }
 
 pub fn aws_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
@@ -75,7 +64,6 @@ pub fn aws_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> 
         None,
     )
 }
-
 impl Cluster<AWS, Options> for AWS {
     fn docker_cr_engine(
         context: &Context,

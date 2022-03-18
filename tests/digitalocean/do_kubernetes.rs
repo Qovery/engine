@@ -2,9 +2,7 @@ extern crate test_utilities;
 
 use self::test_utilities::common::ClusterDomain;
 use self::test_utilities::digitalocean::{DO_KUBERNETES_MAJOR_VERSION, DO_KUBERNETES_MINOR_VERSION};
-use self::test_utilities::utilities::{
-    context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets,
-};
+use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 use ::function_name::named;
 use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cloud_provider::Kind;

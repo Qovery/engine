@@ -15,8 +15,8 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
 use crate::errors::EngineError;
-use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage, ToTransmitter, Transmitter};
-use crate::logger::{LogLevel, Logger};
+use crate::events::{EnvironmentStep, Stage, ToTransmitter, Transmitter};
+use crate::logger::Logger;
 use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper, Port};
 use ::function_name::named;
 
@@ -201,26 +201,7 @@ impl Service for Application {
         let commit_id = self.image().commit_id.as_str();
 
         context.insert("helm_app_version", &commit_id[..7]);
-
-        match &self.image().registry_url {
-            Some(registry_url) => context.insert("image_name_with_tag", registry_url.as_str()),
-            None => {
-                let image_name_with_tag = self.image().name_with_tag();
-
-                self.logger().log(
-                    LogLevel::Warning,
-                    EngineEvent::Warning(
-                        event_details.clone(),
-                        EventMessage::new_from_safe(format!(
-                            "there is no registry url, use image name with tag with the default container registry: {}",
-                            image_name_with_tag.as_str()
-                        )),
-                    ),
-                );
-
-                context.insert("image_name_with_tag", image_name_with_tag.as_str());
-            }
-        }
+        context.insert("image_name_with_tag", &self.image.full_image_name_with_tag());
 
         let environment_variables = self
             .environment_variables
@@ -233,16 +214,8 @@ impl Service for Application {
 
         context.insert("environment_variables", &environment_variables);
         context.insert("ports", &self.ports);
-
-        match self.image.registry_name.as_ref() {
-            Some(registry_name) => {
-                context.insert("is_registry_secret", &true);
-                context.insert("registry_secret", registry_name);
-            }
-            None => {
-                context.insert("is_registry_secret", &false);
-            }
-        };
+        context.insert("is_registry_secret", &true);
+        context.insert("registry_secret", self.image.registry_host());
 
         let cpu_limits = match validate_k8s_required_cpu_and_burstable(
             &ListenersHelper::new(&self.listeners),

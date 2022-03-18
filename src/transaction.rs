@@ -1,10 +1,7 @@
-use std::collections::HashMap;
 use std::thread;
 
-use crate::build_platform::BuildResult;
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::service::{Application, Service};
-use crate::container_registry::PushResult;
+use crate::cloud_provider::service::Service;
 use crate::engine::EngineConfig;
 use crate::errors::{EngineError, Tag};
 use crate::events::{EngineEvent, EventMessage};
@@ -102,129 +99,48 @@ impl<'a> Transaction<'a> {
         Ok(())
     }
 
-    fn load_build_app_cache(&self, app: &crate::models::Application) -> Result<(), EngineError> {
-        let container_registry = self.engine.container_registry();
-        let mut image = app.to_image();
-
-        image.tag = String::from("latest");
-        // pull image from container registry
-        // FIXME: if one day we use something else than LocalDocker to build image
-        // FIXME: we'll need to send the PullResult to the Build implementation
-        let _ = match container_registry.pull(&image) {
-            Ok(pull_result) => pull_result,
-            Err(err) => {
-                self.logger.log(
-                    LogLevel::Error,
-                    EngineEvent::Error(
-                        err.clone(),
-                        Some(EventMessage::new_from_safe(
-                            "Something goes wrong while pulling image from container registry".to_string(),
-                        )),
-                    ),
-                );
-
-                return Err(err);
-            }
-        };
-
-        Ok(())
-    }
-
-    fn build_applications(
+    fn build_and_push_applications(
         &self,
         environment: &Environment,
         option: &DeploymentOption,
-    ) -> Result<Vec<Box<dyn Application>>, EngineError> {
+    ) -> Result<(), EngineError> {
         // do the same for applications
         let apps_to_build = environment
             .applications
             .iter()
             // build only applications that are set with Action: Create
-            .filter(|app| app.action == Action::Create);
-
-        let application_and_result_tuples = apps_to_build
-            .map(|app| {
-                let image = app.to_image();
-                let build_result = if option.force_build || !self.engine.container_registry().does_image_exists(&image)
-                {
-                    // If an error occurred we can skip it. It's not critical.
-                    let _ = self.load_build_app_cache(app);
-
-                    // only if the build is forced OR if the image does not exist in the registry
-                    self.engine
-                        .build_platform()
-                        .build(app.to_build(), option.force_build, &self.is_transaction_aborted)
-                } else {
-                    // use the cache
-                    Ok(BuildResult::new(app.to_build()))
-                };
-
-                (app, build_result)
-            })
+            .filter(|app| app.action == Action::Create)
             .collect::<Vec<_>>();
 
-        let mut applications: Vec<Box<dyn Application>> = Vec::with_capacity(application_and_result_tuples.len());
-        for (application, result) in application_and_result_tuples {
-            // catch build error, can't do it in Fn
-            let build_result = match result {
-                Err(err) => {
-                    error!("build error for application {}: {:?}", application.id.as_str(), err);
-                    return Err(err);
-                }
-                Ok(build_result) => build_result,
-            };
-
-            if let Some(app) = application.to_application(
-                self.engine.context(),
-                &build_result.build.image,
-                self.engine.cloud_provider(),
-                self.logger.clone(),
-            ) {
-                applications.push(app)
-            }
+        // If nothing to build, do nothing
+        if apps_to_build.is_empty() {
+            return Ok(());
         }
 
-        Ok(applications)
-    }
+        // Do setup of registry and be sure we are login to the registry
+        let cr_registry = self.engine.container_registry();
+        let _ = cr_registry.create_registry()?;
+        let registry = self.engine.container_registry().registry_info();
 
-    fn push_applications(
-        &self,
-        applications: Vec<Box<dyn Application>>,
-        option: &DeploymentOption,
-    ) -> Result<Vec<(Box<dyn Application>, PushResult)>, EngineError> {
-        let application_and_push_results: Vec<_> = applications
-            .into_iter()
-            .map(|mut app| {
-                match self.engine.container_registry().push(app.image(), option.force_push) {
-                    Ok(push_result) => {
-                        // I am not a big fan of doing that but it's the most effective way
-                        app.set_image(push_result.image.clone());
-                        Ok((app, push_result))
-                    }
-                    Err(err) => Err(err),
-                }
-            })
-            .collect();
+        for app in apps_to_build.into_iter() {
+            let app_build = app.to_build(&registry);
 
-        let mut results: Vec<(Box<dyn Application>, PushResult)> = vec![];
-        for result in application_and_push_results.into_iter() {
-            match result {
-                Ok(tuple) => results.push(tuple),
-                Err(err) => {
-                    self.logger.log(
-                        LogLevel::Error,
-                        EngineEvent::Error(
-                            err.clone(),
-                            Some(EventMessage::new_from_safe("Error pushing docker image".to_string())),
-                        ),
-                    );
-
-                    return Err(err);
-                }
+            // If image already exist in the registry, skip the build
+            if !option.force_build && cr_registry.does_image_exists(&app_build.image) {
+                continue;
             }
+
+            // Be sure that our repository exist before trying to pull/push images from it
+            let _ = self.engine.container_registry().create_repository(&app.name)?;
+
+            // Ok now everything is setup, we can try to build the app
+            let _ = self
+                .engine
+                .build_platform()
+                .build(app_build, &self.is_transaction_aborted)?;
         }
 
-        Ok(results)
+        Ok(())
     }
 
     pub fn rollback(&self) -> Result<(), RollbackError> {
@@ -267,28 +183,16 @@ impl<'a> Transaction<'a> {
         Ok(())
     }
 
-    /// This function is a wrapper to correctly revert all changes of an attempted deployment AND
-    /// if a failover environment is provided, then rollback.
+    // Warning: This function function does not revert anything, it just there to grab info from kube and services if it fails
+    // FIXME: Cleanup this, qe_environment should not be rebuilt at this step
     fn rollback_environment(&self, environment_action: &EnvironmentAction) -> Result<(), RollbackError> {
+        let registry_info = self.engine.container_registry().registry_info();
+
         let qe_environment = |environment: &Environment| {
-            let mut _applications = Vec::with_capacity(environment.applications.len());
-            for application in environment.applications.iter() {
-                let build = application.to_build();
-
-                if let Some(x) = application.to_application(
-                    self.engine.context(),
-                    &build.image,
-                    self.engine.cloud_provider(),
-                    self.logger.clone(),
-                ) {
-                    _applications.push(x)
-                }
-            }
-
             let qe_environment = environment.to_qe_environment(
                 self.engine.context(),
-                &_applications,
                 self.engine.cloud_provider(),
+                &registry_info,
                 self.logger.clone(),
             );
 
@@ -324,8 +228,6 @@ impl<'a> Transaction<'a> {
     }
 
     pub fn commit(mut self) -> TransactionResult {
-        let mut applications_by_environment: HashMap<&Environment, Vec<Box<dyn Application>>> = HashMap::new();
-
         for step in self.steps.clone().into_iter() {
             // execution loop
             self.executed_steps.push(step.clone());
@@ -372,7 +274,7 @@ impl<'a> Transaction<'a> {
                         EnvironmentAction::Environment(te) => te,
                     };
 
-                    let applications_builds = match self.build_applications(target_environment, &option) {
+                    match self.build_and_push_applications(target_environment, &option) {
                         Ok(apps) => apps,
                         Err(engine_err) => {
                             self.logger.log(
@@ -392,30 +294,6 @@ impl<'a> Transaction<'a> {
                             };
                         }
                     };
-
-                    if (self.is_transaction_aborted)() {
-                        return TransactionResult::Canceled;
-                    }
-
-                    let applications = match self.push_applications(applications_builds, &option) {
-                        Ok(results) => {
-                            let applications = results.into_iter().map(|(app, _)| app).collect::<Vec<_>>();
-
-                            applications
-                        }
-                        Err(engine_err) => {
-                            warn!("ROLLBACK STARTED! an error occurred {:?}", engine_err);
-                            return match self.rollback() {
-                                Ok(_) => TransactionResult::Rollback(engine_err),
-                                Err(err) => {
-                                    error!("ROLLBACK FAILED! fatal error: {:?}", err);
-                                    TransactionResult::UnrecoverableError(engine_err, err)
-                                }
-                            };
-                        }
-                    };
-
-                    applications_by_environment.insert(target_environment, applications);
                 }
                 Step::DeployEnvironment(environment_action) => {
                     if (self.is_transaction_aborted)() {
@@ -423,7 +301,7 @@ impl<'a> Transaction<'a> {
                     }
 
                     // deploy complete environment
-                    match self.commit_environment(environment_action, &applications_by_environment, |qe_env| {
+                    match self.commit_environment(environment_action, |qe_env| {
                         self.engine.kubernetes().deploy_environment(qe_env)
                     }) {
                         TransactionResult::Ok => {}
@@ -439,7 +317,7 @@ impl<'a> Transaction<'a> {
                     }
 
                     // pause complete environment
-                    match self.commit_environment(environment_action, &applications_by_environment, |qe_env| {
+                    match self.commit_environment(environment_action, |qe_env| {
                         self.engine.kubernetes().pause_environment(qe_env)
                     }) {
                         TransactionResult::Ok => {}
@@ -455,7 +333,7 @@ impl<'a> Transaction<'a> {
                     }
 
                     // delete complete environment
-                    match self.commit_environment(environment_action, &applications_by_environment, |qe_env| {
+                    match self.commit_environment(environment_action, |qe_env| {
                         self.engine.kubernetes().delete_environment(qe_env)
                     }) {
                         TransactionResult::Ok => {}
@@ -504,11 +382,6 @@ impl<'a> Transaction<'a> {
         let execution_id = self.engine.context().execution_id();
         let lh = ListenersHelper::new(self.engine.kubernetes().listeners());
 
-        // 100 ms sleep to avoid race condition on last service status update
-        // Otherwise, the last status sent to the CORE is (sometimes) not the right one.
-        // Even by storing data at the micro seconds precision
-        thread::sleep(std::time::Duration::from_millis(100));
-
         match result {
             Err(err) => {
                 warn!("infrastructure ROLLBACK STARTED! an error occurred {:?}", err);
@@ -534,12 +407,7 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    fn commit_environment<F>(
-        &self,
-        environment_action: &EnvironmentAction,
-        applications_by_environment: &HashMap<&Environment, Vec<Box<dyn Application>>>,
-        action_fn: F,
-    ) -> TransactionResult
+    fn commit_environment<F>(&self, environment_action: &EnvironmentAction, action_fn: F) -> TransactionResult
     where
         F: Fn(&crate::cloud_provider::environment::Environment) -> Result<(), EngineError>,
     {
@@ -547,16 +415,11 @@ impl<'a> Transaction<'a> {
             EnvironmentAction::Environment(te) => te,
         };
 
-        let empty_vec = Vec::with_capacity(0);
-        let built_applications = match applications_by_environment.get(target_environment) {
-            Some(applications) => applications,
-            None => &empty_vec,
-        };
-
+        let registry_info = self.engine.container_registry().registry_info();
         let qe_environment = target_environment.to_qe_environment(
             self.engine.context(),
-            built_applications,
             self.engine.cloud_provider(),
+            &registry_info,
             self.logger.clone(),
         );
 

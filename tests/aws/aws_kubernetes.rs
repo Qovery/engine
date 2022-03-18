@@ -1,15 +1,12 @@
 extern crate test_utilities;
 
 use self::test_utilities::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
-use self::test_utilities::utilities::{
-    context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets,
-};
+use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
-use qovery_engine::cloud_provider::aws::regions::{AwsRegion, AwsZones};
+use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::Kind;
-use std::borrow::Borrow;
 use std::str::FromStr;
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 
@@ -99,9 +96,7 @@ fn create_and_destroy_eks_cluster_in_us_east_2() {
 #[named]
 #[test]
 fn create_pause_and_destroy_eks_cluster_in_us_east_2() {
-    let secrets = FuncTestsSecrets::new();
     let region = "us-east-2".to_string();
-    let aws_region = AwsRegion::from_str(&region).expect("Wasn't able to convert the desired region");
     create_and_destroy_eks_cluster(
         region,
         ClusterTestType::WithPause,

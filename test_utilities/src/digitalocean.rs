@@ -1,5 +1,4 @@
 use const_format::formatcp;
-use qovery_engine::build_platform::Image;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DoksOptions;
 use qovery_engine::cloud_provider::digitalocean::network::vpc::VpcInitKind;
@@ -37,10 +36,11 @@ pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
     DOCR::new(
         context.clone(),
         DOCR_ID,
-        "default-docr-registry-qovery-do-test",
+        DOCR_ID,
         secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
         logger(),
     )
+    .unwrap()
 }
 
 pub fn do_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
@@ -163,11 +163,11 @@ impl Cluster<DO, DoksOptions> for DO {
 
 pub fn clean_environments(
     context: &Context,
-    environments: Vec<Environment>,
+    _environments: Vec<Environment>,
     secrets: FuncTestsSecrets,
     _region: DoRegion,
 ) -> Result<(), EngineError> {
-    let do_cr = DOCR::new(
+    let _do_cr = DOCR::new(
         context.clone(),
         "test",
         "test",
@@ -178,14 +178,23 @@ pub fn clean_environments(
         logger(),
     );
 
+    // FIXME: re-enable it, or let pleco do its job ?
+    /*
     // delete images created in registry
+    let registry_url = do_cr.login()?;
     for env in environments.iter() {
-        for image in env.applications.iter().map(|a| a.to_image()).collect::<Vec<Image>>() {
-            if let Err(e) = do_cr.delete_image(&image) {
-                return Err(e);
-            }
+        for image in env
+            .applications
+            .iter()
+            .map(|a| a.to_image(&registry_url))
+            .collect::<Vec<Image>>()
+        {
+            //if let Err(e) = do_cr.delete_registry(&image.name) {
+            //    return Err(e);
+            //}
         }
     }
+     */
 
     Ok(())
 }

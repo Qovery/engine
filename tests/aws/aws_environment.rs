@@ -5,16 +5,15 @@ use self::test_utilities::utilities::{
     engine_run_test, generate_id, get_pods, get_pvc, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
 use ::function_name::named;
-use qovery_engine::build_platform::{BuildPlatform, CacheResult};
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubernetes_get_all_pdbs;
-use qovery_engine::container_registry::{ContainerRegistry, PullResult};
-use qovery_engine::models::{Action, Clone2, EnvironmentAction, Port, Protocol, Storage, StorageType};
+use qovery_engine::models::{Action, CloneForTest, EnvironmentAction, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
-use std::time::SystemTime;
-use test_utilities::aws::{aws_default_engine_config, container_registry_ecr, AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
-use test_utilities::utilities::{build_platform_local_docker, context, init, kubernetes_config_path};
+use std::thread;
+use std::time::Duration;
+use test_utilities::aws::aws_default_engine_config;
+use test_utilities::utilities::{context, init, kubernetes_config_path};
 use tracing::{span, Level};
 
 // TODO:
@@ -70,98 +69,6 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
 
         let ret = environment_for_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
-
-        return test_name.to_string();
-    })
-}
-
-#[cfg(feature = "test-aws-self-hosted")]
-#[named]
-#[test]
-fn test_build_cache() {
-    let test_name = function_name!();
-    engine_run_test(|| {
-        init();
-        let span = span!(Level::INFO, "test", name = test_name);
-        let _enter = span.enter();
-
-        let secrets = FuncTestsSecrets::new();
-        let context = context(
-            secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
-            secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
-        );
-        let engine_config = aws_default_engine_config(&context, logger());
-
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
-
-        let ecr = container_registry_ecr(&context);
-        let local_docker = build_platform_local_docker(&context, logger());
-        let app = environment.applications.first().unwrap();
-        let image = app.to_image();
-
-        let app_build = app.to_build();
-        let _ = match local_docker.has_cache(&app_build) {
-            Ok(CacheResult::Hit) => assert!(false),
-            Ok(CacheResult::Miss(_)) => assert!(true),
-            Ok(CacheResult::MissWithoutParentBuild) => assert!(false),
-            Err(_) => assert!(false),
-        };
-
-        let _ = match ecr.pull(&image).unwrap() {
-            PullResult::Some(_) => assert!(false),
-            PullResult::None => assert!(true),
-        };
-
-        let cancel_task = || false;
-        let build_result = local_docker.build(app.to_build(), false, &cancel_task).unwrap();
-
-        let _ = match ecr.push(&build_result.build.image, false) {
-            Ok(_) => assert!(true),
-            Err(_) => assert!(false),
-        };
-
-        // TODO clean local docker cache
-
-        let start_pull_time = SystemTime::now();
-        let _ = match ecr.pull(&build_result.build.image).unwrap() {
-            PullResult::Some(_) => assert!(true),
-            PullResult::None => assert!(false),
-        };
-
-        let pull_duration = SystemTime::now().duration_since(start_pull_time).unwrap();
-
-        let _ = match local_docker.has_cache(&build_result.build) {
-            Ok(CacheResult::Hit) => assert!(true),
-            Ok(CacheResult::Miss(_)) => assert!(false),
-            Ok(CacheResult::MissWithoutParentBuild) => assert!(false),
-            Err(_) => assert!(false),
-        };
-
-        let start_pull_time = SystemTime::now();
-        let _ = match ecr.pull(&image).unwrap() {
-            PullResult::Some(_) => assert!(true),
-            PullResult::None => assert!(false),
-        };
-
-        let pull_duration_2 = SystemTime::now().duration_since(start_pull_time).unwrap();
-
-        if pull_duration_2.as_millis() > pull_duration.as_millis() {
-            assert!(false);
-        }
 
         return test_name.to_string();
     })
@@ -1043,6 +950,8 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
+        // let time for nginx to reload the config
+        thread::sleep(Duration::from_secs(10));
         // checking if cookie is properly set on the app
         assert!(routers_sessions_are_sticky(environment.routers.clone()));
 

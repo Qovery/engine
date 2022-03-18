@@ -1,7 +1,6 @@
 extern crate test_utilities;
 
 use self::test_utilities::utilities::{context, FuncTestsSecrets};
-use qovery_engine::build_platform::Image;
 use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use test_utilities::utilities::logger;
@@ -47,19 +46,10 @@ fn test_get_registry_namespace() {
             scw_default_project_id.as_str(),
             region,
             logger(),
-        );
+        )
+        .unwrap();
 
-        let image = Image {
-            application_id: "1234".to_string(),
-            name: registry_name.to_string(),
-            tag: "tag123".to_string(),
-            commit_id: "commit_id".to_string(),
-            registry_name: Some(registry_name.to_string()),
-            registry_secret: None,
-            registry_url: None,
-            registry_docker_json_config: None,
-        };
-
+        let image = registry_name.to_string();
         container_registry
             .create_registry_namespace(&image)
             .expect("error while creating registry namespace");
@@ -106,18 +96,10 @@ fn test_create_registry_namespace() {
             scw_default_project_id.as_str(),
             region,
             logger(),
-        );
+        )
+        .unwrap();
 
-        let image = Image {
-            application_id: "1234".to_string(),
-            name: registry_name.to_string(),
-            tag: "tag123".to_string(),
-            commit_id: "commit_id".to_string(),
-            registry_name: Some(registry_name.to_string()),
-            registry_secret: None,
-            registry_url: None,
-            registry_docker_json_config: None,
-        };
+        let image = registry_name.to_string();
 
         // execute:
         debug!("test_create_registry_namespace - {}", region);
@@ -158,19 +140,10 @@ fn test_delete_registry_namespace() {
             scw_default_project_id.as_str(),
             region,
             logger(),
-        );
+        )
+        .unwrap();
 
-        let image = Image {
-            application_id: "1234".to_string(),
-            name: registry_name.to_string(),
-            tag: "tag123".to_string(),
-            commit_id: "commit_id".to_string(),
-            registry_name: Some(registry_name.to_string()),
-            registry_secret: None,
-            registry_url: None,
-            registry_docker_json_config: None,
-        };
-
+        let image = registry_name.to_string();
         container_registry
             .create_registry_namespace(&image)
             .expect("error while creating registry namespace");
@@ -205,19 +178,10 @@ fn test_get_or_create_registry_namespace() {
             scw_default_project_id.as_str(),
             region,
             logger(),
-        );
+        )
+        .unwrap();
 
-        let image = Image {
-            application_id: "1234".to_string(),
-            name: registry_name.to_string(),
-            tag: "tag123".to_string(),
-            commit_id: "commit_id".to_string(),
-            registry_name: Some(registry_name.to_string()),
-            registry_secret: None,
-            registry_url: None,
-            registry_docker_json_config: None,
-        };
-
+        let image = registry_name.to_string();
         container_registry
             .create_registry_namespace(&image)
             .expect("error while creating registry namespace");

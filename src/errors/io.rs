@@ -28,6 +28,7 @@ pub enum Tag {
     CannotGetWorkspaceDirectory,
     UnsupportedInstanceType,
     CannotRetrieveClusterConfigFile,
+    CannotCreateFile,
     CannotGetClusterNodes,
     NotEnoughResourcesToDeployEnvironment,
     CannotUninstallHelmChart,
@@ -96,6 +97,7 @@ pub enum Tag {
     BuilderBuildpackCannotBuildContainerImage,
     BuilderGetBuildError,
     BuilderCloningRepositoryError,
+    DockerError,
     DockerPushImageError,
     DockerPullImageError,
     BuilderDockerCannotListImages,
@@ -115,6 +117,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::Unknown => Tag::Unknown,
             errors::Tag::UnsupportedInstanceType => Tag::UnsupportedInstanceType,
             errors::Tag::CannotRetrieveClusterConfigFile => Tag::CannotRetrieveClusterConfigFile,
+            errors::Tag::CannotCreateFile => Tag::CannotCreateFile,
             errors::Tag::CannotGetClusterNodes => Tag::CannotGetClusterNodes,
             errors::Tag::NotEnoughResourcesToDeployEnvironment => Tag::NotEnoughResourcesToDeployEnvironment,
             errors::Tag::MissingRequiredEnvVariable => Tag::MissingRequiredEnvVariable,
@@ -206,6 +209,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::ContainerRegistryRepositoryDoesntExist => Tag::ContainerRegistryRepositoryDoesntExist,
             errors::Tag::ContainerRegistryDeleteRepositoryError => Tag::ContainerRegistryDeleteRepositoryError,
             errors::Tag::BuilderDockerCannotListImages => Tag::BuilderDockerCannotListImages,
+            errors::Tag::DockerError => Tag::DockerError,
         }
     }
 }
