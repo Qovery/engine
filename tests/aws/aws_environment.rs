@@ -10,6 +10,8 @@ use qovery_engine::cmd::kubectl::kubernetes_get_all_pdbs;
 use qovery_engine::models::{Action, CloneForTest, EnvironmentAction, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
+use std::thread;
+use std::time::Duration;
 use test_utilities::aws::aws_default_engine_config;
 use test_utilities::utilities::{context, init, kubernetes_config_path};
 use tracing::{span, Level};
@@ -948,6 +950,8 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
+        // let time for nginx to reload the config
+        thread::sleep(Duration::from_secs(10));
         // checking if cookie is properly set on the app
         assert!(routers_sessions_are_sticky(environment.routers.clone()));
 

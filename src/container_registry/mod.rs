@@ -21,11 +21,8 @@ pub trait ContainerRegistry: Listen + ToTransmitter {
     }
     fn is_valid(&self) -> Result<(), EngineError>;
 
-    // Login into the registry and setup everything for it
-    // mainly getting creds and calling docker login behind the hood
-    // It is poart of the ContainerRegistry only because DigitalOcean require to call doctl
-    // and that we can't get credentials directly
-    fn login(&self) -> Result<ContainerRegistryInfo, EngineError>;
+    // Get info for this registry, url endpoint with login/password, image name convention, ...
+    fn registry_info(&self) -> &ContainerRegistryInfo;
 
     // Some provider require specific action in order to allow container registry
     // For now it is only digital ocean, that require 2 steps to have registries

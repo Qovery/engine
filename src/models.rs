@@ -21,6 +21,7 @@ use crate::cloud_provider::service::{DatabaseOptions, StatefulService, Stateless
 use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
+use crate::cmd::docker::Docker;
 use crate::container_registry::ContainerRegistryInfo;
 use crate::logger::Logger;
 use crate::utilities::get_image_tag;
@@ -1119,7 +1120,7 @@ impl<'a> ListenersHelper<'a> {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(Clone)]
 pub struct Context {
     organization_id: String,
     cluster_id: String,
@@ -1130,6 +1131,7 @@ pub struct Context {
     docker_host: Option<Url>,
     features: Vec<Features>,
     metadata: Option<Metadata>,
+    pub docker: Docker,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, Eq, PartialEq)]
@@ -1170,6 +1172,7 @@ impl Context {
         docker_host: Option<Url>,
         features: Vec<Features>,
         metadata: Option<Metadata>,
+        docker: Docker,
     ) -> Self {
         Context {
             organization_id,
@@ -1181,6 +1184,7 @@ impl Context {
             docker_host,
             features,
             metadata,
+            docker,
         }
     }
 

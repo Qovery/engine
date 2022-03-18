@@ -120,7 +120,7 @@ impl<'a> Transaction<'a> {
         // Do setup of registry and be sure we are login to the registry
         let cr_registry = self.engine.container_registry();
         let _ = cr_registry.create_registry()?;
-        let registry = self.engine.container_registry().login()?;
+        let registry = self.engine.container_registry().registry_info();
 
         for app in apps_to_build.into_iter() {
             let app_build = app.to_build(&registry);
@@ -183,10 +183,48 @@ impl<'a> Transaction<'a> {
         Ok(())
     }
 
-    /// This function is a wrapper to correctly revert all changes of an attempted deployment AND
-    /// if a failover environment is provided, then rollback.
-    fn rollback_environment(&self, _environment_action: &EnvironmentAction) -> Result<(), RollbackError> {
-        Ok(())
+    // Warning: This function function does not revert anything, it just there to grab info from kube and services if it fails
+    // FIXME: Cleanup this, qe_environment should not be rebuilt at this step
+    fn rollback_environment(&self, environment_action: &EnvironmentAction) -> Result<(), RollbackError> {
+        let registry_info = self.engine.container_registry().registry_info();
+
+        let qe_environment = |environment: &Environment| {
+            let qe_environment = environment.to_qe_environment(
+                self.engine.context(),
+                self.engine.cloud_provider(),
+                &registry_info,
+                self.logger.clone(),
+            );
+
+            qe_environment
+        };
+
+        match environment_action {
+            EnvironmentAction::Environment(te) => {
+                // revert changes but there is no failover environment
+                let target_qe_environment = qe_environment(te);
+
+                let action = match te.action {
+                    Action::Create => self
+                        .engine
+                        .kubernetes()
+                        .deploy_environment_error(&target_qe_environment),
+                    Action::Pause => self.engine.kubernetes().pause_environment_error(&target_qe_environment),
+                    Action::Delete => self
+                        .engine
+                        .kubernetes()
+                        .delete_environment_error(&target_qe_environment),
+                    Action::Nothing => Ok(()),
+                };
+
+                let _ = match action {
+                    Ok(_) => {}
+                    Err(err) => return Err(RollbackError::CommitError(err)),
+                };
+
+                Err(RollbackError::NoFailoverEnvironment)
+            }
+        }
     }
 
     pub fn commit(mut self) -> TransactionResult {
@@ -344,11 +382,6 @@ impl<'a> Transaction<'a> {
         let execution_id = self.engine.context().execution_id();
         let lh = ListenersHelper::new(self.engine.kubernetes().listeners());
 
-        // 100 ms sleep to avoid race condition on last service status update
-        // Otherwise, the last status sent to the CORE is (sometimes) not the right one.
-        // Even by storing data at the micro seconds precision
-        thread::sleep(std::time::Duration::from_millis(100));
-
         match result {
             Err(err) => {
                 warn!("infrastructure ROLLBACK STARTED! an error occurred {:?}", err);
@@ -382,7 +415,7 @@ impl<'a> Transaction<'a> {
             EnvironmentAction::Environment(te) => te,
         };
 
-        let registry_info = self.engine.container_registry().login().unwrap();
+        let registry_info = self.engine.container_registry().registry_info();
         let qe_environment = target_environment.to_qe_environment(
             self.engine.context(),
             self.engine.cloud_provider(),

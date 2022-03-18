@@ -9,17 +9,19 @@ use curl::easy::Easy;
 use dirs::home_dir;
 use gethostname;
 use std::collections::BTreeMap;
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 use std::str::FromStr;
 
 use passwords::PasswordGenerator;
+use qovery_engine::cloud_provider::digitalocean::kubernetes::doks_api::get_do_kubeconfig_by_cluster_name;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
 use std::fs;
+use tokio::io::AsyncWriteExt;
 use tracing::{info, warn};
 
 use crate::scaleway::{
@@ -44,15 +46,13 @@ use crate::digitalocean::{
     DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_SELF_HOSTED_DATABASE_DISK_TYPE,
     DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
 };
-use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cmd::command::QoveryCommand;
+use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::errors::CommandError;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::models::DatabaseMode::MANAGED;
-use qovery_engine::object_storage::spaces::{BucketDeleteStrategy, Spaces};
-use qovery_engine::object_storage::ObjectStorage;
 use qovery_engine::runtime::block_on;
 use time::Instant;
 
@@ -62,6 +62,7 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
     let execution_id = execution_id();
     let home_dir = std::env::var("WORKSPACE_ROOT_DIR").unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
     let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
+    let docker = Docker::new(None).expect("Can't init docker");
 
     let metadata = Metadata {
         dry_run_deploy: Option::from({
@@ -101,6 +102,7 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
         None,
         enabled_features,
         Option::from(metadata),
+        docker,
     )
 }
 
@@ -533,64 +535,52 @@ where
                 )
             }
             Kind::Do => {
-                let region_raw = secrets
-                    .DIGITAL_OCEAN_DEFAULT_REGION
-                    .as_ref()
-                    .expect(&"DIGITAL_OCEAN_DEFAULT_REGION should be set".to_string())
-                    .to_string();
+                let cluster_name = format!("qovery-{}", context.cluster_id());
+                let kubeconfig = match get_do_kubeconfig_by_cluster_name(
+                    secrets.clone().DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
+                    cluster_name.clone().as_str(),
+                ) {
+                    Ok(kubeconfig) => Ok(kubeconfig),
+                    Err(e) => Err(CommandError::new(e.message(), Some(e.message()))),
+                }
+                .expect("Unable to get kubeconfig");
 
-                match DoRegion::from_str(region_raw.as_str()) {
-                    Ok(region) => {
-                        let spaces = Spaces::new(
-                            context.clone(),
-                            "fake".to_string(),
-                            "fake".to_string(),
-                            secrets
-                                .DIGITAL_OCEAN_SPACES_ACCESS_ID
-                                .as_ref()
-                                .expect(&"DIGITAL_OCEAN_SPACES_ACCESS_ID should be set".to_string())
-                                .to_string(),
-                            secrets
-                                .DIGITAL_OCEAN_SPACES_SECRET_ID
-                                .as_ref()
-                                .expect(&"DIGITAL_OCEAN_SPACES_SECRET_ID should be set".to_string())
-                                .to_string(),
-                            region,
-                            BucketDeleteStrategy::HardDelete,
-                        );
+                let workspace_directory = qovery_engine::fs::workspace_directory(
+                    context.workspace_root_dir(),
+                    context.execution_id(),
+                    format!("object-storage/scaleway_os/{}", cluster_name.clone()),
+                )
+                .map_err(|err| CommandError::new(err.to_string(), Some(err.to_string())))
+                .expect("Unable to create directory");
 
-                        match spaces.get(
-                            kubernetes_config_bucket_name.as_str(),
-                            kubernetes_config_object_key.as_str(),
-                            false,
-                        ) {
-                            Ok((_, mut file)) => {
-                                let mut content = String::new();
-                                match file.read_to_string(&mut content) {
-                                    Ok(_) => Ok(content),
-                                    Err(e) => {
-                                        let message_safe = "Error while trying to read file";
-                                        Err(CommandError::new(
-                                            format!("{}, error: {}", message_safe.to_string(), e),
-                                            Some(message_safe.to_string()),
-                                        ))
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                let message_safe = "Error  while trying to get kubeconfig from spaces";
-                                Err(CommandError::new(
-                                    format!(
-                                        "{}, error: {}",
-                                        message_safe.to_string(),
-                                        e.message.unwrap_or("no error message".to_string())
-                                    ),
-                                    Some(message_safe.to_string()),
-                                ))
-                            }
-                        }
-                    }
-                    Err(e) => Err(e),
+                let file_path = format!(
+                    "{}/{}/{}",
+                    workspace_directory,
+                    format!("qovery-kubeconfigs-{}", context.cluster_id()),
+                    format!("{}.yaml", context.cluster_id())
+                );
+                let path = Path::new(file_path.as_str());
+                let parent_dir = path.parent().unwrap();
+                let _ = block_on(tokio::fs::create_dir_all(parent_dir));
+
+                match block_on(
+                    tokio::fs::OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(path),
+                ) {
+                    Ok(mut created_file) => match kubeconfig.is_some() {
+                        false => Err(CommandError::new(
+                            "No kubeconfig found".to_string(),
+                            Some("No kubeconfig found".to_string()),
+                        )),
+                        true => match block_on(created_file.write_all(kubeconfig.unwrap().as_bytes())) {
+                            Ok(_) => Ok(file_path),
+                            Err(e) => Err(CommandError::new(e.to_string(), Some(e.to_string()))),
+                        },
+                    },
+                    Err(e) => Err(CommandError::new(e.to_string(), Some(e.to_string()))),
                 }
             }
             Kind::Scw => {

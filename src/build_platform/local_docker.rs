@@ -1,16 +1,16 @@
 use std::io::{Error, ErrorKind};
 use std::path::Path;
+use std::time::Duration;
 use std::{env, fs};
 
-use chrono::Duration;
 use git2::{Cred, CredentialType};
 use sysinfo::{Disk, DiskExt, SystemExt};
 
 use crate::build_platform::{docker, Build, BuildPlatform, BuildResult, Credentials, Kind};
 use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
-use crate::cmd::command::QoveryCommand;
-use crate::cmd::docker::{ContainerImage, Docker, DockerError};
+use crate::cmd::command::{CommandKiller, QoveryCommand};
+use crate::cmd::docker::{ContainerImage, DockerError};
 use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EngineEvent, EventDetails, EventMessage, ToTransmitter, Transmitter};
 use crate::fs::workspace_directory;
@@ -20,7 +20,7 @@ use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 
-const BUILD_DURATION_TIMEOUT_MIN: i64 = 30;
+const BUILD_DURATION_TIMEOUT_SEC: u64 = 30 * 60;
 
 /// https://buildpacks.io/
 const BUILDPACKS_BUILDERS: [&str; 1] = [
@@ -33,7 +33,6 @@ const BUILDPACKS_BUILDERS: [&str; 1] = [
 /// use Docker in local
 pub struct LocalDocker {
     context: Context,
-    docker: Docker,
     id: String,
     name: String,
     listeners: Listeners,
@@ -47,10 +46,8 @@ impl LocalDocker {
         name: &str,
         logger: Box<dyn Logger>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let docker = Docker::new_with_options(true, context.docker_tcp_socket().clone())?;
         Ok(LocalDocker {
             context,
-            docker,
             id: id.to_string(),
             name: name.to_string(),
             listeners: vec![],
@@ -124,7 +121,7 @@ impl LocalDocker {
             })
             .collect::<Vec<_>>();
 
-        let exit_status = self.docker.build(
+        let exit_status = self.context.docker.build(
             &Path::new(dockerfile_complete_path),
             &Path::new(into_dir_docker_style),
             &image_to_build,
@@ -134,7 +131,7 @@ impl LocalDocker {
                 .collect::<Vec<_>>(),
             &image_cache,
             true,
-            |line| {
+            &mut |line| {
                 self.logger.log(
                     LogLevel::Info,
                     EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
@@ -149,7 +146,7 @@ impl LocalDocker {
                     self.context.execution_id(),
                 ));
             },
-            |line| {
+            &mut |line| {
                 self.logger.log(
                     LogLevel::Info,
                     EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
@@ -164,8 +161,7 @@ impl LocalDocker {
                     self.context.execution_id(),
                 ));
             },
-            Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
-            is_task_canceled,
+            &CommandKiller::from(Duration::from_secs(BUILD_DURATION_TIMEOUT_SEC), is_task_canceled),
         );
 
         match exit_status {
@@ -276,9 +272,9 @@ impl LocalDocker {
 
             // buildpacks build
             let mut cmd = QoveryCommand::new("pack", &buildpacks_args, &self.get_docker_host_envs());
+            let cmd_killer = CommandKiller::from(Duration::from_secs(BUILD_DURATION_TIMEOUT_SEC), is_task_canceled);
             exit_status = cmd.exec_with_abort(
-                Duration::minutes(BUILD_DURATION_TIMEOUT_MIN),
-                |line| {
+                &mut |line| {
                     self.logger.log(
                         LogLevel::Info,
                         EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
@@ -293,7 +289,7 @@ impl LocalDocker {
                         self.context.execution_id(),
                     ));
                 },
-                |line| {
+                &mut |line| {
                     self.logger.log(
                         LogLevel::Warning,
                         EngineEvent::Warning(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
@@ -308,7 +304,7 @@ impl LocalDocker {
                         self.context.execution_id(),
                     ));
                 },
-                is_task_canceled,
+                &cmd_killer,
             );
 
             if exit_status.is_ok() {
@@ -682,7 +678,8 @@ fn docker_prune_images(envs: Vec<(&str, &str)>) -> Result<(), CommandError> {
     let mut errored_commands = vec![];
     for prune in all_prunes_commands {
         let mut cmd = QoveryCommand::new("docker", &prune, &envs);
-        if let Err(e) = cmd.exec_with_timeout(Duration::minutes(BUILD_DURATION_TIMEOUT_MIN), |_| {}, |_| {}) {
+        let cmd_killer = CommandKiller::from_timeout(Duration::from_secs(BUILD_DURATION_TIMEOUT_SEC));
+        if let Err(e) = cmd.exec_with_abort(&mut |_| {}, &mut |_| {}, &cmd_killer) {
             errored_commands.push(format!("{} {:?}", prune[0], e));
         }
     }

@@ -1,7 +1,6 @@
-use crate::cmd::command::{CommandError, QoveryCommand};
+use crate::cmd::command::{CommandError, CommandKiller, QoveryCommand};
 use crate::errors::EngineError;
 use crate::events::EventDetails;
-use chrono::Duration;
 use std::path::Path;
 use std::process::ExitStatus;
 use url::Url;
@@ -50,6 +49,7 @@ impl ContainerImage {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Docker {
     use_buildkit: bool,
     common_envs: Vec<(String, String)>,
@@ -86,10 +86,9 @@ impl Docker {
         let buildx_cmd_exist = docker_exec(
             &args,
             &docker.get_all_envs(&vec![]),
-            Some(Duration::max_value()),
-            &|| false,
-            |_| {},
-            |_| {},
+            &mut |_| {},
+            &mut |_| {},
+            &CommandKiller::never(),
         );
         if let Err(_) = buildx_cmd_exist {
             return Err(DockerError::InvalidConfig(format!(
@@ -106,15 +105,15 @@ impl Docker {
             "qovery-engine",
             "--driver-opt",
             "network=host",
+            "--bootstrap",
             "--use",
         ];
         let _ = docker_exec(
             &args,
             &docker.get_all_envs(&vec![]),
-            Some(Duration::max_value()),
-            &|| false,
-            |_| {},
-            |_| {},
+            &mut |_| {},
+            &mut |_| {},
+            &CommandKiller::never(),
         );
 
         Ok(docker)
@@ -148,10 +147,9 @@ impl Docker {
         docker_exec(
             &args,
             &self.get_all_envs(&vec![]),
-            None,
-            &|| false,
-            |line| info!("{}", line),
-            |line| warn!("{}", line),
+            &mut |line| info!("{}", line),
+            &mut |line| warn!("{}", line),
+            &CommandKiller::never(),
         )?;
 
         Ok(())
@@ -163,10 +161,9 @@ impl Docker {
         let ret = docker_exec(
             &vec!["image", "inspect", &image.image_name()],
             &self.get_all_envs(&vec![]),
-            None,
-            &|| false,
-            |line| info!("{}", line),
-            |line| warn!("{}", line),
+            &mut |line| info!("{}", line),
+            &mut |line| warn!("{}", line),
+            &CommandKiller::never(),
         );
 
         Ok(matches!(ret, Ok(_)))
@@ -179,10 +176,9 @@ impl Docker {
         let ret = docker_exec(
             &vec!["manifest", "inspect", &image.image_name()],
             &self.get_all_envs(&vec![]),
-            None,
-            &|| false,
-            |line| info!("{}", line),
-            |line| warn!("{}", line),
+            &mut |line| info!("{}", line),
+            &mut |line| warn!("{}", line),
+            &CommandKiller::never(),
         );
 
         match ret {
@@ -195,24 +191,22 @@ impl Docker {
     pub fn pull<Stdout, Stderr>(
         &self,
         image: &ContainerImage,
-        stdout_output: Stdout,
-        stderr_output: Stderr,
-        timeout: Duration,
-        should_abort: &dyn Fn() -> bool,
+        stdout_output: &mut Stdout,
+        stderr_output: &mut Stderr,
+        should_abort: &CommandKiller,
     ) -> Result<(), DockerError>
     where
         Stdout: FnMut(String),
         Stderr: FnMut(String),
     {
-        info!("Docker pull {:?}, timeout: {:?}", image, timeout);
+        info!("Docker pull {:?}", image);
 
         docker_exec(
             &vec!["pull", &image.image_name()],
             &self.get_all_envs(&vec![]),
-            Some(timeout),
-            should_abort,
             stdout_output,
             stderr_output,
+            should_abort,
         )
     }
 
@@ -224,10 +218,9 @@ impl Docker {
         build_args: &[(&str, &str)],
         cache: &ContainerImage,
         push_after_build: bool,
-        stdout_output: Stdout,
-        stderr_output: Stderr,
-        timeout: Duration,
-        should_abort: &dyn Fn() -> bool,
+        stdout_output: &mut Stdout,
+        stderr_output: &mut Stderr,
+        should_abort: &CommandKiller,
     ) -> Result<(), DockerError>
     where
         Stdout: FnMut(String),
@@ -236,11 +229,6 @@ impl Docker {
         // if there is no tags, nothing to build
         if image_to_build.tags.is_empty() {
             return Ok(());
-        }
-
-        // if it is already aborted, nothing to do
-        if (should_abort)() {
-            return Err(DockerError::Aborted("build".to_string()));
         }
 
         // Do some checks
@@ -268,7 +256,6 @@ impl Docker {
                 push_after_build,
                 stdout_output,
                 stderr_output,
-                timeout,
                 should_abort,
             )
         } else {
@@ -281,7 +268,6 @@ impl Docker {
                 push_after_build,
                 stdout_output,
                 stderr_output,
-                timeout,
                 should_abort,
             )
         }
@@ -295,10 +281,9 @@ impl Docker {
         build_args: &[(&str, &str)],
         cache: &ContainerImage,
         push_after_build: bool,
-        stdout_output: Stdout,
-        stderr_output: Stderr,
-        timeout: Duration,
-        should_abort: &dyn Fn() -> bool,
+        stdout_output: &mut Stdout,
+        stderr_output: &mut Stderr,
+        should_abort: &CommandKiller,
     ) -> Result<(), DockerError>
     where
         Stdout: FnMut(String),
@@ -307,7 +292,7 @@ impl Docker {
         info!("Docker build {:?}", image_to_build.image_name());
 
         // Best effort to pull the cache, if it does not exist that's ok too
-        let _ = self.pull(cache, |_| {}, |_| {}, timeout, should_abort);
+        let _ = self.pull(cache, stdout_output, stderr_output, should_abort);
 
         let mut args_string: Vec<String> = vec![
             "build".to_string(),
@@ -337,14 +322,13 @@ impl Docker {
         let _ = docker_exec(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(&vec![]),
-            Some(timeout),
-            should_abort,
             stdout_output,
             stderr_output,
+            should_abort,
         )?;
 
         if push_after_build {
-            let _ = self.push(image_to_build, |_| {}, |_| {}, timeout, should_abort)?;
+            let _ = self.push(image_to_build, stdout_output, stderr_output, should_abort)?;
         }
 
         Ok(())
@@ -358,10 +342,9 @@ impl Docker {
         build_args: &[(&str, &str)],
         cache: &ContainerImage,
         push_after_build: bool,
-        stdout_output: Stdout,
-        stderr_output: Stderr,
-        timeout: Duration,
-        should_abort: &dyn Fn() -> bool,
+        stdout_output: &mut Stdout,
+        stderr_output: &mut Stderr,
+        should_abort: &CommandKiller,
     ) -> Result<(), DockerError>
     where
         Stdout: FnMut(String),
@@ -404,26 +387,24 @@ impl Docker {
         docker_exec(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(&vec![]),
-            Some(timeout),
-            should_abort,
             stdout_output,
             stderr_output,
+            should_abort,
         )
     }
 
     pub fn push<Stdout, Stderr>(
         &self,
         image: &ContainerImage,
-        stdout_output: Stdout,
-        stderr_output: Stderr,
-        timeout: Duration,
-        should_abort: &dyn Fn() -> bool,
+        stdout_output: &mut Stdout,
+        stderr_output: &mut Stderr,
+        should_abort: &CommandKiller,
     ) -> Result<(), DockerError>
     where
         Stdout: FnMut(String),
         Stderr: FnMut(String),
     {
-        info!("Docker push {:?}, timeout: {:?}", image, timeout);
+        info!("Docker push {:?}", image);
         let image_names = image.image_names();
         let mut args = vec!["push"];
         args.extend(image_names.iter().map(|x| x.as_str()));
@@ -431,10 +412,9 @@ impl Docker {
         docker_exec(
             &args,
             &self.get_all_envs(&vec![]),
-            Some(timeout),
-            should_abort,
             stdout_output,
             stderr_output,
+            should_abort,
         )
     }
 }
@@ -442,18 +422,16 @@ impl Docker {
 fn docker_exec<F, X>(
     args: &[&str],
     envs: &[(&str, &str)],
-    timeout: Option<Duration>,
-    should_abort: &dyn Fn() -> bool,
-    stdout_output: F,
-    stderr_output: X,
+    stdout_output: &mut F,
+    stderr_output: &mut X,
+    cmd_killer: &CommandKiller,
 ) -> Result<(), DockerError>
 where
     F: FnMut(String),
     X: FnMut(String),
 {
-    let timeout = timeout.unwrap_or_else(|| Duration::max_value());
     let mut cmd = QoveryCommand::new("docker", args, envs);
-    let ret = cmd.exec_with_abort(timeout, stdout_output, stderr_output, should_abort);
+    let ret = cmd.exec_with_abort(stdout_output, stderr_output, &cmd_killer);
 
     match ret {
         Ok(_) => Ok(()),
@@ -473,9 +451,10 @@ pub fn to_engine_error(event_details: &EventDetails, error: DockerError) -> Engi
 #[cfg(feature = "test-with-docker")]
 #[cfg(test)]
 mod tests {
+    use crate::cmd::command::CommandKiller;
     use crate::cmd::docker::{ContainerImage, Docker, DockerError};
-    use chrono::Duration;
     use std::path::Path;
+    use std::time::Duration;
     use url::Url;
 
     fn private_registry_url() -> Url {
@@ -494,10 +473,9 @@ mod tests {
         };
         let ret = docker.pull(
             &image,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
-            Duration::max_value(),
-            &|| false,
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
+            &CommandKiller::never(),
         );
         assert!(matches!(ret, Err(_)));
 
@@ -510,20 +488,18 @@ mod tests {
 
         let ret = docker.pull(
             &image,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
-            Duration::max_value(),
-            &|| false,
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
+            &CommandKiller::never(),
         );
         assert!(matches!(ret, Ok(_)));
 
         // Should timeout
         let ret = docker.pull(
             &image,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
-            Duration::seconds(1),
-            &|| false,
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
+            &CommandKiller::from_timeout(Duration::from_secs(1)),
         );
         assert!(matches!(ret, Err(DockerError::Timeout(_))));
     }
@@ -551,10 +527,9 @@ mod tests {
             &vec![],
             &image_cache,
             false,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
-            Duration::max_value(),
-            &|| false,
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
+            &CommandKiller::never(),
         );
 
         assert!(matches!(ret, Ok(_)));
@@ -567,10 +542,9 @@ mod tests {
             &vec![],
             &image_cache,
             false,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
-            Duration::max_value(),
-            &|| false,
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
+            &CommandKiller::never(),
         );
 
         assert!(matches!(ret, Err(_)));
@@ -600,10 +574,9 @@ mod tests {
             &vec![],
             &image_cache,
             false,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
-            Duration::max_value(),
-            &|| false,
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
+            &CommandKiller::never(),
         );
 
         assert!(matches!(ret, Ok(_)));
@@ -615,10 +588,9 @@ mod tests {
             &vec![],
             &image_cache,
             false,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
-            Duration::max_value(),
-            &|| false,
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
+            &CommandKiller::never(),
         );
 
         assert!(matches!(ret, Ok(_)));
@@ -648,10 +620,9 @@ mod tests {
             &vec![],
             &image_cache,
             false,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
-            Duration::max_value(),
-            &|| false,
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
+            &CommandKiller::never(),
         );
         assert!(matches!(ret, Ok(_)));
 
@@ -663,19 +634,17 @@ mod tests {
 
         let ret = docker.push(
             &image_to_build,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
-            Duration::max_value(),
-            &|| false,
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
+            &CommandKiller::never(),
         );
         assert!(matches!(ret, Ok(_)));
 
         let ret = docker.pull(
             &image_to_build,
-            |msg| println!("{}", msg),
-            |msg| eprintln!("{}", msg),
-            Duration::max_value(),
-            &|| false,
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
+            &CommandKiller::never(),
         );
         assert!(matches!(ret, Ok(_)));
     }

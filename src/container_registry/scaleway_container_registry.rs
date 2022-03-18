@@ -6,12 +6,11 @@ use std::borrow::Borrow;
 use self::scaleway_api_rs::models::scaleway_registry_v1_namespace::Status;
 use crate::build_platform::Image;
 use crate::cmd::docker;
-use crate::cmd::docker::Docker;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
 use crate::errors::{CommandError, EngineError};
-use crate::events::{EngineEvent, EventMessage, ToTransmitter, Transmitter};
+use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, Stage, ToTransmitter, Transmitter};
 use crate::logger::{LogLevel, Logger};
-use crate::models::{Context, Listen, Listener, Listeners};
+use crate::models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
 use crate::runtime::block_on;
 use url::Url;
 
@@ -20,10 +19,9 @@ pub struct ScalewayCR {
     id: String,
     name: String,
     default_project_id: String,
-    login: String,
     secret_token: String,
     zone: ScwZone,
-    docker: Docker,
+    registry_info: ContainerRegistryInfo,
     listeners: Listeners,
     logger: Box<dyn Logger>,
 }
@@ -37,21 +35,55 @@ impl ScalewayCR {
         default_project_id: &str,
         zone: ScwZone,
         logger: Box<dyn Logger>,
-    ) -> ScalewayCR {
-        let docker = Docker::new(context.docker_tcp_socket().clone()).unwrap(); // FIXME: remove unwrap
+    ) -> Result<ScalewayCR, EngineError> {
+        let event_details = EventDetails::new(
+            None,
+            QoveryIdentifier::from(context.organization_id().to_string()),
+            QoveryIdentifier::from(context.cluster_id().to_string()),
+            QoveryIdentifier::from(context.execution_id().to_string()),
+            None,
+            Stage::General(GeneralStep::ValidateSystemRequirements),
+            Transmitter::ContainerRegistry(id.to_string(), name.to_string()),
+        );
 
-        ScalewayCR {
+        // Be sure we are logged on the registry
+        let login = "nologin".to_string();
+        let secret_token = secret_token.to_string();
+
+        let mut registry = Url::parse(&format!("https://rg.{}.scw.cloud", zone.region())).unwrap();
+        let _ = registry.set_username(&login);
+        let _ = registry.set_password(Some(&secret_token));
+
+        if context.docker.login(&registry).is_err() {
+            return Err(EngineError::new_client_invalid_cloud_provider_credentials(
+                event_details,
+            ));
+        }
+
+        let registry_info = ContainerRegistryInfo {
+            endpoint: registry,
+            registry_name: name.to_string(),
+            registry_docker_json_config: Some(Self::get_docker_json_config_raw(
+                &login,
+                &secret_token,
+                zone.region().as_str(),
+            )),
+            get_image_name: Box::new(move |img_name| format!("{}/{}", img_name, img_name)),
+        };
+
+        let cr = ScalewayCR {
             context,
             id: id.to_string(),
             name: name.to_string(),
             default_project_id: default_project_id.to_string(),
-            login: "nologin".to_string(),
-            secret_token: secret_token.to_string(),
+            secret_token,
             zone,
-            docker,
+            registry_info,
             listeners: Vec::new(),
             logger,
-        }
+        };
+
+        Ok(cr)
     }
 
     fn get_configuration(&self) -> scaleway_api_rs::apis::configuration::Configuration {
@@ -291,12 +323,12 @@ impl ScalewayCR {
         self.create_registry_namespace(namespace_name)
     }
 
-    fn get_docker_json_config_raw(&self) -> String {
+    fn get_docker_json_config_raw(login: &str, secret_token: &str, region: &str) -> String {
         base64::encode(
             format!(
                 r#"{{"auths":{{"rg.{}.scw.cloud":{{"auth":"{}"}}}}}}"#,
-                self.zone.region().as_str(),
-                base64::encode(format!("nologin:{}", self.secret_token).as_bytes())
+                region,
+                base64::encode(format!("{}:{}", login, secret_token).as_bytes())
             )
             .as_bytes(),
         )
@@ -330,24 +362,8 @@ impl ContainerRegistry for ScalewayCR {
         Ok(())
     }
 
-    fn login(&self) -> Result<ContainerRegistryInfo, EngineError> {
-        let event_details = self.get_event_details();
-        let mut registry = Url::parse(&format!("https://rg.{}.scw.cloud", self.zone.region())).unwrap();
-        let _ = registry.set_username(&self.login);
-        let _ = registry.set_password(Some(&self.secret_token));
-
-        if self.docker.login(&registry).is_err() {
-            return Err(EngineError::new_client_invalid_cloud_provider_credentials(
-                event_details,
-            ));
-        }
-
-        Ok(ContainerRegistryInfo {
-            endpoint: registry,
-            registry_name: self.name.to_string(),
-            registry_docker_json_config: Some(self.get_docker_json_config_raw()),
-            get_image_name: Box::new(move |img_name| format!("{}/{}", img_name, img_name)),
-        })
+    fn registry_info(&self) -> &ContainerRegistryInfo {
+        &self.registry_info
     }
 
     fn create_registry(&self) -> Result<(), EngineError> {
@@ -361,18 +377,12 @@ impl ContainerRegistry for ScalewayCR {
     }
 
     fn does_image_exists(&self, image: &Image) -> bool {
-        let info = if let Ok(url) = self.login() {
-            url
-        } else {
-            return false;
-        };
-
         let image = docker::ContainerImage {
-            registry: info.endpoint,
+            registry: self.registry_info.endpoint.clone(),
             name: image.name().clone(),
             tags: vec![image.tag.clone()],
         };
-        self.docker.does_image_exist_remotely(&image).is_ok()
+        self.context.docker.does_image_exist_remotely(&image).is_ok()
     }
 
     fn logger(&self) -> &dyn Logger {
