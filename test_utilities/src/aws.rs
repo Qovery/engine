@@ -51,6 +51,7 @@ pub fn container_registry_ecr(context: &Context) -> ECR {
         secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
         logger(),
     )
+    .unwrap()
 }
 
 pub fn aws_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {

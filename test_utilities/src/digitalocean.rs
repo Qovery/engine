@@ -40,6 +40,7 @@ pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
         secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
         logger(),
     )
+    .unwrap()
 }
 
 pub fn do_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {

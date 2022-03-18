@@ -25,7 +25,7 @@ pub trait ContainerRegistry: Listen + ToTransmitter {
     // mainly getting creds and calling docker login behind the hood
     // It is poart of the ContainerRegistry only because DigitalOcean require to call doctl
     // and that we can't get credentials directly
-    fn login(&self) -> Result<ContainerRegistryInfo, EngineError>;
+    fn login(&self) -> Result<&ContainerRegistryInfo, EngineError>;
 
     // Some provider require specific action in order to allow container registry
     // For now it is only digital ocean, that require 2 steps to have registries

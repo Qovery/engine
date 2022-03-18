@@ -30,6 +30,7 @@ pub struct ECR {
     access_key_id: String,
     secret_access_key: String,
     region: Region,
+    registry_info: Option<ContainerRegistryInfo>,
     listeners: Listeners,
     logger: Box<dyn Logger>,
 }
@@ -43,17 +44,39 @@ impl ECR {
         secret_access_key: &str,
         region: &str,
         logger: Box<dyn Logger>,
-    ) -> Self {
-        ECR {
+    ) -> Result<Self, EngineError> {
+        let mut cr = ECR {
             context,
             id: id.to_string(),
             name: name.to_string(),
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
             region: Region::from_str(region).unwrap(),
+            registry_info: None,
             listeners: vec![],
             logger,
-        }
+        };
+
+        let credentials = cr.get_credentials()?;
+        let docker = Docker::new(cr.context.docker_tcp_socket().clone())
+            .map_err(|err| to_engine_error(&cr.get_event_details(), err))?;
+        let mut registry_url = Url::parse(credentials.endpoint_url.as_str()).unwrap();
+        let _ = registry_url.set_username(&credentials.access_token);
+        let _ = registry_url.set_password(Some(&credentials.password));
+
+        let _ = docker
+            .login(&registry_url)
+            .map_err(|err| to_engine_error(&cr.get_event_details(), err))?;
+
+        let registry_info = ContainerRegistryInfo {
+            endpoint: registry_url,
+            registry_name: cr.name.to_string(),
+            registry_docker_json_config: None,
+            get_image_name: Box::new(|img_name| img_name.to_string()),
+        };
+
+        cr.registry_info = Some(registry_info);
+        Ok(cr)
     }
 
     pub fn credentials(&self) -> StaticProvider {
@@ -363,25 +386,9 @@ impl ContainerRegistry for ECR {
         }
     }
 
-    fn login(&self) -> Result<ContainerRegistryInfo, EngineError> {
-        let event_details = self.get_event_details();
-        let credentials = self.get_credentials()?;
-        let docker = Docker::new(self.context.docker_tcp_socket().clone())
-            .map_err(|err| to_engine_error(&event_details, err))?;
-        let mut registry_url = Url::parse(credentials.endpoint_url.as_str()).unwrap();
-        let _ = registry_url.set_username(&credentials.access_token);
-        let _ = registry_url.set_password(Some(&credentials.password));
-
-        let _ = docker
-            .login(&registry_url)
-            .map_err(|err| to_engine_error(&event_details, err))?;
-
-        Ok(ContainerRegistryInfo {
-            endpoint: registry_url,
-            registry_name: self.name.to_string(),
-            registry_docker_json_config: None,
-            get_image_name: Box::new(|img_name| img_name.to_string()),
-        })
+    fn login(&self) -> Result<&ContainerRegistryInfo, EngineError> {
+        // At this point the registry info should be initialize, so unwrap is safe
+        Ok(&self.registry_info.as_ref().unwrap())
     }
 
     fn create_registry(&self) -> Result<(), EngineError> {
