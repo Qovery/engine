@@ -5,6 +5,7 @@ use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter};
 use crate::logger::Logger;
 use crate::models::{Context, Listen, QoveryIdentifier};
 use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::path::PathBuf;
 use url::Url;
 
 pub mod docker;
@@ -65,12 +66,12 @@ pub struct SshKey {
 }
 
 pub struct GitRepository {
-    pub url: String,
+    pub url: Url,
     pub credentials: Option<Credentials>,
     pub ssh_keys: Vec<SshKey>,
     pub commit_id: String,
-    pub dockerfile_path: Option<String>,
-    pub root_path: String,
+    pub dockerfile_path: Option<PathBuf>,
+    pub root_path: PathBuf,
     pub buildpack_language: Option<String>,
 }
 

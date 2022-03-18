@@ -417,6 +417,38 @@ impl Docker {
             should_abort,
         )
     }
+
+    pub fn prune_images(&self) -> Result<(), DockerError> {
+        info!("Docker prune images");
+
+        let all_prunes_commands = vec![
+            vec!["container", "prune", "-f"],
+            vec!["image", "prune", "-a", "-f"],
+            vec!["builder", "prune", "-a", "-f"],
+            vec!["volume", "prune", "-f"],
+            vec!["buildx", "prune", "-a", "-f"],
+        ];
+
+        let mut errored_commands = vec![];
+        for prune in all_prunes_commands {
+            let ret = docker_exec(
+                &prune,
+                &self.get_all_envs(&vec![]),
+                &mut |_| {},
+                &mut |_| {},
+                &CommandKiller::never(),
+            );
+            if let Err(e) = ret {
+                errored_commands.push(e);
+            }
+        }
+
+        if !errored_commands.is_empty() {
+            return Err(errored_commands.remove(0));
+        }
+
+        Ok(())
+    }
 }
 
 fn docker_exec<F, X>(
