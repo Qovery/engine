@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::net::Ipv4Addr;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -427,17 +428,36 @@ impl Application {
             });
         }
 
+        // Convert our root path to an relative path to be able to append them correctly
+        let root_path = if Path::new(&self.root_path).is_absolute() {
+            PathBuf::from(self.root_path.trim_start_matches('/'))
+        } else {
+            PathBuf::from(&self.root_path)
+        };
+        assert!(root_path.is_relative(), "root path is not a relative path");
+
+        let dockerfile_path = self.dockerfile_path.as_ref().map(|path| {
+            if Path::new(&path).is_absolute() {
+                root_path.join(path.trim_start_matches('/'))
+            } else {
+                root_path.join(&path)
+            }
+        });
+
+        //FIXME: Return a result the function
+        let url = Url::parse(&self.git_url).unwrap_or_else(|_| Url::parse("https://invalid-git-url.com").unwrap());
+
         Build {
             git_repository: GitRepository {
-                url: self.git_url.clone(),
+                url,
                 credentials: self.git_credentials.as_ref().map(|credentials| Credentials {
                     login: credentials.login.clone(),
                     password: credentials.access_token.clone(),
                 }),
                 ssh_keys,
                 commit_id: self.commit_id.clone(),
-                dockerfile_path: self.dockerfile_path.clone(),
-                root_path: self.root_path.clone(),
+                dockerfile_path,
+                root_path,
                 buildpack_language: self.buildpack_language.clone(),
             },
             image: self.to_image(registry_url),
