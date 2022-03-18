@@ -80,6 +80,36 @@ fn get_do_kubernetes_latest_slug_version(
     )))
 }
 
+pub fn get_do_kubeconfig_by_cluster_name(token: &str, cluster_name: &str) -> Result<Option<String>, CommandError> {
+    let clusters_url = format!("{}/clusters", DoApiType::Doks.api_url());
+    let clusters_response = do_get_from_api(token, DoApiType::Doks, clusters_url);
+    let clusters: Result<DoksList, CommandError> = match clusters_response {
+        Ok(clusters_response) => match serde_json::from_str(clusters_response.as_str()) {
+            Ok(clusters) => Ok(clusters),
+            Err(e) => Err(CommandError::new_from_safe_message(e.to_string())),
+        },
+        Err(e) => Err(CommandError::new_from_safe_message(e.message())),
+    };
+
+    let clusters_copy = clusters.expect("Unable to list clusters").kubernetes_clusters.clone();
+    match clusters_copy
+        .into_iter()
+        .filter(|cluster| cluster.name == cluster_name.to_string())
+        .collect::<Vec<KubernetesCluster>>()
+        .first()
+        .clone()
+    {
+        Some(cluster) => {
+            let kubeconfig_url = format!("{}/clusters/{}/kubeconfig", DoApiType::Doks.api_url(), cluster.id);
+            match do_get_from_api(token, DoApiType::Doks, kubeconfig_url) {
+                Ok(kubeconfig) => Ok(Some(kubeconfig)),
+                Err(e) => Err(CommandError::new_from_safe_message(e.message())),
+            }
+        }
+        None => Ok(None),
+    }
+}
+
 #[cfg(test)]
 mod tests_doks {
     use crate::cloud_provider::digitalocean::kubernetes::doks_api::{

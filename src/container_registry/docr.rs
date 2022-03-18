@@ -26,7 +26,7 @@ pub struct DOCR {
     pub name: String,
     pub api_key: String,
     pub id: String,
-    pub registry_info: ContainerRegistryInfo,
+    pub registry_info: Option<ContainerRegistryInfo>,
     pub listeners: Listeners,
     pub logger: Box<dyn Logger>,
 }
@@ -55,12 +55,13 @@ impl DOCR {
             name: name.to_string(),
             api_key: api_key.into(),
             id: id.into(),
-            registry_info,
             listeners: vec![],
             logger,
+            registry_info: Some(registry_info),
         };
 
         let event_details = cr.get_event_details();
+
         if cr.context.docker.login(&cr.registry_info.endpoint).is_err() {
             return Err(EngineError::new_client_invalid_cloud_provider_credentials(
                 event_details,
@@ -222,7 +223,8 @@ impl ContainerRegistry for DOCR {
     }
 
     fn registry_info(&self) -> &ContainerRegistryInfo {
-        &self.registry_info
+        // At this point the registry info should be initialize, so unwrap is safe
+        self.registry_info.as_ref().unwrap()
     }
 
     fn create_registry(&self) -> Result<(), EngineError> {
