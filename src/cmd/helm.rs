@@ -10,7 +10,6 @@ use crate::cmd::helm::HelmError::{CannotRollback, CmdError, InvalidKubeConfig, R
 use crate::cmd::structs::{HelmChart, HelmListItem};
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
-use chrono::Duration;
 use semver::Version;
 use serde_derive::Deserialize;
 use std::fs::File;
@@ -548,7 +547,7 @@ where
     // Helm returns an error each time a command does not succeed as they want. Which leads to handling error with status code 1
     // It means that the command successfully ran, but it didn't terminate as expected
     let mut cmd = QoveryCommand::new("helm", args, envs);
-    match cmd.exec_with_timeout(Duration::max_value(), stdout_output, stderr_output) {
+    match cmd.exec_with_output(stdout_output, stderr_output) {
         Err(err) => Err(CommandError::new(format!("{:?}", err), None)),
         _ => Ok(()),
     }

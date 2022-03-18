@@ -836,7 +836,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_sticky_session() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // let time for nginx to reload the config
-        thread::sleep(Duration::from_secs(5));
+        thread::sleep(Duration::from_secs(10));
         // checking cookie is properly set on the app
         assert!(routers_sessions_are_sticky(environment.routers.clone()));
 
