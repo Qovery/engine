@@ -386,9 +386,9 @@ impl ContainerRegistry for ECR {
         }
     }
 
-    fn login(&self) -> Result<&ContainerRegistryInfo, EngineError> {
+    fn registry_info(&self) -> &ContainerRegistryInfo {
         // At this point the registry info should be initialize, so unwrap is safe
-        Ok(&self.registry_info.as_ref().unwrap())
+        self.registry_info.as_ref().unwrap()
     }
 
     fn create_registry(&self) -> Result<(), EngineError> {

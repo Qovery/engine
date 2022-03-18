@@ -224,8 +224,8 @@ impl ContainerRegistry for DOCR {
         Ok(())
     }
 
-    fn login(&self) -> Result<&ContainerRegistryInfo, EngineError> {
-        Ok(&self.registry_info)
+    fn registry_info(&self) -> &ContainerRegistryInfo {
+        &self.registry_info
     }
 
     fn create_registry(&self) -> Result<(), EngineError> {
