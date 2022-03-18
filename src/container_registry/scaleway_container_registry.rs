@@ -6,7 +6,6 @@ use std::borrow::Borrow;
 use self::scaleway_api_rs::models::scaleway_registry_v1_namespace::Status;
 use crate::build_platform::Image;
 use crate::cmd::docker;
-use crate::cmd::docker::{to_engine_error, Docker};
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, Stage, ToTransmitter, Transmitter};
@@ -23,7 +22,6 @@ pub struct ScalewayCR {
     secret_token: String,
     zone: ScwZone,
     registry_info: ContainerRegistryInfo,
-    docker: Docker,
     listeners: Listeners,
     logger: Box<dyn Logger>,
 }
@@ -56,9 +54,7 @@ impl ScalewayCR {
         let _ = registry.set_username(&login);
         let _ = registry.set_password(Some(&secret_token));
 
-        let docker =
-            Docker::new(context.docker_tcp_socket().clone()).map_err(|err| to_engine_error(&event_details, err))?;
-        if docker.login(&registry).is_err() {
+        if context.docker.login(&registry).is_err() {
             return Err(EngineError::new_client_invalid_cloud_provider_credentials(
                 event_details,
             ));
@@ -83,7 +79,6 @@ impl ScalewayCR {
             secret_token,
             zone,
             registry_info,
-            docker,
             listeners: Vec::new(),
             logger,
         };
@@ -387,7 +382,7 @@ impl ContainerRegistry for ScalewayCR {
             name: image.name().clone(),
             tags: vec![image.tag.clone()],
         };
-        self.docker.does_image_exist_remotely(&image).is_ok()
+        self.context.docker.does_image_exist_remotely(&image).is_ok()
     }
 
     fn logger(&self) -> &dyn Logger {

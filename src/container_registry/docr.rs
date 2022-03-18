@@ -6,7 +6,6 @@ use std::borrow::Borrow;
 
 use crate::build_platform::Image;
 use crate::cmd::command::QoveryCommand;
-use crate::cmd::docker::{to_engine_error, Docker};
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, EngineError, Kind};
 use crate::errors::CommandError;
 use crate::events::{EngineEvent, EventDetails, ToTransmitter, Transmitter};
@@ -62,9 +61,8 @@ impl DOCR {
         };
 
         let event_details = cr.get_event_details();
-        let docker =
-            Docker::new(cr.context.docker_tcp_socket().clone()).map_err(|err| to_engine_error(&event_details, err))?;
-        if docker.login(&cr.registry_info.as_ref().unwrap().endpoint).is_err() {
+
+        if cr.context.docker.login(&cr.registry_info.endpoint).is_err() {
             return Err(EngineError::new_client_invalid_cloud_provider_credentials(
                 event_details,
             ));
