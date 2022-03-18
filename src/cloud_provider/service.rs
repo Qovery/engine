@@ -535,24 +535,18 @@ pub fn scale_down_application(
     })
 }
 
-pub fn delete_router<T>(
-    target: &DeploymentTarget,
-    service: &T,
-    is_error: bool,
-    event_details: EventDetails,
-) -> Result<(), EngineError>
+pub fn delete_router<T>(target: &DeploymentTarget, service: &T, event_details: EventDetails) -> Result<(), EngineError>
 where
     T: Router,
 {
     send_progress_on_long_task(service, crate::cloud_provider::service::Action::Delete, || {
-        delete_stateless_service(target, service, is_error, event_details.clone())
+        delete_stateless_service(target, service, event_details.clone())
     })
 }
 
 pub fn delete_stateless_service<T>(
     target: &DeploymentTarget,
     service: &T,
-    is_error: bool,
     event_details: EventDetails,
 ) -> Result<(), EngineError>
 where
@@ -561,15 +555,6 @@ where
     let kubernetes = target.kubernetes;
     let environment = target.environment;
     let helm_release_name = service.helm_release_name();
-
-    if is_error {
-        let _ = get_stateless_resource_information(
-            kubernetes,
-            environment,
-            service.selector().unwrap_or("".to_string()).as_str(),
-            Stage::Environment(EnvironmentStep::Delete),
-        )?;
-    }
 
     // clean the resource
     let _ = helm_uninstall_release(
@@ -1250,52 +1235,6 @@ where
     }
 
     Ok(result)
-}
-
-/// show different output (kubectl describe, log..) for debug purpose
-pub fn get_stateless_resource_information(
-    kubernetes: &dyn Kubernetes,
-    environment: &Environment,
-    selector: &str,
-    stage: Stage,
-) -> Result<(Describe, Logs), EngineError> {
-    let event_details = kubernetes.get_event_details(stage);
-    let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
-
-    // exec describe pod...
-    let describe = crate::cmd::kubectl::kubectl_exec_describe_pod(
-        kubernetes_config_file_path.to_string(),
-        environment.namespace(),
-        selector,
-        kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| {
-        EngineError::new_k8s_describe(
-            event_details.clone(),
-            selector.to_string(),
-            environment.namespace().to_string(),
-            e,
-        )
-    })?;
-
-    // exec logs...
-    let logs = crate::cmd::kubectl::kubectl_exec_logs(
-        kubernetes_config_file_path.to_string(),
-        environment.namespace(),
-        selector,
-        kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| {
-        EngineError::new_k8s_get_logs_error(
-            event_details.clone(),
-            selector.to_string(),
-            environment.namespace().to_string(),
-            e,
-        )
-    })?
-    .join("\n");
-
-    Ok((describe, logs))
 }
 
 pub fn helm_uninstall_release(
