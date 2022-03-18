@@ -10,7 +10,7 @@ use rusoto_ecr::{
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use crate::build_platform::Image;
-use crate::cmd::docker::{to_engine_error, Docker};
+use crate::cmd::docker::to_engine_error;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventMessage, ToTransmitter, Transmitter};
@@ -58,13 +58,13 @@ impl ECR {
         };
 
         let credentials = cr.get_credentials()?;
-        let docker = Docker::new(cr.context.docker_tcp_socket().clone())
-            .map_err(|err| to_engine_error(&cr.get_event_details(), err))?;
         let mut registry_url = Url::parse(credentials.endpoint_url.as_str()).unwrap();
         let _ = registry_url.set_username(&credentials.access_token);
         let _ = registry_url.set_password(Some(&credentials.password));
 
-        let _ = docker
+        let _ = cr
+            .context
+            .docker
             .login(&registry_url)
             .map_err(|err| to_engine_error(&cr.get_event_details(), err))?;
 

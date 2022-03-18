@@ -10,7 +10,7 @@ use crate::build_platform::{docker, Build, BuildPlatform, BuildResult, Credentia
 use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, QoveryCommand};
-use crate::cmd::docker::{ContainerImage, Docker, DockerError};
+use crate::cmd::docker::{ContainerImage, DockerError};
 use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EngineEvent, EventDetails, EventMessage, ToTransmitter, Transmitter};
 use crate::fs::workspace_directory;
@@ -33,7 +33,6 @@ const BUILDPACKS_BUILDERS: [&str; 1] = [
 /// use Docker in local
 pub struct LocalDocker {
     context: Context,
-    docker: Docker,
     id: String,
     name: String,
     listeners: Listeners,
@@ -47,10 +46,8 @@ impl LocalDocker {
         name: &str,
         logger: Box<dyn Logger>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let docker = Docker::new_with_options(true, context.docker_tcp_socket().clone())?;
         Ok(LocalDocker {
             context,
-            docker,
             id: id.to_string(),
             name: name.to_string(),
             listeners: vec![],
@@ -124,7 +121,7 @@ impl LocalDocker {
             })
             .collect::<Vec<_>>();
 
-        let exit_status = self.docker.build(
+        let exit_status = self.context.docker.build(
             &Path::new(dockerfile_complete_path),
             &Path::new(into_dir_docker_style),
             &image_to_build,

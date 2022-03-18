@@ -46,6 +46,7 @@ use crate::digitalocean::{
 };
 use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cmd::command::QoveryCommand;
+use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::errors::CommandError;
@@ -62,6 +63,7 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
     let execution_id = execution_id();
     let home_dir = std::env::var("WORKSPACE_ROOT_DIR").unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
     let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
+    let docker = Docker::new(None).expect("Can't init docker");
 
     let metadata = Metadata {
         dry_run_deploy: Option::from({
@@ -101,6 +103,7 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
         None,
         enabled_features,
         Option::from(metadata),
+        docker,
     )
 }
 
