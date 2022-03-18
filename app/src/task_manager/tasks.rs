@@ -6,6 +6,7 @@ use std::sync::{Arc, RwLock};
 use chrono::{DateTime, Utc};
 use crossbeam_channel::Sender;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
+use qovery_engine::cmd::docker::Docker;
 use url::Url;
 
 use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
@@ -23,6 +24,7 @@ pub struct InfrastructureTask {
     workspace_root_dir: String,
     lib_root_dir: String,
     docker_host: Option<Url>,
+    docker: Docker,
     request: EngineRequest,
     status_sender: Sender<Status>,
 }
@@ -35,10 +37,12 @@ impl InfrastructureTask {
         lib_root_dir: String,
         docker_host: Option<Url>,
     ) -> Self {
+        let docker = Docker::new(docker_host.clone()).expect("Can't init docker builder");
         InfrastructureTask {
             workspace_root_dir,
             lib_root_dir,
             docker_host,
+            docker,
             request,
             status_sender,
         }
@@ -55,6 +59,7 @@ impl InfrastructureTask {
             self.docker_host.clone(),
             self.request.features.clone(),
             self.request.metadata.clone(),
+            self.docker.clone(),
         )
     }
 
@@ -192,6 +197,7 @@ pub struct EnvironmentTask {
     workspace_root_dir: String,
     lib_root_dir: String,
     docker_host: Option<Url>,
+    docker: Docker,
     request: EngineRequest,
     status_sender: Sender<Status>,
     cancel_requested: Arc<AtomicBool>,
@@ -206,10 +212,12 @@ impl EnvironmentTask {
         lib_root_dir: String,
         docker_host: Option<Url>,
     ) -> Self {
+        let docker = Docker::new(docker_host.clone()).expect("Can't init docker builder");
         EnvironmentTask {
             workspace_root_dir,
             lib_root_dir,
             docker_host,
+            docker,
             request,
             status_sender,
             cancel_requested: Arc::new(AtomicBool::from(false)),
@@ -228,6 +236,7 @@ impl EnvironmentTask {
             self.docker_host.clone(),
             self.request.features.clone(),
             self.request.metadata.clone(),
+            self.docker.clone(),
         )
     }
 
