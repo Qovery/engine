@@ -120,7 +120,7 @@ impl<'a> Transaction<'a> {
         // Do setup of registry and be sure we are login to the registry
         let cr_registry = self.engine.container_registry();
         let _ = cr_registry.create_registry()?;
-        let registry = self.engine.container_registry().login()?;
+        let registry = self.engine.container_registry().registry_info();
 
         for app in apps_to_build.into_iter() {
             let app_build = app.to_build(&registry);
@@ -186,11 +186,7 @@ impl<'a> Transaction<'a> {
     // Warning: This function function does not revert anything, it just there to grab info from kube and services if it fails
     // FIXME: Cleanup this, qe_environment should not be rebuilt at this step
     fn rollback_environment(&self, environment_action: &EnvironmentAction) -> Result<(), RollbackError> {
-        let registry_info = self
-            .engine
-            .container_registry()
-            .login()
-            .map_err(|err| RollbackError::CommitError(err))?;
+        let registry_info = self.engine.container_registry().registry_info();
 
         let qe_environment = |environment: &Environment| {
             let qe_environment = environment.to_qe_environment(
@@ -424,7 +420,7 @@ impl<'a> Transaction<'a> {
             EnvironmentAction::Environment(te) => te,
         };
 
-        let registry_info = self.engine.container_registry().login().unwrap();
+        let registry_info = self.engine.container_registry().registry_info();
         let qe_environment = target_environment.to_qe_environment(
             self.engine.context(),
             self.engine.cloud_provider(),
