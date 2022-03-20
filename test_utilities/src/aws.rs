@@ -20,7 +20,7 @@ use tracing::error;
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
-use crate::utilities::{build_platform_local_docker, logger, FuncTestsSecrets};
+use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
 pub const AWS_TEST_REGION: AwsRegion = AwsRegion::EuWest3;
@@ -49,7 +49,6 @@ pub fn container_registry_ecr(context: &Context) -> ECR {
         secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
         secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),
         secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
-        logger(),
     )
     .unwrap()
 }
