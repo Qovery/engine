@@ -12,6 +12,7 @@ use url::Url;
 use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use qovery_engine::logger::Logger;
 use qovery_engine::models::{Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope};
+use qovery_engine::object_storage::errors::ObjectStorageError;
 use qovery_engine::transaction::{RollbackError, StepName, Transaction, TransactionResult};
 
 use crate::task_manager::models::{Action, Archive, EngineRequest};
@@ -724,7 +725,7 @@ fn upload_s3_file(
     archive: Option<&Archive>,
     file_path: &str,
     region: AwsRegion,
-) -> Result<(), EngineError> {
+) -> Result<(), ObjectStorageError> {
     let archive = match archive {
         Some(archive) => archive,
         None => {
