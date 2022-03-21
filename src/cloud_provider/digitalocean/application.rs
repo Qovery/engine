@@ -7,8 +7,8 @@ use crate::cloud_provider::models::{
 };
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, deploy_stateless_service_error, deploy_user_stateless_service,
-    scale_down_application, send_progress_on_long_task, Action, Create, Delete, Helm, Pause, Service, ServiceType,
-    StatelessService,
+    scale_down_application, send_progress_on_long_task, Action, Application, Create, Delete, Helm, Pause, Service,
+    ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
@@ -22,7 +22,7 @@ use ::function_name::named;
 use std::fmt;
 use std::str::FromStr;
 
-pub struct Application {
+pub struct ApplicationDo {
     context: Context,
     id: String,
     action: Action,
@@ -41,7 +41,7 @@ pub struct Application {
     logger: Box<dyn Logger>,
 }
 
-impl Application {
+impl ApplicationDo {
     pub fn new(
         context: Context,
         id: &str,
@@ -60,7 +60,7 @@ impl Application {
         listeners: Listeners,
         logger: Box<dyn Logger>,
     ) -> Self {
-        Application {
+        ApplicationDo {
             context,
             id: id.to_string(),
             action,
@@ -93,17 +93,7 @@ impl Application {
     }
 }
 
-impl crate::cloud_provider::service::Application for Application {
-    fn image(&self) -> &Image {
-        &self.image
-    }
-
-    fn set_image(&mut self, image: Image) {
-        self.image = image;
-    }
-}
-
-impl Helm for Application {
+impl Helm for ApplicationDo {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -125,15 +115,21 @@ impl Helm for Application {
     }
 }
 
-impl StatelessService for Application {}
+impl StatelessService for ApplicationDo {
+    fn as_stateless_service(&self) -> &dyn StatelessService {
+        self
+    }
+}
 
-impl ToTransmitter for Application {
+impl Application for ApplicationDo {}
+
+impl ToTransmitter for ApplicationDo {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::Application(self.id().to_string(), self.name().to_string())
     }
 }
 
-impl Service for Application {
+impl Service for ApplicationDo {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -287,7 +283,7 @@ impl Service for Application {
     }
 }
 
-impl Create for Application {
+impl Create for ApplicationDo {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -327,7 +323,7 @@ impl Create for Application {
     }
 }
 
-impl Pause for Application {
+impl Pause for ApplicationDo {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
@@ -370,7 +366,7 @@ impl Pause for Application {
     }
 }
 
-impl Delete for Application {
+impl Delete for ApplicationDo {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
@@ -410,7 +406,7 @@ impl Delete for Application {
     }
 }
 
-impl Listen for Application {
+impl Listen for ApplicationDo {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

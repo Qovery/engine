@@ -1,14 +1,13 @@
+use crate::cloud_provider::environment::Environment;
 use std::thread;
 
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::service::Service;
+use crate::cloud_provider::service::{Action, Service};
 use crate::engine::EngineConfig;
 use crate::errors::{EngineError, Tag};
 use crate::events::{EngineEvent, EventMessage};
 use crate::logger::{LogLevel, Logger};
-use crate::models::{
-    Action, Environment, EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-};
+use crate::models::{EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
 
 pub struct Transaction<'a> {
     engine: &'a EngineConfig,
@@ -108,7 +107,7 @@ impl<'a> Transaction<'a> {
             .applications
             .iter()
             // build only applications that are set with Action: Create
-            .filter(|app| app.action == Action::Create)
+            .filter(|app| *app.action() == Action::Create)
             .collect::<Vec<_>>();
 
         // If nothing to build, do nothing
@@ -119,18 +118,18 @@ impl<'a> Transaction<'a> {
         // Do setup of registry and be sure we are login to the registry
         let cr_registry = self.engine.container_registry();
         let _ = cr_registry.create_registry()?;
-        let registry = self.engine.container_registry().registry_info();
 
-        for app in apps_to_build.into_iter() {
-            let app_build = app.to_build(&registry);
-
+        for app_build in &environment.builds {
             // If image already exist in the registry, skip the build
             if !option.force_build && cr_registry.does_image_exists(&app_build.image) {
                 continue;
             }
 
             // Be sure that our repository exist before trying to pull/push images from it
-            let _ = self.engine.container_registry().create_repository(&app.name)?;
+            let _ = self
+                .engine
+                .container_registry()
+                .create_repository(app_build.image.repository_name())?;
 
             // Ok now everything is setup, we can try to build the app
             let _ = self
@@ -185,32 +184,10 @@ impl<'a> Transaction<'a> {
     // Warning: This function function does not revert anything, it just there to grab info from kube and services if it fails
     // FIXME: Cleanup this, qe_environment should not be rebuilt at this step
     fn rollback_environment(&self, environment: &Environment) -> Result<(), RollbackError> {
-        let registry_info = self.engine.container_registry().registry_info();
-
-        let qe_environment = |environment: &Environment| {
-            let qe_environment = environment.to_qe_environment(
-                self.engine.context(),
-                self.engine.cloud_provider(),
-                &registry_info,
-                self.logger.clone(),
-            );
-
-            qe_environment
-        };
-
-        // revert changes but there is no failover environment
-        let target_qe_environment = qe_environment(environment);
-
         let action = match environment.action {
-            Action::Create => self
-                .engine
-                .kubernetes()
-                .deploy_environment_error(&target_qe_environment),
-            Action::Pause => self.engine.kubernetes().pause_environment_error(&target_qe_environment),
-            Action::Delete => self
-                .engine
-                .kubernetes()
-                .delete_environment_error(&target_qe_environment),
+            Action::Create => self.engine.kubernetes().deploy_environment_error(&environment),
+            Action::Pause => self.engine.kubernetes().pause_environment_error(&environment),
+            Action::Delete => self.engine.kubernetes().delete_environment_error(&environment),
             Action::Nothing => Ok(()),
         };
 
@@ -259,13 +236,13 @@ impl<'a> Transaction<'a> {
                         }
                     };
                 }
-                Step::BuildEnvironment(target_environment, option) => {
+                Step::BuildEnvironment(environment, option) => {
                     if (self.is_transaction_aborted)() {
                         return TransactionResult::Canceled;
                     }
 
                     // build applications
-                    match self.build_and_push_applications(target_environment, &option) {
+                    match self.build_and_push_applications(environment, &option) {
                         Ok(apps) => apps,
                         Err(engine_err) => {
                             self.logger.log(
@@ -398,25 +375,17 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    fn commit_environment<F>(&self, target_environment: &Environment, action_fn: F) -> TransactionResult
+    fn commit_environment<F>(&self, environment: &Environment, action_fn: F) -> TransactionResult
     where
-        F: Fn(&crate::cloud_provider::environment::Environment) -> Result<(), EngineError>,
+        F: Fn(&Environment) -> Result<(), EngineError>,
     {
-        let registry_info = self.engine.container_registry().registry_info();
-        let qe_environment = target_environment.to_qe_environment(
-            self.engine.context(),
-            self.engine.cloud_provider(),
-            &registry_info,
-            self.logger.clone(),
-        );
-
         let execution_id = self.engine.context().execution_id();
 
         // send back the right progress status
         fn send_progress<T>(
             kubernetes: &dyn Kubernetes,
             action: &Action,
-            service: &Box<T>,
+            service: &T,
             execution_id: &str,
             is_error: bool,
         ) where
@@ -453,7 +422,7 @@ impl<'a> Transaction<'a> {
         // Even by storing data at the micro seconds precision
         thread::sleep(std::time::Duration::from_millis(100));
 
-        let _ = match action_fn(&qe_environment) {
+        let _ = match action_fn(&environment) {
             Err(err) => {
                 let rollback_result = match self.rollback() {
                     Ok(_) => TransactionResult::Rollback(err),
@@ -465,20 +434,20 @@ impl<'a> Transaction<'a> {
 
                 // !!! don't change the order
                 // terminal update
-                for service in &qe_environment.stateful_services {
+                for service in environment.stateful_services() {
                     send_progress(
                         self.engine.kubernetes(),
-                        &target_environment.action,
+                        &environment.action,
                         service,
                         execution_id,
                         true,
                     );
                 }
 
-                for service in &qe_environment.stateless_services {
+                for service in environment.stateless_services() {
                     send_progress(
                         self.engine.kubernetes(),
-                        &target_environment.action,
+                        &environment.action,
                         service,
                         execution_id,
                         true,
@@ -489,20 +458,20 @@ impl<'a> Transaction<'a> {
             }
             _ => {
                 // terminal update
-                for service in &qe_environment.stateful_services {
+                for service in environment.stateful_services() {
                     send_progress(
                         self.engine.kubernetes(),
-                        &target_environment.action,
+                        &environment.action,
                         service,
                         execution_id,
                         false,
                     );
                 }
 
-                for service in &qe_environment.stateless_services {
+                for service in environment.stateless_services() {
                     send_progress(
                         self.engine.kubernetes(),
-                        &target_environment.action,
+                        &environment.action,
                         service,
                         execution_id,
                         false,

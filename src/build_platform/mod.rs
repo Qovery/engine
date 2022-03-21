@@ -20,7 +20,7 @@ pub trait BuildPlatform: ToTransmitter + Listen {
         format!("{} ({})", self.name(), self.id())
     }
     fn is_valid(&self) -> Result<(), EngineError>;
-    fn build(&self, build: Build, is_task_canceled: &dyn Fn() -> bool) -> Result<BuildResult, EngineError>;
+    fn build(&self, build: &Build, is_task_canceled: &dyn Fn() -> bool) -> Result<(), EngineError>;
     fn logger(&self) -> Box<dyn Logger>;
     fn get_event_details(&self) -> EventDetails {
         let context = self.context();
@@ -94,6 +94,9 @@ impl Image {
         self.registry_url.host_str().unwrap()
     }
 
+    pub fn repository_name(&self) -> &str {
+        self.name.split('/').collect::<Vec<&str>>()[0]
+    }
     pub fn full_image_name_with_tag(&self) -> String {
         format!(
             "{}/{}:{}",
@@ -133,16 +136,6 @@ impl Display for Image {
             "Image (name={}, tag={}, commit_id={}, application_id={}, registry_name={:?}, registry_url={:?})",
             self.name, self.tag, self.commit_id, self.application_id, self.registry_name, self.registry_url
         )
-    }
-}
-
-pub struct BuildResult {
-    pub build: Build,
-}
-
-impl BuildResult {
-    pub fn new(build: Build) -> Self {
-        BuildResult { build }
     }
 }
 

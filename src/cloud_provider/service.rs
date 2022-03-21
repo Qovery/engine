@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use tera::Context as TeraContext;
 
-use crate::build_platform::Image;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -119,6 +118,7 @@ pub trait Service: ToTransmitter {
 }
 
 pub trait StatelessService: Service + Create + Pause + Delete {
+    fn as_stateless_service(&self) -> &dyn StatelessService;
     fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), EngineError> {
         match self.action() {
             crate::cloud_provider::service::Action::Create => self.on_create(deployment_target),
@@ -139,6 +139,7 @@ pub trait StatelessService: Service + Create + Pause + Delete {
 }
 
 pub trait StatefulService: Service + Create + Pause + Delete {
+    fn as_stateful_service(&self) -> &dyn StatefulService;
     fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), EngineError> {
         match self.action() {
             crate::cloud_provider::service::Action::Create => self.on_create(deployment_target),
@@ -159,11 +160,7 @@ pub trait StatefulService: Service + Create + Pause + Delete {
 
     fn is_managed_service(&self) -> bool;
 }
-
-pub trait Application: StatelessService {
-    fn image(&self) -> &Image;
-    fn set_image(&mut self, image: Image);
-}
+pub trait Application: StatelessService {}
 
 pub trait Router: StatelessService + Listen + Helm {
     fn domains(&self) -> Vec<&str>;
@@ -997,7 +994,7 @@ pub enum CheckAction {
 pub fn check_kubernetes_service_error<T>(
     result: Result<(), EngineError>,
     kubernetes: &dyn Kubernetes,
-    service: &Box<T>,
+    service: &T,
     event_details: EventDetails,
     logger: &dyn Logger,
     deployment_target: &DeploymentTarget,

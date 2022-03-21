@@ -6,7 +6,7 @@ use std::{env, fs};
 use git2::{Cred, CredentialType};
 use sysinfo::{Disk, DiskExt, SystemExt};
 
-use crate::build_platform::{docker, Build, BuildPlatform, BuildResult, Credentials, Kind};
+use crate::build_platform::{docker, Build, BuildPlatform, Credentials, Kind};
 use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, QoveryCommand};
@@ -82,13 +82,13 @@ impl LocalDocker {
 
     fn build_image_with_docker(
         &self,
-        build: Build,
+        build: &Build,
         dockerfile_complete_path: &str,
         into_dir_docker_style: &str,
         env_var_args: Vec<String>,
         lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
-    ) -> Result<BuildResult, EngineError> {
+    ) -> Result<(), EngineError> {
         let image_to_build = ContainerImage {
             registry: build.image.registry_url.clone(),
             name: build.image.name(),
@@ -169,7 +169,7 @@ impl LocalDocker {
         );
 
         match exit_status {
-            Ok(_) => Ok(BuildResult { build }),
+            Ok(_) => Ok(()),
             Err(DockerError::Aborted(_)) => Err(EngineError::new_task_cancellation_requested(self.get_event_details())),
             Err(err) => Err(EngineError::new_docker_cannot_build_container_image(
                 self.get_event_details(),
@@ -181,13 +181,13 @@ impl LocalDocker {
 
     fn build_image_with_buildpacks(
         &self,
-        build: Build,
+        build: &Build,
         into_dir_docker_style: &str,
         env_var_args: Vec<String>,
         use_build_cache: bool,
         lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
-    ) -> Result<BuildResult, EngineError> {
+    ) -> Result<(), EngineError> {
         let name_with_tag = build.image.full_image_name_with_tag();
         let name_with_latest_tag = format!("{}:latest", build.image.full_image_name());
 
@@ -318,7 +318,7 @@ impl LocalDocker {
         }
 
         match exit_status {
-            Ok(_) => Ok(BuildResult { build }),
+            Ok(_) => Ok(()),
             Err(Killed(_)) => Err(EngineError::new_task_cancellation_requested(self.get_event_details())),
             Err(err) => {
                 let error = EngineError::new_buildpack_cannot_build_container_image(
@@ -386,7 +386,7 @@ impl BuildPlatform for LocalDocker {
         Ok(())
     }
 
-    fn build(&self, build: Build, is_task_canceled: &dyn Fn() -> bool) -> Result<BuildResult, EngineError> {
+    fn build(&self, build: &Build, is_task_canceled: &dyn Fn() -> bool) -> Result<(), EngineError> {
         let event_details = self.get_event_details();
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let app_id = build.image.application_id.clone();
