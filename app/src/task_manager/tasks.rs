@@ -1,5 +1,7 @@
 use std::borrow::Cow;
+use std::cell::RefCell;
 use std::fs;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
@@ -366,10 +368,18 @@ impl Task for EnvironmentTask {
             Some(ea) => ea,
         };
 
+        let env = environment_action.to_environment_domain(
+            engine.context(),
+            engine.cloud_provider(),
+            engine.container_registry().registry_info(),
+            logger.clone(),
+        );
+
+        let env = Rc::new(RefCell::new(env));
         let _ = match self.request.action {
-            Action::Create => tx.deploy_environment(&environment_action),
-            Action::Pause => tx.pause_environment(&environment_action),
-            Action::Delete => tx.delete_environment(&environment_action),
+            Action::Create => tx.deploy_environment(&env),
+            Action::Pause => tx.pause_environment(&env),
+            Action::Delete => tx.delete_environment(&env),
         };
 
         // run the actions

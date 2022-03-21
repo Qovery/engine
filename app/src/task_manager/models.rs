@@ -18,7 +18,7 @@ use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::engine::EngineConfig;
 use qovery_engine::error::EngineError;
 use qovery_engine::logger::Logger;
-use qovery_engine::models::{Context, Domain, Environment, Features, Listener, Metadata};
+use qovery_engine::models::{Context, Domain, EnvironmentRequest, Features, Listener, Metadata};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -36,8 +36,8 @@ pub struct EngineRequest {
     pub cloud_provider: CloudProvider,
     pub dns_provider: DnsProvider,
     pub container_registry: ContainerRegistry,
-    pub target_environment: Option<Environment>,
-    pub failover_environment: Option<Environment>,
+    pub target_environment: Option<EnvironmentRequest>,
+    pub failover_environment: Option<EnvironmentRequest>,
     pub metadata: Option<Metadata>,
     pub archive: Option<Archive>,
     // this field is used to store the data bytes from the current request send through NATS.
@@ -116,7 +116,7 @@ impl EngineRequest {
         ))
     }
 
-    pub fn environment(&self) -> Option<Environment> {
+    pub fn environment(&self) -> Option<EnvironmentRequest> {
         let environment = self.target_environment.as_ref().unwrap().clone();
         Some(environment)
     }
