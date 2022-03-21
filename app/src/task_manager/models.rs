@@ -77,7 +77,7 @@ impl EngineRequest {
 
         let mut container_registry = self
             .container_registry
-            .to_engine_container_registry(context.clone(), logger.clone())
+            .to_engine_container_registry(context.clone())
             .ok_or_else(|| {
                 RequestError::ContainerRegistry(format!(
                     "Invalid container registry info: {:?}",
@@ -323,7 +323,6 @@ impl ContainerRegistry {
     pub fn to_engine_container_registry(
         &self,
         context: Context,
-        logger: Box<dyn qovery_engine::logger::Logger>,
     ) -> Option<Box<dyn qovery_engine::container_registry::ContainerRegistry>> {
         match self.kind {
             qovery_engine::container_registry::Kind::Ecr => Some(Box::new(
@@ -334,7 +333,6 @@ impl ContainerRegistry {
                     self.options.access_key_id.as_ref()?.as_str(),
                     self.options.secret_access_key.as_ref()?.as_str(),
                     self.options.region.as_ref()?.as_str(),
-                    logger,
                 )
                 .ok()?,
             )),
@@ -344,7 +342,6 @@ impl ContainerRegistry {
                     self.id.as_str(),
                     self.name.as_str(),
                     self.options.token.as_ref()?.as_str(),
-                    logger,
                 )
                 .ok()?,
             )),
@@ -365,7 +362,6 @@ impl ContainerRegistry {
                         )
                         .as_str(),
                     ),
-                    logger,
                 )
                 .ok()?,
             )),
