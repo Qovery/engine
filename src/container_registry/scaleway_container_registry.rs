@@ -382,7 +382,11 @@ impl ContainerRegistry for ScalewayCR {
             name: image.name().clone(),
             tags: vec![image.tag.clone()],
         };
-        self.context.docker.does_image_exist_remotely(&image).is_ok()
+        match self.context.docker.does_image_exist_remotely(&image) {
+            Ok(true) => true,
+            Ok(false) => false,
+            Err(_) => false,
+        }
     }
 
     fn logger(&self) -> &dyn Logger {
