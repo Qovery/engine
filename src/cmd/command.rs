@@ -5,16 +5,10 @@ use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 
 use crate::cmd::command::CommandError::{ExecutionError, ExitStatusError, Killed, TimeoutError};
-use crate::cmd::command::CommandOutputType::{STDERR, STDOUT};
 
 use itertools::Itertools;
 use std::time::{Duration, Instant};
 use timeout_readwrite::TimeoutReader;
-
-enum CommandOutputType {
-    STDOUT(Result<String, std::io::Error>),
-    STDERR(Result<String, std::io::Error>),
-}
 
 #[derive(thiserror::Error, Debug)]
 pub enum CommandError {
@@ -173,37 +167,82 @@ impl QoveryCommand {
             .map_err(ExecutionError)?;
 
         // Read stdout/stderr until timeout is reached
-        let reader_timeout = std::time::Duration::from_secs(5);
+        let reader_timeout = std::time::Duration::from_secs(1);
         let stdout = cmd_handle.stdout.take().ok_or(ExecutionError(Error::new(
             ErrorKind::BrokenPipe,
             "Cannot get stdout for command",
         )))?;
-        let stdout_reader = BufReader::new(TimeoutReader::new(stdout, reader_timeout))
-            .lines()
-            .map(STDOUT);
+        let mut stdout_reader = BufReader::new(TimeoutReader::new(stdout, reader_timeout)).lines();
 
         let stderr = cmd_handle.stderr.take().ok_or(ExecutionError(Error::new(
             ErrorKind::BrokenPipe,
             "Cannot get stderr for command",
         )))?;
-        let stderr_reader = BufReader::new(TimeoutReader::new(
+        let mut stderr_reader = BufReader::new(TimeoutReader::new(
             stderr,
             std::time::Duration::from_secs(0), // don't block on stderr
         ))
-        .lines()
-        .map(STDERR);
+        .lines();
 
-        for line in stdout_reader.interleave(stderr_reader) {
-            match line {
-                STDOUT(Err(ref err)) | STDERR(Err(ref err)) if err.kind() == ErrorKind::TimedOut => {}
-                STDOUT(Ok(line)) => stdout_output(line),
-                STDERR(Ok(line)) => stderr_output(line),
-                STDOUT(Err(err)) => error!("Error on stdout of cmd {:?}: {:?}", self.command, err),
-                STDERR(Err(err)) => error!("Error on stderr of cmd {:?}: {:?}", self.command, err),
-            }
-
+        let mut should_exit_loop = false;
+        while !should_exit_loop {
+            // We should abort and kill the process
             if abort_notifier.should_abort().is_some() {
                 break;
+            }
+
+            // Read on stdout first
+            while !should_exit_loop {
+                let line = if let Some(line) = stdout_reader.next() {
+                    line
+                } else {
+                    // Stdout has been closed
+                    should_exit_loop = true;
+                    break;
+                };
+
+                match line {
+                    Err(ref err) if err.kind() == ErrorKind::TimedOut => break,
+                    Ok(line) => stdout_output(line),
+                    Err(err) => {
+                        error!("Error on stdout of cmd {:?}: {:?}", self.command, err);
+                        should_exit_loop = true;
+                        break;
+                    }
+                }
+
+                // Should we abort and kill the process
+                if abort_notifier.should_abort().is_some() {
+                    should_exit_loop = true;
+                    break;
+                }
+            }
+
+            // Read stderr now
+            while !should_exit_loop {
+                let line = if let Some(line) = stderr_reader.next() {
+                    line
+                } else {
+                    // Stderr has been closed
+                    should_exit_loop = true;
+                    break;
+                };
+
+                match line {
+                    Err(ref err) if err.kind() == ErrorKind::TimedOut => break,
+                    Ok(line) => stderr_output(line),
+                    Err(err) => {
+                        error!("Error on stderr of cmd {:?}: {:?}", self.command, err);
+                        should_exit_loop = true;
+                        break;
+                    }
+                }
+
+                // should we abort and kill the process
+                if abort_notifier.should_abort().is_some() {
+                    should_exit_loop = true;
+                    break;
+                }
             }
         }
 
