@@ -89,8 +89,14 @@ impl<'a> CommandKiller<'a> {
         let is_canceled = Self::from_cancelable(is_canceled);
         CommandKiller {
             should_abort: Box::new(move || {
-                (is_canceled.should_abort)()?;
-                (has_timeout.should_abort)()?;
+                if let Some(reason) = (has_timeout.should_abort)() {
+                    return Some(reason);
+                }
+
+                if let Some(reason) = (is_canceled.should_abort)() {
+                    return Some(reason);
+                }
+
                 None
             }),
         }
