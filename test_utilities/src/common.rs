@@ -6,8 +6,8 @@ use chrono::Utc;
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::models::{
-    Action, Application, CloneForTest, Context, Database, DatabaseKind, DatabaseMode, Environment, EnvironmentAction,
-    GitCredentials, Port, Protocol, Route, Router, Storage, StorageType,
+    Action, Application, CloneForTest, Context, Database, DatabaseKind, DatabaseMode, Environment, GitCredentials,
+    Port, Protocol, Route, Router, Storage, StorageType,
 };
 
 use crate::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
@@ -70,19 +70,19 @@ pub trait Cluster<T, U> {
 pub trait Infrastructure {
     fn deploy_environment(
         &self,
-        environment_action: &EnvironmentAction,
+        environment: &Environment,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult;
     fn pause_environment(
         &self,
-        environment_action: &EnvironmentAction,
+        environment: &Environment,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult;
     fn delete_environment(
         &self,
-        environment_action: &EnvironmentAction,
+        environment: &Environment,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult;
@@ -91,13 +91,13 @@ pub trait Infrastructure {
 impl Infrastructure for Environment {
     fn deploy_environment(
         &self,
-        environment_action: &EnvironmentAction,
+        environment: &Environment,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult {
         let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
         let _ = tx.deploy_environment_with_options(
-            &environment_action,
+            &environment,
             DeploymentOption {
                 force_build: true,
                 force_push: true,
@@ -109,24 +109,24 @@ impl Infrastructure for Environment {
 
     fn pause_environment(
         &self,
-        environment_action: &EnvironmentAction,
+        environment: &Environment,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult {
         let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let _ = tx.pause_environment(&environment_action);
+        let _ = tx.pause_environment(&environment);
 
         tx.commit()
     }
 
     fn delete_environment(
         &self,
-        environment_action: &EnvironmentAction,
+        environment: &Environment,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult {
         let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let _ = tx.delete_environment(&environment_action);
+        let _ = tx.delete_environment(&environment);
 
         tx.commit()
     }
@@ -1061,8 +1061,8 @@ pub fn test_db(
 
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;
-    let ea = EnvironmentAction::Environment(environment.clone());
-    let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
+    let ea = environment.clone();
+    let ea_delete = environment_delete.clone();
 
     let (localisation, kubernetes_version) = match provider_kind {
         Kind::Aws => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
@@ -1369,7 +1369,7 @@ pub fn cluster_test(
     minor_boot_version: u8,
     cluster_domain: &ClusterDomain,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
-    environment_to_deploy: Option<&EnvironmentAction>,
+    environment_to_deploy: Option<&Environment>,
 ) -> String {
     init();
 

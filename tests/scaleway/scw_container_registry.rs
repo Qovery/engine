@@ -1,7 +1,6 @@
 extern crate test_utilities;
 
 use self::test_utilities::utilities::{context, FuncTestsSecrets};
-use qovery_engine::build_platform::Image;
 use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use test_utilities::utilities::logger;

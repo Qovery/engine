@@ -78,14 +78,6 @@ impl Display for QoveryIdentifier {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-pub enum EnvironmentAction {
-    Environment(TargetEnvironment),
-}
-
-pub type TargetEnvironment = Environment;
-pub type FailoverEnvironment = Environment;
-
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Environment {
     pub execution_id: String,
     pub id: String,
