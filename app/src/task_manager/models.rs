@@ -18,7 +18,7 @@ use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::engine::EngineConfig;
 use qovery_engine::error::EngineError;
 use qovery_engine::logger::Logger;
-use qovery_engine::models::{Context, Domain, Environment, EnvironmentAction, Features, Listener, Metadata};
+use qovery_engine::models::{Context, Domain, Environment, Features, Listener, Metadata};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -116,10 +116,9 @@ impl EngineRequest {
         ))
     }
 
-    pub fn environment_action(&self) -> Option<EnvironmentAction> {
-        self.target_environment.as_ref()?;
+    pub fn environment(&self) -> Option<Environment> {
         let environment = self.target_environment.as_ref().unwrap().clone();
-        Some(EnvironmentAction::Environment(environment))
+        Some(environment)
     }
 }
 

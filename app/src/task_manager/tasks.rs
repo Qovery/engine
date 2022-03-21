@@ -347,7 +347,7 @@ impl Task for EnvironmentTask {
             }
         };
 
-        let environment_action = match self.request.environment_action() {
+        let environment_action = match self.request.environment() {
             None => {
                 send_progress(
                     self,
