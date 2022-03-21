@@ -137,13 +137,7 @@ pub trait Kubernetes: Listen {
                     Err(err) => {
                         let error = EngineError::new_cannot_retrieve_cluster_config_file(
                             self.get_event_details(stage.clone()),
-                            CommandError::new_from_safe_message(
-                                format!(
-                                    "Error getting file from store, error: {}",
-                                    err.message.unwrap_or_else(|| "no details.".to_string())
-                                )
-                                .to_string(),
-                            ),
+                            err.into(),
                         );
                         self.logger()
                             .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));

@@ -109,6 +109,10 @@ pub enum Tag {
     ContainerRegistryRepositoryDoesntExist,
     ContainerRegistryDeleteRepositoryError,
     ContainerRegistryDeleteImageError,
+    ObjectStorageInvalidBucketName,
+    ObjectStorageCannotEmptyBucket,
+    ObjectStorageCannotTagBucket,
+    ObjectStorageCannotActivateBucketVersioning,
 }
 
 impl From<errors::Tag> for Tag {
@@ -210,6 +214,12 @@ impl From<errors::Tag> for Tag {
             errors::Tag::ContainerRegistryDeleteRepositoryError => Tag::ContainerRegistryDeleteRepositoryError,
             errors::Tag::BuilderDockerCannotListImages => Tag::BuilderDockerCannotListImages,
             errors::Tag::DockerError => Tag::DockerError,
+            errors::Tag::ObjectStorageInvalidBucketName => Tag::ObjectStorageInvalidBucketName,
+            errors::Tag::ObjectStorageCannotEmptyBucket => Tag::ObjectStorageCannotEmptyBucket,
+            errors::Tag::ObjectStorageCannotTagBucket => Tag::ObjectStorageCannotTagBucket,
+            errors::Tag::ObjectStorageCannotActivateBucketVersioning => {
+                Tag::ObjectStorageCannotActivateBucketVersioning
+            }
         }
     }
 }
