@@ -114,33 +114,25 @@ impl EnvironmentRequest {
         container_registry: &ContainerRegistryInfo,
         logger: Box<dyn Logger>,
     ) -> Environment {
-        let builds = self
-            .applications
-            .iter()
-            .filter(|app| app.action == Action::Create)
-            .map(|app| app.to_build(&container_registry))
-            .collect();
-
         //FIXME: remove those flatten as it hide errors regarding conversion to model data type
         let applications = self
             .applications
             .iter()
-            .map(|x| x.to_application_domain(context, x.to_image(container_registry), cloud_provider, logger.clone()))
-            .flatten()
+            .filter_map(|x| {
+                x.to_application_domain(context, x.to_build(container_registry), cloud_provider, logger.clone())
+            })
             .collect::<Vec<_>>();
 
         let routers = self
             .routers
             .iter()
-            .map(|x| x.to_router_domain(context, cloud_provider, logger.clone()))
-            .flatten()
+            .filter_map(|x| x.to_router_domain(context, cloud_provider, logger.clone()))
             .collect::<Vec<_>>();
 
         let databases = self
             .databases
             .iter()
-            .map(|x| x.to_database_domain(context, cloud_provider, logger.clone()))
-            .flatten()
+            .filter_map(|x| x.to_database_domain(context, cloud_provider, logger.clone()))
             .collect::<Vec<_>>();
 
         Environment::new(
@@ -152,7 +144,6 @@ impl EnvironmentRequest {
             applications,
             routers,
             databases,
-            builds,
         )
     }
 }
@@ -229,7 +220,7 @@ impl Application {
     pub fn to_application_domain(
         &self,
         context: &Context,
-        image: Image,
+        build: Build,
         cloud_provider: &dyn CloudProvider,
         logger: Box<dyn Logger>,
     ) -> Option<Box<dyn crate::cloud_provider::service::Application>> {
@@ -249,7 +240,7 @@ impl Application {
                 self.min_instances,
                 self.max_instances,
                 self.start_timeout_in_seconds,
-                image,
+                build,
                 self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 listeners,
@@ -267,7 +258,7 @@ impl Application {
                 self.min_instances,
                 self.max_instances,
                 self.start_timeout_in_seconds,
-                image,
+                build,
                 self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 listeners,
@@ -285,7 +276,7 @@ impl Application {
                 self.min_instances,
                 self.max_instances,
                 self.start_timeout_in_seconds,
-                image,
+                build,
                 self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 listeners,
@@ -339,18 +330,14 @@ impl Application {
             let passphrase = self
                 .environment_vars
                 .get(&ssh_key_name.replace(ENV_GIT_PREFIX, "GIT_SSH_PASSPHRASE"))
-                .map(|val| base64::decode(val).ok())
-                .flatten()
-                .map(|str| String::from_utf8(str).ok())
-                .flatten();
+                .and_then(|val| base64::decode(val).ok())
+                .and_then(|str| String::from_utf8(str).ok());
 
             let public_key = self
                 .environment_vars
                 .get(&ssh_key_name.replace(ENV_GIT_PREFIX, "GIT_SSH_PUBLIC_KEY"))
-                .map(|val| base64::decode(val).ok())
-                .flatten()
-                .map(|str| String::from_utf8(str).ok())
-                .flatten();
+                .and_then(|val| base64::decode(val).ok())
+                .and_then(|str| String::from_utf8(str).ok());
 
             ssh_keys.push(SshKey {
                 private_key,
@@ -398,7 +385,7 @@ impl Application {
                     .iter()
                     .map(|(k, v)| crate::build_platform::EnvironmentVariable {
                         key: k.clone(),
-                        value: String::from_utf8_lossy(&base64::decode(v.as_bytes()).unwrap_or(vec![])).into_owned(),
+                        value: String::from_utf8_lossy(&base64::decode(v.as_bytes()).unwrap_or_default()).into_owned(),
                     })
                     .collect::<Vec<_>>(),
             },
@@ -1184,7 +1171,7 @@ impl Context {
 
     pub fn resource_expiration_in_seconds(&self) -> Option<u32> {
         match &self.metadata {
-            Some(meta) => meta.resource_expiration_in_seconds.map(|ttl| ttl),
+            Some(meta) => meta.resource_expiration_in_seconds,
             _ => None,
         }
     }
@@ -1287,13 +1274,13 @@ impl Domain {
     }
 
     fn is_wildcarded(&self) -> bool {
-        self.raw.starts_with("*")
+        self.raw.starts_with('*')
     }
 }
 
 impl Display for Domain {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.raw.as_str())
+        f.write_str(self.raw.as_str())
     }
 }
 
@@ -1311,7 +1298,7 @@ impl ToHelmString for Domain {
 
 impl ToTerraformString for Ipv4Addr {
     fn to_terraform_format_string(&self) -> String {
-        format!("{{{}}}", self.to_string())
+        format!("{{{}}}", self)
     }
 }
 

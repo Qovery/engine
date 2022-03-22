@@ -386,7 +386,7 @@ impl BuildPlatform for LocalDocker {
         Ok(())
     }
 
-    fn build(&self, build: &Build, is_task_canceled: &dyn Fn() -> bool) -> Result<(), EngineError> {
+    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<(), EngineError> {
         let event_details = self.get_event_details();
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let app_id = build.image.application_id.clone();

@@ -1,6 +1,6 @@
 use tera::Context as TeraContext;
 
-use crate::build_platform::Image;
+use crate::build_platform::Build;
 use crate::cloud_provider::kubernetes::validate_k8s_required_cpu_and_burstable;
 use crate::cloud_provider::models::{
     EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
@@ -32,7 +32,7 @@ pub struct ApplicationAws {
     min_instances: u32,
     max_instances: u32,
     start_timeout_in_seconds: u32,
-    image: Image,
+    build: Build,
     storage: Vec<Storage<StorageType>>,
     environment_variables: Vec<EnvironmentVariable>,
     listeners: Listeners,
@@ -52,7 +52,7 @@ impl ApplicationAws {
         min_instances: u32,
         max_instances: u32,
         start_timeout_in_seconds: u32,
-        image: Image,
+        build: Build,
         storage: Vec<Storage<StorageType>>,
         environment_variables: Vec<EnvironmentVariable>,
         listeners: Listeners,
@@ -70,7 +70,7 @@ impl ApplicationAws {
             min_instances,
             max_instances,
             start_timeout_in_seconds,
-            image,
+            build,
             storage,
             environment_variables,
             listeners,
@@ -125,7 +125,15 @@ impl ToTransmitter for ApplicationAws {
     }
 }
 
-impl Application for ApplicationAws {}
+impl Application for ApplicationAws {
+    fn get_build(&self) -> &Build {
+        &self.build
+    }
+
+    fn get_build_mut(&mut self) -> &mut Build {
+        &mut self.build
+    }
+}
 
 impl Service for ApplicationAws {
     fn context(&self) -> &Context {
@@ -149,7 +157,7 @@ impl Service for ApplicationAws {
     }
 
     fn version(&self) -> String {
-        self.image.commit_id.clone()
+        self.build.image.commit_id.clone()
     }
 
     fn action(&self) -> &Action {
@@ -194,10 +202,10 @@ impl Service for ApplicationAws {
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let mut context = default_tera_context(self, target.kubernetes, target.environment);
-        let commit_id = self.image.commit_id.as_str();
+        let commit_id = self.build.image.commit_id.as_str();
 
         context.insert("helm_app_version", &commit_id[..7]);
-        context.insert("image_name_with_tag", &self.image.full_image_name_with_tag());
+        context.insert("image_name_with_tag", &self.build.image.full_image_name_with_tag());
 
         let environment_variables = self
             .environment_variables
@@ -211,7 +219,7 @@ impl Service for ApplicationAws {
         context.insert("environment_variables", &environment_variables);
         context.insert("ports", &self.ports);
         context.insert("is_registry_secret", &true);
-        context.insert("registry_secret", self.image.registry_host());
+        context.insert("registry_secret", self.build.image.registry_host());
 
         let cpu_limits = match validate_k8s_required_cpu_and_burstable(
             &ListenersHelper::new(&self.listeners),

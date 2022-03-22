@@ -1,4 +1,6 @@
 use crate::cloud_provider::environment::Environment;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::thread;
 
 use crate::cloud_provider::kubernetes::Kubernetes;
@@ -12,8 +14,8 @@ use crate::models::{EnvironmentError, ListenersHelper, ProgressInfo, ProgressLev
 pub struct Transaction<'a> {
     engine: &'a EngineConfig,
     logger: Box<dyn Logger>,
-    steps: Vec<Step<'a>>,
-    executed_steps: Vec<Step<'a>>,
+    steps: Vec<Step>,
+    executed_steps: Vec<Step>,
     current_step: StepName,
     is_transaction_aborted: Box<dyn Fn() -> bool>,
     on_step_change: Box<dyn Fn(&StepName)>,
@@ -63,7 +65,7 @@ impl<'a> Transaction<'a> {
         Ok(())
     }
 
-    pub fn deploy_environment(&mut self, environment: &'a Environment) -> Result<(), EnvironmentError> {
+    pub fn deploy_environment(&mut self, environment: &Rc<RefCell<Environment>>) -> Result<(), EnvironmentError> {
         self.deploy_environment_with_options(
             environment,
             DeploymentOption {
@@ -75,37 +77,37 @@ impl<'a> Transaction<'a> {
 
     pub fn deploy_environment_with_options(
         &mut self,
-        environment: &'a Environment,
+        environment: &Rc<RefCell<Environment>>,
         option: DeploymentOption,
     ) -> Result<(), EnvironmentError> {
         // add build step
-        self.steps.push(Step::BuildEnvironment(environment, option));
+        self.steps.push(Step::BuildEnvironment(environment.clone(), option));
 
         // add deployment step
-        self.steps.push(Step::DeployEnvironment(environment));
+        self.steps.push(Step::DeployEnvironment(environment.clone()));
 
         Ok(())
     }
 
-    pub fn pause_environment(&mut self, environment: &'a Environment) -> Result<(), EnvironmentError> {
-        self.steps.push(Step::PauseEnvironment(environment));
+    pub fn pause_environment(&mut self, environment: &Rc<RefCell<Environment>>) -> Result<(), EnvironmentError> {
+        self.steps.push(Step::PauseEnvironment(environment.clone()));
         Ok(())
     }
 
-    pub fn delete_environment(&mut self, environment: &'a Environment) -> Result<(), EnvironmentError> {
-        self.steps.push(Step::DeleteEnvironment(environment));
+    pub fn delete_environment(&mut self, environment: &Rc<RefCell<Environment>>) -> Result<(), EnvironmentError> {
+        self.steps.push(Step::DeleteEnvironment(environment.clone()));
         Ok(())
     }
 
     fn build_and_push_applications(
         &self,
-        environment: &Environment,
+        environment: &mut Environment,
         option: &DeploymentOption,
     ) -> Result<(), EngineError> {
         // do the same for applications
-        let apps_to_build = environment
+        let mut apps_to_build = environment
             .applications
-            .iter()
+            .iter_mut()
             // build only applications that are set with Action: Create
             .filter(|app| *app.action() == Action::Create)
             .collect::<Vec<_>>();
@@ -119,9 +121,9 @@ impl<'a> Transaction<'a> {
         let cr_registry = self.engine.container_registry();
         let _ = cr_registry.create_registry()?;
 
-        for app_build in &environment.builds {
+        for app in apps_to_build.iter_mut() {
             // If image already exist in the registry, skip the build
-            if !option.force_build && cr_registry.does_image_exists(&app_build.image) {
+            if !option.force_build && cr_registry.does_image_exists(&app.get_build().image) {
                 continue;
             }
 
@@ -129,13 +131,13 @@ impl<'a> Transaction<'a> {
             let _ = self
                 .engine
                 .container_registry()
-                .create_repository(app_build.image.repository_name())?;
+                .create_repository(app.get_build().image.repository_name())?;
 
             // Ok now everything is setup, we can try to build the app
             let _ = self
                 .engine
                 .build_platform()
-                .build(app_build, &self.is_transaction_aborted)?;
+                .build(app.get_build_mut(), &self.is_transaction_aborted)?;
         }
 
         Ok(())
@@ -167,13 +169,13 @@ impl<'a> Transaction<'a> {
                 }
                 Step::DeployEnvironment(environment_action) => {
                     // revert environment deployment
-                    self.rollback_environment(*environment_action)?;
+                    self.rollback_environment(&(environment_action.as_ref().borrow()))?;
                 }
                 Step::PauseEnvironment(environment_action) => {
-                    self.rollback_environment(*environment_action)?;
+                    self.rollback_environment(&(environment_action.as_ref().borrow()))?;
                 }
                 Step::DeleteEnvironment(environment_action) => {
-                    self.rollback_environment(*environment_action)?;
+                    self.rollback_environment(&(environment_action.as_ref().borrow()))?;
                 }
             }
         }
@@ -242,7 +244,7 @@ impl<'a> Transaction<'a> {
                     }
 
                     // build applications
-                    match self.build_and_push_applications(environment, &option) {
+                    match self.build_and_push_applications(&mut (environment.as_ref().borrow_mut()), &option) {
                         Ok(apps) => apps,
                         Err(engine_err) => {
                             self.logger.log(
@@ -269,7 +271,7 @@ impl<'a> Transaction<'a> {
                     }
 
                     // deploy complete environment
-                    match self.commit_environment(environment_action, |qe_env| {
+                    match self.commit_environment(&(environment_action.as_ref().borrow()), |qe_env| {
                         self.engine.kubernetes().deploy_environment(qe_env)
                     }) {
                         TransactionResult::Ok => {}
@@ -285,7 +287,7 @@ impl<'a> Transaction<'a> {
                     }
 
                     // pause complete environment
-                    match self.commit_environment(environment_action, |qe_env| {
+                    match self.commit_environment(&(environment_action.as_ref().borrow()), |qe_env| {
                         self.engine.kubernetes().pause_environment(qe_env)
                     }) {
                         TransactionResult::Ok => {}
@@ -301,7 +303,7 @@ impl<'a> Transaction<'a> {
                     }
 
                     // delete complete environment
-                    match self.commit_environment(environment_action, |qe_env| {
+                    match self.commit_environment(&(environment_action.as_ref().borrow()), |qe_env| {
                         self.engine.kubernetes().delete_environment(qe_env)
                     }) {
                         TransactionResult::Ok => {}
@@ -517,18 +519,18 @@ impl StepName {
     }
 }
 
-pub enum Step<'a> {
+pub enum Step {
     // init and create all the necessary resources (Network, Kubernetes)
     CreateKubernetes,
     DeleteKubernetes,
     PauseKubernetes,
-    BuildEnvironment(&'a Environment, DeploymentOption),
-    DeployEnvironment(&'a Environment),
-    PauseEnvironment(&'a Environment),
-    DeleteEnvironment(&'a Environment),
+    BuildEnvironment(Rc<RefCell<Environment>>, DeploymentOption),
+    DeployEnvironment(Rc<RefCell<Environment>>),
+    PauseEnvironment(Rc<RefCell<Environment>>),
+    DeleteEnvironment(Rc<RefCell<Environment>>),
 }
 
-impl<'a> Step<'a> {
+impl Step {
     fn step_name(&self) -> StepName {
         match self {
             Step::CreateKubernetes => StepName::CreateKubernetes,
@@ -542,16 +544,16 @@ impl<'a> Step<'a> {
     }
 }
 
-impl<'a> Clone for Step<'a> {
+impl Clone for Step {
     fn clone(&self) -> Self {
         match self {
             Step::CreateKubernetes => Step::CreateKubernetes,
             Step::DeleteKubernetes => Step::DeleteKubernetes,
             Step::PauseKubernetes => Step::PauseKubernetes,
-            Step::BuildEnvironment(e, option) => Step::BuildEnvironment(*e, option.clone()),
-            Step::DeployEnvironment(e) => Step::DeployEnvironment(*e),
-            Step::PauseEnvironment(e) => Step::PauseEnvironment(*e),
-            Step::DeleteEnvironment(e) => Step::DeleteEnvironment(*e),
+            Step::BuildEnvironment(e, option) => Step::BuildEnvironment(e.clone(), option.clone()),
+            Step::DeployEnvironment(e) => Step::DeployEnvironment(e.clone()),
+            Step::PauseEnvironment(e) => Step::PauseEnvironment(e.clone()),
+            Step::DeleteEnvironment(e) => Step::DeleteEnvironment(e.clone()),
         }
     }
 }

@@ -20,7 +20,7 @@ pub trait BuildPlatform: ToTransmitter + Listen {
         format!("{} ({})", self.name(), self.id())
     }
     fn is_valid(&self) -> Result<(), EngineError>;
-    fn build(&self, build: &Build, is_task_canceled: &dyn Fn() -> bool) -> Result<(), EngineError>;
+    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<(), EngineError>;
     fn logger(&self) -> Box<dyn Logger>;
     fn get_event_details(&self) -> EventDetails {
         let context = self.context();

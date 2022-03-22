@@ -1,4 +1,3 @@
-use crate::build_platform::Build;
 use crate::cloud_provider::service::{Action, Application, Database, Router, StatefulService, StatelessService};
 use crate::unit_conversion::cpu_string_to_float;
 
@@ -12,7 +11,6 @@ pub struct Environment {
     pub applications: Vec<Box<dyn Application>>,
     pub routers: Vec<Box<dyn Router>>,
     pub databases: Vec<Box<dyn Database>>,
-    pub builds: Vec<Build>,
 }
 
 impl Environment {
@@ -25,7 +23,6 @@ impl Environment {
         applications: Vec<Box<dyn Application>>,
         routers: Vec<Box<dyn Router>>,
         databases: Vec<Box<dyn Database>>,
-        builds: Vec<Build>,
     ) -> Self {
         Environment {
             namespace: format!("{}-{}", project_id, id),
@@ -37,7 +34,6 @@ impl Environment {
             applications,
             routers,
             databases,
-            builds,
         }
     }
 

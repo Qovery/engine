@@ -2,6 +2,7 @@ extern crate serde;
 extern crate serde_derive;
 
 use chrono::Utc;
+use std::cell::RefCell;
 
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::dns_provider::DnsProvider;
@@ -39,6 +40,7 @@ use qovery_engine::models::DatabaseMode::CONTAINER;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{span, Level};
@@ -103,6 +105,7 @@ impl Infrastructure for EnvironmentRequest {
             logger,
         );
 
+        let env = Rc::new(RefCell::new(env));
         let _ = tx.deploy_environment_with_options(
             &env,
             DeploymentOption {
@@ -127,6 +130,7 @@ impl Infrastructure for EnvironmentRequest {
             engine_config.container_registry().registry_info(),
             logger,
         );
+        let env = Rc::new(RefCell::new(env));
         let _ = tx.pause_environment(&env);
 
         tx.commit()
@@ -145,6 +149,7 @@ impl Infrastructure for EnvironmentRequest {
             engine_config.container_registry().registry_info(),
             logger,
         );
+        let env = Rc::new(RefCell::new(env));
         let _ = tx.delete_environment(&env);
 
         tx.commit()
@@ -1453,6 +1458,7 @@ pub fn cluster_test(
             engine.container_registry().registry_info(),
             logger.clone(),
         );
+        let env = Rc::new(RefCell::new(env));
         if let Err(err) = deploy_env_tx.deploy_environment(&env) {
             panic!("{:?}", err)
         }
@@ -1571,6 +1577,7 @@ pub fn cluster_test(
             engine.container_registry().registry_info(),
             logger.clone(),
         );
+        let env = Rc::new(RefCell::new(env));
         if let Err(err) = destroy_env_tx.delete_environment(&env) {
             panic!("{:?}", err)
         }

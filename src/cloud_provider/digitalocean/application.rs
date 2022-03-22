@@ -1,6 +1,6 @@
 use tera::Context as TeraContext;
 
-use crate::build_platform::Image;
+use crate::build_platform::Build;
 use crate::cloud_provider::kubernetes::validate_k8s_required_cpu_and_burstable;
 use crate::cloud_provider::models::{
     EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
@@ -34,7 +34,7 @@ pub struct ApplicationDo {
     min_instances: u32,
     max_instances: u32,
     start_timeout_in_seconds: u32,
-    image: Image,
+    build: Build,
     storage: Vec<Storage<StorageType>>,
     environment_variables: Vec<EnvironmentVariable>,
     listeners: Listeners,
@@ -54,7 +54,7 @@ impl ApplicationDo {
         min_instances: u32,
         max_instances: u32,
         start_timeout_in_seconds: u32,
-        image: Image,
+        build: Build,
         storage: Vec<Storage<StorageType>>,
         environment_variables: Vec<EnvironmentVariable>,
         listeners: Listeners,
@@ -72,7 +72,7 @@ impl ApplicationDo {
             min_instances,
             max_instances,
             start_timeout_in_seconds,
-            image,
+            build,
             storage,
             environment_variables,
             listeners,
@@ -121,7 +121,15 @@ impl StatelessService for ApplicationDo {
     }
 }
 
-impl Application for ApplicationDo {}
+impl Application for ApplicationDo {
+    fn get_build(&self) -> &Build {
+        &self.build
+    }
+
+    fn get_build_mut(&mut self) -> &mut Build {
+        &mut self.build
+    }
+}
 
 impl ToTransmitter for ApplicationDo {
     fn to_transmitter(&self) -> Transmitter {
@@ -151,7 +159,7 @@ impl Service for ApplicationDo {
     }
 
     fn version(&self) -> String {
-        self.image.commit_id.clone()
+        self.build.image.commit_id.clone()
     }
 
     fn action(&self) -> &Action {
@@ -198,10 +206,10 @@ impl Service for ApplicationDo {
         let kubernetes = target.kubernetes;
         let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
-        let commit_id = self.image.commit_id.as_str();
+        let commit_id = self.build.image.commit_id.as_str();
 
         context.insert("helm_app_version", &commit_id[..7]);
-        context.insert("image_name_with_tag", &self.image.full_image_name_with_tag());
+        context.insert("image_name_with_tag", &self.build.image.full_image_name_with_tag());
 
         let cpu_limits = match validate_k8s_required_cpu_and_burstable(
             &ListenersHelper::new(&self.listeners),
@@ -239,7 +247,7 @@ impl Service for ApplicationDo {
 
         // This is specific to digital ocean as it is them that create the registry secret
         // we don't have the hand on it
-        context.insert("registry_secret", &self.image.registry_name);
+        context.insert("registry_secret", &self.build.image.registry_name);
 
         let storage = self
             .storage

@@ -5,6 +5,7 @@ use std::sync::mpsc::TryRecvError;
 use std::thread;
 use std::time::Duration;
 
+use crate::build_platform::Build;
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::environment::Environment;
@@ -160,7 +161,10 @@ pub trait StatefulService: Service + Create + Pause + Delete {
 
     fn is_managed_service(&self) -> bool;
 }
-pub trait Application: StatelessService {}
+pub trait Application: StatelessService {
+    fn get_build(&self) -> &Build;
+    fn get_build_mut(&mut self) -> &mut Build;
+}
 
 pub trait Router: StatelessService + Listen + Helm {
     fn domains(&self) -> Vec<&str>;

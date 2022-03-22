@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use tera::Context as TeraContext;
 
-use crate::build_platform::Image;
+use crate::build_platform::Build;
 use crate::cloud_provider::kubernetes::validate_k8s_required_cpu_and_burstable;
 use crate::cloud_provider::models::{
     EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
@@ -35,7 +35,7 @@ pub struct ApplicationScw {
     min_instances: u32,
     max_instances: u32,
     start_timeout_in_seconds: u32,
-    image: Image,
+    build: Build,
     storage: Vec<Storage<StorageType>>,
     environment_variables: Vec<EnvironmentVariable>,
     listeners: Listeners,
@@ -55,7 +55,7 @@ impl ApplicationScw {
         min_instances: u32,
         max_instances: u32,
         start_timeout_in_seconds: u32,
-        image: Image,
+        build: Build,
         storage: Vec<Storage<StorageType>>,
         environment_variables: Vec<EnvironmentVariable>,
         listeners: Listeners,
@@ -73,7 +73,7 @@ impl ApplicationScw {
             min_instances,
             max_instances,
             start_timeout_in_seconds,
-            image,
+            build,
             storage,
             environment_variables,
             listeners,
@@ -122,7 +122,15 @@ impl StatelessService for ApplicationScw {
     }
 }
 
-impl Application for ApplicationScw {}
+impl Application for ApplicationScw {
+    fn get_build(&self) -> &Build {
+        &self.build
+    }
+
+    fn get_build_mut(&mut self) -> &mut Build {
+        &mut self.build
+    }
+}
 
 impl ToTransmitter for ApplicationScw {
     fn to_transmitter(&self) -> Transmitter {
@@ -152,7 +160,7 @@ impl Service for ApplicationScw {
     }
 
     fn version(&self) -> String {
-        self.image.commit_id.clone()
+        self.build.image.commit_id.clone()
     }
 
     fn action(&self) -> &Action {
@@ -199,10 +207,10 @@ impl Service for ApplicationScw {
         let kubernetes = target.kubernetes;
         let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
-        let commit_id = self.image.commit_id.as_str();
+        let commit_id = self.build.image.commit_id.as_str();
 
         context.insert("helm_app_version", &commit_id[..7]);
-        context.insert("image_name_with_tag", &self.image.full_image_name_with_tag());
+        context.insert("image_name_with_tag", &self.build.image.full_image_name_with_tag());
 
         let environment_variables = self
             .environment_variables
@@ -276,7 +284,8 @@ impl Service for ApplicationScw {
         // container registry credentials
         context.insert(
             "container_registry_docker_json_config",
-            self.image
+            self.build
+                .image
                 .clone()
                 .registry_docker_json_config
                 .unwrap_or("".to_string())
