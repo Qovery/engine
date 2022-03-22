@@ -11,16 +11,16 @@ use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrateg
 use std::sync::Arc;
 
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::utilities::{build_platform_local_docker, generate_id, logger, FuncTestsSecrets};
+use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
 use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::Kind::Scw;
+use qovery_engine::container_registry::errors::ContainerRegistryError;
 use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::dns_provider::DnsProvider;
-use qovery_engine::errors::EngineError;
 use qovery_engine::logger::Logger;
 use tracing::error;
 
@@ -59,7 +59,6 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
         scw_secret_key.as_str(),
         scw_default_project_id.as_str(),
         SCW_TEST_ZONE,
-        logger(),
     )
     .unwrap()
 }
@@ -226,7 +225,7 @@ pub fn clean_environments(
     environments: Vec<EnvironmentRequest>,
     secrets: FuncTestsSecrets,
     zone: ScwZone,
-) -> Result<(), EngineError> {
+) -> Result<(), ContainerRegistryError> {
     let secret_token = secrets.SCALEWAY_SECRET_KEY.unwrap();
     let project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap();
 
@@ -237,9 +236,7 @@ pub fn clean_environments(
         secret_token.as_str(),
         project_id.as_str(),
         zone,
-        logger(),
-    )
-    .unwrap();
+    )?;
 
     // delete images created in registry
     let registry_url = container_registry_client.registry_info();

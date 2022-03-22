@@ -5,11 +5,13 @@ use std::thread;
 
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{Action, Service};
-use crate::engine::EngineConfig;
+use crate::container_registry::errors::ContainerRegistryError;
+use crate::container_registry::to_engine_error;
+use crate::engine::{EngineConfig, EngineConfigError};
 use crate::errors::{EngineError, Tag};
-use crate::events::{EngineEvent, EventMessage};
+use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, Transmitter};
 use crate::logger::{LogLevel, Logger};
-use crate::models::{EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
+use crate::models::{EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier};
 
 pub struct Transaction<'a> {
     engine: &'a EngineConfig,
@@ -27,9 +29,11 @@ impl<'a> Transaction<'a> {
         logger: Box<dyn Logger>,
         is_transaction_aborted: Box<dyn Fn() -> bool>,
         on_step_change: Box<dyn Fn(&StepName)>,
-    ) -> Result<Self, EngineError> {
+    ) -> Result<Self, EngineConfigError> {
         let _ = engine.is_valid()?;
-        let _ = engine.kubernetes().is_valid()?;
+        if let Err(e) = engine.kubernetes().is_valid() {
+            return Err(EngineConfigError::KubernetesNotValid(e));
+        }
 
         let mut tx = Transaction::<'a> {
             engine,
@@ -43,6 +47,19 @@ impl<'a> Transaction<'a> {
         tx.set_current_step(StepName::Waiting);
 
         Ok(tx)
+    }
+
+    fn get_event_details(&self, stage: Stage, transmitter: Transmitter) -> EventDetails {
+        let context = self.engine.context();
+        EventDetails::new(
+            None,
+            QoveryIdentifier::from(context.organization_id().to_string()),
+            QoveryIdentifier::from(context.cluster_id().to_string()),
+            QoveryIdentifier::from(context.execution_id().to_string()),
+            None,
+            stage,
+            transmitter,
+        )
     }
 
     pub fn set_current_step(&mut self, step: StepName) {
@@ -117,9 +134,20 @@ impl<'a> Transaction<'a> {
             return Ok(());
         }
 
+        let cr_to_engine_error = |err: ContainerRegistryError| -> EngineError {
+            let event_details = self.get_event_details(
+                Stage::Environment(EnvironmentStep::Build),
+                Transmitter::ContainerRegistry(
+                    self.engine.container_registry().id().to_string(),
+                    self.engine.container_registry().name().to_string(),
+                ),
+            );
+            to_engine_error(event_details, err)
+        };
+
         // Do setup of registry and be sure we are login to the registry
         let cr_registry = self.engine.container_registry();
-        let _ = cr_registry.create_registry()?;
+        let _ = cr_registry.create_registry().map_err(cr_to_engine_error)?;
 
         for app in apps_to_build.iter_mut() {
             // If image already exist in the registry, skip the build
@@ -131,7 +159,8 @@ impl<'a> Transaction<'a> {
             let _ = self
                 .engine
                 .container_registry()
-                .create_repository(app.get_build().image.repository_name())?;
+                .create_repository(app.get_build().image.repository_name())
+                .map_err(cr_to_engine_error)?;
 
             // Ok now everything is setup, we can try to build the app
             let _ = self

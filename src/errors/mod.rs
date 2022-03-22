@@ -6,6 +6,7 @@ use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cmd;
 use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
+use crate::container_registry::errors::ContainerRegistryError;
 use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
 use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
 use crate::models::QoveryIdentifier;
@@ -111,6 +112,12 @@ impl Display for CommandError {
 impl From<ObjectStorageError> for CommandError {
     fn from(object_storage_error: ObjectStorageError) -> Self {
         CommandError::new_from_safe_message(object_storage_error.to_string())
+    }
+}
+
+impl From<ContainerRegistryError> for CommandError {
+    fn from(container_registry_error: ContainerRegistryError) -> Self {
+        CommandError::new_from_safe_message(container_registry_error.to_string())
     }
 }
 
@@ -303,7 +310,7 @@ pub enum Tag {
     ObjectStorageCannotActivateBucketVersioning,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 /// EngineError: represents an engine error. Engine will always returns such errors carrying context infos easing monitoring and debugging.
 pub struct EngineError {
     /// tag: error unique identifier
@@ -1725,6 +1732,24 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
+    pub fn new_container_registry_error(event_details: EventDetails, error: ContainerRegistryError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::HelmChartUninstallError,
+            error.to_string(),
+            error.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from an Container Registry error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
     pub fn new_helm_error(event_details: EventDetails, error: HelmError) -> EngineError {
         let cmd_error = match &error {
             HelmError::CmdError(_, _, cmd_error) => Some(cmd_error.clone()),
@@ -2439,7 +2464,7 @@ impl EngineError {
         event_details: EventDetails,
         repository_name: String,
         registry_name: String,
-        raw_error: CommandError,
+        raw_error: ContainerRegistryError,
     ) -> EngineError {
         let message = format!(
             "Error, trying to create registry `{}` in `{}`.",
@@ -2451,7 +2476,7 @@ impl EngineError {
             Tag::ContainerRegistryRepositoryCreationError,
             message.to_string(),
             message.to_string(),
-            Some(raw_error),
+            Some(raw_error.into()),
             None,
             None,
         )
@@ -2467,7 +2492,7 @@ impl EngineError {
     pub fn new_container_registry_repository_set_lifecycle_policy_error(
         event_details: EventDetails,
         repository_name: String,
-        raw_error: CommandError,
+        raw_error: ContainerRegistryError,
     ) -> EngineError {
         let message = format!(
             "Error, trying to set lifecycle policy repository `{}`.",
@@ -2479,7 +2504,7 @@ impl EngineError {
             Tag::ContainerRegistryRepositorySetLifecycleError,
             message.to_string(),
             message.to_string(),
-            Some(raw_error),
+            Some(raw_error.into()),
             None,
             None,
         )
@@ -2521,7 +2546,7 @@ impl EngineError {
     pub fn new_container_registry_delete_image_error(
         event_details: EventDetails,
         image_name: String,
-        raw_error: Option<CommandError>,
+        raw_error: ContainerRegistryError,
     ) -> EngineError {
         let message = format!("Failed to delete image `{}`.", image_name,);
 
@@ -2530,7 +2555,7 @@ impl EngineError {
             Tag::ContainerRegistryDeleteImageError,
             message.to_string(),
             message.to_string(),
-            raw_error,
+            Some(raw_error.into()),
             None,
             None,
         )
@@ -2545,7 +2570,7 @@ impl EngineError {
     pub fn new_container_registry_image_doesnt_exist(
         event_details: EventDetails,
         image_name: String,
-        raw_error: Option<CommandError>,
+        raw_error: ContainerRegistryError,
     ) -> EngineError {
         let message = format!("Image `{}` doesn't exists.", image_name,);
 
@@ -2554,7 +2579,7 @@ impl EngineError {
             Tag::ContainerRegistryImageDoesntExist,
             message.to_string(),
             message.to_string(),
-            raw_error,
+            Some(raw_error.into()),
             None,
             None,
         )
@@ -2817,5 +2842,11 @@ impl EngineError {
             None,
             None,
         )
+    }
+}
+
+impl Display for EngineError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(format!("{:?}", self).as_str())
     }
 }
