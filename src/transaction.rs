@@ -134,6 +134,7 @@ impl<'a> Transaction<'a> {
             return Ok(());
         }
 
+        // To convert ContainerError to EngineError
         let cr_to_engine_error = |err: ContainerRegistryError| -> EngineError {
             let event_details = self.get_event_details(
                 Stage::Environment(EnvironmentStep::Build),

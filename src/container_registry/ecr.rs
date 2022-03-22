@@ -66,6 +66,7 @@ impl ECR {
             registry_name: cr.name.to_string(),
             registry_docker_json_config: None,
             get_image_name: Box::new(|img_name| img_name.to_string()),
+            get_repository_name: Box::new(|imag_name| imag_name.to_string()),
         };
 
         cr.registry_info = Some(registry_info);

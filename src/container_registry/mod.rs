@@ -52,6 +52,9 @@ pub struct ContainerRegistryInfo {
     // i.e: fo scaleway => image_name/image_name
     // i.e: for AWS => image_name
     pub get_image_name: Box<dyn Fn(&str) -> String>,
+
+    // Give it the name of your image, and it return the name of the repository that will be used
+    pub get_repository_name: Box<dyn Fn(&str) -> String>,
 }
 
 pub struct PushResult {

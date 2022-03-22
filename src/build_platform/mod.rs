@@ -81,12 +81,13 @@ pub struct Image {
     pub name: String,
     pub tag: String,
     pub commit_id: String,
-    // registry name where the image has been pushed: Optional
+    // registry name where the image has been pushed
     pub registry_name: String,
     // registry docker json config: Optional
     pub registry_docker_json_config: Option<String>,
     // complete registry URL where the image has been pushed
     pub registry_url: Url,
+    pub repository_name: String,
 }
 
 impl Image {
@@ -95,7 +96,7 @@ impl Image {
     }
 
     pub fn repository_name(&self) -> &str {
-        self.name.split('/').collect::<Vec<&str>>()[0]
+        &self.repository_name
     }
     pub fn full_image_name_with_tag(&self) -> String {
         format!(
@@ -125,6 +126,7 @@ impl Default for Image {
             registry_name: "".to_string(),
             registry_docker_json_config: None,
             registry_url: Url::parse("https://default.com").unwrap(),
+            repository_name: "".to_string(),
         }
     }
 }
