@@ -184,21 +184,23 @@ impl QoveryCommand {
         ))
         .lines();
 
-        let mut should_exit_loop = false;
-        while !should_exit_loop {
+        let mut stdout_closed = false;
+        let mut stderr_closed = false;
+        while !stdout_closed || !stderr_closed {
             // We should abort and kill the process
             if abort_notifier.should_abort().is_some() {
                 break;
             }
 
             // Read on stdout first
-            while !should_exit_loop {
-                let line = if let Some(line) = stdout_reader.next() {
-                    line
-                } else {
-                    // Stdout has been closed
-                    should_exit_loop = true;
-                    break;
+            while !stdout_closed {
+                let line = match stdout_reader.next() {
+                    Some(line) => line,
+                    None => {
+                        // Stdout has been closed
+                        stdout_closed = true;
+                        break;
+                    }
                 };
 
                 match line {
@@ -206,26 +208,28 @@ impl QoveryCommand {
                     Ok(line) => stdout_output(line),
                     Err(err) => {
                         error!("Error on stdout of cmd {:?}: {:?}", self.command, err);
-                        should_exit_loop = true;
+                        stdout_closed = true;
                         break;
                     }
                 }
 
                 // Should we abort and kill the process
                 if abort_notifier.should_abort().is_some() {
-                    should_exit_loop = true;
+                    stdout_closed = true;
+                    stderr_closed = true;
                     break;
                 }
             }
 
             // Read stderr now
-            while !should_exit_loop {
-                let line = if let Some(line) = stderr_reader.next() {
-                    line
-                } else {
-                    // Stderr has been closed
-                    should_exit_loop = true;
-                    break;
+            while !stderr_closed {
+                let line = match stderr_reader.next() {
+                    Some(line) => line,
+                    None => {
+                        // Stdout has been closed
+                        stderr_closed = true;
+                        break;
+                    }
                 };
 
                 match line {
@@ -233,14 +237,15 @@ impl QoveryCommand {
                     Ok(line) => stderr_output(line),
                     Err(err) => {
                         error!("Error on stderr of cmd {:?}: {:?}", self.command, err);
-                        should_exit_loop = true;
+                        stderr_closed = true;
                         break;
                     }
                 }
 
                 // should we abort and kill the process
                 if abort_notifier.should_abort().is_some() {
-                    should_exit_loop = true;
+                    stdout_closed = true;
+                    stderr_closed = true;
                     break;
                 }
             }
