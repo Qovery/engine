@@ -154,7 +154,7 @@ impl Display for EventMessage {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// Stage: represents an engine event stage, can be General, Infrastructure or Environment.
 pub enum Stage {
     /// GeneralStep: general stage in the engine, usually used across all stages.
@@ -190,7 +190,7 @@ impl Display for Stage {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// GeneralStep: represents an engine general step usually shared across all engine stages
 pub enum GeneralStep {
     /// ValidateSystemRequirements: validating system requirements
@@ -218,7 +218,7 @@ impl Display for GeneralStep {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// InfrastructureStep: represents an engine infrastructure step.
 pub enum InfrastructureStep {
     /// LoadConfiguration: first step in infrastructure, aiming to load all configuration (from Terraform, etc).
@@ -255,7 +255,7 @@ impl Display for InfrastructureStep {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// EnvironmentStep: represents an engine environment step.
 pub enum EnvironmentStep {
     /// LoadConfiguration: first step in environment, aiming to load all configuration (from Terraform, etc).
@@ -309,7 +309,7 @@ type TransmitterName = String;
 /// TransmitterType: represents a transmitter type.
 type TransmitterType = String; // TODO(benjaminch): makes it a real enum / type
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// Transmitter: represents the event's source caller (transmitter).
 pub enum Transmitter {
     /// BuildPlatform: platform aiming to build applications images.
@@ -358,7 +358,7 @@ impl Display for Transmitter {
 /// Region: represents event's cloud provider region.
 type Region = String;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// EventDetails: represents an event details, carrying all useful data such as Qovery identifiers, transmitter, stage etc.
 pub struct EventDetails {
     /// provider_kind: cloud provider name. an be set to None if not linked to any provider kind.

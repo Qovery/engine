@@ -27,7 +27,7 @@ use crate::container_registry::ContainerRegistryInfo;
 use crate::logger::Logger;
 use crate::utilities::get_image_tag;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct QoveryIdentifier {
     raw_long_id: String,
     short: String,

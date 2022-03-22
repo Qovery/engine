@@ -2,7 +2,7 @@ use std::thread;
 
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::Service;
-use crate::engine::EngineConfig;
+use crate::engine::{EngineConfig, EngineConfigError};
 use crate::errors::{EngineError, Tag};
 use crate::events::{EngineEvent, EventMessage};
 use crate::logger::{LogLevel, Logger};
@@ -26,9 +26,11 @@ impl<'a> Transaction<'a> {
         logger: Box<dyn Logger>,
         is_transaction_aborted: Box<dyn Fn() -> bool>,
         on_step_change: Box<dyn Fn(&StepName)>,
-    ) -> Result<Self, EngineError> {
+    ) -> Result<Self, EngineConfigError> {
         let _ = engine.is_valid()?;
-        let _ = engine.kubernetes().is_valid()?;
+        if let Err(e) = engine.kubernetes().is_valid() {
+            return Err(EngineConfigError::KubernetesNotValid(e));
+        }
 
         let mut tx = Transaction::<'a> {
             engine,
@@ -118,7 +120,7 @@ impl<'a> Transaction<'a> {
 
         // Do setup of registry and be sure we are login to the registry
         let cr_registry = self.engine.container_registry();
-        let _ = cr_registry.create_registry()?;
+        let _ = cr_registry.create_registry();
         let registry = self.engine.container_registry().registry_info();
 
         for app in apps_to_build.into_iter() {
@@ -130,7 +132,7 @@ impl<'a> Transaction<'a> {
             }
 
             // Be sure that our repository exist before trying to pull/push images from it
-            let _ = self.engine.container_registry().create_repository(&app.name)?;
+            let _ = self.engine.container_registry().create_repository(&app.name);
 
             // Ok now everything is setup, we can try to build the app
             let _ = self
