@@ -25,19 +25,6 @@ pub enum CommandError {
     Killed(String),
 }
 
-impl CommandError {
-    pub fn to_string(&self) -> String {
-        match self {
-            ExecutionError(err) => format!("Execution error: {}", err.to_string()),
-            ExitStatusError(exit_status) => {
-                format!("Execution error: exit status {}", exit_status.to_string())
-            }
-            TimeoutError(msg) => format!("Execution error: timeout, {}", msg.to_string()),
-            Killed(msg) => format!("Execution error: killed, {}", msg.to_string()),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum AbortReason {
     Timeout(Duration),
@@ -168,16 +155,16 @@ impl QoveryCommand {
 
         // Read stdout/stderr until timeout is reached
         let reader_timeout = std::time::Duration::from_secs(1);
-        let stdout = cmd_handle.stdout.take().ok_or(ExecutionError(Error::new(
-            ErrorKind::BrokenPipe,
-            "Cannot get stdout for command",
-        )))?;
+        let stdout = cmd_handle
+            .stdout
+            .take()
+            .ok_or_else(|| ExecutionError(Error::new(ErrorKind::BrokenPipe, "Cannot get stdout for command")))?;
         let mut stdout_reader = BufReader::new(TimeoutReader::new(stdout, reader_timeout)).lines();
 
-        let stderr = cmd_handle.stderr.take().ok_or(ExecutionError(Error::new(
-            ErrorKind::BrokenPipe,
-            "Cannot get stderr for command",
-        )))?;
+        let stderr = cmd_handle
+            .stderr
+            .take()
+            .ok_or_else(|| ExecutionError(Error::new(ErrorKind::BrokenPipe, "Cannot get stderr for command")))?;
         let mut stderr_reader = BufReader::new(TimeoutReader::new(
             stderr,
             std::time::Duration::from_secs(0), // don't block on stderr
@@ -304,7 +291,7 @@ impl QoveryCommand {
 // return the output of "binary_name" --version
 pub fn run_version_command_for(binary_name: &str) -> String {
     let mut output_from_cmd = String::new();
-    let mut cmd = QoveryCommand::new(binary_name, &vec!["--version"], Default::default());
+    let mut cmd = QoveryCommand::new(binary_name, &["--version"], Default::default());
     let _ = cmd.exec_with_output(&mut |r_out| output_from_cmd.push_str(&r_out), &mut |r_err| {
         error!("Error executing {}: {}", binary_name, r_err)
     });
