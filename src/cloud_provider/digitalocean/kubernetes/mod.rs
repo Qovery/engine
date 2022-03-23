@@ -1739,7 +1739,15 @@ impl Kubernetes for DOKS {
             },
             None => {
                 let kubeconfig = match get_do_kubeconfig_by_cluster_name(self.cloud_provider.token(), self.name()) {
-                    Ok(kubeconfig) => kubeconfig,
+                    Ok(kubeconfig) => match kubeconfig {
+                        None => {
+                            return Err(EngineError::new_cannot_retrieve_cluster_config_file(
+                                event_details.clone(),
+                                CommandError::new_from_safe_message("Kubeconfig is empty".to_string()),
+                            ))
+                        }
+                        Some(content) => content,
+                    },
                     Err(e) => {
                         return Err(EngineError::new_cannot_retrieve_cluster_config_file(
                             event_details.clone(),
@@ -1778,24 +1786,15 @@ impl Kubernetes for DOKS {
                         .truncate(true)
                         .open(path),
                 ) {
-                    Ok(mut created_file) => match kubeconfig.is_some() {
-                        false => Err(EngineError::new_cannot_create_file(
+                    Ok(mut created_file) => match block_on(created_file.write_all(kubeconfig.as_bytes())) {
+                        Ok(_) => {
+                            let file = File::open(path).unwrap();
+                            Ok((file_path, file))
+                        }
+                        Err(e) => Err(EngineError::new_cannot_retrieve_cluster_config_file(
                             event_details.clone(),
-                            CommandError::new(
-                                "No kubeconfig found".to_string(),
-                                Some("No kubeconfig found".to_string()),
-                            ),
+                            CommandError::new(e.to_string(), Some(e.to_string())),
                         )),
-                        true => match block_on(created_file.write_all(kubeconfig.unwrap().as_bytes())) {
-                            Ok(_) => {
-                                let file = File::open(path).unwrap();
-                                Ok((file_path, file))
-                            }
-                            Err(e) => Err(EngineError::new_cannot_retrieve_cluster_config_file(
-                                event_details.clone(),
-                                CommandError::new(e.to_string(), Some(e.to_string())),
-                            )),
-                        },
                     },
                     Err(e) => Err(EngineError::new_cannot_create_file(
                         event_details.clone(),
