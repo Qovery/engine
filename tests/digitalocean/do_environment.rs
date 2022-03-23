@@ -7,7 +7,7 @@ use self::test_utilities::utilities::{
 };
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::models::{Action, CloneForTest, EnvironmentAction, Port, Protocol, Storage, StorageType};
+use qovery_engine::models::{Action, CloneForTest, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
 use std::thread;
@@ -60,8 +60,8 @@ fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
         environment_for_delete.routers = vec![];
         environment_for_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
+        let env_action = environment.clone();
+        let env_action_for_delete = environment_for_delete.clone();
 
         let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -117,8 +117,8 @@ fn digitalocean_doks_deploy_a_not_working_environment_with_no_router() {
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
+        let env_action = environment.clone();
+        let env_action_for_delete = environment_for_delete.clone();
         let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
 
@@ -168,7 +168,7 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
                 .as_str(),
         );
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
+        let env_action = environment.clone();
         let selector = format!("appId={}", environment.applications[0].id);
 
         let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
@@ -283,8 +283,8 @@ fn digitalocean_doks_build_with_buildpacks_and_deploy_a_working_environment() {
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
+        let env_action = environment.clone();
+        let env_action_for_delete = environment_for_delete.clone();
 
         let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
@@ -339,8 +339,8 @@ fn digitalocean_doks_deploy_a_working_environment_with_domain() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_delete = EnvironmentAction::Environment(environment_delete.clone());
+        let env_action = environment.clone();
+        let env_action_for_delete = environment_delete.clone();
 
         let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
@@ -411,8 +411,8 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
+        let env_action = environment.clone();
+        let env_action_delete = environment_delete.clone();
 
         let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
@@ -497,9 +497,9 @@ fn digitalocean_doks_redeploy_same_app() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_redeploy = EnvironmentAction::Environment(environment_redeploy.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
+        let env_action = environment.clone();
+        let env_action_redeploy = environment_redeploy.clone();
+        let env_action_delete = environment_delete.clone();
 
         let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
@@ -602,9 +602,9 @@ fn digitalocean_doks_deploy_a_not_working_environment_and_then_working_environme
         environment_for_delete.action = Action::Delete;
 
         // environment actions
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_not_working = EnvironmentAction::Environment(environment_for_not_working.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_for_delete.clone());
+        let env_action = environment.clone();
+        let env_action_not_working = environment_for_not_working.clone();
+        let env_action_delete = environment_for_delete.clone();
 
         let result = environment_for_not_working.deploy_environment(
             &env_action_not_working,
@@ -688,10 +688,10 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_not_working_1 = EnvironmentAction::Environment(not_working_env_1.clone());
-        let env_action_not_working_2 = EnvironmentAction::Environment(not_working_env_2.clone());
-        let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
+        let env_action = environment.clone();
+        let env_action_not_working_1 = not_working_env_1.clone();
+        let env_action_not_working_2 = not_working_env_2.clone();
+        let env_action_delete = delete_env.clone();
 
         // OK
         let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
@@ -772,8 +772,8 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_no_failover() {
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
+        let env_action = environment.clone();
+        let env_action_delete = delete_env.clone();
 
         let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::UnrecoverableError(_, _)));
@@ -829,8 +829,8 @@ fn digitalocean_doks_deploy_a_working_environment_with_sticky_session() {
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
+        let env_action = environment.clone();
+        let env_action_for_delete = environment_for_delete.clone();
 
         let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));

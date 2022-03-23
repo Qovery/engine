@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::str::FromStr;
 
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
@@ -10,11 +9,8 @@ use rusoto_ecr::{
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
 use crate::build_platform::Image;
-use crate::cmd::docker::to_engine_error;
+use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
-use crate::errors::{CommandError, EngineError};
-use crate::events::{EngineEvent, EventMessage, ToTransmitter, Transmitter};
-use crate::logger::{LogLevel, Logger};
 use crate::models::{Context, Listen, Listener, Listeners};
 use crate::runtime::block_on;
 use retry::delay::Fixed;
@@ -32,7 +28,6 @@ pub struct ECR {
     region: Region,
     registry_info: Option<ContainerRegistryInfo>,
     listeners: Listeners,
-    logger: Box<dyn Logger>,
 }
 
 impl ECR {
@@ -43,8 +38,7 @@ impl ECR {
         access_key_id: &str,
         secret_access_key: &str,
         region: &str,
-        logger: Box<dyn Logger>,
-    ) -> Result<Self, EngineError> {
+    ) -> Result<Self, ContainerRegistryError> {
         let mut cr = ECR {
             context,
             id: id.to_string(),
@@ -54,7 +48,6 @@ impl ECR {
             region: Region::from_str(region).unwrap(),
             registry_info: None,
             listeners: vec![],
-            logger,
         };
 
         let credentials = cr.get_credentials()?;
@@ -66,13 +59,14 @@ impl ECR {
             .context
             .docker
             .login(&registry_url)
-            .map_err(|err| to_engine_error(&cr.get_event_details(), err))?;
+            .map_err(|_err| ContainerRegistryError::InvalidCredentials)?;
 
         let registry_info = ContainerRegistryInfo {
             endpoint: registry_url,
             registry_name: cr.name.to_string(),
             registry_docker_json_config: None,
             get_image_name: Box::new(|img_name| img_name.to_string()),
+            get_repository_name: Box::new(|imag_name| imag_name.to_string()),
         };
 
         cr.registry_info = Some(registry_info);
@@ -132,16 +126,7 @@ impl ECR {
         }
     }
 
-    fn create_repository(&self, repository_name: &str) -> Result<Repository, EngineError> {
-        let event_details = self.get_event_details();
-        self.logger().log(
-            LogLevel::Info,
-            EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe(format!("Creating ECR repository {}", &repository_name)),
-            ),
-        );
-
+    fn create_repository(&self, repository_name: &str) -> Result<Repository, ContainerRegistryError> {
         let mut repo_creation_counter = 0;
         let container_registry_request = DescribeRepositoriesRequest {
             repository_names: Some(vec![repository_name.to_string()]),
@@ -159,92 +144,44 @@ impl ECR {
                 self.ecr_client()
                     .describe_repositories(container_registry_request.clone()),
             ) {
-                Ok(x) => {
-                    self.logger().log(
-                        LogLevel::Debug,
-                        EngineEvent::Debug(
-                            event_details.clone(),
-                            EventMessage::new_from_safe(format!("Created {:?} repository", x)),
-                        ),
-                    );
-                    OperationResult::Ok(())
-                }
+                Ok(_x) => OperationResult::Ok(()),
                 Err(e) => {
                     match e {
                         RusotoError::Service(s) => match s {
                             DescribeRepositoriesError::RepositoryNotFound(_) => {
-                                if repo_creation_counter != 0 {
-                                    self.logger().log(
-                                        LogLevel::Warning,
-                                        EngineEvent::Warning(
-                                            event_details.clone(),
-                                            EventMessage::new_from_safe(format!(
-                                                "Repository {} was not found, {}x retrying...",
-                                                &repository_name, &repo_creation_counter
-                                            )),
-                                        ),
-                                    );
-                                }
                                 repo_creation_counter += 1;
                             }
-                            _ => self.logger().log(
-                                LogLevel::Warning,
-                                EngineEvent::Warning(
-                                    event_details.clone(),
-                                    EventMessage::new(
-                                        "Error while trying to create repository.".to_string(),
-                                        Some(format!("{:?}", s)),
-                                    ),
-                                ),
-                            ),
+                            _ => {}
                         },
-                        _ => self.logger().log(
-                            LogLevel::Warning,
-                            EngineEvent::Warning(
-                                event_details.clone(),
-                                EventMessage::new(
-                                    "Error while trying to create repository.".to_string(),
-                                    Some(format!("{:?}", e)),
-                                ),
-                            ),
-                        ),
+                        _ => {}
                     }
 
-                    // TODO: This behavior is weird, returning an ok message saying repository has been created in an error ...
-                    let msg = match block_on(self.ecr_client().create_repository(crr.clone())) {
-                        Ok(_) => format!("repository {} created", &repository_name),
-                        Err(err) => format!("{:?}", err),
-                    };
+                    if let Err(err) = block_on(self.ecr_client().create_repository(crr.clone())) {
+                        return OperationResult::Retry(Err(ContainerRegistryError::CannotCreateRepository {
+                            registry_name: self.name.to_string(),
+                            repository_name: repository_name.to_string(),
+                            raw_error_message: err.to_string(),
+                        }));
+                    }
 
-                    OperationResult::Retry(Err(EngineError::new_container_registry_namespace_creation_error(
-                        event_details.clone(),
-                        repository_name.to_string(),
-                        self.name_with_id(),
-                        CommandError::new(msg.to_string(), Some("Can't create ECR repository".to_string())),
-                    )))
+                    OperationResult::Err(Err(ContainerRegistryError::CannotCreateRepository {
+                        registry_name: self.name.to_string(),
+                        repository_name: repository_name.to_string(),
+                        raw_error_message: "unknwon error".to_string(),
+                    }))
                 }
             }
         });
 
         match repo_created {
-            Ok(_) => self.logger.log(
-                LogLevel::Info,
-                EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(format!(
-                        "repository {} created after {} attempt(s)",
-                        &repository_name, repo_creation_counter,
-                    )),
-                ),
-            ),
+            Ok(_) => {}
             Err(Operation { error, .. }) => return error,
             Err(retry::Error::Internal(e)) => {
-                return Err(EngineError::new_container_registry_namespace_creation_error(
-                    event_details.clone(),
-                    repository_name.to_string(),
-                    self.name_with_id(),
-                    CommandError::new_from_safe_message(e),
-                ))
+                return Err(ContainerRegistryError::CannotCreateRepository {
+                    registry_name: self.name.to_string(),
+                    repository_name: repository_name.to_string(),
+                    raw_error_message: e.to_string(),
+                })
             }
         };
 
@@ -278,38 +215,26 @@ impl ECR {
         };
 
         match block_on(self.ecr_client().put_lifecycle_policy(plp)) {
-            Err(err) => Err(
-                EngineError::new_container_registry_repository_set_lifecycle_policy_error(
-                    event_details.clone(),
-                    repository_name.to_string(),
-                    CommandError::new_from_safe_message(err.to_string()),
-                ),
-            ),
+            Err(err) => Err(ContainerRegistryError::CannotSetRepositoryLifecyclePolicy {
+                registry_name: self.name.to_string(),
+                repository_name: repository_name.to_string(),
+                raw_error_message: err.to_string(),
+            }),
             _ => Ok(self.get_repository(repository_name).expect("cannot get repository")),
         }
     }
 
-    fn get_or_create_repository(&self, repository_name: &str) -> Result<Repository, EngineError> {
-        let event_details = self.get_event_details();
-
+    fn get_or_create_repository(&self, repository_name: &str) -> Result<Repository, ContainerRegistryError> {
         // check if the repository already exists
         let repository = self.get_repository(repository_name);
         if repository.is_some() {
-            self.logger.log(
-                LogLevel::Info,
-                EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(format!("ECR repository {} already exists", repository_name)),
-                ),
-            );
             return Ok(repository.unwrap());
         }
 
         self.create_repository(repository_name)
     }
 
-    fn get_credentials(&self) -> Result<ECRCredentials, EngineError> {
-        let event_details = self.get_event_details();
+    fn get_credentials(&self) -> Result<ECRCredentials, ContainerRegistryError> {
         let r = block_on(
             self.ecr_client()
                 .get_authorization_token(GetAuthorizationTokenRequest::default()),
@@ -333,27 +258,15 @@ impl ECR {
                     )
                 }
                 None => {
-                    return Err(EngineError::new_container_registry_get_credentials_error(
-                        event_details.clone(),
-                        self.name_with_id(),
-                    ));
+                    return Err(ContainerRegistryError::CannotGetCredentials);
                 }
             },
             _ => {
-                return Err(EngineError::new_container_registry_get_credentials_error(
-                    event_details.clone(),
-                    self.name_with_id(),
-                ));
+                return Err(ContainerRegistryError::CannotGetCredentials);
             }
         };
 
         Ok(ECRCredentials::new(access_token, password, endpoint_url))
-    }
-}
-
-impl ToTransmitter for ECR {
-    fn to_transmitter(&self) -> Transmitter {
-        Transmitter::ContainerRegistry(self.id().to_string(), self.name().to_string())
     }
 }
 
@@ -374,15 +287,13 @@ impl ContainerRegistry for ECR {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), ContainerRegistryError> {
         let client = StsClient::new_with_client(self.client(), Region::default());
         let s = block_on(client.get_caller_identity(GetCallerIdentityRequest::default()));
 
         match s {
             Ok(_) => Ok(()),
-            Err(_) => Err(EngineError::new_client_invalid_cloud_provider_credentials(
-                self.get_event_details(),
-            )),
+            Err(_) => Err(ContainerRegistryError::InvalidCredentials),
         }
     }
 
@@ -391,22 +302,18 @@ impl ContainerRegistry for ECR {
         self.registry_info.as_ref().unwrap()
     }
 
-    fn create_registry(&self) -> Result<(), EngineError> {
+    fn create_registry(&self) -> Result<(), ContainerRegistryError> {
         // Nothing to do, ECR require to create only repository
         Ok(())
     }
 
-    fn create_repository(&self, name: &str) -> Result<(), EngineError> {
+    fn create_repository(&self, name: &str) -> Result<(), ContainerRegistryError> {
         let _ = self.get_or_create_repository(name)?;
         Ok(())
     }
 
     fn does_image_exists(&self, image: &Image) -> bool {
         self.get_image(image).is_some()
-    }
-
-    fn logger(&self) -> &dyn Logger {
-        self.logger.borrow()
     }
 }
 

@@ -3,15 +3,15 @@ use std::str::FromStr;
 
 use tera::Context as TeraContext;
 
-use crate::build_platform::Image;
+use crate::build_platform::Build;
 use crate::cloud_provider::kubernetes::validate_k8s_required_cpu_and_burstable;
 use crate::cloud_provider::models::{
     EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
 };
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, deploy_stateless_service_error, deploy_user_stateless_service,
-    scale_down_application, send_progress_on_long_task, Action, Application as CApplication, Create, Delete, Helm,
-    Pause, Service, ServiceType, StatelessService,
+    scale_down_application, send_progress_on_long_task, Action, Application, Create, Delete, Helm, Pause, Service,
+    ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
@@ -23,7 +23,7 @@ use crate::logger::Logger;
 use crate::models::{Context, Listen, Listener, Listeners, ListenersHelper, Port};
 use ::function_name::named;
 
-pub struct Application {
+pub struct ApplicationScw {
     context: Context,
     id: String,
     action: Action,
@@ -35,14 +35,14 @@ pub struct Application {
     min_instances: u32,
     max_instances: u32,
     start_timeout_in_seconds: u32,
-    image: Image,
+    build: Build,
     storage: Vec<Storage<StorageType>>,
     environment_variables: Vec<EnvironmentVariable>,
     listeners: Listeners,
     logger: Box<dyn Logger>,
 }
 
-impl Application {
+impl ApplicationScw {
     pub fn new(
         context: Context,
         id: &str,
@@ -55,13 +55,13 @@ impl Application {
         min_instances: u32,
         max_instances: u32,
         start_timeout_in_seconds: u32,
-        image: Image,
+        build: Build,
         storage: Vec<Storage<StorageType>>,
         environment_variables: Vec<EnvironmentVariable>,
         listeners: Listeners,
         logger: Box<dyn Logger>,
     ) -> Self {
-        Application {
+        ApplicationScw {
             context,
             id: id.to_string(),
             action,
@@ -73,7 +73,7 @@ impl Application {
             min_instances,
             max_instances,
             start_timeout_in_seconds,
-            image,
+            build,
             storage,
             environment_variables,
             listeners,
@@ -94,17 +94,7 @@ impl Application {
     }
 }
 
-impl crate::cloud_provider::service::Application for Application {
-    fn image(&self) -> &Image {
-        &self.image
-    }
-
-    fn set_image(&mut self, image: Image) {
-        self.image = image;
-    }
-}
-
-impl Helm for Application {
+impl Helm for ApplicationScw {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -126,15 +116,29 @@ impl Helm for Application {
     }
 }
 
-impl StatelessService for Application {}
+impl StatelessService for ApplicationScw {
+    fn as_stateless_service(&self) -> &dyn StatelessService {
+        self
+    }
+}
 
-impl ToTransmitter for Application {
+impl Application for ApplicationScw {
+    fn get_build(&self) -> &Build {
+        &self.build
+    }
+
+    fn get_build_mut(&mut self) -> &mut Build {
+        &mut self.build
+    }
+}
+
+impl ToTransmitter for ApplicationScw {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::Application(self.id().to_string(), self.name().to_string())
     }
 }
 
-impl Service for Application {
+impl Service for ApplicationScw {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -156,7 +160,7 @@ impl Service for Application {
     }
 
     fn version(&self) -> String {
-        self.image.commit_id.clone()
+        self.build.image.commit_id.clone()
     }
 
     fn action(&self) -> &Action {
@@ -203,10 +207,10 @@ impl Service for Application {
         let kubernetes = target.kubernetes;
         let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
-        let commit_id = self.image().commit_id.as_str();
+        let commit_id = self.build.image.commit_id.as_str();
 
         context.insert("helm_app_version", &commit_id[..7]);
-        context.insert("image_name_with_tag", &self.image.full_image_name_with_tag());
+        context.insert("image_name_with_tag", &self.build.image.full_image_name_with_tag());
 
         let environment_variables = self
             .environment_variables
@@ -280,7 +284,8 @@ impl Service for Application {
         // container registry credentials
         context.insert(
             "container_registry_docker_json_config",
-            self.image
+            self.build
+                .image
                 .clone()
                 .registry_docker_json_config
                 .unwrap_or("".to_string())
@@ -290,16 +295,16 @@ impl Service for Application {
         Ok(context)
     }
 
-    fn selector(&self) -> Option<String> {
-        Some(format!("appId={}", self.id))
-    }
-
     fn logger(&self) -> &dyn Logger {
         &*self.logger
     }
+
+    fn selector(&self) -> Option<String> {
+        Some(format!("appId={}", self.id))
+    }
 }
 
-impl Create for Application {
+impl Create for ApplicationScw {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -339,7 +344,7 @@ impl Create for Application {
     }
 }
 
-impl Pause for Application {
+impl Pause for ApplicationScw {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
@@ -382,7 +387,7 @@ impl Pause for Application {
     }
 }
 
-impl Delete for Application {
+impl Delete for ApplicationScw {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
@@ -422,7 +427,7 @@ impl Delete for Application {
     }
 }
 
-impl Listen for Application {
+impl Listen for ApplicationScw {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

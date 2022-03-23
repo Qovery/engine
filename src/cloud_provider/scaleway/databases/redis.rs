@@ -16,7 +16,7 @@ use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
 
-pub struct Redis {
+pub struct RedisScw {
     context: Context,
     id: String,
     action: Action,
@@ -32,7 +32,7 @@ pub struct Redis {
     logger: Box<dyn Logger>,
 }
 
-impl Redis {
+impl RedisScw {
     pub fn new(
         context: Context,
         id: &str,
@@ -83,13 +83,17 @@ impl Redis {
     }
 }
 
-impl StatefulService for Redis {
+impl StatefulService for RedisScw {
+    fn as_stateful_service(&self) -> &dyn StatefulService {
+        self
+    }
+
     fn is_managed_service(&self) -> bool {
         self.options.mode == MANAGED
     }
 }
 
-impl ToTransmitter for Redis {
+impl ToTransmitter for RedisScw {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::Database(
             self.id().to_string(),
@@ -99,7 +103,7 @@ impl ToTransmitter for Redis {
     }
 }
 
-impl Service for Redis {
+impl Service for RedisScw {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -222,18 +226,18 @@ impl Service for Redis {
         Ok(context)
     }
 
-    fn selector(&self) -> Option<String> {
-        Some(format!("app={}", self.sanitized_name()))
-    }
-
     fn logger(&self) -> &dyn Logger {
         &*self.logger
     }
+
+    fn selector(&self) -> Option<String> {
+        Some(format!("app={}", self.sanitized_name()))
+    }
 }
 
-impl Database for Redis {}
+impl Database for RedisScw {}
 
-impl Helm for Redis {
+impl Helm for RedisScw {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -255,7 +259,7 @@ impl Helm for Redis {
     }
 }
 
-impl Terraform for Redis {
+impl Terraform for RedisScw {
     fn terraform_common_resource_dir_path(&self) -> String {
         format!("{}/scaleway/services/common", self.context.lib_root_dir())
     }
@@ -265,7 +269,7 @@ impl Terraform for Redis {
     }
 }
 
-impl Create for Redis {
+impl Create for RedisScw {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -308,7 +312,7 @@ impl Create for Redis {
     }
 }
 
-impl Pause for Redis {
+impl Pause for RedisScw {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
@@ -345,7 +349,7 @@ impl Pause for Redis {
     }
 }
 
-impl Delete for Redis {
+impl Delete for RedisScw {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
@@ -382,7 +386,7 @@ impl Delete for Redis {
     }
 }
 
-impl Listen for Redis {
+impl Listen for RedisScw {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

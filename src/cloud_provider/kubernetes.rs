@@ -137,13 +137,7 @@ pub trait Kubernetes: Listen {
                     Err(err) => {
                         let error = EngineError::new_cannot_retrieve_cluster_config_file(
                             self.get_event_details(stage.clone()),
-                            CommandError::new_from_safe_message(
-                                format!(
-                                    "Error getting file from store, error: {}",
-                                    err.message.unwrap_or_else(|| "no details.".to_string())
-                                )
-                                .to_string(),
-                            ),
+                            err.into(),
                         );
                         self.logger()
                             .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
@@ -440,7 +434,7 @@ pub fn deploy_environment(
     };
 
     // create all stateful services (database)
-    for service in &environment.stateful_services {
+    for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
             service.exec_action(&stateful_deployment_target),
             kubernetes,
@@ -477,7 +471,7 @@ pub fn deploy_environment(
     };
 
     // create all stateless services (router, application...)
-    for service in &environment.stateless_services {
+    for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
             service.exec_action(&stateless_deployment_target),
             kubernetes,
@@ -495,7 +489,7 @@ pub fn deploy_environment(
     thread::sleep(std::time::Duration::from_millis(100));
 
     // check all deployed services
-    for service in &environment.stateful_services {
+    for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
             service.exec_check_action(),
             kubernetes,
@@ -512,7 +506,7 @@ pub fn deploy_environment(
     // Quick fix: adding 100 ms delay to avoid race condition on service status update
     thread::sleep(std::time::Duration::from_millis(100));
 
-    for service in &environment.stateless_services {
+    for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
             service.exec_check_action(),
             kubernetes,
@@ -553,7 +547,7 @@ pub fn deploy_environment_error(
     };
 
     // clean up all stateful services (database)
-    for service in &environment.stateful_services {
+    for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_create_error(&stateful_deployment_target),
             kubernetes,
@@ -577,7 +571,7 @@ pub fn deploy_environment_error(
     };
 
     // clean up all stateless services (router, application...)
-    for service in &environment.stateless_services {
+    for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_create_error(&stateless_deployment_target),
             kubernetes,
@@ -615,7 +609,7 @@ pub fn pause_environment(
     };
 
     // create all stateless services (router, application...)
-    for service in &environment.stateless_services {
+    for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_pause(&stateless_deployment_target),
             kubernetes,
@@ -633,7 +627,7 @@ pub fn pause_environment(
     thread::sleep(std::time::Duration::from_millis(100));
 
     // create all stateful services (database)
-    for service in &environment.stateful_services {
+    for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_pause(&stateful_deployment_target),
             kubernetes,
@@ -650,7 +644,7 @@ pub fn pause_environment(
     // Quick fix: adding 100 ms delay to avoid race condition on service status update
     thread::sleep(std::time::Duration::from_millis(100));
 
-    for service in &environment.stateless_services {
+    for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_pause_check(),
             kubernetes,
@@ -668,7 +662,7 @@ pub fn pause_environment(
     thread::sleep(std::time::Duration::from_millis(100));
 
     // check all deployed services
-    for service in &environment.stateful_services {
+    for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_pause_check(),
             kubernetes,
@@ -706,7 +700,7 @@ pub fn delete_environment(
     };
 
     // delete all stateless services (router, application...)
-    for service in &environment.stateless_services {
+    for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_delete(&stateful_deployment_target),
             kubernetes,
@@ -724,7 +718,7 @@ pub fn delete_environment(
     thread::sleep(std::time::Duration::from_millis(100));
 
     // delete all stateful services (database)
-    for service in &environment.stateful_services {
+    for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_delete(&stateful_deployment_target),
             kubernetes,
@@ -741,7 +735,7 @@ pub fn delete_environment(
     // Quick fix: adding 100 ms delay to avoid race condition on service status update
     thread::sleep(std::time::Duration::from_millis(100));
 
-    for service in &environment.stateless_services {
+    for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_delete_check(),
             kubernetes,
@@ -759,7 +753,7 @@ pub fn delete_environment(
     thread::sleep(std::time::Duration::from_millis(100));
 
     // check all deployed services
-    for service in &environment.stateful_services {
+    for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_delete_check(),
             kubernetes,

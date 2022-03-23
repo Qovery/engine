@@ -6,13 +6,17 @@ use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cmd;
 use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
+use crate::container_registry::errors::ContainerRegistryError;
 use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
 use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
 use crate::models::QoveryIdentifier;
+use crate::object_storage::errors::ObjectStorageError;
+use std::fmt::{Display, Formatter};
+use thiserror::Error;
 use url::Url;
 
 /// CommandError: command error, mostly returned by third party tools.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub struct CommandError {
     /// message: full error message, can contains unsafe text such as passwords and tokens.
     message_raw: String,
@@ -96,6 +100,24 @@ impl CommandError {
         }
 
         CommandError::new(unsafe_message, Some(message))
+    }
+}
+
+impl Display for CommandError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.message().as_str())
+    }
+}
+
+impl From<ObjectStorageError> for CommandError {
+    fn from(object_storage_error: ObjectStorageError) -> Self {
+        CommandError::new_from_safe_message(object_storage_error.to_string())
+    }
+}
+
+impl From<ContainerRegistryError> for CommandError {
+    fn from(container_registry_error: ContainerRegistryError) -> Self {
+        CommandError::new_from_safe_message(container_registry_error.to_string())
     }
 }
 
@@ -278,9 +300,17 @@ pub enum Tag {
     ContainerRegistryRepositoryDoesntExist,
     /// ContainerRegistryDeleteRepositoryError: represents an error while trying to delete a repository.
     ContainerRegistryDeleteRepositoryError,
+    /// ObjectStorageInvalidBucketName: represents an error, bucket name is not valid.
+    ObjectStorageInvalidBucketName,
+    /// ObjectStorageCannotEmptyBucket: represents an error while trying to empty an object storage bucket.
+    ObjectStorageCannotEmptyBucket,
+    /// ObjectStorageCannotTagBucket: represents an error while trying to tag an object storage bucket.
+    ObjectStorageCannotTagBucket,
+    /// ObjectStorageCannotActivateBucketVersioning: represents an error while trying to activate bucket versioning for bucket.
+    ObjectStorageCannotActivateBucketVersioning,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 /// EngineError: represents an engine error. Engine will always returns such errors carrying context infos easing monitoring and debugging.
 pub struct EngineError {
     /// tag: error unique identifier
@@ -634,7 +664,7 @@ impl EngineError {
             Tag::CannotRetrieveClusterConfigFile,
             message.to_string(),
             message.to_string(),
-            Some(error_message),
+            Some(error_message.into()),
             None,
             None,
         )
@@ -1702,6 +1732,24 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
+    pub fn new_container_registry_error(event_details: EventDetails, error: ContainerRegistryError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::HelmChartUninstallError,
+            error.to_string(),
+            error.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from an Container Registry error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
     pub fn new_helm_error(event_details: EventDetails, error: HelmError) -> EngineError {
         let cmd_error = match &error {
             HelmError::CmdError(_, _, cmd_error) => Some(cmd_error.clone()),
@@ -1847,65 +1895,6 @@ impl EngineError {
             message.to_string(),
             message.to_string(),
             None,
-            None,
-            None,
-        )
-    }
-
-    /// Creates new object storage cannot create bucket.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `bucket_name`: Object storage bucket name.
-    /// * `raw_error`: Raw error message.
-    pub fn new_object_storage_cannot_create_bucket_error(
-        event_details: EventDetails,
-        bucket_name: String,
-        raw_error: CommandError,
-    ) -> EngineError {
-        let message = format!(
-            "Error, cannot create object storage bucket `{}`.",
-            bucket_name.to_string(),
-        );
-
-        EngineError::new(
-            event_details,
-            Tag::ObjectStorageCannotCreateBucket,
-            message.to_string(),
-            message.to_string(),
-            Some(raw_error),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new object storage cannot put file into bucket.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `bucket_name`: Object storage bucket name.
-    /// * `file_name`: File name to be added into the bucket.
-    /// * `raw_error`: Raw error message.
-    pub fn new_object_storage_cannot_put_file_into_bucket_error(
-        event_details: EventDetails,
-        bucket_name: String,
-        file_name: String,
-        raw_error: CommandError,
-    ) -> EngineError {
-        let message = format!(
-            "Error, cannot put file `{}` into object storage bucket `{}`.",
-            file_name.to_string(),
-            bucket_name.to_string(),
-        );
-
-        EngineError::new(
-            event_details,
-            Tag::ObjectStorageCannotPutFileIntoBucket,
-            message.to_string(),
-            message.to_string(),
-            Some(raw_error),
             None,
             None,
         )
@@ -2475,7 +2464,7 @@ impl EngineError {
         event_details: EventDetails,
         repository_name: String,
         registry_name: String,
-        raw_error: CommandError,
+        raw_error: ContainerRegistryError,
     ) -> EngineError {
         let message = format!(
             "Error, trying to create registry `{}` in `{}`.",
@@ -2487,7 +2476,7 @@ impl EngineError {
             Tag::ContainerRegistryRepositoryCreationError,
             message.to_string(),
             message.to_string(),
-            Some(raw_error),
+            Some(raw_error.into()),
             None,
             None,
         )
@@ -2503,7 +2492,7 @@ impl EngineError {
     pub fn new_container_registry_repository_set_lifecycle_policy_error(
         event_details: EventDetails,
         repository_name: String,
-        raw_error: CommandError,
+        raw_error: ContainerRegistryError,
     ) -> EngineError {
         let message = format!(
             "Error, trying to set lifecycle policy repository `{}`.",
@@ -2515,7 +2504,7 @@ impl EngineError {
             Tag::ContainerRegistryRepositorySetLifecycleError,
             message.to_string(),
             message.to_string(),
-            Some(raw_error),
+            Some(raw_error.into()),
             None,
             None,
         )
@@ -2557,7 +2546,7 @@ impl EngineError {
     pub fn new_container_registry_delete_image_error(
         event_details: EventDetails,
         image_name: String,
-        raw_error: Option<CommandError>,
+        raw_error: ContainerRegistryError,
     ) -> EngineError {
         let message = format!("Failed to delete image `{}`.", image_name,);
 
@@ -2566,7 +2555,7 @@ impl EngineError {
             Tag::ContainerRegistryDeleteImageError,
             message.to_string(),
             message.to_string(),
-            raw_error,
+            Some(raw_error.into()),
             None,
             None,
         )
@@ -2581,7 +2570,7 @@ impl EngineError {
     pub fn new_container_registry_image_doesnt_exist(
         event_details: EventDetails,
         image_name: String,
-        raw_error: Option<CommandError>,
+        raw_error: ContainerRegistryError,
     ) -> EngineError {
         let message = format!("Image `{}` doesn't exists.", image_name,);
 
@@ -2590,7 +2579,7 @@ impl EngineError {
             Tag::ContainerRegistryImageDoesntExist,
             message.to_string(),
             message.to_string(),
-            raw_error,
+            Some(raw_error.into()),
             None,
             None,
         )
@@ -2690,5 +2679,174 @@ impl EngineError {
             None,
             None,
         )
+    }
+
+    /// Creates new error, object storage bucket name is not valid.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `bucket_name`: Errored bucket name.
+    pub fn new_object_storage_bucket_name_is_invalid(event_details: EventDetails, bucket_name: String) -> EngineError {
+        let message = format!("Error: bucket name `{}` is not valid.", bucket_name);
+
+        EngineError::new(
+            event_details,
+            Tag::ObjectStorageInvalidBucketName,
+            message.to_string(),
+            message.to_string(),
+            None,
+            None,
+            Some("Check your cloud provider documentation to know bucket naming rules.".to_string()),
+        )
+    }
+
+    /// Creates new object storage cannot create bucket.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `bucket_name`: Object storage bucket name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_object_storage_cannot_create_bucket_error(
+        event_details: EventDetails,
+        bucket_name: String,
+        raw_error: ObjectStorageError,
+    ) -> EngineError {
+        let message = format!(
+            "Error, cannot create object storage bucket `{}`.",
+            bucket_name.to_string(),
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::ObjectStorageCannotCreateBucket,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error.into()),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new object storage cannot put file into bucket.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `bucket_name`: Object storage bucket name.
+    /// * `file_name`: File name to be added into the bucket.
+    /// * `raw_error`: Raw error message.
+    pub fn new_object_storage_cannot_put_file_into_bucket_error(
+        event_details: EventDetails,
+        bucket_name: String,
+        file_name: String,
+        raw_error: ObjectStorageError,
+    ) -> EngineError {
+        let message = format!(
+            "Error, cannot put file `{}` into object storage bucket `{}`.",
+            file_name.to_string(),
+            bucket_name.to_string(),
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::ObjectStorageCannotPutFileIntoBucket,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error.into()),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new object storage cannot empty object storage bucket.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `bucket_name`: Object storage bucket name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_object_storage_cannot_empty_bucket(
+        event_details: EventDetails,
+        bucket_name: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!(
+            "Error while trying to empty object storage bucket `{}`.",
+            bucket_name.to_string(),
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::ObjectStorageCannotEmptyBucket,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new object storage cannot tag bucket error.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `bucket_name`: Object storage bucket name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_object_storage_cannot_tag_bucket_error(
+        event_details: EventDetails,
+        bucket_name: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!(
+            "Error while trying to tag object storage bucket `{}`.",
+            bucket_name.to_string(),
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::ObjectStorageCannotTagBucket,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new object storage cannot activate bucket versioning error.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `bucket_name`: Object storage bucket name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_object_storage_cannot_activate_bucket_versioning_error(
+        event_details: EventDetails,
+        bucket_name: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!(
+            "Error while trying to activate versioning for object storage bucket `{}`.",
+            bucket_name.to_string(),
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::ObjectStorageCannotActivateBucketVersioning,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+}
+
+impl Display for EngineError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(format!("{:?}", self).as_str())
     }
 }

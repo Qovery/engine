@@ -1,14 +1,14 @@
 use tera::Context as TeraContext;
 
-use crate::build_platform::Image;
+use crate::build_platform::Build;
 use crate::cloud_provider::kubernetes::validate_k8s_required_cpu_and_burstable;
 use crate::cloud_provider::models::{
     EnvironmentVariable, EnvironmentVariableDataTemplate, Storage, StorageDataTemplate,
 };
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, deploy_stateless_service_error, deploy_user_stateless_service,
-    scale_down_application, send_progress_on_long_task, Action, Create, Delete, Helm, Pause, Service, ServiceType,
-    StatelessService,
+    scale_down_application, send_progress_on_long_task, Action, Application, Create, Delete, Helm, Pause, Service,
+    ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
@@ -22,7 +22,7 @@ use ::function_name::named;
 use std::fmt;
 use std::str::FromStr;
 
-pub struct Application {
+pub struct ApplicationDo {
     context: Context,
     id: String,
     action: Action,
@@ -34,14 +34,14 @@ pub struct Application {
     min_instances: u32,
     max_instances: u32,
     start_timeout_in_seconds: u32,
-    image: Image,
+    build: Build,
     storage: Vec<Storage<StorageType>>,
     environment_variables: Vec<EnvironmentVariable>,
     listeners: Listeners,
     logger: Box<dyn Logger>,
 }
 
-impl Application {
+impl ApplicationDo {
     pub fn new(
         context: Context,
         id: &str,
@@ -54,13 +54,13 @@ impl Application {
         min_instances: u32,
         max_instances: u32,
         start_timeout_in_seconds: u32,
-        image: Image,
+        build: Build,
         storage: Vec<Storage<StorageType>>,
         environment_variables: Vec<EnvironmentVariable>,
         listeners: Listeners,
         logger: Box<dyn Logger>,
     ) -> Self {
-        Application {
+        ApplicationDo {
             context,
             id: id.to_string(),
             action,
@@ -72,7 +72,7 @@ impl Application {
             min_instances,
             max_instances,
             start_timeout_in_seconds,
-            image,
+            build,
             storage,
             environment_variables,
             listeners,
@@ -93,17 +93,7 @@ impl Application {
     }
 }
 
-impl crate::cloud_provider::service::Application for Application {
-    fn image(&self) -> &Image {
-        &self.image
-    }
-
-    fn set_image(&mut self, image: Image) {
-        self.image = image;
-    }
-}
-
-impl Helm for Application {
+impl Helm for ApplicationDo {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -125,15 +115,29 @@ impl Helm for Application {
     }
 }
 
-impl StatelessService for Application {}
+impl StatelessService for ApplicationDo {
+    fn as_stateless_service(&self) -> &dyn StatelessService {
+        self
+    }
+}
 
-impl ToTransmitter for Application {
+impl Application for ApplicationDo {
+    fn get_build(&self) -> &Build {
+        &self.build
+    }
+
+    fn get_build_mut(&mut self) -> &mut Build {
+        &mut self.build
+    }
+}
+
+impl ToTransmitter for ApplicationDo {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::Application(self.id().to_string(), self.name().to_string())
     }
 }
 
-impl Service for Application {
+impl Service for ApplicationDo {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -155,7 +159,7 @@ impl Service for Application {
     }
 
     fn version(&self) -> String {
-        self.image.commit_id.clone()
+        self.build.image.commit_id.clone()
     }
 
     fn action(&self) -> &Action {
@@ -202,10 +206,10 @@ impl Service for Application {
         let kubernetes = target.kubernetes;
         let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
-        let commit_id = self.image.commit_id.as_str();
+        let commit_id = self.build.image.commit_id.as_str();
 
         context.insert("helm_app_version", &commit_id[..7]);
-        context.insert("image_name_with_tag", &self.image.full_image_name_with_tag());
+        context.insert("image_name_with_tag", &self.build.image.full_image_name_with_tag());
 
         let cpu_limits = match validate_k8s_required_cpu_and_burstable(
             &ListenersHelper::new(&self.listeners),
@@ -243,7 +247,7 @@ impl Service for Application {
 
         // This is specific to digital ocean as it is them that create the registry secret
         // we don't have the hand on it
-        context.insert("registry_secret", &self.image.registry_name);
+        context.insert("registry_secret", &self.build.image.registry_name);
 
         let storage = self
             .storage
@@ -287,7 +291,7 @@ impl Service for Application {
     }
 }
 
-impl Create for Application {
+impl Create for ApplicationDo {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -327,7 +331,7 @@ impl Create for Application {
     }
 }
 
-impl Pause for Application {
+impl Pause for ApplicationDo {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
@@ -370,7 +374,7 @@ impl Pause for Application {
     }
 }
 
-impl Delete for Application {
+impl Delete for ApplicationDo {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
@@ -410,7 +414,7 @@ impl Delete for Application {
     }
 }
 
-impl Listen for Application {
+impl Listen for ApplicationDo {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

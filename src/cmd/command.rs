@@ -5,16 +5,10 @@ use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 
 use crate::cmd::command::CommandError::{ExecutionError, ExitStatusError, Killed, TimeoutError};
-use crate::cmd::command::CommandOutputType::{STDERR, STDOUT};
 
 use itertools::Itertools;
 use std::time::{Duration, Instant};
 use timeout_readwrite::TimeoutReader;
-
-enum CommandOutputType {
-    STDOUT(Result<String, std::io::Error>),
-    STDERR(Result<String, std::io::Error>),
-}
 
 #[derive(thiserror::Error, Debug)]
 pub enum CommandError {
@@ -29,19 +23,6 @@ pub enum CommandError {
 
     #[error("Command killed by user request: {0}")]
     Killed(String),
-}
-
-impl CommandError {
-    pub fn to_string(&self) -> String {
-        match self {
-            ExecutionError(err) => format!("Execution error: {}", err.to_string()),
-            ExitStatusError(exit_status) => {
-                format!("Execution error: exit status {}", exit_status.to_string())
-            }
-            TimeoutError(msg) => format!("Execution error: timeout, {}", msg.to_string()),
-            Killed(msg) => format!("Execution error: killed, {}", msg.to_string()),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -89,8 +70,14 @@ impl<'a> CommandKiller<'a> {
         let is_canceled = Self::from_cancelable(is_canceled);
         CommandKiller {
             should_abort: Box::new(move || {
-                (is_canceled.should_abort)()?;
-                (has_timeout.should_abort)()?;
+                if let Some(reason) = (has_timeout.should_abort)() {
+                    return Some(reason);
+                }
+
+                if let Some(reason) = (is_canceled.should_abort)() {
+                    return Some(reason);
+                }
+
                 None
             }),
         }
@@ -167,37 +154,87 @@ impl QoveryCommand {
             .map_err(ExecutionError)?;
 
         // Read stdout/stderr until timeout is reached
-        let reader_timeout = std::time::Duration::from_secs(5);
-        let stdout = cmd_handle.stdout.take().ok_or(ExecutionError(Error::new(
-            ErrorKind::BrokenPipe,
-            "Cannot get stdout for command",
-        )))?;
-        let stdout_reader = BufReader::new(TimeoutReader::new(stdout, reader_timeout))
-            .lines()
-            .map(STDOUT);
+        let reader_timeout = std::time::Duration::from_secs(1);
+        let stdout = cmd_handle
+            .stdout
+            .take()
+            .ok_or_else(|| ExecutionError(Error::new(ErrorKind::BrokenPipe, "Cannot get stdout for command")))?;
+        let mut stdout_reader = BufReader::new(TimeoutReader::new(stdout, reader_timeout)).lines();
 
-        let stderr = cmd_handle.stderr.take().ok_or(ExecutionError(Error::new(
-            ErrorKind::BrokenPipe,
-            "Cannot get stderr for command",
-        )))?;
-        let stderr_reader = BufReader::new(TimeoutReader::new(
+        let stderr = cmd_handle
+            .stderr
+            .take()
+            .ok_or_else(|| ExecutionError(Error::new(ErrorKind::BrokenPipe, "Cannot get stderr for command")))?;
+        let mut stderr_reader = BufReader::new(TimeoutReader::new(
             stderr,
             std::time::Duration::from_secs(0), // don't block on stderr
         ))
-        .lines()
-        .map(STDERR);
+        .lines();
 
-        for line in stdout_reader.interleave(stderr_reader) {
-            match line {
-                STDOUT(Err(ref err)) | STDERR(Err(ref err)) if err.kind() == ErrorKind::TimedOut => {}
-                STDOUT(Ok(line)) => stdout_output(line),
-                STDERR(Ok(line)) => stderr_output(line),
-                STDOUT(Err(err)) => error!("Error on stdout of cmd {:?}: {:?}", self.command, err),
-                STDERR(Err(err)) => error!("Error on stderr of cmd {:?}: {:?}", self.command, err),
-            }
-
+        let mut stdout_closed = false;
+        let mut stderr_closed = false;
+        while !stdout_closed || !stderr_closed {
+            // We should abort and kill the process
             if abort_notifier.should_abort().is_some() {
                 break;
+            }
+
+            // Read on stdout first
+            while !stdout_closed {
+                let line = match stdout_reader.next() {
+                    Some(line) => line,
+                    None => {
+                        // Stdout has been closed
+                        stdout_closed = true;
+                        break;
+                    }
+                };
+
+                match line {
+                    Err(ref err) if err.kind() == ErrorKind::TimedOut => break,
+                    Ok(line) => stdout_output(line),
+                    Err(err) => {
+                        error!("Error on stdout of cmd {:?}: {:?}", self.command, err);
+                        stdout_closed = true;
+                        break;
+                    }
+                }
+
+                // Should we abort and kill the process
+                if abort_notifier.should_abort().is_some() {
+                    stdout_closed = true;
+                    stderr_closed = true;
+                    break;
+                }
+            }
+
+            // Read stderr now
+            while !stderr_closed {
+                let line = match stderr_reader.next() {
+                    Some(line) => line,
+                    None => {
+                        // Stdout has been closed
+                        stderr_closed = true;
+                        break;
+                    }
+                };
+
+                match line {
+                    Err(ref err) if err.kind() == ErrorKind::TimedOut => break,
+                    Ok(line) => stderr_output(line),
+                    Err(err) => {
+                        error!("Error on stderr of cmd {:?}: {:?}", self.command, err);
+                        stderr_closed = true;
+                        break;
+                    }
+                }
+
+                // should we abort and kill the process
+                if abort_notifier.should_abort().is_some() {
+                    stdout_closed = true;
+                    stderr_closed = true;
+                    break;
+                }
             }
         }
 
@@ -254,7 +291,7 @@ impl QoveryCommand {
 // return the output of "binary_name" --version
 pub fn run_version_command_for(binary_name: &str) -> String {
     let mut output_from_cmd = String::new();
-    let mut cmd = QoveryCommand::new(binary_name, &vec!["--version"], Default::default());
+    let mut cmd = QoveryCommand::new(binary_name, &["--version"], Default::default());
     let _ = cmd.exec_with_output(&mut |r_out| output_from_cmd.push_str(&r_out), &mut |r_err| {
         error!("Error executing {}: {}", binary_name, r_err)
     });

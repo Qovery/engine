@@ -2,7 +2,6 @@ use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::WithNatGateways;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::models::EnvironmentAction;
 use std::str::FromStr;
 use test_utilities::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
@@ -33,7 +32,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
     );
 
     let environment = test_utilities::common::working_minimal_environment(&context, cluster_domain.as_str());
-    let env_action = EnvironmentAction::Environment(environment.clone());
+    let env_action = environment.clone();
 
     engine_run_test(|| {
         cluster_test(

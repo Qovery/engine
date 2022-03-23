@@ -1,7 +1,6 @@
 use ::function_name::named;
 use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::models::EnvironmentAction;
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 use test_utilities::scaleway::{SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION};
 use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets};
@@ -27,7 +26,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
     );
 
     let environment = test_utilities::common::working_minimal_environment(&context, cluster_domain.as_str());
-    let env_action = EnvironmentAction::Environment(environment.clone());
+    let env_action = environment.clone();
 
     engine_run_test(|| {
         cluster_test(

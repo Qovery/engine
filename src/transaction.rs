@@ -1,21 +1,23 @@
+use crate::cloud_provider::environment::Environment;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::thread;
 
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::service::Service;
-use crate::engine::EngineConfig;
+use crate::cloud_provider::service::{Action, Service};
+use crate::container_registry::errors::ContainerRegistryError;
+use crate::container_registry::to_engine_error;
+use crate::engine::{EngineConfig, EngineConfigError};
 use crate::errors::{EngineError, Tag};
-use crate::events::{EngineEvent, EventMessage};
+use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, Transmitter};
 use crate::logger::{LogLevel, Logger};
-use crate::models::{
-    Action, Environment, EnvironmentAction, EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope,
-};
+use crate::models::{EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier};
 
 pub struct Transaction<'a> {
     engine: &'a EngineConfig,
     logger: Box<dyn Logger>,
-    steps: Vec<Step<'a>>,
-    executed_steps: Vec<Step<'a>>,
+    steps: Vec<Step>,
+    executed_steps: Vec<Step>,
     current_step: StepName,
     is_transaction_aborted: Box<dyn Fn() -> bool>,
     on_step_change: Box<dyn Fn(&StepName)>,
@@ -27,9 +29,11 @@ impl<'a> Transaction<'a> {
         logger: Box<dyn Logger>,
         is_transaction_aborted: Box<dyn Fn() -> bool>,
         on_step_change: Box<dyn Fn(&StepName)>,
-    ) -> Result<Self, EngineError> {
+    ) -> Result<Self, EngineConfigError> {
         let _ = engine.is_valid()?;
-        let _ = engine.kubernetes().is_valid()?;
+        if let Err(e) = engine.kubernetes().is_valid() {
+            return Err(EngineConfigError::KubernetesNotValid(e));
+        }
 
         let mut tx = Transaction::<'a> {
             engine,
@@ -43,6 +47,19 @@ impl<'a> Transaction<'a> {
         tx.set_current_step(StepName::Waiting);
 
         Ok(tx)
+    }
+
+    fn get_event_details(&self, stage: Stage, transmitter: Transmitter) -> EventDetails {
+        let context = self.engine.context();
+        EventDetails::new(
+            None,
+            QoveryIdentifier::from(context.organization_id().to_string()),
+            QoveryIdentifier::from(context.cluster_id().to_string()),
+            QoveryIdentifier::from(context.execution_id().to_string()),
+            None,
+            stage,
+            transmitter,
+        )
     }
 
     pub fn set_current_step(&mut self, step: StepName) {
@@ -65,9 +82,9 @@ impl<'a> Transaction<'a> {
         Ok(())
     }
 
-    pub fn deploy_environment(&mut self, environment_action: &'a EnvironmentAction) -> Result<(), EnvironmentError> {
+    pub fn deploy_environment(&mut self, environment: &Rc<RefCell<Environment>>) -> Result<(), EnvironmentError> {
         self.deploy_environment_with_options(
-            environment_action,
+            environment,
             DeploymentOption {
                 force_build: false,
                 force_push: false,
@@ -77,39 +94,39 @@ impl<'a> Transaction<'a> {
 
     pub fn deploy_environment_with_options(
         &mut self,
-        environment_action: &'a EnvironmentAction,
+        environment: &Rc<RefCell<Environment>>,
         option: DeploymentOption,
     ) -> Result<(), EnvironmentError> {
         // add build step
-        self.steps.push(Step::BuildEnvironment(environment_action, option));
+        self.steps.push(Step::BuildEnvironment(environment.clone(), option));
 
         // add deployment step
-        self.steps.push(Step::DeployEnvironment(environment_action));
+        self.steps.push(Step::DeployEnvironment(environment.clone()));
 
         Ok(())
     }
 
-    pub fn pause_environment(&mut self, environment_action: &'a EnvironmentAction) -> Result<(), EnvironmentError> {
-        self.steps.push(Step::PauseEnvironment(environment_action));
+    pub fn pause_environment(&mut self, environment: &Rc<RefCell<Environment>>) -> Result<(), EnvironmentError> {
+        self.steps.push(Step::PauseEnvironment(environment.clone()));
         Ok(())
     }
 
-    pub fn delete_environment(&mut self, environment_action: &'a EnvironmentAction) -> Result<(), EnvironmentError> {
-        self.steps.push(Step::DeleteEnvironment(environment_action));
+    pub fn delete_environment(&mut self, environment: &Rc<RefCell<Environment>>) -> Result<(), EnvironmentError> {
+        self.steps.push(Step::DeleteEnvironment(environment.clone()));
         Ok(())
     }
 
     fn build_and_push_applications(
         &self,
-        environment: &Environment,
+        environment: &mut Environment,
         option: &DeploymentOption,
     ) -> Result<(), EngineError> {
         // do the same for applications
-        let apps_to_build = environment
+        let mut apps_to_build = environment
             .applications
-            .iter()
+            .iter_mut()
             // build only applications that are set with Action: Create
-            .filter(|app| app.action == Action::Create)
+            .filter(|app| *app.action() == Action::Create)
             .collect::<Vec<_>>();
 
         // If nothing to build, do nothing
@@ -117,27 +134,40 @@ impl<'a> Transaction<'a> {
             return Ok(());
         }
 
+        // To convert ContainerError to EngineError
+        let cr_to_engine_error = |err: ContainerRegistryError| -> EngineError {
+            let event_details = self.get_event_details(
+                Stage::Environment(EnvironmentStep::Build),
+                Transmitter::ContainerRegistry(
+                    self.engine.container_registry().id().to_string(),
+                    self.engine.container_registry().name().to_string(),
+                ),
+            );
+            to_engine_error(event_details, err)
+        };
+
         // Do setup of registry and be sure we are login to the registry
         let cr_registry = self.engine.container_registry();
-        let _ = cr_registry.create_registry()?;
-        let registry = self.engine.container_registry().registry_info();
+        let _ = cr_registry.create_registry().map_err(cr_to_engine_error)?;
 
-        for app in apps_to_build.into_iter() {
-            let app_build = app.to_build(&registry);
-
+        for app in apps_to_build.iter_mut() {
             // If image already exist in the registry, skip the build
-            if !option.force_build && cr_registry.does_image_exists(&app_build.image) {
+            if !option.force_build && cr_registry.does_image_exists(&app.get_build().image) {
                 continue;
             }
 
             // Be sure that our repository exist before trying to pull/push images from it
-            let _ = self.engine.container_registry().create_repository(&app.name)?;
+            let _ = self
+                .engine
+                .container_registry()
+                .create_repository(app.get_build().image.repository_name())
+                .map_err(cr_to_engine_error)?;
 
             // Ok now everything is setup, we can try to build the app
             let _ = self
                 .engine
                 .build_platform()
-                .build(app_build, &self.is_transaction_aborted)?;
+                .build(app.get_build_mut(), &self.is_transaction_aborted)?;
         }
 
         Ok(())
@@ -169,13 +199,13 @@ impl<'a> Transaction<'a> {
                 }
                 Step::DeployEnvironment(environment_action) => {
                     // revert environment deployment
-                    self.rollback_environment(*environment_action)?;
+                    self.rollback_environment(&(environment_action.as_ref().borrow()))?;
                 }
                 Step::PauseEnvironment(environment_action) => {
-                    self.rollback_environment(*environment_action)?;
+                    self.rollback_environment(&(environment_action.as_ref().borrow()))?;
                 }
                 Step::DeleteEnvironment(environment_action) => {
-                    self.rollback_environment(*environment_action)?;
+                    self.rollback_environment(&(environment_action.as_ref().borrow()))?;
                 }
             }
         }
@@ -185,46 +215,20 @@ impl<'a> Transaction<'a> {
 
     // Warning: This function function does not revert anything, it just there to grab info from kube and services if it fails
     // FIXME: Cleanup this, qe_environment should not be rebuilt at this step
-    fn rollback_environment(&self, environment_action: &EnvironmentAction) -> Result<(), RollbackError> {
-        let registry_info = self.engine.container_registry().registry_info();
-
-        let qe_environment = |environment: &Environment| {
-            let qe_environment = environment.to_qe_environment(
-                self.engine.context(),
-                self.engine.cloud_provider(),
-                &registry_info,
-                self.logger.clone(),
-            );
-
-            qe_environment
+    fn rollback_environment(&self, environment: &Environment) -> Result<(), RollbackError> {
+        let action = match environment.action {
+            Action::Create => self.engine.kubernetes().deploy_environment_error(&environment),
+            Action::Pause => self.engine.kubernetes().pause_environment_error(&environment),
+            Action::Delete => self.engine.kubernetes().delete_environment_error(&environment),
+            Action::Nothing => Ok(()),
         };
 
-        match environment_action {
-            EnvironmentAction::Environment(te) => {
-                // revert changes but there is no failover environment
-                let target_qe_environment = qe_environment(te);
+        let _ = match action {
+            Ok(_) => {}
+            Err(err) => return Err(RollbackError::CommitError(err)),
+        };
 
-                let action = match te.action {
-                    Action::Create => self
-                        .engine
-                        .kubernetes()
-                        .deploy_environment_error(&target_qe_environment),
-                    Action::Pause => self.engine.kubernetes().pause_environment_error(&target_qe_environment),
-                    Action::Delete => self
-                        .engine
-                        .kubernetes()
-                        .delete_environment_error(&target_qe_environment),
-                    Action::Nothing => Ok(()),
-                };
-
-                let _ = match action {
-                    Ok(_) => {}
-                    Err(err) => return Err(RollbackError::CommitError(err)),
-                };
-
-                Err(RollbackError::NoFailoverEnvironment)
-            }
-        }
+        Err(RollbackError::NoFailoverEnvironment)
     }
 
     pub fn commit(mut self) -> TransactionResult {
@@ -264,17 +268,13 @@ impl<'a> Transaction<'a> {
                         }
                     };
                 }
-                Step::BuildEnvironment(environment_action, option) => {
+                Step::BuildEnvironment(environment, option) => {
                     if (self.is_transaction_aborted)() {
                         return TransactionResult::Canceled;
                     }
 
                     // build applications
-                    let target_environment = match environment_action {
-                        EnvironmentAction::Environment(te) => te,
-                    };
-
-                    match self.build_and_push_applications(target_environment, &option) {
+                    match self.build_and_push_applications(&mut (environment.as_ref().borrow_mut()), &option) {
                         Ok(apps) => apps,
                         Err(engine_err) => {
                             self.logger.log(
@@ -301,7 +301,7 @@ impl<'a> Transaction<'a> {
                     }
 
                     // deploy complete environment
-                    match self.commit_environment(environment_action, |qe_env| {
+                    match self.commit_environment(&(environment_action.as_ref().borrow()), |qe_env| {
                         self.engine.kubernetes().deploy_environment(qe_env)
                     }) {
                         TransactionResult::Ok => {}
@@ -317,7 +317,7 @@ impl<'a> Transaction<'a> {
                     }
 
                     // pause complete environment
-                    match self.commit_environment(environment_action, |qe_env| {
+                    match self.commit_environment(&(environment_action.as_ref().borrow()), |qe_env| {
                         self.engine.kubernetes().pause_environment(qe_env)
                     }) {
                         TransactionResult::Ok => {}
@@ -333,7 +333,7 @@ impl<'a> Transaction<'a> {
                     }
 
                     // delete complete environment
-                    match self.commit_environment(environment_action, |qe_env| {
+                    match self.commit_environment(&(environment_action.as_ref().borrow()), |qe_env| {
                         self.engine.kubernetes().delete_environment(qe_env)
                     }) {
                         TransactionResult::Ok => {}
@@ -407,29 +407,17 @@ impl<'a> Transaction<'a> {
         }
     }
 
-    fn commit_environment<F>(&self, environment_action: &EnvironmentAction, action_fn: F) -> TransactionResult
+    fn commit_environment<F>(&self, environment: &Environment, action_fn: F) -> TransactionResult
     where
-        F: Fn(&crate::cloud_provider::environment::Environment) -> Result<(), EngineError>,
+        F: Fn(&Environment) -> Result<(), EngineError>,
     {
-        let target_environment = match environment_action {
-            EnvironmentAction::Environment(te) => te,
-        };
-
-        let registry_info = self.engine.container_registry().registry_info();
-        let qe_environment = target_environment.to_qe_environment(
-            self.engine.context(),
-            self.engine.cloud_provider(),
-            &registry_info,
-            self.logger.clone(),
-        );
-
         let execution_id = self.engine.context().execution_id();
 
         // send back the right progress status
         fn send_progress<T>(
             kubernetes: &dyn Kubernetes,
             action: &Action,
-            service: &Box<T>,
+            service: &T,
             execution_id: &str,
             is_error: bool,
         ) where
@@ -466,7 +454,7 @@ impl<'a> Transaction<'a> {
         // Even by storing data at the micro seconds precision
         thread::sleep(std::time::Duration::from_millis(100));
 
-        let _ = match action_fn(&qe_environment) {
+        let _ = match action_fn(&environment) {
             Err(err) => {
                 let rollback_result = match self.rollback() {
                     Ok(_) => TransactionResult::Rollback(err),
@@ -478,20 +466,20 @@ impl<'a> Transaction<'a> {
 
                 // !!! don't change the order
                 // terminal update
-                for service in &qe_environment.stateful_services {
+                for service in environment.stateful_services() {
                     send_progress(
                         self.engine.kubernetes(),
-                        &target_environment.action,
+                        &environment.action,
                         service,
                         execution_id,
                         true,
                     );
                 }
 
-                for service in &qe_environment.stateless_services {
+                for service in environment.stateless_services() {
                     send_progress(
                         self.engine.kubernetes(),
-                        &target_environment.action,
+                        &environment.action,
                         service,
                         execution_id,
                         true,
@@ -502,20 +490,20 @@ impl<'a> Transaction<'a> {
             }
             _ => {
                 // terminal update
-                for service in &qe_environment.stateful_services {
+                for service in environment.stateful_services() {
                     send_progress(
                         self.engine.kubernetes(),
-                        &target_environment.action,
+                        &environment.action,
                         service,
                         execution_id,
                         false,
                     );
                 }
 
-                for service in &qe_environment.stateless_services {
+                for service in environment.stateless_services() {
                     send_progress(
                         self.engine.kubernetes(),
-                        &target_environment.action,
+                        &environment.action,
                         service,
                         execution_id,
                         false,
@@ -561,18 +549,18 @@ impl StepName {
     }
 }
 
-pub enum Step<'a> {
+pub enum Step {
     // init and create all the necessary resources (Network, Kubernetes)
     CreateKubernetes,
     DeleteKubernetes,
     PauseKubernetes,
-    BuildEnvironment(&'a EnvironmentAction, DeploymentOption),
-    DeployEnvironment(&'a EnvironmentAction),
-    PauseEnvironment(&'a EnvironmentAction),
-    DeleteEnvironment(&'a EnvironmentAction),
+    BuildEnvironment(Rc<RefCell<Environment>>, DeploymentOption),
+    DeployEnvironment(Rc<RefCell<Environment>>),
+    PauseEnvironment(Rc<RefCell<Environment>>),
+    DeleteEnvironment(Rc<RefCell<Environment>>),
 }
 
-impl<'a> Step<'a> {
+impl Step {
     fn step_name(&self) -> StepName {
         match self {
             Step::CreateKubernetes => StepName::CreateKubernetes,
@@ -586,16 +574,16 @@ impl<'a> Step<'a> {
     }
 }
 
-impl<'a> Clone for Step<'a> {
+impl Clone for Step {
     fn clone(&self) -> Self {
         match self {
             Step::CreateKubernetes => Step::CreateKubernetes,
             Step::DeleteKubernetes => Step::DeleteKubernetes,
             Step::PauseKubernetes => Step::PauseKubernetes,
-            Step::BuildEnvironment(e, option) => Step::BuildEnvironment(*e, option.clone()),
-            Step::DeployEnvironment(e) => Step::DeployEnvironment(*e),
-            Step::PauseEnvironment(e) => Step::PauseEnvironment(*e),
-            Step::DeleteEnvironment(e) => Step::DeleteEnvironment(*e),
+            Step::BuildEnvironment(e, option) => Step::BuildEnvironment(e.clone(), option.clone()),
+            Step::DeployEnvironment(e) => Step::DeployEnvironment(e.clone()),
+            Step::PauseEnvironment(e) => Step::PauseEnvironment(e.clone()),
+            Step::DeleteEnvironment(e) => Step::DeleteEnvironment(e.clone()),
         }
     }
 }

@@ -758,7 +758,7 @@ impl Kapsule {
             let error = EngineError::new_object_storage_cannot_create_bucket_error(
                 event_details.clone(),
                 self.kubeconfig_bucket_name(),
-                CommandError::new(e.message.unwrap_or("No error message".to_string()), None),
+                e,
             );
             self.logger()
                 .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
@@ -770,7 +770,7 @@ impl Kapsule {
             let error = EngineError::new_object_storage_cannot_create_bucket_error(
                 event_details.clone(),
                 self.logs_bucket_name(),
-                CommandError::new(e.message.unwrap_or("No error message".to_string()), None),
+                e,
             );
             self.logger()
                 .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
@@ -798,7 +798,7 @@ impl Kapsule {
                 event_details.clone(),
                 self.logs_bucket_name(),
                 kubeconfig_name.to_string(),
-                CommandError::new(e.message.unwrap_or("No error message".to_string()), None),
+                e,
             );
             self.logger()
                 .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
@@ -1605,7 +1605,7 @@ impl Kapsule {
                                 ),
                             ),
                             Err(e) => {
-                                let message_safe = format!("Error deleting chart `{}`: {}", chart.name, e);
+                                let message_safe = format!("Error deleting chart `{}`", chart.name);
                                 self.logger().log(
                                     LogLevel::Error,
                                     EngineEvent::Deleting(

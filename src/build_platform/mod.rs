@@ -20,7 +20,7 @@ pub trait BuildPlatform: ToTransmitter + Listen {
         format!("{} ({})", self.name(), self.id())
     }
     fn is_valid(&self) -> Result<(), EngineError>;
-    fn build(&self, build: Build, is_task_canceled: &dyn Fn() -> bool) -> Result<BuildResult, EngineError>;
+    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<(), EngineError>;
     fn logger(&self) -> Box<dyn Logger>;
     fn get_event_details(&self) -> EventDetails {
         let context = self.context();
@@ -81,12 +81,13 @@ pub struct Image {
     pub name: String,
     pub tag: String,
     pub commit_id: String,
-    // registry name where the image has been pushed: Optional
+    // registry name where the image has been pushed
     pub registry_name: String,
     // registry docker json config: Optional
     pub registry_docker_json_config: Option<String>,
     // complete registry URL where the image has been pushed
     pub registry_url: Url,
+    pub repository_name: String,
 }
 
 impl Image {
@@ -94,6 +95,9 @@ impl Image {
         self.registry_url.host_str().unwrap()
     }
 
+    pub fn repository_name(&self) -> &str {
+        &self.repository_name
+    }
     pub fn full_image_name_with_tag(&self) -> String {
         format!(
             "{}/{}:{}",
@@ -122,6 +126,7 @@ impl Default for Image {
             registry_name: "".to_string(),
             registry_docker_json_config: None,
             registry_url: Url::parse("https://default.com").unwrap(),
+            repository_name: "".to_string(),
         }
     }
 }
@@ -133,16 +138,6 @@ impl Display for Image {
             "Image (name={}, tag={}, commit_id={}, application_id={}, registry_name={:?}, registry_url={:?})",
             self.name, self.tag, self.commit_id, self.application_id, self.registry_name, self.registry_url
         )
-    }
-}
-
-pub struct BuildResult {
-    pub build: Build,
-}
-
-impl BuildResult {
-    pub fn new(build: Build) -> Self {
-        BuildResult { build }
     }
 }
 

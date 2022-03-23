@@ -2,9 +2,7 @@ use ::function_name::named;
 use tracing::{span, warn, Level};
 
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
-use qovery_engine::models::{
-    Action, CloneForTest, Database, DatabaseKind, DatabaseMode, EnvironmentAction, Port, Protocol,
-};
+use qovery_engine::models::{Action, CloneForTest, Database, DatabaseKind, DatabaseMode, Port, Protocol};
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, logger, FuncTestsSecrets,
@@ -64,8 +62,8 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
+        let env_action = environment.clone();
+        let env_action_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -122,8 +120,8 @@ fn deploy_an_environment_with_db_and_pause_it() {
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
+        let env_action = environment.clone();
+        let env_action_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&env_action.clone(), logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -205,8 +203,8 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 
         environment_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
+        let env_action = environment.clone();
+        let env_action_for_deletion = environment_delete.clone();
 
         let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -342,12 +340,12 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         let environment_to_redeploy = environment.clone();
         let environment_check = environment.clone();
-        let env_action_redeploy = EnvironmentAction::Environment(environment_to_redeploy.clone());
+        let env_action_redeploy = environment_to_redeploy.clone();
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
+        let env_action = environment.clone();
+        let env_action_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));

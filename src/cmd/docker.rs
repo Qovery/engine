@@ -1,6 +1,4 @@
 use crate::cmd::command::{CommandError, CommandKiller, QoveryCommand};
-use crate::errors::EngineError;
-use crate::events::EventDetails;
 use std::path::Path;
 use std::process::ExitStatus;
 use url::Url;
@@ -472,10 +470,6 @@ where
         Err(CommandError::ExitStatusError(err)) => Err(DockerError::ExitStatusError(err)),
         Err(CommandError::ExecutionError(err)) => Err(DockerError::ExecutionError(err)),
     }
-}
-
-pub fn to_engine_error(event_details: &EventDetails, error: DockerError) -> EngineError {
-    EngineError::new_docker_error(event_details.clone(), error)
 }
 
 // start a local registry to run this test
