@@ -277,10 +277,6 @@ impl ContainerRegistry for ScalewayCR {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), ContainerRegistryError> {
-        Ok(())
-    }
-
     fn registry_info(&self) -> &ContainerRegistryInfo {
         &self.registry_info
     }

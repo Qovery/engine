@@ -1,10 +1,11 @@
+use crate::build_platform::BuildError;
 use crate::cloud_provider::environment::Environment;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::thread;
 
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::service::{Action, Service};
+use crate::cloud_provider::service::{Action, Application, Service};
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::to_engine_error;
 use crate::engine::{EngineConfig, EngineConfigError};
@@ -118,12 +119,11 @@ impl<'a> Transaction<'a> {
 
     fn build_and_push_applications(
         &self,
-        environment: &mut Environment,
+        applications: &mut [Box<dyn Application>],
         option: &DeploymentOption,
     ) -> Result<(), EngineError> {
         // do the same for applications
-        let mut apps_to_build = environment
-            .applications
+        let mut apps_to_build = applications
             .iter_mut()
             // build only applications that are set with Action: Create
             .filter(|app| *app.action() == Action::Create)
@@ -146,6 +146,16 @@ impl<'a> Transaction<'a> {
             to_engine_error(event_details, err)
         };
 
+        let build_event_details = || -> EventDetails {
+            self.get_event_details(
+                Stage::Environment(EnvironmentStep::Build),
+                Transmitter::BuildPlatform(
+                    self.engine.build_platform().id().to_string(),
+                    self.engine.build_platform().name().to_string(),
+                ),
+            )
+        };
+
         // Do setup of registry and be sure we are login to the registry
         let cr_registry = self.engine.container_registry();
         let _ = cr_registry.create_registry().map_err(cr_to_engine_error)?;
@@ -164,10 +174,43 @@ impl<'a> Transaction<'a> {
                 .map_err(cr_to_engine_error)?;
 
             // Ok now everything is setup, we can try to build the app
-            let _ = self
+            let build_result = self
                 .engine
                 .build_platform()
-                .build(app.get_build_mut(), &self.is_transaction_aborted)?;
+                .build(app.get_build_mut(), &self.is_transaction_aborted);
+
+            // logging
+            let image_name = app.get_build().image.full_image_name_with_tag();
+            let msg = match &build_result {
+                Ok(_) => format!("✅ Container {} is built", &image_name),
+                Err(BuildError::Aborted(_)) => format!("🚫 Container {} build has been canceled", &image_name),
+                Err(err) => format!("❌ Container {} failed to be build: {}", &image_name, err),
+            };
+
+            let progress_info = ProgressInfo::new(
+                ProgressScope::Application {
+                    id: app.id().to_string(),
+                },
+                match build_result.is_ok() {
+                    true => ProgressLevel::Info,
+                    false => ProgressLevel::Error,
+                },
+                Some(msg.to_string()),
+                self.engine.context().execution_id(),
+            );
+            ListenersHelper::new(self.engine.build_platform().listeners()).deployment_in_progress(progress_info);
+
+            let event_details = build_event_details();
+            self.logger.log(
+                match build_result.is_ok() {
+                    true => LogLevel::Info,
+                    false => LogLevel::Error,
+                },
+                EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)),
+            );
+
+            // Abort if it was an error
+            let _ = build_result.map_err(|err| crate::build_platform::to_engine_error(event_details, err))?;
         }
 
         Ok(())
@@ -274,7 +317,8 @@ impl<'a> Transaction<'a> {
                     }
 
                     // build applications
-                    match self.build_and_push_applications(&mut (environment.as_ref().borrow_mut()), &option) {
+                    let applications = &mut (environment.as_ref().borrow_mut()).applications;
+                    match self.build_and_push_applications(applications, &option) {
                         Ok(apps) => apps,
                         Err(engine_err) => {
                             self.logger.log(

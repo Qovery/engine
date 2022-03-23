@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::cmd::command::CommandError;
+use crate::cmd::docker::DockerError;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter};
 use crate::logger::Logger;
@@ -8,8 +10,36 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::path::PathBuf;
 use url::Url;
 
-pub mod docker;
+pub mod dockerfile_utils;
 pub mod local_docker;
+
+#[derive(thiserror::Error, Debug)]
+pub enum BuildError {
+    #[error("Cannot build Application {0} due to an invalid config: {1}")]
+    InvalidConfig(String, String),
+
+    #[error("Cannot build Application {0} due to an error with git: {1}")]
+    GitError(String, git2::Error),
+
+    #[error("Build of Application {0} have been aborted at user request")]
+    Aborted(String),
+
+    #[error("Cannot build Application {0} due to an io error: {1} {2}")]
+    IoError(String, String, std::io::Error),
+
+    #[error("Cannot build Application {0} due to an error with docker: {1}")]
+    DockerError(String, DockerError),
+
+    #[error("Cannot build Application {0} due to an error with buildpack: {1}")]
+    BuildpackError(String, CommandError),
+}
+
+pub fn to_engine_error(event_details: EventDetails, err: BuildError) -> EngineError {
+    match err {
+        BuildError::Aborted(_) => EngineError::new_task_cancellation_requested(event_details),
+        _ => EngineError::new_build_error(event_details, err),
+    }
+}
 
 pub trait BuildPlatform: ToTransmitter + Listen {
     fn context(&self) -> &Context;
@@ -19,8 +49,7 @@ pub trait BuildPlatform: ToTransmitter + Listen {
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
     }
-    fn is_valid(&self) -> Result<(), EngineError>;
-    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<(), EngineError>;
+    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<(), BuildError>;
     fn logger(&self) -> Box<dyn Logger>;
     fn get_event_details(&self) -> EventDetails {
         let context = self.context();
@@ -94,7 +123,6 @@ impl Image {
     pub fn registry_host(&self) -> &str {
         self.registry_url.host_str().unwrap()
     }
-
     pub fn repository_name(&self) -> &str {
         &self.repository_name
     }
