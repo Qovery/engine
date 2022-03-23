@@ -4,7 +4,7 @@ use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
     default_tera_context, delete_router, deploy_stateless_service_error, send_progress_on_long_task, Action, Create,
-    Delete, Helm, Pause, Router as RRouter, Service, ServiceType, StatelessService,
+    Delete, Helm, Pause, Router as RRouter, Router, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{check_cname_for, print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
@@ -16,7 +16,7 @@ use crate::logger::{LogLevel, Logger};
 use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
 
-pub struct Router {
+pub struct RouterScw {
     context: Context,
     id: String,
     action: Action,
@@ -29,7 +29,7 @@ pub struct Router {
     logger: Box<dyn Logger>,
 }
 
-impl Router {
+impl RouterScw {
     pub fn new(
         context: Context,
         id: &str,
@@ -42,7 +42,7 @@ impl Router {
         listeners: Listeners,
         logger: Box<dyn Logger>,
     ) -> Self {
-        Router {
+        RouterScw {
             context,
             id: id.to_string(),
             name: name.to_string(),
@@ -65,7 +65,7 @@ impl Router {
     }
 }
 
-impl Service for Router {
+impl Service for RouterScw {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -133,8 +133,8 @@ impl Service for Router {
         let mut context = default_tera_context(self, kubernetes, environment);
 
         let applications = environment
-            .stateless_services
-            .iter()
+            .stateless_services()
+            .into_iter()
             .filter(|x| x.service_type() == ServiceType::Application)
             .collect::<Vec<_>>();
 
@@ -203,7 +203,7 @@ impl Service for Router {
     }
 }
 
-impl crate::cloud_provider::service::Router for Router {
+impl Router for RouterScw {
     fn domains(&self) -> Vec<&str> {
         let mut _domains = vec![self.default_domain.as_str()];
 
@@ -219,7 +219,7 @@ impl crate::cloud_provider::service::Router for Router {
     }
 }
 
-impl Helm for Router {
+impl Helm for RouterScw {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -241,7 +241,7 @@ impl Helm for Router {
     }
 }
 
-impl Listen for Router {
+impl Listen for RouterScw {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }
@@ -251,15 +251,19 @@ impl Listen for Router {
     }
 }
 
-impl StatelessService for Router {}
+impl StatelessService for RouterScw {
+    fn as_stateless_service(&self) -> &dyn StatelessService {
+        self
+    }
+}
 
-impl ToTransmitter for Router {
+impl ToTransmitter for RouterScw {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::Router(self.id().to_string(), self.name().to_string())
     }
 }
 
-impl Create for Router {
+impl Create for RouterScw {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -376,7 +380,7 @@ impl Create for Router {
     }
 }
 
-impl Pause for Router {
+impl Pause for RouterScw {
     #[named]
     fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
@@ -410,7 +414,7 @@ impl Pause for Router {
     }
 }
 
-impl Delete for Router {
+impl Delete for RouterScw {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));

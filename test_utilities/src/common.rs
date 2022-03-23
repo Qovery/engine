@@ -2,12 +2,13 @@ extern crate serde;
 extern crate serde_derive;
 
 use chrono::Utc;
+use std::cell::RefCell;
 
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::models::{
-    Action, Application, CloneForTest, Context, Database, DatabaseKind, DatabaseMode, Environment, GitCredentials,
-    Port, Protocol, Route, Router, Storage, StorageType,
+    Action, Application, CloneForTest, Context, Database, DatabaseKind, DatabaseMode, EnvironmentRequest,
+    GitCredentials, Port, Protocol, Route, Router, Storage, StorageType,
 };
 
 use crate::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
@@ -39,6 +40,7 @@ use qovery_engine::models::DatabaseMode::CONTAINER;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{span, Level};
@@ -70,34 +72,42 @@ pub trait Cluster<T, U> {
 pub trait Infrastructure {
     fn deploy_environment(
         &self,
-        environment: &Environment,
+        environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult;
     fn pause_environment(
         &self,
-        environment: &Environment,
+        environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult;
     fn delete_environment(
         &self,
-        environment: &Environment,
+        environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult;
 }
 
-impl Infrastructure for Environment {
+impl Infrastructure for EnvironmentRequest {
     fn deploy_environment(
         &self,
-        environment: &Environment,
+        environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult {
         let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+        let env = environment.to_environment_domain(
+            engine_config.context(),
+            engine_config.cloud_provider(),
+            engine_config.container_registry().registry_info(),
+            logger,
+        );
+
+        let env = Rc::new(RefCell::new(env));
         let _ = tx.deploy_environment_with_options(
-            &environment,
+            &env,
             DeploymentOption {
                 force_build: true,
                 force_push: true,
@@ -109,24 +119,38 @@ impl Infrastructure for Environment {
 
     fn pause_environment(
         &self,
-        environment: &Environment,
+        environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult {
         let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let _ = tx.pause_environment(&environment);
+        let env = environment.to_environment_domain(
+            engine_config.context(),
+            engine_config.cloud_provider(),
+            engine_config.container_registry().registry_info(),
+            logger,
+        );
+        let env = Rc::new(RefCell::new(env));
+        let _ = tx.pause_environment(&env);
 
         tx.commit()
     }
 
     fn delete_environment(
         &self,
-        environment: &Environment,
+        environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult {
         let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let _ = tx.delete_environment(&environment);
+        let env = environment.to_environment_domain(
+            engine_config.context(),
+            engine_config.cloud_provider(),
+            engine_config.container_registry().registry_info(),
+            logger,
+        );
+        let env = Rc::new(RefCell::new(env));
+        let _ = tx.delete_environment(&env);
 
         tx.commit()
     }
@@ -144,7 +168,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     database_instance_type: &str,
     database_disk_type: &str,
     provider_kind: Kind,
-) -> Environment {
+) -> EnvironmentRequest {
     let app_name_1 = format!("{}-{}", "simple-app-1".to_string(), generate_id());
     let app_name_2 = format!("{}-{}", "simple-app-2".to_string(), generate_id());
     let app_name_3 = format!("{}-{}", "simple-app-3".to_string(), generate_id());
@@ -177,7 +201,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     let database_username_2 = "superuser2".to_string();
     let database_name_2 = "postgres2".to_string();
 
-    Environment {
+    EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
         owner_id: generate_id(),
@@ -439,7 +463,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     }
 }
 
-pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Environment {
+pub fn working_minimal_environment(context: &Context, test_domain: &str) -> EnvironmentRequest {
     let suffix = generate_id();
     let application_id = generate_id();
     let application_name = format!("{}-{}", "simple-app".to_string(), &suffix);
@@ -451,7 +475,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
         context.cluster_id().to_string(),
         test_domain
     );
-    Environment {
+    EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
         owner_id: generate_id(),
@@ -509,12 +533,12 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
     }
 }
 
-pub fn database_test_environment(context: &Context) -> Environment {
+pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
     let suffix = generate_id();
     let application_id = generate_id();
     let application_name = format!("{}-{}", "simple-app".to_string(), &suffix);
 
-    Environment {
+    EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
         owner_id: generate_id(),
@@ -552,7 +576,10 @@ pub fn database_test_environment(context: &Context) -> Environment {
     }
 }
 
-pub fn environment_only_http_server_router_with_sticky_session(context: &Context, test_domain: &str) -> Environment {
+pub fn environment_only_http_server_router_with_sticky_session(
+    context: &Context,
+    test_domain: &str,
+) -> EnvironmentRequest {
     let mut env = environment_only_http_server_router(context, test_domain.clone());
 
     for mut router in &mut env.routers {
@@ -568,7 +595,7 @@ pub fn environnement_2_app_2_routers_1_psql(
     database_instance_type: &str,
     database_disk_type: &str,
     provider_kind: Kind,
-) -> Environment {
+) -> EnvironmentRequest {
     let fqdn = get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()).to_string();
 
     let database_port = 5432;
@@ -580,7 +607,7 @@ pub fn environnement_2_app_2_routers_1_psql(
     let application_name1 = sanitize_name("postgresql", &format!("{}-{}", "postgresql-app1", &suffix));
     let application_name2 = sanitize_name("postgresql", &format!("{}-{}", "postgresql-app2", &suffix));
 
-    Environment {
+    EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
         owner_id: generate_id(),
@@ -735,7 +762,7 @@ pub fn environnement_2_app_2_routers_1_psql(
     }
 }
 
-pub fn non_working_environment(context: &Context, test_domain: &str) -> Environment {
+pub fn non_working_environment(context: &Context, test_domain: &str) -> EnvironmentRequest {
     let mut environment = working_minimal_environment(context, test_domain);
 
     environment.applications = environment
@@ -754,9 +781,9 @@ pub fn non_working_environment(context: &Context, test_domain: &str) -> Environm
 
 // echo app environment is an environment that contains http-echo container (forked from hashicorp)
 // ECHO_TEXT var will be the content of the application root path
-pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment {
+pub fn echo_app_environment(context: &Context, test_domain: &str) -> EnvironmentRequest {
     let suffix = generate_id();
-    Environment {
+    EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
         owner_id: generate_id(),
@@ -817,9 +844,9 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
     }
 }
 
-pub fn environment_only_http_server(context: &Context) -> Environment {
+pub fn environment_only_http_server(context: &Context) -> EnvironmentRequest {
     let suffix = generate_id();
-    Environment {
+    EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
         owner_id: generate_id(),
@@ -866,9 +893,9 @@ pub fn environment_only_http_server(context: &Context) -> Environment {
     }
 }
 
-pub fn environment_only_http_server_router(context: &Context, test_domain: &str) -> Environment {
+pub fn environment_only_http_server_router(context: &Context, test_domain: &str) -> EnvironmentRequest {
     let suffix = generate_id();
-    Environment {
+    EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
         owner_id: generate_id(),
@@ -963,7 +990,7 @@ pub fn routers_sessions_are_sticky(routers: Vec<Router>) -> bool {
 pub fn test_db(
     context: Context,
     logger: Box<dyn Logger>,
-    mut environment: Environment,
+    mut environment: EnvironmentRequest,
     secrets: FuncTestsSecrets,
     version: &str,
     test_name: &str,
@@ -1369,7 +1396,7 @@ pub fn cluster_test(
     minor_boot_version: u8,
     cluster_domain: &ClusterDomain,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
-    environment_to_deploy: Option<&Environment>,
+    environment_to_deploy: Option<&EnvironmentRequest>,
 ) -> String {
     init();
 
@@ -1425,7 +1452,14 @@ pub fn cluster_test(
             Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
         // Deploy env
-        if let Err(err) = deploy_env_tx.deploy_environment(env) {
+        let env = env.to_environment_domain(
+            &context,
+            engine.cloud_provider(),
+            engine.container_registry().registry_info(),
+            logger.clone(),
+        );
+        let env = Rc::new(RefCell::new(env));
+        if let Err(err) = deploy_env_tx.deploy_environment(&env) {
             panic!("{:?}", err)
         }
 
@@ -1537,7 +1571,14 @@ pub fn cluster_test(
             Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
         // Deploy env
-        if let Err(err) = destroy_env_tx.delete_environment(env) {
+        let env = env.to_environment_domain(
+            &context,
+            engine.cloud_provider(),
+            engine.container_registry().registry_info(),
+            logger.clone(),
+        );
+        let env = Rc::new(RefCell::new(env));
+        if let Err(err) = destroy_env_tx.delete_environment(&env) {
             panic!("{:?}", err)
         }
         assert!(matches!(destroy_env_tx.commit(), TransactionResult::Ok));

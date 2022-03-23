@@ -66,6 +66,7 @@ impl ECR {
             registry_name: cr.name.to_string(),
             registry_docker_json_config: None,
             get_image_name: Box::new(|img_name| img_name.to_string()),
+            get_repository_name: Box::new(|imag_name| imag_name.to_string()),
         };
 
         cr.registry_info = Some(registry_info);
@@ -126,7 +127,6 @@ impl ECR {
     }
 
     fn create_repository(&self, repository_name: &str) -> Result<Repository, ContainerRegistryError> {
-        let mut repo_creation_counter = 0;
         let container_registry_request = DescribeRepositoriesRequest {
             repository_names: Some(vec![repository_name.to_string()]),
             ..Default::default()
@@ -139,36 +139,39 @@ impl ECR {
         // ensure repository is created
         // need to do all this checks and retry because of several issues encountered like: 200 API response code while repo is not created
         let repo_created = retry::retry(Fixed::from_millis(5000).take(24), || {
-            match block_on(
+            let repositories = block_on(
                 self.ecr_client()
                     .describe_repositories(container_registry_request.clone()),
-            ) {
-                Ok(_x) => OperationResult::Ok(()),
-                Err(e) => {
-                    match e {
-                        RusotoError::Service(s) => match s {
-                            DescribeRepositoriesError::RepositoryNotFound(_) => {
-                                repo_creation_counter += 1;
-                            }
-                            _ => {}
-                        },
-                        _ => {}
-                    }
+            );
+            match repositories {
+                // Repo already exist, so ok
+                Ok(_) => OperationResult::Ok(()),
 
+                // Repo does not exist, so creating it
+                Err(RusotoError::Service(DescribeRepositoriesError::RepositoryNotFound(_))) => {
                     if let Err(err) = block_on(self.ecr_client().create_repository(crr.clone())) {
-                        return OperationResult::Retry(Err(ContainerRegistryError::CannotCreateRepository {
+                        OperationResult::Retry(Err(ContainerRegistryError::CannotCreateRepository {
                             registry_name: self.name.to_string(),
                             repository_name: repository_name.to_string(),
                             raw_error_message: err.to_string(),
-                        }));
+                        }))
+                    } else {
+                        // The Repo should be created at this point, but we want to verify that
+                        // the describe/list return it now. we want to reloop so return a retry instead of a ok
+                        OperationResult::Retry(Err(ContainerRegistryError::CannotCreateRepository {
+                            registry_name: self.name.to_string(),
+                            repository_name: repository_name.to_string(),
+                            raw_error_message: "Retry to check repository exist".to_string(),
+                        }))
                     }
-
-                    OperationResult::Err(Err(ContainerRegistryError::CannotCreateRepository {
-                        registry_name: self.name.to_string(),
-                        repository_name: repository_name.to_string(),
-                        raw_error_message: "unknwon error".to_string(),
-                    }))
                 }
+
+                // Unknown error, so retries ¯\_(ツ)_/¯
+                Err(err) => OperationResult::Retry(Err(ContainerRegistryError::CannotCreateRepository {
+                    registry_name: self.name.to_string(),
+                    repository_name: repository_name.to_string(),
+                    raw_error_message: err.to_string(),
+                })),
             }
         });
 

@@ -6,7 +6,7 @@ use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::engine::EngineConfig;
-use qovery_engine::models::{Context, Environment};
+use qovery_engine::models::{Context, EnvironmentRequest};
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use std::sync::Arc;
 
@@ -222,7 +222,7 @@ pub fn scw_object_storage(context: Context, region: ScwZone) -> ScalewayOS {
 
 pub fn clean_environments(
     context: &Context,
-    environments: Vec<Environment>,
+    environments: Vec<EnvironmentRequest>,
     secrets: FuncTestsSecrets,
     zone: ScwZone,
 ) -> Result<(), ContainerRegistryError> {

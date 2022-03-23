@@ -22,7 +22,7 @@ use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
 
-pub struct PostgreSQL {
+pub struct PostgreSQLAws {
     context: Context,
     id: String,
     action: Action,
@@ -38,7 +38,7 @@ pub struct PostgreSQL {
     logger: Box<dyn Logger>,
 }
 
-impl PostgreSQL {
+impl PostgreSQLAws {
     pub fn new(
         context: Context,
         id: &str,
@@ -54,7 +54,7 @@ impl PostgreSQL {
         listeners: Listeners,
         logger: Box<dyn Logger>,
     ) -> Self {
-        PostgreSQL {
+        PostgreSQLAws {
             context,
             action,
             id: id.to_string(),
@@ -93,13 +93,17 @@ impl PostgreSQL {
     }
 }
 
-impl StatefulService for PostgreSQL {
+impl StatefulService for PostgreSQLAws {
+    fn as_stateful_service(&self) -> &dyn StatefulService {
+        self
+    }
+
     fn is_managed_service(&self) -> bool {
         self.options.mode == MANAGED
     }
 }
 
-impl ToTransmitter for PostgreSQL {
+impl ToTransmitter for PostgreSQLAws {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::Database(
             self.id().to_string(),
@@ -109,7 +113,7 @@ impl ToTransmitter for PostgreSQL {
     }
 }
 
-impl Service for PostgreSQL {
+impl Service for PostgreSQLAws {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -250,9 +254,9 @@ impl Service for PostgreSQL {
     }
 }
 
-impl Database for PostgreSQL {}
+impl Database for PostgreSQLAws {}
 
-impl Helm for PostgreSQL {
+impl Helm for PostgreSQLAws {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -274,7 +278,7 @@ impl Helm for PostgreSQL {
     }
 }
 
-impl Terraform for PostgreSQL {
+impl Terraform for PostgreSQLAws {
     fn terraform_common_resource_dir_path(&self) -> String {
         format!("{}/aws/services/common", self.context.lib_root_dir())
     }
@@ -284,7 +288,7 @@ impl Terraform for PostgreSQL {
     }
 }
 
-impl Create for PostgreSQL {
+impl Create for PostgreSQLAws {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -328,7 +332,7 @@ impl Create for PostgreSQL {
     }
 }
 
-impl Pause for PostgreSQL {
+impl Pause for PostgreSQLAws {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
@@ -366,7 +370,7 @@ impl Pause for PostgreSQL {
     }
 }
 
-impl Delete for PostgreSQL {
+impl Delete for PostgreSQLAws {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
@@ -404,7 +408,7 @@ impl Delete for PostgreSQL {
     }
 }
 
-impl Listen for PostgreSQL {
+impl Listen for PostgreSQLAws {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

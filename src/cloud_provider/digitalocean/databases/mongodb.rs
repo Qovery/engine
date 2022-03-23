@@ -16,7 +16,7 @@ use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
 
-pub struct MongoDB {
+pub struct MongoDo {
     context: Context,
     id: String,
     action: Action,
@@ -32,7 +32,7 @@ pub struct MongoDB {
     logger: Box<dyn Logger>,
 }
 
-impl MongoDB {
+impl MongoDo {
     pub fn new(
         context: Context,
         id: &str,
@@ -48,7 +48,7 @@ impl MongoDB {
         listeners: Listeners,
         logger: Box<dyn Logger>,
     ) -> Self {
-        MongoDB {
+        MongoDo {
             context,
             action,
             id: id.to_string(),
@@ -83,13 +83,17 @@ impl MongoDB {
     }
 }
 
-impl StatefulService for MongoDB {
+impl StatefulService for MongoDo {
+    fn as_stateful_service(&self) -> &dyn StatefulService {
+        self
+    }
+
     fn is_managed_service(&self) -> bool {
         self.options.mode == MANAGED
     }
 }
 
-impl ToTransmitter for MongoDB {
+impl ToTransmitter for MongoDo {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::Database(
             self.id().to_string(),
@@ -99,7 +103,7 @@ impl ToTransmitter for MongoDB {
     }
 }
 
-impl Service for MongoDB {
+impl Service for MongoDo {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -222,18 +226,18 @@ impl Service for MongoDB {
         Ok(context)
     }
 
-    fn selector(&self) -> Option<String> {
-        Some(format!("app={}", self.sanitized_name()))
-    }
-
     fn logger(&self) -> &dyn Logger {
         &*self.logger
     }
+
+    fn selector(&self) -> Option<String> {
+        Some(format!("app={}", self.sanitized_name()))
+    }
 }
 
-impl Database for MongoDB {}
+impl Database for MongoDo {}
 
-impl Helm for MongoDB {
+impl Helm for MongoDo {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -255,7 +259,7 @@ impl Helm for MongoDB {
     }
 }
 
-impl Terraform for MongoDB {
+impl Terraform for MongoDo {
     fn terraform_common_resource_dir_path(&self) -> String {
         format!("{}/digitalocean/services/common", self.context.lib_root_dir())
     }
@@ -265,7 +269,7 @@ impl Terraform for MongoDB {
     }
 }
 
-impl Create for MongoDB {
+impl Create for MongoDo {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -303,7 +307,7 @@ impl Create for MongoDB {
     }
 }
 
-impl Pause for MongoDB {
+impl Pause for MongoDo {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
@@ -341,7 +345,7 @@ impl Pause for MongoDB {
     }
 }
 
-impl Delete for MongoDB {
+impl Delete for MongoDo {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
@@ -379,7 +383,7 @@ impl Delete for MongoDB {
     }
 }
 
-impl Listen for MongoDB {
+impl Listen for MongoDo {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }
