@@ -6,12 +6,11 @@ use std::{env, fs};
 use git2::{Cred, CredentialType};
 use sysinfo::{Disk, DiskExt, SystemExt};
 
-use crate::build_platform::{docker, Build, BuildPlatform, Credentials, Kind};
+use crate::build_platform::{docker, Build, BuildError, BuildPlatform, Credentials, Kind};
 use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, QoveryCommand};
 use crate::cmd::docker::{ContainerImage, Docker, DockerError};
-use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EngineEvent, EventDetails, EventMessage, ToTransmitter, Transmitter};
 use crate::fs::workspace_directory;
 use crate::git;
@@ -40,12 +39,7 @@ pub struct LocalDocker {
 }
 
 impl LocalDocker {
-    pub fn new(
-        context: Context,
-        id: &str,
-        name: &str,
-        logger: Box<dyn Logger>,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(context: Context, id: &str, name: &str, logger: Box<dyn Logger>) -> Result<Self, BuildError> {
         Ok(LocalDocker {
             context,
             id: id.to_string(),
@@ -63,20 +57,48 @@ impl LocalDocker {
         }
     }
 
-    /// Read Dockerfile content from location path and return an array of bytes
-    fn get_dockerfile_content(&self, dockerfile_path: &str) -> Result<Vec<u8>, EngineError> {
-        match fs::read(dockerfile_path) {
-            Ok(bytes) => Ok(bytes),
-            Err(err) => {
-                let engine_error = EngineError::new_docker_cannot_read_dockerfile(
+    fn reclaim_space_if_needed(&self) {
+        if env::var_os("CI").is_some() {
+            self.logger.log(
+                LogLevel::Info,
+                EngineEvent::Info(
                     self.get_event_details(),
-                    dockerfile_path.to_string(),
-                    CommandError::new(err.to_string(), None),
-                );
-                self.logger
-                    .log(LogLevel::Error, EngineEvent::Error(engine_error.clone(), None));
-                Err(engine_error)
-            }
+                    EventMessage::new_from_safe(
+                        "CI environment variable found, no docker prune will be made".to_string(),
+                    ),
+                ),
+            );
+
+            return;
+        }
+
+        // ensure there is enough disk space left before building a new image
+        let docker_path_string = "/var/lib/docker";
+        let docker_path = Path::new(docker_path_string);
+
+        // get system info
+        let mut system = sysinfo::System::new_all();
+        system.refresh_all();
+
+        for disk in system.get_disks() {
+            if disk.get_mount_point() == docker_path {
+                let event_details = self.get_event_details();
+                if let Err(e) = check_docker_space_usage_and_clean(
+                    &self.context.docker,
+                    disk,
+                    event_details.clone(),
+                    &*self.logger(),
+                ) {
+                    self.logger.log(
+                        LogLevel::Warning,
+                        EngineEvent::Warning(
+                            event_details.clone(),
+                            EventMessage::new(e.to_string(), Some(e.to_string())),
+                        ),
+                    );
+                }
+                break;
+            };
         }
     }
 
@@ -88,7 +110,7 @@ impl LocalDocker {
         env_var_args: Vec<String>,
         lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
-    ) -> Result<(), EngineError> {
+    ) -> Result<(), BuildError> {
         let image_to_build = ContainerImage {
             registry: build.image.registry_url.clone(),
             name: build.image.name(),
@@ -101,18 +123,18 @@ impl LocalDocker {
             tags: vec!["latest".to_string()],
         };
 
-        let dockerfile_content = self.get_dockerfile_content(dockerfile_complete_path)?;
+        let dockerfile_content = fs::read(dockerfile_complete_path).map_err(|err| {
+            BuildError::IoError(
+                build.image.application_id.clone(),
+                "reading dockerfile content".to_string(),
+                err,
+            )
+        })?;
         let env_var_args = match docker::match_used_env_var_args(env_var_args, dockerfile_content) {
             Ok(env_var_args) => env_var_args,
             Err(err) => {
-                let engine_error = EngineError::new_docker_cannot_extract_env_vars_from_dockerfile(
-                    self.get_event_details(),
-                    dockerfile_complete_path.to_string(),
-                    CommandError::new(err.to_string(), None),
-                );
-                self.logger
-                    .log(LogLevel::Error, EngineEvent::Error(engine_error.clone(), None));
-                return Err(engine_error);
+                let msg = format!("Cannot extract env vars from your dockerfile {}", err);
+                return Err(BuildError::InvalidConfig(build.image.application_id.clone(), msg));
             }
         };
 
@@ -170,12 +192,8 @@ impl LocalDocker {
 
         match exit_status {
             Ok(_) => Ok(()),
-            Err(DockerError::Aborted(_)) => Err(EngineError::new_task_cancellation_requested(self.get_event_details())),
-            Err(err) => Err(EngineError::new_docker_cannot_build_container_image(
-                self.get_event_details(),
-                self.name_with_id(),
-                CommandError::new(format!("{:?}", err), None),
-            )),
+            Err(DockerError::Aborted(msg)) => Err(BuildError::Aborted(msg)),
+            Err(err) => Err(BuildError::DockerError(build.image.application_id.clone(), err)),
         }
     }
 
@@ -187,7 +205,7 @@ impl LocalDocker {
         use_build_cache: bool,
         lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
-    ) -> Result<(), EngineError> {
+    ) -> Result<(), BuildError> {
         let name_with_tag = build.image.full_image_name_with_tag();
         let name_with_latest_tag = format!("{}:latest", build.image.full_image_name());
 
@@ -240,26 +258,10 @@ impl LocalDocker {
                     }
                     _ => {
                         let msg = format!(
-                            "Cannot build: Invalid buildpacks language format: expected `builder[@version]` got {}",
+                            "Invalid buildpacks language format: expected `builder[@version]` got {}",
                             buildpacks_language
                         );
-                        lh.deployment_error(ProgressInfo::new(
-                            ProgressScope::Application {
-                                id: build.image.application_id.clone(),
-                            },
-                            ProgressLevel::Error,
-                            Some(msg.clone()),
-                            self.context.execution_id(),
-                        ));
-
-                        let err = EngineError::new_buildpack_invalid_language_format(
-                            self.get_event_details(),
-                            buildpacks_language.to_string(),
-                        );
-
-                        self.logger.log(LogLevel::Error, EngineEvent::Error(err.clone(), None));
-
-                        return Err(err);
+                        return Err(BuildError::InvalidConfig(build.image.application_id.clone(), msg));
                     }
                 }
             }
@@ -319,33 +321,22 @@ impl LocalDocker {
 
         match exit_status {
             Ok(_) => Ok(()),
-            Err(Killed(_)) => Err(EngineError::new_task_cancellation_requested(self.get_event_details())),
-            Err(err) => {
-                let error = EngineError::new_buildpack_cannot_build_container_image(
-                    self.get_event_details(),
-                    self.name_with_id(),
-                    BUILDPACKS_BUILDERS.iter().map(|b| b.to_string()).collect(),
-                    CommandError::new(format!("{:?}", err), None),
-                );
-
-                self.logger
-                    .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
-
-                Err(error)
-            }
+            Err(Killed(msg)) => Err(BuildError::Aborted(msg)),
+            Err(err) => Err(BuildError::BuildpackError(build.image.application_id.clone(), err)),
         }
     }
 
-    fn get_repository_build_root_path(&self, build: &Build) -> Result<String, EngineError> {
+    fn get_repository_build_root_path(&self, build: &Build) -> Result<String, BuildError> {
         workspace_directory(
             self.context.workspace_root_dir(),
             self.context.execution_id(),
             format!("build/{}", build.image.name.as_str()),
         )
         .map_err(|err| {
-            EngineError::new_cannot_get_workspace_directory(
-                self.get_event_details(),
-                CommandError::new(err.to_string(), None),
+            BuildError::IoError(
+                build.image.application_id.clone(),
+                "when creating build workspace".to_string(),
+                err,
             )
         })
     }
@@ -368,32 +359,14 @@ impl BuildPlatform for LocalDocker {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
-        if !crate::cmd::command::does_binary_exist("docker") {
-            return Err(EngineError::new_missing_required_binary(
-                self.get_event_details(),
-                "docker".to_string(),
-            ));
-        }
-
-        if !crate::cmd::command::does_binary_exist("pack") {
-            return Err(EngineError::new_missing_required_binary(
-                self.get_event_details(),
-                "pack".to_string(),
-            ));
-        }
-
-        Ok(())
-    }
-
-    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<(), EngineError> {
+    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<(), BuildError> {
         let event_details = self.get_event_details();
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let app_id = build.image.application_id.clone();
 
         // check if we should already abort the task
         if is_task_canceled() {
-            return Err(EngineError::new_task_cancellation_requested(event_details.clone()));
+            return Err(BuildError::Aborted(build.image.application_id.clone()));
         }
 
         // LOGGING
@@ -403,7 +376,7 @@ impl BuildPlatform for LocalDocker {
             build.git_repository.url, repository_root_path
         );
         listeners_helper.deployment_in_progress(ProgressInfo::new(
-            ProgressScope::Application { id: app_id },
+            ProgressScope::Application { id: app_id.clone() },
             ProgressLevel::Info,
             Some(msg.clone()),
             self.context.execution_id(),
@@ -439,7 +412,9 @@ impl BuildPlatform for LocalDocker {
         // Cleanup, mono repo can require to clone multiple time the same repo
         // FIXME: re-use the same repo and just checkout at the correct commit
         if repository_root_path.exists() {
-            let _ = fs::remove_dir_all(&repository_root_path);
+            let app_id = app_id.clone();
+            fs::remove_dir_all(&repository_root_path)
+                .map_err(|err| BuildError::IoError(app_id, "cleaning old repository".to_string(), err))?;
         }
 
         // Do the real git clone
@@ -449,20 +424,11 @@ impl BuildPlatform for LocalDocker {
             &repository_root_path,
             &get_credentials,
         ) {
-            let error = EngineError::new_builder_clone_repository_error(
-                self.get_event_details(),
-                build.git_repository.url.to_string(),
-                CommandError::new(clone_error.to_string(), None),
-            );
-
-            self.logger
-                .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
-
-            return Err(error);
+            return Err(BuildError::GitError(build.image.application_id.clone(), clone_error));
         }
 
         if is_task_canceled() {
-            return Err(EngineError::new_task_cancellation_requested(event_details.clone()));
+            return Err(BuildError::Aborted(build.image.application_id.clone()));
         }
 
         let mut disable_build_cache = false;
@@ -480,77 +446,34 @@ impl BuildPlatform for LocalDocker {
 
         // ensure docker_path is a mounted volume, otherwise ignore because it's not what Qovery does in production
         // ex: this cause regular cleanup on CI, leading to random tests errors
-        match env::var_os("CI") {
-            Some(_) => self.logger.log(
-                LogLevel::Info,
-                EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(
-                        "CI environment variable found, no docker prune will be made".to_string(),
-                    ),
-                ),
-            ),
-            None => {
-                // ensure there is enough disk space left before building a new image
-                let docker_path_string = "/var/lib/docker";
-                let docker_path = Path::new(docker_path_string);
-
-                // get system info
-                let mut system = sysinfo::System::new_all();
-                system.refresh_all();
-
-                for disk in system.get_disks() {
-                    if disk.get_mount_point() == docker_path {
-                        let event_details = self.get_event_details();
-                        if let Err(e) = check_docker_space_usage_and_clean(
-                            &self.context.docker,
-                            disk,
-                            event_details.clone(),
-                            &*self.logger(),
-                        ) {
-                            self.logger.log(
-                                LogLevel::Warning,
-                                EngineEvent::Warning(
-                                    event_details.clone(),
-                                    EventMessage::new(e.to_string(), Some(e.to_string())),
-                                ),
-                            );
-                        }
-                        break;
-                    };
-                }
-            }
-        }
+        self.reclaim_space_if_needed();
 
         let app_id = build.image.application_id.clone();
 
         // Check that the build context is correct
         let build_context_path = repository_root_path.join(&build.git_repository.root_path);
         if !build_context_path.is_dir() {
-            listeners_helper.error(ProgressInfo::new(
-                ProgressScope::Application { id: app_id.clone() },
-                ProgressLevel::Error,
-                Some(format!(
-                    "Application build context is not present at location {:?}",
-                    build_context_path
-                )),
-                self.context.execution_id(),
-            ));
-
-            let error = EngineError::new_docker_cannot_find_dockerfile(
-                self.get_event_details(),
-                build_context_path.to_str().unwrap_or_default().to_string(),
+            let msg = format!(
+                "Specified build context path {:?} does not exist within the repository",
+                &build.git_repository.root_path
             );
+            return Err(BuildError::InvalidConfig(app_id.clone(), msg));
+        }
 
-            self.logger
-                .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
-
-            return Err(error);
+        // Safety check to ensure we can't go up in the directory
+        if !build_context_path
+            .canonicalize()
+            .unwrap_or_default()
+            .starts_with(repository_root_path.canonicalize().unwrap_or_default())
+        {
+            let msg = format!(
+                "Specified build context path {:?} tries to access directory outside of his git repository",
+                &build.git_repository.root_path
+            );
+            return Err(BuildError::InvalidConfig(app_id.clone(), msg));
         }
 
         // now we have to decide if we use buildpack or docker to build our application
-        // if dockerfile_path is not present it means we need to use buildpack
-
         // If no Dockerfile specified, we should use BuildPacks
         let result = if let Some(dockerfile_path) = &build.git_repository.dockerfile_path {
             // build container from the provided Dockerfile
@@ -559,27 +482,11 @@ impl BuildPlatform for LocalDocker {
 
             // If the dockerfile does not exist, abort
             if !dockerfile_absolute_path.is_file() {
-                listeners_helper.error(ProgressInfo::new(
-                    ProgressScope::Application {
-                        id: build.image.application_id.clone(),
-                    },
-                    ProgressLevel::Error,
-                    Some(format!(
-                        "Dockerfile is not present at location {}",
-                        dockerfile_absolute_path.display()
-                    )),
-                    self.context.execution_id(),
-                ));
-
-                let error = EngineError::new_docker_cannot_find_dockerfile(
-                    self.get_event_details(),
-                    dockerfile_absolute_path.to_str().unwrap_or_default().to_string(),
+                let msg = format!(
+                    "Specified dockerfile path {:?} does not exist within the repository",
+                    &dockerfile_path
                 );
-
-                self.logger
-                    .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
-
-                return Err(error);
+                return Err(BuildError::InvalidConfig(app_id.clone(), msg));
             }
 
             self.build_image_with_docker(
@@ -601,32 +508,6 @@ impl BuildPlatform for LocalDocker {
                 is_task_canceled,
             )
         };
-
-        let msg = match &result {
-            Ok(_) => format!("✅ Container {} is built", self.name_with_id()),
-            Err(engine_err) if engine_err.tag() == &Tag::TaskCancellationRequested => {
-                format!("🚫 Container {} build has been canceled", self.name_with_id())
-            }
-            Err(engine_err) => {
-                format!(
-                    "❌ Container {} failed to be build: {}",
-                    self.name_with_id(),
-                    engine_err.message()
-                )
-            }
-        };
-
-        listeners_helper.deployment_in_progress(ProgressInfo::new(
-            ProgressScope::Application { id: app_id },
-            ProgressLevel::Info,
-            Some(msg.to_string()),
-            self.context.execution_id(),
-        ));
-
-        self.logger.log(
-            LogLevel::Info,
-            EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg.to_string())),
-        );
 
         result
     }
