@@ -6,7 +6,7 @@ use std::{env, fs};
 use git2::{Cred, CredentialType};
 use sysinfo::{Disk, DiskExt, SystemExt};
 
-use crate::build_platform::{docker, Build, BuildError, BuildPlatform, Credentials, Kind};
+use crate::build_platform::{dockerfile_utils, Build, BuildError, BuildPlatform, Credentials, Kind};
 use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, QoveryCommand};
@@ -91,10 +91,7 @@ impl LocalDocker {
                 ) {
                     self.logger.log(
                         LogLevel::Warning,
-                        EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new(e.to_string(), Some(e.to_string())),
-                        ),
+                        EngineEvent::Warning(event_details, EventMessage::new(e.to_string(), Some(e.to_string()))),
                     );
                 }
                 break;
@@ -107,7 +104,7 @@ impl LocalDocker {
         build: &Build,
         dockerfile_complete_path: &str,
         into_dir_docker_style: &str,
-        env_var_args: Vec<String>,
+        env_var_args: &[(&str, &str)],
         lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError> {
@@ -130,7 +127,7 @@ impl LocalDocker {
                 err,
             )
         })?;
-        let env_var_args = match docker::match_used_env_var_args(env_var_args, dockerfile_content) {
+        let env_var_args = match dockerfile_utils::match_used_env_var_args(env_var_args, dockerfile_content) {
             Ok(env_var_args) => env_var_args,
             Err(err) => {
                 let msg = format!("Cannot extract env vars from your dockerfile {}", err);
@@ -138,23 +135,11 @@ impl LocalDocker {
             }
         };
 
-        // FIXME: pass a Vec<(key, value)> instead of spliting always the string
-        let env_vars = env_var_args
-            .into_iter()
-            .map(|val| {
-                let (key, value) = val.rsplit_once('=').unwrap();
-                (key.to_string(), value.to_string())
-            })
-            .collect::<Vec<_>>();
-
         let exit_status = self.context.docker.build(
-            &Path::new(dockerfile_complete_path),
-            &Path::new(into_dir_docker_style),
+            Path::new(dockerfile_complete_path),
+            Path::new(into_dir_docker_style),
             &image_to_build,
-            &env_vars
-                .iter()
-                .map(|(k, v)| (k.as_str(), v.as_str()))
-                .collect::<Vec<_>>(),
+            &env_var_args,
             &image_cache,
             true,
             &mut |line| {
@@ -201,7 +186,7 @@ impl LocalDocker {
         &self,
         build: &Build,
         into_dir_docker_style: &str,
-        env_var_args: Vec<String>,
+        env_var_args: &[(&str, &str)],
         use_build_cache: bool,
         lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
@@ -224,19 +209,12 @@ impl LocalDocker {
             buildpacks_args.extend(vec!["-t", name_with_latest_tag.as_str()]);
             buildpacks_args.extend(vec!["--path", into_dir_docker_style]);
 
-            let mut buildpacks_args = if env_var_args.is_empty() {
-                buildpacks_args
-            } else {
-                let mut build_args = vec![];
-
-                env_var_args.iter().for_each(|x| {
-                    build_args.push("--env");
-                    build_args.push(x.as_str());
-                });
-
-                buildpacks_args.extend(build_args);
-                buildpacks_args
-            };
+            let mut args_buffer = Vec::with_capacity(env_var_args.len());
+            for (key, value) in env_var_args {
+                args_buffer.push("--env".to_string());
+                args_buffer.push(format!("{}={}", key, value));
+            }
+            buildpacks_args.extend(args_buffer.iter().map(|value| value.as_str()).collect::<Vec<&str>>());
 
             buildpacks_args.push("-B");
             buildpacks_args.push(builder_name);
@@ -370,7 +348,7 @@ impl BuildPlatform for LocalDocker {
         }
 
         // LOGGING
-        let repository_root_path = PathBuf::from(self.get_repository_build_root_path(&build)?);
+        let repository_root_path = PathBuf::from(self.get_repository_build_root_path(build)?);
         let msg = format!(
             "Cloning repository: {} to {:?}",
             build.git_repository.url, repository_root_path
@@ -383,7 +361,7 @@ impl BuildPlatform for LocalDocker {
         ));
         self.logger.log(
             LogLevel::Info,
-            EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)),
+            EngineEvent::Info(event_details, EventMessage::new_from_safe(msg)),
         );
         // LOGGING
 
@@ -392,8 +370,8 @@ impl BuildPlatform for LocalDocker {
         let get_credentials = |user: &str| {
             let mut creds: Vec<(CredentialType, Cred)> = Vec::with_capacity(build.git_repository.ssh_keys.len() + 1);
             for ssh_key in build.git_repository.ssh_keys.iter() {
-                let public_key = ssh_key.public_key.as_ref().map(|x| x.as_str());
-                let passphrase = ssh_key.passphrase.as_ref().map(|x| x.as_str());
+                let public_key = ssh_key.public_key.as_deref();
+                let passphrase = ssh_key.passphrase.as_deref();
                 if let Ok(cred) = Cred::ssh_key_from_memory(user, public_key, &ssh_key.private_key, passphrase) {
                     creds.push((CredentialType::SSH_MEMORY, cred));
                 }
@@ -402,7 +380,7 @@ impl BuildPlatform for LocalDocker {
             if let Some(Credentials { login, password }) = &build.git_repository.credentials {
                 creds.push((
                     CredentialType::USER_PASS_PLAINTEXT,
-                    Cred::userpass_plaintext(&login, &password).unwrap(),
+                    Cred::userpass_plaintext(login, password).unwrap(),
                 ));
             }
 
@@ -412,7 +390,7 @@ impl BuildPlatform for LocalDocker {
         // Cleanup, mono repo can require to clone multiple time the same repo
         // FIXME: re-use the same repo and just checkout at the correct commit
         if repository_root_path.exists() {
-            let app_id = app_id.clone();
+            let app_id = app_id;
             fs::remove_dir_all(&repository_root_path)
                 .map_err(|err| BuildError::IoError(app_id, "cleaning old repository".to_string(), err))?;
         }
@@ -432,15 +410,14 @@ impl BuildPlatform for LocalDocker {
         }
 
         let mut disable_build_cache = false;
-        let mut env_var_args: Vec<String> = Vec::with_capacity(build.options.environment_variables.len());
-
+        let mut env_var_args: Vec<(&str, &str)> = Vec::with_capacity(build.options.environment_variables.len());
         for ev in &build.options.environment_variables {
             if ev.key == "QOVERY_DISABLE_BUILD_CACHE" && ev.value.to_lowercase() == "true" {
                 // this is a special flag to disable build cache dynamically
                 // -- do not pass this env var key/value to as build parameter
                 disable_build_cache = true;
             } else {
-                env_var_args.push(format!("{}={}", ev.key, ev.value));
+                env_var_args.push((&ev.key, &ev.value));
             }
         }
 
@@ -457,7 +434,7 @@ impl BuildPlatform for LocalDocker {
                 "Specified build context path {:?} does not exist within the repository",
                 &build.git_repository.root_path
             );
-            return Err(BuildError::InvalidConfig(app_id.clone(), msg));
+            return Err(BuildError::InvalidConfig(app_id, msg));
         }
 
         // Safety check to ensure we can't go up in the directory
@@ -470,7 +447,7 @@ impl BuildPlatform for LocalDocker {
                 "Specified build context path {:?} tries to access directory outside of his git repository",
                 &build.git_repository.root_path
             );
-            return Err(BuildError::InvalidConfig(app_id.clone(), msg));
+            return Err(BuildError::InvalidConfig(app_id, msg));
         }
 
         // now we have to decide if we use buildpack or docker to build our application
@@ -486,14 +463,14 @@ impl BuildPlatform for LocalDocker {
                     "Specified dockerfile path {:?} does not exist within the repository",
                     &dockerfile_path
                 );
-                return Err(BuildError::InvalidConfig(app_id.clone(), msg));
+                return Err(BuildError::InvalidConfig(app_id, msg));
             }
 
             self.build_image_with_docker(
                 build,
                 dockerfile_absolute_path.to_str().unwrap_or_default(),
                 build_context_path.to_str().unwrap_or_default(),
-                env_var_args,
+                &env_var_args,
                 &listeners_helper,
                 is_task_canceled,
             )
@@ -502,7 +479,7 @@ impl BuildPlatform for LocalDocker {
             self.build_image_with_buildpacks(
                 build,
                 build_context_path.to_str().unwrap_or_default(),
-                env_var_args,
+                &env_var_args,
                 !disable_build_cache,
                 &listeners_helper,
                 is_task_canceled,
@@ -547,7 +524,7 @@ fn check_docker_space_usage_and_clean(
         logger.log(
             LogLevel::Warning,
             EngineEvent::Warning(
-                event_details.clone(),
+                event_details,
                 EventMessage::new_from_safe(format!(
                     "Docker disk remaining ({}%) is lower than {}%, requesting cleaning (purge)",
                     docker_percentage_remaining, docker_max_disk_percentage_usage_before_purge
@@ -561,7 +538,7 @@ fn check_docker_space_usage_and_clean(
     logger.log(
         LogLevel::Info,
         EngineEvent::Info(
-            event_details.clone(),
+            event_details,
             EventMessage::new_from_safe(format!(
                 "No need to purge old docker images, only {}% ({}/{}) disk used",
                 100 - docker_percentage_remaining,

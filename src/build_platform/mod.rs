@@ -10,7 +10,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::path::PathBuf;
 use url::Url;
 
-pub mod docker;
+pub mod dockerfile_utils;
 pub mod local_docker;
 
 #[derive(thiserror::Error, Debug)]
