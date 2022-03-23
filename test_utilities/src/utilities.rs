@@ -547,7 +547,7 @@ where
                 let workspace_directory = qovery_engine::fs::workspace_directory(
                     context.workspace_root_dir(),
                     context.execution_id(),
-                    format!("object-storage/scaleway_os/{}", cluster_name.clone()),
+                    format!("object-storage/spaces/{}", cluster_name.clone()),
                 )
                 .map_err(|err| CommandError::new(err.to_string(), Some(err.to_string())))
                 .expect("Unable to create directory");

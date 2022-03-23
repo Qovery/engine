@@ -1759,7 +1759,7 @@ impl Kubernetes for DOKS {
                 let workspace_directory = crate::fs::workspace_directory(
                     self.context().workspace_root_dir(),
                     self.context().execution_id(),
-                    format!("object-storage/scaleway_os/{}", self.name()),
+                    format!("object-storage/spaces/{}", self.name()),
                 )
                 .map_err(|err| {
                     EngineError::new_cannot_retrieve_cluster_config_file(
