@@ -540,10 +540,9 @@ where
                     secrets.clone().DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
                     cluster_name.clone().as_str(),
                 ) {
-                    Ok(kubeconfig) => Ok(kubeconfig),
-                    Err(e) => Err(CommandError::new(e.message(), Some(e.message()))),
-                }
-                .expect("Unable to get kubeconfig");
+                    Ok(kubeconfig) => kubeconfig,
+                    Err(e) => return OperationResult::Retry(CommandError::new(e.message(), Some(e.message()))),
+                };
 
                 let workspace_directory = qovery_engine::fs::workspace_directory(
                     context.workspace_root_dir(),

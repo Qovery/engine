@@ -92,9 +92,10 @@ pub fn get_do_kubeconfig_by_cluster_name(token: &str, cluster_name: &str) -> Res
     };
 
     let clusters_copy = clusters.expect("Unable to list clusters").kubernetes_clusters.clone();
+    let cluster_name = cluster_name.trim().to_lowercase();
     match clusters_copy
         .into_iter()
-        .filter(|cluster| cluster.name == cluster_name.to_string())
+        .filter(|cluster| cluster.name.trim().to_lowercase() == cluster_name.to_string())
         .collect::<Vec<KubernetesCluster>>()
         .first()
         .clone()

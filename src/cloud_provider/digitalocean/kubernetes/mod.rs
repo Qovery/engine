@@ -1739,13 +1739,14 @@ impl Kubernetes for DOKS {
             },
             None => {
                 let kubeconfig = match get_do_kubeconfig_by_cluster_name(self.cloud_provider.token(), self.name()) {
-                    Ok(kubeconfig) => Ok(kubeconfig),
-                    Err(e) => Err(EngineError::new_cannot_retrieve_cluster_config_file(
-                        event_details.clone(),
-                        CommandError::new(e.message(), Some(e.message())),
-                    )),
-                }
-                .expect("Unable to get kubeconfig");
+                    Ok(kubeconfig) => kubeconfig,
+                    Err(e) => {
+                        return Err(EngineError::new_cannot_retrieve_cluster_config_file(
+                            event_details.clone(),
+                            CommandError::new(e.message(), Some(e.message())),
+                        ))
+                    }
+                };
 
                 let workspace_directory = crate::fs::workspace_directory(
                     self.context().workspace_root_dir(),
