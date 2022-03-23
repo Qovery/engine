@@ -70,6 +70,7 @@ impl ECR {
         };
 
         cr.registry_info = Some(registry_info);
+        cr.is_credentials_valid()?;
         Ok(cr)
     }
 
@@ -270,6 +271,16 @@ impl ECR {
 
         Ok(ECRCredentials::new(access_token, password, endpoint_url))
     }
+
+    fn is_credentials_valid(&self) -> Result<(), ContainerRegistryError> {
+        let client = StsClient::new_with_client(self.client(), Region::default());
+        let s = block_on(client.get_caller_identity(GetCallerIdentityRequest::default()));
+
+        match s {
+            Ok(_) => Ok(()),
+            Err(_) => Err(ContainerRegistryError::InvalidCredentials),
+        }
+    }
 }
 
 impl ContainerRegistry for ECR {
@@ -287,16 +298,6 @@ impl ContainerRegistry for ECR {
 
     fn name(&self) -> &str {
         self.name.as_str()
-    }
-
-    fn is_valid(&self) -> Result<(), ContainerRegistryError> {
-        let client = StsClient::new_with_client(self.client(), Region::default());
-        let s = block_on(client.get_caller_identity(GetCallerIdentityRequest::default()));
-
-        match s {
-            Ok(_) => Ok(()),
-            Err(_) => Err(ContainerRegistryError::InvalidCredentials),
-        }
     }
 
     fn registry_info(&self) -> &ContainerRegistryInfo {

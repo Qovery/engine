@@ -78,14 +78,6 @@ impl EngineConfig {
     }
 
     pub fn is_valid(&self) -> Result<(), EngineConfigError> {
-        if let Err(e) = self.build_platform.is_valid() {
-            return Err(EngineConfigError::BuildPlatformNotValid(e));
-        }
-
-        if let Err(e) = self.container_registry.is_valid() {
-            return Err(EngineConfigError::ContainerRegistryNotValid(e));
-        }
-
         if let Err(e) = self.cloud_provider.is_valid() {
             return Err(EngineConfigError::CloudProviderNotValid(e));
         }

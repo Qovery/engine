@@ -75,6 +75,7 @@ pub enum Tag {
     UnsupportedVersion,
     CannotGetSupportedVersions,
     CannotGetCluster,
+    ContainerRegistryError,
     ObjectStorageCannotCreateBucket,
     ObjectStorageCannotPutFileIntoBucket,
     NoClusterFound,
@@ -89,6 +90,7 @@ pub enum Tag {
     CloudProviderClientInvalidCredentials,
     VersionNumberParsingError,
     NotImplementedError,
+    BuilderError,
     BuilderDockerCannotFindAnyDockerfile,
     BuilderDockerCannotReadDockerfile,
     BuilderDockerCannotExtractEnvVarsFromDockerfile,
@@ -220,6 +222,8 @@ impl From<errors::Tag> for Tag {
             errors::Tag::ObjectStorageCannotActivateBucketVersioning => {
                 Tag::ObjectStorageCannotActivateBucketVersioning
             }
+            errors::Tag::BuilderError => Tag::BuilderError,
+            errors::Tag::ContainerRegistryError => Tag::ContainerRegistryError,
         }
     }
 }

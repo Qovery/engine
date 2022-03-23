@@ -24,7 +24,7 @@ pub fn extract_dockerfile_args(dockerfile_content: Vec<u8>) -> Result<HashSet<St
             x.get(1).unwrap_or(&"").to_string()
         })
         .map(|arg_value| {
-            let x = arg_value.split("=").collect::<Vec<&str>>();
+            let x = arg_value.split('=').collect::<Vec<&str>>();
             x.get(0).unwrap_or(&"").to_string()
         })
         .collect::<HashSet<String>>();
@@ -35,31 +35,17 @@ pub fn extract_dockerfile_args(dockerfile_content: Vec<u8>) -> Result<HashSet<St
 /// Return env var args that are really used in the Dockerfile
 /// env_var_args is a vector of value "key=value".
 /// which is the format of the value expected by docker with the argument "build-arg"
-pub fn match_used_env_var_args(
-    env_var_args: Vec<String>,
+pub fn match_used_env_var_args<'a>(
+    env_var_args: &'a [(&'a str, &'a str)],
     dockerfile_content: Vec<u8>,
-) -> Result<Vec<String>, Utf8Error> {
+) -> Result<Vec<(&'a str, &'a str)>, Utf8Error> {
     // extract env vars used in the Dockerfile
     let used_args = extract_dockerfile_args(dockerfile_content)?;
 
-    // match env var args and dockerfile env vargs
-    let env_var_arg_keys = env_var_args
-        .iter()
-        .map(|env_var| env_var.split("=").next().unwrap_or(&"").to_string())
-        .collect::<HashSet<String>>();
+    let mut matched_env_args = env_var_args.to_vec();
+    matched_env_args.retain(|(k, _v)| used_args.contains(*k));
 
-    let matched_env_args_keys = env_var_arg_keys
-        .intersection(&used_args)
-        .map(|arg| arg.clone())
-        .collect::<HashSet<String>>();
-
-    Ok(env_var_args
-        .into_iter()
-        .filter(|env_var_arg| {
-            let env_var_arg_key = env_var_arg.split("=").next().unwrap_or("");
-            matched_env_args_keys.contains(env_var_arg_key)
-        })
-        .collect::<Vec<String>>())
+    Ok(matched_env_args)
 }
 
 #[cfg(test)]
@@ -114,26 +100,25 @@ mod tests {
         assert_eq!(res.unwrap().len(), 4);
 
         let env_var_args_to_match = vec![
-            "foo=abcdvalue".to_string(),
-            "bar=abcdvalue".to_string(),
-            "toto=abcdvalue".to_string(),
-            "x=abcdvalue".to_string(),
+            ("foo", "abcdvalue"),
+            ("bar", "abcdvalue"),
+            ("toto", "abcdvalue"),
+            ("x", "abcdvalue"),
         ];
 
-        let matched_vars = match_used_env_var_args(env_var_args_to_match.clone(), dockerfile.to_vec());
+        let matched_vars = match_used_env_var_args(&env_var_args_to_match, dockerfile.to_vec());
 
         assert_eq!(matched_vars.clone().unwrap(), env_var_args_to_match.clone());
 
         assert_eq!(matched_vars.unwrap().len(), 4);
 
-        let matched_vars = match_used_env_var_args(
-            vec!["toto=abcdvalue".to_string(), "x=abcdvalue".to_string()],
-            dockerfile.to_vec(),
-        );
+        let args = vec![("toto", "abcdvalue"), ("x", "abcdvalue")];
+        let matched_vars = match_used_env_var_args(&args, dockerfile.to_vec());
 
         assert_eq!(matched_vars.unwrap().len(), 2);
 
-        let matched_vars = match_used_env_var_args(vec![], dockerfile.to_vec());
+        let args = vec![];
+        let matched_vars = match_used_env_var_args(&args, dockerfile.to_vec());
 
         assert_eq!(matched_vars.unwrap().len(), 0);
 
@@ -144,7 +129,7 @@ mod tests {
         RUN ls -lh
         ";
 
-        let matched_vars = match_used_env_var_args(env_var_args_to_match.clone(), dockerfile.to_vec());
+        let matched_vars = match_used_env_var_args(&env_var_args_to_match, dockerfile.to_vec());
 
         assert_eq!(matched_vars.unwrap().len(), 0);
     }
@@ -180,23 +165,22 @@ mod tests {
         let res = extract_dockerfile_args(dockerfile.to_vec());
         assert_eq!(res.unwrap().len(), 3);
 
-        let matched_vars = match_used_env_var_args(
-            vec![
-                "PRISMIC_REPO_NAME=abcdvalue".to_string(),
-                "PRISMIC_API_KEY=abcdvalue".to_string(),
-                "PRISMIC_CUSTOM_TYPES_API_TOKEN=abcdvalue".to_string(),
-            ],
-            dockerfile.to_vec(),
-        );
+        let args = vec![
+            ("PRISMIC_REPO_NAME", "abcdvalue"),
+            ("PRISMIC_API_KEY", "abcdvalue"),
+            ("PRISMIC_CUSTOM_TYPES_API_TOKEN", "abcdvalue"),
+        ];
+        let matched_vars = match_used_env_var_args(&args, dockerfile.to_vec());
 
         assert_eq!(matched_vars.unwrap().len(), 3);
 
-        let matched_vars =
-            match_used_env_var_args(vec!["PRISMIC_REPO_NAME=abcdvalue".to_string()], dockerfile.to_vec());
+        let args = vec![("PRISMIC_REPO_NAME", "abcdvalue")];
+        let matched_vars = match_used_env_var_args(&args, dockerfile.to_vec());
 
         assert_eq!(matched_vars.unwrap().len(), 1);
 
-        let matched_vars = match_used_env_var_args(vec![], dockerfile.to_vec());
+        let args = vec![];
+        let matched_vars = match_used_env_var_args(&args, dockerfile.to_vec());
 
         assert_eq!(matched_vars.unwrap().len(), 0);
     }

@@ -2,6 +2,7 @@ pub mod io;
 
 extern crate url;
 
+use crate::build_platform::BuildError;
 use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cmd;
 use crate::cmd::docker::DockerError;
@@ -260,6 +261,8 @@ pub enum Tag {
     NotImplementedError,
     /// TaskCancellationRequested: represents an error where current task cancellation has been requested.
     TaskCancellationRequested,
+    /// BuildError: represents an error when trying to build an application.
+    BuilderError,
     /// BuilderDockerCannotFindAnyDockerfile: represents an error when trying to get a Dockerfile.
     BuilderDockerCannotFindAnyDockerfile,
     /// BuilderDockerCannotReadDockerfile: represents an error while trying to read Dockerfile.
@@ -284,6 +287,8 @@ pub enum Tag {
     DockerPushImageError,
     /// DockerPullImageError: represents an error when trying to pull a docker image.
     DockerPullImageError,
+    /// ContainerRegistryError: represents an error when trying to interact with a repository.
+    ContainerRegistryError,
     /// ContainerRegistryRepositoryCreationError: represents an error when trying to create a repository.
     ContainerRegistryRepositoryCreationError,
     /// ContainerRegistryRepositorySetLifecycleError: represents an error when trying to set repository lifecycle policy.
@@ -1735,7 +1740,25 @@ impl EngineError {
     pub fn new_container_registry_error(event_details: EventDetails, error: ContainerRegistryError) -> EngineError {
         EngineError::new(
             event_details,
-            Tag::HelmChartUninstallError,
+            Tag::ContainerRegistryError,
+            error.to_string(),
+            error.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from an Build error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_build_error(event_details: EventDetails, error: BuildError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::BuilderError,
             error.to_string(),
             error.to_string(),
             None,
