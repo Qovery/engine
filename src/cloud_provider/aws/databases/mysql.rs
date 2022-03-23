@@ -22,7 +22,7 @@ use crate::models::DatabaseMode::MANAGED;
 use crate::models::{Context, DatabaseKind, Listen, Listener, Listeners};
 use ::function_name::named;
 
-pub struct MySQL {
+pub struct MySQLAws {
     context: Context,
     id: String,
     action: Action,
@@ -38,7 +38,7 @@ pub struct MySQL {
     logger: Box<dyn Logger>,
 }
 
-impl MySQL {
+impl MySQLAws {
     pub fn new(
         context: Context,
         id: &str,
@@ -93,13 +93,17 @@ impl MySQL {
     }
 }
 
-impl StatefulService for MySQL {
+impl StatefulService for MySQLAws {
+    fn as_stateful_service(&self) -> &dyn StatefulService {
+        self
+    }
+
     fn is_managed_service(&self) -> bool {
         self.options.mode == MANAGED
     }
 }
 
-impl ToTransmitter for MySQL {
+impl ToTransmitter for MySQLAws {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::Database(
             self.id().to_string(),
@@ -109,7 +113,7 @@ impl ToTransmitter for MySQL {
     }
 }
 
-impl Service for MySQL {
+impl Service for MySQLAws {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -262,9 +266,9 @@ impl Service for MySQL {
     }
 }
 
-impl Database for MySQL {}
+impl Database for MySQLAws {}
 
-impl Helm for MySQL {
+impl Helm for MySQLAws {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -286,7 +290,7 @@ impl Helm for MySQL {
     }
 }
 
-impl Terraform for MySQL {
+impl Terraform for MySQLAws {
     fn terraform_common_resource_dir_path(&self) -> String {
         format!("{}/aws/services/common", self.context.lib_root_dir())
     }
@@ -296,7 +300,7 @@ impl Terraform for MySQL {
     }
 }
 
-impl Create for MySQL {
+impl Create for MySQLAws {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -340,7 +344,7 @@ impl Create for MySQL {
     }
 }
 
-impl Pause for MySQL {
+impl Pause for MySQLAws {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
@@ -377,7 +381,7 @@ impl Pause for MySQL {
     }
 }
 
-impl Delete for MySQL {
+impl Delete for MySQLAws {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
@@ -414,7 +418,7 @@ impl Delete for MySQL {
     }
 }
 
-impl Listen for MySQL {
+impl Listen for MySQLAws {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

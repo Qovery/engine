@@ -37,7 +37,7 @@ use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DIGITAL_OCEAN_SPACES_ACCESS_ID, DIGITAL_OCEAN_SPACES_SECRET_ID,
     DIGITAL_OCEAN_TOKEN, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
-use qovery_engine::models::{Context, Database, DatabaseKind, DatabaseMode, Environment, Features, Metadata};
+use qovery_engine::models::{Context, Database, DatabaseKind, DatabaseMode, EnvironmentRequest, Features, Metadata};
 use retry::Error::Operation;
 use serde::{Deserialize, Serialize};
 
@@ -454,7 +454,7 @@ pub fn generate_password(provider_kind: Kind, db_mode: DatabaseMode) -> String {
     password
 }
 
-pub fn check_all_connections(env: &Environment) -> Vec<bool> {
+pub fn check_all_connections(env: &EnvironmentRequest) -> Vec<bool> {
     let mut checking: Vec<bool> = Vec::with_capacity(env.routers.len());
 
     for router_to_test in &env.routers {
@@ -795,7 +795,7 @@ fn aws_s3_get_object(
 pub fn is_pod_restarted_env(
     context: Context,
     provider_kind: Kind,
-    environment_check: Environment,
+    environment_check: EnvironmentRequest,
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
 ) -> (bool, String) {
@@ -830,7 +830,7 @@ pub fn is_pod_restarted_env(
 pub fn get_pods(
     context: Context,
     provider_kind: Kind,
-    environment_check: Environment,
+    environment_check: EnvironmentRequest,
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
 ) -> Result<KubernetesList<KubernetesPod>, CommandError> {
@@ -903,7 +903,7 @@ pub fn generate_cluster_id(region: &str) -> String {
 pub fn get_pvc(
     context: Context,
     provider_kind: Kind,
-    environment_check: Environment,
+    environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<PVC, CommandError> {
     let namespace_name = format!(
@@ -932,7 +932,7 @@ pub fn get_pvc(
 pub fn get_svc(
     context: Context,
     provider_kind: Kind,
-    environment_check: Environment,
+    environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<SVC, CommandError> {
     let namespace_name = format!(

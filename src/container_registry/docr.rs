@@ -30,14 +30,17 @@ pub struct DOCR {
 impl DOCR {
     pub fn new(context: Context, id: &str, name: &str, api_key: &str) -> Result<Self, ContainerRegistryError> {
         let registry_name = name.to_string();
+        let registry_name2 = name.to_string();
         let mut registry = Url::parse(&format!("https://{}", CR_REGISTRY_DOMAIN)).unwrap();
         let _ = registry.set_username(&api_key);
         let _ = registry.set_password(Some(&api_key));
+
         let registry_info = ContainerRegistryInfo {
             endpoint: registry,
             registry_name: name.to_string(),
             registry_docker_json_config: None,
             get_image_name: Box::new(move |img_name| format!("{}/{}", registry_name, img_name)),
+            get_repository_name: Box::new(move |_| registry_name2.to_string()),
         };
 
         let cr = DOCR {

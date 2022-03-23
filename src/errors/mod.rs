@@ -1732,6 +1732,24 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
+    pub fn new_container_registry_error(event_details: EventDetails, error: ContainerRegistryError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::HelmChartUninstallError,
+            error.to_string(),
+            error.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from an Container Registry error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
     pub fn new_helm_error(event_details: EventDetails, error: HelmError) -> EngineError {
         let cmd_error = match &error {
             HelmError::CmdError(_, _, cmd_error) => Some(cmd_error.clone()),

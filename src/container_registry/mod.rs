@@ -3,6 +3,8 @@ use url::Url;
 
 use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
+use crate::errors::EngineError;
+use crate::events::EventDetails;
 use crate::models::{Context, Listen};
 
 pub mod docr;
@@ -37,6 +39,10 @@ pub trait ContainerRegistry: Listen {
     fn does_image_exists(&self, image: &Image) -> bool;
 }
 
+pub fn to_engine_error(event_details: EventDetails, err: ContainerRegistryError) -> EngineError {
+    EngineError::new_container_registry_error(event_details, err)
+}
+
 pub struct ContainerRegistryInfo {
     pub endpoint: Url, // Contains username and password if necessary
     pub registry_name: String,
@@ -46,6 +52,9 @@ pub struct ContainerRegistryInfo {
     // i.e: fo scaleway => image_name/image_name
     // i.e: for AWS => image_name
     pub get_image_name: Box<dyn Fn(&str) -> String>,
+
+    // Give it the name of your image, and it return the name of the repository that will be used
+    pub get_repository_name: Box<dyn Fn(&str) -> String>,
 }
 
 pub struct PushResult {
