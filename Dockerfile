@@ -15,7 +15,7 @@ RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pk
 ADD . .
 
 # run release build
-RUN mkdir -p $TF_PLUGIN_CACHE_DIR
+RUN rm -rf $TF_PLUGIN_CACHE_DIR; mkdir -p $TF_PLUGIN_CACHE_DIR
 RUN ./docker/load.sh download $BIN_DEST_FOLDER
 RUN ./docker/load.sh install $BIN_DEST_FOLDER
 RUN ./docker/load.sh download_terraform_plugins
