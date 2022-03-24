@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y curl libssh-dev pkg-config unzip make n
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null &&\
     apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io
 
+RUN curl -L -o /bin/kubectl https://dl.k8s.io/release/v1.21.0/bin/linux/amd64/kubectl && chmod +x /bin/kubectl
 RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | TAG="0.10.7" bash -s -- --to /bin
 RUN curl -s https://raw.githubusercontent.com/rancher/k3d/main/install.sh | TAG="v5.2.2" bash
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \

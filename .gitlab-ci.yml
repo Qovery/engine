@@ -1,4 +1,4 @@
-image: public.ecr.aws/r3m4q3r9/qovery-ci:a38e0d0-4637c2c
+image: public.ecr.aws/r3m4q3r9/qovery-ci:df1e5cb-6d6f36c
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
@@ -21,6 +21,7 @@ services:
 
 stages:
   - build
+  - local-test
   - tests
   - upgrade-dev
   - e2e-tests
@@ -163,6 +164,19 @@ all-managed-services-mr:
       - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 1 week
   interruptible: true
+
+test-local:
+  stage: local-test
+  script:
+    - just test_local_stack
+  only:
+    - merge_requests
+  dependencies:
+    - linter-mr
+    - build-mr
+  when: always
+  tags:
+    - vm-2cpu-4gmem-0g
 
 test-all-mr:
   stage: tests
