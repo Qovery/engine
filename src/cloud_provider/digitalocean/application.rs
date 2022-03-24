@@ -247,7 +247,7 @@ impl Service for ApplicationDo {
 
         // This is specific to digital ocean as it is them that create the registry secret
         // we don't have the hand on it
-        context.insert("registry_secret", &self.build.image.registry_name);
+        context.insert("registry_secret", "do-container-registry-secret-for-cluster");
 
         let storage = self
             .storage
