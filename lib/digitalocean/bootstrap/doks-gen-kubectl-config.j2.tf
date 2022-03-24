@@ -7,5 +7,5 @@ KUBECONFIG
 resource "local_file" "kubeconfig" {
   filename = "${var.space_bucket_kubeconfig}/${var.kubeconfig_filename}"
   content = local.kubeconfig
-  file_permission = "0644"
+  file_permission = "0600"
 }
