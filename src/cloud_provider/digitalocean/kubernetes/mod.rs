@@ -187,6 +187,11 @@ impl DOKS {
         format!("{}.yaml", self.id)
     }
 
+    // TODO(benjaminch): Very dirty quickfix, should be removed and cluster id / name should be handled globally
+    fn doks_cluster_name(&self) -> String {
+        format!("qovery-{}", self.id)
+    }
+
     // create a context to render tf files (terraform) contained in lib/digitalocean/
     fn tera_context(&self) -> Result<TeraContext, EngineError> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
@@ -1738,7 +1743,10 @@ impl Kubernetes for DOKS {
                 )),
             },
             None => {
-                let kubeconfig = match get_do_kubeconfig_by_cluster_name(self.cloud_provider.token(), self.name()) {
+                let kubeconfig = match get_do_kubeconfig_by_cluster_name(
+                    self.cloud_provider.token(),
+                    self.doks_cluster_name().as_str(),
+                ) {
                     Ok(kubeconfig) => match kubeconfig {
                         None => {
                             return Err(EngineError::new_cannot_retrieve_cluster_config_file(
