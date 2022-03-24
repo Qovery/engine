@@ -163,10 +163,10 @@ impl LocalDocker {
 
         // Check if the image does not exist already remotly, if yes, we skip the build
         let image_name = image_to_build.image_name();
-        log_info(format!("Checking if image {} already exist remotely", image_name));
+        log_info(format!("🕵️ Checking if image {} already exist remotely", image_name));
         if let Ok(true) = self.context.docker.does_image_exist_remotely(&image_to_build) {
             log_info(format!(
-                "Image {} already exist in the registry, skipping build",
+                "🎯 Image {} already exist in the registry, skipping build",
                 image_name
             ));
 
@@ -174,7 +174,7 @@ impl LocalDocker {
             return Ok(());
         }
 
-        log_info(format!("Image {} does not exist remotely. Building it", image_name));
+        log_info(format!("⌛ Image {} does not exist remotely. Building it", image_name));
         // Actually do the build of the image
         let env_vars: Vec<(&str, &str)> = build
             .environment_variables
