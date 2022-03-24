@@ -210,7 +210,7 @@ gitguardian-dev:
       - dev
   interruptible: true
 
-build_and_lint:
+build-and-lint:
   stage: build-and-lint
   retry: 0
   script:
