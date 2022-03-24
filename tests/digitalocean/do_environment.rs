@@ -119,11 +119,16 @@ fn digitalocean_doks_deploy_a_not_working_environment_with_no_router() {
 
         let env_action = environment.clone();
         let env_action_for_delete = environment_for_delete.clone();
-        let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
-        assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
 
-        let ret = environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
-        assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(result, TransactionResult::UnrecoverableError(_, _)));
+
+        let result =
+            environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
+        assert!(matches!(
+            result,
+            TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
+        ));
 
         if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
