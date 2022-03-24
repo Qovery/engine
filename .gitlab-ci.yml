@@ -170,11 +170,13 @@ test-local:
   script:
     - just test_local_stack
   only:
-    - merge_requests
+    refs:
+      - dev
   dependencies:
     - linter-mr
     - build-mr
   when: always
+
   tags:
     - vm-2cpu-4gmem-0g
 
