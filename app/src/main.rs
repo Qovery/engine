@@ -187,8 +187,8 @@ pub fn main() -> io::Result<()> {
     let test_cluster_env_var = std::env::var("TEST_CLUSTER");
     let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or_else(|_| "lib".to_string());
     let docker_host = env::var("DOCKER_HOST").map(|val| Url::parse(&val).unwrap()).ok();
-    let workspace_root_dir = env::var("WORKSPACE_ROOT_DIR")
-        .unwrap_or(format!("{}/.qovery-workspace", home_dir().unwrap().to_str().unwrap()));
+    let workspace_root_dir =
+        env::var("WORKSPACE_ROOT_DIR").unwrap_or(home_dir().unwrap().to_string_lossy().into_owned());
 
     let nats_credentials = match (nats_login, nats_password) {
         (Ok(nats_login), Ok(nats_password)) if !nats_login.is_empty() && !nats_password.is_empty() => {
