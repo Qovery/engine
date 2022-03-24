@@ -30,10 +30,10 @@ destroy_kube_cluster $DOCKER_HOST="":
 # TESTS
 #####################
 
-test_local_stack $DOCKER_HOST="": (spawn_kube_cluster DOCKER_HOST)
+test_local_stack $DOCKER_HOST="": (spawn_kube_cluster DOCKER_HOST) && (destroy_kube_cluster DOCKER_HOST) 
   echo "==========================LOCAL STACK==========================="
   if [ -z $DOCKER_HOST ]; then unset $DOCKER_HOST; fi
-  trap 'just destroy_kube_cluster' SIGINT ERR EXIT; \
+  trap 'just destroy_kube_cluster' INT ERR EXIT; \
     cargo test --manifest-path cloned-engine/Cargo.toml --features test-with-kube,test-with-docker
 
 test $DOCKER_HOST="": (test_local_stack DOCKER_HOST) 
