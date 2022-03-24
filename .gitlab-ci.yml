@@ -1,4 +1,4 @@
-image: public.ecr.aws/r3m4q3r9/qovery-ci:9dc795e-ea8c70c
+image: public.ecr.aws/r3m4q3r9/qovery-ci:a38e0d0-4637c2c
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
