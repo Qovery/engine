@@ -3,21 +3,18 @@ image: public.ecr.aws/r3m4q3r9/qovery-ci:df1e5cb-6d6f36c
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
   DOCKER_HOST: tcp://localhost:2375
+  DOCKER_BUILDKIT: 1
   DOCKER_TLS_CERTDIR: ""
   WORKSPACE_ROOT_DIR: $CI_PROJECT_DIR
   CARGO_HOME: $WORKSPACE_ROOT_DIR/.cargo
   GIT_DEPTH: 10
   ROLLBACK_IMAGE: ""
 
-#cache: &global_cache
-#  key: ${CI_COMMIT_REF_SLUG}
-#  paths:
-#    - $CARGO_HOME
-#    - $WORKSPACE_ROOT_DIR/target
-#  policy: pull
-
 services:
   - docker:dind
+
+before_script:
+  - docker/wait_docker_available.sh
 
 stages:
   - build-and-lint
