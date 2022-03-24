@@ -54,7 +54,7 @@ impl InfrastructureTask {
     fn info_context(&self) -> Context {
         Context::new(
             self.request.organization_id.to_string(),
-            self.request.cloud_provider.long_id.to_string(),
+            self.request.cloud_provider.kubernetes.long_id.to_string(),
             self.request.id.to_string(),
             self.workspace_root_dir.to_string(),
             self.lib_root_dir.to_string(),
@@ -231,7 +231,7 @@ impl EnvironmentTask {
     fn info_context(&self) -> Context {
         Context::new(
             self.request.organization_id.to_string(),
-            self.request.cloud_provider.long_id.to_string(),
+            self.request.cloud_provider.kubernetes.long_id.to_string(),
             self.request.id.to_string(),
             self.workspace_root_dir.to_string(),
             self.lib_root_dir.to_string(),
