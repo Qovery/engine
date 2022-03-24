@@ -20,7 +20,6 @@ pub trait ContainerRegistry: Listen {
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
     }
-    fn is_valid(&self) -> Result<(), ContainerRegistryError>;
 
     // Get info for this registry, url endpoint with login/password, image name convention, ...
     fn registry_info(&self) -> &ContainerRegistryInfo;
@@ -55,15 +54,6 @@ pub struct ContainerRegistryInfo {
 
     // Give it the name of your image, and it return the name of the repository that will be used
     pub get_repository_name: Box<dyn Fn(&str) -> String>,
-}
-
-pub struct PushResult {
-    pub image: Image,
-}
-
-pub enum PullResult {
-    Some(Image),
-    None,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]

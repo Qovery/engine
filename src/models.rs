@@ -13,7 +13,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::build_platform::{Build, BuildOptions, Credentials, GitRepository, Image, SshKey};
+use crate::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
 use crate::cloud_provider::aws::application::ApplicationAws;
 use crate::cloud_provider::aws::databases::mongodb::MongoDbAws;
 use crate::cloud_provider::aws::databases::mysql::MySQLAws;
@@ -40,7 +40,6 @@ use crate::cloud_provider::Kind as CPKind;
 use crate::cmd::docker::Docker;
 use crate::container_registry::ContainerRegistryInfo;
 use crate::logger::Logger;
-use crate::utilities::get_image_tag;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct QoveryIdentifier {
@@ -285,16 +284,11 @@ impl Application {
         }
     }
 
-    pub fn to_image(&self, cr_info: &ContainerRegistryInfo) -> Image {
+    fn to_image(&self, cr_info: &ContainerRegistryInfo) -> Image {
         Image {
             application_id: self.id.clone(),
             name: (cr_info.get_image_name)(&self.name),
-            tag: get_image_tag(
-                &self.root_path,
-                &self.dockerfile_path,
-                &self.environment_vars,
-                &self.commit_id,
-            ),
+            tag: "".to_string(), // It needs to be compute after creation
             commit_id: self.commit_id.clone(),
             registry_name: cr_info.registry_name.clone(),
             registry_url: cr_info.endpoint.clone(),
@@ -366,7 +360,8 @@ impl Application {
         //FIXME: Return a result the function
         let url = Url::parse(&self.git_url).unwrap_or_else(|_| Url::parse("https://invalid-git-url.com").unwrap());
 
-        Build {
+        let mut disable_build_cache = false;
+        let mut build = Build {
             git_repository: GitRepository {
                 url,
                 credentials: self.git_credentials.as_ref().map(|credentials| Credentials {
@@ -380,17 +375,25 @@ impl Application {
                 buildpack_language: self.buildpack_language.clone(),
             },
             image: self.to_image(registry_url),
-            options: BuildOptions {
-                environment_variables: self
-                    .environment_vars
-                    .iter()
-                    .map(|(k, v)| crate::build_platform::EnvironmentVariable {
-                        key: k.clone(),
-                        value: String::from_utf8_lossy(&base64::decode(v.as_bytes()).unwrap_or_default()).into_owned(),
-                    })
-                    .collect::<Vec<_>>(),
-            },
-        }
+            environment_variables: self
+                .environment_vars
+                .iter()
+                .filter_map(|(k, v)| {
+                    // Remove special vars
+                    let v = String::from_utf8_lossy(&base64::decode(v.as_bytes()).unwrap_or_default()).into_owned();
+                    if k == "QOVERY_DISABLE_BUILD_CACHE" && v.to_lowercase() == "true" {
+                        disable_build_cache = true;
+                        return None;
+                    }
+
+                    Some((k.clone(), v))
+                })
+                .collect::<BTreeMap<_, _>>(),
+            disable_cache: disable_build_cache,
+        };
+
+        build.compute_image_tag();
+        build
     }
 }
 
