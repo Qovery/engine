@@ -13,9 +13,6 @@ variables:
 services:
   - docker:dind
 
-before_script:
-  - docker/wait_docker_available.sh
-
 stages:
   - build-and-lint
   - local-test
@@ -150,6 +147,8 @@ all-managed-services-mr:
 
 test-local:
   stage: local-test
+  before_script:
+    - docker/wait_docker_available.sh
   script:
     - just test_local_stack $DOCKER_HOST
   only:
