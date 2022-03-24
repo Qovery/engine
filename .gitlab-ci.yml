@@ -168,7 +168,7 @@ all-managed-services-mr:
 test-local:
   stage: local-test
   script:
-    - just test_local_stack
+    - just test_local_stack $DOCKER_HOST
   only:
     refs:
       - dev
