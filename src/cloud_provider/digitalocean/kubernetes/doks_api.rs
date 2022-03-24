@@ -92,17 +92,22 @@ pub fn get_do_kubeconfig_by_cluster_name(token: &str, cluster_name: &str) -> Res
     };
 
     let clusters_copy = clusters.expect("Unable to list clusters").kubernetes_clusters.clone();
+    let cluster_name = cluster_name.trim().to_lowercase();
     match clusters_copy
         .into_iter()
-        .filter(|cluster| cluster.name == cluster_name.to_string())
+        .filter(|cluster| cluster.name.trim().to_lowercase() == cluster_name.to_string())
         .collect::<Vec<KubernetesCluster>>()
         .first()
-        .clone()
     {
         Some(cluster) => {
             let kubeconfig_url = format!("{}/clusters/{}/kubeconfig", DoApiType::Doks.api_url(), cluster.id);
             match do_get_from_api(token, DoApiType::Doks, kubeconfig_url) {
-                Ok(kubeconfig) => Ok(Some(kubeconfig)),
+                Ok(kubeconfig) => {
+                    if kubeconfig.is_empty() {
+                        return Ok(None);
+                    }
+                    Ok(Some(kubeconfig))
+                }
                 Err(e) => Err(CommandError::new_from_safe_message(e.message())),
             }
         }

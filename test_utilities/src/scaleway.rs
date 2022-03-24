@@ -1,5 +1,5 @@
 use const_format::formatcp;
-use qovery_engine::build_platform::Image;
+use qovery_engine::build_platform::Build;
 use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
@@ -241,15 +241,13 @@ pub fn clean_environments(
     // delete images created in registry
     let registry_url = container_registry_client.registry_info();
     for env in environments.iter() {
-        for image in env
+        for build in env
             .applications
             .iter()
-            .map(|a| a.to_image(&registry_url))
-            .collect::<Vec<Image>>()
+            .map(|a| a.to_build(&registry_url))
+            .collect::<Vec<Build>>()
         {
-            if let Err(e) = container_registry_client.delete_image(&image) {
-                return Err(e);
-            }
+            let _ = container_registry_client.delete_image(&build.image);
         }
     }
 

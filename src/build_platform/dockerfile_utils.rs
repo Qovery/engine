@@ -32,25 +32,11 @@ pub fn extract_dockerfile_args(dockerfile_content: Vec<u8>) -> Result<HashSet<St
     Ok(used_args)
 }
 
-/// Return env var args that are really used in the Dockerfile
-/// env_var_args is a vector of value "key=value".
-/// which is the format of the value expected by docker with the argument "build-arg"
-pub fn match_used_env_var_args<'a>(
-    env_var_args: &'a [(&'a str, &'a str)],
-    dockerfile_content: Vec<u8>,
-) -> Result<Vec<(&'a str, &'a str)>, Utf8Error> {
-    // extract env vars used in the Dockerfile
-    let used_args = extract_dockerfile_args(dockerfile_content)?;
-
-    let mut matched_env_args = env_var_args.to_vec();
-    matched_env_args.retain(|(k, _v)| used_args.contains(*k));
-
-    Ok(matched_env_args)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use maplit::btreemap;
+    use std::collections::BTreeMap;
 
     #[test]
     fn test_extract_dockerfile_args() {
@@ -99,28 +85,29 @@ mod tests {
         let res = extract_dockerfile_args(dockerfile.to_vec());
         assert_eq!(res.unwrap().len(), 4);
 
-        let env_var_args_to_match = vec![
-            ("foo", "abcdvalue"),
-            ("bar", "abcdvalue"),
-            ("toto", "abcdvalue"),
-            ("x", "abcdvalue"),
+        let args = btreemap![
+            "foo" => "abcdvalue",
+            "bar" => "abcdvalue",
+            "toto" => "abcdvalue",
+            "x" => "abcdvalue",
         ];
 
-        let matched_vars = match_used_env_var_args(&env_var_args_to_match, dockerfile.to_vec());
+        let matched_vars = extract_dockerfile_args(dockerfile.to_vec()).unwrap();
+        let mut ret = args.clone();
+        ret.retain(|k, _| matched_vars.contains(*k));
+        assert_eq!(ret, args);
 
-        assert_eq!(matched_vars.clone().unwrap(), env_var_args_to_match.clone());
+        let args = btreemap!["toto" => "abcdvalue", "x" => "abcdvalue"];
+        let matched_vars = extract_dockerfile_args(dockerfile.to_vec()).unwrap();
+        let mut ret = args.clone();
+        ret.retain(|k, _| matched_vars.contains(*k));
+        assert_eq!(ret.len(), 2);
 
-        assert_eq!(matched_vars.unwrap().len(), 4);
-
-        let args = vec![("toto", "abcdvalue"), ("x", "abcdvalue")];
-        let matched_vars = match_used_env_var_args(&args, dockerfile.to_vec());
-
-        assert_eq!(matched_vars.unwrap().len(), 2);
-
-        let args = vec![];
-        let matched_vars = match_used_env_var_args(&args, dockerfile.to_vec());
-
-        assert_eq!(matched_vars.unwrap().len(), 0);
+        let args: BTreeMap<&str, &str> = btreemap![];
+        let matched_vars = extract_dockerfile_args(dockerfile.to_vec()).unwrap();
+        let mut ret = args.clone();
+        ret.retain(|k, _| matched_vars.contains(*k));
+        assert_eq!(ret.len(), 0);
 
         let dockerfile = b"
         FROM node
@@ -129,9 +116,10 @@ mod tests {
         RUN ls -lh
         ";
 
-        let matched_vars = match_used_env_var_args(&env_var_args_to_match, dockerfile.to_vec());
-
-        assert_eq!(matched_vars.unwrap().len(), 0);
+        let matched_vars = extract_dockerfile_args(dockerfile.to_vec()).unwrap();
+        let mut ret = args.clone();
+        ret.retain(|k, _| matched_vars.contains(*k));
+        assert_eq!(ret.len(), 0);
     }
 
     #[test]
@@ -165,23 +153,26 @@ mod tests {
         let res = extract_dockerfile_args(dockerfile.to_vec());
         assert_eq!(res.unwrap().len(), 3);
 
-        let args = vec![
-            ("PRISMIC_REPO_NAME", "abcdvalue"),
-            ("PRISMIC_API_KEY", "abcdvalue"),
-            ("PRISMIC_CUSTOM_TYPES_API_TOKEN", "abcdvalue"),
+        let args = btreemap![
+            "PRISMIC_REPO_NAME" => "abcdvalue",
+            "PRISMIC_API_KEY" => "abcdvalue",
+            "PRISMIC_CUSTOM_TYPES_API_TOKEN" => "abcdvalue",
         ];
-        let matched_vars = match_used_env_var_args(&args, dockerfile.to_vec());
+        let matched_vars = extract_dockerfile_args(dockerfile.to_vec()).unwrap();
+        let mut ret = args.clone();
+        ret.retain(|k, _| matched_vars.contains(*k));
+        assert_eq!(ret.len(), 3);
 
-        assert_eq!(matched_vars.unwrap().len(), 3);
+        let args = btreemap!["PRISMIC_REPO_NAME" => "abcdvalue"];
+        let matched_vars = extract_dockerfile_args(dockerfile.to_vec()).unwrap();
+        let mut ret = args.clone();
+        ret.retain(|k, _| matched_vars.contains(*k));
+        assert_eq!(ret.len(), 1);
 
-        let args = vec![("PRISMIC_REPO_NAME", "abcdvalue")];
-        let matched_vars = match_used_env_var_args(&args, dockerfile.to_vec());
-
-        assert_eq!(matched_vars.unwrap().len(), 1);
-
-        let args = vec![];
-        let matched_vars = match_used_env_var_args(&args, dockerfile.to_vec());
-
-        assert_eq!(matched_vars.unwrap().len(), 0);
+        let args: BTreeMap<&str, &str> = btreemap![];
+        let matched_vars = extract_dockerfile_args(dockerfile.to_vec()).unwrap();
+        let mut ret = args.clone();
+        ret.retain(|k, _| matched_vars.contains(*k));
+        assert_eq!(ret.len(), 0);
     }
 }

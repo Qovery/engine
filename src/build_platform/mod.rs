@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 use crate::cmd::command::CommandError;
 use crate::cmd::docker::DockerError;
@@ -6,7 +7,9 @@ use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter};
 use crate::logger::Logger;
 use crate::models::{Context, Listen, QoveryIdentifier};
+use crate::utilities::compute_image_tag;
 use std::fmt::{Display, Formatter, Result as FmtResult};
+use std::hash::Hash;
 use std::path::PathBuf;
 use url::Url;
 
@@ -68,11 +71,19 @@ pub trait BuildPlatform: ToTransmitter + Listen {
 pub struct Build {
     pub git_repository: GitRepository,
     pub image: Image,
-    pub options: BuildOptions,
+    pub environment_variables: BTreeMap<String, String>,
+    pub disable_cache: bool,
 }
 
-pub struct BuildOptions {
-    pub environment_variables: Vec<EnvironmentVariable>,
+impl Build {
+    pub fn compute_image_tag(&mut self) {
+        self.image.tag = compute_image_tag(
+            &self.git_repository.root_path,
+            &self.git_repository.dockerfile_path,
+            &self.environment_variables,
+            &self.git_repository.commit_id,
+        );
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]

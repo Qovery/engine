@@ -6,7 +6,8 @@ use std::{env, fs};
 use git2::{Cred, CredentialType};
 use sysinfo::{Disk, DiskExt, SystemExt};
 
-use crate::build_platform::{dockerfile_utils, Build, BuildError, BuildPlatform, Credentials, Kind};
+use crate::build_platform::dockerfile_utils::extract_dockerfile_args;
+use crate::build_platform::{Build, BuildError, BuildPlatform, Credentials, Kind};
 use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, QoveryCommand};
@@ -101,13 +102,53 @@ impl LocalDocker {
 
     fn build_image_with_docker(
         &self,
-        build: &Build,
+        build: &mut Build,
         dockerfile_complete_path: &str,
         into_dir_docker_style: &str,
-        env_var_args: &[(&str, &str)],
         lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError> {
+        // logger
+        let log_info = {
+            let app_id = build.image.application_id.clone();
+            move |msg: String| {
+                self.logger.log(
+                    LogLevel::Info,
+                    EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(msg.clone())),
+                );
+
+                lh.deployment_in_progress(ProgressInfo::new(
+                    ProgressScope::Application { id: app_id.clone() },
+                    ProgressLevel::Info,
+                    Some(msg),
+                    self.context.execution_id(),
+                ));
+            }
+        };
+
+        // Going to inject only env var that are used by the dockerfile
+        // so extracting it and modifying the image tag and env variables
+        let dockerfile_content = fs::read(dockerfile_complete_path).map_err(|err| {
+            BuildError::IoError(
+                build.image.application_id.clone(),
+                "reading dockerfile content".to_string(),
+                err,
+            )
+        })?;
+        let dockerfile_args = match extract_dockerfile_args(dockerfile_content) {
+            Ok(dockerfile_args) => dockerfile_args,
+            Err(err) => {
+                let msg = format!("Cannot extract env vars from your dockerfile {}", err);
+                return Err(BuildError::InvalidConfig(build.image.application_id.clone(), msg));
+            }
+        };
+
+        // Keep only the env variables we want for our build
+        // and force re-compute the image tag
+        build.environment_variables.retain(|k, _| dockerfile_args.contains(k));
+        build.compute_image_tag();
+
+        // Prepare image we want to build
         let image_to_build = ContainerImage {
             registry: build.image.registry_url.clone(),
             name: build.image.name(),
@@ -120,58 +161,36 @@ impl LocalDocker {
             tags: vec!["latest".to_string()],
         };
 
-        let dockerfile_content = fs::read(dockerfile_complete_path).map_err(|err| {
-            BuildError::IoError(
-                build.image.application_id.clone(),
-                "reading dockerfile content".to_string(),
-                err,
-            )
-        })?;
-        let env_var_args = match dockerfile_utils::match_used_env_var_args(env_var_args, dockerfile_content) {
-            Ok(env_var_args) => env_var_args,
-            Err(err) => {
-                let msg = format!("Cannot extract env vars from your dockerfile {}", err);
-                return Err(BuildError::InvalidConfig(build.image.application_id.clone(), msg));
-            }
-        };
+        // Check if the image does not exist already remotly, if yes, we skip the build
+        let image_name = image_to_build.image_name();
+        log_info(format!("🕵️ Checking if image already exist remotely {}", image_name));
+        if let Ok(true) = self.context.docker.does_image_exist_remotely(&image_to_build) {
+            log_info(format!(
+                "🎯 Skipping build. Image already exist in the registry {}",
+                image_name
+            ));
+
+            // skip build
+            return Ok(());
+        }
+
+        log_info(format!("⛏️ Building image. It does not exist remotely {}", image_name));
+        // Actually do the build of the image
+        let env_vars: Vec<(&str, &str)> = build
+            .environment_variables
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
 
         let exit_status = self.context.docker.build(
             Path::new(dockerfile_complete_path),
             Path::new(into_dir_docker_style),
             &image_to_build,
-            &env_var_args,
+            &env_vars,
             &image_cache,
             true,
-            &mut |line| {
-                self.logger.log(
-                    LogLevel::Info,
-                    EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
-                );
-
-                lh.deployment_in_progress(ProgressInfo::new(
-                    ProgressScope::Application {
-                        id: build.image.application_id.clone(),
-                    },
-                    ProgressLevel::Info,
-                    Some(line),
-                    self.context.execution_id(),
-                ));
-            },
-            &mut |line| {
-                self.logger.log(
-                    LogLevel::Info,
-                    EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
-                );
-
-                lh.deployment_in_progress(ProgressInfo::new(
-                    ProgressScope::Application {
-                        id: build.image.application_id.clone(),
-                    },
-                    ProgressLevel::Info,
-                    Some(line),
-                    self.context.execution_id(),
-                ));
-            },
+            &mut |line| log_info(line),
+            &mut |line| log_info(line),
             &CommandKiller::from(Duration::from_secs(BUILD_DURATION_TIMEOUT_SEC), is_task_canceled),
         );
 
@@ -186,7 +205,6 @@ impl LocalDocker {
         &self,
         build: &Build,
         into_dir_docker_style: &str,
-        env_var_args: &[(&str, &str)],
         use_build_cache: bool,
         lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
@@ -209,8 +227,8 @@ impl LocalDocker {
             buildpacks_args.extend(vec!["-t", name_with_latest_tag.as_str()]);
             buildpacks_args.extend(vec!["--path", into_dir_docker_style]);
 
-            let mut args_buffer = Vec::with_capacity(env_var_args.len());
-            for (key, value) in env_var_args {
+            let mut args_buffer = Vec::with_capacity(build.environment_variables.len());
+            for (key, value) in &build.environment_variables {
                 args_buffer.push("--env".to_string());
                 args_buffer.push(format!("{}={}", key, value));
             }
@@ -350,7 +368,7 @@ impl BuildPlatform for LocalDocker {
         // LOGGING
         let repository_root_path = PathBuf::from(self.get_repository_build_root_path(build)?);
         let msg = format!(
-            "Cloning repository: {} to {:?}",
+            "📥 Cloning repository: {} to {:?}",
             build.git_repository.url, repository_root_path
         );
         listeners_helper.deployment_in_progress(ProgressInfo::new(
@@ -409,18 +427,6 @@ impl BuildPlatform for LocalDocker {
             return Err(BuildError::Aborted(build.image.application_id.clone()));
         }
 
-        let mut disable_build_cache = false;
-        let mut env_var_args: Vec<(&str, &str)> = Vec::with_capacity(build.options.environment_variables.len());
-        for ev in &build.options.environment_variables {
-            if ev.key == "QOVERY_DISABLE_BUILD_CACHE" && ev.value.to_lowercase() == "true" {
-                // this is a special flag to disable build cache dynamically
-                // -- do not pass this env var key/value to as build parameter
-                disable_build_cache = true;
-            } else {
-                env_var_args.push((&ev.key, &ev.value));
-            }
-        }
-
         // ensure docker_path is a mounted volume, otherwise ignore because it's not what Qovery does in production
         // ex: this cause regular cleanup on CI, leading to random tests errors
         self.reclaim_space_if_needed();
@@ -470,7 +476,6 @@ impl BuildPlatform for LocalDocker {
                 build,
                 dockerfile_absolute_path.to_str().unwrap_or_default(),
                 build_context_path.to_str().unwrap_or_default(),
-                &env_var_args,
                 &listeners_helper,
                 is_task_canceled,
             )
@@ -479,8 +484,7 @@ impl BuildPlatform for LocalDocker {
             self.build_image_with_buildpacks(
                 build,
                 build_context_path.to_str().unwrap_or_default(),
-                &env_var_args,
-                !disable_build_cache,
+                !build.disable_cache,
                 &listeners_helper,
                 is_task_canceled,
             )
