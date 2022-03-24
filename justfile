@@ -22,19 +22,21 @@ spawn_kube_cluster $DOCKER_HOST="":
 
 destroy_kube_cluster $DOCKER_HOST="":
   if [ -z $DOCKER_HOST ]; then unset $DOCKER_HOST; fi
-  docker kill engine-registry
-  k3d cluster delete {{kube_cluster_name}}
+  -docker kill engine-registry
+  -k3d cluster delete {{kube_cluster_name}}
 
 
 #####################
 # TESTS
 #####################
 
-test_local_stack $DOCKER_HOST="": (spawn_kube_cluster DOCKER_HOST) && (destroy_kube_cluster DOCKER_HOST) 
-  echo "==========================LOCAL STACK==========================="
+test_local_stack $DOCKER_HOST="": (spawn_kube_cluster DOCKER_HOST)
+  #!/usr/bin/env bash
+  set -euxo pipefail
+  echo "==========================TEST WITH LOCAL STACK==========================="
+  trap "just destroy_kube_cluster $DOCKER_HOST" EXIT
   if [ -z $DOCKER_HOST ]; then unset $DOCKER_HOST; fi
-  trap "just destroy_kube_cluster $DOCKER_HOST" EXIT; \
-    cargo test --manifest-path cloned-engine/Cargo.toml --features test-with-kube,test-with-docker
+  cargo test --manifest-path cloned-engine/Cargo.toml --features test-with-kube,test-with-docker
 
 test $DOCKER_HOST="": (test_local_stack DOCKER_HOST) 
 
