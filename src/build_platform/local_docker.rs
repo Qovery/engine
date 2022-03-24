@@ -368,7 +368,7 @@ impl BuildPlatform for LocalDocker {
         // LOGGING
         let repository_root_path = PathBuf::from(self.get_repository_build_root_path(build)?);
         let msg = format!(
-            "Cloning repository: {} to {:?}",
+            "💾 Cloning repository: {} to {:?}",
             build.git_repository.url, repository_root_path
         );
         listeners_helper.deployment_in_progress(ProgressInfo::new(
