@@ -544,42 +544,15 @@ where
                     Err(e) => return OperationResult::Retry(CommandError::new(e.message(), Some(e.message()))),
                 };
 
-                let workspace_directory = qovery_engine::fs::workspace_directory(
-                    context.workspace_root_dir(),
-                    context.execution_id(),
-                    format!("object-storage/spaces/{}", cluster_name.clone()),
-                )
-                .map_err(|err| CommandError::new(err.to_string(), Some(err.to_string())))
-                .expect("Unable to create directory");
-
-                let file_path = format!(
-                    "{}/{}/{}",
-                    workspace_directory,
-                    format!("qovery-kubeconfigs-{}", context.cluster_id()),
-                    format!("{}.yaml", context.cluster_id())
-                );
-                let path = Path::new(file_path.as_str());
-                let parent_dir = path.parent().unwrap();
-                let _ = block_on(tokio::fs::create_dir_all(parent_dir));
-
-                match block_on(
-                    tokio::fs::OpenOptions::new()
-                        .create(true)
-                        .write(true)
-                        .truncate(true)
-                        .open(path),
-                ) {
-                    Ok(mut created_file) => match kubeconfig.is_some() {
-                        false => Err(CommandError::new(
-                            "No kubeconfig found".to_string(),
-                            Some("No kubeconfig found".to_string()),
-                        )),
-                        true => match block_on(created_file.write_all(kubeconfig.unwrap().as_bytes())) {
-                            Ok(_) => Ok(file_path),
-                            Err(e) => Err(CommandError::new(e.to_string(), Some(e.to_string()))),
-                        },
-                    },
-                    Err(e) => Err(CommandError::new(e.to_string(), Some(e.to_string()))),
+                match kubeconfig {
+                    None => Err(CommandError::new(
+                        "No kubeconfig found".to_string(),
+                        Some("No kubeconfig found".to_string()),
+                    )),
+                    Some(file_content) => {
+                        let _ = "test";
+                        Ok(file_content)
+                    }
                 }
             }
             Kind::Scw => {
