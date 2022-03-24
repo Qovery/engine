@@ -20,7 +20,7 @@ services:
   - docker:dind
 
 stages:
-  - build
+  - build-and-lint
   - local-test
   - tests
   - upgrade-dev
@@ -35,7 +35,7 @@ stages:
 #
 
 gitguardian-mr:
-  stage: build
+  stage: build-and-lint
   image: gitguardian/ggshield:latest
   retry: 0
   when: always
@@ -46,22 +46,11 @@ gitguardian-mr:
     - merge_requests
   interruptible: true
 
-linter-mr:
-  stage: build
+build-and-lint-mr:
+  stage: build-and-lint
   retry: 0
   script:
     - ./helper.sh lint
-  when: always
-  tags:
-    - vm-2cpu-4gmem-0g
-  only:
-    - merge_requests
-  interruptible: true
-
-build-mr:
-  stage: build
-  retry: 0
-  script:
     - ./helper.sh build
   when: always
   tags:
@@ -71,7 +60,7 @@ build-mr:
   interruptible: true
 
 release-image-mr:
-  stage: build
+  stage: build-and-lint
   retry: 1
   script:
     - ./helper.sh new_release
@@ -97,8 +86,7 @@ unit-tests-mr:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
   dependencies:
-    - linter-mr
-    - build-mr
+    - build-and-lint-mr
   artifacts:
     when: always
     reports:
@@ -125,8 +113,7 @@ all-self-hosted-mr:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
   dependencies:
-    - linter-mr
-    - build-mr
+    - build-and-lint-mr
   artifacts:
     when: always
     reports:
@@ -153,8 +140,7 @@ all-managed-services-mr:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
   dependencies:
-    - linter-mr
-    - build-mr
+    - build-and-lint-mr
   artifacts:
     when: always
     reports:
@@ -173,8 +159,7 @@ test-local:
     refs:
       - dev
   dependencies:
-    - linter-mr
-    - build-mr
+    - build-and-lint-mr
   when: always
 
   tags:
@@ -189,8 +174,7 @@ test-all-mr:
   only:
     - merge_requests
   dependencies:
-    - linter-mr
-    - build-mr
+    - build-and-lint-mr
   when: manual
   tags:
     - bm-qovery-2cpu-12gb
@@ -214,7 +198,7 @@ test-all-mr:
 #
 
 gitguardian-dev:
-  stage: build
+  stage: build-and-lint
   image: gitguardian/ggshield:latest
   retry: 0
   when: always
@@ -226,36 +210,22 @@ gitguardian-dev:
       - dev
   interruptible: true
 
-linter:
-  stage: build
+build_and_lint:
+  stage: build-and-lint
   retry: 0
   script:
     - ./helper.sh lint
-  when: always
-  tags:
-    - vm-3cpu-4gmem-0g
-  only:
-    refs:
-      - dev
-  interruptible: true
-
-build:
-  stage: build
-  retry: 0
-  script:
     - ./helper.sh build
-#  cache:
-#    <<: *global_cache
-#    policy: pull-push
   when: always
   tags:
     - bm-7cpu-4gmem-0g
   only:
     refs:
       - dev
+  interruptible: true
 
 dev-release-image:
-  stage: build
+  stage: build-and-lint
   retry: 1
   script:
     - ./helper.sh new_release
@@ -272,8 +242,7 @@ unit-tests:
   script:
     - ./helper.sh unit_tests
   dependencies:
-    - linter
-    - build
+    - build-and-lint
   when: always
   tags:
     - vm-2cpu-4gmem-0g
@@ -299,8 +268,7 @@ aws-whole-enchilada:
   script:
     - ./helper.sh aws_whole_enchilada
   dependencies:
-    - linter
-    - build
+    - build-and-lint
   when: always
   tags:
     - vm-2cpu-4gmem-0g
@@ -328,8 +296,7 @@ aws-infra:
   script:
     - ./helper.sh aws_infra
   dependencies:
-    - linter
-    - build
+    - build-and-lint
   when: always
   tags:
     - vm-2cpu-4gmem-0g
@@ -357,8 +324,7 @@ aws-managed-services:
   script:
     - ./helper.sh aws_managed_services
   dependencies:
-    - linter
-    - build
+    - build-and-lint
   tags:
     - vm-2cpu-4gmem-0g
   when: always
@@ -386,8 +352,7 @@ aws-self-hosted:
   script:
     - ./helper.sh aws_self_hosted
   dependencies:
-    - linter
-    - build
+    - build-and-lint
   tags:
     - vm-2cpu-12gmem-0g
   when: always
@@ -415,8 +380,7 @@ do-whole-enchilada:
   script:
     - ./helper.sh do_whole_enchilada
   dependencies:
-    - linter
-    - build
+    - build-and-lint
   when: always
   tags:
     - vm-2cpu-4gmem-0g
@@ -444,8 +408,7 @@ do-infra:
   script:
     - ./helper.sh do_infra
   dependencies:
-    - linter
-    - build
+    - build-and-lint
   when: always
   tags:
     - vm-2cpu-4gmem-0g
@@ -473,8 +436,7 @@ do-managed-services:
   script:
     - ./helper.sh do_managed_services
   dependencies:
-    - linter
-    - build
+    - build-and-lint
   tags:
     - vm-2cpu-4gmem-0g
   when: always
@@ -502,8 +464,7 @@ do-self-hosted:
   script:
     - ./helper.sh do_self_hosted
   dependencies:
-    - linter
-    - build
+    - build-and-lint
   tags:
     - vm-2cpu-12gmem-0g
   when: always
@@ -530,8 +491,7 @@ scw-whole-enchilada:
     script:
       - ./helper.sh scw_whole_enchilada
     dependencies:
-      - linter
-      - build
+      - build-and-lint
     when: always
     tags:
       - vm-2cpu-4gmem-0g
@@ -559,8 +519,7 @@ scw-infra:
   script:
     - ./helper.sh scw_infra
   dependencies:
-    - linter
-    - build
+    - build-and-lint
   when: always
   tags:
     - vm-2cpu-4gmem-0g
@@ -588,8 +547,7 @@ scw-managed-services:
   script:
     - ./helper.sh scw_managed_services
   dependencies:
-    - linter
-    - build
+    - build-and-lint
   tags:
     - vm-2cpu-4gmem-0g
   when: always
@@ -617,8 +575,7 @@ scw-self-hosted:
   script:
     - ./helper.sh scw_self_hosted
   dependencies:
-    - linter
-    - build
+    - build-and-lint
   tags:
     - vm-2cpu-4gmem-0g
   when: always
