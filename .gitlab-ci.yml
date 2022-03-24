@@ -150,7 +150,9 @@ test-local:
   before_script:
     - docker/wait_docker_available.sh
   script:
+    - export RUSTC_WRAPPER=/usr/bin/sccache
     - ./helper.sh prepare_engine
+    - cd cloned-engine
     - just test_local_stack $DOCKER_HOST
   only:
     refs:
