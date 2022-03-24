@@ -1784,7 +1784,6 @@ impl Kubernetes for DOKS {
                         .create(true)
                         .write(true)
                         .truncate(true)
-                        .mode(600)
                         .open(path),
                 ) {
                     Ok(mut created_file) => match block_on(created_file.write_all(kubeconfig.as_bytes())) {
