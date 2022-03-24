@@ -108,6 +108,24 @@ impl LocalDocker {
         lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<(), BuildError> {
+        // logger
+        let log_info = {
+            let app_id = build.image.application_id.clone();
+            move |msg: String| {
+                self.logger.log(
+                    LogLevel::Info,
+                    EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(msg.clone())),
+                );
+
+                lh.deployment_in_progress(ProgressInfo::new(
+                    ProgressScope::Application { id: app_id.clone() },
+                    ProgressLevel::Info,
+                    Some(msg),
+                    self.context.execution_id(),
+                ));
+            }
+        };
+
         // Going to inject only env var that are used by the dockerfile
         // so extracting it and modifying the image tag and env variables
         let dockerfile_content = fs::read(dockerfile_complete_path).map_err(|err| {
@@ -143,6 +161,21 @@ impl LocalDocker {
             tags: vec!["latest".to_string()],
         };
 
+        // Check if the image does not exist already remotly, if yes, we skip the build
+        let image_name = image_to_build.image_name();
+        log_info(format!("Checking if image {} already exist remotely", image_name));
+        if let Ok(true) = self.context.docker.does_image_exist_remotely(&image_to_build) {
+            log_info(format!(
+                "Image {} already exist in the registry, skipping build",
+                image_name
+            ));
+
+            // skip build
+            return Ok(());
+        }
+
+        log_info(format!("Image {} does not exist remotely. Building it", image_name));
+        // Actually do the build of the image
         let env_vars: Vec<(&str, &str)> = build
             .environment_variables
             .iter()
@@ -156,36 +189,8 @@ impl LocalDocker {
             &env_vars,
             &image_cache,
             true,
-            &mut |line| {
-                self.logger.log(
-                    LogLevel::Info,
-                    EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
-                );
-
-                lh.deployment_in_progress(ProgressInfo::new(
-                    ProgressScope::Application {
-                        id: build.image.application_id.clone(),
-                    },
-                    ProgressLevel::Info,
-                    Some(line),
-                    self.context.execution_id(),
-                ));
-            },
-            &mut |line| {
-                self.logger.log(
-                    LogLevel::Info,
-                    EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
-                );
-
-                lh.deployment_in_progress(ProgressInfo::new(
-                    ProgressScope::Application {
-                        id: build.image.application_id.clone(),
-                    },
-                    ProgressLevel::Info,
-                    Some(line),
-                    self.context.execution_id(),
-                ));
-            },
+            &mut |line| log_info(line),
+            &mut |line| log_info(line),
             &CommandKiller::from(Duration::from_secs(BUILD_DURATION_TIMEOUT_SEC), is_task_canceled),
         );
 
