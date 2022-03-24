@@ -21,7 +21,6 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
 use std::fs;
-use tokio::io::AsyncWriteExt;
 use tracing::{info, warn};
 
 use crate::scaleway::{
