@@ -106,7 +106,7 @@ all-minimal-tests:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
   dependencies:
-    - local-test
+    - test-local
   artifacts:
     when: always
     reports:
