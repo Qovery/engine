@@ -223,7 +223,7 @@ impl Service for ApplicationAws {
 
         let cpu_limits = match validate_k8s_required_cpu_and_burstable(
             &ListenersHelper::new(&self.listeners),
-            &self.context.execution_id(),
+            self.context.execution_id(),
             &self.id,
             self.total_cpus(),
             self.cpu_burst(),
@@ -233,7 +233,7 @@ impl Service for ApplicationAws {
             Ok(l) => l,
             Err(e) => {
                 return Err(EngineError::new_k8s_validate_required_cpu_and_burstable_error(
-                    event_details.clone(),
+                    event_details,
                     self.total_cpus(),
                     self.cpu_burst(),
                     e,
@@ -297,7 +297,7 @@ impl Create for ApplicationAws {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
@@ -317,7 +317,7 @@ impl Create for ApplicationAws {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
 

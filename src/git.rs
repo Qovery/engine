@@ -14,7 +14,7 @@ fn authentication_callback<'a>(
 ) -> impl FnMut(&str, Option<&str>, CredentialType) -> Result<Cred, Error> + 'a {
     let mut current_credentials: (String, Vec<(CredentialType, Cred)>) = ("".into(), vec![]);
 
-    return move |remote_url, username_from_url, allowed_types| {
+    move |remote_url, username_from_url, allowed_types| {
         // If we have changed remote, reset our available auth methods
         if remote_url != current_credentials.0 {
             current_credentials = (
@@ -43,7 +43,7 @@ fn authentication_callback<'a>(
                 return Ok(credential);
             }
         }
-    };
+    }
 }
 
 fn checkout<'a>(repo: &'a Repository, commit_id: &'a str) -> Result<Object<'a>, Error> {
@@ -173,7 +173,7 @@ mod tests {
         /// Since tests are runs in parallel and eventually on the same node, it will avoid having directories collisions between tests running on the same node.
         pub fn new_with_random_suffix(base_path: String) -> Self {
             DirectoryForTests {
-                path: format!("{}_{}", base_path, Uuid::new_v4().to_string()),
+                path: format!("{}_{}", base_path, Uuid::new_v4()),
             }
         }
 

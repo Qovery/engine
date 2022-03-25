@@ -32,8 +32,8 @@ impl DOCR {
         let registry_name = name.to_string();
         let registry_name2 = name.to_string();
         let mut registry = Url::parse(&format!("https://{}", CR_REGISTRY_DOMAIN)).unwrap();
-        let _ = registry.set_username(&api_key);
-        let _ = registry.set_password(Some(&api_key));
+        let _ = registry.set_username(api_key);
+        let _ = registry.set_password(Some(api_key));
 
         let registry_info = ContainerRegistryInfo {
             endpoint: registry,
@@ -99,7 +99,7 @@ impl DOCR {
                             raw_error_message: format!(
                                 "Failed to create DOCR repository `{}`, error: {}.",
                                 registry_name.as_str(),
-                                e.to_string(),
+                                e,
                             ),
                         });
                     }
@@ -111,7 +111,7 @@ impl DOCR {
                     raw_error_message: format!(
                         "Failed to create DOCR repository `{}`, error: {}.",
                         registry_name.as_str(),
-                        e.to_string(),
+                        e,
                     ),
                 });
             }
@@ -141,7 +141,7 @@ impl DOCR {
             Err(e) => {
                 return Err(ContainerRegistryError::CannotDeleteRegistry {
                     registry_name: "default".to_string(),
-                    raw_error_message: format!("No response from the Digital Ocean API, error: {}", e.to_string()),
+                    raw_error_message: format!("No response from the Digital Ocean API, error: {}", e),
                 });
             }
         }
@@ -150,8 +150,8 @@ impl DOCR {
     pub fn exec_docr_login(&self) -> Result<(), ContainerRegistryError> {
         let mut cmd = QoveryCommand::new(
             "doctl",
-            &vec!["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
-            &vec![],
+            &["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
+            &[],
         );
 
         match cmd.exec() {
@@ -184,7 +184,7 @@ impl ContainerRegistry for DOCR {
 
     fn create_registry(&self) -> Result<(), ContainerRegistryError> {
         // Digital Ocean only allow one registry per account...
-        if let Err(_) = get_current_registry_name(self.api_key.as_str()) {
+        if get_current_registry_name(self.api_key.as_str()).is_err() {
             let _ = self.create_registry(self.name())?;
         }
 
@@ -282,17 +282,14 @@ pub fn subscribe_kube_cluster_to_container_registry(
                 Err(e) => Err(ContainerRegistryError::CannotLinkRegistryToCluster {
                         registry_name: "default".to_string(),
                         cluster_id: cluster_uuid.to_string(),
-                        raw_error_message: format!("Unable to call Digital Ocean when tyring to subscribe repository to cluster, error: {}", e.to_string()),
+                        raw_error_message: format!("Unable to call Digital Ocean when tyring to subscribe repository to cluster, error: {}", e),
                     }),
             }
         }
         Err(e) => Err(ContainerRegistryError::CannotLinkRegistryToCluster {
             registry_name: "default".to_string(),
             cluster_id: cluster_uuid.to_string(),
-            raw_error_message: format!(
-                "Unable to Serialize digital ocean cluster uuids, error: {}",
-                e.to_string()
-            ),
+            raw_error_message: format!("Unable to Serialize digital ocean cluster uuids, error: {}", e),
         }),
     };
 }
@@ -316,7 +313,7 @@ pub fn get_current_registry_name(api_key: &str) -> Result<String, ContainerRegis
                         registry_name: "default".to_string(),
                         raw_error_message: format!(
                             "Seems there is no registry set (DO has only one registry), error: {}.",
-                            err.to_string()
+                            err
                         ),
                     }),
                 }
@@ -333,7 +330,7 @@ pub fn get_current_registry_name(api_key: &str) -> Result<String, ContainerRegis
             registry_name: "default".to_string(),
             raw_error_message: format!(
                 "Unable to call Digital Ocean when tyring to fetch the container registry name, error: {}.",
-                e.to_string(),
+                e,
             ),
         }),
     };

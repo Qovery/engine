@@ -109,7 +109,7 @@ impl ECR {
 
     fn get_image(&self, image: &Image) -> Option<ImageDetail> {
         let mut dir = DescribeImagesRequest::default();
-        dir.repository_name = image.name().to_string();
+        dir.repository_name = image.name();
 
         let mut image_identifier = ImageIdentifier::default();
         image_identifier.image_tag = Some(image.tag.to_string());
@@ -183,7 +183,7 @@ impl ECR {
                 return Err(ContainerRegistryError::CannotCreateRepository {
                     registry_name: self.name.to_string(),
                     repository_name: repository_name.to_string(),
-                    raw_error_message: e.to_string(),
+                    raw_error_message: e,
                 })
             }
         };

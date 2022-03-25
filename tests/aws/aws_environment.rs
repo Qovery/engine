@@ -70,7 +70,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let ret = environment_for_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -112,7 +112,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         );
 
         let ea = environment.clone();
-        let selector = format!("appId={}", environment.clone().applications[0].id);
+        let selector = format!("appId={}", environment.applications[0].id);
 
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -183,7 +183,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         let ret = get_pods(
-            context.clone(),
+            context,
             Kind::Aws,
             environment.clone(),
             selector.as_str(),
@@ -235,7 +235,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ret = environment.delete_environment(&ea, logger, &engine_config_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -291,7 +291,7 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
             TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
         ));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -362,7 +362,7 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -433,7 +433,7 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -485,7 +485,7 @@ fn deploy_a_working_environment_with_domain() {
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -553,7 +553,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        match get_pvc(context.clone(), Kind::Aws, environment.clone(), secrets.clone()) {
+        match get_pvc(context, Kind::Aws, environment, secrets) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
@@ -564,7 +564,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -638,7 +638,7 @@ fn redeploy_same_app_with_ebs() {
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        match get_pvc(context.clone(), Kind::Aws, environment.clone(), secrets.clone()) {
+        match get_pvc(context.clone(), Kind::Aws, environment, secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
@@ -651,26 +651,20 @@ fn redeploy_same_app_with_ebs() {
             context.clone(),
             Kind::Aws,
             environment_check1,
-            app_name.clone().as_str(),
+            app_name.as_str(),
             secrets.clone(),
         );
 
         let ret = environment_redeploy.deploy_environment(&ea2, logger.clone(), &engine_config_bis);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let (_, number2) = is_pod_restarted_env(
-            context.clone(),
-            Kind::Aws,
-            environment_check2,
-            app_name.as_str(),
-            secrets.clone(),
-        );
+        let (_, number2) = is_pod_restarted_env(context, Kind::Aws, environment_check2, app_name.as_str(), secrets);
         //nothing change in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -747,7 +741,7 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         let ret = environment_for_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -848,7 +842,7 @@ fn deploy_ok_fail_fail_ok_environment() {
         let ret = delete_env.delete_environment(&ea_delete, logger, &engine_config_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -900,7 +894,7 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
         let ret = delete_env.delete_environment(&ea_delete, logger, &engine_config_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -953,7 +947,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         // let time for nginx to reload the config
         thread::sleep(Duration::from_secs(10));
         // checking if cookie is properly set on the app
-        assert!(routers_sessions_are_sticky(environment.routers.clone()));
+        assert!(routers_sessions_are_sticky(environment.routers));
 
         let ret = environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));

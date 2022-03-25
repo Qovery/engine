@@ -329,7 +329,7 @@ impl ObjectStorage for Spaces {
                     Error::Internal(err) => Err(ObjectStorageError::CannotGetObjectFile {
                         bucket_name: bucket_name.to_string(),
                         file_name: object_key.to_string(),
-                        raw_error_message: err.to_string(),
+                        raw_error_message: err,
                     }),
                 };
             }

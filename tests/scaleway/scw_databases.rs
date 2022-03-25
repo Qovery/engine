@@ -80,7 +80,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -141,7 +141,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
             context.clone(),
             ProviderKind::Scw,
             environment.clone(),
-            app_name.clone().as_str(),
+            app_name.as_str(),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -152,11 +152,11 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -231,7 +231,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -386,7 +386,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 

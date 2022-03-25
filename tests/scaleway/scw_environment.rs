@@ -71,7 +71,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
             environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -134,7 +134,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
             TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
         ));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -229,7 +229,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         let result = environment.delete_environment(&env_action, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -306,7 +306,7 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
             environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -363,7 +363,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
         let result = environment_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -446,7 +446,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
         let result = environment_delete.delete_environment(&env_action_delete, logger, &engine_config_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -526,20 +526,14 @@ fn deploy_a_working_environment_and_pause_it() {
         let result = environment.deploy_environment(&ea, logger.clone(), &engine_config_resume);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let ret = get_pods(
-            context.clone(),
-            Kind::Scw,
-            environment.clone(),
-            selector.as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(context, Kind::Scw, environment.clone(), selector.as_str(), secrets);
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
         // Cleanup
         let result = environment.delete_environment(&ea, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -577,7 +571,6 @@ fn scaleway_kapsule_redeploy_same_app() {
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
-                .clone()
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
@@ -627,7 +620,7 @@ fn scaleway_kapsule_redeploy_same_app() {
             context.clone(),
             Kind::Scw,
             environment_check1,
-            app_name.clone().as_str(),
+            app_name.as_str(),
             secrets.clone(),
         );
 
@@ -648,7 +641,7 @@ fn scaleway_kapsule_redeploy_same_app() {
         let result = environment_delete.delete_environment(&env_action_delete, logger, &engine_config_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -731,7 +724,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
         let result = environment_for_delete.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -843,7 +836,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
         let result = delete_env.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -901,7 +894,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
         let result = delete_env.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -964,7 +957,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
             environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
