@@ -116,7 +116,11 @@ impl QoveryCommand {
     }
 
     pub fn exec(&mut self) -> Result<(), CommandError> {
-        self.exec_with_abort(&mut |line| info!("{}", line), &mut |line| warn!("{}", line), &CommandKiller::never())
+        self.exec_with_abort(
+            &mut |line| info!("{}", line),
+            &mut |line| warn!("{}", line),
+            &CommandKiller::never(),
+        )
     }
 
     pub fn exec_with_output<STDOUT, STDERR>(
@@ -273,7 +277,10 @@ impl QoveryCommand {
         }
 
         if !exit_status.success() {
-            debug!("command: {:?} terminated with error exist status {:?}", self.command, exit_status);
+            debug!(
+                "command: {:?} terminated with error exist status {:?}",
+                self.command, exit_status
+            );
             return Err(ExitStatusError(exit_status));
         }
 

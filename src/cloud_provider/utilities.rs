@@ -183,8 +183,10 @@ pub fn generate_supported_version(
             } else {
                 for minor in minor_min..minor_max + 1 {
                     // add short minor format targeting latest version
-                    supported_versions
-                        .insert(format!("{}.{}", major, minor), format!("{}.{}.{}", major, minor, update_max.unwrap()));
+                    supported_versions.insert(
+                        format!("{}.{}", major, minor),
+                        format!("{}.{}.{}", major, minor, update_max.unwrap()),
+                    );
                     if update_min.unwrap() == update_max.unwrap() {
                         let version = format!("{}.{}.{}", major, minor, update_min.unwrap());
                         supported_versions.insert(version.clone(), format!("{}{}", version, suffix));
@@ -238,7 +240,11 @@ impl VersionsNumber {
     }
 
     pub fn to_major_minor_version_string(&self, default_minor: &str) -> String {
-        let test = format!("{}.{}", self.major.clone(), self.minor.as_ref().unwrap_or(&default_minor.to_string()));
+        let test = format!(
+            "{}.{}",
+            self.major.clone(),
+            self.minor.as_ref().unwrap_or(&default_minor.to_string())
+        );
 
         test
     }
@@ -374,7 +380,11 @@ pub fn check_cname_for(
     };
 
     send_deployment_progress(
-        format!("Checking CNAME resolution of '{}'. Please wait, it can take some time...", cname_to_check).as_str(),
+        format!(
+            "Checking CNAME resolution of '{}'. Please wait, it can take some time...",
+            cname_to_check
+        )
+        .as_str(),
     );
 
     // Trying for 5 min to resolve CNAME
@@ -385,12 +395,14 @@ pub fn check_cname_for(
         resolver
     };
     let fixed_iterable = Fixed::from_millis(Duration::seconds(5).num_milliseconds() as u64).take(6 * 5);
-    let check_result = retry::retry(fixed_iterable, || match get_cname_record_value(next_resolver(), cname_to_check) {
-        Some(domain) => OperationResult::Ok(domain),
-        None => {
-            let msg = format!("Cannot find domain under CNAME {}. Retrying in 5 seconds...", cname_to_check);
-            send_deployment_progress(msg.as_str());
-            OperationResult::Retry(msg)
+    let check_result = retry::retry(fixed_iterable, || {
+        match get_cname_record_value(next_resolver(), cname_to_check) {
+            Some(domain) => OperationResult::Ok(domain),
+            None => {
+                let msg = format!("Cannot find domain under CNAME {}. Retrying in 5 seconds...", cname_to_check);
+                send_deployment_progress(msg.as_str());
+                OperationResult::Retry(msg)
+            }
         }
     });
 
@@ -422,7 +434,10 @@ pub fn check_domain_for(
     let resolvers = dns_resolvers();
 
     for domain in domains_to_check {
-        let message = format!("Let's check domain resolution for '{}'. Please wait, it can take some time...", domain);
+        let message = format!(
+            "Let's check domain resolution for '{}'. Please wait, it can take some time...",
+            domain
+        );
 
         listener_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Environment {
@@ -537,8 +552,14 @@ pub fn print_action(
 ) {
     let msg = format!("{}.{}.{} called for {}", cloud_provider_name, struct_name, fn_name, item_name);
     match fn_name.contains("error") {
-        true => logger.log(LogLevel::Warning, EngineEvent::Warning(event_details, EventMessage::new_from_safe(msg))),
-        false => logger.log(LogLevel::Info, EngineEvent::Info(event_details, EventMessage::new_from_safe(msg))),
+        true => logger.log(
+            LogLevel::Warning,
+            EngineEvent::Warning(event_details, EventMessage::new_from_safe(msg)),
+        ),
+        false => logger.log(
+            LogLevel::Info,
+            EngineEvent::Info(event_details, EventMessage::new_from_safe(msg)),
+        ),
     }
 }
 

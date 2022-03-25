@@ -23,7 +23,10 @@ where
                 tera::ErrorKind::TemplateNotFound(x) => format!("template not found: {}", x),
                 tera::ErrorKind::Msg(x) => format!("tera error: {}", x),
                 tera::ErrorKind::CircularExtend { tpl, inheritance_chain } => {
-                    format!("circular extend - template: {}, inheritance chain: {:?}", tpl, inheritance_chain)
+                    format!(
+                        "circular extend - template: {}, inheritance chain: {:?}",
+                        tpl, inheritance_chain
+                    )
                 }
                 tera::ErrorKind::MissingParent { current, parent } => {
                     format!("missing parent - current: {}, parent: {}", current, parent)

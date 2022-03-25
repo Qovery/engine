@@ -104,7 +104,14 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             vpc_network_mode,
         );
 
-        EngineConfig::new(context.clone(), build_platform, container_registry, cloud_provider, dns_provider, cluster)
+        EngineConfig::new(
+            context.clone(),
+            build_platform,
+            container_registry,
+            cloud_provider,
+            dns_provider,
+            cluster,
+        )
     }
 
     fn cloud_provider(context: &Context) -> Box<Scaleway> {
@@ -222,8 +229,14 @@ pub fn clean_environments(
     let secret_token = secrets.SCALEWAY_SECRET_KEY.unwrap();
     let project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap();
 
-    let container_registry_client =
-        ScalewayCR::new(context.clone(), "test", "test", secret_token.as_str(), project_id.as_str(), zone)?;
+    let container_registry_client = ScalewayCR::new(
+        context.clone(),
+        "test",
+        "test",
+        secret_token.as_str(),
+        project_id.as_str(),
+        zone,
+    )?;
 
     // delete images created in registry
     let registry_url = container_registry_client.registry_info();

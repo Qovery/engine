@@ -391,7 +391,10 @@ impl EKS {
 
         // Qovery features
         context.insert("log_history_enabled", &self.context.is_feature_enabled(&Features::LogsHistory));
-        context.insert("metrics_history_enabled", &self.context.is_feature_enabled(&Features::MetricsHistory));
+        context.insert(
+            "metrics_history_enabled",
+            &self.context.is_feature_enabled(&Features::MetricsHistory),
+        );
 
         // DNS configuration
         let managed_dns_list = vec![self.dns_provider.name()];
@@ -406,8 +409,14 @@ impl EKS {
         context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
         context.insert("managed_dns_domains_root_helm_format", &managed_dns_domains_root_helm_format);
         context.insert("managed_dns_domains_terraform_format", &managed_dns_domains_terraform_format);
-        context.insert("managed_dns_domains_root_terraform_format", &managed_dns_domains_root_terraform_format);
-        context.insert("managed_dns_resolvers_terraform_format", &managed_dns_resolvers_terraform_format);
+        context.insert(
+            "managed_dns_domains_root_terraform_format",
+            &managed_dns_domains_root_terraform_format,
+        );
+        context.insert(
+            "managed_dns_resolvers_terraform_format",
+            &managed_dns_resolvers_terraform_format,
+        );
 
         match self.dns_provider.kind() {
             dns_provider::Kind::Cloudflare => {
@@ -478,8 +487,10 @@ impl EKS {
                 .secret_access_key
                 .as_str(),
         );
-        context
-            .insert("aws_region_tfstates_account", self.cloud_provider().terraform_state_credentials().region.as_str());
+        context.insert(
+            "aws_region_tfstates_account",
+            self.cloud_provider().terraform_state_credentials().region.as_str(),
+        );
 
         context.insert("aws_region", &self.region());
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
@@ -784,9 +795,10 @@ impl EKS {
         );
 
         match kubectl_exec_get_events(kubeconfig_path, None, environment_variables) {
-            Ok(ok_line) => self
-                .logger()
-                .log(LogLevel::Info, EngineEvent::Deploying(event_details, EventMessage::new(ok_line, None))),
+            Ok(ok_line) => self.logger().log(
+                LogLevel::Info,
+                EngineEvent::Deploying(event_details, EventMessage::new(ok_line, None)),
+            ),
             Err(err) => self.logger().log(
                 LogLevel::Error,
                 EngineEvent::Deploying(
@@ -984,8 +996,10 @@ impl EKS {
             Ok(_) => {
                 let message = format!("Kubernetes cluster {} successfully paused", self.name());
                 self.send_to_customer(&message, &listeners_helper);
-                self.logger()
-                    .log(LogLevel::Info, EngineEvent::Pausing(event_details, EventMessage::new_from_safe(message)));
+                self.logger().log(
+                    LogLevel::Info,
+                    EngineEvent::Pausing(event_details, EventMessage::new_from_safe(message)),
+                );
                 Ok(())
             }
             Err(e) => Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e)),
@@ -1072,11 +1086,16 @@ impl EKS {
 
         // should apply before destroy to be sure destroy will compute on all resources
         // don't exit on failure, it can happen if we resume a destroy process
-        let message =
-            format!("Ensuring everything is up to date before deleting cluster {}/{}", self.name(), self.id());
+        let message = format!(
+            "Ensuring everything is up to date before deleting cluster {}/{}",
+            self.name(),
+            self.id()
+        );
         self.send_to_customer(&message, &listeners_helper);
-        self.logger()
-            .log(LogLevel::Info, EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)));
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)),
+        );
 
         self.logger().log(
             LogLevel::Info,
@@ -1161,8 +1180,10 @@ impl EKS {
                     }
                 }
                 Err(e) => {
-                    let message_safe =
-                        format!("Error while getting all namespaces for Kubernetes cluster {}", self.name_with_id(),);
+                    let message_safe = format!(
+                        "Error while getting all namespaces for Kubernetes cluster {}",
+                        self.name_with_id(),
+                    );
                     self.logger().log(
                         LogLevel::Error,
                         EngineEvent::Deleting(
@@ -1185,9 +1206,11 @@ impl EKS {
             );
 
             // delete custom metrics api to avoid stale namespaces on deletion
-            let helm =
-                Helm::new(&kubernetes_config_file_path, &self.cloud_provider.credentials_environment_variables())
-                    .map_err(|e| to_engine_error(&event_details, e))?;
+            let helm = Helm::new(
+                &kubernetes_config_file_path,
+                &self.cloud_provider.credentials_environment_variables(),
+            )
+            .map_err(|e| to_engine_error(&event_details, e))?;
             let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
             helm.uninstall(&chart, &[])
                 .map_err(|e| to_engine_error(&event_details, e))?;
@@ -1325,8 +1348,10 @@ impl EKS {
 
         let message = format!("Deleting Kubernetes cluster {}/{}", self.name(), self.id());
         self.send_to_customer(&message, &listeners_helper);
-        self.logger()
-            .log(LogLevel::Info, EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)));
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)),
+        );
 
         self.logger().log(
             LogLevel::Info,
@@ -1356,9 +1381,10 @@ impl EKS {
                 );
                 Ok(())
             }
-            Err(Operation { error, .. }) => {
-                Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(event_details, error))
-            }
+            Err(Operation { error, .. }) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
+                event_details,
+                error,
+            )),
             Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
                 event_details,
                 CommandError::new(msg, None),
@@ -1473,7 +1499,12 @@ impl Kubernetes for EKS {
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         self.send_to_customer(
-            format!("Start preparing EKS upgrade process {} cluster with id {}", self.name(), self.id()).as_str(),
+            format!(
+                "Start preparing EKS upgrade process {} cluster with id {}",
+                self.name(),
+                self.id()
+            )
+            .as_str(),
             &listeners_helper,
         );
         self.logger().log(
@@ -1631,7 +1662,10 @@ impl Kubernetes for EKS {
 
         // disable cluster autoscaler to avoid interfering with AWS upgrade procedure
         context.insert("enable_cluster_autoscaler", &false);
-        context.insert("eks_workers_version", format!("{}", &kubernetes_upgrade_status.requested_version).as_str());
+        context.insert(
+            "eks_workers_version",
+            format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
+        );
 
         if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
             self.template_directory.as_str(),
@@ -1661,7 +1695,10 @@ impl Kubernetes for EKS {
             ));
         }
 
-        self.send_to_customer(format!("Upgrading Kubernetes {} worker nodes", self.name()).as_str(), &listeners_helper);
+        self.send_to_customer(
+            format!("Upgrading Kubernetes {} worker nodes", self.name()).as_str(),
+            &listeners_helper,
+        );
         self.logger().log(
             LogLevel::Info,
             EngineEvent::Deploying(

@@ -66,7 +66,12 @@ impl PostgresDo {
     }
 
     fn matching_correct_version(&self, event_details: EventDetails) -> Result<ServiceVersionCheckResult, EngineError> {
-        check_service_version(get_self_hosted_postgres_version(self.version()), self, event_details, self.logger())
+        check_service_version(
+            get_self_hosted_postgres_version(self.version()),
+            self,
+            event_details,
+            self.logger(),
+        )
     }
 
     fn cloud_provider_name(&self) -> &str {

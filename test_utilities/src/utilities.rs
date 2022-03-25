@@ -169,13 +169,21 @@ impl FuncTestsSecrets {
     fn get_vault_config() -> Result<VaultConfig, Error> {
         let vault_addr = match env::var_os("VAULT_ADDR") {
             Some(x) => x.into_string().unwrap(),
-            None => return Err(Error::new(ErrorKind::NotFound, format!("VAULT_ADDR environment variable is missing"))),
+            None => {
+                return Err(Error::new(
+                    ErrorKind::NotFound,
+                    format!("VAULT_ADDR environment variable is missing"),
+                ))
+            }
         };
 
         let vault_token = match env::var_os("VAULT_TOKEN") {
             Some(x) => x.into_string().unwrap(),
             None => {
-                return Err(Error::new(ErrorKind::NotFound, format!("VAULT_TOKEN environment variable is missing")))
+                return Err(Error::new(
+                    ErrorKind::NotFound,
+                    format!("VAULT_TOKEN environment variable is missing"),
+                ))
             }
         };
 
@@ -370,7 +378,10 @@ pub fn init() -> Instant {
         None => tracing_subscriber::fmt().try_init(),
     };
 
-    info!("running from current directory: {}", std::env::current_dir().unwrap().to_str().unwrap());
+    info!(
+        "running from current directory: {}",
+        std::env::current_dir().unwrap().to_str().unwrap()
+    );
 
     Instant::now()
 }
@@ -701,7 +712,10 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
         Kind::Scw => vec![
             (SCALEWAY_ACCESS_KEY, secrets.SCALEWAY_ACCESS_KEY.as_ref().unwrap().as_str()),
             (SCALEWAY_SECRET_KEY, secrets.SCALEWAY_SECRET_KEY.as_ref().unwrap().as_str()),
-            (SCALEWAY_DEFAULT_PROJECT_ID, secrets.SCALEWAY_DEFAULT_PROJECT_ID.as_ref().unwrap().as_str()),
+            (
+                SCALEWAY_DEFAULT_PROJECT_ID,
+                secrets.SCALEWAY_DEFAULT_PROJECT_ID.as_ref().unwrap().as_str(),
+            ),
         ],
     }
 }

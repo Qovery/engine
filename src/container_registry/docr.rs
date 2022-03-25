@@ -148,8 +148,11 @@ impl DOCR {
     }
 
     pub fn exec_docr_login(&self) -> Result<(), ContainerRegistryError> {
-        let mut cmd =
-            QoveryCommand::new("doctl", &["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()], &[]);
+        let mut cmd = QoveryCommand::new(
+            "doctl",
+            &["registry", "login", self.name.as_str(), "-t", self.api_key.as_str()],
+            &[],
+        );
 
         match cmd.exec() {
             Ok(_) => Ok(()),

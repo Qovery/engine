@@ -795,7 +795,11 @@ where
                 EngineEvent::Deleting(
                     event_details.clone(),
                     EventMessage::new(
-                        format!("Encountering issues while trying to get objects kind {}: {:?}", object, e.message()),
+                        format!(
+                            "Encountering issues while trying to get objects kind {}: {:?}",
+                            object,
+                            e.message()
+                        ),
                         None,
                     ),
                 ),
@@ -804,8 +808,9 @@ where
         }
 
         // delete if resource exists
-        match retry::retry(Fibonacci::from_millis(5000).take(3), || {
-            match kubectl_delete_objects_in_all_namespaces(&kubernetes_config, object, envs.clone()) {
+        match retry::retry(
+            Fibonacci::from_millis(5000).take(3),
+            || match kubectl_delete_objects_in_all_namespaces(&kubernetes_config, object, envs.clone()) {
                 Ok(_) => OperationResult::Ok(()),
                 Err(e) => {
                     logger.log(
@@ -817,8 +822,8 @@ where
                     );
                     OperationResult::Retry(e)
                 }
-            }
-        }) {
+            },
+        ) {
             Ok(_) => {}
             Err(Operation { error, .. }) => {
                 return Err(EngineError::new_cannot_uninstall_helm_chart(
@@ -861,7 +866,10 @@ where
     let masters_version = match VersionsNumber::from_str(raw_version.as_str()) {
         Ok(vn) => vn,
         Err(_) => {
-            return Err(EngineError::new_cannot_determine_k8s_master_version(event_details, raw_version.to_string()))
+            return Err(EngineError::new_cannot_determine_k8s_master_version(
+                event_details,
+                raw_version.to_string(),
+            ))
         }
     };
 
@@ -1057,12 +1065,14 @@ fn check_kubernetes_upgrade_status(
             }
         }
         Err(e) => {
-            return Err(EngineError::new_k8s_version_upgrade_deployed_vs_requested_versions_inconsistency(
-                event_details,
-                deployed_masters_version,
-                wished_version,
-                e,
-            ))
+            return Err(
+                EngineError::new_k8s_version_upgrade_deployed_vs_requested_versions_inconsistency(
+                    event_details,
+                    deployed_masters_version,
+                    wished_version,
+                    e,
+                ),
+            )
         }
     };
 
@@ -1108,12 +1118,14 @@ fn check_kubernetes_upgrade_status(
                 non_up_to_date_workers += 1;
             }
             Err(e) => {
-                return Err(EngineError::new_k8s_version_upgrade_deployed_vs_requested_versions_inconsistency(
-                    event_details,
-                    node,
-                    wished_version,
-                    e,
-                ))
+                return Err(
+                    EngineError::new_k8s_version_upgrade_deployed_vs_requested_versions_inconsistency(
+                        event_details,
+                        node,
+                        wished_version,
+                        e,
+                    ),
+                )
             }
         }
     }
@@ -1253,9 +1265,18 @@ where
     F: Fn() -> R,
 {
     let waiting_message = match action {
-        Action::Create => Some(format!("Infrastructure '{}' deployment is in progress...", kubernetes.name_with_id())),
-        Action::Pause => Some(format!("Infrastructure '{}' pause is in progress...", kubernetes.name_with_id())),
-        Action::Delete => Some(format!("Infrastructure '{}' deletion is in progress...", kubernetes.name_with_id())),
+        Action::Create => Some(format!(
+            "Infrastructure '{}' deployment is in progress...",
+            kubernetes.name_with_id()
+        )),
+        Action::Pause => Some(format!(
+            "Infrastructure '{}' pause is in progress...",
+            kubernetes.name_with_id()
+        )),
+        Action::Delete => Some(format!(
+            "Infrastructure '{}' deletion is in progress...",
+            kubernetes.name_with_id()
+        )),
         Action::Nothing => None,
     };
 
@@ -1393,7 +1414,10 @@ pub fn validate_k8s_required_cpu_and_burstable(
             context_id,
         ));
 
-        logger.log(LogLevel::Warning, EngineEvent::Warning(event_details, EventMessage::new_from_safe(message)));
+        logger.log(
+            LogLevel::Warning,
+            EngineEvent::Warning(event_details, EventMessage::new_from_safe(message)),
+        );
 
         set_cpu_burst = total_cpu.clone();
     }
@@ -1414,7 +1438,10 @@ pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, CommandError> 
             }
             Err(e) => Err(CommandError::new(
                 e.to_string(),
-                Some(format!("Error while trying to parse `{}` to float 32.", value_number_string.as_str())),
+                Some(format!(
+                    "Error while trying to parse `{}` to float 32.",
+                    value_number_string.as_str()
+                )),
             )),
         };
     }

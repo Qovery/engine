@@ -469,7 +469,15 @@ impl EngineError {
         link: Option<Url>,
         hint_message: Option<String>,
     ) -> EngineError {
-        EngineError::new(event_details, Tag::Unknown, qovery_log_message, user_log_message, message, link, hint_message)
+        EngineError::new(
+            event_details,
+            Tag::Unknown,
+            qovery_log_message,
+            user_log_message,
+            message,
+            link,
+            hint_message,
+        )
     }
 
     /// Creates new error for missing required env variable.
@@ -482,7 +490,15 @@ impl EngineError {
     /// * `variable_name`: Variable name which is not set.
     pub fn new_missing_required_env_variable(event_details: EventDetails, variable_name: String) -> EngineError {
         let message = format!("`{}` environment variable wasn't found.", variable_name);
-        EngineError::new(event_details, Tag::MissingRequiredEnvVariable, message.to_string(), message, None, None, None)
+        EngineError::new(
+            event_details,
+            Tag::MissingRequiredEnvVariable,
+            message.to_string(),
+            message,
+            None,
+            None,
+            None,
+        )
     }
 
     /// Creates new error for cluster has no worker nodes.
@@ -1175,7 +1191,15 @@ impl EngineError {
             selector, namespace
         );
 
-        EngineError::new(event_details, Tag::K8sGetLogs, message.to_string(), message, Some(raw_error), None, None)
+        EngineError::new(
+            event_details,
+            Tag::K8sGetLogs,
+            message.to_string(),
+            message,
+            Some(raw_error),
+            None,
+            None,
+        )
     }
 
     /// Creates new error for kubernetes get events.
@@ -1192,7 +1216,15 @@ impl EngineError {
     ) -> EngineError {
         let message = format!("Error, unable to retrieve events in namespace `{}`.", namespace);
 
-        EngineError::new(event_details, Tag::K8sGetLogs, message.to_string(), message, Some(raw_error), None, None)
+        EngineError::new(
+            event_details,
+            Tag::K8sGetLogs,
+            message.to_string(),
+            message,
+            Some(raw_error),
+            None,
+            None,
+        )
     }
 
     /// Creates new error for kubernetes describe.
@@ -1209,10 +1241,20 @@ impl EngineError {
         namespace: String,
         raw_error: CommandError,
     ) -> EngineError {
-        let message =
-            format!("Error, unable to describe pod with selector `{}` in namespace `{}`.", selector, namespace);
+        let message = format!(
+            "Error, unable to describe pod with selector `{}` in namespace `{}`.",
+            selector, namespace
+        );
 
-        EngineError::new(event_details, Tag::K8sDescribe, message.to_string(), message, Some(raw_error), None, None)
+        EngineError::new(
+            event_details,
+            Tag::K8sDescribe,
+            message.to_string(),
+            message,
+            Some(raw_error),
+            None,
+            None,
+        )
     }
 
     /// Creates new error for kubernetes history.
@@ -1225,7 +1267,15 @@ impl EngineError {
     pub fn new_k8s_history(event_details: EventDetails, namespace: String, raw_error: CommandError) -> EngineError {
         let message = format!("Error, unable to get history in namespace `{}`.", namespace);
 
-        EngineError::new(event_details, Tag::K8sHistory, message.to_string(), message, Some(raw_error), None, None)
+        EngineError::new(
+            event_details,
+            Tag::K8sHistory,
+            message.to_string(),
+            message,
+            Some(raw_error),
+            None,
+            None,
+        )
     }
 
     /// Creates new error for kubernetes namespace creation issue.
@@ -1267,7 +1317,10 @@ impl EngineError {
         namespace: String,
         raw_error: CommandError,
     ) -> EngineError {
-        let message = format!("Error, pod with selector `{}` in namespace `{}` is not ready.", selector, namespace);
+        let message = format!(
+            "Error, pod with selector `{}` in namespace `{}` is not ready.",
+            selector, namespace
+        );
 
         EngineError::new(
             event_details,
@@ -1364,7 +1417,15 @@ impl EngineError {
     pub fn new_missing_required_binary(event_details: EventDetails, missing_binary_name: String) -> EngineError {
         let message = format!("`{}` binary is required but was not found.", missing_binary_name);
 
-        EngineError::new(event_details, Tag::CannotFindRequiredBinary, message.to_string(), message, None, None, None)
+        EngineError::new(
+            event_details,
+            Tag::CannotFindRequiredBinary,
+            message.to_string(),
+            message,
+            None,
+            None,
+            None,
+        )
     }
 
     /// Creates new error for subnets count not being even. Subnets count should be even to get the same number as private and public.
@@ -1384,7 +1445,15 @@ impl EngineError {
             zone_name, subnets_count,
         );
 
-        EngineError::new(event_details, Tag::SubnetsCountShouldBeEven, message.to_string(), message, None, None, None)
+        EngineError::new(
+            event_details,
+            Tag::SubnetsCountShouldBeEven,
+            message.to_string(),
+            message,
+            None,
+            None,
+            None,
+        )
     }
 
     /// Creates new error for IAM role which cannot be retrieved or created.
@@ -1568,8 +1637,10 @@ impl EngineError {
         parameter_value: String,
         raw_error: Option<CommandError>,
     ) -> EngineError {
-        let message =
-            format!("{} value `{}` not supported for parameter `{}`", service_type, parameter_value, parameter_name,);
+        let message = format!(
+            "{} value `{}` not supported for parameter `{}`",
+            service_type, parameter_value, parameter_name,
+        );
 
         EngineError::new(
             event_details,
@@ -1667,7 +1738,15 @@ impl EngineError {
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
     pub fn new_build_error(event_details: EventDetails, error: BuildError) -> EngineError {
-        EngineError::new(event_details, Tag::BuilderError, error.to_string(), error.to_string(), None, None, None)
+        EngineError::new(
+            event_details,
+            Tag::BuilderError,
+            error.to_string(),
+            error.to_string(),
+            None,
+            None,
+            None,
+        )
     }
 
     /// Creates new error from an Container Registry error
@@ -1732,8 +1811,10 @@ impl EngineError {
         namespace: String,
         raw_error: CommandError,
     ) -> EngineError {
-        let message =
-            format!("Error while trying to get helm chart `{}` history in namespace `{}`.", helm_chart, namespace);
+        let message = format!(
+            "Error while trying to get helm chart `{}` history in namespace `{}`.",
+            helm_chart, namespace
+        );
 
         EngineError::new(
             event_details,
@@ -1805,7 +1886,15 @@ impl EngineError {
     ) -> EngineError {
         let message = format!("Error, version `{}` is not supported for `{}`.", version, product_name);
 
-        EngineError::new(event_details, Tag::UnsupportedVersion, message.to_string(), message, None, None, None)
+        EngineError::new(
+            event_details,
+            Tag::UnsupportedVersion,
+            message.to_string(),
+            message,
+            None,
+            None,
+            None,
+        )
     }
 
     /// Creates new error while trying to get cluster.
@@ -1868,7 +1957,10 @@ impl EngineError {
         service_name: String,
     ) -> EngineError {
         // TODO(benjaminch): Service should probably passed otherwise, either inside event_details or via a new dedicated struct.
-        let message = format!("Service `{}` (id `{}`) failed to deploy (before start).", service_name, service_id);
+        let message = format!(
+            "Service `{}` (id `{}`) failed to deploy (before start).",
+            service_name, service_id
+        );
 
         EngineError::new(
             event_details,
@@ -1895,8 +1987,10 @@ impl EngineError {
         service_type: String,
         raw_error: Option<CommandError>,
     ) -> EngineError {
-        let message =
-            format!("Database `{}` (id `{}`) failed to start after several retries.", service_type, service_id);
+        let message = format!(
+            "Database `{}` (id `{}`) failed to start after several retries.",
+            service_type, service_id
+        );
 
         EngineError::new(
             event_details,
@@ -2203,7 +2297,15 @@ impl EngineError {
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
     pub fn new_docker_error(event_details: EventDetails, error: DockerError) -> EngineError {
-        EngineError::new(event_details, Tag::DockerError, error.to_string(), error.to_string(), None, None, None)
+        EngineError::new(
+            event_details,
+            Tag::DockerError,
+            error.to_string(),
+            error.to_string(),
+            None,
+            None,
+            None,
+        )
     }
 
     /// Creates new error when trying to push a Docker image.
@@ -2220,8 +2322,10 @@ impl EngineError {
         repository_url: String,
         raw_error: CommandError,
     ) -> EngineError {
-        let message =
-            format!("Error, trying to push Docker image `{}` to repository `{}`.", image_name, repository_url);
+        let message = format!(
+            "Error, trying to push Docker image `{}` to repository `{}`.",
+            image_name, repository_url
+        );
 
         EngineError::new(
             event_details,
@@ -2248,8 +2352,10 @@ impl EngineError {
         repository_url: String,
         raw_error: CommandError,
     ) -> EngineError {
-        let message =
-            format!("Error, trying to pull Docker image `{}` from repository `{}`.", image_name, repository_url);
+        let message = format!(
+            "Error, trying to pull Docker image `{}` from repository `{}`.",
+            image_name, repository_url
+        );
 
         EngineError::new(
             event_details,
@@ -2399,8 +2505,10 @@ impl EngineError {
         event_details: EventDetails,
         repository_name: String,
     ) -> EngineError {
-        let message =
-            format!("Failed to retrieve credentials and endpoint URL from container registry `{}`.", repository_name,);
+        let message = format!(
+            "Failed to retrieve credentials and endpoint URL from container registry `{}`.",
+            repository_name,
+        );
 
         EngineError::new(
             event_details,
@@ -2617,7 +2725,10 @@ impl EngineError {
         file_name: String,
         raw_error: ObjectStorageError,
     ) -> EngineError {
-        let message = format!("Error, cannot put file `{}` into object storage bucket `{}`.", file_name, bucket_name,);
+        let message = format!(
+            "Error, cannot put file `{}` into object storage bucket `{}`.",
+            file_name, bucket_name,
+        );
 
         EngineError::new(
             event_details,
@@ -2692,8 +2803,10 @@ impl EngineError {
         bucket_name: String,
         raw_error: CommandError,
     ) -> EngineError {
-        let message =
-            format!("Error while trying to activate versioning for object storage bucket `{}`.", bucket_name,);
+        let message = format!(
+            "Error while trying to activate versioning for object storage bucket `{}`.",
+            bucket_name,
+        );
 
         EngineError::new(
             event_details,

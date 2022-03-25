@@ -49,7 +49,10 @@ fn checkout<'a>(repo: &'a Repository, commit_id: &'a str) -> Result<Object<'a>, 
             .find_remote("origin")
             .map(|remote| remote.url().unwrap_or_default().to_string())
             .unwrap_or_default();
-        let msg = format!("Unable to use git object commit ID {} on repository {}: {}", &commit_id, &repo_url, &err);
+        let msg = format!(
+            "Unable to use git object commit ID {} on repository {}: {}",
+            &commit_id, &repo_url, &err
+        );
         Error::from_str(&msg)
     })?;
 
@@ -188,11 +191,19 @@ mod tests {
         let repo_path = repo_dir.path();
 
         // We only allow https:// at the moment
-        let repo = clone(&Url::parse("ssh://git@github.com/Qovery/engine.git").unwrap(), &repo_path, &|_| vec![]);
+        let repo = clone(
+            &Url::parse("ssh://git@github.com/Qovery/engine.git").unwrap(),
+            &repo_path,
+            &|_| vec![],
+        );
         assert!(matches!(repo, Err(e) if e.message().contains("https://")));
 
         // Repository must be empty
-        let repo = clone(&Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(), &repo_path, &|_| vec![]);
+        let repo = clone(
+            &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
+            &repo_path,
+            &|_| vec![],
+        );
         assert!(repo.is_ok()); // clone makes sure to empty the directory
 
         // Working case
@@ -210,10 +221,16 @@ mod tests {
         {
             let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_clone".to_string());
             let get_credentials = |_: &str| {
-                vec![(CredentialType::USER_PASS_PLAINTEXT, Cred::userpass_plaintext("FAKE", "FAKE").unwrap())]
+                vec![(
+                    CredentialType::USER_PASS_PLAINTEXT,
+                    Cred::userpass_plaintext("FAKE", "FAKE").unwrap(),
+                )]
             };
-            let repo =
-                clone(&Url::parse("https://gitlab.com/qovery/q-core.git").unwrap(), clone_dir.path(), &get_credentials);
+            let repo = clone(
+                &Url::parse("https://gitlab.com/qovery/q-core.git").unwrap(),
+                clone_dir.path(),
+                &get_credentials,
+            );
             assert!(matches!(repo, Err(repo) if repo.message().contains("authentication")));
         }
 
@@ -246,9 +263,12 @@ mod tests {
     #[test]
     fn test_git_checkout() {
         let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_checkout".to_string());
-        let repo =
-            clone(&Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(), clone_dir.path(), &|_| vec![])
-                .unwrap();
+        let repo = clone(
+            &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
+            clone_dir.path(),
+            &|_| vec![],
+        )
+        .unwrap();
 
         // Invalid commit for this repository
         let check = checkout(&repo, "c2c2101f8e4c4ffadb326dc440ba8afb4aeb1310");
@@ -305,7 +325,10 @@ mod tests {
                     CredentialType::SSH_MEMORY,
                     Cred::ssh_key_from_memory(user, None, &invalid_ssh_key, Some("toto")).unwrap(),
                 ),
-                (CredentialType::SSH_MEMORY, Cred::ssh_key_from_memory(user, None, &ssh_key, None).unwrap()),
+                (
+                    CredentialType::SSH_MEMORY,
+                    Cred::ssh_key_from_memory(user, None, &ssh_key, None).unwrap(),
+                ),
                 (
                     CredentialType::SSH_MEMORY,
                     Cred::ssh_key_from_memory(user, None, &invalid_ssh_key, Some("toto")).unwrap(),

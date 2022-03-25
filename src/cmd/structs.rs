@@ -1311,7 +1311,10 @@ mod tests {
         assert_eq!(pod_status.is_ok(), true);
         let pod_status = pod_status.unwrap();
         assert_eq!(pod_status.items[0].status.conditions[0].status, "False");
-        assert_eq!(pod_status.items[0].status.conditions[0].reason, KubernetesPodStatusReason::CrashLoopBackOff);
+        assert_eq!(
+            pod_status.items[0].status.conditions[0].reason,
+            KubernetesPodStatusReason::CrashLoopBackOff
+        );
 
         let payload = r#"{
     "apiVersion": "v1",
@@ -1584,7 +1587,10 @@ mod tests {
         let pod_status = serde_json::from_str::<KubernetesList<KubernetesPod>>(payload);
 
         assert!(pod_status.is_ok());
-        assert_eq!(pod_status.unwrap().items[0].status.conditions[0].reason, KubernetesPodStatusReason::Unknown(None));
+        assert_eq!(
+            pod_status.unwrap().items[0].status.conditions[0].reason,
+            KubernetesPodStatusReason::Unknown(None)
+        );
     }
 
     #[test]

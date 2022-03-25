@@ -52,15 +52,24 @@ pub fn get_qovery_app_version<T: DeserializeOwned>(
         QoveryAppName::ShellAgent => "shellAgent",
     };
 
-    let url = format!("https://{}/api/v1/{}-version?type=cluster&clusterId={}", api_fqdn, app_type, cluster_id);
+    let url = format!(
+        "https://{}/api/v1/{}-version?type=cluster&clusterId={}",
+        api_fqdn, app_type, cluster_id
+    );
 
     let message_safe = format!("Error while trying to get `{}` version.", app_type);
 
     match reqwest::blocking::Client::new().get(&url).headers(headers).send() {
         Ok(x) => match x.json::<T>() {
             Ok(qa) => Ok(qa),
-            Err(e) => Err(CommandError::new(format!("{}, error: {:?}", message_safe, e), Some(message_safe))),
+            Err(e) => Err(CommandError::new(
+                format!("{}, error: {:?}", message_safe, e),
+                Some(message_safe),
+            )),
         },
-        Err(e) => Err(CommandError::new(format!("{}, error: {:?}", message_safe, e), Some(message_safe))),
+        Err(e) => Err(CommandError::new(
+            format!("{}, error: {:?}", message_safe, e),
+            Some(message_safe),
+        )),
     }
 }

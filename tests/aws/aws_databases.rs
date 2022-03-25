@@ -330,7 +330,10 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         }
 
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
-        assert!(matches!(ret, TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)));
+        assert!(matches!(
+            ret,
+            TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
+        ));
 
         test_name.to_string()
     })

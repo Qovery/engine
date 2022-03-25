@@ -79,7 +79,10 @@ impl Role {
                     Ok(_) => Ok(true),
                     Err(e) => {
                         let safe_message = format!("Unable to know if `{}` exist on AWS Account", &self.role_name);
-                        return Err(CommandError::new(format!("{}, error: {:?}", safe_message, e), Some(safe_message)));
+                        return Err(CommandError::new(
+                            format!("{}, error: {:?}", safe_message, e),
+                            Some(safe_message),
+                        ));
                     }
                 };
             }

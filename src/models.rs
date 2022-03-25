@@ -1426,8 +1426,16 @@ mod tests {
             let result = QoveryIdentifier::new_from_long_id(tc.input.clone());
 
             // verify:
-            assert_eq!(tc.expected_long_id_output, result.raw_long_id, "case {} : '{}'", tc.description, tc.input);
-            assert_eq!(tc.expected_short_output, result.short, "case {} : '{}'", tc.description, tc.input);
+            assert_eq!(
+                tc.expected_long_id_output, result.raw_long_id,
+                "case {} : '{}'",
+                tc.description, tc.input
+            );
+            assert_eq!(
+                tc.expected_short_output, result.short,
+                "case {} : '{}'",
+                tc.description, tc.input
+            );
         }
     }
 }

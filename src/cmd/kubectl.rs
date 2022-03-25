@@ -412,7 +412,9 @@ where
     P: AsRef<Path>,
 {
     if labels.is_empty() {
-        return Err(CommandError::new_from_safe_message("No labels were defined, can't set them".to_string()));
+        return Err(CommandError::new_from_safe_message(
+            "No labels were defined, can't set them".to_string(),
+        ));
     };
 
     if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace, envs.clone()) {
@@ -436,8 +438,9 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs.clone());
 
-    let _ =
-        kubectl_exec_with_output(command_args, _envs, &mut |line| info!("{}", line), &mut |line| error!("{}", line))?;
+    let _ = kubectl_exec_with_output(command_args, _envs, &mut |line| info!("{}", line), &mut |line| {
+        error!("{}", line)
+    })?;
 
     Ok(())
 }
@@ -545,10 +548,12 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
 
-    let _ =
-        kubectl_exec_with_output(vec!["delete", "crd", crd_name], _envs, &mut |line| info!("{}", line), &mut |line| {
-            error!("{}", line)
-        })?;
+    let _ = kubectl_exec_with_output(
+        vec!["delete", "crd", crd_name],
+        _envs,
+        &mut |line| info!("{}", line),
+        &mut |line| error!("{}", line),
+    )?;
 
     Ok(())
 }
@@ -668,7 +673,9 @@ where
     environment_variables.push(("KUBECONFIG", kubernetes_config.as_ref().to_str().unwrap()));
     let args = vec!["-n", namespace, "rollout", "restart", "deployment", name];
 
-    kubectl_exec_with_output(args, environment_variables, &mut |line| info!("{}", line), &mut |line| error!("{}", line))
+    kubectl_exec_with_output(args, environment_variables, &mut |line| info!("{}", line), &mut |line| {
+        error!("{}", line)
+    })
 }
 
 pub fn kubectl_exec_get_node<P>(
@@ -767,7 +774,11 @@ pub fn kubectl_exec_get_configmap<P>(
 where
     P: AsRef<Path>,
 {
-    kubectl_exec::<P, Configmap>(vec!["get", "configmap", "-o", "json", "-n", namespace, name], kubernetes_config, envs)
+    kubectl_exec::<P, Configmap>(
+        vec!["get", "configmap", "-o", "json", "-n", namespace, name],
+        kubernetes_config,
+        envs,
+    )
 }
 
 pub fn kubectl_exec_get_json_events<P>(
@@ -857,7 +868,10 @@ where
     P: AsRef<Path>,
 {
     let pods = specific_pod_name.unwrap_or("*");
-    let api_url = format!("/apis/custom.metrics.k8s.io/v1beta1/namespaces/{}/pods/{}/{}", namespace, pods, metric_name);
+    let api_url = format!(
+        "/apis/custom.metrics.k8s.io/v1beta1/namespaces/{}/pods/{}/{}",
+        namespace, pods, metric_name
+    );
     kubectl_exec::<P, KubernetesApiMetrics>(vec!["get", "--raw", api_url.as_str()], kubernetes_config, envs)
 }
 

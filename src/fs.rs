@@ -113,7 +113,11 @@ pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -
             Err(err) => {
                 error!(
                     "{}",
-                    format!("error trying to remove workspace directory '{}', error: {}", workspace_dir.as_str(), err)
+                    format!(
+                        "error trying to remove workspace directory '{}', error: {}",
+                        workspace_dir.as_str(),
+                        err
+                    )
                 );
                 Err(err)
             }

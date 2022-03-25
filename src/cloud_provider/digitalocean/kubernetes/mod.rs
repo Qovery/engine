@@ -248,8 +248,14 @@ impl DOKS {
         context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
         context.insert("managed_dns_domains_root_helm_format", &managed_dns_domains_root_helm_format);
         context.insert("managed_dns_domains_terraform_format", &managed_dns_domains_terraform_format);
-        context.insert("managed_dns_domains_root_terraform_format", &managed_dns_domains_root_terraform_format);
-        context.insert("managed_dns_resolvers_terraform_format", &managed_dns_resolvers_terraform_format);
+        context.insert(
+            "managed_dns_domains_root_terraform_format",
+            &managed_dns_domains_root_terraform_format,
+        );
+        context.insert(
+            "managed_dns_resolvers_terraform_format",
+            &managed_dns_resolvers_terraform_format,
+        );
         match self.dns_provider.kind() {
             dns_provider::Kind::Cloudflare => {
                 context.insert("external_dns_provider", self.dns_provider.provider_name());
@@ -290,7 +296,10 @@ impl DOKS {
 
         // Qovery features
         context.insert("log_history_enabled", &self.context.is_feature_enabled(&Features::LogsHistory));
-        context.insert("metrics_history_enabled", &self.context.is_feature_enabled(&Features::MetricsHistory));
+        context.insert(
+            "metrics_history_enabled",
+            &self.context.is_feature_enabled(&Features::MetricsHistory),
+        );
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
         }
@@ -320,8 +329,10 @@ impl DOKS {
                 .as_str(),
         );
 
-        context
-            .insert("aws_region_tfstates_account", self.cloud_provider().terraform_state_credentials().region.as_str());
+        context.insert(
+            "aws_region_tfstates_account",
+            self.cloud_provider().terraform_state_credentials().region.as_str(),
+        );
 
         context.insert("nginx_enable_horizontal_autoscaler", "true");
         context.insert("nginx_minimum_replicas", "2");
@@ -427,7 +438,9 @@ impl DOKS {
         // TODO(benjaminch): `qovery-` to be added into Rust name directly everywhere
         match get_doks_info_from_name(json_content.as_str(), format!("qovery-{}", self.id())) {
             Ok(cluster_result) => match cluster_result {
-                None => Err(CommandError::new_from_safe_message("Cluster doesn't exist on DO side.".to_string())),
+                None => Err(CommandError::new_from_safe_message(
+                    "Cluster doesn't exist on DO side.".to_string(),
+                )),
                 Some(cluster) => Ok(cluster),
             },
             Err(e) => Err(e),
@@ -443,7 +456,11 @@ impl DOKS {
                 execution_id: self.context.execution_id().to_string(),
             },
             ProgressLevel::Info,
-            Some(format!("start to create Digital Ocean Kubernetes cluster {} with id {}", self.name(), self.id())),
+            Some(format!(
+                "start to create Digital Ocean Kubernetes cluster {} with id {}",
+                self.name(),
+                self.id()
+            )),
             self.context.execution_id(),
         ));
         self.logger().log(
@@ -753,9 +770,10 @@ impl DOKS {
         );
 
         match kubectl_exec_get_events(kubeconfig_path, None, environment_variables) {
-            Ok(ok_line) => self
-                .logger()
-                .log(LogLevel::Info, EngineEvent::Deploying(event_details, EventMessage::new(ok_line, None))),
+            Ok(ok_line) => self.logger().log(
+                LogLevel::Info,
+                EngineEvent::Deploying(event_details, EventMessage::new(ok_line, None)),
+            ),
             Err(err) => self.logger().log(
                 LogLevel::Error,
                 EngineEvent::Deploying(
@@ -866,11 +884,16 @@ impl DOKS {
 
         // should apply before destroy to be sure destroy will compute on all resources
         // don't exit on failure, it can happen if we resume a destroy process
-        let message =
-            format!("Ensuring everything is up to date before deleting cluster {}/{}", self.name(), self.id());
+        let message = format!(
+            "Ensuring everything is up to date before deleting cluster {}/{}",
+            self.name(),
+            self.id()
+        );
         self.send_to_customer(&message, &listeners_helper);
-        self.logger()
-            .log(LogLevel::Info, EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)));
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)),
+        );
 
         self.logger().log(
             LogLevel::Info,
@@ -958,8 +981,10 @@ impl DOKS {
                     }
                 }
                 Err(e) => {
-                    let message_safe =
-                        format!("Error while getting all namespaces for Kubernetes cluster {}", self.name_with_id(),);
+                    let message_safe = format!(
+                        "Error while getting all namespaces for Kubernetes cluster {}",
+                        self.name_with_id(),
+                    );
                     self.logger().log(
                         LogLevel::Error,
                         EngineEvent::Deleting(
@@ -1121,8 +1146,10 @@ impl DOKS {
 
         let message = format!("Deleting Kubernetes cluster {}/{}", self.name(), self.id());
         self.send_to_customer(&message, &listeners_helper);
-        self.logger()
-            .log(LogLevel::Info, EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)));
+        self.logger().log(
+            LogLevel::Info,
+            EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)),
+        );
 
         self.logger().log(
             LogLevel::Info,
@@ -1152,9 +1179,10 @@ impl DOKS {
                 );
                 Ok(())
             }
-            Err(Operation { error, .. }) => {
-                Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(event_details, error))
-            }
+            Err(Operation { error, .. }) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
+                event_details,
+                error,
+            )),
             Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
                 event_details,
                 CommandError::new(msg, None),
@@ -1391,7 +1419,12 @@ impl Kubernetes for DOKS {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         let listeners_helper = ListenersHelper::new(&self.listeners);
         self.send_to_customer(
-            format!("Start preparing DOKS upgrade process {} cluster with id {}", self.name(), self.id()).as_str(),
+            format!(
+                "Start preparing DOKS upgrade process {} cluster with id {}",
+                self.name(),
+                self.id()
+            )
+            .as_str(),
             &listeners_helper,
         );
         self.logger().log(
@@ -1482,7 +1515,10 @@ impl Kubernetes for DOKS {
             ));
         }
 
-        self.send_to_customer(format!("Upgrading Kubernetes {} nodes", self.name()).as_str(), &listeners_helper);
+        self.send_to_customer(
+            format!("Upgrading Kubernetes {} nodes", self.name()).as_str(),
+            &listeners_helper,
+        );
         self.logger().log(
             LogLevel::Info,
             EngineEvent::Deploying(

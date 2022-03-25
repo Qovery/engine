@@ -76,7 +76,14 @@ impl Cluster<DO, DoksOptions> for DO {
             vpc_network_mode,
         );
 
-        EngineConfig::new(context.clone(), build_platform, container_registry, cloud_provider, dns_provider, k)
+        EngineConfig::new(
+            context.clone(),
+            build_platform,
+            container_registry,
+            cloud_provider,
+            dns_provider,
+            k,
+        )
     }
 
     fn cloud_provider(context: &Context) -> Box<DO> {

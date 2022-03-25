@@ -27,7 +27,10 @@ fn manage_common_issues(terraform_provider_lock: &str, err: &CommandError) -> Re
             Ok(_) => Ok(()),
             Err(e) => Err(CommandError::new(
                 format!("Wasn't able to delete terraform lock file {}", &terraform_provider_lock),
-                Some(format!("Wasn't able to delete terraform lock file {}, error: {:?}", &terraform_provider_lock, e)),
+                Some(format!(
+                    "Wasn't able to delete terraform lock file {}, error: {:?}",
+                    &terraform_provider_lock, e
+                )),
             )),
         };
     } else if err.message().contains("Plugin reinitialization required") {
@@ -35,7 +38,9 @@ fn manage_common_issues(terraform_provider_lock: &str, err: &CommandError) -> Re
         return Ok(());
     }
 
-    Err(CommandError::new_from_safe_message("Not known method to fix this Terraform issue".to_string()))
+    Err(CommandError::new_from_safe_message(
+        "Not known method to fix this Terraform issue".to_string(),
+    ))
 }
 
 fn terraform_init_validate(root_dir: &str) -> Result<(), CommandError> {

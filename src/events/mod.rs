@@ -458,7 +458,12 @@ mod tests {
     fn test_event_message() {
         // setup:
         let test_cases: Vec<(String, Option<String>, EventMessageVerbosity, String)> = vec![
-            ("safe".to_string(), Some("raw".to_string()), EventMessageVerbosity::SafeOnly, "safe".to_string()),
+            (
+                "safe".to_string(),
+                Some("raw".to_string()),
+                EventMessageVerbosity::SafeOnly,
+                "safe".to_string(),
+            ),
             ("safe".to_string(), None, EventMessageVerbosity::SafeOnly, "safe".to_string()),
             ("safe".to_string(), None, EventMessageVerbosity::FullDetails, "safe".to_string()),
             (
@@ -483,11 +488,26 @@ mod tests {
     fn test_stage_sub_step_name() {
         // setup:
         let test_cases: Vec<(Stage, String)> = vec![
-            (Stage::Infrastructure(InfrastructureStep::Create), InfrastructureStep::Create.to_string()),
-            (Stage::Infrastructure(InfrastructureStep::Upgrade), InfrastructureStep::Upgrade.to_string()),
-            (Stage::Infrastructure(InfrastructureStep::Delete), InfrastructureStep::Delete.to_string()),
-            (Stage::Infrastructure(InfrastructureStep::Resume), InfrastructureStep::Resume.to_string()),
-            (Stage::Infrastructure(InfrastructureStep::Pause), InfrastructureStep::Pause.to_string()),
+            (
+                Stage::Infrastructure(InfrastructureStep::Create),
+                InfrastructureStep::Create.to_string(),
+            ),
+            (
+                Stage::Infrastructure(InfrastructureStep::Upgrade),
+                InfrastructureStep::Upgrade.to_string(),
+            ),
+            (
+                Stage::Infrastructure(InfrastructureStep::Delete),
+                InfrastructureStep::Delete.to_string(),
+            ),
+            (
+                Stage::Infrastructure(InfrastructureStep::Resume),
+                InfrastructureStep::Resume.to_string(),
+            ),
+            (
+                Stage::Infrastructure(InfrastructureStep::Pause),
+                InfrastructureStep::Pause.to_string(),
+            ),
             (
                 Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
                 InfrastructureStep::LoadConfiguration.to_string(),

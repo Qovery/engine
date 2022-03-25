@@ -37,8 +37,10 @@ pub fn do_get_from_api(token: &str, api_type: DoApiType, url_api: String) -> Res
             match response.status() {
                 StatusCode::OK => Ok(response.text().expect("Cannot get response text")),
                 StatusCode::UNAUTHORIZED => {
-                    let message_safe =
-                        format!("Could not get {} information, ensure your DigitalOcean token is valid.", api_type);
+                    let message_safe = format!(
+                        "Could not get {} information, ensure your DigitalOcean token is valid.",
+                        api_type
+                    );
                     return Err(CommandError::new(
                         format!("{}, response: {:?}", message_safe, response),
                         Some(message_safe),

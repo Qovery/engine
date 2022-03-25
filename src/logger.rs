@@ -129,7 +129,10 @@ mod tests {
                         ),
                         qovery_message.to_string(),
                         user_message.to_string(),
-                        Some(errors::CommandError::new(safe_message.to_string(), Some(raw_message.to_string()))),
+                        Some(errors::CommandError::new(
+                            safe_message.to_string(),
+                            Some(raw_message.to_string()),
+                        )),
                         Some(link),
                         Some(hint.to_string()),
                     ),
@@ -205,9 +208,21 @@ mod tests {
                 tc.description
             );
 
-            assert!(logs_contain(format!("organization_id=\"{}\"", orga_id.short()).as_str()), "{}", tc.description);
-            assert!(logs_contain(format!("cluster_id=\"{}\"", cluster_id.short()).as_str()), "{}", tc.description);
-            assert!(logs_contain(format!("execution_id=\"{}\"", execution_id).as_str()), "{}", tc.description);
+            assert!(
+                logs_contain(format!("organization_id=\"{}\"", orga_id.short()).as_str()),
+                "{}",
+                tc.description
+            );
+            assert!(
+                logs_contain(format!("cluster_id=\"{}\"", cluster_id.short()).as_str()),
+                "{}",
+                tc.description
+            );
+            assert!(
+                logs_contain(format!("execution_id=\"{}\"", execution_id).as_str()),
+                "{}",
+                tc.description
+            );
 
             let details = tc.event.get_details();
             assert!(
@@ -240,13 +255,21 @@ mod tests {
                 tc.description
             );
 
-            assert!(logs_contain(format!("stage=\"{}\"", details.stage()).as_str()), "{}", tc.description);
+            assert!(
+                logs_contain(format!("stage=\"{}\"", details.stage()).as_str()),
+                "{}",
+                tc.description
+            );
             assert!(
                 logs_contain(format!("step=\"{}\"", details.stage().sub_step_name()).as_str()),
                 "{}",
                 tc.description
             );
-            assert!(logs_contain(format!("transmitter=\"{}\"", details.transmitter()).as_str()), "{}", tc.description);
+            assert!(
+                logs_contain(format!("transmitter=\"{}\"", details.transmitter()).as_str()),
+                "{}",
+                tc.description
+            );
 
             // Logger should display everything
             assert!(logs_contain(safe_message), "{}", tc.description);

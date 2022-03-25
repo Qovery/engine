@@ -429,7 +429,10 @@ mod tests {
             let current_zone = AwsZones::from_string(sanitized_zone.to_lowercase());
             assert_eq!(current_zone.unwrap(), zone);
         }
-        assert_eq!(AwsZones::from_string("eu-west-3x".to_string()), Err(RegionAndZoneErrors::ZoneNotSupported));
+        assert_eq!(
+            AwsZones::from_string("eu-west-3x".to_string()),
+            Err(RegionAndZoneErrors::ZoneNotSupported)
+        );
     }
 
     #[test]

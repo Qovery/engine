@@ -125,7 +125,10 @@ fn digitalocean_doks_deploy_a_not_working_environment_with_no_router() {
 
         let result =
             environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
-        assert!(matches!(result, TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)));
+        assert!(matches!(
+            result,
+            TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
+        ));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -176,7 +179,13 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = get_pods(context.clone(), Kind::Do, environment.clone(), selector.as_str(), secrets.clone());
+        let ret = get_pods(
+            context.clone(),
+            Kind::Do,
+            environment.clone(),
+            selector.as_str(),
+            secrets.clone(),
+        );
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
@@ -184,7 +193,13 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
-        let ret = get_pods(context.clone(), Kind::Do, environment.clone(), selector.as_str(), secrets.clone());
+        let ret = get_pods(
+            context.clone(),
+            Kind::Do,
+            environment.clone(),
+            selector.as_str(),
+            secrets.clone(),
+        );
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
@@ -194,7 +209,13 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config_resume);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = get_pods(context.clone(), Kind::Do, environment.clone(), selector.as_str(), secrets.clone());
+        let ret = get_pods(
+            context.clone(),
+            Kind::Do,
+            environment.clone(),
+            selector.as_str(),
+            secrets.clone(),
+        );
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
@@ -497,14 +518,24 @@ fn digitalocean_doks_redeploy_same_app() {
         };
 
         let app_name = format!("{}-0", &environment_check1.applications[0].name);
-        let (_, number) =
-            is_pod_restarted_env(context.clone(), Kind::Do, environment_check1, app_name.as_str(), secrets.clone());
+        let (_, number) = is_pod_restarted_env(
+            context.clone(),
+            Kind::Do,
+            environment_check1,
+            app_name.as_str(),
+            secrets.clone(),
+        );
 
         let result = environment_redeploy.deploy_environment(&env_action_redeploy, logger.clone(), &engine_config_bis);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let (_, number2) =
-            is_pod_restarted_env(context.clone(), Kind::Do, environment_check2, app_name.as_str(), secrets.clone());
+        let (_, number2) = is_pod_restarted_env(
+            context.clone(),
+            Kind::Do,
+            environment_check2,
+            app_name.as_str(),
+            secrets.clone(),
+        );
 
         // nothing changed in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
@@ -677,7 +708,10 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
             logger.clone(),
             &engine_config_for_not_working_1,
         );
-        assert!(matches!(result, TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)));
+        assert!(matches!(
+            result,
+            TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)
+        ));
 
         // FAIL and Rollback again
         let result = not_working_env_2.deploy_environment(
@@ -685,7 +719,10 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
             logger.clone(),
             &engine_config_for_not_working_2,
         );
-        assert!(matches!(result, TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)));
+        assert!(matches!(
+            result,
+            TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)
+        ));
 
         // Should be working
         let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
