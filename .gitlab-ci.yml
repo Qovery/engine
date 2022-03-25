@@ -15,7 +15,6 @@ services:
 
 stages:
   - build-and-lint
-  - local-test
   - minimal-tests
   - tests
   - release
@@ -173,7 +172,7 @@ all-managed-services-mr:
   interruptible: true
 
 test-local:
-  stage: local-test
+  stage: minimal-tests
   before_script:
     - docker/wait_docker_available.sh
   script:
