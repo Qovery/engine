@@ -64,11 +64,7 @@ impl EngineRequest {
 
         let mut cloud_provider = self
             .cloud_provider
-            .to_engine_cloud_provider(
-                context.clone(),
-                self.organization_id.as_str(),
-                self.organization_long_id,
-            )
+            .to_engine_cloud_provider(context.clone(), self.organization_id.as_str(), self.organization_long_id)
             .ok_or_else(|| {
                 RequestError::CloudProvider(format!("Invalid cloud provider info: {:?}", self.cloud_provider))
             })?;
