@@ -91,7 +91,7 @@ unit-tests-mr:
 
 
 all-minimal-tests:
-  stage: tests
+  stage: minimal-tests
   retry: 0
   timeout: 3 hours
   script:
