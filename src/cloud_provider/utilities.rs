@@ -167,10 +167,7 @@ pub fn generate_supported_version(
 
             if minor_min == minor_max {
                 // add short minor format targeting latest version
-                supported_versions.insert(
-                    format!("{}.{}", major.to_string(), minor_max.to_string()),
-                    latest_major_version.clone(),
-                );
+                supported_versions.insert(format!("{}.{}", major, minor_max), latest_major_version.clone());
                 if update_min.unwrap() == update_max.unwrap() {
                     let version = format!("{}.{}.{}", major, minor_min, update_min.unwrap());
                     supported_versions.insert(version.clone(), format!("{}{}", version, suffix));
@@ -184,13 +181,8 @@ pub fn generate_supported_version(
                 for minor in minor_min..minor_max + 1 {
                     // add short minor format targeting latest version
                     supported_versions.insert(
-                        format!("{}.{}", major.to_string(), minor.to_string()),
-                        format!(
-                            "{}.{}.{}",
-                            major.to_string(),
-                            minor.to_string(),
-                            update_max.unwrap().to_string()
-                        ),
+                        format!("{}.{}", major, minor),
+                        format!("{}.{}.{}", major, minor, update_max.unwrap()),
                     );
                     if update_min.unwrap() == update_max.unwrap() {
                         let version = format!("{}.{}.{}", major, minor, update_min.unwrap());
@@ -286,7 +278,7 @@ impl FromStr for VersionsNumber {
         let major = match version_split.next() {
             Some(major) => {
                 let major = major.to_string();
-                major.replace("v", "")
+                major.replace('v', "")
             }
             None => {
                 return Err(CommandError::new_from_safe_message(format!(
@@ -298,7 +290,7 @@ impl FromStr for VersionsNumber {
 
         let minor = version_split.next().map(|minor| {
             let minor = minor.to_string();
-            minor.replace("+", "")
+            minor.replace('+', "")
         });
 
         let patch = version_split.next().map(|patch| patch.to_string());
@@ -539,12 +531,12 @@ pub fn check_domain_for(
 }
 
 pub fn sanitize_name(prefix: &str, name: &str) -> String {
-    format!("{}-{}", prefix, name).replace("_", "-")
+    format!("{}-{}", prefix, name).replace('_', "-")
 }
 
 pub fn managed_db_name_sanitizer(max_size: usize, prefix: &str, name: &str) -> String {
     let max_size = max_size - prefix.len();
-    let mut new_name = format!("{}{}", prefix, name.replace("_", "").replace("-", ""));
+    let mut new_name = format!("{}{}", prefix, name.replace('_', "").replace('-', ""));
     if new_name.chars().count() > max_size {
         new_name = new_name[..max_size].to_string();
     }

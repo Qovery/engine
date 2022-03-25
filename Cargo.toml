@@ -110,3 +110,4 @@ test-scw-all = ["test-scw-infra", "test-scw-managed-services", "test-scw-self-ho
 
 # functionnal test with only a k8s cluster as a dependency
 test-with-kube = []
+test-with-docker = []

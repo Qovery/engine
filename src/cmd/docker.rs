@@ -83,15 +83,15 @@ impl Docker {
         let args = vec!["buildx", "version"];
         let buildx_cmd_exist = docker_exec(
             &args,
-            &docker.get_all_envs(&vec![]),
+            &docker.get_all_envs(&[]),
             &mut |_| {},
             &mut |_| {},
             &CommandKiller::never(),
         );
         if let Err(_) = buildx_cmd_exist {
-            return Err(DockerError::InvalidConfig(format!(
-                "Docker buildx plugin for buildkit is not correctly installed"
-            )));
+            return Err(DockerError::InvalidConfig(
+                "Docker buildx plugin for buildkit is not correctly installed".to_string(),
+            ));
         }
 
         // In order to be able to use --cache-from --cache-to for buildkit,
@@ -108,7 +108,7 @@ impl Docker {
         ];
         let _ = docker_exec(
             &args,
-            &docker.get_all_envs(&vec![]),
+            &docker.get_all_envs(&[]),
             &mut |_| {},
             &mut |_| {},
             &CommandKiller::never(),
@@ -130,7 +130,7 @@ impl Docker {
 
     pub fn login(&self, registry: &Url) -> Result<(), DockerError> {
         info!("Docker login {} as user {}", registry, registry.username());
-        let password = urlencoding::decode(&registry.password().unwrap_or_default())
+        let password = urlencoding::decode(registry.password().unwrap_or_default())
             .unwrap_or_default()
             .to_string();
         let args = vec![
@@ -144,7 +144,7 @@ impl Docker {
 
         docker_exec(
             &args,
-            &self.get_all_envs(&vec![]),
+            &self.get_all_envs(&[]),
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
             &CommandKiller::never(),
@@ -157,8 +157,8 @@ impl Docker {
         info!("Docker check locally image exist {:?}", image);
 
         let ret = docker_exec(
-            &vec!["image", "inspect", &image.image_name()],
-            &self.get_all_envs(&vec![]),
+            &["image", "inspect", &image.image_name()],
+            &self.get_all_envs(&[]),
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
             &CommandKiller::never(),
@@ -172,8 +172,8 @@ impl Docker {
         info!("Docker check remotely image exist {:?}", image);
 
         let ret = docker_exec(
-            &vec!["manifest", "inspect", &image.image_name()],
-            &self.get_all_envs(&vec![]),
+            &["manifest", "inspect", &image.image_name()],
+            &self.get_all_envs(&[]),
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
             &CommandKiller::never(),
@@ -200,8 +200,8 @@ impl Docker {
         info!("Docker pull {:?}", image);
 
         docker_exec(
-            &vec!["pull", &image.image_name()],
-            &self.get_all_envs(&vec![]),
+            &["pull", &image.image_name()],
+            &self.get_all_envs(&[]),
             stdout_output,
             stderr_output,
             should_abort,
@@ -319,7 +319,7 @@ impl Docker {
 
         let _ = docker_exec(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
-            &self.get_all_envs(&vec![]),
+            &self.get_all_envs(&[]),
             stdout_output,
             stderr_output,
             should_abort,
@@ -384,7 +384,7 @@ impl Docker {
 
         docker_exec(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
-            &self.get_all_envs(&vec![]),
+            &self.get_all_envs(&[]),
             stdout_output,
             stderr_output,
             should_abort,
@@ -409,7 +409,7 @@ impl Docker {
 
         docker_exec(
             &args,
-            &self.get_all_envs(&vec![]),
+            &self.get_all_envs(&[]),
             stdout_output,
             stderr_output,
             should_abort,
@@ -431,7 +431,7 @@ impl Docker {
         for prune in all_prunes_commands {
             let ret = docker_exec(
                 &prune,
-                &self.get_all_envs(&vec![]),
+                &self.get_all_envs(&[]),
                 &mut |_| {},
                 &mut |_| {},
                 &CommandKiller::never(),
@@ -461,7 +461,7 @@ where
     X: FnMut(String),
 {
     let mut cmd = QoveryCommand::new("docker", args, envs);
-    let ret = cmd.exec_with_abort(stdout_output, stderr_output, &cmd_killer);
+    let ret = cmd.exec_with_abort(stdout_output, stderr_output, cmd_killer);
 
     match ret {
         Ok(_) => Ok(()),
@@ -550,7 +550,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/Dockerfile"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
-            &vec![],
+            &[],
             &image_cache,
             false,
             &mut |msg| println!("{}", msg),
@@ -565,7 +565,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/Dockerfile.buildkit"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
-            &vec![],
+            &[],
             &image_cache,
             false,
             &mut |msg| println!("{}", msg),
@@ -597,7 +597,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/Dockerfile"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
-            &vec![],
+            &[],
             &image_cache,
             false,
             &mut |msg| println!("{}", msg),
@@ -611,7 +611,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/Dockerfile.buildkit"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
-            &vec![],
+            &[],
             &image_cache,
             false,
             &mut |msg| println!("{}", msg),
@@ -643,7 +643,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/Dockerfile"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
-            &vec![],
+            &[],
             &image_cache,
             false,
             &mut |msg| println!("{}", msg),

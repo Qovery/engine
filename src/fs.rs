@@ -176,7 +176,7 @@ mod tests {
         let root_dir_path = Path::new(root_dir.as_str());
 
         let directories_to_create = vec![
-            format!("{}", root_dir),
+            root_dir.to_string(),
             format!("{}/.terraform", root_dir),
             format!("{}/.terraform/dir-1", root_dir),
             format!("{}/dir-1", root_dir),
@@ -255,7 +255,7 @@ mod tests {
         }
 
         // clean:
-        tmp_files.into_iter().for_each(|f| drop(f));
+        tmp_files.into_iter().for_each(drop);
         tmp_dir.close().expect("error closing temporary directory");
     }
 }

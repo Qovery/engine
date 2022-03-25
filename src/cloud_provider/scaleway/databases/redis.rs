@@ -176,13 +176,13 @@ impl Service for RedisScw {
         context.insert("kubeconfig_path", &kube_config_file_path);
 
         kubectl::kubectl_exec_create_namespace_without_labels(
-            &environment.namespace(),
+            environment.namespace(),
             kube_config_file_path.as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
 
         let version = self
-            .matching_correct_version(event_details.clone())?
+            .matching_correct_version(event_details)?
             .matched_version()
             .to_string();
 

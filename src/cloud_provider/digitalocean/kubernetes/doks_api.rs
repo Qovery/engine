@@ -27,7 +27,7 @@ pub fn get_doks_info_from_name(
         Err(e) => {
             let safe_message = "Error while trying to deserialize json received from Digital Ocean DOKS API";
             return Err(CommandError::new(
-                format!("{}, error: {}", safe_message.to_string(), e.to_string()),
+                format!("{}, error: {}", safe_message, e),
                 Some(safe_message.to_string()),
             ));
         }
@@ -51,7 +51,7 @@ fn get_doks_versions_from_api_output(json_content: &str) -> Result<Vec<Kubernete
         Err(e) => {
             let safe_message = "Error while trying to deserialize json received from Digital Ocean DOKS API";
             return Err(CommandError::new(
-                format!("{}, error: {}", safe_message.to_string(), e.to_string()),
+                format!("{}, error: {}", safe_message, e),
                 Some(safe_message.to_string()),
             ));
         }
@@ -91,11 +91,11 @@ pub fn get_do_kubeconfig_by_cluster_name(token: &str, cluster_name: &str) -> Res
         Err(e) => Err(CommandError::new_from_safe_message(e.message())),
     };
 
-    let clusters_copy = clusters.expect("Unable to list clusters").kubernetes_clusters.clone();
+    let clusters_copy = clusters.expect("Unable to list clusters").kubernetes_clusters;
     let cluster_name = cluster_name.trim().to_lowercase();
     match clusters_copy
         .into_iter()
-        .filter(|cluster| cluster.name.trim().to_lowercase() == cluster_name.to_string())
+        .filter(|cluster| cluster.name.trim().to_lowercase() == cluster_name)
         .collect::<Vec<KubernetesCluster>>()
         .first()
     {

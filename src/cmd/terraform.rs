@@ -70,8 +70,8 @@ fn terraform_init_validate(root_dir: &str) -> Result<(), CommandError> {
 
     match result {
         Ok(_) => Ok(()),
-        Err(Operation { error, .. }) => return Err(error),
-        Err(retry::Error::Internal(e)) => return Err(CommandError::new(e, None)),
+        Err(Operation { error, .. }) => Err(error),
+        Err(retry::Error::Internal(e)) => Err(CommandError::new(e, None)),
     }
 }
 
@@ -195,7 +195,7 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Co
     let mut cmd = QoveryCommand::new(
         "terraform",
         &args,
-        &vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())],
+        &[(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())],
     );
     cmd.set_current_dir(root_dir);
 

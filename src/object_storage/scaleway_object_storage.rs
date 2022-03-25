@@ -76,7 +76,7 @@ impl ScalewayOS {
     }
 
     fn get_endpoint_url_for_region(&self) -> String {
-        format!("https://s3.{}.scw.cloud", self.zone.region().to_string())
+        format!("https://s3.{}.scw.cloud", self.zone.region())
     }
 
     fn is_bucket_name_valid(bucket_name: &str) -> Result<(), ObjectStorageError> {
@@ -217,7 +217,7 @@ impl ObjectStorage for ScalewayOS {
                     },
                     Tag {
                         key: "Ttl".to_string(),
-                        value: format!("Ttl={}", self.bucket_ttl_in_seconds.unwrap_or_else(|| 0).to_string()),
+                        value: format!("Ttl={}", self.bucket_ttl_in_seconds.unwrap_or(0)),
                     },
                 ],
             },
@@ -263,12 +263,10 @@ impl ObjectStorage for ScalewayOS {
                 ..Default::default()
             })) {
                 Ok(_) => Ok(()),
-                Err(e) => {
-                    return Err(ObjectStorageError::CannotDeleteBucket {
-                        bucket_name: bucket_name.to_string(),
-                        raw_error_message: e.to_string(),
-                    });
-                }
+                Err(e) => Err(ObjectStorageError::CannotDeleteBucket {
+                    bucket_name: bucket_name.to_string(),
+                    raw_error_message: e.to_string(),
+                }),
             },
             BucketDeleteStrategy::Empty => Ok(()), // Do not delete the bucket
         }
@@ -331,19 +329,15 @@ impl ObjectStorage for ScalewayOS {
                             let file = File::open(path).unwrap();
                             Ok((file_path, file))
                         }
-                        Err(e) => {
-                            return Err(ObjectStorageError::CannotReadFile {
-                                bucket_name: bucket_name.to_string(),
-                                raw_error_message: e.to_string(),
-                            });
-                        }
-                    },
-                    Err(e) => {
-                        return Err(ObjectStorageError::CannotOpenFile {
+                        Err(e) => Err(ObjectStorageError::CannotReadFile {
                             bucket_name: bucket_name.to_string(),
                             raw_error_message: e.to_string(),
-                        });
-                    }
+                        }),
+                    },
+                    Err(e) => Err(ObjectStorageError::CannotOpenFile {
+                        bucket_name: bucket_name.to_string(),
+                        raw_error_message: e.to_string(),
+                    }),
                 }
             }
             Err(e) => Err(ObjectStorageError::CannotGetObjectFile {

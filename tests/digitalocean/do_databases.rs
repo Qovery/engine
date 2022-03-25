@@ -76,7 +76,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -123,7 +123,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let env_action = environment.clone();
         let env_action_delete = environment_delete.clone();
 
-        let ret = environment.deploy_environment(&env_action.clone(), logger.clone(), &engine_config);
+        let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
         let ret = environment.pause_environment(&env_action, logger.clone(), &engine_config);
@@ -135,7 +135,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
             context.clone(),
             ProviderKind::Do,
             environment.clone(),
-            app_name.clone().as_str(),
+            app_name.as_str(),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -145,11 +145,11 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets.clone(), DO_TEST_REGION) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -229,7 +229,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -381,7 +381,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 

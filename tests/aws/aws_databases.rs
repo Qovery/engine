@@ -71,7 +71,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -128,20 +128,14 @@ fn deploy_an_environment_with_db_and_pause_it() {
 
         // Check that we have actually 0 pods running for this db
         let app_name = format!("postgresql{}-0", environment.databases[0].name);
-        let ret = get_pods(
-            context.clone(),
-            Kind::Aws,
-            environment.clone(),
-            app_name.clone().as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(context, Kind::Aws, environment, app_name.as_str(), secrets);
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -213,7 +207,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let ret = environment_delete.delete_environment(&ea_for_deletion, logger, &engine_config_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -330,13 +324,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
-        match is_pod_restarted_env(
-            context.clone(),
-            Kind::Aws,
-            environment_check,
-            database_name.as_str(),
-            secrets.clone(),
-        ) {
+        match is_pod_restarted_env(context, Kind::Aws, environment_check, database_name.as_str(), secrets) {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
         }
@@ -347,7 +335,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
         ));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 

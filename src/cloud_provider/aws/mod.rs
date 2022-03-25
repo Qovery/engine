@@ -115,11 +115,9 @@ impl CloudProvider for AWS {
 
         match s {
             Ok(_x) => Ok(()),
-            Err(_) => {
-                return Err(EngineError::new_client_invalid_cloud_provider_credentials(
-                    event_details,
-                ));
-            }
+            Err(_) => Err(EngineError::new_client_invalid_cloud_provider_credentials(
+                event_details,
+            )),
         }
     }
 

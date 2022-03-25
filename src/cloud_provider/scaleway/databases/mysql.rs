@@ -203,7 +203,7 @@ impl Service for MySQLScw {
         context.insert("kubeconfig_path", &kube_config_file_path);
 
         kubectl::kubectl_exec_create_namespace_without_labels(
-            &environment.namespace(),
+            environment.namespace(),
             kube_config_file_path.as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
@@ -211,7 +211,7 @@ impl Service for MySQLScw {
         context.insert("namespace", environment.namespace());
 
         let version = &self
-            .matching_correct_version(self.is_managed_service(), event_details.clone())?
+            .matching_correct_version(self.is_managed_service(), event_details)?
             .matched_version();
         context.insert("version_major", &version.to_major_version_string());
         context.insert("version", &version.to_string()); // Scaleway needs to have major version only

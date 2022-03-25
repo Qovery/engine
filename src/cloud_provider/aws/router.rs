@@ -154,7 +154,7 @@ impl Service for RouterAws {
         let route_data_templates = self
             .routes
             .iter()
-            .map(|r| {
+            .filter_map(|r| {
                 match applications
                     .iter()
                     .find(|app| app.name() == r.application_name.as_str())
@@ -167,8 +167,6 @@ impl Service for RouterAws {
                     _ => None,
                 }
             })
-            .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
             .collect::<Vec<_>>();
 
         // autoscaler
@@ -197,7 +195,7 @@ impl Service for RouterAws {
                     self.logger().log(
                         LogLevel::Warning,
                         EngineEvent::Warning(
-                            event_details.clone(),
+                            event_details,
                             EventMessage::new_from_safe(
                                 "Error while trying to get Load Balancer hostname from Kubernetes cluster".to_string(),
                             ),
@@ -211,7 +209,7 @@ impl Service for RouterAws {
                 self.logger().log(
                     LogLevel::Warning,
                     EngineEvent::Warning(
-                        event_details.clone(),
+                        event_details,
                         EventMessage::new_from_safe("Can't fetch external ingress hostname.".to_string()),
                     ),
                 );
@@ -338,9 +336,9 @@ impl Create for RouterAws {
             crate::template::generate_and_copy_all_files_into_dir(from_dir.as_str(), workspace_dir.as_str(), context)
         {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
-                from_dir.to_string(),
-                workspace_dir.to_string(),
+                event_details,
+                from_dir,
+                workspace_dir,
                 e,
             ));
         }
@@ -365,7 +363,7 @@ impl Create for RouterAws {
             self.selector(),
         );
 
-        helm.upgrade(&chart, &vec![])
+        helm.upgrade(&chart, &[])
             .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))
     }
 

@@ -173,7 +173,7 @@ impl AwsRegion {
 
     pub fn to_string(&self) -> String {
         let enum_name = format!("{}", self);
-        format!("{}", enum_name)
+        enum_name
     }
 
     pub fn to_aws_format(&self) -> String {
@@ -377,7 +377,7 @@ impl AwsZones {
 
     pub fn from_string(zone: String) -> Result<AwsZones, RegionAndZoneErrors> {
         // create tmp region from zone and get zone name (one letter)
-        let sanitized_zone_name = zone.to_lowercase().replace("-", "").replace("_", "");
+        let sanitized_zone_name = zone.to_lowercase().replace('-', "").replace('_', "");
         let mut sanitized_region = sanitized_zone_name.clone();
         sanitized_region.pop();
 
@@ -392,7 +392,7 @@ impl AwsZones {
 
         // check if the zone is currently supported
         for zone in region.get_zones() {
-            if zone.to_string().replace("-", "") == sanitized_zone_name {
+            if zone.to_string().replace('-', "") == sanitized_zone_name {
                 return Ok(zone);
             }
         }
