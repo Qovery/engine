@@ -37,7 +37,7 @@ jobs:
           echo "########## LINTER ##########"
           cargo fmt --all -- --check --color=always  || (echo "Use cargo fmt to format your code"; exit 1)
           rustup component add clippy
-          RUSTFLAGS="--deny warnings" cargo clippy --all --all-features --lib || (echo "Solve your clippy warnings to continue"; exit 1)
+          cargo clippy --all --all-features --lib || (echo "Solve your clippy warnings to continue"; exit 1)
           echo "########## START BUILD ##########"
           cargo build --all-features
           sccache --show-stats
