@@ -148,6 +148,7 @@ impl ECR {
                 // Repo does not exist, so creating it
                 Err(RusotoError::Service(DescribeRepositoriesError::RepositoryNotFound(_))) => {
                     if let Err(err) = block_on(self.ecr_client().create_repository(crr.clone())) {
+                        debug!("after creation {:?}", err);
                         OperationResult::Retry(Err(ContainerRegistryError::CannotCreateRepository {
                             registry_name: self.name.to_string(),
                             repository_name: repository_name.to_string(),
@@ -173,6 +174,7 @@ impl ECR {
             }
         });
 
+        debug!("created {:?}", repo_created);
         match repo_created {
             Ok(_) => {}
             Err(Operation { error, .. }) => return error,
@@ -228,6 +230,7 @@ impl ECR {
         // check if the repository already exists
         let repository = self.get_repository(repository_name);
         if let Some(repo) = repository {
+            debug!("already exist {:?}", repo);
             return Ok(repo);
         }
 
