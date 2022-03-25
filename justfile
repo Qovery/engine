@@ -50,4 +50,6 @@ clippy_check:
 
 linter_fix:
     cargo fmt --all
+    cargo clippy --fix --locked --all --all-features -- -D warnings
+    cargo fmt --all
 
