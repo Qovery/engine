@@ -172,9 +172,7 @@ impl Helm {
         ];
 
         let mut stderr = String::new();
-        match helm_exec_with_output(&args, &self.get_all_envs(envs), &mut |_| {}, &mut |line| {
-            stderr.push_str(&line)
-        }) {
+        match helm_exec_with_output(&args, &self.get_all_envs(envs), &mut |_| {}, &mut |line| stderr.push_str(&line)) {
             Err(err) => {
                 stderr.push_str(&err.message());
                 let error = CommandError::new(stderr, err.message_safe());
@@ -207,9 +205,7 @@ impl Helm {
         ];
 
         let mut stderr = String::new();
-        match helm_exec_with_output(&args, &self.get_all_envs(envs), &mut |_| {}, &mut |line| {
-            stderr.push_str(&line)
-        }) {
+        match helm_exec_with_output(&args, &self.get_all_envs(envs), &mut |_| {}, &mut |line| stderr.push_str(&line)) {
             Err(err) => {
                 stderr.push_str(&err.message());
                 let error = CommandError::new(stderr, err.message_safe());
@@ -288,10 +284,7 @@ impl Helm {
                 Err(HelmError::CmdError(
                     "none".to_string(),
                     LIST,
-                    CommandError::new(
-                        format!("{}, error: {}", message_safe, e),
-                        Some(message_safe.to_string()),
-                    ),
+                    CommandError::new(format!("{}, error: {}", message_safe, e), Some(message_safe.to_string())),
                 ))
             }
         }

@@ -17,10 +17,7 @@ fn authentication_callback<'a>(
     move |remote_url, username_from_url, allowed_types| {
         // If we have changed remote, reset our available auth methods
         if remote_url != current_credentials.0 {
-            current_credentials = (
-                remote_url.to_string(),
-                get_credentials(username_from_url.unwrap_or("git")),
-            );
+            current_credentials = (remote_url.to_string(), get_credentials(username_from_url.unwrap_or("git")));
         }
         let auth_methods = &mut current_credentials.1;
 

@@ -78,11 +78,7 @@ pub trait Service: ToTransmitter {
             true => fqdn.to_string(),
             false => match is_managed {
                 true => format!("{}-dns.{}.svc.cluster.local", self.id(), target.environment.namespace()),
-                false => format!(
-                    "{}.{}.svc.cluster.local",
-                    self.sanitized_name(),
-                    target.environment.namespace()
-                ),
+                false => format!("{}.{}.svc.cluster.local", self.sanitized_name(), target.environment.namespace()),
             },
         }
     }

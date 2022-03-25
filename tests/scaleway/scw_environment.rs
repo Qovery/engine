@@ -19,7 +19,57 @@ use tracing::{span, warn, Level};
 // Note: All those tests relies on a test cluster running on Scaleway infrastructure.
 // This cluster should be live in order to have those tests passing properly.
 
-#[cfg(feature = "test-scw-self-hosted")]
+#[cfg(feature = "test-scw-minimal")]
+#[named]
+#[test]
+fn scaleway_test_build_phase() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
+                .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID")
+                .as_str(),
+        );
+        let engine_config = scw_default_engine_config(&context, logger.clone());
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
+
+        let env_action = environment.clone();
+
+        let (env, ret) = environment.build_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        // Check the the image exist in the registry
+        let img_exist = engine_config
+            .container_registry()
+            .does_image_exists(&env.applications[0].get_build().image);
+        assert!(img_exist);
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-minimal")]
 #[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {

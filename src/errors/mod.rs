@@ -732,10 +732,7 @@ impl EngineError {
         let mut message = vec!["There is not enough resources on the cluster:".to_string()];
 
         if requested_cpu > free_cpu {
-            message.push(format!(
-                "{} CPU requested and only {} CPU available",
-                free_cpu, requested_cpu
-            ));
+            message.push(format!("{} CPU requested and only {} CPU available", free_cpu, requested_cpu));
         }
 
         if requested_ram_in_mib > free_ram_in_mib {
@@ -849,10 +846,7 @@ impl EngineError {
         event_details: EventDetails,
         kubernetes_raw_version: String,
     ) -> EngineError {
-        let message = format!(
-            "Unable to determine Kubernetes master version: `{}`",
-            kubernetes_raw_version,
-        );
+        let message = format!("Unable to determine Kubernetes master version: `{}`", kubernetes_raw_version,);
 
         EngineError::new(
             event_details,
@@ -903,10 +897,7 @@ impl EngineError {
         event_details: EventDetails,
         kubelet_worker_raw_version: String,
     ) -> EngineError {
-        let message = format!(
-            "Unable to determine Kubelet worker version: `{}`",
-            kubelet_worker_raw_version,
-        );
+        let message = format!("Unable to determine Kubelet worker version: `{}`", kubelet_worker_raw_version,);
 
         EngineError::new(
             event_details,
@@ -972,10 +963,7 @@ impl EngineError {
     /// * `event_details`: Error linked event details.
     /// * `pod_name`: Pod name having PDB in an invalid state.
     pub fn new_k8s_pod_disruption_budget_invalid_state(event_details: EventDetails, pod_name: String) -> EngineError {
-        let message = format!(
-            "Unable to upgrade Kubernetes, pdb for app `{}` in invalid state.",
-            pod_name,
-        );
+        let message = format!("Unable to upgrade Kubernetes, pdb for app `{}` in invalid state.", pod_name,);
 
         EngineError::new(
             event_details,
@@ -1357,10 +1345,7 @@ impl EngineError {
         requested_version: String,
         raw_error: CommandError,
     ) -> EngineError {
-        let message = format!(
-            "Error, node is not ready with the requested version `{}`.",
-            requested_version
-        );
+        let message = format!("Error, node is not ready with the requested version `{}`.", requested_version);
 
         EngineError::new(
             event_details,
@@ -1510,10 +1495,7 @@ impl EngineError {
         to_dir: String,
         raw_error: CommandError,
     ) -> EngineError {
-        let message = format!(
-            "Error while trying to copy all files from `{}` to `{}`.",
-            from_dir, to_dir
-        );
+        let message = format!("Error while trying to copy all files from `{}` to `{}`.", from_dir, to_dir);
 
         EngineError::new(
             event_details,
@@ -2071,10 +2053,7 @@ impl EngineError {
         raw_version_number: String,
         raw_error: CommandError,
     ) -> EngineError {
-        let message = format!(
-            "Error while trying to parse `{}` to a version number.",
-            raw_version_number
-        );
+        let message = format!("Error while trying to parse `{}` to a version number.", raw_version_number);
 
         EngineError::new(
             event_details,
@@ -2199,10 +2178,7 @@ impl EngineError {
         event_details: EventDetails,
         requested_language: String,
     ) -> EngineError {
-        let message = format!(
-            "Cannot build: Invalid buildpacks language format: `{}`.",
-            requested_language
-        );
+        let message = format!("Cannot build: Invalid buildpacks language format: `{}`.", requested_language);
 
         EngineError::new(
             event_details,
@@ -2481,10 +2457,7 @@ impl EngineError {
         registry_name: String,
         raw_error: ContainerRegistryError,
     ) -> EngineError {
-        let message = format!(
-            "Error, trying to create registry `{}` in `{}`.",
-            registry_name, repository_name
-        );
+        let message = format!("Error, trying to create registry `{}` in `{}`.", registry_name, repository_name);
 
         EngineError::new(
             event_details,
@@ -2509,10 +2482,7 @@ impl EngineError {
         repository_name: String,
         raw_error: ContainerRegistryError,
     ) -> EngineError {
-        let message = format!(
-            "Error, trying to set lifecycle policy repository `{}`.",
-            repository_name,
-        );
+        let message = format!("Error, trying to set lifecycle policy repository `{}`.", repository_name,);
 
         EngineError::new(
             event_details,

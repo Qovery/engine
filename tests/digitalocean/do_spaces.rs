@@ -178,10 +178,7 @@ fn test_put_file() {
 
     // validate:
     assert!(result.is_ok());
-    assert_eq!(
-        true,
-        spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok()
-    );
+    assert_eq!(true, spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok());
 
     // clean-up:
     spaces
@@ -226,10 +223,7 @@ fn test_get_file() {
 
     // validate:
     assert!(result.is_ok());
-    assert_eq!(
-        true,
-        spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok()
-    );
+    assert_eq!(true, spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok());
 
     // clean-up:
     spaces

@@ -464,18 +464,8 @@ mod tests {
                 EventMessageVerbosity::SafeOnly,
                 "safe".to_string(),
             ),
-            (
-                "safe".to_string(),
-                None,
-                EventMessageVerbosity::SafeOnly,
-                "safe".to_string(),
-            ),
-            (
-                "safe".to_string(),
-                None,
-                EventMessageVerbosity::FullDetails,
-                "safe".to_string(),
-            ),
+            ("safe".to_string(), None, EventMessageVerbosity::SafeOnly, "safe".to_string()),
+            ("safe".to_string(), None, EventMessageVerbosity::FullDetails, "safe".to_string()),
             (
                 "safe".to_string(),
                 Some("raw".to_string()),
@@ -522,30 +512,12 @@ mod tests {
                 Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
                 InfrastructureStep::LoadConfiguration.to_string(),
             ),
-            (
-                Stage::Environment(EnvironmentStep::Pause),
-                EnvironmentStep::Pause.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Resume),
-                EnvironmentStep::Resume.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Build),
-                EnvironmentStep::Build.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Delete),
-                EnvironmentStep::Delete.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Update),
-                EnvironmentStep::Update.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Deploy),
-                EnvironmentStep::Deploy.to_string(),
-            ),
+            (Stage::Environment(EnvironmentStep::Pause), EnvironmentStep::Pause.to_string()),
+            (Stage::Environment(EnvironmentStep::Resume), EnvironmentStep::Resume.to_string()),
+            (Stage::Environment(EnvironmentStep::Build), EnvironmentStep::Build.to_string()),
+            (Stage::Environment(EnvironmentStep::Delete), EnvironmentStep::Delete.to_string()),
+            (Stage::Environment(EnvironmentStep::Update), EnvironmentStep::Update.to_string()),
+            (Stage::Environment(EnvironmentStep::Deploy), EnvironmentStep::Deploy.to_string()),
         ];
 
         for tc in test_cases {

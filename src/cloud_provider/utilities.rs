@@ -255,9 +255,7 @@ impl FromStr for VersionsNumber {
 
     fn from_str(version: &str) -> Result<Self, Self::Err> {
         if version.trim() == "" {
-            return Err(CommandError::new_from_safe_message(
-                "version cannot be empty".to_string(),
-            ));
+            return Err(CommandError::new_from_safe_message("version cannot be empty".to_string()));
         }
 
         let mut version_split = version.splitn(4, '.').map(|v| v.trim());
@@ -401,10 +399,7 @@ pub fn check_cname_for(
         match get_cname_record_value(next_resolver(), cname_to_check) {
             Some(domain) => OperationResult::Ok(domain),
             None => {
-                let msg = format!(
-                    "Cannot find domain under CNAME {}. Retrying in 5 seconds...",
-                    cname_to_check
-                );
+                let msg = format!("Cannot find domain under CNAME {}. Retrying in 5 seconds...", cname_to_check);
                 send_deployment_progress(msg.as_str());
                 OperationResult::Retry(msg)
             }
@@ -555,10 +550,7 @@ pub fn print_action(
     event_details: EventDetails,
     logger: &dyn Logger,
 ) {
-    let msg = format!(
-        "{}.{}.{} called for {}",
-        cloud_provider_name, struct_name, fn_name, item_name
-    );
+    let msg = format!("{}.{}.{} called for {}", cloud_provider_name, struct_name, fn_name, item_name);
     match fn_name.contains("error") {
         true => logger.log(
             LogLevel::Warning,
@@ -597,23 +589,17 @@ mod tests {
         let test_cases = vec![
             TestCase {
                 input: "",
-                expected_output: Err(CommandError::new_from_safe_message(
-                    "version cannot be empty".to_string(),
-                )),
+                expected_output: Err(CommandError::new_from_safe_message("version cannot be empty".to_string())),
                 description: "empty version str",
             },
             TestCase {
                 input: "    ",
-                expected_output: Err(CommandError::new_from_safe_message(
-                    "version cannot be empty".to_string(),
-                )),
+                expected_output: Err(CommandError::new_from_safe_message("version cannot be empty".to_string())),
                 description: "version a tab str",
             },
             TestCase {
                 input: " ",
-                expected_output: Err(CommandError::new_from_safe_message(
-                    "version cannot be empty".to_string(),
-                )),
+                expected_output: Err(CommandError::new_from_safe_message("version cannot be empty".to_string())),
                 description: "version as a space str",
             },
             TestCase {

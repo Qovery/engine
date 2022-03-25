@@ -40,11 +40,7 @@ fn test_delete_bucket() {
     let result = aws_os.delete_bucket(bucket_name.as_str());
 
     // validate:
-    assert!(
-        result.is_ok(),
-        "Delete bucket failed in `{}`",
-        aws_region.to_aws_format()
-    );
+    assert!(result.is_ok(), "Delete bucket failed in `{}`", aws_region.to_aws_format());
     assert!(
         !aws_os.bucket_exists(bucket_name.as_str()),
         "Delete bucket failed in `{}`, bucket still exists",
@@ -83,11 +79,7 @@ fn test_create_bucket() {
     let result = aws_os.create_bucket(bucket_name.as_str());
 
     // validate:
-    assert!(
-        result.is_ok(),
-        "Create bucket failed in `{}`",
-        aws_region.to_aws_format()
-    );
+    assert!(result.is_ok(), "Create bucket failed in `{}`", aws_region.to_aws_format());
     assert!(
         aws_os.bucket_exists(bucket_name.as_str()),
         "Create bucket failed in `{}`, bucket doesn't exist",
@@ -95,13 +87,9 @@ fn test_create_bucket() {
     );
 
     // clean-up:
-    aws_os.delete_bucket(bucket_name.as_str()).unwrap_or_else(|_| {
-        panic!(
-            "error deleting S3 bucket `{}` in `{}`",
-            bucket_name,
-            aws_region.to_aws_format()
-        )
-    });
+    aws_os
+        .delete_bucket(bucket_name.as_str())
+        .unwrap_or_else(|_| panic!("error deleting S3 bucket `{}` in `{}`", bucket_name, aws_region.to_aws_format()));
 }
 
 #[cfg(feature = "test-aws-infra")]

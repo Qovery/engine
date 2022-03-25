@@ -79,10 +79,7 @@ pub fn aws_helm_charts(
     let qovery_terraform_config: AwsQoveryTerraformConfig = match serde_json::from_reader(reader) {
         Ok(config) => config,
         Err(e) => {
-            let message_safe = format!(
-                "Error while parsing terraform config file {}",
-                qovery_terraform_config_file
-            );
+            let message_safe = format!("Error while parsing terraform config file {}", qovery_terraform_config_file);
             return Err(CommandError::new(
                 format!("{}, error: {:?}", message_safe, e),
                 Some(message_safe),

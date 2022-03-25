@@ -77,12 +77,7 @@ impl ECR {
     }
 
     pub fn credentials(&self) -> StaticProvider {
-        StaticProvider::new(
-            self.access_key_id.to_string(),
-            self.secret_access_key.to_string(),
-            None,
-            None,
-        )
+        StaticProvider::new(self.access_key_id.to_string(), self.secret_access_key.to_string(), None, None)
     }
 
     pub fn client(&self) -> Client {

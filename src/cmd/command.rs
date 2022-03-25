@@ -352,29 +352,17 @@ mod tests {
     #[test]
     fn test_command_with_timeout() {
         let mut cmd = QoveryCommand::new("sleep", &["120"], &[]);
-        let ret = cmd.exec_with_abort(
-            &mut |_| {},
-            &mut |_| {},
-            &CommandKiller::from_timeout(Duration::from_secs(2)),
-        );
+        let ret = cmd.exec_with_abort(&mut |_| {}, &mut |_| {}, &CommandKiller::from_timeout(Duration::from_secs(2)));
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
 
         let mut cmd = QoveryCommand::new("sh", &["-c", "cat /dev/urandom | grep -a --null-data ."], &[]);
-        let ret = cmd.exec_with_abort(
-            &mut |_| {},
-            &mut |_| {},
-            &CommandKiller::from_timeout(Duration::from_secs(2)),
-        );
+        let ret = cmd.exec_with_abort(&mut |_| {}, &mut |_| {}, &CommandKiller::from_timeout(Duration::from_secs(2)));
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
 
         let mut cmd = QoveryCommand::new("sleep", &["1"], &[]);
-        let ret = cmd.exec_with_abort(
-            &mut |_| {},
-            &mut |_| {},
-            &CommandKiller::from_timeout(Duration::from_secs(2)),
-        );
+        let ret = cmd.exec_with_abort(&mut |_| {}, &mut |_| {}, &CommandKiller::from_timeout(Duration::from_secs(2)));
         assert!(ret.is_ok());
     }
 

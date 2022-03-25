@@ -904,13 +904,7 @@ where
         }
     }
 
-    check_kubernetes_upgrade_status(
-        requested_version,
-        masters_version,
-        workers_version,
-        event_details,
-        logger,
-    )
+    check_kubernetes_upgrade_status(requested_version, masters_version, workers_version, event_details, logger)
 }
 
 pub fn is_kubernetes_upgradable<P>(
@@ -936,10 +930,7 @@ where
                 Ok(())
             }
         },
-        Err(err) => Err(EngineError::new_k8s_cannot_retrieve_pods_disruption_budget(
-            event_details,
-            err,
-        )),
+        Err(err) => Err(EngineError::new_k8s_cannot_retrieve_pods_disruption_budget(event_details, err)),
     }
 }
 

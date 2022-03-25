@@ -407,13 +407,7 @@ impl Docker {
         let mut args = vec!["push"];
         args.extend(image_names.iter().map(|x| x.as_str()));
 
-        docker_exec(
-            &args,
-            &self.get_all_envs(&[]),
-            stdout_output,
-            stderr_output,
-            should_abort,
-        )
+        docker_exec(&args, &self.get_all_envs(&[]), stdout_output, stderr_output, should_abort)
     }
 
     pub fn prune_images(&self) -> Result<(), DockerError> {

@@ -306,20 +306,14 @@ impl Kapsule {
                 &cluster_id,
                 &cluster_info.name.unwrap_or_else(|| "unknown cluster".to_string())
             );
-            return Err(ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(
-                msg.clone(),
-                Some(msg),
-            )));
+            return Err(ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(msg.clone(), Some(msg))));
         }
 
         // create sanitized nodegroup pools
         let mut nodegroup_pool: Vec<ScwNodeGroup> = Vec::with_capacity(pools.total_count.unwrap_or(0 as f32) as usize);
         for ng in pools.pools.unwrap() {
             if ng.id.is_none() {
-                let msg = format!(
-                    "error while trying to validate SCW pool ID from cluster {}",
-                    &cluster_id
-                );
+                let msg = format!("error while trying to validate SCW pool ID from cluster {}", &cluster_id);
                 return Err(ScwNodeGroupErrors::NodeGroupValidationError(CommandError::new(
                     msg.clone(),
                     Some(msg),
@@ -342,10 +336,8 @@ impl Kapsule {
             Err(e) => {
                 return Err(match e {
                     Error::ResponseError(x) => {
-                        let msg_with_error = format!(
-                            "Error code while getting node group: {}, API message: {} ",
-                            x.status, x.content
-                        );
+                        let msg_with_error =
+                            format!("Error code while getting node group: {}, API message: {} ", x.status, x.content);
                         match x.status {
                             StatusCode::NOT_FOUND => ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(
                                 msg_with_error,
@@ -451,14 +443,8 @@ impl Kapsule {
 
         context.insert("managed_dns", &managed_dns_list);
         context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
-        context.insert(
-            "managed_dns_domains_root_helm_format",
-            &managed_dns_domains_root_helm_format,
-        );
-        context.insert(
-            "managed_dns_domains_terraform_format",
-            &managed_dns_domains_terraform_format,
-        );
+        context.insert("managed_dns_domains_root_helm_format", &managed_dns_domains_root_helm_format);
+        context.insert("managed_dns_domains_terraform_format", &managed_dns_domains_terraform_format);
         context.insert(
             "managed_dns_domains_root_terraform_format",
             &managed_dns_domains_root_terraform_format,
@@ -492,29 +478,17 @@ impl Kapsule {
         context.insert("qovery_nats_url", self.options.qovery_nats_url.as_str());
         context.insert("qovery_nats_user", self.options.qovery_nats_user.as_str());
         context.insert("qovery_nats_password", self.options.qovery_nats_password.as_str());
-        context.insert(
-            "engine_version_controller_token",
-            &self.options.engine_version_controller_token,
-        );
-        context.insert(
-            "agent_version_controller_token",
-            &self.options.agent_version_controller_token,
-        );
+        context.insert("engine_version_controller_token", &self.options.engine_version_controller_token);
+        context.insert("agent_version_controller_token", &self.options.agent_version_controller_token);
 
         // Qovery features
-        context.insert(
-            "log_history_enabled",
-            &self.context.is_feature_enabled(&Features::LogsHistory),
-        );
+        context.insert("log_history_enabled", &self.context.is_feature_enabled(&Features::LogsHistory));
         context.insert(
             "metrics_history_enabled",
             &self.context.is_feature_enabled(&Features::MetricsHistory),
         );
         if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert(
-                "resource_expiration_in_seconds",
-                &self.context.resource_expiration_in_seconds(),
-            )
+            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
         }
 
         // AWS S3 tfstates storage tfstates
@@ -734,10 +708,7 @@ impl Kapsule {
             }
             Err(e) => self.logger().log(
                 LogLevel::Warning,
-                EngineEvent::Error(
-                    EngineError::new_terraform_state_does_not_exist(event_details.clone(), e),
-                    None,
-                ),
+                EngineEvent::Error(EngineError::new_terraform_state_does_not_exist(event_details.clone(), e), None),
             ),
         };
 
@@ -775,10 +746,7 @@ impl Kapsule {
 
         // terraform deployment dedicated to cloud resources
         if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
-            return Err(EngineError::new_terraform_error_while_executing_pipeline(
-                event_details,
-                e,
-            ));
+            return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
         }
 
         // push config file to object storage
@@ -1288,10 +1256,7 @@ impl Kapsule {
                 );
                 Ok(())
             }
-            Err(e) => Err(EngineError::new_terraform_error_while_executing_pipeline(
-                event_details,
-                e,
-            )),
+            Err(e) => Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e)),
         }
     }
 
@@ -1481,11 +1446,8 @@ impl Kapsule {
             );
 
             // delete custom metrics api to avoid stale namespaces on deletion
-            let helm = Helm::new(
-                &kubeconfig_path,
-                &self.cloud_provider.credentials_environment_variables(),
-            )
-            .map_err(|e| to_engine_error(&event_details, e))?;
+            let helm = Helm::new(&kubeconfig_path, &self.cloud_provider.credentials_environment_variables())
+                .map_err(|e| to_engine_error(&event_details, e))?;
             let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
             helm.uninstall(&chart, &[])
                 .map_err(|e| to_engine_error(&event_details, e))?;
@@ -1889,10 +1851,7 @@ impl Kubernetes for Kapsule {
                 }
             },
             Err(e) => {
-                return Err(EngineError::new_terraform_error_while_executing_pipeline(
-                    event_details,
-                    e,
-                ));
+                return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
             }
         }
 

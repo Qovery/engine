@@ -270,10 +270,7 @@ impl Service for ApplicationAws {
         context.insert("start_timeout_in_seconds", &self.start_timeout_in_seconds);
 
         if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert(
-                "resource_expiration_in_seconds",
-                &self.context.resource_expiration_in_seconds(),
-            )
+            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
         }
 
         Ok(context)
@@ -341,12 +338,7 @@ impl Pause for ApplicationAws {
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
-            scale_down_application(
-                target,
-                self,
-                0,
-                if self.is_stateful() { Statefulset } else { Deployment },
-            )
+            scale_down_application(target, self, 0, if self.is_stateful() { Statefulset } else { Deployment })
         })
     }
 

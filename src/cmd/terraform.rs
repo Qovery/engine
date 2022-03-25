@@ -192,11 +192,7 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Co
 
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    let mut cmd = QoveryCommand::new(
-        "terraform",
-        &args,
-        &[(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())],
-    );
+    let mut cmd = QoveryCommand::new("terraform", &args, &[(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())]);
     cmd.set_current_dir(root_dir);
 
     let result = cmd.exec_with_output(

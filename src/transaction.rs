@@ -93,13 +93,23 @@ impl<'a> Transaction<'a> {
         )
     }
 
+    pub fn build_environment(
+        &mut self,
+        environment: &Rc<RefCell<Environment>>,
+        option: DeploymentOption,
+    ) -> Result<(), EnvironmentError> {
+        self.steps.push(Step::BuildEnvironment(environment.clone(), option));
+
+        Ok(())
+    }
+
     pub fn deploy_environment_with_options(
         &mut self,
         environment: &Rc<RefCell<Environment>>,
         option: DeploymentOption,
     ) -> Result<(), EnvironmentError> {
         // add build step
-        self.steps.push(Step::BuildEnvironment(environment.clone(), option));
+        self.build_environment(environment, option)?;
 
         // add deployment step
         self.steps.push(Step::DeployEnvironment(environment.clone()));
@@ -468,12 +478,8 @@ impl<'a> Transaction<'a> {
             T: Service + ?Sized,
         {
             let lh = ListenersHelper::new(kubernetes.listeners());
-            let progress_info = ProgressInfo::new(
-                service.progress_scope(),
-                ProgressLevel::Info,
-                None::<&str>,
-                execution_id,
-            );
+            let progress_info =
+                ProgressInfo::new(service.progress_scope(), ProgressLevel::Info, None::<&str>, execution_id);
 
             if !is_error {
                 match action {
@@ -511,23 +517,11 @@ impl<'a> Transaction<'a> {
                 // !!! don't change the order
                 // terminal update
                 for service in environment.stateful_services() {
-                    send_progress(
-                        self.engine.kubernetes(),
-                        &environment.action,
-                        service,
-                        execution_id,
-                        true,
-                    );
+                    send_progress(self.engine.kubernetes(), &environment.action, service, execution_id, true);
                 }
 
                 for service in environment.stateless_services() {
-                    send_progress(
-                        self.engine.kubernetes(),
-                        &environment.action,
-                        service,
-                        execution_id,
-                        true,
-                    );
+                    send_progress(self.engine.kubernetes(), &environment.action, service, execution_id, true);
                 }
 
                 return rollback_result;
@@ -535,23 +529,11 @@ impl<'a> Transaction<'a> {
             _ => {
                 // terminal update
                 for service in environment.stateful_services() {
-                    send_progress(
-                        self.engine.kubernetes(),
-                        &environment.action,
-                        service,
-                        execution_id,
-                        false,
-                    );
+                    send_progress(self.engine.kubernetes(), &environment.action, service, execution_id, false);
                 }
 
                 for service in environment.stateless_services() {
-                    send_progress(
-                        self.engine.kubernetes(),
-                        &environment.action,
-                        service,
-                        execution_id,
-                        false,
-                    );
+                    send_progress(self.engine.kubernetes(), &environment.action, service, execution_id, false);
                 }
             }
         };

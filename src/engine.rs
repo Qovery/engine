@@ -7,6 +7,7 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::CloudProvider;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::ContainerRegistry;
+use crate::dns_provider::errors::DnsProviderError;
 use crate::dns_provider::DnsProvider;
 use crate::errors::EngineError;
 use crate::models::Context;
@@ -20,7 +21,7 @@ pub enum EngineConfigError {
     #[error("Cloud provider is not valid error: {0}")]
     CloudProviderNotValid(EngineError),
     #[error("DNS provider is not valid error: {0}")]
-    DnsProviderNotValid(EngineError),
+    DnsProviderNotValid(DnsProviderError),
     #[error("Kubernetes is not valid error: {0}")]
     KubernetesNotValid(EngineError),
 }
