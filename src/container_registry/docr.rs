@@ -201,7 +201,7 @@ impl ContainerRegistry for DOCR {
         let url = format!(
             "https://api.digitalocean.com/v2/registry/{}/repositories/{}/tags",
             image.registry_name,
-            image.name()
+            image.name_without_repository()
         );
 
         let res = reqwest::blocking::Client::new()
