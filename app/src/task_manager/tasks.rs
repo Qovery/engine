@@ -18,7 +18,7 @@ use qovery_engine::object_storage::errors::ObjectStorageError;
 use qovery_engine::transaction::{RollbackError, StepName, Transaction, TransactionResult};
 
 use crate::task_manager::models::{Action, Archive, EngineRequest};
-use crate::task_manager::task_manager::{ActionContext, State, Status, Task};
+use crate::task_manager::scheduler::{ActionContext, State, Status, Task};
 use qovery_engine::object_storage::ObjectStorage;
 use qovery_engine::transaction::StepName::Waiting;
 
@@ -158,12 +158,7 @@ impl Task for InfrastructureTask {
             Action::Delete => tx.delete_kubernetes(),
         };
 
-        handle_transaction_result(
-            tx.commit(),
-            self,
-            &self.request,
-            self.action_context(ProgressLevel::Info),
-        );
+        handle_transaction_result(tx.commit(), self, &self.request, self.action_context(ProgressLevel::Info));
 
         match qovery_engine::fs::create_workspace_archive(
             engine.context().workspace_root_dir(),
@@ -327,27 +322,23 @@ impl Task for EnvironmentTask {
                 }
             }
         };
-        let mut tx = match Transaction::new(
-            &engine,
-            logger.clone(),
-            self.cancel_checker(),
-            Box::new(task_status_updater),
-        ) {
-            Ok(transaction) => transaction,
-            Err(err) => {
-                send_progress(
-                    self,
-                    &self.request,
-                    self.action_context(ProgressLevel::Error),
-                    Some(format!("failed to create engine transaction {:?}", err)),
-                    true,
-                    true,
-                    false,
-                );
+        let mut tx =
+            match Transaction::new(&engine, logger.clone(), self.cancel_checker(), Box::new(task_status_updater)) {
+                Ok(transaction) => transaction,
+                Err(err) => {
+                    send_progress(
+                        self,
+                        &self.request,
+                        self.action_context(ProgressLevel::Error),
+                        Some(format!("failed to create engine transaction {:?}", err)),
+                        true,
+                        true,
+                        false,
+                    );
 
-                return;
-            }
-        };
+                    return;
+                }
+            };
 
         let environment_action = match self.request.environment() {
             None => {
@@ -497,35 +488,19 @@ where
     }
 
     fn error(&self, info: ProgressInfo) {
-        self.send(Status::new(
-            State::Error,
-            info.message.clone(),
-            self.action_context(info),
-        ));
+        self.send(Status::new(State::Error, info.message.clone(), self.action_context(info)));
     }
 
     fn deployed(&self, info: ProgressInfo) {
-        self.send(Status::new(
-            State::Deployed,
-            info.message.clone(),
-            self.action_context(info),
-        ));
+        self.send(Status::new(State::Deployed, info.message.clone(), self.action_context(info)));
     }
 
     fn paused(&self, info: ProgressInfo) {
-        self.send(Status::new(
-            State::Paused,
-            info.message.clone(),
-            self.action_context(info),
-        ));
+        self.send(Status::new(State::Paused, info.message.clone(), self.action_context(info)));
     }
 
     fn deleted(&self, info: ProgressInfo) {
-        self.send(Status::new(
-            State::Deleted,
-            info.message.clone(),
-            self.action_context(info),
-        ));
+        self.send(Status::new(State::Deleted, info.message.clone(), self.action_context(info)));
     }
 
     fn deployment_error(&self, info: ProgressInfo) {
@@ -537,19 +512,11 @@ where
     }
 
     fn pause_error(&self, info: ProgressInfo) {
-        self.send(Status::new(
-            State::PauseError,
-            info.message.clone(),
-            self.action_context(info),
-        ));
+        self.send(Status::new(State::PauseError, info.message.clone(), self.action_context(info)));
     }
 
     fn delete_error(&self, info: ProgressInfo) {
-        self.send(Status::new(
-            State::DeleteError,
-            info.message.clone(),
-            self.action_context(info),
-        ));
+        self.send(Status::new(State::DeleteError, info.message.clone(), self.action_context(info)));
     }
 }
 
@@ -653,14 +620,11 @@ fn format_engine_error_output(engine_error: EngineError, rollback_error: Option<
     };
 
     let rollback_engine_error_message = match rollback_error {
-        Some(rollback_error) => match rollback_error {
-            RollbackError::CommitError(rollback_engine_error) => Some(format!(
-                "{} (event_details: {:?})",
-                rollback_engine_error.message(),
-                rollback_engine_error.event_details(),
-            )),
-            _ => None,
-        },
+        Some(RollbackError::CommitError(rollback_engine_error)) => Some(format!(
+            "{} (event_details: {:?})",
+            rollback_engine_error.message(),
+            rollback_engine_error.event_details(),
+        )),
         _ => None,
     };
 

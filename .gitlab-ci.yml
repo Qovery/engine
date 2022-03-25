@@ -15,11 +15,8 @@ services:
 
 stages:
   - build-and-lint
-  - local-test
+  - minimal-tests
   - tests
-  - upgrade-dev
-  - e2e-tests
-  - downgrade-dev
   - release
   - deploy
   - deploy-all-clusters
@@ -91,6 +88,35 @@ unit-tests-mr:
     expire_in: 1 week
   interruptible: true
 
+
+all-minimal-tests:
+  stage: minimal-tests
+  retry: 0
+  timeout: 3 hours
+  script:
+    - ./helper.sh all_minimal_tests
+  only:
+    refs:
+      - dev
+  when: always
+  tags:
+    - vm-2cpu-4gmem-0g
+  except:
+    variables:
+      - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
+  dependencies:
+    - test-local
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 1 week
+  interruptible: true
+
 all-self-hosted-mr:
   stage: tests
   retry: 0
@@ -146,7 +172,7 @@ all-managed-services-mr:
   interruptible: true
 
 test-local:
-  stage: local-test
+  stage: minimal-tests
   before_script:
     - docker/wait_docker_available.sh
   script:
@@ -594,61 +620,7 @@ scw-self-hosted:
     expire_in: 2 week
   interruptible: true
 
-upgrade-engine-dev:
-  stage: upgrade-dev
-  retry: 1
-  before_script:
-    - apk add bash
-  script:
-    - $ROLLBACK_IMAGE=$(kubectl -n qovery get statefulset qovery-engine -ojson | jq --raw-output .spec.template.spec.containers[0].image)
-    - ./helper.sh upgrade_on_dev || ./helper.sh downgrade_on_dev $ROLLBACK_IMAGE
-  tags:
-    - vm-1cpu-1gmem-0g
-  when: manual
-  only:
-    refs:
-      - dev
 
-e2e-tests:
-  stage: e2e-tests
-  image: golang:1.16-alpine
-  allow_failure: true
-  dependencies:
-    - upgrade-engine-dev
-  tags:
-    - vm-2cpu-2gmem-0g
-  before_script:
-    - apk add bash
-    - echo -e "machine gitlab.com\nlogin gitlab-ci-token\npassword ${CI_JOB_TOKEN}" > ~/.netrc
-    - ./helper.sh await_docker
-  script:
-    - apk add --no-cache git build-base
-    - mkdir /usr/local/qovery
-    - cd /usr/local/qovery
-    - git clone https://gitlab.com/qovery/quality-streets.git
-    - cd quality-streets/e2e_tests/test
-    - go test -timeout 1800s -v
-  only:
-    refs:
-      - dev
-
-downgrade-engine-dev:
-  stage: downgrade-dev
-  retry: 1
-  dependencies:
-    - e2e-tests
-  before_script:
-    - apk add bash
-  script:
-    - ./helper.sh downgrade_on_dev $ROLLBACK_IMAGE
-  tags:
-    - vm-1cpu-1gmem-0g
-  when: manual
-  only:
-    refs:
-      - dev
-
-#
 # Main branch
 #
 

@@ -38,10 +38,7 @@ impl Logger for NatsLogger {
                             event_details.clone(),
                             error_message_qovery,
                             error_message_user,
-                            Some(CommandError::new(
-                                message_raw.to_string(),
-                                Some(message_safe.to_string()),
-                            )),
+                            Some(CommandError::new(message_raw, Some(message_safe.to_string()))),
                             None,
                             None,
                         ),
@@ -57,10 +54,7 @@ impl Logger for NatsLogger {
                         event_details.clone(),
                         error_message_qovery,
                         error_message_user,
-                        Some(CommandError::new(
-                            message_raw.to_string(),
-                            Some(message_safe.to_string()),
-                        )),
+                        Some(CommandError::new(message_raw.to_string(), Some(message_safe.to_string()))),
                         None,
                         None,
                     ),

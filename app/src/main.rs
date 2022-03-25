@@ -41,7 +41,7 @@ use crate::models::{StatusResponse, TaskSelector};
 use crate::nats::{subjects, Connection, Message};
 use crate::subjects::Subject;
 use crate::task_manager::models::EngineRequest;
-use crate::task_manager::task_manager::{Status, Task, TaskManager};
+use crate::task_manager::scheduler::{Status, Task, TaskManager};
 use crate::task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 use crate::utils::{log_no_spam_builder, LogErrorOnDrop};
 
@@ -131,7 +131,7 @@ fn check_versions_from(path: &str) -> Result<(), EngineInitError> {
 
         // check if the binary need to be tested
         if bin_to_check.contains(&binary_name) {
-            let result_cmd = cmd::command::run_version_command_for(&binary_name);
+            let result_cmd = cmd::command::run_version_command_for(binary_name);
             let version = lowercase.split('=').last().unwrap_or("").replace('"', "");
 
             if !result_cmd.contains(&version) {
@@ -188,7 +188,7 @@ pub fn main() -> io::Result<()> {
     let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or_else(|_| "lib".to_string());
     let docker_host = env::var("DOCKER_HOST").map(|val| Url::parse(&val).unwrap()).ok();
     let workspace_root_dir =
-        env::var("WORKSPACE_ROOT_DIR").unwrap_or(home_dir().unwrap().to_string_lossy().into_owned());
+        env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_string_lossy().into_owned());
 
     let nats_credentials = match (nats_login, nats_password) {
         (Ok(nats_login), Ok(nats_password)) if !nats_login.is_empty() && !nats_password.is_empty() => {
@@ -359,7 +359,7 @@ pub fn using_json_path_parameter(
     let mut task_manager = TaskManager::new();
     let task: Box<dyn Task> = match deployment_type {
         TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(
-            req.clone(),
+            req,
             task_manager.get_task_status_tx().clone(),
             workspace_root_dir,
             lib_root_dir,
@@ -485,13 +485,13 @@ fn using_nats_server(
     if let Mode::Local = mode {
         spawn_task_poller(
             task_manager.clone(),
-            nc.clone(),
+            nc,
             task_selector,
-            mode.clone(),
-            workspace_root_dir.clone(),
-            docker_host.clone(),
-            lib_root_dir.clone(),
-            engine_name.clone(),
+            mode,
+            workspace_root_dir,
+            docker_host,
+            lib_root_dir,
+            engine_name,
             sig_term_tx.clone(),
         );
     }
@@ -614,7 +614,7 @@ fn spawn_task_poller(
                 }
 
                 // If the task is finished to be run, go get a new one
-                if task_manager.remaining_tasks_to_run() <= 0 {
+                if task_manager.remaining_tasks_to_run() == 0 {
                     break;
                 }
             }
@@ -626,5 +626,5 @@ fn spawn_task_poller(
     thread::Builder::new()
         .name(thread_name.clone())
         .spawn(func)
-        .expect(format!("Cannot spawn thread {}", thread_name).as_str());
+        .unwrap_or_else(|_| panic!("Cannot spawn thread {}", thread_name));
 }

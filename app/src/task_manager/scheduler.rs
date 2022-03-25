@@ -189,11 +189,7 @@ impl TaskManager {
                     let current_task = current_task_lock.read().unwrap();
                     let task = current_task.as_ref().unwrap();
                     task.run(logger.clone());
-                    info!(
-                        "task {} took {} sec to be executed",
-                        &task.id(),
-                        start_time.elapsed().as_secs()
-                    );
+                    info!("task {} took {} sec to be executed", &task.id(), start_time.elapsed().as_secs());
                     info!("it remains {} tasks to be run", task_executor_rx.len());
                     nb_running_tasks.dec();
                 }
@@ -303,7 +299,7 @@ impl fmt::Display for Error {
 
 #[cfg(test)]
 mod tests {
-    use crate::task_manager::task_manager::{ActionContext, State, Status, Task, TaskManager};
+    use crate::task_manager::scheduler::{ActionContext, State, Status, Task, TaskManager};
     use chrono::{DateTime, NaiveDateTime, Utc};
     use crossbeam_channel::Sender;
     use qovery_engine::logger::{Logger, StdIoLogger};
