@@ -56,10 +56,7 @@ impl QoveryIdentifier {
     }
 
     pub fn new_from_long_id(raw_long_id: String) -> Self {
-        QoveryIdentifier::new(
-            raw_long_id.to_string(),
-            QoveryIdentifier::extract_short(raw_long_id.as_str()),
-        )
+        QoveryIdentifier::new(raw_long_id.to_string(), QoveryIdentifier::extract_short(raw_long_id.as_str()))
     }
 
     pub fn new_random() -> Self {
@@ -825,10 +822,7 @@ impl Database {
                         Some(db)
                     }
                     Err(e) => {
-                        error!(
-                            "{}",
-                            format!("error while parsing postgres version, error: {}", e.message())
-                        );
+                        error!("{}", format!("error while parsing postgres version, error: {}", e.message()));
                         None
                     }
                 },
@@ -853,10 +847,7 @@ impl Database {
                         Some(db)
                     }
                     Err(e) => {
-                        error!(
-                            "{}",
-                            format!("error while parsing mysql version, error: {}", e.message())
-                        );
+                        error!("{}", format!("error while parsing mysql version, error: {}", e.message()));
                         None
                     }
                 },
@@ -1435,16 +1426,8 @@ mod tests {
             let result = QoveryIdentifier::new_from_long_id(tc.input.clone());
 
             // verify:
-            assert_eq!(
-                tc.expected_long_id_output, result.raw_long_id,
-                "case {} : '{}'",
-                tc.description, tc.input
-            );
-            assert_eq!(
-                tc.expected_short_output, result.short,
-                "case {} : '{}'",
-                tc.description, tc.input
-            );
+            assert_eq!(tc.expected_long_id_output, result.raw_long_id, "case {} : '{}'", tc.description, tc.input);
+            assert_eq!(tc.expected_short_output, result.short, "case {} : '{}'", tc.description, tc.input);
         }
     }
 }

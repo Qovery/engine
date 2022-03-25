@@ -78,11 +78,7 @@ pub trait Service: ToTransmitter {
             true => fqdn.to_string(),
             false => match is_managed {
                 true => format!("{}-dns.{}.svc.cluster.local", self.id(), target.environment.namespace()),
-                false => format!(
-                    "{}.{}.svc.cluster.local",
-                    self.sanitized_name(),
-                    target.environment.namespace()
-                ),
+                false => format!("{}.{}.svc.cluster.local", self.sanitized_name(), target.environment.namespace()),
             },
         }
     }
@@ -422,11 +418,9 @@ where
     })?;
 
     // do exec helm upgrade and return the last deployment status
-    let helm = helm::Helm::new(
-        &kubernetes_config_file_path,
-        &kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| helm::to_engine_error(&event_details, e))?;
+    let helm =
+        helm::Helm::new(&kubernetes_config_file_path, &kubernetes.cloud_provider().credentials_environment_variables())
+            .map_err(|e| helm::to_engine_error(&event_details, e))?;
     let chart = ChartInfo::new_from_custom_namespace(
         helm_release_name,
         workspace_dir.clone(),
@@ -932,11 +926,7 @@ where
             ))
         }
         Err(_err) => {
-            let message = format!(
-                "{} version {} is not supported!",
-                service.service_type().name(),
-                service.version(),
-            );
+            let message = format!("{} version {} is not supported!", service.service_type().name(), service.version(),);
 
             let progress_info = ProgressInfo::new(
                 service.progress_scope(),
@@ -998,12 +988,7 @@ pub fn check_kubernetes_service_error<T>(
 where
     T: Service + ?Sized,
 {
-    let message = format!(
-        "{} {} {}",
-        action_verb,
-        service.service_type().name().to_lowercase(),
-        service.name()
-    );
+    let message = format!("{} {} {}", action_verb, service.service_type().name().to_lowercase(), service.name());
 
     let progress_info = ProgressInfo::new(
         service.progress_scope(),
@@ -1022,10 +1007,8 @@ where
         }
         CheckAction::Pause => {
             listeners_helper.pause_in_progress(progress_info);
-            logger.log(
-                LogLevel::Info,
-                EngineEvent::Pausing(event_details.clone(), EventMessage::new_from_safe(message)),
-            );
+            logger
+                .log(LogLevel::Info, EngineEvent::Pausing(event_details.clone(), EventMessage::new_from_safe(message)));
         }
         CheckAction::Delete => {
             listeners_helper.delete_in_progress(progress_info);
@@ -1259,16 +1242,12 @@ where
             service.service_type().name(),
             service.name_with_id()
         )),
-        Action::Pause => Some(format!(
-            "{} '{}' pause is in progress...",
-            service.service_type().name(),
-            service.name_with_id()
-        )),
-        Action::Delete => Some(format!(
-            "{} '{}' deletion is in progress...",
-            service.service_type().name(),
-            service.name_with_id()
-        )),
+        Action::Pause => {
+            Some(format!("{} '{}' pause is in progress...", service.service_type().name(), service.name_with_id()))
+        }
+        Action::Delete => {
+            Some(format!("{} '{}' deletion is in progress...", service.service_type().name(), service.name_with_id()))
+        }
         Action::Nothing => None,
     };
 
@@ -1291,12 +1270,8 @@ where
     let logger = service.logger().clone_dyn();
     let listeners = std::clone::Clone::clone(service.listeners());
 
-    let progress_info = ProgressInfo::new(
-        service.progress_scope(),
-        Info,
-        waiting_message.clone(),
-        service.context().execution_id(),
-    );
+    let progress_info =
+        ProgressInfo::new(service.progress_scope(), Info, waiting_message.clone(), service.context().execution_id());
 
     let (tx, rx) = mpsc::channel();
 

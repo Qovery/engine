@@ -131,11 +131,7 @@ impl LocalDocker {
         // Going to inject only env var that are used by the dockerfile
         // so extracting it and modifying the image tag and env variables
         let dockerfile_content = fs::read(dockerfile_complete_path).map_err(|err| {
-            BuildError::IoError(
-                build.image.application_id.clone(),
-                "reading dockerfile content".to_string(),
-                err,
-            )
+            BuildError::IoError(build.image.application_id.clone(), "reading dockerfile content".to_string(), err)
         })?;
         let dockerfile_args = match extract_dockerfile_args(dockerfile_content) {
             Ok(dockerfile_args) => dockerfile_args,
@@ -167,10 +163,7 @@ impl LocalDocker {
         let image_name = image_to_build.image_name();
         log_info(format!("🕵️ Checking if image already exist remotely {}", image_name));
         if let Ok(true) = self.context.docker.does_image_exist_remotely(&image_to_build) {
-            log_info(format!(
-                "🎯 Skipping build. Image already exist in the registry {}",
-                image_name
-            ));
+            log_info(format!("🎯 Skipping build. Image already exist in the registry {}", image_name));
 
             // skip build
             return Ok(());
@@ -331,11 +324,7 @@ impl LocalDocker {
             format!("build/{}", build.image.name.as_str()),
         )
         .map_err(|err| {
-            BuildError::IoError(
-                build.image.application_id.clone(),
-                "when creating build workspace".to_string(),
-                err,
-            )
+            BuildError::IoError(build.image.application_id.clone(), "when creating build workspace".to_string(), err)
         })
     }
 }
@@ -369,20 +358,15 @@ impl BuildPlatform for LocalDocker {
 
         // LOGGING
         let repository_root_path = PathBuf::from(self.get_repository_build_root_path(build)?);
-        let msg = format!(
-            "📥 Cloning repository: {} to {:?}",
-            build.git_repository.url, repository_root_path
-        );
+        let msg = format!("📥 Cloning repository: {} to {:?}", build.git_repository.url, repository_root_path);
         listeners_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Application { id: app_id.clone() },
             ProgressLevel::Info,
             Some(msg.clone()),
             self.context.execution_id(),
         ));
-        self.logger.log(
-            LogLevel::Info,
-            EngineEvent::Info(event_details, EventMessage::new_from_safe(msg)),
-        );
+        self.logger
+            .log(LogLevel::Info, EngineEvent::Info(event_details, EventMessage::new_from_safe(msg)));
         // LOGGING
 
         // Create callback that will be called by git to provide credentials per user
@@ -398,10 +382,7 @@ impl BuildPlatform for LocalDocker {
             }
 
             if let Some(Credentials { login, password }) = &build.git_repository.credentials {
-                creds.push((
-                    CredentialType::USER_PASS_PLAINTEXT,
-                    Cred::userpass_plaintext(login, password).unwrap(),
-                ));
+                creds.push((CredentialType::USER_PASS_PLAINTEXT, Cred::userpass_plaintext(login, password).unwrap()));
             }
 
             creds
@@ -467,10 +448,8 @@ impl BuildPlatform for LocalDocker {
 
             // If the dockerfile does not exist, abort
             if !dockerfile_absolute_path.is_file() {
-                let msg = format!(
-                    "Specified dockerfile path {:?} does not exist within the repository",
-                    &dockerfile_path
-                );
+                let msg =
+                    format!("Specified dockerfile path {:?} does not exist within the repository", &dockerfile_path);
                 return Err(BuildError::InvalidConfig(app_id, msg));
             }
 

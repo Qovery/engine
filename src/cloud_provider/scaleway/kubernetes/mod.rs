@@ -271,9 +271,9 @@ impl Kapsule {
         let error_cluster_id = "expected cluster id for this Scaleway cluster".to_string();
         let cluster_id = match cluster_info.id {
             None => {
-                return Err(ScwNodeGroupErrors::NodeGroupValidationError(
-                    CommandError::new_from_safe_message(error_cluster_id),
-                ))
+                return Err(ScwNodeGroupErrors::NodeGroupValidationError(CommandError::new_from_safe_message(
+                    error_cluster_id,
+                )))
             }
             Some(x) => x,
         };
@@ -292,10 +292,7 @@ impl Kapsule {
             Err(e) => {
                 let msg = format!("error while trying to get SCW pool info from cluster {}", &cluster_id);
                 let msg_with_error = format!("{}. {:?}", msg, e);
-                return Err(ScwNodeGroupErrors::CloudProviderApiError(CommandError::new(
-                    msg_with_error,
-                    Some(msg),
-                )));
+                return Err(ScwNodeGroupErrors::CloudProviderApiError(CommandError::new(msg_with_error, Some(msg))));
             }
         };
 
@@ -306,24 +303,15 @@ impl Kapsule {
                 &cluster_id,
                 &cluster_info.name.unwrap_or_else(|| "unknown cluster".to_string())
             );
-            return Err(ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(
-                msg.clone(),
-                Some(msg),
-            )));
+            return Err(ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(msg.clone(), Some(msg))));
         }
 
         // create sanitized nodegroup pools
         let mut nodegroup_pool: Vec<ScwNodeGroup> = Vec::with_capacity(pools.total_count.unwrap_or(0 as f32) as usize);
         for ng in pools.pools.unwrap() {
             if ng.id.is_none() {
-                let msg = format!(
-                    "error while trying to validate SCW pool ID from cluster {}",
-                    &cluster_id
-                );
-                return Err(ScwNodeGroupErrors::NodeGroupValidationError(CommandError::new(
-                    msg.clone(),
-                    Some(msg),
-                )));
+                let msg = format!("error while trying to validate SCW pool ID from cluster {}", &cluster_id);
+                return Err(ScwNodeGroupErrors::NodeGroupValidationError(CommandError::new(msg.clone(), Some(msg))));
             }
             let ng_sanitized = self.get_node_group_info(ng.id.unwrap().as_str())?;
             nodegroup_pool.push(ng_sanitized)
@@ -342,10 +330,8 @@ impl Kapsule {
             Err(e) => {
                 return Err(match e {
                     Error::ResponseError(x) => {
-                        let msg_with_error = format!(
-                            "Error code while getting node group: {}, API message: {} ",
-                            x.status, x.content
-                        );
+                        let msg_with_error =
+                            format!("Error code while getting node group: {}, API message: {} ", x.status, x.content);
                         match x.status {
                             StatusCode::NOT_FOUND => ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(
                                 msg_with_error,
@@ -451,22 +437,10 @@ impl Kapsule {
 
         context.insert("managed_dns", &managed_dns_list);
         context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
-        context.insert(
-            "managed_dns_domains_root_helm_format",
-            &managed_dns_domains_root_helm_format,
-        );
-        context.insert(
-            "managed_dns_domains_terraform_format",
-            &managed_dns_domains_terraform_format,
-        );
-        context.insert(
-            "managed_dns_domains_root_terraform_format",
-            &managed_dns_domains_root_terraform_format,
-        );
-        context.insert(
-            "managed_dns_resolvers_terraform_format",
-            &managed_dns_resolvers_terraform_format,
-        );
+        context.insert("managed_dns_domains_root_helm_format", &managed_dns_domains_root_helm_format);
+        context.insert("managed_dns_domains_terraform_format", &managed_dns_domains_terraform_format);
+        context.insert("managed_dns_domains_root_terraform_format", &managed_dns_domains_root_terraform_format);
+        context.insert("managed_dns_resolvers_terraform_format", &managed_dns_resolvers_terraform_format);
         match self.dns_provider.kind() {
             dns_provider::Kind::Cloudflare => {
                 context.insert("external_dns_provider", self.dns_provider.provider_name());
@@ -492,29 +466,14 @@ impl Kapsule {
         context.insert("qovery_nats_url", self.options.qovery_nats_url.as_str());
         context.insert("qovery_nats_user", self.options.qovery_nats_user.as_str());
         context.insert("qovery_nats_password", self.options.qovery_nats_password.as_str());
-        context.insert(
-            "engine_version_controller_token",
-            &self.options.engine_version_controller_token,
-        );
-        context.insert(
-            "agent_version_controller_token",
-            &self.options.agent_version_controller_token,
-        );
+        context.insert("engine_version_controller_token", &self.options.engine_version_controller_token);
+        context.insert("agent_version_controller_token", &self.options.agent_version_controller_token);
 
         // Qovery features
-        context.insert(
-            "log_history_enabled",
-            &self.context.is_feature_enabled(&Features::LogsHistory),
-        );
-        context.insert(
-            "metrics_history_enabled",
-            &self.context.is_feature_enabled(&Features::MetricsHistory),
-        );
+        context.insert("log_history_enabled", &self.context.is_feature_enabled(&Features::LogsHistory));
+        context.insert("metrics_history_enabled", &self.context.is_feature_enabled(&Features::MetricsHistory));
         if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert(
-                "resource_expiration_in_seconds",
-                &self.context.resource_expiration_in_seconds(),
-            )
+            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
         }
 
         // AWS S3 tfstates storage tfstates
@@ -532,10 +491,8 @@ impl Kapsule {
                 .secret_access_key
                 .as_str(),
         );
-        context.insert(
-            "aws_region_tfstates_account",
-            self.cloud_provider().terraform_state_credentials().region.as_str(),
-        );
+        context
+            .insert("aws_region_tfstates_account", self.cloud_provider().terraform_state_credentials().region.as_str());
         context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
         context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
 
@@ -734,10 +691,7 @@ impl Kapsule {
             }
             Err(e) => self.logger().log(
                 LogLevel::Warning,
-                EngineEvent::Error(
-                    EngineError::new_terraform_state_does_not_exist(event_details.clone(), e),
-                    None,
-                ),
+                EngineEvent::Error(EngineError::new_terraform_state_does_not_exist(event_details.clone(), e), None),
             ),
         };
 
@@ -775,10 +729,7 @@ impl Kapsule {
 
         // terraform deployment dedicated to cloud resources
         if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
-            return Err(EngineError::new_terraform_error_while_executing_pipeline(
-                event_details,
-                e,
-            ));
+            return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
         }
 
         // push config file to object storage
@@ -817,10 +768,7 @@ impl Kapsule {
             Err(e) => {
                 match e {
                     ScwNodeGroupErrors::CloudProviderApiError(c) => {
-                        return Err(EngineError::new_missing_api_info_from_cloud_provider_error(
-                            event_details,
-                            Some(c),
-                        ))
+                        return Err(EngineError::new_missing_api_info_from_cloud_provider_error(event_details, Some(c)))
                     }
                     ScwNodeGroupErrors::ClusterDoesNotExists(_) => self.logger().log(
                         LogLevel::Info,
@@ -1080,10 +1028,9 @@ impl Kapsule {
         );
 
         match kubectl_exec_get_events(kubeconfig_path, None, environment_variables) {
-            Ok(ok_line) => self.logger().log(
-                LogLevel::Info,
-                EngineEvent::Deploying(event_details, EventMessage::new_from_safe(ok_line)),
-            ),
+            Ok(ok_line) => self
+                .logger()
+                .log(LogLevel::Info, EngineEvent::Deploying(event_details, EventMessage::new_from_safe(ok_line))),
             Err(err) => self.logger().log(
                 LogLevel::Error,
                 EngineEvent::Deploying(
@@ -1282,16 +1229,11 @@ impl Kapsule {
             Ok(_) => {
                 let message = format!("Kubernetes cluster {} successfully paused", self.name());
                 self.send_to_customer(&message, &listeners_helper);
-                self.logger().log(
-                    LogLevel::Info,
-                    EngineEvent::Pausing(event_details, EventMessage::new_from_safe(message)),
-                );
+                self.logger()
+                    .log(LogLevel::Info, EngineEvent::Pausing(event_details, EventMessage::new_from_safe(message)));
                 Ok(())
             }
-            Err(e) => Err(EngineError::new_terraform_error_while_executing_pipeline(
-                event_details,
-                e,
-            )),
+            Err(e) => Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e)),
         }
     }
 
@@ -1358,16 +1300,11 @@ impl Kapsule {
 
         // should apply before destroy to be sure destroy will compute on all resources
         // don't exit on failure, it can happen if we resume a destroy process
-        let message = format!(
-            "Ensuring everything is up to date before deleting cluster {}/{}",
-            self.name(),
-            self.id()
-        );
+        let message =
+            format!("Ensuring everything is up to date before deleting cluster {}/{}", self.name(), self.id());
         self.send_to_customer(&message, &listeners_helper);
-        self.logger().log(
-            LogLevel::Info,
-            EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)),
-        );
+        self.logger()
+            .log(LogLevel::Info, EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)));
 
         self.logger().log(
             LogLevel::Info,
@@ -1455,10 +1392,8 @@ impl Kapsule {
                     }
                 }
                 Err(e) => {
-                    let message_safe = format!(
-                        "Error while getting all namespaces for Kubernetes cluster {}",
-                        self.name_with_id(),
-                    );
+                    let message_safe =
+                        format!("Error while getting all namespaces for Kubernetes cluster {}", self.name_with_id(),);
                     self.logger().log(
                         LogLevel::Error,
                         EngineEvent::Deleting(
@@ -1481,11 +1416,8 @@ impl Kapsule {
             );
 
             // delete custom metrics api to avoid stale namespaces on deletion
-            let helm = Helm::new(
-                &kubeconfig_path,
-                &self.cloud_provider.credentials_environment_variables(),
-            )
-            .map_err(|e| to_engine_error(&event_details, e))?;
+            let helm = Helm::new(&kubeconfig_path, &self.cloud_provider.credentials_environment_variables())
+                .map_err(|e| to_engine_error(&event_details, e))?;
             let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
             helm.uninstall(&chart, &[])
                 .map_err(|e| to_engine_error(&event_details, e))?;
@@ -1623,10 +1555,8 @@ impl Kapsule {
 
         let message = format!("Deleting Kubernetes cluster {}/{}", self.name(), self.id());
         self.send_to_customer(&message, &listeners_helper);
-        self.logger().log(
-            LogLevel::Info,
-            EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)),
-        );
+        self.logger()
+            .log(LogLevel::Info, EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)));
 
         self.logger().log(
             LogLevel::Info,
@@ -1656,10 +1586,9 @@ impl Kapsule {
                 );
                 Ok(())
             }
-            Err(Operation { error, .. }) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-                event_details,
-                error,
-            )),
+            Err(Operation { error, .. }) => {
+                Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(event_details, error))
+            }
             Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
                 event_details,
                 CommandError::new(msg, None),
@@ -1773,12 +1702,7 @@ impl Kubernetes for Kapsule {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         let listeners_helper = ListenersHelper::new(&self.listeners);
         self.send_to_customer(
-            format!(
-                "Start preparing Kapsule upgrade process {} cluster with id {}",
-                self.name(),
-                self.id()
-            )
-            .as_str(),
+            format!("Start preparing Kapsule upgrade process {} cluster with id {}", self.name(), self.id()).as_str(),
             &listeners_helper,
         );
         self.logger().log(
@@ -1820,10 +1744,8 @@ impl Kubernetes for Kapsule {
             ),
         );
 
-        context.insert(
-            "kubernetes_cluster_version",
-            format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
-        );
+        context
+            .insert("kubernetes_cluster_version", format!("{}", &kubernetes_upgrade_status.requested_version).as_str());
 
         if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
             self.template_directory.as_str(),
@@ -1851,10 +1773,7 @@ impl Kubernetes for Kapsule {
             ));
         }
 
-        self.send_to_customer(
-            format!("Upgrading Kubernetes {} nodes", self.name()).as_str(),
-            &listeners_helper,
-        );
+        self.send_to_customer(format!("Upgrading Kubernetes {} nodes", self.name()).as_str(), &listeners_helper);
         self.logger().log(
             LogLevel::Info,
             EngineEvent::Deploying(
@@ -1889,10 +1808,7 @@ impl Kubernetes for Kapsule {
                 }
             },
             Err(e) => {
-                return Err(EngineError::new_terraform_error_while_executing_pipeline(
-                    event_details,
-                    e,
-                ));
+                return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
             }
         }
 

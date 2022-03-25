@@ -117,13 +117,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = get_pods(
-            context.clone(),
-            Kind::Aws,
-            environment.clone(),
-            selector.as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(context.clone(), Kind::Aws, environment.clone(), selector.as_str(), secrets.clone());
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
@@ -131,13 +125,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
-        let ret = get_pods(
-            context.clone(),
-            Kind::Aws,
-            environment.clone(),
-            selector.as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(context.clone(), Kind::Aws, environment.clone(), selector.as_str(), secrets.clone());
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
@@ -182,13 +170,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config_resume);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = get_pods(
-            context,
-            Kind::Aws,
-            environment.clone(),
-            selector.as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(context, Kind::Aws, environment.clone(), selector.as_str(), secrets.clone());
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
@@ -286,10 +268,7 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
 
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
-        assert!(matches!(
-            ret,
-            TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
-        ));
+        assert!(matches!(ret, TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)));
 
         test_name.to_string()
     })
@@ -647,13 +626,8 @@ fn redeploy_same_app_with_ebs() {
         };
 
         let app_name = format!("{}-0", &environment_check1.applications[0].name);
-        let (_, number) = is_pod_restarted_env(
-            context.clone(),
-            Kind::Aws,
-            environment_check1,
-            app_name.as_str(),
-            secrets.clone(),
-        );
+        let (_, number) =
+            is_pod_restarted_env(context.clone(), Kind::Aws, environment_check1, app_name.as_str(), secrets.clone());
 
         let ret = environment_redeploy.deploy_environment(&ea2, logger.clone(), &engine_config_bis);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -822,18 +796,12 @@ fn deploy_ok_fail_fail_ok_environment() {
         // FAIL and rollback
         let ret =
             not_working_env_1.deploy_environment(&ea_not_working_1, logger.clone(), &engine_config_for_not_working_1);
-        assert!(matches!(
-            ret,
-            TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)
-        ));
+        assert!(matches!(ret, TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)));
 
         // FAIL and Rollback again
         let ret =
             not_working_env_2.deploy_environment(&ea_not_working_2, logger.clone(), &engine_config_for_not_working_2);
-        assert!(matches!(
-            ret,
-            TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)
-        ));
+        assert!(matches!(ret, TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)));
 
         // Should be working
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);

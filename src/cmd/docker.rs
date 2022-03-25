@@ -81,13 +81,8 @@ impl Docker {
 
         // First check that the buildx plugin is correctly installed
         let args = vec!["buildx", "version"];
-        let buildx_cmd_exist = docker_exec(
-            &args,
-            &docker.get_all_envs(&[]),
-            &mut |_| {},
-            &mut |_| {},
-            &CommandKiller::never(),
-        );
+        let buildx_cmd_exist =
+            docker_exec(&args, &docker.get_all_envs(&[]), &mut |_| {}, &mut |_| {}, &CommandKiller::never());
         if buildx_cmd_exist.is_err() {
             return Err(DockerError::InvalidConfig(
                 "Docker buildx plugin for buildkit is not correctly installed".to_string(),
@@ -106,13 +101,7 @@ impl Docker {
             "--bootstrap",
             "--use",
         ];
-        let _ = docker_exec(
-            &args,
-            &docker.get_all_envs(&[]),
-            &mut |_| {},
-            &mut |_| {},
-            &CommandKiller::never(),
-        );
+        let _ = docker_exec(&args, &docker.get_all_envs(&[]), &mut |_| {}, &mut |_| {}, &CommandKiller::never());
 
         Ok(docker)
     }
@@ -199,13 +188,7 @@ impl Docker {
     {
         info!("Docker pull {:?}", image);
 
-        docker_exec(
-            &["pull", &image.image_name()],
-            &self.get_all_envs(&[]),
-            stdout_output,
-            stderr_output,
-            should_abort,
-        )
+        docker_exec(&["pull", &image.image_name()], &self.get_all_envs(&[]), stdout_output, stderr_output, should_abort)
     }
 
     pub fn build<Stdout, Stderr>(
@@ -407,13 +390,7 @@ impl Docker {
         let mut args = vec!["push"];
         args.extend(image_names.iter().map(|x| x.as_str()));
 
-        docker_exec(
-            &args,
-            &self.get_all_envs(&[]),
-            stdout_output,
-            stderr_output,
-            should_abort,
-        )
+        docker_exec(&args, &self.get_all_envs(&[]), stdout_output, stderr_output, should_abort)
     }
 
     pub fn prune_images(&self) -> Result<(), DockerError> {
@@ -429,13 +406,7 @@ impl Docker {
 
         let mut errored_commands = vec![];
         for prune in all_prunes_commands {
-            let ret = docker_exec(
-                &prune,
-                &self.get_all_envs(&[]),
-                &mut |_| {},
-                &mut |_| {},
-                &CommandKiller::never(),
-            );
+            let ret = docker_exec(&prune, &self.get_all_envs(&[]), &mut |_| {}, &mut |_| {}, &CommandKiller::never());
             if let Err(e) = ret {
                 errored_commands.push(e);
             }

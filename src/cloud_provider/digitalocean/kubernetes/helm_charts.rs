@@ -121,10 +121,7 @@ pub fn do_helm_charts(
         Ok(x) => x,
         Err(e) => {
             let message_safe = "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?";
-            return Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe, e),
-                Some(message_safe.to_string()),
-            ));
+            return Err(CommandError::new(format!("{}, error: {:?}", message_safe, e), Some(message_safe.to_string())));
         }
     };
     let chart_prefix = chart_prefix_path.unwrap_or("./");
@@ -133,14 +130,8 @@ pub fn do_helm_charts(
     let qovery_terraform_config: DigitalOceanQoveryTerraformConfig = match serde_json::from_reader(reader) {
         Ok(config) => config,
         Err(e) => {
-            let message_safe = format!(
-                "Error while parsing terraform config file {}",
-                qovery_terraform_config_file
-            );
-            return Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe, e),
-                Some(message_safe),
-            ));
+            let message_safe = format!("Error while parsing terraform config file {}", qovery_terraform_config_file);
+            return Err(CommandError::new(format!("{}, error: {:?}", message_safe, e), Some(message_safe)));
         }
     };
 

@@ -25,10 +25,7 @@ fn create_and_destroy_eks_cluster(
         cluster_test(
             test_name,
             Kind::Aws,
-            context(
-                generate_id().as_str(),
-                generate_cluster_id(region.to_string().as_str()).as_str(),
-            ),
+            context(generate_id().as_str(), generate_cluster_id(region.to_string().as_str()).as_str()),
             logger(),
             region.to_aws_format().as_str(),
             Some(zones),

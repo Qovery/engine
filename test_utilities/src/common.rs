@@ -469,12 +469,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
     let application_name = format!("{}-{}", "simple-app".to_string(), &suffix);
     let router_id = generate_id();
     let router_name = "main".to_string();
-    let application_domain = format!(
-        "{}.{}.{}",
-        application_id,
-        context.cluster_id().to_string(),
-        test_domain
-    );
+    let application_domain = format!("{}.{}.{}", application_id, context.cluster_id().to_string(), test_domain);
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
@@ -1129,12 +1124,7 @@ pub fn test_db(
 
     match database_mode.clone() {
         DatabaseMode::CONTAINER => {
-            match get_pvc(
-                context.clone(),
-                provider_kind.clone(),
-                environment.clone(),
-                secrets.clone(),
-            ) {
+            match get_pvc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                     format!("{}Gi", storage_size)
@@ -1142,12 +1132,7 @@ pub fn test_db(
                 Err(_) => assert!(false),
             };
 
-            match get_svc(
-                context.clone(),
-                provider_kind.clone(),
-                environment.clone(),
-                secrets.clone(),
-            ) {
+            match get_svc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(svc) => assert_eq!(
                     svc.items
                         .expect("No items in svc")
@@ -1610,9 +1595,7 @@ where
                     .expect("No hpa condition.")
                     .contains("ValidMetricFound")
                 {
-                    return Err(CommandError::new_from_safe_message(
-                        "Metrics server doesn't work".to_string(),
-                    ));
+                    return Err(CommandError::new_from_safe_message("Metrics server doesn't work".to_string()));
                 }
             }
             Ok(())

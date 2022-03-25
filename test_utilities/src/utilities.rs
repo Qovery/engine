@@ -169,21 +169,13 @@ impl FuncTestsSecrets {
     fn get_vault_config() -> Result<VaultConfig, Error> {
         let vault_addr = match env::var_os("VAULT_ADDR") {
             Some(x) => x.into_string().unwrap(),
-            None => {
-                return Err(Error::new(
-                    ErrorKind::NotFound,
-                    format!("VAULT_ADDR environment variable is missing"),
-                ))
-            }
+            None => return Err(Error::new(ErrorKind::NotFound, format!("VAULT_ADDR environment variable is missing"))),
         };
 
         let vault_token = match env::var_os("VAULT_TOKEN") {
             Some(x) => x.into_string().unwrap(),
             None => {
-                return Err(Error::new(
-                    ErrorKind::NotFound,
-                    format!("VAULT_TOKEN environment variable is missing"),
-                ))
+                return Err(Error::new(ErrorKind::NotFound, format!("VAULT_TOKEN environment variable is missing")))
             }
         };
 
@@ -378,10 +370,7 @@ pub fn init() -> Instant {
         None => tracing_subscriber::fmt().try_init(),
     };
 
-    info!(
-        "running from current directory: {}",
-        std::env::current_dir().unwrap().to_str().unwrap()
-    );
+    info!("running from current directory: {}", std::env::current_dir().unwrap().to_str().unwrap());
 
     Instant::now()
 }
@@ -457,10 +446,7 @@ pub fn check_all_connections(env: &EnvironmentRequest) -> Vec<bool> {
     let mut checking: Vec<bool> = Vec::with_capacity(env.routers.len());
 
     for router_to_test in &env.routers {
-        let path_to_test = format!(
-            "https://{}{}",
-            &router_to_test.default_domain, &router_to_test.routes[0].path
-        );
+        let path_to_test = format!("https://{}{}", &router_to_test.default_domain, &router_to_test.routes[0].path);
 
         checking.push(curl_path(path_to_test.as_str()));
     }
@@ -637,9 +623,7 @@ where
                     }
                 }
 
-                Err(CommandError::new_from_safe_message(
-                    "Test cluster not found".to_string(),
-                ))
+                Err(CommandError::new_from_safe_message("Test cluster not found".to_string()))
             }
         };
 
@@ -689,10 +673,7 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
     match provider_kind {
         Kind::Aws => vec![
             (AWS_ACCESS_KEY_ID, secrets.AWS_ACCESS_KEY_ID.as_ref().unwrap().as_str()),
-            (
-                AWS_SECRET_ACCESS_KEY,
-                secrets.AWS_SECRET_ACCESS_KEY.as_ref().unwrap().as_str(),
-            ),
+            (AWS_SECRET_ACCESS_KEY, secrets.AWS_SECRET_ACCESS_KEY.as_ref().unwrap().as_str()),
         ],
         Kind::Do => vec![
             (
@@ -718,18 +699,9 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
             ),
         ],
         Kind::Scw => vec![
-            (
-                SCALEWAY_ACCESS_KEY,
-                secrets.SCALEWAY_ACCESS_KEY.as_ref().unwrap().as_str(),
-            ),
-            (
-                SCALEWAY_SECRET_KEY,
-                secrets.SCALEWAY_SECRET_KEY.as_ref().unwrap().as_str(),
-            ),
-            (
-                SCALEWAY_DEFAULT_PROJECT_ID,
-                secrets.SCALEWAY_DEFAULT_PROJECT_ID.as_ref().unwrap().as_str(),
-            ),
+            (SCALEWAY_ACCESS_KEY, secrets.SCALEWAY_ACCESS_KEY.as_ref().unwrap().as_str()),
+            (SCALEWAY_SECRET_KEY, secrets.SCALEWAY_SECRET_KEY.as_ref().unwrap().as_str()),
+            (SCALEWAY_DEFAULT_PROJECT_ID, secrets.SCALEWAY_DEFAULT_PROJECT_ID.as_ref().unwrap().as_str()),
         ],
     }
 }
@@ -770,11 +742,7 @@ pub fn is_pod_restarted_env(
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
 ) -> (bool, String) {
-    let namespace_name = format!(
-        "{}-{}",
-        &environment_check.project_id.clone(),
-        &environment_check.id.clone(),
-    );
+    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
@@ -805,11 +773,7 @@ pub fn get_pods(
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
 ) -> Result<KubernetesList<KubernetesPod>, CommandError> {
-    let namespace_name = format!(
-        "{}-{}",
-        &environment_check.project_id.clone(),
-        &environment_check.id.clone(),
-    );
+    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
@@ -877,11 +841,7 @@ pub fn get_pvc(
     environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<PVC, CommandError> {
-    let namespace_name = format!(
-        "{}-{}",
-        &environment_check.project_id.clone(),
-        &environment_check.id.clone(),
-    );
+    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
@@ -906,11 +866,7 @@ pub fn get_svc(
     environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<SVC, CommandError> {
-    let namespace_name = format!(
-        "{}-{}",
-        &environment_check.project_id.clone(),
-        &environment_check.id.clone(),
-    );
+    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 

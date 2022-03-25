@@ -128,10 +128,7 @@ fn do_get_vpcs_from_api_output(json_content: &str) -> Result<Vec<Vpc>, CommandEr
         Ok(vpcs) => Ok(vpcs.vpcs),
         Err(e) => {
             let message_safe = "Error while trying to deserialize json received from Digital Ocean VPC API";
-            Err(CommandError::new(
-                format!("{}, error: {}", message_safe, e),
-                Some(message_safe.to_string()),
-            ))
+            Err(CommandError::new(format!("{}, error: {}", message_safe, e), Some(message_safe.to_string())))
         }
     }
 }
@@ -258,10 +255,7 @@ mod tests_do_vpcs {
         let vpc_subnets: Vec<String> = vpcs.into_iter().map(|x| x.ip_range).collect();
 
         let joined_subnets = vpc_subnets.join(",");
-        assert_eq!(
-            joined_subnets,
-            "10.2.0.0/16,10.110.0.0/20,10.116.0.0/20,10.1.0.0/16,10.0.0.0/16"
-        );
+        assert_eq!(joined_subnets, "10.2.0.0/16,10.110.0.0/20,10.116.0.0/20,10.1.0.0/16,10.0.0.0/16");
     }
 
     #[test]
@@ -270,11 +264,9 @@ mod tests_do_vpcs {
         let vpcs = do_get_vpcs_from_api_output(&json_content).unwrap();
 
         // available
-        assert!(
-            get_do_vpc_from_subnet("10.3.0.0/16".to_string(), vpcs.clone(), DoRegion::Frankfurt)
-                .unwrap()
-                .is_none()
-        );
+        assert!(get_do_vpc_from_subnet("10.3.0.0/16".to_string(), vpcs.clone(), DoRegion::Frankfurt)
+            .unwrap()
+            .is_none());
         // already used
         assert_eq!(
             get_do_vpc_from_subnet("10.2.0.0/16".to_string(), vpcs.clone(), DoRegion::Frankfurt)
@@ -286,11 +278,9 @@ mod tests_do_vpcs {
         // DO reserved subnet in the same region
         assert!(get_do_vpc_from_subnet("10.19.0.0/16".to_string(), vpcs.clone(), DoRegion::Frankfurt).is_err());
         // DO reserved subnet in another region
-        assert!(
-            get_do_vpc_from_subnet("10.19.0.0/16".to_string(), vpcs, DoRegion::London)
-                .unwrap()
-                .is_none()
-        );
+        assert!(get_do_vpc_from_subnet("10.19.0.0/16".to_string(), vpcs, DoRegion::London)
+            .unwrap()
+            .is_none());
     }
 
     #[test]

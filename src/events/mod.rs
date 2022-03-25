@@ -458,24 +458,9 @@ mod tests {
     fn test_event_message() {
         // setup:
         let test_cases: Vec<(String, Option<String>, EventMessageVerbosity, String)> = vec![
-            (
-                "safe".to_string(),
-                Some("raw".to_string()),
-                EventMessageVerbosity::SafeOnly,
-                "safe".to_string(),
-            ),
-            (
-                "safe".to_string(),
-                None,
-                EventMessageVerbosity::SafeOnly,
-                "safe".to_string(),
-            ),
-            (
-                "safe".to_string(),
-                None,
-                EventMessageVerbosity::FullDetails,
-                "safe".to_string(),
-            ),
+            ("safe".to_string(), Some("raw".to_string()), EventMessageVerbosity::SafeOnly, "safe".to_string()),
+            ("safe".to_string(), None, EventMessageVerbosity::SafeOnly, "safe".to_string()),
+            ("safe".to_string(), None, EventMessageVerbosity::FullDetails, "safe".to_string()),
             (
                 "safe".to_string(),
                 Some("raw".to_string()),
@@ -498,54 +483,21 @@ mod tests {
     fn test_stage_sub_step_name() {
         // setup:
         let test_cases: Vec<(Stage, String)> = vec![
-            (
-                Stage::Infrastructure(InfrastructureStep::Create),
-                InfrastructureStep::Create.to_string(),
-            ),
-            (
-                Stage::Infrastructure(InfrastructureStep::Upgrade),
-                InfrastructureStep::Upgrade.to_string(),
-            ),
-            (
-                Stage::Infrastructure(InfrastructureStep::Delete),
-                InfrastructureStep::Delete.to_string(),
-            ),
-            (
-                Stage::Infrastructure(InfrastructureStep::Resume),
-                InfrastructureStep::Resume.to_string(),
-            ),
-            (
-                Stage::Infrastructure(InfrastructureStep::Pause),
-                InfrastructureStep::Pause.to_string(),
-            ),
+            (Stage::Infrastructure(InfrastructureStep::Create), InfrastructureStep::Create.to_string()),
+            (Stage::Infrastructure(InfrastructureStep::Upgrade), InfrastructureStep::Upgrade.to_string()),
+            (Stage::Infrastructure(InfrastructureStep::Delete), InfrastructureStep::Delete.to_string()),
+            (Stage::Infrastructure(InfrastructureStep::Resume), InfrastructureStep::Resume.to_string()),
+            (Stage::Infrastructure(InfrastructureStep::Pause), InfrastructureStep::Pause.to_string()),
             (
                 Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
                 InfrastructureStep::LoadConfiguration.to_string(),
             ),
-            (
-                Stage::Environment(EnvironmentStep::Pause),
-                EnvironmentStep::Pause.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Resume),
-                EnvironmentStep::Resume.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Build),
-                EnvironmentStep::Build.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Delete),
-                EnvironmentStep::Delete.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Update),
-                EnvironmentStep::Update.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Deploy),
-                EnvironmentStep::Deploy.to_string(),
-            ),
+            (Stage::Environment(EnvironmentStep::Pause), EnvironmentStep::Pause.to_string()),
+            (Stage::Environment(EnvironmentStep::Resume), EnvironmentStep::Resume.to_string()),
+            (Stage::Environment(EnvironmentStep::Build), EnvironmentStep::Build.to_string()),
+            (Stage::Environment(EnvironmentStep::Delete), EnvironmentStep::Delete.to_string()),
+            (Stage::Environment(EnvironmentStep::Update), EnvironmentStep::Update.to_string()),
+            (Stage::Environment(EnvironmentStep::Deploy), EnvironmentStep::Deploy.to_string()),
         ];
 
         for tc in test_cases {

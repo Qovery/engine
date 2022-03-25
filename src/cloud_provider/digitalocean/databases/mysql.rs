@@ -66,12 +66,7 @@ impl MySQLDo {
     }
 
     fn matching_correct_version(&self, event_details: EventDetails) -> Result<ServiceVersionCheckResult, EngineError> {
-        check_service_version(
-            get_self_hosted_mysql_version(self.version()),
-            self,
-            event_details,
-            self.logger(),
-        )
+        check_service_version(get_self_hosted_mysql_version(self.version()), self, event_details, self.logger())
     }
 
     fn cloud_provider_name(&self) -> &str {
@@ -95,11 +90,7 @@ impl StatefulService for MySQLDo {
 
 impl ToTransmitter for MySQLDo {
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Database(
-            self.id().to_string(),
-            self.service_type().to_string(),
-            self.name().to_string(),
-        )
+        Transmitter::Database(self.id().to_string(), self.service_type().to_string(), self.name().to_string())
     }
 }
 
@@ -196,10 +187,7 @@ impl Service for MySQLDo {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert(
-            "fqdn",
-            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
-        );
+        context.insert("fqdn", self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
@@ -217,10 +205,7 @@ impl Service for MySQLDo {
 
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
         if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert(
-                "resource_expiration_in_seconds",
-                &self.context.resource_expiration_in_seconds(),
-            )
+            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
         }
 
         Ok(context)

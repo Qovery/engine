@@ -33,13 +33,7 @@ pub const DO_SELF_HOSTED_DATABASE_DISK_TYPE: &str = "do-block-storage";
 
 pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
     let secrets = FuncTestsSecrets::new();
-    DOCR::new(
-        context.clone(),
-        DOCR_ID,
-        DOCR_ID,
-        secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
-    )
-    .unwrap()
+    DOCR::new(context.clone(), DOCR_ID, DOCR_ID, secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str()).unwrap()
 }
 
 pub fn do_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
@@ -82,14 +76,7 @@ impl Cluster<DO, DoksOptions> for DO {
             vpc_network_mode,
         );
 
-        EngineConfig::new(
-            context.clone(),
-            build_platform,
-            container_registry,
-            cloud_provider,
-            dns_provider,
-            k,
-        )
+        EngineConfig::new(context.clone(), build_platform, container_registry, cloud_provider, dns_provider, k)
     }
 
     fn cloud_provider(context: &Context) -> Box<DO> {

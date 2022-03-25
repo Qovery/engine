@@ -155,14 +155,9 @@ pub trait HelmChart: Send {
         let chart = self.get_chart_info();
         for file in chart.values_files.iter() {
             if let Err(e) = fs::metadata(file) {
-                let safe_message = format!(
-                    "Can't access helm chart override file `{}` for chart `{}`",
-                    file, chart.name,
-                );
-                return Err(CommandError::new(
-                    format!("{}, error: {:?}", safe_message, e),
-                    Some(safe_message),
-                ));
+                let safe_message =
+                    format!("Can't access helm chart override file `{}` for chart `{}`", file, chart.name,);
+                return Err(CommandError::new(format!("{}, error: {:?}", safe_message, e), Some(safe_message)));
             }
         }
         Ok(None)
@@ -229,10 +224,7 @@ pub trait HelmChart: Send {
         match chart_info.action {
             HelmAction::Deploy => {
                 if let Err(e) = helm.uninstall_chart_if_breaking_version(chart_info, &[]) {
-                    warn!(
-                        "error while trying to destroy chart if breaking change is detected: {:?}",
-                        e.to_string()
-                    );
+                    warn!("error while trying to destroy chart if breaking change is detected: {:?}", e.to_string());
                 }
 
                 helm.upgrade(chart_info, &[]).map_err(to_command_error)?;
@@ -307,10 +299,8 @@ fn deploy_parallel_charts(
             }
             Err(e) => {
                 let safe_message = "Thread panicked during parallel charts deployments.";
-                let error = Err(CommandError::new(
-                    format!("{}, error: {:?}", safe_message, e),
-                    Some(safe_message.to_string()),
-                ));
+                let error =
+                    Err(CommandError::new(format!("{}, error: {:?}", safe_message, e), Some(safe_message.to_string())));
                 errors.push(error);
             }
         }
@@ -597,10 +587,7 @@ impl HelmChart for PrometheusOperatorConfigChart {
         match chart_info.action {
             HelmAction::Deploy => {
                 if let Err(e) = helm.uninstall_chart_if_breaking_version(chart_info, &[]) {
-                    warn!(
-                        "error while trying to destroy chart if breaking change is detected: {}",
-                        e.to_string()
-                    );
+                    warn!("error while trying to destroy chart if breaking change is detected: {}", e.to_string());
                 }
 
                 helm.upgrade(chart_info, &[]).map_err(to_command_error)?;
@@ -666,12 +653,8 @@ pub fn get_chart_for_shell_agent(
     context: ShellAgentContext,
     chart_path: impl Fn(&str) -> String,
 ) -> Result<CommonChart, CommandError> {
-    let shell_agent_version: QoveryShellAgent = get_qovery_app_version(
-        QoveryAppName::ShellAgent,
-        context.api_token,
-        context.api_url,
-        context.cluster_id,
-    )?;
+    let shell_agent_version: QoveryShellAgent =
+        get_qovery_app_version(QoveryAppName::ShellAgent, context.api_token, context.api_url, context.cluster_id)?;
     let shell_agent = CommonChart {
         chart_info: ChartInfo {
             name: "shell-agent".to_string(),

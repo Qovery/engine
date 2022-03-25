@@ -116,11 +116,7 @@ impl QoveryCommand {
     }
 
     pub fn exec(&mut self) -> Result<(), CommandError> {
-        self.exec_with_abort(
-            &mut |line| info!("{}", line),
-            &mut |line| warn!("{}", line),
-            &CommandKiller::never(),
-        )
+        self.exec_with_abort(&mut |line| info!("{}", line), &mut |line| warn!("{}", line), &CommandKiller::never())
     }
 
     pub fn exec_with_output<STDOUT, STDERR>(
@@ -277,10 +273,7 @@ impl QoveryCommand {
         }
 
         if !exit_status.success() {
-            debug!(
-                "command: {:?} terminated with error exist status {:?}",
-                self.command, exit_status
-            );
+            debug!("command: {:?} terminated with error exist status {:?}", self.command, exit_status);
             return Err(ExitStatusError(exit_status));
         }
 
@@ -352,29 +345,17 @@ mod tests {
     #[test]
     fn test_command_with_timeout() {
         let mut cmd = QoveryCommand::new("sleep", &["120"], &[]);
-        let ret = cmd.exec_with_abort(
-            &mut |_| {},
-            &mut |_| {},
-            &CommandKiller::from_timeout(Duration::from_secs(2)),
-        );
+        let ret = cmd.exec_with_abort(&mut |_| {}, &mut |_| {}, &CommandKiller::from_timeout(Duration::from_secs(2)));
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
 
         let mut cmd = QoveryCommand::new("sh", &["-c", "cat /dev/urandom | grep -a --null-data ."], &[]);
-        let ret = cmd.exec_with_abort(
-            &mut |_| {},
-            &mut |_| {},
-            &CommandKiller::from_timeout(Duration::from_secs(2)),
-        );
+        let ret = cmd.exec_with_abort(&mut |_| {}, &mut |_| {}, &CommandKiller::from_timeout(Duration::from_secs(2)));
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
 
         let mut cmd = QoveryCommand::new("sleep", &["1"], &[]);
-        let ret = cmd.exec_with_abort(
-            &mut |_| {},
-            &mut |_| {},
-            &CommandKiller::from_timeout(Duration::from_secs(2)),
-        );
+        let ret = cmd.exec_with_abort(&mut |_| {}, &mut |_| {}, &CommandKiller::from_timeout(Duration::from_secs(2)));
         assert!(ret.is_ok());
     }
 

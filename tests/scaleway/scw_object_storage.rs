@@ -191,11 +191,8 @@ fn test_put_file() {
     let temp_file = NamedTempFile::new().expect("error while creating tempfile");
 
     // compute:
-    let result = scaleway_os.put(
-        bucket_name.as_str(),
-        object_key.as_str(),
-        temp_file.into_temp_path().to_str().unwrap(),
-    );
+    let result =
+        scaleway_os.put(bucket_name.as_str(), object_key.as_str(), temp_file.into_temp_path().to_str().unwrap());
 
     // validate:
     assert!(result.is_ok());

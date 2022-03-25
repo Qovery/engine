@@ -113,11 +113,7 @@ pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -
             Err(err) => {
                 error!(
                     "{}",
-                    format!(
-                        "error trying to remove workspace directory '{}', error: {}",
-                        workspace_dir.as_str(),
-                        err
-                    )
+                    format!("error trying to remove workspace directory '{}', error: {}", workspace_dir.as_str(), err)
                 );
                 Err(err)
             }
@@ -168,11 +164,7 @@ mod tests {
         // setup:
         let execution_id: &str = "123";
         let tmp_dir = TempDir::new("workspace_directory").expect("error creating temporary dir");
-        let root_dir = format!(
-            "{}/.qovery-workspace/{}",
-            tmp_dir.path().to_str().unwrap(),
-            execution_id
-        );
+        let root_dir = format!("{}/.qovery-workspace/{}", tmp_dir.path().to_str().unwrap(), execution_id);
         let root_dir_path = Path::new(root_dir.as_str());
 
         let directories_to_create = vec![
@@ -215,10 +207,8 @@ mod tests {
         .collect::<Vec<File>>();
 
         // execute:
-        let result = archive_workspace_directory(
-            tmp_dir.path().to_str().expect("error getting file path string"),
-            execution_id,
-        );
+        let result =
+            archive_workspace_directory(tmp_dir.path().to_str().expect("error getting file path string"), execution_id);
 
         // verify:
         assert_eq!(true, result.is_ok());

@@ -63,10 +63,7 @@ fn test_get_registry_namespace() {
         assert_eq!(true, result.status.is_some());
 
         let status = result.status.unwrap();
-        assert_eq!(
-            scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready,
-            status,
-        );
+        assert_eq!(scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready, status,);
 
         // clean-up:
         container_registry.delete_registry_namespace(&image).unwrap();
@@ -194,10 +191,7 @@ fn test_get_or_create_registry_namespace() {
         assert_eq!(true, result.status.is_some());
 
         let status = result.status.unwrap();
-        assert_eq!(
-            scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready,
-            status,
-        );
+        assert_eq!(scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready, status,);
 
         let added_registry_result = container_registry.get_registry_namespace(&image);
         assert_eq!(true, added_registry_result.is_some());
@@ -215,10 +209,7 @@ fn test_get_or_create_registry_namespace() {
         assert_eq!(true, result.status.is_some());
 
         let status = result.status.unwrap();
-        assert_eq!(
-            scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready,
-            status,
-        );
+        assert_eq!(scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready, status,);
 
         let added_registry_result = container_registry.get_registry_namespace(&image);
         assert_eq!(true, added_registry_result.is_some());

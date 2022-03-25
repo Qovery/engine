@@ -105,12 +105,9 @@ where
     let mut output_vec: Vec<String> = Vec::with_capacity(20);
     let mut err_output_vec: Vec<String> = Vec::with_capacity(20);
     let cmd_args = vec!["get", "svc", "-n", namespace, service_name, "-o", "json"];
-    let _ = kubectl_exec_with_output(
-        cmd_args.clone(),
-        envs.clone(),
-        &mut |line| output_vec.push(line),
-        &mut |line| err_output_vec.push(line),
-    )?;
+    let _ = kubectl_exec_with_output(cmd_args.clone(), envs.clone(), &mut |line| output_vec.push(line), &mut |line| {
+        err_output_vec.push(line)
+    })?;
 
     let output_string: String = output_vec.join("\n");
     let err_output_string: String = output_vec.join("\n");
@@ -165,9 +162,7 @@ where
                 return Ok(None);
             }
 
-            Ok(Some(
-                result.metadata.annotations.kubernetes_digitalocean_com_load_balancer_id,
-            ))
+            Ok(Some(result.metadata.annotations.kubernetes_digitalocean_com_load_balancer_id))
         }
         Err(e) => Err(e),
     }
@@ -192,9 +187,7 @@ where
         return Ok(None);
     }
 
-    Ok(Some(
-        result.status.load_balancer.ingress.first().unwrap().hostname.clone(),
-    ))
+    Ok(Some(result.status.load_balancer.ingress.first().unwrap().hostname.clone()))
 }
 
 pub fn kubectl_exec_is_pod_ready_with_retry<P>(
@@ -419,9 +412,7 @@ where
     P: AsRef<Path>,
 {
     if labels.is_empty() {
-        return Err(CommandError::new_from_safe_message(
-            "No labels were defined, can't set them".to_string(),
-        ));
+        return Err(CommandError::new_from_safe_message("No labels were defined, can't set them".to_string()));
     };
 
     if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace, envs.clone()) {
@@ -445,9 +436,8 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs.clone());
 
-    let _ = kubectl_exec_with_output(command_args, _envs, &mut |line| info!("{}", line), &mut |line| {
-        error!("{}", line)
-    })?;
+    let _ =
+        kubectl_exec_with_output(command_args, _envs, &mut |line| info!("{}", line), &mut |line| error!("{}", line))?;
 
     Ok(())
 }
@@ -555,12 +545,10 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
 
-    let _ = kubectl_exec_with_output(
-        vec!["delete", "crd", crd_name],
-        _envs,
-        &mut |line| info!("{}", line),
-        &mut |line| error!("{}", line),
-    )?;
+    let _ =
+        kubectl_exec_with_output(vec!["delete", "crd", crd_name], _envs, &mut |line| info!("{}", line), &mut |line| {
+            error!("{}", line)
+        })?;
 
     Ok(())
 }
@@ -680,12 +668,7 @@ where
     environment_variables.push(("KUBECONFIG", kubernetes_config.as_ref().to_str().unwrap()));
     let args = vec!["-n", namespace, "rollout", "restart", "deployment", name];
 
-    kubectl_exec_with_output(
-        args,
-        environment_variables,
-        &mut |line| info!("{}", line),
-        &mut |line| error!("{}", line),
-    )
+    kubectl_exec_with_output(args, environment_variables, &mut |line| info!("{}", line), &mut |line| error!("{}", line))
 }
 
 pub fn kubectl_exec_get_node<P>(
@@ -784,11 +767,7 @@ pub fn kubectl_exec_get_configmap<P>(
 where
     P: AsRef<Path>,
 {
-    kubectl_exec::<P, Configmap>(
-        vec!["get", "configmap", "-o", "json", "-n", namespace, name],
-        kubernetes_config,
-        envs,
-    )
+    kubectl_exec::<P, Configmap>(vec!["get", "configmap", "-o", "json", "-n", namespace, name], kubernetes_config, envs)
 }
 
 pub fn kubectl_exec_get_json_events<P>(
@@ -878,10 +857,7 @@ where
     P: AsRef<Path>,
 {
     let pods = specific_pod_name.unwrap_or("*");
-    let api_url = format!(
-        "/apis/custom.metrics.k8s.io/v1beta1/namespaces/{}/pods/{}/{}",
-        namespace, pods, metric_name
-    );
+    let api_url = format!("/apis/custom.metrics.k8s.io/v1beta1/namespaces/{}/pods/{}/{}", namespace, pods, metric_name);
     kubectl_exec::<P, KubernetesApiMetrics>(vec!["get", "--raw", api_url.as_str()], kubernetes_config, envs)
 }
 
@@ -1035,22 +1011,14 @@ pub fn kubectl_get_pvc<P>(kubernetes_config: P, namespace: &str, envs: Vec<(&str
 where
     P: AsRef<Path>,
 {
-    kubectl_exec::<P, PVC>(
-        vec!["get", "pvc", "-o", "json", "-n", namespace],
-        kubernetes_config,
-        envs,
-    )
+    kubectl_exec::<P, PVC>(vec!["get", "pvc", "-o", "json", "-n", namespace], kubernetes_config, envs)
 }
 
 pub fn kubectl_get_svc<P>(kubernetes_config: P, namespace: &str, envs: Vec<(&str, &str)>) -> Result<SVC, CommandError>
 where
     P: AsRef<Path>,
 {
-    kubectl_exec::<P, SVC>(
-        vec!["get", "svc", "-o", "json", "-n", namespace],
-        kubernetes_config,
-        envs,
-    )
+    kubectl_exec::<P, SVC>(vec!["get", "svc", "-o", "json", "-n", namespace], kubernetes_config, envs)
 }
 
 /// kubectl_delete_crash_looping_pods: delete crash looping pods.
@@ -1190,12 +1158,9 @@ where
     _envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
-    let _ = kubectl_exec_with_output(
-        args.clone(),
-        _envs.clone(),
-        &mut |line| output_vec.push(line),
-        &mut |line| error!("{}", line),
-    )?;
+    let _ = kubectl_exec_with_output(args.clone(), _envs.clone(), &mut |line| output_vec.push(line), &mut |line| {
+        error!("{}", line)
+    })?;
 
     let output_string: String = output_vec.join("");
 

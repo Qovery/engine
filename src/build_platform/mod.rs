@@ -138,12 +138,7 @@ impl Image {
         &self.repository_name
     }
     pub fn full_image_name_with_tag(&self) -> String {
-        format!(
-            "{}/{}:{}",
-            self.registry_url.host_str().unwrap_or_default(),
-            self.name,
-            self.tag
-        )
+        format!("{}/{}:{}", self.registry_url.host_str().unwrap_or_default(), self.name, self.tag)
     }
 
     pub fn full_image_name(&self) -> String {

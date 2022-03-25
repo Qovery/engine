@@ -170,18 +170,11 @@ fn test_put_file() {
     let temp_file = NamedTempFile::new().expect("error while creating tempfile");
 
     // compute:
-    let result = spaces.put(
-        bucket_name.as_str(),
-        object_key.as_str(),
-        temp_file.into_temp_path().to_str().unwrap(),
-    );
+    let result = spaces.put(bucket_name.as_str(), object_key.as_str(), temp_file.into_temp_path().to_str().unwrap());
 
     // validate:
     assert!(result.is_ok());
-    assert_eq!(
-        true,
-        spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok()
-    );
+    assert_eq!(true, spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok());
 
     // clean-up:
     spaces
@@ -226,10 +219,7 @@ fn test_get_file() {
 
     // validate:
     assert!(result.is_ok());
-    assert_eq!(
-        true,
-        spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok()
-    );
+    assert_eq!(true, spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok());
 
     // clean-up:
     spaces

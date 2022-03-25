@@ -60,10 +60,8 @@ impl S3 {
     fn get_s3_client(&self) -> S3Client {
         let region = RusotoRegion::from_str(&self.region.to_aws_format())
             .unwrap_or_else(|_| panic!("S3 region `{}` doesn't seems to be valid.", self.region.to_aws_format()));
-        let client = Client::new_with(
-            self.get_credentials(),
-            HttpClient::new().expect("unable to create new Http client"),
-        );
+        let client =
+            Client::new_with(self.get_credentials(), HttpClient::new().expect("unable to create new Http client"));
 
         S3Client::new_with_client(client, region)
     }

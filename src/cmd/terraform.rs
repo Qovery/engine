@@ -27,10 +27,7 @@ fn manage_common_issues(terraform_provider_lock: &str, err: &CommandError) -> Re
             Ok(_) => Ok(()),
             Err(e) => Err(CommandError::new(
                 format!("Wasn't able to delete terraform lock file {}", &terraform_provider_lock),
-                Some(format!(
-                    "Wasn't able to delete terraform lock file {}, error: {:?}",
-                    &terraform_provider_lock, e
-                )),
+                Some(format!("Wasn't able to delete terraform lock file {}, error: {:?}", &terraform_provider_lock, e)),
             )),
         };
     } else if err.message().contains("Plugin reinitialization required") {
@@ -38,9 +35,7 @@ fn manage_common_issues(terraform_provider_lock: &str, err: &CommandError) -> Re
         return Ok(());
     }
 
-    Err(CommandError::new_from_safe_message(
-        "Not known method to fix this Terraform issue".to_string(),
-    ))
+    Err(CommandError::new_from_safe_message("Not known method to fix this Terraform issue".to_string()))
 }
 
 fn terraform_init_validate(root_dir: &str) -> Result<(), CommandError> {
@@ -192,11 +187,7 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Co
 
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    let mut cmd = QoveryCommand::new(
-        "terraform",
-        &args,
-        &[(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())],
-    );
+    let mut cmd = QoveryCommand::new("terraform", &args, &[(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())]);
     cmd.set_current_dir(root_dir);
 
     let result = cmd.exec_with_output(

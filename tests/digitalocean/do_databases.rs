@@ -131,13 +131,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
 
         // Check that we have actually 0 pods running for this db
         let app_name = format!("postgresql{}-0", environment.databases[0].name);
-        let ret = get_pods(
-            context.clone(),
-            ProviderKind::Do,
-            environment.clone(),
-            app_name.as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(context.clone(), ProviderKind::Do, environment.clone(), app_name.as_str(), secrets.clone());
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
@@ -220,12 +214,9 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(
-            &context,
-            vec![environment, environment_delete],
-            secrets.clone(),
-            DO_TEST_REGION,
-        ) {
+        if let Err(e) =
+            clean_environments(&context, vec![environment, environment_delete], secrets.clone(), DO_TEST_REGION)
+        {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -371,10 +362,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         }
 
         let ret = environment_delete.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
-        assert!(matches!(
-            ret,
-            TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
-        ));
+        assert!(matches!(ret, TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)));
 
         // delete images created during test from registries
         if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
