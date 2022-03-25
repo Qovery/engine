@@ -95,7 +95,7 @@ pub fn get_do_kubeconfig_by_cluster_name(token: &str, cluster_name: &str) -> Res
     let cluster_name = cluster_name.trim().to_lowercase();
     match clusters_copy
         .into_iter()
-        .filter(|cluster| cluster.name.trim().to_lowercase() == cluster_name.to_string())
+        .filter(|cluster| cluster.name.trim().to_lowercase() == cluster_name)
         .collect::<Vec<KubernetesCluster>>()
         .first()
     {
