@@ -9,7 +9,7 @@ use rand::Rng;
 use retry::Error::Operation;
 use std::{env, fs, thread, time};
 
-fn manage_common_issues(terraform_provider_lock: &String, err: &CommandError) -> Result<(), CommandError> {
+fn manage_common_issues(terraform_provider_lock: &str, err: &CommandError) -> Result<(), CommandError> {
     // Error: Failed to install provider from shared cache
     // in order to avoid lock errors on parallel run, let's sleep a bit
     // https://github.com/hashicorp/terraform/issues/28041
@@ -70,8 +70,8 @@ fn terraform_init_validate(root_dir: &str) -> Result<(), CommandError> {
 
     match result {
         Ok(_) => Ok(()),
-        Err(Operation { error, .. }) => return Err(error),
-        Err(retry::Error::Internal(e)) => return Err(CommandError::new(e, None)),
+        Err(Operation { error, .. }) => Err(error),
+        Err(retry::Error::Internal(e)) => Err(CommandError::new(e, None)),
     }
 }
 
@@ -195,7 +195,7 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Co
     let mut cmd = QoveryCommand::new(
         "terraform",
         &args,
-        &vec![(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())],
+        &[(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())],
     );
     cmd.set_current_dir(root_dir);
 
@@ -249,7 +249,7 @@ in the dependency lock file
         "#;
 
         let could_not_load_plugin_error = CommandError::new_from_safe_message(could_not_load_plugin.to_string());
-        assert!(manage_common_issues(&"/tmp/do_not_exists".to_string(), &could_not_load_plugin_error).is_ok());
+        assert!(manage_common_issues("/tmp/do_not_exists", &could_not_load_plugin_error).is_ok());
     }
 
     #[test]

@@ -14,7 +14,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
     let secrets = FuncTestsSecrets::new();
 
     let region = secrets.AWS_DEFAULT_REGION.as_ref().expect("AWS region was not found");
-    let aws_region = AwsRegion::from_str(&region).expect("Wasn't able to convert the desired region");
+    let aws_region = AwsRegion::from_str(region).expect("Wasn't able to convert the desired region");
     let aws_zones = aws_region.get_zones();
 
     let organization_id = generate_id();
@@ -32,7 +32,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
     );
 
     let environment = test_utilities::common::working_minimal_environment(&context, cluster_domain.as_str());
-    let env_action = environment.clone();
+    let env_action = environment;
 
     engine_run_test(|| {
         cluster_test(
@@ -40,7 +40,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             Kind::Aws,
             context.clone(),
             logger(),
-            &region,
+            region,
             Some(aws_zones),
             ClusterTestType::Classic,
             AWS_KUBERNETES_MAJOR_VERSION,

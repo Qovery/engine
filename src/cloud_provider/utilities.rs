@@ -1,3 +1,5 @@
+#![allow(clippy::field_reassign_with_default)]
+
 use std::collections::HashMap;
 
 use crate::errors::{CommandError, EngineError};
@@ -12,6 +14,7 @@ use retry::delay::Fixed;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::fmt::Write;
 use std::str::FromStr;
 use trust_dns_resolver::config::*;
 use trust_dns_resolver::proto::rr::{RData, RecordType};
@@ -167,10 +170,7 @@ pub fn generate_supported_version(
 
             if minor_min == minor_max {
                 // add short minor format targeting latest version
-                supported_versions.insert(
-                    format!("{}.{}", major.to_string(), minor_max.to_string()),
-                    latest_major_version.clone(),
-                );
+                supported_versions.insert(format!("{}.{}", major, minor_max), latest_major_version.clone());
                 if update_min.unwrap() == update_max.unwrap() {
                     let version = format!("{}.{}.{}", major, minor_min, update_min.unwrap());
                     supported_versions.insert(version.clone(), format!("{}{}", version, suffix));
@@ -184,13 +184,8 @@ pub fn generate_supported_version(
                 for minor in minor_min..minor_max + 1 {
                     // add short minor format targeting latest version
                     supported_versions.insert(
-                        format!("{}.{}", major.to_string(), minor.to_string()),
-                        format!(
-                            "{}.{}.{}",
-                            major.to_string(),
-                            minor.to_string(),
-                            update_max.unwrap().to_string()
-                        ),
+                        format!("{}.{}", major, minor),
+                        format!("{}.{}.{}", major, minor, update_max.unwrap()),
                     );
                     if update_min.unwrap() == update_max.unwrap() {
                         let version = format!("{}.{}.{}", major, minor, update_min.unwrap());
@@ -240,22 +235,6 @@ impl VersionsNumber {
         }
     }
 
-    pub fn to_string(&self) -> String {
-        let mut version = vec![self.major.to_string()];
-
-        if self.minor.is_some() {
-            version.push(self.minor.clone().unwrap())
-        }
-        if self.patch.is_some() {
-            version.push(self.patch.clone().unwrap())
-        }
-        if self.suffix.is_some() {
-            version.push(self.suffix.clone().unwrap())
-        }
-
-        version.join(".")
-    }
-
     pub fn to_major_version_string(&self) -> String {
         self.major.clone()
     }
@@ -286,7 +265,7 @@ impl FromStr for VersionsNumber {
         let major = match version_split.next() {
             Some(major) => {
                 let major = major.to_string();
-                major.replace("v", "")
+                major.replace('v', "")
             }
             None => {
                 return Err(CommandError::new_from_safe_message(format!(
@@ -298,7 +277,7 @@ impl FromStr for VersionsNumber {
 
         let minor = version_split.next().map(|minor| {
             let minor = minor.to_string();
-            minor.replace("+", "")
+            minor.replace('+', "")
         });
 
         let patch = version_split.next().map(|patch| patch.to_string());
@@ -314,7 +293,24 @@ impl FromStr for VersionsNumber {
 
 impl fmt::Display for VersionsNumber {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        f.write_str(&self.major)?;
+
+        if let Some(minor) = &self.minor {
+            f.write_char('.')?;
+            f.write_str(minor)?;
+        }
+
+        if let Some(patch) = &self.patch {
+            f.write_char('.')?;
+            f.write_str(patch)?;
+        }
+
+        if let Some(suffix) = &self.suffix {
+            f.write_char('.')?;
+            f.write_str(suffix)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -539,12 +535,12 @@ pub fn check_domain_for(
 }
 
 pub fn sanitize_name(prefix: &str, name: &str) -> String {
-    format!("{}-{}", prefix, name).replace("_", "-")
+    format!("{}-{}", prefix, name).replace('_', "-")
 }
 
 pub fn managed_db_name_sanitizer(max_size: usize, prefix: &str, name: &str) -> String {
     let max_size = max_size - prefix.len();
-    let mut new_name = format!("{}{}", prefix, name.replace("_", "").replace("-", ""));
+    let mut new_name = format!("{}{}", prefix, name.replace('_', "").replace('-', ""));
     if new_name.chars().count() > max_size {
         new_name = new_name[..max_size].to_string();
     }

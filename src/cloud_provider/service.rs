@@ -73,7 +73,7 @@ pub trait Service: ToTransmitter {
     fn min_instances(&self) -> u32;
     fn max_instances(&self) -> u32;
     fn publicly_accessible(&self) -> bool;
-    fn fqdn<'a>(&self, target: &DeploymentTarget, fqdn: &'a String, is_managed: bool) -> String {
+    fn fqdn(&self, target: &DeploymentTarget, fqdn: &str, is_managed: bool) -> String {
         match &self.publicly_accessible() {
             true => fqdn.to_string(),
             false => match is_managed {
@@ -296,7 +296,7 @@ impl<'a> ServiceType<'a> {
 
 impl<'a> ToString for ServiceType<'a> {
     fn to_string(&self) -> String {
-        self.name().to_string()
+        self.name()
     }
 }
 
@@ -311,7 +311,7 @@ where
 {
     let kubernetes = deployment_target.kubernetes;
     let environment = deployment_target.environment;
-    match get_stateless_resource_information_for_user(kubernetes, environment, service, event_details.clone()) {
+    match get_stateless_resource_information_for_user(kubernetes, environment, service, event_details) {
         Ok(lines) => lines,
         Err(err) => {
             logger.log(
@@ -390,9 +390,9 @@ where
         tera_context,
     ) {
         return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details.clone(),
+            event_details,
             service.helm_chart_dir(),
-            workspace_dir.to_string(),
+            workspace_dir,
             e,
         ));
     }
@@ -440,19 +440,19 @@ where
         service.selector(),
     );
 
-    helm.upgrade(&chart, &vec![])
+    helm.upgrade(&chart, &[])
         .map_err(|e| helm::to_engine_error(&event_details, e))?;
 
     crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
-        service.selector().unwrap_or("".to_string()).as_str(),
+        service.selector().unwrap_or_default().as_str(),
         kubernetes.cloud_provider().credentials_environment_variables(),
     )
     .map_err(|e| {
         EngineError::new_k8s_pod_not_ready(
             event_details.clone(),
-            service.selector().unwrap_or("".to_string()),
+            service.selector().unwrap_or_default(),
             environment.namespace().to_string(),
             e,
         )
@@ -522,13 +522,13 @@ pub fn scale_down_application(
         kubernetes.cloud_provider().credentials_environment_variables(),
         environment.namespace(),
         scaling_kind,
-        service.selector().unwrap_or("".to_string()).as_str(),
+        service.selector().unwrap_or_default().as_str(),
         replicas_count as u32,
     )
     .map_err(|e| {
         EngineError::new_k8s_scale_replicas(
             event_details.clone(),
-            service.selector().unwrap_or("".to_string()),
+            service.selector().unwrap_or_default(),
             environment.namespace().to_string(),
             replicas_count as u32,
             e,
@@ -558,12 +558,7 @@ where
     let helm_release_name = service.helm_release_name();
 
     // clean the resource
-    let _ = helm_uninstall_release(
-        kubernetes,
-        environment,
-        helm_release_name.as_str(),
-        event_details.clone(),
-    )?;
+    let _ = helm_uninstall_release(kubernetes, environment, helm_release_name.as_str(), event_details)?;
 
     Ok(())
 }
@@ -602,9 +597,9 @@ where
             context.clone(),
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 service.terraform_common_resource_dir_path(),
-                workspace_dir.to_string(),
+                workspace_dir,
                 e,
             ));
         }
@@ -615,9 +610,9 @@ where
             context.clone(),
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 service.terraform_resource_dir_path(),
-                workspace_dir.to_string(),
+                workspace_dir,
                 e,
             ));
         }
@@ -626,12 +621,12 @@ where
         if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
             service.helm_chart_external_name_service_dir(),
             external_svc_dir.as_str(),
-            context.clone(),
+            context,
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 service.helm_chart_external_name_service_dir(),
-                external_svc_dir.to_string(),
+                external_svc_dir,
                 e,
             ));
         }
@@ -665,9 +660,9 @@ where
             context.clone(),
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 service.helm_chart_dir(),
-                workspace_dir.to_string(),
+                workspace_dir,
                 e,
             ));
         }
@@ -676,12 +671,12 @@ where
         if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
             service.helm_chart_values_dir(),
             workspace_dir.as_str(),
-            context.clone(),
+            context,
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 service.helm_chart_values_dir(),
-                workspace_dir.to_string(),
+                workspace_dir,
                 e,
             ));
         }
@@ -698,7 +693,7 @@ where
 
         // create a namespace with labels if it does not exist
         crate::cmd::kubectl::kubectl_exec_create_namespace(
-            kubernetes_config_file_path.to_string(),
+            &kubernetes_config_file_path,
             environment.namespace(),
             namespace_labels,
             kubernetes.cloud_provider().credentials_environment_variables(),
@@ -726,14 +721,14 @@ where
             service.selector(),
         );
 
-        helm.upgrade(&chart, &vec![])
+        helm.upgrade(&chart, &[])
             .map_err(|e| helm::to_engine_error(&event_details, e))?;
 
         // check app status
         let is_pod_ready = crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
             &kubernetes_config_file_path,
             environment.namespace(),
-            service.selector().unwrap_or("".to_string()).as_str(),
+            service.selector().unwrap_or_default().as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
         if let Ok(Some(true)) = is_pod_ready {
@@ -741,7 +736,7 @@ where
         }
 
         return Err(EngineError::new_database_failed_to_start_after_several_retries(
-            event_details.clone(),
+            event_details,
             service.name_with_id(),
             service.service_type().name(),
             match is_pod_ready {
@@ -775,9 +770,9 @@ where
             tera_context.clone(),
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 service.terraform_common_resource_dir_path(),
-                workspace_dir.to_string(),
+                workspace_dir,
                 e,
             ));
         }
@@ -788,9 +783,9 @@ where
             tera_context.clone(),
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 service.terraform_resource_dir_path(),
-                workspace_dir.to_string(),
+                workspace_dir,
                 e,
             ));
         }
@@ -798,13 +793,13 @@ where
         let external_svc_dir = format!("{}/{}", workspace_dir, "external-name-svc");
         if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
             service.helm_chart_external_name_service_dir(),
-            external_svc_dir.to_string(),
+            &external_svc_dir,
             tera_context.clone(),
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 service.helm_chart_external_name_service_dir(),
-                external_svc_dir.to_string(),
+                external_svc_dir,
                 e,
             ));
         }
@@ -812,12 +807,12 @@ where
         if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
             service.helm_chart_external_name_service_dir(),
             workspace_dir.as_str(),
-            tera_context.clone(),
+            tera_context,
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 service.helm_chart_external_name_service_dir(),
-                workspace_dir.to_string(),
+                workspace_dir,
                 e,
             ));
         }
@@ -827,7 +822,7 @@ where
                 logger.log(
                     LogLevel::Info,
                     EngineEvent::Deleting(
-                        event_details.clone(),
+                        event_details,
                         EventMessage::new_from_safe("Deleting secret containing tfstates".to_string()),
                     ),
                 );
@@ -835,8 +830,7 @@ where
                     delete_terraform_tfstate_secret(kubernetes, environment.namespace(), &get_tfstate_name(service));
             }
             Err(e) => {
-                let engine_err =
-                    EngineError::new_terraform_error_while_executing_destroy_pipeline(event_details.clone(), e);
+                let engine_err = EngineError::new_terraform_error_while_executing_destroy_pipeline(event_details, e);
 
                 logger.log(LogLevel::Error, EngineEvent::Error(engine_err.clone(), None));
 
@@ -847,12 +841,7 @@ where
         // If not managed, we use helm to deploy
         let helm_release_name = service.helm_release_name();
         // clean the resource
-        let _ = helm_uninstall_release(
-            kubernetes,
-            environment,
-            helm_release_name.as_str(),
-            event_details.clone(),
-        )?;
+        let _ = helm_uninstall_release(kubernetes, environment, helm_release_name.as_str(), event_details)?;
     }
 
     Ok(())
@@ -925,10 +914,10 @@ where
                     VersionsNumber::from_str(&service.version()).map_err(|e| {
                         EngineError::new_version_number_parsing_error(event_details.clone(), service.version(), e)
                     })?,
-                    VersionsNumber::from_str(&version.to_string()).map_err(|e| {
+                    VersionsNumber::from_str(&version).map_err(|e| {
                         EngineError::new_version_number_parsing_error(event_details.clone(), version.to_string(), e)
                     })?,
-                    Some(message.to_string()),
+                    Some(message),
                 ));
             }
 
@@ -936,7 +925,7 @@ where
                 VersionsNumber::from_str(&service.version()).map_err(|e| {
                     EngineError::new_version_number_parsing_error(event_details.clone(), service.version(), e)
                 })?,
-                VersionsNumber::from_str(&version.to_string()).map_err(|e| {
+                VersionsNumber::from_str(&version).map_err(|e| {
                     EngineError::new_version_number_parsing_error(event_details.clone(), version.to_string(), e)
                 })?,
                 None,
@@ -959,7 +948,7 @@ where
             listeners_helper.deployment_error(progress_info);
 
             let error = EngineError::new_unsupported_version_error(
-                event_details.clone(),
+                event_details,
                 service.service_type().name(),
                 service.version(),
             );
@@ -1028,21 +1017,21 @@ where
             listeners_helper.deployment_in_progress(progress_info);
             logger.log(
                 LogLevel::Info,
-                EngineEvent::Deploying(event_details.clone(), EventMessage::new_from_safe(message.to_string())),
+                EngineEvent::Deploying(event_details.clone(), EventMessage::new_from_safe(message)),
             );
         }
         CheckAction::Pause => {
             listeners_helper.pause_in_progress(progress_info);
             logger.log(
                 LogLevel::Info,
-                EngineEvent::Pausing(event_details.clone(), EventMessage::new_from_safe(message.to_string())),
+                EngineEvent::Pausing(event_details.clone(), EventMessage::new_from_safe(message)),
             );
         }
         CheckAction::Delete => {
             listeners_helper.delete_in_progress(progress_info);
             logger.log(
                 LogLevel::Info,
-                EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message.to_string())),
+                EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)),
             );
         }
     }
@@ -1107,10 +1096,10 @@ where
                 CheckAction::Delete => listeners_helper.delete_error(progress_info),
             }
 
-            return Err(EngineError::new_k8s_service_issue(
-                event_details.clone(),
+            Err(EngineError::new_k8s_service_issue(
+                event_details,
                 CommandError::new(err.message(), Some("Error with Kubernetes service".to_string())),
-            ));
+            ))
         }
         _ => {
             let progress_info = ProgressInfo::new(
@@ -1150,13 +1139,13 @@ pub fn get_stateless_resource_information_for_user<T>(
 where
     T: Service + ?Sized,
 {
-    let selector = service.selector().unwrap_or("".to_string());
+    let selector = service.selector().unwrap_or_default();
     let mut result = Vec::with_capacity(50);
     let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
 
     // get logs
     let logs = crate::cmd::kubectl::kubectl_exec_logs(
-        kubernetes_config_file_path.to_string(),
+        &kubernetes_config_file_path,
         environment.namespace(),
         selector.as_str(),
         kubernetes.cloud_provider().credentials_environment_variables(),
@@ -1174,7 +1163,7 @@ where
 
     // get pod state
     let pods = crate::cmd::kubectl::kubectl_exec_get_pods(
-        kubernetes_config_file_path.to_string(),
+        &kubernetes_config_file_path,
         Some(environment.namespace()),
         Some(selector.as_str()),
         kubernetes.cloud_provider().credentials_environment_variables(),
@@ -1253,7 +1242,7 @@ pub fn helm_uninstall_release(
     .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))?;
 
     let chart = ChartInfo::new_from_release_name(helm_release_name, environment.namespace());
-    helm.uninstall(&chart, &vec![])
+    helm.uninstall(&chart, &[])
         .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))
 }
 
@@ -1298,9 +1287,7 @@ where
     S: Service + Listen,
     F: Fn() -> R,
 {
-    let event_details = service
-        .get_event_details(Stage::Environment(EnvironmentStep::Deploy))
-        .clone();
+    let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
     let logger = service.logger().clone_dyn();
     let listeners = std::clone::Clone::clone(service.listeners());
 
@@ -1321,7 +1308,7 @@ where
             let listeners_helper = ListenersHelper::new(&listeners);
             let action = action;
             let progress_info = progress_info;
-            let waiting_message = waiting_message.clone().unwrap_or("No message...".to_string());
+            let waiting_message = waiting_message.clone().unwrap_or_else(|| "No message...".to_string());
 
             loop {
                 // do notify users here

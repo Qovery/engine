@@ -329,7 +329,7 @@ impl ObjectStorage for Spaces {
                     Error::Internal(err) => Err(ObjectStorageError::CannotGetObjectFile {
                         bucket_name: bucket_name.to_string(),
                         file_name: object_key.to_string(),
-                        raw_error_message: err.to_string(),
+                        raw_error_message: err,
                     }),
                 };
             }
@@ -353,7 +353,7 @@ impl ObjectStorage for Spaces {
         match block_on(s3_client.put_object(PutObjectRequest {
             bucket: bucket_name.to_string(),
             key: object_key.to_string(),
-            body: Some(StreamingBody::from(match std::fs::read(file_path.clone()) {
+            body: Some(StreamingBody::from(match std::fs::read(file_path) {
                 Ok(x) => x,
                 Err(e) => {
                     return Err(ObjectStorageError::CannotReadFile {

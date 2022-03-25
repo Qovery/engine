@@ -123,7 +123,7 @@ where
             cmd_args.into_iter().map(|a| a.to_string()).collect(),
             envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
             Some(output_string.to_string()),
-            Some(err_output_string.to_string()),
+            Some(err_output_string),
         )),
     }
 }
@@ -166,11 +166,7 @@ where
             }
 
             Ok(Some(
-                result
-                    .metadata
-                    .annotations
-                    .kubernetes_digitalocean_com_load_balancer_id
-                    .clone(),
+                result.metadata.annotations.kubernetes_digitalocean_com_load_balancer_id,
             ))
         }
         Err(e) => Err(e),
@@ -403,8 +399,8 @@ where
     }
 
     // additional labels
-    if labels.is_some() {
-        match kubectl_add_labels_to_namespace(kubernetes_config, namespace, labels.unwrap(), envs) {
+    if let Some(..) = labels {
+        match kubectl_add_labels_to_namespace(kubernetes_config, namespace, labels.unwrap_or_default(), envs) {
             Ok(_) => {}
             Err(e) => return Err(e),
         }
@@ -460,7 +456,7 @@ where
 pub fn does_contain_terraform_tfstate<P>(
     kubernetes_config: P,
     namespace: &str,
-    envs: &Vec<(&str, &str)>,
+    envs: &[(&str, &str)],
 ) -> Result<bool, CommandError>
 where
     P: AsRef<Path>,
@@ -527,7 +523,7 @@ pub fn kubectl_exec_delete_namespace<P>(
 where
     P: AsRef<Path>,
 {
-    if does_contain_terraform_tfstate(&kubernetes_config, &namespace, &envs)? {
+    if does_contain_terraform_tfstate(&kubernetes_config, namespace, &envs)? {
         return Err(CommandError::new_from_safe_message(
             "Namespace contains terraform tfstates in secret, can't delete it !".to_string(),
         ));
@@ -675,18 +671,18 @@ pub fn kubectl_exec_rollout_restart_deployment<P>(
     kubernetes_config: P,
     name: &str,
     namespace: &str,
-    envs: &Vec<(&str, &str)>,
+    envs: &[(&str, &str)],
 ) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
-    let mut environment_variables: Vec<(&str, &str)> = envs.clone();
+    let mut environment_variables: Vec<(&str, &str)> = envs.to_owned();
     environment_variables.push(("KUBECONFIG", kubernetes_config.as_ref().to_str().unwrap()));
     let args = vec!["-n", namespace, "rollout", "restart", "deployment", name];
 
     kubectl_exec_with_output(
         args,
-        environment_variables.clone(),
+        environment_variables,
         &mut |line| info!("{}", line),
         &mut |line| error!("{}", line),
     )
@@ -789,7 +785,7 @@ where
     P: AsRef<Path>,
 {
     kubectl_exec::<P, Configmap>(
-        vec!["get", "configmap", "-o", "json", "-n", namespace, &name],
+        vec!["get", "configmap", "-o", "json", "-n", namespace, name],
         kubernetes_config,
         envs,
     )
@@ -845,7 +841,7 @@ where
     P: AsRef<Path>,
 {
     let result = kubectl_exec::<P, KubernetesList<Item>>(
-        vec!["delete", &object.to_string(), "--all-namespaces", "--all"],
+        vec!["delete", object, "--all-namespaces", "--all"],
         kubernetes_config,
         envs,
     );
@@ -857,7 +853,7 @@ where
             if lower_case_message.contains("no resources found") || lower_case_message.ends_with(" deleted") {
                 return Ok(());
             }
-            return Err(e);
+            Err(e)
         }
     }
 }
@@ -972,7 +968,7 @@ where
             "scale",
             "--replicas",
             &replicas_count.to_string(),
-            &kind_formatted,
+            kind_formatted,
             "--selector",
             selector,
         ],
@@ -1128,7 +1124,7 @@ where
                     .container_statuses
                     .as_ref()
                     .expect("Cannot get container statuses")
-                    .into_iter()
+                    .iter()
                     .any(|e| {
                         e.state.waiting.as_ref().is_some()
                         && e.state.waiting.as_ref().expect("cannot get container state").reason == KubernetesPodStatusReason::CrashLoopBackOff // check 1

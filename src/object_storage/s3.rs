@@ -45,9 +45,9 @@ impl S3 {
             context,
             id,
             name,
-            access_key_id: access_key_id.to_string(),
-            secret_access_key: secret_access_key.to_string(),
-            region: region.clone(),
+            access_key_id,
+            secret_access_key,
+            region,
             bucket_versioning_activated,
             bucket_ttl_in_seconds,
         }
@@ -59,7 +59,7 @@ impl S3 {
 
     fn get_s3_client(&self) -> S3Client {
         let region = RusotoRegion::from_str(&self.region.to_aws_format())
-            .expect(format!("S3 region `{}` doesn't seems to be valid.", self.region.to_aws_format()).as_str());
+            .unwrap_or_else(|_| panic!("S3 region `{}` doesn't seems to be valid.", self.region.to_aws_format()));
         let client = Client::new_with(
             self.get_credentials(),
             HttpClient::new().expect("unable to create new Http client"),
@@ -191,11 +191,11 @@ impl ObjectStorage for S3 {
                 tag_set: vec![
                     Tag {
                         key: "CreationDate".to_string(),
-                        value: format!("{}", creation_date.to_rfc3339()),
+                        value: creation_date.to_rfc3339(),
                     },
                     Tag {
                         key: "Ttl".to_string(),
-                        value: format!("{}", self.bucket_ttl_in_seconds.unwrap_or_else(|| 0).to_string()),
+                        value: format!("{}", self.bucket_ttl_in_seconds.unwrap_or(0)),
                     },
                 ],
             },
@@ -324,7 +324,7 @@ impl ObjectStorage for S3 {
         match block_on(s3_client.put_object(PutObjectRequest {
             bucket: bucket_name.to_string(),
             key: object_key.to_string(),
-            body: Some(StreamingBody::from(match std::fs::read(file_path.clone()) {
+            body: Some(StreamingBody::from(match std::fs::read(file_path) {
                 Ok(x) => x,
                 Err(e) => {
                     return Err(ObjectStorageError::CannotReadFile {

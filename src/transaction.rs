@@ -222,19 +222,19 @@ impl<'a> Transaction<'a> {
                 Step::CreateKubernetes => {
                     // revert kubernetes creation
                     if let Err(err) = self.engine.kubernetes().on_create_error() {
-                        return Err(RollbackError::CommitError(err));
+                        return Err(RollbackError::CommitError(Box::new(err)));
                     };
                 }
                 Step::DeleteKubernetes => {
                     // revert kubernetes deletion
                     if let Err(err) = self.engine.kubernetes().on_delete_error() {
-                        return Err(RollbackError::CommitError(err));
+                        return Err(RollbackError::CommitError(Box::new(err)));
                     };
                 }
                 Step::PauseKubernetes => {
                     // revert pause
                     if let Err(err) = self.engine.kubernetes().on_pause_error() {
-                        return Err(RollbackError::CommitError(err));
+                        return Err(RollbackError::CommitError(Box::new(err)));
                     };
                 }
                 Step::BuildEnvironment(_environment_action, _option) => {
@@ -260,15 +260,15 @@ impl<'a> Transaction<'a> {
     // FIXME: Cleanup this, qe_environment should not be rebuilt at this step
     fn rollback_environment(&self, environment: &Environment) -> Result<(), RollbackError> {
         let action = match environment.action {
-            Action::Create => self.engine.kubernetes().deploy_environment_error(&environment),
-            Action::Pause => self.engine.kubernetes().pause_environment_error(&environment),
-            Action::Delete => self.engine.kubernetes().delete_environment_error(&environment),
+            Action::Create => self.engine.kubernetes().deploy_environment_error(environment),
+            Action::Pause => self.engine.kubernetes().pause_environment_error(environment),
+            Action::Delete => self.engine.kubernetes().delete_environment_error(environment),
             Action::Nothing => Ok(()),
         };
 
         let _ = match action {
             Ok(_) => {}
-            Err(err) => return Err(RollbackError::CommitError(err)),
+            Err(err) => return Err(RollbackError::CommitError(Box::new(err))),
         };
 
         Err(RollbackError::NoFailoverEnvironment)
@@ -498,7 +498,7 @@ impl<'a> Transaction<'a> {
         // Even by storing data at the micro seconds precision
         thread::sleep(std::time::Duration::from_millis(100));
 
-        let _ = match action_fn(&environment) {
+        let _ = match action_fn(environment) {
             Err(err) => {
                 let rollback_result = match self.rollback() {
                     Ok(_) => TransactionResult::Rollback(err),
@@ -634,7 +634,7 @@ impl Clone for Step {
 
 #[derive(Debug)]
 pub enum RollbackError {
-    CommitError(EngineError),
+    CommitError(Box<EngineError>),
     NoFailoverEnvironment,
     Nothing,
 }

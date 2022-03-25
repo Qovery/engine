@@ -1,3 +1,5 @@
+#![allow(clippy::field_reassign_with_default)]
+#![allow(clippy::large_enum_variant)]
 #![allow(deprecated)]
 
 pub mod io;
@@ -132,11 +134,7 @@ impl EventMessage {
             EventMessageVerbosity::SafeOnly => self.safe_message.to_string(),
             EventMessageVerbosity::FullDetails => match &self.full_details {
                 None => self.safe_message.to_string(),
-                Some(details) => format!(
-                    "{} / Full details: {}",
-                    self.safe_message.to_string(),
-                    details.to_string()
-                ),
+                Some(details) => format!("{} / Full details: {}", self.safe_message, details),
             },
         }
     }
@@ -411,7 +409,7 @@ impl EventDetails {
 
     /// TODO(benjaminch): remove this dirty hack
     pub fn clone_changing_stage(event_details: EventDetails, stage: Stage) -> Self {
-        let mut event_details = event_details.clone();
+        let mut event_details = event_details;
         event_details.stage = stage;
         event_details
     }

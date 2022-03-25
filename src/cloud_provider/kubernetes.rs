@@ -72,7 +72,7 @@ pub trait Kubernetes: Listen {
             QoveryIdentifier::from(context.organization_id().to_string()),
             QoveryIdentifier::from(context.cluster_id().to_string()),
             QoveryIdentifier::from(context.execution_id().to_string()),
-            Some(self.region().to_string()),
+            Some(self.region()),
             stage,
             Transmitter::Kubernetes(self.id().to_string(), self.name().to_string()),
         )
@@ -103,10 +103,7 @@ pub trait Kubernetes: Listen {
                                     self.get_event_details(stage.clone()),
                                     EventMessage::new(
                                         err.to_string(),
-                                        Some(
-                                            format!("Error, couldn't open {} file", &local_kubeconfig_generated,)
-                                                .to_string(),
-                                        ),
+                                        Some(format!("Error, couldn't open {} file", &local_kubeconfig_generated,)),
                                     ),
                                 ),
                             );
@@ -136,7 +133,7 @@ pub trait Kubernetes: Listen {
                     Ok((path, file)) => (path, file),
                     Err(err) => {
                         let error = EngineError::new_cannot_retrieve_cluster_config_file(
-                            self.get_event_details(stage.clone()),
+                            self.get_event_details(stage),
                             err.into(),
                         );
                         self.logger()
@@ -151,10 +148,8 @@ pub trait Kubernetes: Listen {
             Ok(metadata) => metadata,
             Err(err) => {
                 let error = EngineError::new_cannot_retrieve_cluster_config_file(
-                    self.get_event_details(stage.clone()),
-                    CommandError::new_from_safe_message(
-                        format!("Error getting file metadata, error: {}", err.to_string(),).to_string(),
-                    ),
+                    self.get_event_details(stage),
+                    CommandError::new_from_safe_message(format!("Error getting file metadata, error: {}", err,)),
                 );
                 self.logger()
                     .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
@@ -166,11 +161,8 @@ pub trait Kubernetes: Listen {
         permissions.set_mode(0o400);
         if let Err(err) = std::fs::set_permissions(string_path.as_str(), permissions) {
             let error = EngineError::new_cannot_retrieve_cluster_config_file(
-                self.get_event_details(stage.clone()),
-                CommandError::new_from_safe_message(format!(
-                    "Error setting file permissions, error: {}",
-                    err.to_string(),
-                )),
+                self.get_event_details(stage),
+                CommandError::new_from_safe_message(format!("Error setting file permissions, error: {}", err,)),
             );
             self.logger()
                 .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
@@ -197,9 +189,10 @@ pub trait Kubernetes: Listen {
             Err(err) => {
                 let error = EngineError::new_cannot_get_cluster_nodes(
                     self.get_event_details(stage),
-                    CommandError::new_from_safe_message(
-                        format!("Error while trying to get cluster nodes, error: {}", err.message()).to_string(),
-                    ),
+                    CommandError::new_from_safe_message(format!(
+                        "Error while trying to get cluster nodes, error: {}",
+                        err.message()
+                    )),
                 );
 
                 self.logger()
@@ -251,9 +244,9 @@ pub trait Kubernetes: Listen {
             Err(e) => Err(e),
             Ok(..) => match is_kubernetes_upgrade_required(
                 kubeconfig,
-                &self.version(),
+                self.version(),
                 self.cloud_provider().credentials_environment_variables(),
-                event_details.clone(),
+                event_details,
                 self.logger(),
             ) {
                 Ok(x) => self.upgrade_with_status(x),
@@ -354,7 +347,7 @@ pub trait Kubernetes: Listen {
                             envs.clone(),
                         ) {
                             return Err(EngineError::new_k8s_cannot_delete_pod(
-                                event_details.clone(),
+                                event_details,
                                 pod.metadata.name.to_string(),
                                 e,
                             ));
@@ -362,10 +355,7 @@ pub trait Kubernetes: Listen {
                     }
                 }
                 Err(e) => {
-                    return Err(EngineError::new_k8s_cannot_get_crash_looping_pods(
-                        event_details.clone(),
-                        e,
-                    ));
+                    return Err(EngineError::new_k8s_cannot_get_crash_looping_pods(event_details, e));
                 }
             },
         };
@@ -495,7 +485,7 @@ pub fn deploy_environment(
             kubernetes,
             service,
             event_details.clone(),
-            logger.clone(),
+            logger,
             &stateless_deployment_target,
             &listeners_helper,
             "check deployment",
@@ -770,7 +760,7 @@ pub fn delete_environment(
     // do not catch potential error - to confirm
     let _ = kubectl::kubectl_exec_delete_namespace(
         kubernetes.get_kubeconfig_file_path()?,
-        &environment.namespace(),
+        environment.namespace(),
         kubernetes.cloud_provider().credentials_environment_variables(),
     );
 
@@ -837,7 +827,7 @@ where
             Ok(_) => {}
             Err(Operation { error, .. }) => {
                 return Err(EngineError::new_cannot_uninstall_helm_chart(
-                    event_details.clone(),
+                    event_details,
                     "Cert-Manager".to_string(),
                     object.to_string(),
                     error,
@@ -845,7 +835,7 @@ where
             }
             Err(retry::Error::Internal(msg)) => {
                 return Err(EngineError::new_cannot_uninstall_helm_chart(
-                    event_details.clone(),
+                    event_details,
                     "Cert-Manager".to_string(),
                     object.to_string(),
                     CommandError::new_from_safe_message(msg),
@@ -870,19 +860,14 @@ where
     // check master versions
     let v = match kubectl_exec_version(&kubernetes_config, envs.clone()) {
         Ok(v) => v,
-        Err(e) => {
-            return Err(EngineError::new_cannot_execute_k8s_exec_version(
-                event_details.clone(),
-                e,
-            ))
-        }
+        Err(e) => return Err(EngineError::new_cannot_execute_k8s_exec_version(event_details, e)),
     };
     let raw_version = format!("{}.{}", v.server_version.major, v.server_version.minor);
     let masters_version = match VersionsNumber::from_str(raw_version.as_str()) {
         Ok(vn) => vn,
         Err(_) => {
             return Err(EngineError::new_cannot_determine_k8s_master_version(
-                event_details.clone(),
+                event_details,
                 raw_version.to_string(),
             ))
         }
@@ -892,7 +877,7 @@ where
     let mut workers_version: Vec<VersionsNumber> = vec![];
     let nodes = match kubectl_exec_get_node(kubernetes_config, envs) {
         Ok(n) => n,
-        Err(e) => return Err(EngineError::new_cannot_get_cluster_nodes(event_details.clone(), e)),
+        Err(e) => return Err(EngineError::new_cannot_get_cluster_nodes(event_details, e)),
     };
 
     for node in nodes.items {
@@ -901,7 +886,7 @@ where
             Ok(vn) => workers_version.push(vn),
             Err(_) => {
                 return Err(EngineError::new_cannot_determine_k8s_kubelet_worker_version(
-                    event_details.clone(),
+                    event_details,
                     node.status.node_info.kubelet_version.to_string(),
                 ))
             }
@@ -912,7 +897,7 @@ where
             Ok(vn) => workers_version.push(vn),
             Err(_) => {
                 return Err(EngineError::new_cannot_determine_k8s_kube_proxy_version(
-                    event_details.clone(),
+                    event_details,
                     node.status.node_info.kube_proxy_version.to_string(),
                 ))
             }
@@ -923,7 +908,7 @@ where
         requested_version,
         masters_version,
         workers_version,
-        event_details.clone(),
+        event_details,
         logger,
     )
 }
@@ -943,7 +928,7 @@ where
                 for pdb in pdbs.items.unwrap() {
                     if pdb.status.current_healthy < pdb.status.desired_healthy {
                         return Err(EngineError::new_k8s_pod_disruption_budget_invalid_state(
-                            event_details.clone(),
+                            event_details,
                             pdb.metadata.name,
                         ));
                     }
@@ -951,12 +936,10 @@ where
                 Ok(())
             }
         },
-        Err(err) => {
-            return Err(EngineError::new_k8s_cannot_retrieve_pods_disruption_budget(
-                event_details.clone(),
-                err,
-            ));
-        }
+        Err(err) => Err(EngineError::new_k8s_cannot_retrieve_pods_disruption_budget(
+            event_details,
+            err,
+        )),
     }
 }
 
@@ -979,7 +962,7 @@ where
                         ));
                     }
                 }
-                return OperationResult::Ok(());
+                OperationResult::Ok(())
             }
         }
     });
@@ -1014,16 +997,16 @@ where
                         ));
                     }
                 }
-                return OperationResult::Ok(());
+                OperationResult::Ok(())
             }
         }
     });
 
-    return match result {
+    match result {
         Ok(_) => Ok(()),
         Err(Operation { error, .. }) => Err(error),
         Err(retry::Error::Internal(e)) => Err(CommandError::new_from_safe_message(e)),
-    };
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -1067,7 +1050,7 @@ fn check_kubernetes_upgrade_status(
         Ok(v) => v,
         Err(e) => {
             return Err(EngineError::new_cannot_determine_k8s_requested_upgrade_version(
-                event_details.clone(),
+                event_details,
                 requested_version.to_string(),
                 Some(e),
             ));
@@ -1093,7 +1076,7 @@ fn check_kubernetes_upgrade_status(
         Err(e) => {
             return Err(
                 EngineError::new_k8s_version_upgrade_deployed_vs_requested_versions_inconsistency(
-                    event_details.clone(),
+                    event_details,
                     deployed_masters_version,
                     wished_version,
                     e,
@@ -1107,7 +1090,7 @@ fn check_kubernetes_upgrade_status(
         logger.log(
             LogLevel::Warning,
             EngineEvent::Deploying(
-                event_details.clone(),
+                event_details,
                 EventMessage::new_from_safe(
                     "No worker nodes found, can't check if upgrade is required for workers".to_string(),
                 ),
@@ -1146,7 +1129,7 @@ fn check_kubernetes_upgrade_status(
             Err(e) => {
                 return Err(
                     EngineError::new_k8s_version_upgrade_deployed_vs_requested_versions_inconsistency(
-                        event_details.clone(),
+                        event_details,
                         node,
                         wished_version,
                         e,
@@ -1159,7 +1142,7 @@ fn check_kubernetes_upgrade_status(
     logger.log(
         LogLevel::Info,
         EngineEvent::Deploying(
-            event_details.clone(),
+            event_details,
             EventMessage::new_from_safe(match &required_upgrade_on {
                 None => "All workers are up to date, no upgrade required".to_string(),
                 Some(node_type) => match node_type {
@@ -1229,12 +1212,12 @@ pub fn compare_kubernetes_cluster_versions_for_upgrade(
         messages.push("Older Kubernetes major version detected");
     }
 
-    if &wished_minor_version > &deployed_minor_version {
+    if wished_minor_version > deployed_minor_version {
         upgrade_required.upgraded_required = true;
         messages.push("Kubernetes minor version change detected");
     }
 
-    if &wished_minor_version < &deployed_minor_version {
+    if wished_minor_version < deployed_minor_version {
         upgrade_required.upgraded_required = false;
         upgrade_required.older_version_detected = true;
         messages.push("Older Kubernetes minor version detected");
@@ -1324,9 +1307,7 @@ where
 {
     let listeners = std::clone::Clone::clone(kubernetes.listeners());
     let logger = kubernetes.logger().clone_dyn();
-    let event_details = kubernetes
-        .get_event_details(Stage::Infrastructure(InfrastructureStep::Create))
-        .clone();
+    let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
 
     let progress_info = ProgressInfo::new(
         ProgressScope::Infrastructure {
@@ -1347,7 +1328,7 @@ where
             let listeners_helper = ListenersHelper::new(&listeners);
             let action = action;
             let progress_info = progress_info;
-            let waiting_message = waiting_message.unwrap_or("no message ...".to_string());
+            let waiting_message = waiting_message.unwrap_or_else(|| "no message ...".to_string());
 
             loop {
                 // do notify users here
@@ -1573,7 +1554,7 @@ mod tests {
             "1.17",
             version_1_17.clone(),
             vec![version_1_17.clone(), version_1_16.clone()],
-            event_details.clone(),
+            event_details,
             &logger,
         )
         .unwrap();
@@ -1590,7 +1571,7 @@ mod tests {
             "Provider version: {} | Wished version: {} | Is upgrade required: {:?}",
             provider_version.clone(),
             provider.clone(),
-            compare_kubernetes_cluster_versions_for_upgrade(&provider_version, &provider)
+            compare_kubernetes_cluster_versions_for_upgrade(provider_version, provider)
                 .unwrap()
                 .message
         )
@@ -2070,8 +2051,8 @@ mod tests {
         let milli_cpu = "250m".to_string();
         let int_cpu = "2".to_string();
 
-        assert_eq!(convert_k8s_cpu_value_to_f32(milli_cpu).unwrap(), 0.25 as f32);
-        assert_eq!(convert_k8s_cpu_value_to_f32(int_cpu).unwrap(), 2 as f32);
+        assert_eq!(convert_k8s_cpu_value_to_f32(milli_cpu).unwrap(), 0.25_f32);
+        assert_eq!(convert_k8s_cpu_value_to_f32(int_cpu).unwrap(), 2_f32);
     }
 
     #[test]
@@ -2122,7 +2103,7 @@ mod tests {
                 context_id,
                 total_cpu,
                 cpu_burst,
-                event_details.clone(),
+                event_details,
                 &logger
             )
             .unwrap(),

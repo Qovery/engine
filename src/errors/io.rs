@@ -12,7 +12,7 @@ pub struct CommandError {
 impl From<errors::CommandError> for CommandError {
     fn from(error: errors::CommandError) -> Self {
         CommandError {
-            message: error.message_safe.unwrap_or("".to_string()),
+            message: error.message_safe.unwrap_or_default(),
             message_unsafe: error.message_raw,
         }
     }
@@ -247,10 +247,7 @@ impl From<errors::EngineError> for EngineError {
             event_details: EventDetails::from(error.event_details),
             qovery_log_message: error.qovery_log_message,
             user_log_message: error.user_log_message,
-            message: match error.message {
-                Some(msg) => Some(CommandError::from(msg)),
-                None => None,
-            },
+            message: error.message.map(CommandError::from),
             link: error.link.map(|url| url.to_string()),
             hint_message: error.hint_message,
         }

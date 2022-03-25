@@ -165,7 +165,7 @@ impl Kapsule {
                         QoveryIdentifier::new_from_long_id(context.organization_id().to_string()),
                         QoveryIdentifier::new_from_long_id(context.cluster_id().to_string()),
                         QoveryIdentifier::new_from_long_id(context.execution_id().to_string()),
-                        Some(zone.region_str().to_string()),
+                        Some(zone.region_str()),
                         Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
                         Transmitter::Kubernetes(id, name),
                     ),
@@ -183,8 +183,8 @@ impl Kapsule {
             context.clone(),
             "s3-temp-id".to_string(),
             "default-s3".to_string(),
-            cloud_provider.access_key_id().clone(),
-            cloud_provider.secret_access_key().clone(),
+            cloud_provider.access_key_id(),
+            cloud_provider.secret_access_key(),
             zone,
             BucketDeleteStrategy::Empty,
             false,
@@ -240,7 +240,7 @@ impl Kapsule {
             Err(e) => {
                 let msg = format!("wasn't able to retrieve SCW cluster information from the API. {:?}", e);
                 return Err(EngineError::new_cannot_get_cluster_error(
-                    event_details.clone(),
+                    event_details,
                     CommandError::new(msg.clone(), Some(msg)),
                 ));
             }
@@ -248,9 +248,9 @@ impl Kapsule {
 
         // if no cluster exists
         let cluster_info_content = cluster_info.clusters.unwrap();
-        if &cluster_info_content.len() == &(0 as usize) {
+        if cluster_info_content.is_empty() {
             return Ok(None);
-        } else if &cluster_info_content.len() != &(1 as usize) {
+        } else if cluster_info_content.len() != 1_usize {
             let msg = format!(
                 "too many clusters found with this name, where 1 was expected. {:?}",
                 &cluster_info_content.len()
@@ -268,7 +268,7 @@ impl Kapsule {
         &self,
         cluster_info: ScalewayK8sV1Cluster,
     ) -> Result<Vec<ScwNodeGroup>, ScwNodeGroupErrors> {
-        let error_cluster_id = format!("expected cluster id for this Scaleway cluster");
+        let error_cluster_id = "expected cluster id for this Scaleway cluster".to_string();
         let cluster_id = match cluster_info.id {
             None => {
                 return Err(ScwNodeGroupErrors::NodeGroupValidationError(
@@ -291,7 +291,7 @@ impl Kapsule {
             Ok(x) => x,
             Err(e) => {
                 let msg = format!("error while trying to get SCW pool info from cluster {}", &cluster_id);
-                let msg_with_error = format!("{}. {:?}", msg.clone(), e);
+                let msg_with_error = format!("{}. {:?}", msg, e);
                 return Err(ScwNodeGroupErrors::CloudProviderApiError(CommandError::new(
                     msg_with_error,
                     Some(msg),
@@ -304,7 +304,7 @@ impl Kapsule {
             let msg = format!(
                 "No SCW pool found from the SCW API for cluster {}/{}",
                 &cluster_id,
-                &cluster_info.name.unwrap_or("unknown cluster".to_string())
+                &cluster_info.name.unwrap_or_else(|| "unknown cluster".to_string())
             );
             return Err(ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(
                 msg.clone(),
@@ -558,7 +558,7 @@ impl Kapsule {
                             LogLevel::Error,
                             EngineEvent::Error(
                                 EngineError::new_missing_required_env_variable(
-                                    event_details.clone(),
+                                    event_details,
                                     "VAULT_SECRET_ID".to_string(),
                                 ),
                                 None,
@@ -671,9 +671,9 @@ impl Kapsule {
             context,
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 self.template_directory.to_string(),
-                temp_dir.to_string(),
+                temp_dir,
                 e,
             ));
         }
@@ -682,13 +682,12 @@ impl Kapsule {
         // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
         let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        if let Err(e) =
-            crate::template::copy_non_template_files(bootstrap_charts_dir.to_string(), common_charts_temp_dir.as_str())
+        if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
-                bootstrap_charts_dir.to_string(),
-                common_charts_temp_dir.to_string(),
+                event_details,
+                bootstrap_charts_dir,
+                common_charts_temp_dir,
                 e,
             ));
         }
@@ -723,7 +722,7 @@ impl Kapsule {
                                 ),
                                 Err(e) => {
                                     return Err(EngineError::new_terraform_cannot_remove_entry_out(
-                                        event_details.clone(),
+                                        event_details,
                                         entry.to_string(),
                                         e,
                                     ))
@@ -756,7 +755,7 @@ impl Kapsule {
             .create_bucket(self.kubeconfig_bucket_name().as_str())
         {
             let error = EngineError::new_object_storage_cannot_create_bucket_error(
-                event_details.clone(),
+                event_details,
                 self.kubeconfig_bucket_name(),
                 e,
             );
@@ -767,11 +766,8 @@ impl Kapsule {
 
         // Logs bucket
         if let Err(e) = self.object_storage.create_bucket(self.logs_bucket_name().as_str()) {
-            let error = EngineError::new_object_storage_cannot_create_bucket_error(
-                event_details.clone(),
-                self.logs_bucket_name(),
-                e,
-            );
+            let error =
+                EngineError::new_object_storage_cannot_create_bucket_error(event_details, self.logs_bucket_name(), e);
             self.logger()
                 .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
             return Err(error);
@@ -780,7 +776,7 @@ impl Kapsule {
         // terraform deployment dedicated to cloud resources
         if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
             return Err(EngineError::new_terraform_error_while_executing_pipeline(
-                event_details.clone(),
+                event_details,
                 e,
             ));
         }
@@ -795,7 +791,7 @@ impl Kapsule {
             kubeconfig_path.to_str().expect("No path for Kubeconfig"),
         ) {
             let error = EngineError::new_object_storage_cannot_put_file_into_bucket_error(
-                event_details.clone(),
+                event_details,
                 self.logs_bucket_name(),
                 kubeconfig_name.to_string(),
                 e,
@@ -809,7 +805,7 @@ impl Kapsule {
         if cluster_info.is_none() {
             let msg = "no cluster found from the Scaleway API".to_string();
             return Err(EngineError::new_no_cluster_found_error(
-                event_details.clone(),
+                event_details,
                 CommandError::new(msg.clone(), Some(msg)),
             ));
         }
@@ -822,7 +818,7 @@ impl Kapsule {
                 match e {
                     ScwNodeGroupErrors::CloudProviderApiError(c) => {
                         return Err(EngineError::new_missing_api_info_from_cloud_provider_error(
-                            event_details.clone(),
+                            event_details,
                             Some(c),
                         ))
                     }
@@ -838,7 +834,7 @@ impl Kapsule {
                     ScwNodeGroupErrors::MultipleClusterFound => {
                         let msg = "multiple clusters found, can't match the correct node groups".to_string();
                         return Err(EngineError::new_multiple_cluster_found_expected_one_error(
-                            event_details.clone(),
+                            event_details,
                             CommandError::new(msg.clone(), Some(msg)),
                         ));
                     }
@@ -852,15 +848,15 @@ impl Kapsule {
                         ),
                     ),
                     ScwNodeGroupErrors::MissingNodePoolInfo => {
-                        let msg = format!("Error with Scaleway API while trying to retrieve node pool info");
+                        let msg = "Error with Scaleway API while trying to retrieve node pool info".to_string();
                         return Err(EngineError::new_missing_api_info_from_cloud_provider_error(
-                            event_details.clone(),
+                            event_details,
                             Some(CommandError::new_from_safe_message(msg)),
                         ));
                     }
                     ScwNodeGroupErrors::NodeGroupValidationError(c) => {
                         return Err(EngineError::new_missing_api_info_from_cloud_provider_error(
-                            event_details.clone(),
+                            event_details,
                             Some(c),
                         ));
                     }
@@ -974,7 +970,7 @@ impl Kapsule {
                 Err(Operation { error, .. }) => return Err(error),
                 Err(retry::Error::Internal(msg)) => {
                     return Err(EngineError::new_k8s_node_not_ready(
-                        event_details.clone(),
+                        event_details,
                         CommandError::new(msg, Some("Waiting for too long worker nodes to be ready".to_string())),
                     ))
                 }
@@ -1006,7 +1002,7 @@ impl Kapsule {
                 )
             }
             Err(e) => {
-                return Err(EngineError::new_k8s_node_not_ready(event_details.clone(), e));
+                return Err(EngineError::new_k8s_node_not_ready(event_details, e));
             }
         };
 
@@ -1027,8 +1023,8 @@ impl Kapsule {
             self.cluster_name(),
             "scw".to_string(),
             self.context.is_test_cluster(),
-            self.cloud_provider.access_key_id().to_string(),
-            self.cloud_provider.secret_access_key().to_string(),
+            self.cloud_provider.access_key_id(),
+            self.cloud_provider.secret_access_key(),
             self.options.scaleway_project_id.to_string(),
             self.options.qovery_engine_location.clone(),
             self.context.is_feature_enabled(&Features::LogsHistory),
@@ -1056,13 +1052,13 @@ impl Kapsule {
             format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
             &charts_prerequisites,
             Some(&temp_dir),
-            &kubeconfig_path,
+            kubeconfig_path,
             &credentials_environment_variables,
         )
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
         deploy_charts_levels(
-            &kubeconfig_path,
+            kubeconfig_path,
             &credentials_environment_variables,
             helm_charts_to_deploy,
             self.context.is_dry_run_deploy(),
@@ -1086,12 +1082,12 @@ impl Kapsule {
         match kubectl_exec_get_events(kubeconfig_path, None, environment_variables) {
             Ok(ok_line) => self.logger().log(
                 LogLevel::Info,
-                EngineEvent::Deploying(event_details.clone(), EventMessage::new_from_safe(ok_line)),
+                EngineEvent::Deploying(event_details, EventMessage::new_from_safe(ok_line)),
             ),
             Err(err) => self.logger().log(
                 LogLevel::Error,
                 EngineEvent::Deploying(
-                    event_details.clone(),
+                    event_details,
                     EventMessage::new("Error trying to get kubernetes events".to_string(), Some(err.message())),
                 ),
             ),
@@ -1160,9 +1156,9 @@ impl Kapsule {
             context,
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 self.template_directory.to_string(),
-                temp_dir.to_string(),
+                temp_dir,
                 e,
             ));
         }
@@ -1171,13 +1167,12 @@ impl Kapsule {
         // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
         let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        if let Err(e) =
-            crate::template::copy_non_template_files(bootstrap_charts_dir.to_string(), common_charts_temp_dir.as_str())
+        if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
-                bootstrap_charts_dir.to_string(),
-                common_charts_temp_dir.to_string(),
+                event_details,
+                bootstrap_charts_dir,
+                common_charts_temp_dir,
                 e,
             ));
         }
@@ -1195,7 +1190,7 @@ impl Kapsule {
                 tf_workers_resources_name
             }
             Err(e) => {
-                let error = EngineError::new_terraform_state_does_not_exist(event_details.clone(), e);
+                let error = EngineError::new_terraform_state_does_not_exist(event_details, e);
                 self.logger()
                     .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
                 return Err(error);
@@ -1203,10 +1198,7 @@ impl Kapsule {
         };
 
         if tf_workers_resources.is_empty() {
-            return Err(EngineError::new_cluster_has_no_worker_nodes(
-                event_details.clone(),
-                None,
-            ));
+            return Err(EngineError::new_cluster_has_no_worker_nodes(event_details, None));
         }
 
         let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
@@ -1232,7 +1224,7 @@ impl Kapsule {
                                         Ok(job_count) if job_count > 0 => current_engine_jobs += 1,
                                         Err(e) => {
                                             let safe_message = "Error while looking at the API metric value";
-                                            return OperationResult::Retry(EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), CommandError::new(format!("{}, error: {}", safe_message, e.to_string()), Some(safe_message.to_string()))));
+                                            return OperationResult::Retry(EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), CommandError::new(format!("{}, error: {}", safe_message, e), Some(safe_message.to_string()))));
                                         }
                                         _ => {}
                                     }
@@ -1247,7 +1239,7 @@ impl Kapsule {
                             Err(e) => {
                                 let safe_message = format!("Error while looking at the API metric value {}", metric_name);
                                 OperationResult::Retry(
-                                    EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), CommandError::new(format!("{}, error: {}", safe_message, e.message()), Some(safe_message.to_string()))))
+                                    EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), CommandError::new(format!("{}, error: {}", safe_message, e.message()), Some(safe_message))))
                             }
                         };
                     });
@@ -1260,7 +1252,7 @@ impl Kapsule {
                             return Err(error)
                         }
                         Err(retry::Error::Internal(msg)) => {
-                            return Err(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details.clone(), Some(CommandError::new_from_safe_message(msg))))
+                            return Err(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details, Some(CommandError::new_from_safe_message(msg))))
                         }
                     }
                 }
@@ -1292,12 +1284,12 @@ impl Kapsule {
                 self.send_to_customer(&message, &listeners_helper);
                 self.logger().log(
                     LogLevel::Info,
-                    EngineEvent::Pausing(event_details.clone(), EventMessage::new_from_safe(message)),
+                    EngineEvent::Pausing(event_details, EventMessage::new_from_safe(message)),
                 );
                 Ok(())
             }
             Err(e) => Err(EngineError::new_terraform_error_while_executing_pipeline(
-                event_details.clone(),
+                event_details,
                 e,
             )),
         }
@@ -1343,9 +1335,9 @@ impl Kapsule {
             context,
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 self.template_directory.to_string(),
-                temp_dir.to_string(),
+                temp_dir,
                 e,
             ));
         }
@@ -1354,13 +1346,12 @@ impl Kapsule {
         // this is due to the required dependencies of lib/scaleway/bootstrap/*.tf files
         let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        if let Err(e) =
-            crate::template::copy_non_template_files(bootstrap_charts_dir.to_string(), common_charts_temp_dir.as_str())
+        if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
-                bootstrap_charts_dir.to_string(),
-                common_charts_temp_dir.to_string(),
+                event_details,
+                bootstrap_charts_dir,
+                common_charts_temp_dir,
                 e,
             ));
         }
@@ -1496,7 +1487,7 @@ impl Kapsule {
             )
             .map_err(|e| to_engine_error(&event_details, e))?;
             let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
-            helm.uninstall(&chart, &vec![])
+            helm.uninstall(&chart, &[])
                 .map_err(|e| to_engine_error(&event_details, e))?;
 
             // required to avoid namespace stuck on deletion
@@ -1518,12 +1509,12 @@ impl Kapsule {
             let qovery_namespaces = get_qovery_managed_namespaces();
             for qovery_namespace in qovery_namespaces.iter() {
                 let charts_to_delete = helm
-                    .list_release(Some(qovery_namespace), &vec![])
+                    .list_release(Some(qovery_namespace), &[])
                     .map_err(|e| to_engine_error(&event_details, e))?;
 
                 for chart in charts_to_delete {
                     let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                    match helm.uninstall(&chart_info, &vec![]) {
+                    match helm.uninstall(&chart_info, &[]) {
                         Ok(_) => self.logger().log(
                             LogLevel::Info,
                             EngineEvent::Deleting(
@@ -1592,11 +1583,11 @@ impl Kapsule {
                 ),
             );
 
-            match helm.list_release(None, &vec![]) {
+            match helm.list_release(None, &[]) {
                 Ok(helm_charts) => {
                     for chart in helm_charts {
                         let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                        match helm.uninstall(&chart_info, &vec![]) {
+                        match helm.uninstall(&chart_info, &[]) {
                             Ok(_) => self.logger().log(
                                 LogLevel::Info,
                                 EngineEvent::Deleting(
@@ -1659,18 +1650,18 @@ impl Kapsule {
                 self.logger().log(
                     LogLevel::Info,
                     EngineEvent::Deleting(
-                        event_details.clone(),
+                        event_details,
                         EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),
                     ),
                 );
                 Ok(())
             }
             Err(Operation { error, .. }) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-                event_details.clone(),
+                event_details,
                 error,
             )),
             Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-                event_details.clone(),
+                event_details,
                 CommandError::new(msg, None),
             )),
         }
@@ -1758,7 +1749,7 @@ impl Kubernetes for Kapsule {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.create())
@@ -1772,7 +1763,7 @@ impl Kubernetes for Kapsule {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.create_error())
@@ -1840,9 +1831,9 @@ impl Kubernetes for Kapsule {
             context,
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 self.template_directory.to_string(),
-                temp_dir.to_string(),
+                temp_dir,
                 e,
             ));
         }
@@ -1853,9 +1844,9 @@ impl Kubernetes for Kapsule {
             crate::template::copy_non_template_files(common_bootstrap_charts.as_str(), common_charts_temp_dir.as_str())
         {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
-                common_bootstrap_charts.to_string(),
-                common_charts_temp_dir.to_string(),
+                event_details,
+                common_bootstrap_charts,
+                common_charts_temp_dir,
                 e,
             ));
         }
@@ -1882,7 +1873,7 @@ impl Kubernetes for Kapsule {
                     self.logger().log(
                         LogLevel::Info,
                         EngineEvent::Deploying(
-                            event_details.clone(),
+                            event_details,
                             EventMessage::new_from_safe(
                                 "Kubernetes nodes have been successfully upgraded.".to_string(),
                             ),
@@ -1891,7 +1882,7 @@ impl Kubernetes for Kapsule {
                 }
                 Err(e) => {
                     return Err(EngineError::new_k8s_node_not_ready_with_requested_version(
-                        event_details.clone(),
+                        event_details,
                         kubernetes_upgrade_status.requested_version.to_string(),
                         e,
                     ));
@@ -1899,7 +1890,7 @@ impl Kubernetes for Kapsule {
             },
             Err(e) => {
                 return Err(EngineError::new_terraform_error_while_executing_pipeline(
-                    event_details.clone(),
+                    event_details,
                     e,
                 ));
             }
@@ -1916,7 +1907,7 @@ impl Kubernetes for Kapsule {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.upgrade())
@@ -1930,7 +1921,7 @@ impl Kubernetes for Kapsule {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.upgrade_error())
@@ -1944,7 +1935,7 @@ impl Kubernetes for Kapsule {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.downgrade())
@@ -1958,7 +1949,7 @@ impl Kubernetes for Kapsule {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.downgrade_error())
@@ -1972,7 +1963,7 @@ impl Kubernetes for Kapsule {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Pause, || self.pause())
@@ -1986,7 +1977,7 @@ impl Kubernetes for Kapsule {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Pause, || self.pause_error())
@@ -2000,7 +1991,7 @@ impl Kubernetes for Kapsule {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || self.delete())
@@ -2014,7 +2005,7 @@ impl Kubernetes for Kapsule {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
@@ -2070,7 +2061,7 @@ impl Kubernetes for Kapsule {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         Ok(())
@@ -2098,7 +2089,7 @@ impl Kubernetes for Kapsule {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         Ok(())

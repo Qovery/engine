@@ -117,7 +117,7 @@ pub fn scw_helm_charts(
         Err(e) => {
             let message_safe = "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?";
             return Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe.to_string(), e),
+                format!("{}, error: {:?}", message_safe, e),
                 Some(message_safe.to_string()),
             ));
         }
@@ -133,16 +133,16 @@ pub fn scw_helm_charts(
                 qovery_terraform_config_file
             );
             return Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe.to_string(), e),
-                Some(message_safe.to_string()),
+                format!("{}, error: {:?}", message_safe, e),
+                Some(message_safe),
             ));
         }
     };
 
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
-    let prometheus_internal_url = format!("http://prometheus-operated.{}.svc", prometheus_namespace.to_string());
+    let prometheus_internal_url = format!("http://prometheus-operated.{}.svc", prometheus_namespace);
     let loki_namespace = HelmChartNamespaces::Logging;
-    let loki_kube_dns_prefix = format!("loki.{}.svc", loki_namespace.to_string());
+    let loki_kube_dns_prefix = format!("loki.{}.svc", loki_namespace);
 
     // Qovery storage class
     let q_storage_class = CommonChart {
@@ -454,11 +454,7 @@ datasources:
         type: loki
         url: \"http://{}.{}.svc:3100\"
       ",
-        prometheus_internal_url.clone(),
-        &loki.chart_info.name,
-        loki_namespace.to_string(),
-        &loki.chart_info.name,
-        loki_namespace.to_string(),
+        prometheus_internal_url, &loki.chart_info.name, loki_namespace, &loki.chart_info.name, loki_namespace,
     );
 
     let grafana = CommonChart {

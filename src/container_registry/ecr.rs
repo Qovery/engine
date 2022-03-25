@@ -1,3 +1,5 @@
+#![allow(clippy::field_reassign_with_default)]
+
 use std::str::FromStr;
 
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
@@ -109,7 +111,7 @@ impl ECR {
 
     fn get_image(&self, image: &Image) -> Option<ImageDetail> {
         let mut dir = DescribeImagesRequest::default();
-        dir.repository_name = image.name().to_string();
+        dir.repository_name = image.name();
 
         let mut image_identifier = ImageIdentifier::default();
         image_identifier.image_tag = Some(image.tag.to_string());
@@ -183,7 +185,7 @@ impl ECR {
                 return Err(ContainerRegistryError::CannotCreateRepository {
                     registry_name: self.name.to_string(),
                     repository_name: repository_name.to_string(),
-                    raw_error_message: e.to_string(),
+                    raw_error_message: e,
                 })
             }
         };
@@ -230,8 +232,8 @@ impl ECR {
     fn get_or_create_repository(&self, repository_name: &str) -> Result<Repository, ContainerRegistryError> {
         // check if the repository already exists
         let repository = self.get_repository(repository_name);
-        if repository.is_some() {
-            return Ok(repository.unwrap());
+        if let Some(repo) = repository {
+            return Ok(repo);
         }
 
         self.create_repository(repository_name)

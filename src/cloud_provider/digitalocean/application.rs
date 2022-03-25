@@ -81,7 +81,7 @@ impl ApplicationDo {
     }
 
     fn is_stateful(&self) -> bool {
-        self.storage.len() > 0
+        !self.storage.is_empty()
     }
 
     fn cloud_provider_name(&self) -> &str {
@@ -213,7 +213,7 @@ impl Service for ApplicationDo {
 
         let cpu_limits = match validate_k8s_required_cpu_and_burstable(
             &ListenersHelper::new(&self.listeners),
-            &self.context.execution_id(),
+            self.context.execution_id(),
             &self.id,
             self.total_cpus(),
             self.cpu_burst(),
@@ -223,7 +223,7 @@ impl Service for ApplicationDo {
             Ok(l) => l,
             Err(e) => {
                 return Err(EngineError::new_k8s_validate_required_cpu_and_burstable_error(
-                    event_details.clone(),
+                    event_details,
                     self.total_cpus(),
                     self.cpu_burst(),
                     e,
@@ -265,7 +265,7 @@ impl Service for ApplicationDo {
             })
             .collect::<Vec<_>>();
 
-        let is_storage = storage.len() > 0;
+        let is_storage = !storage.is_empty();
 
         context.insert("storage", &storage);
         context.insert("is_storage", &is_storage);
@@ -300,7 +300,7 @@ impl Create for ApplicationDo {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
 

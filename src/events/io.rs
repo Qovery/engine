@@ -79,10 +79,7 @@ impl From<events::EngineEvent> for EngineEvent {
             },
             events::EngineEvent::Error(e, m) => EngineEvent::Error {
                 error: EngineError::from(e),
-                message: match m {
-                    Some(msg) => Some(EventMessage::from(msg)),
-                    None => None,
-                },
+                message: m.map(EventMessage::from),
             },
             events::EngineEvent::Waiting(d, m) => EngineEvent::Waiting {
                 details: EventDetails::from(d),
@@ -308,10 +305,7 @@ pub struct EventDetails {
 
 impl From<events::EventDetails> for EventDetails {
     fn from(details: events::EventDetails) -> Self {
-        let provider_kind = match details.provider_kind {
-            Some(kind) => Some(Kind::from(kind)),
-            None => None,
-        };
+        let provider_kind = details.provider_kind.map(Kind::from);
         EventDetails {
             provider_kind,
             organisation_id: details.organisation_id.to_string(),
