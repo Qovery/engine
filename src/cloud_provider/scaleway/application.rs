@@ -288,7 +288,7 @@ impl Service for ApplicationScw {
                 .image
                 .clone()
                 .registry_docker_json_config
-                .unwrap_or("".to_string())
+                .unwrap_or_default()
                 .as_str(),
         );
 

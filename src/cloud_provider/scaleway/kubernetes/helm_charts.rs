@@ -140,9 +140,9 @@ pub fn scw_helm_charts(
     };
 
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
-    let prometheus_internal_url = format!("http://prometheus-operated.{}.svc", prometheus_namespace.to_string());
+    let prometheus_internal_url = format!("http://prometheus-operated.{}.svc", prometheus_namespace);
     let loki_namespace = HelmChartNamespaces::Logging;
-    let loki_kube_dns_prefix = format!("loki.{}.svc", loki_namespace.to_string());
+    let loki_kube_dns_prefix = format!("loki.{}.svc", loki_namespace);
 
     // Qovery storage class
     let q_storage_class = CommonChart {
@@ -454,11 +454,7 @@ datasources:
         type: loki
         url: \"http://{}.{}.svc:3100\"
       ",
-        prometheus_internal_url,
-        &loki.chart_info.name,
-        loki_namespace.to_string(),
-        &loki.chart_info.name,
-        loki_namespace.to_string(),
+        prometheus_internal_url, &loki.chart_info.name, loki_namespace, &loki.chart_info.name, loki_namespace,
     );
 
     let grafana = CommonChart {

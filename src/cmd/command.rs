@@ -339,14 +339,14 @@ mod tests {
     fn test_run_version_for_command() {
         let ret = run_version_command_for("ls");
         assert_eq!(ret.is_empty(), false);
-        assert_eq!(ret.contains("GNU"), true)
+        assert!(ret.contains("GNU"))
     }
 
     #[test]
     fn test_error() {
         let mut cmd = QoveryCommand::new("false", &[], &[]);
         assert_eq!(cmd.exec().is_err(), true);
-        assert_eq!(matches!(cmd.exec(), Err(CommandError::ExitStatusError(_))), true);
+        assert!(matches!(cmd.exec(), Err(CommandError::ExitStatusError(_))));
     }
 
     #[test]
@@ -375,7 +375,7 @@ mod tests {
             &mut |_| {},
             &CommandKiller::from_timeout(Duration::from_secs(2)),
         );
-        assert_eq!(ret.is_ok(), true);
+        assert!(ret.is_ok());
     }
 
     #[test]

@@ -11,6 +11,7 @@ use crate::errors::CommandError;
 use crate::utilities::calculate_hash;
 use semver::Version;
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use std::path::Path;
 use std::{fs, thread};
 use thread::spawn;
@@ -35,9 +36,9 @@ pub enum HelmChartNamespaces {
     Custom,
 }
 
-impl HelmChartNamespaces {
-    pub fn to_string(&self) -> String {
-        match self {
+impl Display for HelmChartNamespaces {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
             HelmChartNamespaces::Custom => "custom",
             HelmChartNamespaces::KubeSystem => "kube-system",
             HelmChartNamespaces::Prometheus => "prometheus",
@@ -45,8 +46,9 @@ impl HelmChartNamespaces {
             HelmChartNamespaces::CertManager => "cert-manager",
             HelmChartNamespaces::NginxIngress => "nginx-ingress",
             HelmChartNamespaces::Qovery => "qovery",
-        }
-        .to_string()
+        };
+
+        f.write_str(str)
     }
 }
 
@@ -324,7 +326,7 @@ fn deploy_parallel_charts(
 
 pub fn deploy_charts_levels(
     kubernetes_config: &Path,
-    envs: &Vec<(String, String)>,
+    envs: &[(String, String)],
     charts: Vec<Vec<Box<dyn HelmChart>>>,
     dry_run: bool,
 ) -> Result<(), CommandError> {

@@ -255,7 +255,7 @@ impl EKS {
         &self,
         event_details: EventDetails,
         zone_name: &str,
-        subnet_block: &Vec<String>,
+        subnet_block: &[String],
     ) -> Result<usize, EngineError> {
         if subnet_block.len() % 2 == 1 {
             return Err(EngineError::new_subnets_count_is_not_even(

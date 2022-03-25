@@ -407,7 +407,7 @@ impl EngineError {
 
     /// Creates new engine error from legacy engine error easing migration.
     pub fn new_from_legacy_engine_error(e: LegacyEngineError) -> Self {
-        let message = e.message.unwrap_or("".to_string());
+        let message = e.message.unwrap_or_default();
         EngineError {
             tag: Tag::Unknown,
             event_details: EventDetails::new(

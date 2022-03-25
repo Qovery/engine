@@ -399,8 +399,8 @@ where
     }
 
     // additional labels
-    if labels.is_some() {
-        match kubectl_add_labels_to_namespace(kubernetes_config, namespace, labels.unwrap(), envs) {
+    if let Some(..) = labels {
+        match kubectl_add_labels_to_namespace(kubernetes_config, namespace, labels.unwrap_or_default(), envs) {
             Ok(_) => {}
             Err(e) => return Err(e),
         }
@@ -456,7 +456,7 @@ where
 pub fn does_contain_terraform_tfstate<P>(
     kubernetes_config: P,
     namespace: &str,
-    envs: &Vec<(&str, &str)>,
+    envs: &[(&str, &str)],
 ) -> Result<bool, CommandError>
 where
     P: AsRef<Path>,
@@ -671,18 +671,18 @@ pub fn kubectl_exec_rollout_restart_deployment<P>(
     kubernetes_config: P,
     name: &str,
     namespace: &str,
-    envs: &Vec<(&str, &str)>,
+    envs: &[(&str, &str)],
 ) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
-    let mut environment_variables: Vec<(&str, &str)> = envs.clone();
+    let mut environment_variables: Vec<(&str, &str)> = envs.to_owned();
     environment_variables.push(("KUBECONFIG", kubernetes_config.as_ref().to_str().unwrap()));
     let args = vec!["-n", namespace, "rollout", "restart", "deployment", name];
 
     kubectl_exec_with_output(
         args,
-        environment_variables.clone(),
+        environment_variables,
         &mut |line| info!("{}", line),
         &mut |line| error!("{}", line),
     )

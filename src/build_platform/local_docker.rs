@@ -1,3 +1,5 @@
+#![allow(clippy::redundant_closure)]
+
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -161,7 +163,7 @@ impl LocalDocker {
             tags: vec!["latest".to_string()],
         };
 
-        // Check if the image does not exist already remotly, if yes, we skip the build
+        // Check if the image does not exist already remotely, if yes, we skip the build
         let image_name = image_to_build.image_name();
         log_info(format!("🕵️ Checking if image already exist remotely {}", image_name));
         if let Ok(true) = self.context.docker.does_image_exist_remotely(&image_to_build) {

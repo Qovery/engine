@@ -15,8 +15,8 @@ pub enum VpcInitKind {
 impl ToString for VpcInitKind {
     fn to_string(&self) -> String {
         match self {
-            &VpcInitKind::Autodetect => "autodetect".to_string(),
-            &VpcInitKind::Manual => "manual".to_string(),
+            VpcInitKind::Autodetect => "autodetect".to_string(),
+            VpcInitKind::Manual => "manual".to_string(),
         }
     }
 }

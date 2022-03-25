@@ -9,7 +9,7 @@ use rand::Rng;
 use retry::Error::Operation;
 use std::{env, fs, thread, time};
 
-fn manage_common_issues(terraform_provider_lock: &String, err: &CommandError) -> Result<(), CommandError> {
+fn manage_common_issues(terraform_provider_lock: &str, err: &CommandError) -> Result<(), CommandError> {
     // Error: Failed to install provider from shared cache
     // in order to avoid lock errors on parallel run, let's sleep a bit
     // https://github.com/hashicorp/terraform/issues/28041
@@ -249,7 +249,7 @@ in the dependency lock file
         "#;
 
         let could_not_load_plugin_error = CommandError::new_from_safe_message(could_not_load_plugin.to_string());
-        assert!(manage_common_issues(&"/tmp/do_not_exists".to_string(), &could_not_load_plugin_error).is_ok());
+        assert!(manage_common_issues("/tmp/do_not_exists", &could_not_load_plugin_error).is_ok());
     }
 
     #[test]
