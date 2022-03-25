@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventDetails, EventMessage};
-use crate::logger::{LogLevel, Logger};
+use crate::logger::Logger;
 use crate::models::{Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
 use chrono::Duration;
 use core::option::Option::{None, Some};
@@ -455,10 +455,10 @@ pub fn check_domain_for(
             resolver
         };
 
-        logger.log(
-            LogLevel::Info,
-            EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message.to_string())),
-        );
+        logger.log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe(message.to_string()),
+        ));
 
         let fixed_iterable = Fixed::from_millis(3000).take(100);
         let check_result = retry::retry(fixed_iterable, || match next_resolver().lookup_ip(domain) {
@@ -466,10 +466,10 @@ pub fn check_domain_for(
             Err(err) => {
                 let x = format!("Domain resolution check for '{}' is still in progress...", domain);
 
-                logger.log(
-                    LogLevel::Info,
-                    EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(x.to_string())),
-                );
+                logger.log(EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(x.to_string()),
+                ));
 
                 listener_helper.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Environment {
@@ -488,10 +488,10 @@ pub fn check_domain_for(
             Ok(_) => {
                 let x = format!("Domain {} is ready! ⚡️", domain);
 
-                logger.log(
-                    LogLevel::Info,
-                    EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message.to_string())),
-                );
+                logger.log(EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(message.to_string()),
+                ));
 
                 listener_helper.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Environment {
@@ -509,10 +509,10 @@ pub fn check_domain_for(
                     domain
                 );
 
-                logger.log(
-                    LogLevel::Warning,
-                    EngineEvent::Warning(event_details.clone(), EventMessage::new_from_safe(message.to_string())),
-                );
+                logger.log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(message.to_string()),
+                ));
 
                 listener_helper.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Environment {
@@ -552,14 +552,8 @@ pub fn print_action(
 ) {
     let msg = format!("{}.{}.{} called for {}", cloud_provider_name, struct_name, fn_name, item_name);
     match fn_name.contains("error") {
-        true => logger.log(
-            LogLevel::Warning,
-            EngineEvent::Warning(event_details, EventMessage::new_from_safe(msg)),
-        ),
-        false => logger.log(
-            LogLevel::Info,
-            EngineEvent::Info(event_details, EventMessage::new_from_safe(msg)),
-        ),
+        true => logger.log(EngineEvent::Warning(event_details, EventMessage::new_from_safe(msg))),
+        false => logger.log(EngineEvent::Info(event_details, EventMessage::new_from_safe(msg))),
     }
 }
 
