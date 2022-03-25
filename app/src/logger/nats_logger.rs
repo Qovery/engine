@@ -2,7 +2,7 @@ use crate::nats;
 use qovery_engine::errors::{CommandError, EngineError};
 use qovery_engine::events::io::EngineEvent as EngineEventIo;
 use qovery_engine::events::EngineEvent;
-use qovery_engine::logger::{LogLevel, Logger, StdIoLogger};
+use qovery_engine::logger::{Logger, StdIoLogger};
 
 #[derive(Clone)]
 pub struct NatsLogger {
@@ -20,7 +20,7 @@ impl NatsLogger {
 }
 
 impl Logger for NatsLogger {
-    fn log(&self, _log_level: LogLevel, event: EngineEvent) {
+    fn log(&self, event: EngineEvent) {
         let event_details = event.get_details();
         let event_io = EngineEventIo::from(event.clone());
         let error_message_qovery = "error trying to send message to NATS".to_string();
@@ -33,31 +33,7 @@ impl Logger for NatsLogger {
                 if let Err(e) = self.nats_connection.publish(&subject, json_string.as_bytes()) {
                     let message_safe = "cannot publish event object to NATS subject";
                     let message_raw = format!("{}: {}", message_safe, e);
-                    self.std_logger.log(
-                        LogLevel::Error,
-                        EngineEvent::Error(
-                            EngineError::new_unknown(
-                                event_details.clone(),
-                                error_message_qovery,
-                                error_message_user,
-                                Some(CommandError::new(
-                                    message_raw.to_string(),
-                                    Some(message_safe.to_string()),
-                                )),
-                                None,
-                                None,
-                            ),
-                            None,
-                        ),
-                    );
-                }
-            }
-            Err(e) => {
-                let message_safe = "cannot serialize event object to JSON";
-                let message_raw = format!("{}: {}", message_safe, e);
-                self.std_logger.log(
-                    LogLevel::Error,
-                    EngineEvent::Error(
+                    self.std_logger.log(EngineEvent::Error(
                         EngineError::new_unknown(
                             event_details.clone(),
                             error_message_qovery,
@@ -70,8 +46,26 @@ impl Logger for NatsLogger {
                             None,
                         ),
                         None,
+                    ));
+                }
+            }
+            Err(e) => {
+                let message_safe = "cannot serialize event object to JSON";
+                let message_raw = format!("{}: {}", message_safe, e);
+                self.std_logger.log(EngineEvent::Error(
+                    EngineError::new_unknown(
+                        event_details.clone(),
+                        error_message_qovery,
+                        error_message_user,
+                        Some(CommandError::new(
+                            message_raw.to_string(),
+                            Some(message_safe.to_string()),
+                        )),
+                        None,
+                        None,
                     ),
-                );
+                    None,
+                ));
             }
         }
     }

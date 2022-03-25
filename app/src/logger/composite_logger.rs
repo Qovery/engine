@@ -1,5 +1,5 @@
 use qovery_engine::events::EngineEvent;
-use qovery_engine::logger::{LogLevel, Logger};
+use qovery_engine::logger::Logger;
 
 #[derive(Clone)]
 pub struct CompositeLogger {
@@ -13,9 +13,9 @@ impl CompositeLogger {
 }
 
 impl Logger for CompositeLogger {
-    fn log(&self, log_level: LogLevel, event: EngineEvent) {
+    fn log(&self, event: EngineEvent) {
         for logger in &self.loggers {
-            logger.log(log_level.clone(), event.clone());
+            logger.log(event.clone());
         }
     }
 
