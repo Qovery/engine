@@ -131,7 +131,7 @@ impl Service for RedisAws {
         // https://aws.amazon.com/about-aws/whats-new/2019/08/elasticache_supports_50_chars_cluster_name
         let prefix = "redis";
         let max_size = 47 - prefix.len(); // 50 (max Elasticache ) - 3 (k8s statefulset chars)
-        let mut new_name = self.name().replace("_", "").replace("-", "");
+        let mut new_name = self.name().replace('_', "").replace('-', "");
 
         if new_name.chars().count() > max_size {
             new_name = new_name[..max_size].to_string();
@@ -192,7 +192,7 @@ impl Service for RedisAws {
         context.insert("kubeconfig_path", &kube_config_file_path);
 
         kubectl::kubectl_exec_create_namespace_without_labels(
-            &environment.namespace(),
+            environment.namespace(),
             kube_config_file_path.as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
@@ -208,7 +208,7 @@ impl Service for RedisAws {
             "default.redis6.x"
         } else {
             return Err(EngineError::new_terraform_unsupported_context_parameter_value(
-                event_details.clone(),
+                event_details,
                 "Elasicache".to_string(),
                 "database_elasticache_parameter_group_name".to_string(),
                 format!("default.redis{}", version),

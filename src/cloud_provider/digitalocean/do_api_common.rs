@@ -42,15 +42,15 @@ pub fn do_get_from_api(token: &str, api_type: DoApiType, url_api: String) -> Res
                         api_type
                     );
                     return Err(CommandError::new(
-                        format!("{}, response: {:?}", message_safe.to_string(), response),
-                        Some(message_safe.to_string()),
+                        format!("{}, response: {:?}", message_safe, response),
+                        Some(message_safe),
                     ));
                 }
                 _ => {
                     let message_safe = format!("Unknown status code received from Digital Ocean Kubernetes API while retrieving {} information.", api_type);
                     return Err(CommandError::new(
-                        format!("{}, response: {:?}", message_safe.to_string(), response),
-                        Some(message_safe.to_string()),
+                        format!("{}, response: {:?}", message_safe, response),
+                        Some(message_safe),
                     ));
                 }
             }

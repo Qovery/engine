@@ -344,14 +344,14 @@ mod tests {
 
     #[test]
     fn test_error() {
-        let mut cmd = QoveryCommand::new("false", &vec![], &vec![]);
+        let mut cmd = QoveryCommand::new("false", &[], &[]);
         assert_eq!(cmd.exec().is_err(), true);
         assert_eq!(matches!(cmd.exec(), Err(CommandError::ExitStatusError(_))), true);
     }
 
     #[test]
     fn test_command_with_timeout() {
-        let mut cmd = QoveryCommand::new("sleep", &vec!["120"], &vec![]);
+        let mut cmd = QoveryCommand::new("sleep", &["120"], &[]);
         let ret = cmd.exec_with_abort(
             &mut |_| {},
             &mut |_| {},
@@ -360,7 +360,7 @@ mod tests {
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
 
-        let mut cmd = QoveryCommand::new("sh", &vec!["-c", "cat /dev/urandom | grep -a --null-data ."], &vec![]);
+        let mut cmd = QoveryCommand::new("sh", &["-c", "cat /dev/urandom | grep -a --null-data ."], &[]);
         let ret = cmd.exec_with_abort(
             &mut |_| {},
             &mut |_| {},
@@ -369,7 +369,7 @@ mod tests {
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
 
-        let mut cmd = QoveryCommand::new("sleep", &vec!["1"], &vec![]);
+        let mut cmd = QoveryCommand::new("sleep", &["1"], &[]);
         let ret = cmd.exec_with_abort(
             &mut |_| {},
             &mut |_| {},
@@ -380,7 +380,7 @@ mod tests {
 
     #[test]
     fn test_command_with_abort() {
-        let mut cmd = QoveryCommand::new("sleep", &vec!["120"], &vec![]);
+        let mut cmd = QoveryCommand::new("sleep", &["120"], &[]);
         let should_kill = Arc::new(AtomicBool::new(false));
         let should_kill2 = should_kill.clone();
         let barrier = Arc::new(Barrier::new(2));

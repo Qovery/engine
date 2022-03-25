@@ -170,9 +170,9 @@ impl EKS {
                 Ok(x) => aws_zones.push(x),
                 Err(e) => {
                     return Err(EngineError::new_unsupported_zone(
-                        event_details.clone(),
+                        event_details,
                         region.to_string(),
-                        zone.to_string(),
+                        zone,
                         CommandError::new_from_safe_message(e.to_string()),
                     ))
                 }
@@ -181,11 +181,8 @@ impl EKS {
 
         for node_group in &nodes_groups {
             if let Err(e) = AwsInstancesType::from_str(node_group.instance_type.as_str()) {
-                let err = EngineError::new_unsupported_instance_type(
-                    event_details.clone(),
-                    node_group.instance_type.as_str(),
-                    e,
-                );
+                let err =
+                    EngineError::new_unsupported_instance_type(event_details, node_group.instance_type.as_str(), e);
 
                 logger.log(LogLevel::Error, EngineEvent::Error(err.clone(), None));
 
@@ -198,8 +195,8 @@ impl EKS {
             context.clone(),
             "s3-temp-id".to_string(),
             "default-s3".to_string(),
-            cloud_provider.access_key_id().clone(),
-            cloud_provider.secret_access_key().clone(),
+            cloud_provider.access_key_id(),
+            cloud_provider.secret_access_key(),
             region.clone(),
             true,
             context.resource_expiration_in_seconds(),
@@ -239,7 +236,7 @@ impl EKS {
             .dns_provider
             .resolvers()
             .iter()
-            .map(|x| format!("{}", x.clone().to_string()))
+            .map(|x| format!("{}", x.clone()))
             .collect();
 
         terraform_list_format(managed_dns_resolvers)
@@ -458,7 +455,7 @@ impl EKS {
         // Vault
         context.insert("vault_auth_method", "none");
 
-        if let Some(_) = env::var_os("VAULT_ADDR") {
+        if env::var_os("VAULT_ADDR").is_some() {
             // select the correct used method
             match env::var_os("VAULT_ROLE_ID") {
                 Some(role_id) => {
@@ -471,7 +468,7 @@ impl EKS {
                             LogLevel::Error,
                             EngineEvent::Error(
                                 EngineError::new_missing_required_env_variable(
-                                    event_details.clone(),
+                                    event_details,
                                     "VAULT_SECRET_ID".to_string(),
                                 ),
                                 None,
@@ -480,7 +477,7 @@ impl EKS {
                     }
                 }
                 None => {
-                    if let Some(_) = env::var_os("VAULT_TOKEN") {
+                    if env::var_os("VAULT_TOKEN").is_some() {
                         context.insert("vault_auth_method", "token")
                     }
                 }
@@ -525,7 +522,7 @@ impl EKS {
 
         // AWS - EKS
         context.insert("aws_availability_zones", &aws_zones);
-        context.insert("eks_cidr_subnet", &eks_cidr_subnet.clone());
+        context.insert("eks_cidr_subnet", &eks_cidr_subnet);
         context.insert("kubernetes_cluster_name", &self.name());
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("eks_region_cluster_id", region_cluster_id.as_str());
@@ -679,9 +676,9 @@ impl EKS {
             context,
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 self.template_directory.to_string(),
-                temp_dir.to_string(),
+                temp_dir,
                 e,
             ));
         }
@@ -690,13 +687,12 @@ impl EKS {
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
         let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        if let Err(e) =
-            crate::template::copy_non_template_files(bootstrap_charts_dir.to_string(), common_charts_temp_dir.as_str())
+        if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
-                bootstrap_charts_dir.to_string(),
-                common_charts_temp_dir.to_string(),
+                event_details,
+                bootstrap_charts_dir,
+                common_charts_temp_dir,
                 e,
             ));
         }
@@ -730,7 +726,7 @@ impl EKS {
                                 ),
                                 Err(e) => {
                                     return Err(EngineError::new_terraform_cannot_remove_entry_out(
-                                        event_details.clone(),
+                                        event_details,
                                         entry.to_string(),
                                         e,
                                     ))
@@ -752,7 +748,7 @@ impl EKS {
         // terraform deployment dedicated to cloud resources
         if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
             return Err(EngineError::new_terraform_error_while_executing_pipeline(
-                event_details.clone(),
+                event_details,
                 e,
             ));
         }
@@ -776,11 +772,11 @@ impl EKS {
             cluster_id: self.id.clone(),
             cluster_long_id: self.long_id,
             region: self.region(),
-            cluster_name: self.cluster_name().to_string(),
+            cluster_name: self.cluster_name(),
             cloud_provider: "aws".to_string(),
             test_cluster: self.context.is_test_cluster(),
-            aws_access_key_id: self.cloud_provider.access_key_id().to_string(),
-            aws_secret_access_key: self.cloud_provider.secret_access_key().to_string(),
+            aws_access_key_id: self.cloud_provider.access_key_id(),
+            aws_secret_access_key: self.cloud_provider.secret_access_key(),
             vpc_qovery_network_mode: self.options.vpc_qovery_network_mode.clone(),
             qovery_engine_location: self.get_engine_location(),
             ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
@@ -807,13 +803,13 @@ impl EKS {
             format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
             &charts_prerequisites,
             Some(&temp_dir),
-            &kubeconfig_path,
+            kubeconfig_path,
             &credentials_environment_variables,
         )
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
         deploy_charts_levels(
-            &kubeconfig_path,
+            kubeconfig_path,
             &credentials_environment_variables,
             helm_charts_to_deploy,
             self.context.is_dry_run_deploy(),
@@ -837,12 +833,12 @@ impl EKS {
         match kubectl_exec_get_events(kubeconfig_path, None, environment_variables) {
             Ok(ok_line) => self.logger().log(
                 LogLevel::Info,
-                EngineEvent::Deploying(event_details.clone(), EventMessage::new(ok_line, None)),
+                EngineEvent::Deploying(event_details, EventMessage::new(ok_line, None)),
             ),
             Err(err) => self.logger().log(
                 LogLevel::Error,
                 EngineEvent::Deploying(
-                    event_details.clone(),
+                    event_details,
                     EventMessage::new("Error trying to get kubernetes events".to_string(), Some(err.message())),
                 ),
             ),
@@ -911,9 +907,9 @@ impl EKS {
             context,
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 self.template_directory.to_string(),
-                temp_dir.to_string(),
+                temp_dir,
                 e,
             ));
         }
@@ -922,13 +918,12 @@ impl EKS {
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
         let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        if let Err(e) =
-            crate::template::copy_non_template_files(bootstrap_charts_dir.to_string(), common_charts_temp_dir.as_str())
+        if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
-                bootstrap_charts_dir.to_string(),
-                common_charts_temp_dir.to_string(),
+                event_details,
+                bootstrap_charts_dir,
+                common_charts_temp_dir,
                 e,
             ));
         }
@@ -946,7 +941,7 @@ impl EKS {
                 tf_workers_resources_name
             }
             Err(e) => {
-                let error = EngineError::new_terraform_state_does_not_exist(event_details.clone(), e);
+                let error = EngineError::new_terraform_state_does_not_exist(event_details, e);
                 self.logger()
                     .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
                 return Err(error);
@@ -954,10 +949,7 @@ impl EKS {
         };
 
         if tf_workers_resources.is_empty() {
-            return Err(EngineError::new_cluster_has_no_worker_nodes(
-                event_details.clone(),
-                None,
-            ));
+            return Err(EngineError::new_cluster_has_no_worker_nodes(event_details, None));
         }
 
         let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
@@ -983,7 +975,7 @@ impl EKS {
                                         Ok(job_count) if job_count > 0 => current_engine_jobs += 1,
                                         Err(e) => {
                                             let safe_message = "Error while looking at the API metric value"; 
-                                            return OperationResult::Retry(EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), CommandError::new(format!("{}, error: {}", safe_message, e.to_string()), Some(safe_message.to_string()))));
+                                            return OperationResult::Retry(EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), CommandError::new(format!("{}, error: {}", safe_message, e), Some(safe_message.to_string()))));
                                         }
                                         _ => {}
                                     }
@@ -1010,7 +1002,7 @@ impl EKS {
                             return Err(error)
                         }
                         Err(retry::Error::Internal(msg)) => {
-                            return Err(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details.clone(), Some(CommandError::new_from_safe_message(msg))))
+                            return Err(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details, Some(CommandError::new_from_safe_message(msg))))
                         }
                     }
                 }
@@ -1042,12 +1034,12 @@ impl EKS {
                 self.send_to_customer(&message, &listeners_helper);
                 self.logger().log(
                     LogLevel::Info,
-                    EngineEvent::Pausing(event_details.clone(), EventMessage::new_from_safe(message)),
+                    EngineEvent::Pausing(event_details, EventMessage::new_from_safe(message)),
                 );
                 Ok(())
             }
             Err(e) => Err(EngineError::new_terraform_error_while_executing_pipeline(
-                event_details.clone(),
+                event_details,
                 e,
             )),
         }
@@ -1093,9 +1085,9 @@ impl EKS {
             context,
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 self.template_directory.to_string(),
-                temp_dir.to_string(),
+                temp_dir,
                 e,
             ));
         }
@@ -1104,13 +1096,12 @@ impl EKS {
         // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
         let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        if let Err(e) =
-            crate::template::copy_non_template_files(bootstrap_charts_dir.to_string(), common_charts_temp_dir.as_str())
+        if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
-                bootstrap_charts_dir.to_string(),
-                common_charts_temp_dir.to_string(),
+                event_details,
+                bootstrap_charts_dir,
+                common_charts_temp_dir,
                 e,
             ));
         }
@@ -1260,7 +1251,7 @@ impl EKS {
             )
             .map_err(|e| to_engine_error(&event_details, e))?;
             let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
-            helm.uninstall(&chart, &vec![])
+            helm.uninstall(&chart, &[])
                 .map_err(|e| to_engine_error(&event_details, e))?;
 
             // required to avoid namespace stuck on deletion
@@ -1282,12 +1273,12 @@ impl EKS {
             let qovery_namespaces = get_qovery_managed_namespaces();
             for qovery_namespace in qovery_namespaces.iter() {
                 let charts_to_delete = helm
-                    .list_release(Some(qovery_namespace), &vec![])
+                    .list_release(Some(qovery_namespace), &[])
                     .map_err(|e| to_engine_error(&event_details, e))?;
 
                 for chart in charts_to_delete {
                     let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                    match helm.uninstall(&chart_info, &vec![]) {
+                    match helm.uninstall(&chart_info, &[]) {
                         Ok(_) => self.logger().log(
                             LogLevel::Info,
                             EngineEvent::Deleting(
@@ -1356,11 +1347,11 @@ impl EKS {
                 ),
             );
 
-            match helm.list_release(None, &vec![]) {
+            match helm.list_release(None, &[]) {
                 Ok(helm_charts) => {
                     for chart in helm_charts {
                         let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                        match helm.uninstall(&chart_info, &vec![]) {
+                        match helm.uninstall(&chart_info, &[]) {
                             Ok(_) => self.logger().log(
                                 LogLevel::Info,
                                 EngineEvent::Deleting(
@@ -1423,18 +1414,18 @@ impl EKS {
                 self.logger().log(
                     LogLevel::Info,
                     EngineEvent::Deleting(
-                        event_details.clone(),
+                        event_details,
                         EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),
                     ),
                 );
                 Ok(())
             }
             Err(Operation { error, .. }) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-                event_details.clone(),
+                event_details,
                 error,
             )),
             Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-                event_details.clone(),
+                event_details,
                 CommandError::new(msg, None),
             )),
         }
@@ -1522,7 +1513,7 @@ impl Kubernetes for EKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.create())
@@ -1536,7 +1527,7 @@ impl Kubernetes for EKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.create_error())
@@ -1608,9 +1599,9 @@ impl Kubernetes for EKS {
                     context.clone(),
                 ) {
                     return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                        event_details.clone(),
+                        event_details,
                         self.template_directory.to_string(),
-                        temp_dir.to_string(),
+                        temp_dir,
                         e,
                     ));
                 }
@@ -1622,9 +1613,9 @@ impl Kubernetes for EKS {
                     common_charts_temp_dir.as_str(),
                 ) {
                     return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                        event_details.clone(),
-                        common_bootstrap_charts.to_string(),
-                        common_charts_temp_dir.to_string(),
+                        event_details,
+                        common_bootstrap_charts,
+                        common_charts_temp_dir,
                         e,
                     ));
                 }
@@ -1663,7 +1654,7 @@ impl Kubernetes for EKS {
                     }
                     Err(e) => {
                         return Err(EngineError::new_terraform_error_while_executing_pipeline(
-                            event_details.clone(),
+                            event_details,
                             e,
                         ));
                     }
@@ -1684,7 +1675,7 @@ impl Kubernetes for EKS {
                 self.logger().log(
                     LogLevel::Info,
                     EngineEvent::Deploying(
-                        event_details.clone(),
+                        event_details,
                         EventMessage::new_from_safe(
                             "No Kubernetes upgrade required, masters and workers are already up to date.".to_string(),
                         ),
@@ -1737,9 +1728,9 @@ impl Kubernetes for EKS {
             context.clone(),
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 self.template_directory.to_string(),
-                temp_dir.to_string(),
+                temp_dir,
                 e,
             ));
         }
@@ -1752,9 +1743,9 @@ impl Kubernetes for EKS {
             crate::template::copy_non_template_files(common_bootstrap_charts.as_str(), common_charts_temp_dir.as_str())
         {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
-                common_bootstrap_charts.to_string(),
-                common_charts_temp_dir.to_string(),
+                event_details,
+                common_bootstrap_charts,
+                common_charts_temp_dir,
                 e,
             ));
         }
@@ -1799,14 +1790,14 @@ impl Kubernetes for EKS {
                 let _ = self.set_cluster_autoscaler_replicas(event_details.clone(), 1)?;
 
                 return Err(EngineError::new_terraform_error_while_executing_pipeline(
-                    event_details.clone(),
+                    event_details,
                     e,
                 ));
             }
         }
 
         // enable cluster autoscaler deployment
-        self.set_cluster_autoscaler_replicas(event_details.clone(), 1)
+        self.set_cluster_autoscaler_replicas(event_details, 1)
     }
 
     #[named]
@@ -1817,7 +1808,7 @@ impl Kubernetes for EKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.upgrade())
@@ -1831,7 +1822,7 @@ impl Kubernetes for EKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.upgrade_error())
@@ -1845,7 +1836,7 @@ impl Kubernetes for EKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.downgrade())
@@ -1859,7 +1850,7 @@ impl Kubernetes for EKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.downgrade_error())
@@ -1873,7 +1864,7 @@ impl Kubernetes for EKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Pause, || self.pause())
@@ -1887,7 +1878,7 @@ impl Kubernetes for EKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Pause, || self.pause_error())
@@ -1901,7 +1892,7 @@ impl Kubernetes for EKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || self.delete())
@@ -1915,7 +1906,7 @@ impl Kubernetes for EKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
@@ -1971,7 +1962,7 @@ impl Kubernetes for EKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         Ok(())
@@ -1999,7 +1990,7 @@ impl Kubernetes for EKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         Ok(())

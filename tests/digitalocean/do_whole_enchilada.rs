@@ -28,7 +28,7 @@ fn create_upgrade_and_destroy_doks_cluster_with_env_in_ams_3() {
     );
 
     let environment = test_utilities::common::working_minimal_environment(&context, cluster_domain.as_str());
-    let env_action = environment.clone();
+    let env_action = environment;
 
     engine_run_test(|| {
         cluster_test(

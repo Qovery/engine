@@ -69,7 +69,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
         let ret = environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -130,7 +130,7 @@ fn digitalocean_doks_deploy_a_not_working_environment_with_no_router() {
             TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
         ));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -197,7 +197,7 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
             context.clone(),
             Kind::Do,
             environment.clone(),
-            selector.clone().as_str(),
+            selector.as_str(),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -223,7 +223,7 @@ fn digitalocean_doks_deploy_a_working_environment_and_pause() {
         let ret = environment.delete_environment(&env_action, logger, &engine_config_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -298,7 +298,7 @@ fn digitalocean_doks_build_with_buildpacks_and_deploy_a_working_environment() {
             environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -353,7 +353,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_domain() {
         let result = environment_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -433,7 +433,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
         let result = environment_delete.delete_environment(&env_action_delete, logger, &engine_config_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -522,7 +522,7 @@ fn digitalocean_doks_redeploy_same_app() {
             context.clone(),
             Kind::Do,
             environment_check1,
-            app_name.clone().as_str(),
+            app_name.as_str(),
             secrets.clone(),
         );
 
@@ -543,7 +543,7 @@ fn digitalocean_doks_redeploy_same_app() {
         let result = environment_delete.delete_environment(&env_action_delete, logger, &engine_config_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -622,7 +622,7 @@ fn digitalocean_doks_deploy_a_not_working_environment_and_then_working_environme
         let result = environment_for_delete.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -731,7 +731,7 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
         let result = delete_env.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -786,7 +786,7 @@ fn digitalocean_doks_deploy_a_non_working_environment_with_no_failover() {
         let result = delete_env.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -849,7 +849,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_sticky_session() {
             environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), DO_TEST_REGION) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 

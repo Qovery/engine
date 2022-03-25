@@ -181,7 +181,7 @@ impl Service for RedisDo {
         );
 
         let version = self
-            .matching_correct_version(event_details.clone())?
+            .matching_correct_version(event_details)?
             .matched_version()
             .to_string();
 

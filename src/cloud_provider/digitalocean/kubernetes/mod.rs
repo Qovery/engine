@@ -134,7 +134,7 @@ impl DOKS {
                         QoveryIdentifier::new_from_long_id(context.execution_id().to_string()),
                         Some(region.to_string()),
                         Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
-                        Transmitter::Kubernetes(id.to_string(), name.to_string()),
+                        Transmitter::Kubernetes(id, name),
                     ),
                     node_group.instance_type.as_str(),
                     e,
@@ -150,8 +150,8 @@ impl DOKS {
             context.clone(),
             "spaces-temp-id".to_string(),
             "my-spaces-object-storage".to_string(),
-            cloud_provider.access_key_id().clone(),
-            cloud_provider.secret_access_key().clone(),
+            cloud_provider.access_key_id(),
+            cloud_provider.secret_access_key(),
             region,
             BucketDeleteStrategy::HardDelete,
         );
@@ -217,17 +217,15 @@ impl DOKS {
                     Ok(vpcs) => match vpcs {
                         // new vpc: select a random non used subnet
                         None => {
-                            match get_do_random_available_subnet_from_api(&self.cloud_provider.token(), self.region) {
+                            match get_do_random_available_subnet_from_api(self.cloud_provider.token(), self.region) {
                                 Ok(x) => x,
-                                Err(e) => {
-                                    return Err(EngineError::new_cannot_get_any_available_vpc(event_details.clone(), e))
-                                }
+                                Err(e) => return Err(EngineError::new_cannot_get_any_available_vpc(event_details, e)),
                             }
                         }
                         // existing vpc: assign current subnet in this case
                         Some(vpc) => vpc.ip_range,
                     },
-                    Err(e) => return Err(EngineError::new_cannot_get_any_available_vpc(event_details.clone(), e)),
+                    Err(e) => return Err(EngineError::new_cannot_get_any_available_vpc(event_details, e)),
                 }
             }
             VpcInitKind::Manual => self.options.vpc_cidr_block.clone(),
@@ -383,7 +381,7 @@ impl DOKS {
                             LogLevel::Error,
                             EngineEvent::Error(
                                 EngineError::new_missing_required_env_variable(
-                                    event_details.clone(),
+                                    event_details,
                                     "VAULT_SECRET_ID".to_string(),
                                 ),
                                 None,
@@ -413,7 +411,7 @@ impl DOKS {
                 match get_do_latest_doks_slug_from_api(self.cloud_provider.token(), self.version()) {
                     Ok(version) => match version {
                         None => Err(EngineError::new_unsupported_version_error(
-                            event_details.clone(),
+                            event_details,
                             self.kind().to_string(),
                             VersionsNumber::from_str(&self.version)
                                 .expect("cannot parse version")
@@ -422,7 +420,7 @@ impl DOKS {
                         Some(v) => Ok(v),
                     },
                     Err(e) => Err(EngineError::new_cannot_get_supported_versions_error(
-                        event_details.clone(),
+                        event_details,
                         self.kind().to_string(),
                         e,
                     )),
@@ -463,7 +461,7 @@ impl DOKS {
         let api_url = format!("{}/clusters", DoApiType::Doks.api_url());
         let json_content = do_get_from_api(self.cloud_provider.token(), DoApiType::Doks, api_url)?;
         // TODO(benjaminch): `qovery-` to be added into Rust name directly everywhere
-        match get_doks_info_from_name(json_content.as_str(), format!("qovery-{}", self.id().to_string())) {
+        match get_doks_info_from_name(json_content.as_str(), format!("qovery-{}", self.id())) {
             Ok(cluster_result) => match cluster_result {
                 None => Err(CommandError::new_from_safe_message(
                     "Cluster doesn't exist on DO side.".to_string(),
@@ -548,9 +546,9 @@ impl DOKS {
             context,
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 self.template_directory.to_string(),
-                temp_dir.to_string(),
+                temp_dir,
                 e,
             ));
         }
@@ -559,13 +557,12 @@ impl DOKS {
         // this is due to the required dependencies of lib/digitalocean/bootstrap/*.tf files
         let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        if let Err(e) =
-            crate::template::copy_non_template_files(bootstrap_charts_dir.to_string(), common_charts_temp_dir.as_str())
+        if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
-                bootstrap_charts_dir.to_string(),
-                common_charts_temp_dir.to_string(),
+                event_details,
+                bootstrap_charts_dir,
+                common_charts_temp_dir,
                 e,
             ));
         }
@@ -604,7 +601,7 @@ impl DOKS {
                                 ),
                                 Err(e) => {
                                     return Err(EngineError::new_terraform_cannot_remove_entry_out(
-                                        event_details.clone(),
+                                        event_details,
                                         entry.to_string(),
                                         e,
                                     ))
@@ -625,11 +622,8 @@ impl DOKS {
 
         // Logs bucket
         if let Err(e) = self.spaces.create_bucket(self.logs_bucket_name().as_str()) {
-            let error = EngineError::new_object_storage_cannot_create_bucket_error(
-                event_details.clone(),
-                self.logs_bucket_name(),
-                e,
-            );
+            let error =
+                EngineError::new_object_storage_cannot_create_bucket_error(event_details, self.logs_bucket_name(), e);
             self.logger()
                 .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
             return Err(error);
@@ -638,7 +632,7 @@ impl DOKS {
         // terraform deployment dedicated to cloud resources
         if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
             return Err(EngineError::new_terraform_error_while_executing_pipeline(
-                event_details.clone(),
+                event_details,
                 e,
             ));
         }
@@ -661,7 +655,7 @@ impl DOKS {
                 )
             }
             Err(e) => {
-                return Err(EngineError::new_k8s_node_not_ready(event_details.clone(), e));
+                return Err(EngineError::new_k8s_node_not_ready(event_details, e));
             }
         };
 
@@ -675,7 +669,7 @@ impl DOKS {
 
         let doks_id = match self.get_doks_info_from_name_api() {
             Ok(cluster) => cluster.id,
-            Err(e) => return Err(EngineError::new_cannot_get_cluster_error(event_details.clone(), e)),
+            Err(e) => return Err(EngineError::new_cannot_get_cluster_error(event_details, e)),
         };
 
         let charts_prerequisites = ChartsConfigPrerequisites {
@@ -685,13 +679,13 @@ impl DOKS {
             cluster_id: self.id.clone(),
             cluster_long_id: self.long_id,
             do_cluster_id: doks_id,
-            region: self.region().to_string(),
-            cluster_name: self.cluster_name().to_string(),
+            region: self.region(),
+            cluster_name: self.cluster_name(),
             cloud_provider: "digitalocean".to_string(),
             test_cluster: self.context.is_test_cluster(),
             do_token: self.cloud_provider.token().to_string(),
-            do_space_access_id: self.cloud_provider.access_key_id().to_string(),
-            do_space_secret_key: self.cloud_provider.secret_access_key().to_string(),
+            do_space_access_id: self.cloud_provider.access_key_id(),
+            do_space_secret_key: self.cloud_provider.secret_access_key(),
             do_space_bucket_kubeconfig: self.kubeconfig_bucket_name(),
             do_space_kubeconfig_filename: self.kubeconfig_file_name(),
             qovery_engine_location: self.options.qovery_engine_location.clone(),
@@ -725,7 +719,7 @@ impl DOKS {
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
         deploy_charts_levels(
-            &kubeconfig_path,
+            kubeconfig_path,
             &credentials_environment_variables,
             helm_charts_to_deploy,
             self.context.is_dry_run_deploy(),
@@ -760,7 +754,7 @@ impl DOKS {
                 return Err(EngineError::new_k8s_loadbalancer_configuration_issue(
                     event_details.clone(),
                     CommandError::new(
-                        format!("{}, error: {}.", safe_message.to_string(), e.message(),),
+                        format!("{}, error: {}.", safe_message, e.message(),),
                         Some(safe_message.to_string()),
                     ),
                 ));
@@ -796,8 +790,8 @@ impl DOKS {
         .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))?;
 
         // This will ony print the diff on stdout
-        let _ = helm.upgrade_diff(&load_balancer_dns_hostname, &vec![]);
-        helm.upgrade(&load_balancer_dns_hostname, &vec![])
+        let _ = helm.upgrade_diff(&load_balancer_dns_hostname, &[]);
+        helm.upgrade(&load_balancer_dns_hostname, &[])
             .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))
     }
 
@@ -817,12 +811,12 @@ impl DOKS {
         match kubectl_exec_get_events(kubeconfig_path, None, environment_variables) {
             Ok(ok_line) => self.logger().log(
                 LogLevel::Info,
-                EngineEvent::Deploying(event_details.clone(), EventMessage::new(ok_line, None)),
+                EngineEvent::Deploying(event_details, EventMessage::new(ok_line, None)),
             ),
             Err(err) => self.logger().log(
                 LogLevel::Error,
                 EngineEvent::Deploying(
-                    event_details.clone(),
+                    event_details,
                     EventMessage::new("Error trying to get kubernetes events".to_string(), Some(err.message())),
                 ),
             ),
@@ -905,9 +899,9 @@ impl DOKS {
             context,
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 self.template_directory.to_string(),
-                temp_dir.to_string(),
+                temp_dir,
                 e,
             ));
         }
@@ -917,13 +911,12 @@ impl DOKS {
         let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
 
-        if let Err(e) =
-            crate::template::copy_non_template_files(bootstrap_charts_dir.to_string(), common_charts_temp_dir.as_str())
+        if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
-                bootstrap_charts_dir.to_string(),
-                common_charts_temp_dir.to_string(),
+                event_details,
+                bootstrap_charts_dir,
+                common_charts_temp_dir,
                 e,
             ));
         }
@@ -1059,7 +1052,7 @@ impl DOKS {
             )
             .map_err(|e| to_engine_error(&event_details, e))?;
             let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
-            helm.uninstall(&chart, &vec![])
+            helm.uninstall(&chart, &[])
                 .map_err(|e| to_engine_error(&event_details, e))?;
 
             // required to avoid namespace stuck on deletion
@@ -1081,12 +1074,12 @@ impl DOKS {
             let qovery_namespaces = get_qovery_managed_namespaces();
             for qovery_namespace in qovery_namespaces.iter() {
                 let charts_to_delete = helm
-                    .list_release(Some(qovery_namespace), &vec![])
+                    .list_release(Some(qovery_namespace), &[])
                     .map_err(|e| to_engine_error(&event_details, e))?;
 
                 for chart in charts_to_delete {
                     let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                    match helm.uninstall(&chart_info, &vec![]) {
+                    match helm.uninstall(&chart_info, &[]) {
                         Ok(_) => self.logger().log(
                             LogLevel::Info,
                             EngineEvent::Deleting(
@@ -1155,11 +1148,11 @@ impl DOKS {
                 ),
             );
 
-            match helm.list_release(None, &vec![]) {
+            match helm.list_release(None, &[]) {
                 Ok(helm_charts) => {
                     for chart in helm_charts {
                         let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                        match helm.uninstall(&chart_info, &vec![]) {
+                        match helm.uninstall(&chart_info, &[]) {
                             Ok(_) => self.logger().log(
                                 LogLevel::Info,
                                 EngineEvent::Deleting(
@@ -1222,18 +1215,18 @@ impl DOKS {
                 self.logger().log(
                     LogLevel::Info,
                     EngineEvent::Deleting(
-                        event_details.clone(),
+                        event_details,
                         EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),
                     ),
                 );
                 Ok(())
             }
             Err(Operation { error, .. }) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-                event_details.clone(),
+                event_details,
                 error,
             )),
             Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-                event_details.clone(),
+                event_details,
                 CommandError::new(msg, None),
             )),
         }
@@ -1321,7 +1314,7 @@ impl Kubernetes for DOKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.create())
@@ -1335,7 +1328,7 @@ impl Kubernetes for DOKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.create_error())
@@ -1400,7 +1393,7 @@ impl Kubernetes for DOKS {
             Ok(version) => match version {
                 None => {
                     return Err(EngineError::new_unsupported_version_error(
-                        event_details.clone(),
+                        event_details,
                         self.kind().to_string(),
                         VersionsNumber::from_str(&self.version)
                             .expect("cannot parse version")
@@ -1411,14 +1404,14 @@ impl Kubernetes for DOKS {
             },
             Err(e) => {
                 return Err(EngineError::new_cannot_get_supported_versions_error(
-                    event_details.clone(),
+                    event_details,
                     self.kind().to_string(),
                     e,
                 ))
             }
         };
 
-        context.insert("doks_version", format!("{}", &upgrade_doks_version).as_str());
+        context.insert("doks_version", (&upgrade_doks_version).to_string().as_str());
 
         if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
             self.template_directory.as_str(),
@@ -1426,22 +1419,21 @@ impl Kubernetes for DOKS {
             context,
         ) {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
+                event_details,
                 self.template_directory.to_string(),
-                temp_dir.to_string(),
+                temp_dir,
                 e,
             ));
         }
 
         let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
         let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        if let Err(e) =
-            crate::template::copy_non_template_files(bootstrap_charts_dir.to_string(), common_charts_temp_dir.as_str())
+        if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
         {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
-                bootstrap_charts_dir.to_string(),
-                common_charts_temp_dir.to_string(),
+                event_details,
+                bootstrap_charts_dir,
+                common_charts_temp_dir,
                 e,
             ));
         }
@@ -1468,7 +1460,7 @@ impl Kubernetes for DOKS {
                     self.logger().log(
                         LogLevel::Info,
                         EngineEvent::Deploying(
-                            event_details.clone(),
+                            event_details,
                             EventMessage::new_from_safe(
                                 "Kubernetes nodes have been successfully upgraded.".to_string(),
                             ),
@@ -1477,7 +1469,7 @@ impl Kubernetes for DOKS {
                 }
                 Err(e) => {
                     return Err(EngineError::new_k8s_node_not_ready_with_requested_version(
-                        event_details.clone(),
+                        event_details,
                         kubernetes_upgrade_status.requested_version.to_string(),
                         e,
                     ));
@@ -1485,7 +1477,7 @@ impl Kubernetes for DOKS {
             },
             Err(e) => {
                 return Err(EngineError::new_terraform_error_while_executing_pipeline(
-                    event_details.clone(),
+                    event_details,
                     e,
                 ));
             }
@@ -1502,7 +1494,7 @@ impl Kubernetes for DOKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.upgrade())
@@ -1516,7 +1508,7 @@ impl Kubernetes for DOKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.upgrade_error())
@@ -1530,7 +1522,7 @@ impl Kubernetes for DOKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.downgrade())
@@ -1544,7 +1536,7 @@ impl Kubernetes for DOKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.downgrade_error())
@@ -1558,7 +1550,7 @@ impl Kubernetes for DOKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Pause, || self.pause())
@@ -1572,7 +1564,7 @@ impl Kubernetes for DOKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Pause, || self.pause_error())
@@ -1586,7 +1578,7 @@ impl Kubernetes for DOKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || self.delete())
@@ -1600,7 +1592,7 @@ impl Kubernetes for DOKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
@@ -1656,7 +1648,7 @@ impl Kubernetes for DOKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         Ok(())
@@ -1684,7 +1676,7 @@ impl Kubernetes for DOKS {
             self.struct_name(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
         Ok(())
@@ -1713,13 +1705,10 @@ impl Kubernetes for DOKS {
                             self.logger().log(
                                 LogLevel::Debug,
                                 EngineEvent::Debug(
-                                    self.get_event_details(stage.clone()),
+                                    self.get_event_details(stage),
                                     EventMessage::new(
                                         err.to_string(),
-                                        Some(
-                                            format!("Error, couldn't open {} file", &local_kubeconfig_generated,)
-                                                .to_string(),
-                                        ),
+                                        Some(format!("Error, couldn't open {} file", &local_kubeconfig_generated,)),
                                     ),
                                 ),
                             );
@@ -1750,7 +1739,7 @@ impl Kubernetes for DOKS {
                     Ok(kubeconfig) => match kubeconfig {
                         None => {
                             return Err(EngineError::new_cannot_retrieve_cluster_config_file(
-                                event_details.clone(),
+                                event_details,
                                 CommandError::new_from_safe_message("Kubeconfig is empty".to_string()),
                             ))
                         }
@@ -1758,7 +1747,7 @@ impl Kubernetes for DOKS {
                     },
                     Err(e) => {
                         return Err(EngineError::new_cannot_retrieve_cluster_config_file(
-                            event_details.clone(),
+                            event_details,
                             CommandError::new(e.message(), Some(e.message())),
                         ))
                     }
@@ -1814,7 +1803,7 @@ impl Kubernetes for DOKS {
 
         match result {
             Err(e) => Err(EngineError::new_cannot_retrieve_cluster_config_file(
-                event_details.clone(),
+                event_details,
                 CommandError::new(e.message(), Some(e.message())),
             )),
             Ok((file_path, file)) => Ok((file_path, file)),

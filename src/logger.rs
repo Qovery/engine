@@ -133,7 +133,7 @@ mod tests {
                             safe_message.to_string(),
                             Some(raw_message.to_string()),
                         )),
-                        Some(link.clone()),
+                        Some(link),
                         Some(hint.to_string()),
                     ),
                     None,
@@ -150,7 +150,7 @@ mod tests {
                         execution_id.clone(),
                         Some(ScwRegion::Paris.as_str().to_string()),
                         Stage::Infrastructure(InfrastructureStep::Create),
-                        Transmitter::Kubernetes(cluster_id.to_string(), cluster_name.to_string()),
+                        Transmitter::Kubernetes(cluster_id.to_string(), cluster_name),
                     ),
                     EventMessage::new(raw_message.to_string(), Some(safe_message.to_string())),
                 ),
@@ -182,7 +182,7 @@ mod tests {
                         execution_id.clone(),
                         Some(ScwRegion::Paris.as_str().to_string()),
                         Stage::Environment(EnvironmentStep::Delete),
-                        Transmitter::Application(app_id.to_string(), app_name.to_string()),
+                        Transmitter::Application(app_id.to_string(), app_name),
                     ),
                     EventMessage::new(raw_message.to_string(), Some(safe_message.to_string())),
                 ),
@@ -219,7 +219,7 @@ mod tests {
                 tc.description
             );
             assert!(
-                logs_contain(format!("execution_id=\"{}\"", execution_id.to_string()).as_str()),
+                logs_contain(format!("execution_id=\"{}\"", execution_id).as_str()),
                 "{}",
                 tc.description
             );
@@ -256,17 +256,17 @@ mod tests {
             );
 
             assert!(
-                logs_contain(format!("stage=\"{}\"", details.stage().to_string()).as_str()),
+                logs_contain(format!("stage=\"{}\"", details.stage()).as_str()),
                 "{}",
                 tc.description
             );
             assert!(
-                logs_contain(format!("step=\"{}\"", details.stage().sub_step_name().to_string()).as_str()),
+                logs_contain(format!("step=\"{}\"", details.stage().sub_step_name()).as_str()),
                 "{}",
                 tc.description
             );
             assert!(
-                logs_contain(format!("transmitter=\"{}\"", details.transmitter().to_string()).as_str()),
+                logs_contain(format!("transmitter=\"{}\"", details.transmitter()).as_str()),
                 "{}",
                 tc.description
             );

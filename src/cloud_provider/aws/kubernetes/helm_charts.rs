@@ -68,7 +68,7 @@ pub fn aws_helm_charts(
         Err(e) => {
             let message_safe = "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?";
             return Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe.to_string(), e),
+                format!("{}, error: {:?}", message_safe, e),
                 Some(message_safe.to_string()),
             ));
         }
@@ -84,8 +84,8 @@ pub fn aws_helm_charts(
                 qovery_terraform_config_file
             );
             return Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe.to_string(), e),
-                Some(message_safe.to_string()),
+                format!("{}, error: {:?}", message_safe, e),
+                Some(message_safe),
             ));
         }
     };
@@ -153,7 +153,7 @@ pub fn aws_helm_charts(
             ..Default::default()
         },
     };
-    let is_cni_old_installed_version = match aws_vpc_cni_chart.is_cni_old_installed_version(kubernetes_config, &envs) {
+    let is_cni_old_installed_version = match aws_vpc_cni_chart.is_cni_old_installed_version(kubernetes_config, envs) {
         Ok(x) => x,
         Err(e) => return Err(e),
     };
@@ -663,7 +663,7 @@ datasources:
           accessKey: '{}'
           secretKey: '{}'
       ",
-        prometheus_internal_url.clone(),
+        prometheus_internal_url,
         &loki.chart_info.name,
         loki_namespace.to_string(),
         &loki.chart_info.name,

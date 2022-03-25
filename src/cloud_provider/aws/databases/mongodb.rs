@@ -123,7 +123,7 @@ impl Service for MongoDbAws {
         // https://docs.aws.amazon.com/documentdb/latest/developerguide/limits.html#limits-naming_constraints
         let prefix = "mongodb";
         let max_size = 60 - prefix.len(); // 63 (max DocumentDB) - 3 (k8s statefulset chars)
-        let mut new_name = format!("{}{}", prefix, self.name().replace("_", "").replace("-", ""));
+        let mut new_name = format!("{}{}", prefix, self.name().replace('_', "").replace('-', ""));
         if new_name.chars().count() > max_size {
             new_name = new_name[..max_size].to_string();
         }
@@ -183,7 +183,7 @@ impl Service for MongoDbAws {
         context.insert("kubeconfig_path", &kube_config_file_path);
 
         kubectl::kubectl_exec_create_namespace_without_labels(
-            &environment.namespace(),
+            environment.namespace(),
             kube_config_file_path.as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
@@ -191,7 +191,7 @@ impl Service for MongoDbAws {
         context.insert("namespace", environment.namespace());
 
         let version = self
-            .matching_correct_version(self.is_managed_service(), event_details.clone())?
+            .matching_correct_version(self.is_managed_service(), event_details)?
             .matched_version()
             .to_string();
         context.insert("version", &version);

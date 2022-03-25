@@ -102,11 +102,7 @@ impl ScalewayCR {
 
         // We consider every registry namespace names are unique
         if let Some(registries) = scaleway_registry_namespaces {
-            if let Some(registry) = registries
-                .into_iter()
-                .filter(|r| r.status == Some(Status::Ready))
-                .next()
-            {
+            if let Some(registry) = registries.into_iter().find(|r| r.status == Some(Status::Ready)) {
                 return Some(registry);
             }
         }
@@ -223,13 +219,11 @@ impl ScalewayCR {
             registry_to_delete.id.unwrap().as_str(),
         )) {
             Ok(res) => Ok(res),
-            Err(e) => {
-                return Err(ContainerRegistryError::CannotDeleteRepository {
-                    registry_name: self.name.to_string(),
-                    repository_name: namespace_name.to_string(),
-                    raw_error_message: e.to_string(),
-                });
-            }
+            Err(e) => Err(ContainerRegistryError::CannotDeleteRepository {
+                registry_name: self.name.to_string(),
+                repository_name: namespace_name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
         }
     }
 
@@ -294,7 +288,7 @@ impl ContainerRegistry for ScalewayCR {
     fn does_image_exists(&self, image: &Image) -> bool {
         let image = docker::ContainerImage {
             registry: self.registry_info.endpoint.clone(),
-            name: image.name().clone(),
+            name: image.name(),
             tags: vec![image.tag.clone()],
         };
         match self.context.docker.does_image_exist_remotely(&image) {

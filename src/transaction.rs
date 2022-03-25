@@ -260,9 +260,9 @@ impl<'a> Transaction<'a> {
     // FIXME: Cleanup this, qe_environment should not be rebuilt at this step
     fn rollback_environment(&self, environment: &Environment) -> Result<(), RollbackError> {
         let action = match environment.action {
-            Action::Create => self.engine.kubernetes().deploy_environment_error(&environment),
-            Action::Pause => self.engine.kubernetes().pause_environment_error(&environment),
-            Action::Delete => self.engine.kubernetes().delete_environment_error(&environment),
+            Action::Create => self.engine.kubernetes().deploy_environment_error(environment),
+            Action::Pause => self.engine.kubernetes().pause_environment_error(environment),
+            Action::Delete => self.engine.kubernetes().delete_environment_error(environment),
             Action::Nothing => Ok(()),
         };
 
@@ -498,7 +498,7 @@ impl<'a> Transaction<'a> {
         // Even by storing data at the micro seconds precision
         thread::sleep(std::time::Duration::from_millis(100));
 
-        let _ = match action_fn(&environment) {
+        let _ = match action_fn(environment) {
             Err(err) => {
                 let rollback_result = match self.rollback() {
                     Ok(_) => TransactionResult::Rollback(err),

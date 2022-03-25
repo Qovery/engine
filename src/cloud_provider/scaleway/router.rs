@@ -154,7 +154,7 @@ impl Service for RouterScw {
         let route_data_templates = self
             .routes
             .iter()
-            .map(|r| {
+            .filter_map(|r| {
                 match applications
                     .iter()
                     .find(|app| app.name() == r.application_name.as_str())
@@ -167,8 +167,6 @@ impl Service for RouterScw {
                     _ => None,
                 }
             })
-            .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
             .collect::<Vec<_>>();
 
         let router_default_domain_hash = crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
@@ -292,9 +290,9 @@ impl Create for RouterScw {
             crate::template::generate_and_copy_all_files_into_dir(from_dir.as_str(), workspace_dir.as_str(), context)
         {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
-                from_dir.to_string(),
-                workspace_dir.to_string(),
+                event_details,
+                from_dir,
+                workspace_dir,
                 e,
             ));
         }
@@ -319,7 +317,7 @@ impl Create for RouterScw {
             self.selector(),
         );
 
-        helm.upgrade(&chart, &vec![])
+        helm.upgrade(&chart, &[])
             .map_err(|e| helm::to_engine_error(&event_details, e))
     }
 

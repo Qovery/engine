@@ -188,7 +188,7 @@ impl Service for MySQLAws {
         context.insert("kubeconfig_path", &kube_config_file_path);
 
         kubectl::kubectl_exec_create_namespace_without_labels(
-            &environment.namespace(),
+            environment.namespace(),
             kube_config_file_path.as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
@@ -204,7 +204,7 @@ impl Service for MySQLAws {
                     Ok(v) => v,
                     Err(e) => {
                         return Err(EngineError::new_terraform_unsupported_context_parameter_value(
-                            event_details.clone(),
+                            event_details,
                             "MySQL".to_string(),
                             "parameter_group_family".to_string(),
                             version.matched_version().to_string(),

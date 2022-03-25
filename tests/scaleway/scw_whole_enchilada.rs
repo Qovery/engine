@@ -26,7 +26,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
     );
 
     let environment = test_utilities::common::working_minimal_environment(&context, cluster_domain.as_str());
-    let env_action = environment.clone();
+    let env_action = environment;
 
     engine_run_test(|| {
         cluster_test(

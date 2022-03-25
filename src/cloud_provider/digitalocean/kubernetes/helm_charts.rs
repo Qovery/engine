@@ -122,7 +122,7 @@ pub fn do_helm_charts(
         Err(e) => {
             let message_safe = "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?";
             return Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe.to_string(), e),
+                format!("{}, error: {:?}", message_safe, e),
                 Some(message_safe.to_string()),
             ));
         }
@@ -138,8 +138,8 @@ pub fn do_helm_charts(
                 qovery_terraform_config_file
             );
             return Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe.to_string(), e),
-                Some(message_safe.to_string()),
+                format!("{}, error: {:?}", message_safe, e),
+                Some(message_safe),
             ));
         }
     };
@@ -1012,8 +1012,7 @@ datasources:
                             )
                         )
                         .as_bytes(),
-                    )
-                    .to_string(),
+                    ),
                 },
                 ChartSetValue {
                     key: "do_container_registry_secret_identifier".to_string(),
