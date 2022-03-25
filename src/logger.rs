@@ -1,16 +1,8 @@
 use crate::events::{EngineEvent, EventMessageVerbosity};
 use tracing;
 
-#[derive(Debug, Clone)]
-pub enum LogLevel {
-    Debug,
-    Info,
-    Warning,
-    Error,
-}
-
 pub trait Logger: Send + Sync {
-    fn log(&self, log_level: LogLevel, event: EngineEvent);
+    fn log(&self, event: EngineEvent);
     fn clone_dyn(&self) -> Box<dyn Logger>;
 }
 
@@ -37,7 +29,7 @@ impl Default for StdIoLogger {
 }
 
 impl Logger for StdIoLogger {
-    fn log(&self, log_level: LogLevel, event: EngineEvent) {
+    fn log(&self, event: EngineEvent) {
         let event_details = event.get_details();
         let stage = event_details.stage();
         let execution_id = event_details.execution_id().to_string();
@@ -63,11 +55,11 @@ impl Logger for StdIoLogger {
             transmitter = event_details.transmitter().to_string().as_str(),
         )
         .in_scope(|| {
-            match log_level {
-                LogLevel::Debug => debug!("{}", event.message(EventMessageVerbosity::FullDetails)),
-                LogLevel::Info => info!("{}", event.message(EventMessageVerbosity::FullDetails)),
-                LogLevel::Warning => warn!("{}", event.message(EventMessageVerbosity::FullDetails)),
-                LogLevel::Error => error!("{}", event.message(EventMessageVerbosity::FullDetails)),
+            match event {
+                EngineEvent::Debug(_, _) => debug!("{}", event.message(EventMessageVerbosity::FullDetails)),
+                EngineEvent::Info(_, _) => info!("{}", event.message(EventMessageVerbosity::FullDetails)),
+                EngineEvent::Warning(_, _) => warn!("{}", event.message(EventMessageVerbosity::FullDetails)),
+                EngineEvent::Error(_, _) => error!("{}", event.message(EventMessageVerbosity::FullDetails)),
             };
         });
     }
@@ -91,7 +83,6 @@ mod tests {
     use uuid::Uuid;
 
     struct TestCase<'a> {
-        log_level: LogLevel,
         event: EngineEvent,
         description: &'a str,
     }
@@ -115,7 +106,6 @@ mod tests {
 
         let test_cases = vec![
             TestCase {
-                log_level: LogLevel::Error,
                 event: EngineEvent::Error(
                     EngineError::new_unknown(
                         EventDetails::new(
@@ -141,8 +131,7 @@ mod tests {
                 description: "Error event",
             },
             TestCase {
-                log_level: LogLevel::Info,
-                event: EngineEvent::Deploying(
+                event: EngineEvent::Info(
                     EventDetails::new(
                         Some(Kind::Scw),
                         orga_id.clone(),
@@ -157,8 +146,7 @@ mod tests {
                 description: "Deploying info event",
             },
             TestCase {
-                log_level: LogLevel::Debug,
-                event: EngineEvent::Pausing(
+                event: EngineEvent::Debug(
                     EventDetails::new(
                         Some(Kind::Scw),
                         orga_id.clone(),
@@ -173,8 +161,7 @@ mod tests {
                 description: "Pausing application debug event",
             },
             TestCase {
-                log_level: LogLevel::Warning,
-                event: EngineEvent::Pausing(
+                event: EngineEvent::Warning(
                     EventDetails::new(
                         Some(Kind::Scw),
                         orga_id.clone(),
@@ -194,15 +181,15 @@ mod tests {
 
         for tc in test_cases {
             // execute:
-            logger.log(tc.log_level.clone(), tc.event.clone());
+            logger.log(tc.event.clone());
 
             // validate:
             assert!(
-                logs_contain(match tc.log_level {
-                    LogLevel::Debug => "DEBUG",
-                    LogLevel::Info => "INFO",
-                    LogLevel::Warning => "WARN",
-                    LogLevel::Error => "ERROR",
+                logs_contain(match tc.event {
+                    EngineEvent::Debug(_, _) => "DEBUG",
+                    EngineEvent::Info(_, _) => "INFO",
+                    EngineEvent::Warning(_, _) => "WARN",
+                    EngineEvent::Error(_, _) => "ERROR",
                 }),
                 "{}",
                 tc.description

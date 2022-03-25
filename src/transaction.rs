@@ -11,7 +11,7 @@ use crate::container_registry::to_engine_error;
 use crate::engine::{EngineConfig, EngineConfigError};
 use crate::errors::{EngineError, Tag};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, Transmitter};
-use crate::logger::{LogLevel, Logger};
+use crate::logger::Logger;
 use crate::models::{EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier};
 
 pub struct Transaction<'a> {
@@ -201,13 +201,8 @@ impl<'a> Transaction<'a> {
             ListenersHelper::new(self.engine.build_platform().listeners()).deployment_in_progress(progress_info);
 
             let event_details = build_event_details();
-            self.logger.log(
-                match build_result.is_ok() {
-                    true => LogLevel::Info,
-                    false => LogLevel::Error,
-                },
-                EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)),
-            );
+            self.logger
+                .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
 
             // Abort if it was an error
             let _ = build_result.map_err(|err| crate::build_platform::to_engine_error(event_details, err))?;
@@ -321,15 +316,10 @@ impl<'a> Transaction<'a> {
                     match self.build_and_push_applications(applications, &option) {
                         Ok(apps) => apps,
                         Err(engine_err) => {
-                            self.logger.log(
-                                LogLevel::Error,
-                                EngineEvent::Error(
-                                    engine_err.clone(),
-                                    Some(EventMessage::new_from_safe(
-                                        "ROLLBACK STARTED! an error occurred".to_string(),
-                                    )),
-                                ),
-                            );
+                            self.logger.log(EngineEvent::Error(
+                                engine_err.clone(),
+                                Some(EventMessage::new_from_safe("ROLLBACK STARTED! an error occurred".to_string())),
+                            ));
 
                             return if engine_err.tag() == &Tag::TaskCancellationRequested {
                                 TransactionResult::Canceled

@@ -12,7 +12,7 @@ use crate::cmd::helm;
 use crate::cmd::helm::{to_engine_error, Timeout};
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage, ToTransmitter, Transmitter};
-use crate::logger::{LogLevel, Logger};
+use crate::logger::Logger;
 use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
 
@@ -192,27 +192,21 @@ impl Service for RouterAws {
                 Some(hostname) => context.insert("external_ingress_hostname_default", hostname.as_str()),
                 None => {
                     // TODO(benjaminch): Handle better this one via a proper error eventually
-                    self.logger().log(
-                        LogLevel::Warning,
-                        EngineEvent::Warning(
-                            event_details,
-                            EventMessage::new_from_safe(
-                                "Error while trying to get Load Balancer hostname from Kubernetes cluster".to_string(),
-                            ),
+                    self.logger().log(EngineEvent::Warning(
+                        event_details,
+                        EventMessage::new_from_safe(
+                            "Error while trying to get Load Balancer hostname from Kubernetes cluster".to_string(),
                         ),
-                    );
+                    ));
                 }
             },
             _ => {
                 // FIXME really?
                 // TODO(benjaminch): Handle better this one via a proper error eventually
-                self.logger().log(
-                    LogLevel::Warning,
-                    EngineEvent::Warning(
-                        event_details,
-                        EventMessage::new_from_safe("Can't fetch external ingress hostname.".to_string()),
-                    ),
-                );
+                self.logger().log(EngineEvent::Warning(
+                    event_details,
+                    EventMessage::new_from_safe("Can't fetch external ingress hostname.".to_string()),
+                ));
             }
         }
 
@@ -386,19 +380,16 @@ impl Create for RouterAws {
                 }
                 Ok(err) | Err(err) => {
                     // TODO(benjaminch): Handle better this one via a proper error eventually
-                    self.logger().log(
-                        LogLevel::Warning,
-                        EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new(
-                                format!(
-                                    "Invalid CNAME for {}. Might not be an issue if user is using a CDN.",
-                                    domain_to_check.domain,
-                                ),
-                                Some(err.to_string()),
+                    self.logger().log(EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new(
+                            format!(
+                                "Invalid CNAME for {}. Might not be an issue if user is using a CDN.",
+                                domain_to_check.domain,
                             ),
+                            Some(err.to_string()),
                         ),
-                    );
+                    ));
                 }
             }
         }

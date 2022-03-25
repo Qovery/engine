@@ -17,7 +17,7 @@ use crate::cmd::docker::{ContainerImage, Docker, DockerError};
 use crate::events::{EngineEvent, EventDetails, EventMessage, ToTransmitter, Transmitter};
 use crate::fs::workspace_directory;
 use crate::git;
-use crate::logger::{LogLevel, Logger};
+use crate::logger::Logger;
 use crate::models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
@@ -62,15 +62,10 @@ impl LocalDocker {
 
     fn reclaim_space_if_needed(&self) {
         if env::var_os("CI").is_some() {
-            self.logger.log(
-                LogLevel::Info,
-                EngineEvent::Info(
-                    self.get_event_details(),
-                    EventMessage::new_from_safe(
-                        "CI environment variable found, no docker prune will be made".to_string(),
-                    ),
-                ),
-            );
+            self.logger.log(EngineEvent::Info(
+                self.get_event_details(),
+                EventMessage::new_from_safe("CI environment variable found, no docker prune will be made".to_string()),
+            ));
 
             return;
         }
@@ -92,10 +87,10 @@ impl LocalDocker {
                     event_details.clone(),
                     &*self.logger(),
                 ) {
-                    self.logger.log(
-                        LogLevel::Warning,
-                        EngineEvent::Warning(event_details, EventMessage::new(e.to_string(), Some(e.to_string()))),
-                    );
+                    self.logger.log(EngineEvent::Warning(
+                        event_details,
+                        EventMessage::new(e.to_string(), Some(e.to_string())),
+                    ));
                 }
                 break;
             };
@@ -114,10 +109,10 @@ impl LocalDocker {
         let log_info = {
             let app_id = build.image.application_id.clone();
             move |msg: String| {
-                self.logger.log(
-                    LogLevel::Info,
-                    EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(msg.clone())),
-                );
+                self.logger.log(EngineEvent::Info(
+                    self.get_event_details(),
+                    EventMessage::new_from_safe(msg.clone()),
+                ));
 
                 lh.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Application { id: app_id.clone() },
@@ -276,10 +271,10 @@ impl LocalDocker {
             let cmd_killer = CommandKiller::from(Duration::from_secs(BUILD_DURATION_TIMEOUT_SEC), is_task_canceled);
             exit_status = cmd.exec_with_abort(
                 &mut |line| {
-                    self.logger.log(
-                        LogLevel::Info,
-                        EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
-                    );
+                    self.logger.log(EngineEvent::Info(
+                        self.get_event_details(),
+                        EventMessage::new_from_safe(line.to_string()),
+                    ));
 
                     lh.deployment_in_progress(ProgressInfo::new(
                         ProgressScope::Application {
@@ -291,10 +286,10 @@ impl LocalDocker {
                     ));
                 },
                 &mut |line| {
-                    self.logger.log(
-                        LogLevel::Warning,
-                        EngineEvent::Warning(self.get_event_details(), EventMessage::new_from_safe(line.to_string())),
-                    );
+                    self.logger.log(EngineEvent::Warning(
+                        self.get_event_details(),
+                        EventMessage::new_from_safe(line.to_string()),
+                    ));
 
                     lh.deployment_in_progress(ProgressInfo::new(
                         ProgressScope::Application {
@@ -376,10 +371,8 @@ impl BuildPlatform for LocalDocker {
             Some(msg.clone()),
             self.context.execution_id(),
         ));
-        self.logger.log(
-            LogLevel::Info,
-            EngineEvent::Info(event_details, EventMessage::new_from_safe(msg)),
-        );
+        self.logger
+            .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(msg)));
         // LOGGING
 
         // Create callback that will be called by git to provide credentials per user
@@ -524,32 +517,26 @@ fn check_docker_space_usage_and_clean(
     let docker_percentage_remaining = available_space * 100 / docker_path_size_info.get_total_space();
 
     if docker_percentage_remaining < docker_max_disk_percentage_usage_before_purge || available_space == 0 {
-        logger.log(
-            LogLevel::Warning,
-            EngineEvent::Warning(
-                event_details,
-                EventMessage::new_from_safe(format!(
-                    "Docker disk remaining ({}%) is lower than {}%, requesting cleaning (purge)",
-                    docker_percentage_remaining, docker_max_disk_percentage_usage_before_purge
-                )),
-            ),
-        );
+        logger.log(EngineEvent::Warning(
+            event_details,
+            EventMessage::new_from_safe(format!(
+                "Docker disk remaining ({}%) is lower than {}%, requesting cleaning (purge)",
+                docker_percentage_remaining, docker_max_disk_percentage_usage_before_purge
+            )),
+        ));
 
         return docker.prune_images();
     };
 
-    logger.log(
-        LogLevel::Info,
-        EngineEvent::Info(
-            event_details,
-            EventMessage::new_from_safe(format!(
-                "No need to purge old docker images, only {}% ({}/{}) disk used",
-                100 - docker_percentage_remaining,
-                docker_path_size_info.get_available_space(),
-                docker_path_size_info.get_total_space(),
-            )),
-        ),
-    );
+    logger.log(EngineEvent::Info(
+        event_details,
+        EventMessage::new_from_safe(format!(
+            "No need to purge old docker images, only {}% ({}/{}) disk used",
+            100 - docker_percentage_remaining,
+            docker_path_size_info.get_available_space(),
+            docker_path_size_info.get_total_space(),
+        )),
+    ));
 
     Ok(())
 }
