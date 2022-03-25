@@ -22,29 +22,6 @@ pub enum EngineEvent {
     Warning(EventDetails, EventMessage),
     /// Error: represents an error event.
     Error(EngineError, Option<EventMessage>),
-    /// Waiting: represents an engine waiting event.
-    ///
-    /// Engine is waiting for a task to be done.
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Waiting(EventDetails, EventMessage),
-    /// Deploying: represents an engine deploying event.
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Deploying(EventDetails, EventMessage),
-    /// Pausing: represents an engine pausing event.
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Pausing(EventDetails, EventMessage),
-    /// Deleting: represents an engine deleting event.
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Deleting(EventDetails, EventMessage),
-    /// Deployed: represents an engine deployed event.
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Deployed(EventDetails, EventMessage),
-    /// Paused: represents an engine paused event.
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Paused(EventDetails, EventMessage),
-    /// Deleted: represents an engine deleted event.
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Deleted(EventDetails, EventMessage),
 }
 
 impl EngineEvent {
@@ -55,13 +32,6 @@ impl EngineEvent {
             EngineEvent::Info(details, _message) => details,
             EngineEvent::Warning(details, _message) => details,
             EngineEvent::Error(engine_error, _message) => engine_error.event_details(),
-            EngineEvent::Waiting(details, _message) => details,
-            EngineEvent::Deploying(details, _message) => details,
-            EngineEvent::Pausing(details, _message) => details,
-            EngineEvent::Deleting(details, _message) => details,
-            EngineEvent::Deployed(details, _message) => details,
-            EngineEvent::Paused(details, _message) => details,
-            EngineEvent::Deleted(details, _message) => details,
         }
     }
 
@@ -72,13 +42,6 @@ impl EngineEvent {
             EngineEvent::Info(_details, message) => message.message(message_verbosity),
             EngineEvent::Warning(_details, message) => message.message(message_verbosity),
             EngineEvent::Error(engine_error, _message) => engine_error.message(),
-            EngineEvent::Waiting(_details, message) => message.message(message_verbosity),
-            EngineEvent::Deploying(_details, message) => message.message(message_verbosity),
-            EngineEvent::Pausing(_details, message) => message.message(message_verbosity),
-            EngineEvent::Deleting(_details, message) => message.message(message_verbosity),
-            EngineEvent::Deployed(_details, message) => message.message(message_verbosity),
-            EngineEvent::Paused(_details, message) => message.message(message_verbosity),
-            EngineEvent::Deleted(_details, message) => message.message(message_verbosity),
         }
     }
 }

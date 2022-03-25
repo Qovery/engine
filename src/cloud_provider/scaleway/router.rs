@@ -12,7 +12,7 @@ use crate::cmd::helm;
 use crate::cmd::helm::Timeout;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage, ToTransmitter, Transmitter};
-use crate::logger::{LogLevel, Logger};
+use crate::logger::Logger;
 use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
 
@@ -340,19 +340,16 @@ impl Create for RouterScw {
                 }
                 Ok(err) | Err(err) => {
                     // TODO(benjaminch): Handle better this one via a proper error eventually
-                    self.logger().log(
-                        LogLevel::Warning,
-                        EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new(
-                                format!(
-                                    "Invalid CNAME for {}. Might not be an issue if user is using a CDN.",
-                                    domain_to_check.domain,
-                                ),
-                                Some(err.to_string()),
+                    self.logger().log(EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new(
+                            format!(
+                                "Invalid CNAME for {}. Might not be an issue if user is using a CDN.",
+                                domain_to_check.domain,
                             ),
+                            Some(err.to_string()),
                         ),
-                    );
+                    ));
                 }
             }
         }

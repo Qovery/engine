@@ -21,7 +21,7 @@ use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_scale_replica
 use crate::cmd::structs::LabelsContent;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
-use crate::logger::{LogLevel, Logger};
+use crate::logger::Logger;
 use crate::models::ProgressLevel::Info;
 use crate::models::{
     Context, DatabaseMode, Listen, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
@@ -310,17 +310,14 @@ where
     match get_stateless_resource_information_for_user(kubernetes, environment, service, event_details) {
         Ok(lines) => lines,
         Err(err) => {
-            logger.log(
-                LogLevel::Error,
-                EngineEvent::Error(
-                    err,
-                    Some(EventMessage::new_from_safe(format!(
-                        "error while retrieving debug logs from {} {}",
-                        service.service_type().name(),
-                        service.name_with_id(),
-                    ))),
-                ),
-            );
+            logger.log(EngineEvent::Error(
+                err,
+                Some(EventMessage::new_from_safe(format!(
+                    "error while retrieving debug logs from {} {}",
+                    service.service_type().name(),
+                    service.name_with_id(),
+                ))),
+            ));
 
             Vec::new()
         }
@@ -573,17 +570,14 @@ where
     let environment = target.environment;
 
     if service.is_managed_service() {
-        logger.log(
-            LogLevel::Info,
-            EngineEvent::Deploying(
-                event_details.clone(),
-                EventMessage::new_from_safe(format!(
-                    "Deploying managed {} `{}`",
-                    service.service_type().name(),
-                    service.name_with_id()
-                )),
-            ),
-        );
+        logger.log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe(format!(
+                "Deploying managed {} `{}`",
+                service.service_type().name(),
+                service.name_with_id()
+            )),
+        ));
 
         let context = service.tera_context(target)?;
 
@@ -634,17 +628,14 @@ where
         .map_err(|e| EngineError::new_terraform_error_while_executing_pipeline(event_details.clone(), e))?;
     } else {
         // use helm
-        logger.log(
-            LogLevel::Info,
-            EngineEvent::Deploying(
-                event_details.clone(),
-                EventMessage::new_from_safe(format!(
-                    "Deploying containerized {} `{}` on Kubernetes cluster",
-                    service.service_type().name(),
-                    service.name_with_id()
-                )),
-            ),
-        );
+        logger.log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe(format!(
+                "Deploying containerized {} `{}` on Kubernetes cluster",
+                service.service_type().name(),
+                service.name_with_id()
+            )),
+        ));
 
         let context = service.tera_context(target)?;
         let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
@@ -815,20 +806,17 @@ where
 
         match crate::cmd::terraform::terraform_init_validate_destroy(workspace_dir.as_str(), true) {
             Ok(_) => {
-                logger.log(
-                    LogLevel::Info,
-                    EngineEvent::Deleting(
-                        event_details,
-                        EventMessage::new_from_safe("Deleting secret containing tfstates".to_string()),
-                    ),
-                );
+                logger.log(EngineEvent::Info(
+                    event_details,
+                    EventMessage::new_from_safe("Deleting secret containing tfstates".to_string()),
+                ));
                 let _ =
                     delete_terraform_tfstate_secret(kubernetes, environment.namespace(), &get_tfstate_name(service));
             }
             Err(e) => {
                 let engine_err = EngineError::new_terraform_error_while_executing_destroy_pipeline(event_details, e);
 
-                logger.log(LogLevel::Error, EngineEvent::Error(engine_err.clone(), None));
+                logger.log(EngineEvent::Error(engine_err.clone(), None));
 
                 return Err(engine_err);
             }
@@ -892,10 +880,10 @@ where
                     version.as_str()
                 );
 
-                logger.log(
-                    LogLevel::Info,
-                    EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message.to_string())),
-                );
+                logger.log(EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(message.to_string()),
+                ));
 
                 let progress_info = ProgressInfo::new(
                     service.progress_scope(),
@@ -949,7 +937,7 @@ where
                 service.version(),
             );
 
-            logger.log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
+            logger.log(EngineEvent::Error(error.clone(), None));
 
             Err(error)
         }
@@ -1011,24 +999,15 @@ where
     match action {
         CheckAction::Deploy => {
             listeners_helper.deployment_in_progress(progress_info);
-            logger.log(
-                LogLevel::Info,
-                EngineEvent::Deploying(event_details.clone(), EventMessage::new_from_safe(message)),
-            );
+            logger.log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
         }
         CheckAction::Pause => {
             listeners_helper.pause_in_progress(progress_info);
-            logger.log(
-                LogLevel::Info,
-                EngineEvent::Pausing(event_details.clone(), EventMessage::new_from_safe(message)),
-            );
+            logger.log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
         }
         CheckAction::Delete => {
             listeners_helper.delete_in_progress(progress_info);
-            logger.log(
-                LogLevel::Info,
-                EngineEvent::Deleting(event_details.clone(), EventMessage::new_from_safe(message)),
-            );
+            logger.log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
         }
     }
 
@@ -1047,19 +1026,16 @@ where
                 kubernetes.context().execution_id(),
             );
 
-            logger.log(
-                LogLevel::Error,
-                EngineEvent::Error(
-                    err.clone(),
-                    Some(EventMessage::new_from_safe(format!(
-                        "{} error with {} {} , id: {}",
-                        action_verb,
-                        service.service_type().name(),
-                        service.name(),
-                        service.id(),
-                    ))),
-                ),
-            );
+            logger.log(EngineEvent::Error(
+                err.clone(),
+                Some(EventMessage::new_from_safe(format!(
+                    "{} error with {} {} , id: {}",
+                    action_verb,
+                    service.service_type().name(),
+                    service.name(),
+                    service.id(),
+                ))),
+            ));
 
             match action {
                 CheckAction::Deploy => listeners_helper.deployment_error(progress_info),
@@ -1081,10 +1057,10 @@ where
                 kubernetes.context().execution_id(),
             );
 
-            logger.log(
-                LogLevel::Debug,
-                EngineEvent::Debug(event_details.clone(), EventMessage::new_from_safe(debug_logs_string)),
-            );
+            logger.log(EngineEvent::Debug(
+                event_details.clone(),
+                EventMessage::new_from_safe(debug_logs_string),
+            ));
 
             match action {
                 CheckAction::Deploy => listeners_helper.deployment_error(progress_info),
@@ -1315,42 +1291,33 @@ where
                 match action {
                     Action::Create => {
                         listeners_helper.deployment_in_progress(progress_info);
-                        logger.log(
-                            LogLevel::Info,
-                            EngineEvent::Deploying(
-                                EventDetails::clone_changing_stage(
-                                    event_details,
-                                    Stage::Environment(EnvironmentStep::Deploy),
-                                ),
-                                event_message,
+                        logger.log(EngineEvent::Info(
+                            EventDetails::clone_changing_stage(
+                                event_details,
+                                Stage::Environment(EnvironmentStep::Deploy),
                             ),
-                        );
+                            event_message,
+                        ));
                     }
                     Action::Pause => {
                         listeners_helper.pause_in_progress(progress_info);
-                        logger.log(
-                            LogLevel::Info,
-                            EngineEvent::Pausing(
-                                EventDetails::clone_changing_stage(
-                                    event_details,
-                                    Stage::Environment(EnvironmentStep::Pause),
-                                ),
-                                event_message,
+                        logger.log(EngineEvent::Info(
+                            EventDetails::clone_changing_stage(
+                                event_details,
+                                Stage::Environment(EnvironmentStep::Pause),
                             ),
-                        );
+                            event_message,
+                        ));
                     }
                     Action::Delete => {
                         listeners_helper.delete_in_progress(progress_info);
-                        logger.log(
-                            LogLevel::Info,
-                            EngineEvent::Deleting(
-                                EventDetails::clone_changing_stage(
-                                    event_details,
-                                    Stage::Environment(EnvironmentStep::Delete),
-                                ),
-                                event_message,
+                        logger.log(EngineEvent::Info(
+                            EventDetails::clone_changing_stage(
+                                event_details,
+                                Stage::Environment(EnvironmentStep::Delete),
                             ),
-                        );
+                            event_message,
+                        ));
                     }
                     Action::Nothing => {} // should not happens
                 };
