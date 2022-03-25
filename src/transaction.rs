@@ -93,13 +93,23 @@ impl<'a> Transaction<'a> {
         )
     }
 
+    pub fn build_environment(
+        &mut self,
+        environment: &Rc<RefCell<Environment>>,
+        option: DeploymentOption,
+    ) -> Result<(), EnvironmentError> {
+        self.steps.push(Step::BuildEnvironment(environment.clone(), option));
+
+        Ok(())
+    }
+
     pub fn deploy_environment_with_options(
         &mut self,
         environment: &Rc<RefCell<Environment>>,
         option: DeploymentOption,
     ) -> Result<(), EnvironmentError> {
         // add build step
-        self.steps.push(Step::BuildEnvironment(environment.clone(), option));
+        self.build_environment(environment, option)?;
 
         // add deployment step
         self.steps.push(Step::DeployEnvironment(environment.clone()));

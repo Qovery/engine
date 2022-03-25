@@ -20,7 +20,55 @@ use tracing::{span, warn, Level};
 // Note: All those tests relies on a test cluster running on DigitalOcean infrastructure.
 // This cluster should be live in order to have those tests passing properly.
 
-#[cfg(feature = "test-do-self-hosted")]
+#[cfg(feature = "test-do-minimal")]
+#[named]
+#[test]
+fn digitalocean_test_build_phase() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let secrets = FuncTestsSecrets::new();
+        let logger = logger();
+        let context = context(
+            secrets
+                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
+            secrets
+                .DIGITAL_OCEAN_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        );
+        let engine_config = do_default_engine_config(&context, logger.clone());
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
+
+        let env_action = environment.clone();
+
+        let (env, ret) = environment.build_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        // Check the the image exist in the registry
+        let img_exist = engine_config
+            .container_registry()
+            .does_image_exists(&env.applications[0].get_build().image);
+        assert!(img_exist);
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-do-minimal")]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
