@@ -637,47 +637,48 @@ fn format_engine_error_output(engine_error: EngineError, rollback_error: Option<
         EngineErrorCause::Internal => format!(
             r#"
 -------------------------------------------------------------------------------
-    ~~~ Deployment error ~~~
 
-    You can find useful information:
-    * Above in the logs
-    * In your application logs
+    ~~ THIS IS AN INTERNAL ERROR, THE SUPPORT TEAM HAS BEEN ALERTED ~~
 
-    ✉️ Error message: {}
-    💬 Need help: If you need assistance, you can reach the support team from the Qovery console with the integrated chat.
+    MESSAGE FOR QOVERY TEAM:
+        * Execution ID: {}
+        * Scope: {}
+        * Rollback message: {}
 
-    * Execution ID: {}
-    * Scope: {}
-    * Rollback message: {}
+-------------------------------------------------------------------------------
+
+    ❌ ❌ ❌ MESSAGE FOR THE USER ❌ ❌ ❌
+
+        ✉️ Error message: {}
+        💬 Need help: If you need assistance, you can reach the support team on Discord (https://discord.qovery.com) or on the Qovery console (https://console.qovery.com) with the integrated chat.
         "#,
-            engine_error.message.unwrap_or_else(|| "<no error message>".into()),
             engine_error.execution_id,
             scope,
             rollback_message,
+            engine_error.message.unwrap_or_else(|| "<no error message>".into())
         ),
         EngineErrorCause::User(hint) => format!(
             r#"
 -------------------------------------------------------------------------------
-    ~~~ Deployment error ~~~
 
-    You can find useful information:
-    * Above in the logs
-    * In your application logs
-    
-    ✉️ Error message: {}
-    
-    ℹ️ Hint: {}
-    💬 Need help: If you need assistance, you can reach the support team from the Qovery console with the integrated chat.
+    MESSAGE FOR QOVERY TEAM:
+        * Execution ID: {}
+        * Scope: {}
+        * Rollback message: {}
 
-    * Execution ID: {}
-    * Scope: {}
-    * Rollback message: {}
+-------------------------------------------------------------------------------
+
+    ❌ ❌ ❌ MESSAGE FOR THE USER ❌ ❌ ❌
+
+        ✉️ Error message: {}
+        💬 Need help: Look at the hint message first. If you need more assistance, you can reach the support team on Discord (https://discord.qovery.com) or on the Qovery console (https://console.qovery.com) with the integrated chat.
+        ℹ️ Hint: {}
         "#,
-            engine_error.message.unwrap_or_else(|| "<no error message>".into()),
-            hint,
             engine_error.execution_id,
             scope,
             rollback_message,
+            engine_error.message.unwrap_or_else(|| "<no error message>".into()),
+            hint
         ),
         EngineErrorCause::Canceled => {
             todo!()
