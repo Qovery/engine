@@ -303,7 +303,7 @@ impl fmt::Display for Error {
 
 #[cfg(test)]
 mod tests {
-    use crate::task_manager::task_manager::{ActionContext, State, Status, Task, TaskManager};
+    use crate::task_manager::scheduler::{ActionContext, State, Status, Task, TaskManager};
     use chrono::{DateTime, NaiveDateTime, Utc};
     use crossbeam_channel::Sender;
     use qovery_engine::logger::{Logger, StdIoLogger};

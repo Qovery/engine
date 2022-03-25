@@ -1,4 +1,4 @@
-use crate::task_manager::task_manager::Status;
+use crate::task_manager::scheduler::Status;
 use chrono::{DateTime, Utc};
 
 #[derive(Clone, Copy, Debug)]

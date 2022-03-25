@@ -59,7 +59,7 @@ impl EngineRequest {
         progress_listener: Listener,
         logger: Box<dyn Logger>,
     ) -> Result<EngineConfig, RequestError> {
-        let mut build_platform = self.build_platform.to_engine_build_platform(&context, logger.clone());
+        let mut build_platform = self.build_platform.to_engine_build_platform(context, logger.clone());
         build_platform.add_listener(progress_listener.clone());
 
         let mut cloud_provider = self
@@ -94,7 +94,7 @@ impl EngineRequest {
         let dns_provider = Arc::new(dns_provider);
 
         let kubernetes = match self.cloud_provider.kubernetes.to_engine_kubernetes(
-            &context,
+            context,
             cloud_provider.clone(),
             dns_provider.clone(),
             logger.clone(),
@@ -288,13 +288,13 @@ impl Kubernetes {
                 self.long_id,
                 self.name.clone(),
                 self.version.clone(),
-                qovery_engine::cloud_provider::scaleway::application::ScwZone::from_str(self.region.as_str()).expect(
-                    format!(
-                        "cannot parse `{}`, it doesn't seem to be a valid SCW zone",
-                        self.region.as_str()
-                    )
-                    .as_str(),
-                ),
+                qovery_engine::cloud_provider::scaleway::application::ScwZone::from_str(self.region.as_str())
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "cannot parse `{}`, it doesn't seem to be a valid SCW zone",
+                            self.region.as_str()
+                        )
+                    }),
                 cloud_provider,
                 dns_provider,
                 self.nodes_groups.clone(),
@@ -355,13 +355,12 @@ impl ContainerRegistry {
                     qovery_engine::cloud_provider::scaleway::application::ScwZone::from_str(
                         self.options.region.as_ref()?.as_str(),
                     )
-                    .expect(
-                        format!(
+                    .unwrap_or_else(|_| {
+                        panic!(
                             "cannot parse `{}`, it doesn't seem to be a valid SCW zone",
-                            self.options.region.as_ref()?.as_str(),
+                            self.options.region.as_deref().unwrap_or_default()
                         )
-                        .as_str(),
-                    ),
+                    }),
                 )
                 .ok()?,
             )),

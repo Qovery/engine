@@ -18,7 +18,7 @@ use qovery_engine::object_storage::errors::ObjectStorageError;
 use qovery_engine::transaction::{RollbackError, StepName, Transaction, TransactionResult};
 
 use crate::task_manager::models::{Action, Archive, EngineRequest};
-use crate::task_manager::task_manager::{ActionContext, State, Status, Task};
+use crate::task_manager::scheduler::{ActionContext, State, Status, Task};
 use qovery_engine::object_storage::ObjectStorage;
 use qovery_engine::transaction::StepName::Waiting;
 
@@ -653,14 +653,11 @@ fn format_engine_error_output(engine_error: EngineError, rollback_error: Option<
     };
 
     let rollback_engine_error_message = match rollback_error {
-        Some(rollback_error) => match rollback_error {
-            RollbackError::CommitError(rollback_engine_error) => Some(format!(
-                "{} (event_details: {:?})",
-                rollback_engine_error.message(),
-                rollback_engine_error.event_details(),
-            )),
-            _ => None,
-        },
+        Some(RollbackError::CommitError(rollback_engine_error)) => Some(format!(
+            "{} (event_details: {:?})",
+            rollback_engine_error.message(),
+            rollback_engine_error.event_details(),
+        )),
         _ => None,
     };
 
