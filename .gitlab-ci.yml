@@ -97,7 +97,8 @@ all-minimal-tests:
   script:
     - ./helper.sh all_minimal_tests
   only:
-  - merge_requests
+    refs:
+      - dev
   when: always
   tags:
     - vm-2cpu-4gmem-0g
