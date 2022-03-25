@@ -1,4 +1,4 @@
 max_width = 120
 fn_call_width = 100
-#attr_fn_like_width = 80
+attr_fn_like_width = 100
 edition = "2018"
