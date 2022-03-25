@@ -16,7 +16,7 @@ use test_utilities::aws::aws_default_engine_config;
 use test_utilities::utilities::{context, init, kubernetes_config_path};
 use tracing::{span, Level};
 
-#[cfg(feature = "test-aws-self-hosted")]
+#[cfg(feature = "test-aws-minimal")]
 #[named]
 #[test]
 fn aws_test_build_phase() {
@@ -67,7 +67,7 @@ fn aws_test_build_phase() {
     })
 }
 
-#[cfg(feature = "test-aws-self-hosted")]
+#[cfg(feature = "test-aws-minimal")]
 #[named]
 #[test]
 fn deploy_a_working_environment_with_no_router_on_aws_eks() {

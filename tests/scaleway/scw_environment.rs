@@ -19,7 +19,7 @@ use tracing::{span, warn, Level};
 // Note: All those tests relies on a test cluster running on Scaleway infrastructure.
 // This cluster should be live in order to have those tests passing properly.
 
-#[cfg(feature = "test-scw-self-hosted")]
+#[cfg(feature = "test-scw-minimal")]
 #[named]
 #[test]
 fn scaleway_test_build_phase() {
@@ -69,7 +69,7 @@ fn scaleway_test_build_phase() {
     })
 }
 
-#[cfg(feature = "test-scw-self-hosted")]
+#[cfg(feature = "test-scw-minimal")]
 #[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {

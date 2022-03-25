@@ -20,7 +20,7 @@ use tracing::{span, warn, Level};
 // Note: All those tests relies on a test cluster running on DigitalOcean infrastructure.
 // This cluster should be live in order to have those tests passing properly.
 
-#[cfg(feature = "test-do-self-hosted")]
+#[cfg(feature = "test-do-minimal")]
 #[named]
 #[test]
 fn digitalocean_test_build_phase() {
@@ -68,7 +68,7 @@ fn digitalocean_test_build_phase() {
     })
 }
 
-#[cfg(feature = "test-do-self-hosted")]
+#[cfg(feature = "test-do-minimal")]
 #[named]
 #[test]
 fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
