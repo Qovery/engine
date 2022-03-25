@@ -26,7 +26,7 @@ jobs:
           echo "########## LINTER ##########"
           cargo fmt --all -- --check --color=always  || (echo "Use cargo fmt to format your code"; exit 1)
           rustup component add clippy
-          cargo clippy --all --all-features --lib || (echo "Solve your clippy warnings to continue"; exit 1)
+          cargo clippy --all --all-features --lib -- -D warnings || (echo "Solve your clippy warnings to continue"; exit 1)
           
           export PATH=$GITHUB_WORKSPACE/bin:$PATH
           export RUSTC_WRAPPER=$GITHUB_WORKSPACE/bin/sccache
