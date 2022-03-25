@@ -153,6 +153,12 @@ impl Image {
     pub fn name(&self) -> String {
         self.name.clone()
     }
+
+    pub fn name_without_repository(&self) -> &str {
+        self.name
+            .strip_prefix(&format!("{}/", self.repository_name()))
+            .unwrap_or(&self.name)
+    }
 }
 
 impl Default for Image {
