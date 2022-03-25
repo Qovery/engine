@@ -73,7 +73,7 @@ pub trait Service: ToTransmitter {
     fn min_instances(&self) -> u32;
     fn max_instances(&self) -> u32;
     fn publicly_accessible(&self) -> bool;
-    fn fqdn<'a>(&self, target: &DeploymentTarget, fqdn: &'a String, is_managed: bool) -> String {
+    fn fqdn(&self, target: &DeploymentTarget, fqdn: &str, is_managed: bool) -> String {
         match &self.publicly_accessible() {
             true => fqdn.to_string(),
             false => match is_managed {
@@ -446,13 +446,13 @@ where
     crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
-        service.selector().unwrap_or("".to_string()).as_str(),
+        service.selector().unwrap_or_default().as_str(),
         kubernetes.cloud_provider().credentials_environment_variables(),
     )
     .map_err(|e| {
         EngineError::new_k8s_pod_not_ready(
             event_details.clone(),
-            service.selector().unwrap_or("".to_string()),
+            service.selector().unwrap_or_default(),
             environment.namespace().to_string(),
             e,
         )
@@ -522,13 +522,13 @@ pub fn scale_down_application(
         kubernetes.cloud_provider().credentials_environment_variables(),
         environment.namespace(),
         scaling_kind,
-        service.selector().unwrap_or("".to_string()).as_str(),
+        service.selector().unwrap_or_default().as_str(),
         replicas_count as u32,
     )
     .map_err(|e| {
         EngineError::new_k8s_scale_replicas(
             event_details.clone(),
-            service.selector().unwrap_or("".to_string()),
+            service.selector().unwrap_or_default(),
             environment.namespace().to_string(),
             replicas_count as u32,
             e,
@@ -728,7 +728,7 @@ where
         let is_pod_ready = crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
             &kubernetes_config_file_path,
             environment.namespace(),
-            service.selector().unwrap_or("".to_string()).as_str(),
+            service.selector().unwrap_or_default().as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
         if let Ok(Some(true)) = is_pod_ready {
@@ -1139,7 +1139,7 @@ pub fn get_stateless_resource_information_for_user<T>(
 where
     T: Service + ?Sized,
 {
-    let selector = service.selector().unwrap_or("".to_string());
+    let selector = service.selector().unwrap_or_default();
     let mut result = Vec::with_capacity(50);
     let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
 
@@ -1308,7 +1308,7 @@ where
             let listeners_helper = ListenersHelper::new(&listeners);
             let action = action;
             let progress_info = progress_info;
-            let waiting_message = waiting_message.clone().unwrap_or("No message...".to_string());
+            let waiting_message = waiting_message.clone().unwrap_or_else(|| "No message...".to_string());
 
             loop {
                 // do notify users here

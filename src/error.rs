@@ -112,10 +112,10 @@ pub fn cast_simple_error_to_engine_error<X, T: Into<String>>(
             let message = match simple_error.kind {
                 SimpleErrorKind::Command(exit_status) => format!(
                     "{} ({})",
-                    simple_error.message.unwrap_or("<no message>".into()),
+                    simple_error.message.unwrap_or_else(|| "<no message>".into()),
                     exit_status
                 ),
-                SimpleErrorKind::Other => simple_error.message.unwrap_or("<no message>".into()),
+                SimpleErrorKind::Other => simple_error.message.unwrap_or_else(|| "<no message>".into()),
             };
 
             Err(EngineError::new(

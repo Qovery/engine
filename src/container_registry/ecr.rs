@@ -230,8 +230,8 @@ impl ECR {
     fn get_or_create_repository(&self, repository_name: &str) -> Result<Repository, ContainerRegistryError> {
         // check if the repository already exists
         let repository = self.get_repository(repository_name);
-        if repository.is_some() {
-            return Ok(repository.unwrap());
+        if let Some(repo) = repository {
+            return Ok(repo);
         }
 
         self.create_repository(repository_name)

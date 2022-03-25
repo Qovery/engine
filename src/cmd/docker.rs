@@ -88,7 +88,7 @@ impl Docker {
             &mut |_| {},
             &CommandKiller::never(),
         );
-        if let Err(_) = buildx_cmd_exist {
+        if buildx_cmd_exist.is_err() {
             return Err(DockerError::InvalidConfig(
                 "Docker buildx plugin for buildkit is not correctly installed".to_string(),
             ));

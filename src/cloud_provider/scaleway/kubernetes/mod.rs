@@ -248,9 +248,9 @@ impl Kapsule {
 
         // if no cluster exists
         let cluster_info_content = cluster_info.clusters.unwrap();
-        if &cluster_info_content.len() == &0_usize {
+        if cluster_info_content.is_empty() {
             return Ok(None);
-        } else if &cluster_info_content.len() != &1_usize {
+        } else if cluster_info_content.len() != 1_usize {
             let msg = format!(
                 "too many clusters found with this name, where 1 was expected. {:?}",
                 &cluster_info_content.len()
@@ -304,7 +304,7 @@ impl Kapsule {
             let msg = format!(
                 "No SCW pool found from the SCW API for cluster {}/{}",
                 &cluster_id,
-                &cluster_info.name.unwrap_or("unknown cluster".to_string())
+                &cluster_info.name.unwrap_or_else(|| "unknown cluster".to_string())
             );
             return Err(ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(
                 msg.clone(),

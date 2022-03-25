@@ -11,7 +11,7 @@ use url::Url;
 // or an error to specify that we have exhausted everything we are able to provide
 fn authentication_callback<'a>(
     get_credentials: &'a impl Fn(&str) -> Vec<(CredentialType, Cred)>,
-) -> impl FnMut(&str, Option<&str>, CredentialType) -> Result<Cred, Error> + 'a {
+) -> impl FnMut(&str, Option<&str>, CredentialType) -> Result<Cred, Error> + '_ {
     let mut current_credentials: (String, Vec<(CredentialType, Cred)>) = ("".into(), vec![]);
 
     move |remote_url, username_from_url, allowed_types| {

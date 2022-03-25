@@ -324,7 +324,7 @@ fn deploy_parallel_charts(
 
 pub fn deploy_charts_levels(
     kubernetes_config: &Path,
-    envs: &Vec<(String, String)>,
+    envs: &[(String, String)],
     charts: Vec<Vec<Box<dyn HelmChart>>>,
     dry_run: bool,
 ) -> Result<(), CommandError> {
