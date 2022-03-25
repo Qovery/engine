@@ -76,7 +76,7 @@ fn get_do_kubernetes_latest_slug_version(
 
     Err(CommandError::new_from_safe_message(format!(
         "DOKS version `{}` is not supported.",
-        wished_k8s_version.to_string()
+        wished_k8s_version
     )))
 }
 

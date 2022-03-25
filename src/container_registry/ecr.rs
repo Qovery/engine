@@ -1,3 +1,5 @@
+#![allow(clippy::field_reassign_with_default)]
+
 use std::str::FromStr;
 
 use rusoto_core::{Client, HttpClient, Region, RusotoError};

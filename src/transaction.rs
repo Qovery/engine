@@ -222,19 +222,19 @@ impl<'a> Transaction<'a> {
                 Step::CreateKubernetes => {
                     // revert kubernetes creation
                     if let Err(err) = self.engine.kubernetes().on_create_error() {
-                        return Err(RollbackError::CommitError(err));
+                        return Err(RollbackError::CommitError(Box::new(err)));
                     };
                 }
                 Step::DeleteKubernetes => {
                     // revert kubernetes deletion
                     if let Err(err) = self.engine.kubernetes().on_delete_error() {
-                        return Err(RollbackError::CommitError(err));
+                        return Err(RollbackError::CommitError(Box::new(err)));
                     };
                 }
                 Step::PauseKubernetes => {
                     // revert pause
                     if let Err(err) = self.engine.kubernetes().on_pause_error() {
-                        return Err(RollbackError::CommitError(err));
+                        return Err(RollbackError::CommitError(Box::new(err)));
                     };
                 }
                 Step::BuildEnvironment(_environment_action, _option) => {
@@ -268,7 +268,7 @@ impl<'a> Transaction<'a> {
 
         let _ = match action {
             Ok(_) => {}
-            Err(err) => return Err(RollbackError::CommitError(err)),
+            Err(err) => return Err(RollbackError::CommitError(Box::new(err))),
         };
 
         Err(RollbackError::NoFailoverEnvironment)
@@ -634,7 +634,7 @@ impl Clone for Step {
 
 #[derive(Debug)]
 pub enum RollbackError {
-    CommitError(EngineError),
+    CommitError(Box<EngineError>),
     NoFailoverEnvironment,
     Nothing,
 }

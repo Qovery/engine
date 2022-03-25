@@ -1,3 +1,5 @@
+#![allow(clippy::redundant_closure)]
+
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
