@@ -15,7 +15,7 @@ services:
 
 stages:
   - build-and-lint
-  - local-tests
+  - local-test
   - minimal-tests
   - tests
   - release
@@ -106,7 +106,7 @@ all-minimal-tests:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
   dependencies:
-    - local-tests
+    - local-test
   artifacts:
     when: always
     reports:
@@ -172,7 +172,7 @@ all-managed-services-mr:
   interruptible: true
 
 test-local:
-  stage: local-tests
+  stage: local-test
   before_script:
     - docker/wait_docker_available.sh
   script:
