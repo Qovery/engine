@@ -324,7 +324,7 @@ impl ObjectStorage for S3 {
         match block_on(s3_client.put_object(PutObjectRequest {
             bucket: bucket_name.to_string(),
             key: object_key.to_string(),
-            body: Some(StreamingBody::from(match std::fs::read(file_path.clone()) {
+            body: Some(StreamingBody::from(match std::fs::read(file_path) {
                 Ok(x) => x,
                 Err(e) => {
                     return Err(ObjectStorageError::CannotReadFile {

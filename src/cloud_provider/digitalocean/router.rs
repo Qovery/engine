@@ -288,10 +288,7 @@ impl Helm for RouterDo {
     }
 
     fn helm_chart_values_dir(&self) -> String {
-        format!(
-            "{}/digitalocean/chart_values/nginx-ingress",
-            self.context.lib_root_dir()
-        )
+        format!("{}/digitalocean/chart_values/nginx-ingress", self.context.lib_root_dir())
     }
 
     fn helm_chart_external_name_service_dir(&self) -> String {

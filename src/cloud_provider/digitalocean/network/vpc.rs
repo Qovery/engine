@@ -15,8 +15,8 @@ pub enum VpcInitKind {
 impl ToString for VpcInitKind {
     fn to_string(&self) -> String {
         match self {
-            &VpcInitKind::Autodetect => "autodetect".to_string(),
-            &VpcInitKind::Manual => "manual".to_string(),
+            VpcInitKind::Autodetect => "autodetect".to_string(),
+            VpcInitKind::Manual => "manual".to_string(),
         }
     }
 }
@@ -286,11 +286,9 @@ mod tests_do_vpcs {
         // DO reserved subnet in the same region
         assert!(get_do_vpc_from_subnet("10.19.0.0/16".to_string(), vpcs.clone(), DoRegion::Frankfurt).is_err());
         // DO reserved subnet in another region
-        assert!(
-            get_do_vpc_from_subnet("10.19.0.0/16".to_string(), vpcs, DoRegion::London)
-                .unwrap()
-                .is_none()
-        );
+        assert!(get_do_vpc_from_subnet("10.19.0.0/16".to_string(), vpcs, DoRegion::London)
+            .unwrap()
+            .is_none());
     }
 
     #[test]

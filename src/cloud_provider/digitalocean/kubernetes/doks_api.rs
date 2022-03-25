@@ -60,7 +60,7 @@ fn get_doks_versions_from_api_output(json_content: &str) -> Result<Vec<Kubernete
 
 // get DOKS slug version from available DOKS versions
 fn get_do_kubernetes_latest_slug_version(
-    doks_versions: &Vec<KubernetesVersion>,
+    doks_versions: &[KubernetesVersion],
     wished_version: &str,
 ) -> Result<Option<String>, CommandError> {
     let wished_k8s_version = VersionsNumber::from_str(wished_version)?;
@@ -76,7 +76,7 @@ fn get_do_kubernetes_latest_slug_version(
 
     Err(CommandError::new_from_safe_message(format!(
         "DOKS version `{}` is not supported.",
-        wished_k8s_version.to_string()
+        wished_k8s_version
     )))
 }
 

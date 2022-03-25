@@ -16,11 +16,58 @@ use test_utilities::aws::aws_default_engine_config;
 use test_utilities::utilities::{context, init, kubernetes_config_path};
 use tracing::{span, Level};
 
-// TODO:
-//   - Tests that applications are always restarted when receiving a CREATE action
-//     see: https://github.com/Qovery/engine/pull/269
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn aws_test_build_phase() {
+    // This test tries to run up to the build phase of the engine
+    // basically building and pushing each applications
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
 
-#[cfg(feature = "test-aws-self-hosted")]
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context(
+            secrets
+                .AWS_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("AWS_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
+        let engine_config = aws_default_engine_config(&context, logger.clone());
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
+
+        environment.routers = vec![];
+        let ea = environment.clone();
+
+        let (env, ret) = environment.build_environment(&ea, logger.clone(), &engine_config);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        // Check the the image exist in the registry
+        let img_exist = engine_config
+            .container_registry()
+            .does_image_exists(&env.applications[0].get_build().image);
+        assert!(img_exist);
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
 #[named]
 #[test]
 fn deploy_a_working_environment_with_no_router_on_aws_eks() {
@@ -182,13 +229,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config_resume);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = get_pods(
-            context,
-            Kind::Aws,
-            environment.clone(),
-            selector.as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(context, Kind::Aws, environment.clone(), selector.as_str(), secrets.clone());
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 

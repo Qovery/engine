@@ -339,43 +339,31 @@ mod tests {
     fn test_run_version_for_command() {
         let ret = run_version_command_for("ls");
         assert_eq!(ret.is_empty(), false);
-        assert_eq!(ret.contains("GNU"), true)
+        assert!(ret.contains("GNU"))
     }
 
     #[test]
     fn test_error() {
         let mut cmd = QoveryCommand::new("false", &[], &[]);
         assert_eq!(cmd.exec().is_err(), true);
-        assert_eq!(matches!(cmd.exec(), Err(CommandError::ExitStatusError(_))), true);
+        assert!(matches!(cmd.exec(), Err(CommandError::ExitStatusError(_))));
     }
 
     #[test]
     fn test_command_with_timeout() {
         let mut cmd = QoveryCommand::new("sleep", &["120"], &[]);
-        let ret = cmd.exec_with_abort(
-            &mut |_| {},
-            &mut |_| {},
-            &CommandKiller::from_timeout(Duration::from_secs(2)),
-        );
+        let ret = cmd.exec_with_abort(&mut |_| {}, &mut |_| {}, &CommandKiller::from_timeout(Duration::from_secs(2)));
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
 
         let mut cmd = QoveryCommand::new("sh", &["-c", "cat /dev/urandom | grep -a --null-data ."], &[]);
-        let ret = cmd.exec_with_abort(
-            &mut |_| {},
-            &mut |_| {},
-            &CommandKiller::from_timeout(Duration::from_secs(2)),
-        );
+        let ret = cmd.exec_with_abort(&mut |_| {}, &mut |_| {}, &CommandKiller::from_timeout(Duration::from_secs(2)));
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
 
         let mut cmd = QoveryCommand::new("sleep", &["1"], &[]);
-        let ret = cmd.exec_with_abort(
-            &mut |_| {},
-            &mut |_| {},
-            &CommandKiller::from_timeout(Duration::from_secs(2)),
-        );
-        assert_eq!(ret.is_ok(), true);
+        let ret = cmd.exec_with_abort(&mut |_| {}, &mut |_| {}, &CommandKiller::from_timeout(Duration::from_secs(2)));
+        assert!(ret.is_ok());
     }
 
     #[test]

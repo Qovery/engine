@@ -93,13 +93,23 @@ impl<'a> Transaction<'a> {
         )
     }
 
+    pub fn build_environment(
+        &mut self,
+        environment: &Rc<RefCell<Environment>>,
+        option: DeploymentOption,
+    ) -> Result<(), EnvironmentError> {
+        self.steps.push(Step::BuildEnvironment(environment.clone(), option));
+
+        Ok(())
+    }
+
     pub fn deploy_environment_with_options(
         &mut self,
         environment: &Rc<RefCell<Environment>>,
         option: DeploymentOption,
     ) -> Result<(), EnvironmentError> {
         // add build step
-        self.steps.push(Step::BuildEnvironment(environment.clone(), option));
+        self.build_environment(environment, option)?;
 
         // add deployment step
         self.steps.push(Step::DeployEnvironment(environment.clone()));
@@ -222,19 +232,19 @@ impl<'a> Transaction<'a> {
                 Step::CreateKubernetes => {
                     // revert kubernetes creation
                     if let Err(err) = self.engine.kubernetes().on_create_error() {
-                        return Err(RollbackError::CommitError(err));
+                        return Err(RollbackError::CommitError(Box::new(err)));
                     };
                 }
                 Step::DeleteKubernetes => {
                     // revert kubernetes deletion
                     if let Err(err) = self.engine.kubernetes().on_delete_error() {
-                        return Err(RollbackError::CommitError(err));
+                        return Err(RollbackError::CommitError(Box::new(err)));
                     };
                 }
                 Step::PauseKubernetes => {
                     // revert pause
                     if let Err(err) = self.engine.kubernetes().on_pause_error() {
-                        return Err(RollbackError::CommitError(err));
+                        return Err(RollbackError::CommitError(Box::new(err)));
                     };
                 }
                 Step::BuildEnvironment(_environment_action, _option) => {
@@ -268,7 +278,7 @@ impl<'a> Transaction<'a> {
 
         let _ = match action {
             Ok(_) => {}
-            Err(err) => return Err(RollbackError::CommitError(err)),
+            Err(err) => return Err(RollbackError::CommitError(Box::new(err))),
         };
 
         Err(RollbackError::NoFailoverEnvironment)
@@ -468,12 +478,8 @@ impl<'a> Transaction<'a> {
             T: Service + ?Sized,
         {
             let lh = ListenersHelper::new(kubernetes.listeners());
-            let progress_info = ProgressInfo::new(
-                service.progress_scope(),
-                ProgressLevel::Info,
-                None::<&str>,
-                execution_id,
-            );
+            let progress_info =
+                ProgressInfo::new(service.progress_scope(), ProgressLevel::Info, None::<&str>, execution_id);
 
             if !is_error {
                 match action {
@@ -511,23 +517,11 @@ impl<'a> Transaction<'a> {
                 // !!! don't change the order
                 // terminal update
                 for service in environment.stateful_services() {
-                    send_progress(
-                        self.engine.kubernetes(),
-                        &environment.action,
-                        service,
-                        execution_id,
-                        true,
-                    );
+                    send_progress(self.engine.kubernetes(), &environment.action, service, execution_id, true);
                 }
 
                 for service in environment.stateless_services() {
-                    send_progress(
-                        self.engine.kubernetes(),
-                        &environment.action,
-                        service,
-                        execution_id,
-                        true,
-                    );
+                    send_progress(self.engine.kubernetes(), &environment.action, service, execution_id, true);
                 }
 
                 return rollback_result;
@@ -535,23 +529,11 @@ impl<'a> Transaction<'a> {
             _ => {
                 // terminal update
                 for service in environment.stateful_services() {
-                    send_progress(
-                        self.engine.kubernetes(),
-                        &environment.action,
-                        service,
-                        execution_id,
-                        false,
-                    );
+                    send_progress(self.engine.kubernetes(), &environment.action, service, execution_id, false);
                 }
 
                 for service in environment.stateless_services() {
-                    send_progress(
-                        self.engine.kubernetes(),
-                        &environment.action,
-                        service,
-                        execution_id,
-                        false,
-                    );
+                    send_progress(self.engine.kubernetes(), &environment.action, service, execution_id, false);
                 }
             }
         };
@@ -634,7 +616,7 @@ impl Clone for Step {
 
 #[derive(Debug)]
 pub enum RollbackError {
-    CommitError(EngineError),
+    CommitError(Box<EngineError>),
     NoFailoverEnvironment,
     Nothing,
 }

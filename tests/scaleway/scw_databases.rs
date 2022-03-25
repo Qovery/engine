@@ -222,12 +222,9 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(
-            &context,
-            vec![environment, environment_delete],
-            secrets.clone(),
-            SCW_TEST_ZONE,
-        ) {
+        if let Err(e) =
+            clean_environments(&context, vec![environment, environment_delete], secrets.clone(), SCW_TEST_ZONE)
+        {
             warn!("cannot clean environments, error: {:?}", e);
         }
 

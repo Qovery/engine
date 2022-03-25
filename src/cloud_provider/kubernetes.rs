@@ -485,7 +485,7 @@ pub fn deploy_environment(
             kubernetes,
             service,
             event_details.clone(),
-            logger.clone(),
+            logger,
             &stateless_deployment_target,
             &listeners_helper,
             "check deployment",
@@ -904,13 +904,7 @@ where
         }
     }
 
-    check_kubernetes_upgrade_status(
-        requested_version,
-        masters_version,
-        workers_version,
-        event_details,
-        logger,
-    )
+    check_kubernetes_upgrade_status(requested_version, masters_version, workers_version, event_details, logger)
 }
 
 pub fn is_kubernetes_upgradable<P>(
@@ -936,10 +930,7 @@ where
                 Ok(())
             }
         },
-        Err(err) => Err(EngineError::new_k8s_cannot_retrieve_pods_disruption_budget(
-            event_details,
-            err,
-        )),
+        Err(err) => Err(EngineError::new_k8s_cannot_retrieve_pods_disruption_budget(event_details, err)),
     }
 }
 
@@ -1212,12 +1203,12 @@ pub fn compare_kubernetes_cluster_versions_for_upgrade(
         messages.push("Older Kubernetes major version detected");
     }
 
-    if &wished_minor_version > &deployed_minor_version {
+    if wished_minor_version > deployed_minor_version {
         upgrade_required.upgraded_required = true;
         messages.push("Kubernetes minor version change detected");
     }
 
-    if &wished_minor_version < &deployed_minor_version {
+    if wished_minor_version < deployed_minor_version {
         upgrade_required.upgraded_required = false;
         upgrade_required.older_version_detected = true;
         messages.push("Older Kubernetes minor version detected");
@@ -1328,7 +1319,7 @@ where
             let listeners_helper = ListenersHelper::new(&listeners);
             let action = action;
             let progress_info = progress_info;
-            let waiting_message = waiting_message.unwrap_or("no message ...".to_string());
+            let waiting_message = waiting_message.unwrap_or_else(|| "no message ...".to_string());
 
             loop {
                 // do notify users here

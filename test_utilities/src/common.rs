@@ -25,6 +25,7 @@ use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
+use qovery_engine::cloud_provider::environment::Environment;
 use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::scaleway::application::ScwZone;
@@ -70,18 +71,27 @@ pub trait Cluster<T, U> {
 }
 
 pub trait Infrastructure {
+    fn build_environment(
+        &self,
+        environment: &EnvironmentRequest,
+        logger: Box<dyn Logger>,
+        engine_config: &EngineConfig,
+    ) -> (Environment, TransactionResult);
+
     fn deploy_environment(
         &self,
         environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult;
+
     fn pause_environment(
         &self,
         environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult;
+
     fn delete_environment(
         &self,
         environment: &EnvironmentRequest,
@@ -91,6 +101,33 @@ pub trait Infrastructure {
 }
 
 impl Infrastructure for EnvironmentRequest {
+    fn build_environment(
+        &self,
+        environment: &EnvironmentRequest,
+        logger: Box<dyn Logger>,
+        engine_config: &EngineConfig,
+    ) -> (Environment, TransactionResult) {
+        let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+        let env = environment.to_environment_domain(
+            engine_config.context(),
+            engine_config.cloud_provider(),
+            engine_config.container_registry().registry_info(),
+            logger,
+        );
+
+        let env = Rc::new(RefCell::new(env));
+        let _ = tx.build_environment(
+            &env,
+            DeploymentOption {
+                force_build: true,
+                force_push: true,
+            },
+        );
+
+        let ret = tx.commit();
+        (Rc::try_unwrap(env).ok().unwrap().into_inner(), ret)
+    }
+
     fn deploy_environment(
         &self,
         environment: &EnvironmentRequest,
@@ -469,12 +506,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
     let application_name = format!("{}-{}", "simple-app".to_string(), &suffix);
     let router_id = generate_id();
     let router_name = "main".to_string();
-    let application_domain = format!(
-        "{}.{}.{}",
-        application_id,
-        context.cluster_id().to_string(),
-        test_domain
-    );
+    let application_domain = format!("{}.{}.{}", application_id, context.cluster_id().to_string(), test_domain);
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
@@ -1129,12 +1161,7 @@ pub fn test_db(
 
     match database_mode.clone() {
         DatabaseMode::CONTAINER => {
-            match get_pvc(
-                context.clone(),
-                provider_kind.clone(),
-                environment.clone(),
-                secrets.clone(),
-            ) {
+            match get_pvc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                     format!("{}Gi", storage_size)
@@ -1142,12 +1169,7 @@ pub fn test_db(
                 Err(_) => assert!(false),
             };
 
-            match get_svc(
-                context.clone(),
-                provider_kind.clone(),
-                environment.clone(),
-                secrets.clone(),
-            ) {
+            match get_svc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(svc) => assert_eq!(
                     svc.items
                         .expect("No items in svc")
@@ -1610,9 +1632,7 @@ where
                     .expect("No hpa condition.")
                     .contains("ValidMetricFound")
                 {
-                    return Err(CommandError::new_from_safe_message(
-                        "Metrics server doesn't work".to_string(),
-                    ));
+                    return Err(CommandError::new_from_safe_message("Metrics server doesn't work".to_string()));
                 }
             }
             Ok(())

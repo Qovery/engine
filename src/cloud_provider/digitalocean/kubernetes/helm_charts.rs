@@ -133,10 +133,7 @@ pub fn do_helm_charts(
     let qovery_terraform_config: DigitalOceanQoveryTerraformConfig = match serde_json::from_reader(reader) {
         Ok(config) => config,
         Err(e) => {
-            let message_safe = format!(
-                "Error while parsing terraform config file {}",
-                qovery_terraform_config_file
-            );
+            let message_safe = format!("Error while parsing terraform config file {}", qovery_terraform_config_file);
             return Err(CommandError::new(
                 format!("{}, error: {:?}", message_safe, e),
                 Some(message_safe),
@@ -145,9 +142,9 @@ pub fn do_helm_charts(
     };
 
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
-    let prometheus_internal_url = format!("http://prometheus-operated.{}.svc", prometheus_namespace.to_string());
+    let prometheus_internal_url = format!("http://prometheus-operated.{}.svc", prometheus_namespace);
     let loki_namespace = HelmChartNamespaces::Logging;
-    let loki_kube_dns_prefix = format!("loki.{}.svc", loki_namespace.to_string());
+    let loki_kube_dns_prefix = format!("loki.{}.svc", loki_namespace);
 
     // Qovery storage class
     let q_storage_class = CommonChart {
@@ -505,11 +502,7 @@ datasources:
         type: loki
         url: \"http://{}.{}.svc:3100\"
       ",
-        prometheus_internal_url,
-        &loki.chart_info.name,
-        loki_namespace.to_string(),
-        &loki.chart_info.name,
-        loki_namespace.to_string(),
+        prometheus_internal_url, &loki.chart_info.name, loki_namespace, &loki.chart_info.name, loki_namespace,
     );
 
     let grafana = CommonChart {

@@ -122,11 +122,7 @@ impl StatefulService for MySQLScw {
 
 impl ToTransmitter for MySQLScw {
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Database(
-            self.id().to_string(),
-            self.service_type().to_string(),
-            self.name().to_string(),
-        )
+        Transmitter::Database(self.id().to_string(), self.service_type().to_string(), self.name().to_string())
     }
 }
 
@@ -224,10 +220,7 @@ impl Service for MySQLScw {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert(
-            "fqdn",
-            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
-        );
+        context.insert("fqdn", self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
@@ -250,10 +243,7 @@ impl Service for MySQLScw {
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
         context.insert("skip_final_snapshot", &self.context().is_test_cluster());
         if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert(
-                "resource_expiration_in_seconds",
-                &self.context.resource_expiration_in_seconds(),
-            )
+            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
         }
 
         Ok(context)
@@ -322,12 +312,7 @@ impl Create for MySQLScw {
 
     fn on_create_check(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        self.check_domains(
-            self.listeners.clone(),
-            vec![self.fqdn.as_str()],
-            event_details,
-            self.logger(),
-        )
+        self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()], event_details, self.logger())
     }
 
     #[named]

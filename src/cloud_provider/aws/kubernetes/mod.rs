@@ -255,7 +255,7 @@ impl EKS {
         &self,
         event_details: EventDetails,
         zone_name: &str,
-        subnet_block: &Vec<String>,
+        subnet_block: &[String],
     ) -> Result<usize, EngineError> {
         if subnet_block.len() % 2 == 1 {
             return Err(EngineError::new_subnets_count_is_not_even(
@@ -345,10 +345,7 @@ impl EKS {
             }
             VpcQoveryNetworkMode::WithoutNatGateways => {}
         };
-        context.insert(
-            "vpc_qovery_network_mode",
-            &self.options.vpc_qovery_network_mode.to_string(),
-        );
+        context.insert("vpc_qovery_network_mode", &self.options.vpc_qovery_network_mode.to_string());
 
         let rds_zone_a_subnet_blocks = format_ips(&self.options.rds_zone_a_subnet_blocks);
         let rds_zone_b_subnet_blocks = format_ips(&self.options.rds_zone_b_subnet_blocks);
@@ -383,29 +380,17 @@ impl EKS {
         context.insert("organization_id", self.cloud_provider.organization_id());
         context.insert("qovery_api_url", &qovery_api_url);
 
-        context.insert(
-            "engine_version_controller_token",
-            &self.options.engine_version_controller_token,
-        );
-        context.insert(
-            "agent_version_controller_token",
-            &self.options.agent_version_controller_token,
-        );
+        context.insert("engine_version_controller_token", &self.options.engine_version_controller_token);
+        context.insert("agent_version_controller_token", &self.options.agent_version_controller_token);
 
         context.insert("test_cluster", &self.context.is_test_cluster());
         if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert(
-                "resource_expiration_in_seconds",
-                &self.context.resource_expiration_in_seconds(),
-            )
+            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
         }
         context.insert("force_upgrade", &self.context.requires_forced_upgrade());
 
         // Qovery features
-        context.insert(
-            "log_history_enabled",
-            &self.context.is_feature_enabled(&Features::LogsHistory),
-        );
+        context.insert("log_history_enabled", &self.context.is_feature_enabled(&Features::LogsHistory));
         context.insert(
             "metrics_history_enabled",
             &self.context.is_feature_enabled(&Features::MetricsHistory),
@@ -422,14 +407,8 @@ impl EKS {
 
         context.insert("managed_dns", &managed_dns_list);
         context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
-        context.insert(
-            "managed_dns_domains_root_helm_format",
-            &managed_dns_domains_root_helm_format,
-        );
-        context.insert(
-            "managed_dns_domains_terraform_format",
-            &managed_dns_domains_terraform_format,
-        );
+        context.insert("managed_dns_domains_root_helm_format", &managed_dns_domains_root_helm_format);
+        context.insert("managed_dns_domains_terraform_format", &managed_dns_domains_terraform_format);
         context.insert(
             "managed_dns_domains_root_terraform_format",
             &managed_dns_domains_root_terraform_format,
@@ -555,18 +534,9 @@ impl EKS {
 
         // AWS - Elasticsearch
         context.insert("elasticsearch_cidr_subnet", &elasticsearch_cidr_subnet);
-        context.insert(
-            "elasticsearch_zone_a_subnet_blocks",
-            &elasticsearch_zone_a_subnet_blocks,
-        );
-        context.insert(
-            "elasticsearch_zone_b_subnet_blocks",
-            &elasticsearch_zone_b_subnet_blocks,
-        );
-        context.insert(
-            "elasticsearch_zone_c_subnet_blocks",
-            &elasticsearch_zone_c_subnet_blocks,
-        );
+        context.insert("elasticsearch_zone_a_subnet_blocks", &elasticsearch_zone_a_subnet_blocks);
+        context.insert("elasticsearch_zone_b_subnet_blocks", &elasticsearch_zone_b_subnet_blocks);
+        context.insert("elasticsearch_zone_c_subnet_blocks", &elasticsearch_zone_c_subnet_blocks);
 
         // grafana credentials
         context.insert("grafana_admin_user", self.options.grafana_admin_user.as_str());
@@ -738,19 +708,13 @@ impl EKS {
             }
             Err(e) => self.logger().log(
                 LogLevel::Warning,
-                EngineEvent::Error(
-                    EngineError::new_terraform_state_does_not_exist(event_details.clone(), e),
-                    None,
-                ),
+                EngineEvent::Error(EngineError::new_terraform_state_does_not_exist(event_details.clone(), e), None),
             ),
         };
 
         // terraform deployment dedicated to cloud resources
         if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
-            return Err(EngineError::new_terraform_error_while_executing_pipeline(
-                event_details,
-                e,
-            ));
+            return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
         }
 
         // kubernetes helm deployments on the cluster
@@ -1038,10 +1002,7 @@ impl EKS {
                 );
                 Ok(())
             }
-            Err(e) => Err(EngineError::new_terraform_error_while_executing_pipeline(
-                event_details,
-                e,
-            )),
+            Err(e) => Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e)),
         }
     }
 
@@ -1565,12 +1526,7 @@ impl Kubernetes for EKS {
         match &kubernetes_upgrade_status.required_upgrade_on {
             Some(KubernetesNodesType::Masters) => {
                 self.send_to_customer(
-                    format!(
-                        "Start upgrading process for master nodes on {}/{}",
-                        self.name(),
-                        self.id()
-                    )
-                    .as_str(),
+                    format!("Start upgrading process for master nodes on {}/{}", self.name(), self.id()).as_str(),
                     &listeners_helper,
                 );
                 self.logger().log(
@@ -1635,11 +1591,7 @@ impl Kubernetes for EKS {
                 match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
                     Ok(_) => {
                         self.send_to_customer(
-                            format!(
-                                "Kubernetes {} master nodes have been successfully upgraded",
-                                self.name()
-                            )
-                            .as_str(),
+                            format!("Kubernetes {} master nodes have been successfully upgraded", self.name()).as_str(),
                             &listeners_helper,
                         );
                         self.logger().log(
@@ -1653,10 +1605,7 @@ impl Kubernetes for EKS {
                         );
                     }
                     Err(e) => {
-                        return Err(EngineError::new_terraform_error_while_executing_pipeline(
-                            event_details,
-                            e,
-                        ));
+                        return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
                     }
                 }
             }
@@ -1700,11 +1649,7 @@ impl Kubernetes for EKS {
         // Upgrade worker nodes
         //
         self.send_to_customer(
-            format!(
-                "Preparing workers nodes for upgrade for Kubernetes cluster {}",
-                self.name()
-            )
-            .as_str(),
+            format!("Preparing workers nodes for upgrade for Kubernetes cluster {}", self.name()).as_str(),
             &listeners_helper,
         );
         self.logger().log(
@@ -1768,11 +1713,7 @@ impl Kubernetes for EKS {
         match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
             Ok(_) => {
                 self.send_to_customer(
-                    format!(
-                        "Kubernetes {} workers nodes have been successfully upgraded",
-                        self.name()
-                    )
-                    .as_str(),
+                    format!("Kubernetes {} workers nodes have been successfully upgraded", self.name()).as_str(),
                     &listeners_helper,
                 );
                 self.logger().log(
@@ -1789,10 +1730,7 @@ impl Kubernetes for EKS {
                 // enable cluster autoscaler deployment
                 let _ = self.set_cluster_autoscaler_replicas(event_details.clone(), 1)?;
 
-                return Err(EngineError::new_terraform_error_while_executing_pipeline(
-                    event_details,
-                    e,
-                ));
+                return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
             }
         }
 

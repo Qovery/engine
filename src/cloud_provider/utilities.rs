@@ -1,3 +1,5 @@
+#![allow(clippy::field_reassign_with_default)]
+
 use std::collections::HashMap;
 
 use crate::errors::{CommandError, EngineError};
@@ -12,6 +14,7 @@ use retry::delay::Fixed;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::fmt::Write;
 use std::str::FromStr;
 use trust_dns_resolver::config::*;
 use trust_dns_resolver::proto::rr::{RData, RecordType};
@@ -232,22 +235,6 @@ impl VersionsNumber {
         }
     }
 
-    pub fn to_string(&self) -> String {
-        let mut version = vec![self.major.to_string()];
-
-        if self.minor.is_some() {
-            version.push(self.minor.clone().unwrap())
-        }
-        if self.patch.is_some() {
-            version.push(self.patch.clone().unwrap())
-        }
-        if self.suffix.is_some() {
-            version.push(self.suffix.clone().unwrap())
-        }
-
-        version.join(".")
-    }
-
     pub fn to_major_version_string(&self) -> String {
         self.major.clone()
     }
@@ -268,9 +255,7 @@ impl FromStr for VersionsNumber {
 
     fn from_str(version: &str) -> Result<Self, Self::Err> {
         if version.trim() == "" {
-            return Err(CommandError::new_from_safe_message(
-                "version cannot be empty".to_string(),
-            ));
+            return Err(CommandError::new_from_safe_message("version cannot be empty".to_string()));
         }
 
         let mut version_split = version.splitn(4, '.').map(|v| v.trim());
@@ -306,7 +291,24 @@ impl FromStr for VersionsNumber {
 
 impl fmt::Display for VersionsNumber {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        f.write_str(&self.major)?;
+
+        if let Some(minor) = &self.minor {
+            f.write_char('.')?;
+            f.write_str(minor)?;
+        }
+
+        if let Some(patch) = &self.patch {
+            f.write_char('.')?;
+            f.write_str(patch)?;
+        }
+
+        if let Some(suffix) = &self.suffix {
+            f.write_char('.')?;
+            f.write_str(suffix)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -397,10 +399,7 @@ pub fn check_cname_for(
         match get_cname_record_value(next_resolver(), cname_to_check) {
             Some(domain) => OperationResult::Ok(domain),
             None => {
-                let msg = format!(
-                    "Cannot find domain under CNAME {}. Retrying in 5 seconds...",
-                    cname_to_check
-                );
+                let msg = format!("Cannot find domain under CNAME {}. Retrying in 5 seconds...", cname_to_check);
                 send_deployment_progress(msg.as_str());
                 OperationResult::Retry(msg)
             }
@@ -551,10 +550,7 @@ pub fn print_action(
     event_details: EventDetails,
     logger: &dyn Logger,
 ) {
-    let msg = format!(
-        "{}.{}.{} called for {}",
-        cloud_provider_name, struct_name, fn_name, item_name
-    );
+    let msg = format!("{}.{}.{} called for {}", cloud_provider_name, struct_name, fn_name, item_name);
     match fn_name.contains("error") {
         true => logger.log(
             LogLevel::Warning,
@@ -593,23 +589,17 @@ mod tests {
         let test_cases = vec![
             TestCase {
                 input: "",
-                expected_output: Err(CommandError::new_from_safe_message(
-                    "version cannot be empty".to_string(),
-                )),
+                expected_output: Err(CommandError::new_from_safe_message("version cannot be empty".to_string())),
                 description: "empty version str",
             },
             TestCase {
                 input: "    ",
-                expected_output: Err(CommandError::new_from_safe_message(
-                    "version cannot be empty".to_string(),
-                )),
+                expected_output: Err(CommandError::new_from_safe_message("version cannot be empty".to_string())),
                 description: "version a tab str",
             },
             TestCase {
                 input: " ",
-                expected_output: Err(CommandError::new_from_safe_message(
-                    "version cannot be empty".to_string(),
-                )),
+                expected_output: Err(CommandError::new_from_safe_message("version cannot be empty".to_string())),
                 description: "version as a space str",
             },
             TestCase {
