@@ -70,7 +70,7 @@ impl TaskManager {
 
     pub fn add_task(&self, task: Box<dyn Task>) {
         let message = match self.remaining_tasks_to_run() {
-            0 => Some("Task is going to be executed !".to_string()),
+            0 => Some("🚀 Starting engines, your deployment is going to start !".to_string()),
             nb_tasks => {
                 info!("Task is queued. {} remaining tasks.", nb_tasks);
                 Some(format!(
