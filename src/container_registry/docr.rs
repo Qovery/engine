@@ -28,7 +28,13 @@ pub struct DOCR {
 }
 
 impl DOCR {
-    pub fn new(context: Context, id: &str, name: &str, api_key: &str) -> Result<Self, ContainerRegistryError> {
+    pub fn new(
+        context: Context,
+        id: &str,
+        name: &str,
+        api_key: &str,
+        listener: Listener,
+    ) -> Result<Self, ContainerRegistryError> {
         let registry_name = name.to_string();
         let registry_name2 = name.to_string();
         let mut registry = Url::parse(&format!("https://{}", CR_REGISTRY_DOMAIN)).unwrap();
@@ -48,7 +54,7 @@ impl DOCR {
             name: name.to_string(),
             api_key: api_key.into(),
             id: id.into(),
-            listeners: vec![],
+            listeners: vec![listener],
             registry_info,
         };
 
