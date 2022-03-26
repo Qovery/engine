@@ -142,7 +142,7 @@ impl ECR {
                     .describe_repositories(container_registry_request.clone()),
             );
             info!("repo {:?}", repositories);
-            println!("repo {:?}", repositories);
+            println!("repo  {:?}", repositories);
             match repositories {
                 // Repo already exist, so ok
                 Ok(_) => OperationResult::Ok(()),
