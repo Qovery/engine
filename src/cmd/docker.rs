@@ -5,7 +5,6 @@ use std::process::ExitStatus;
 use std::sync::Mutex;
 use url::Url;
 
-
 #[derive(thiserror::Error, Debug)]
 pub enum DockerError {
     #[error("Docker Invalid configuration: {0}")]
@@ -25,6 +24,9 @@ pub enum DockerError {
 }
 
 lazy_static! {
+    // Docker login when launched in parallel can mess up ~/.docker/config.json
+    // We use a mutex that will force serialization of logins in order to avoid that
+    // Mostly use for CI/Test when all test start in parallel and it the login phase at the same time
     static ref LOGIN_LOCK: Mutex<()> = Mutex::new(());
 }
 
@@ -137,6 +139,7 @@ impl Docker {
 
     pub fn login(&self, registry: &Url) -> Result<(), DockerError> {
         info!("Docker login {} as user {}", registry, registry.username());
+
         let _lock = LOGIN_LOCK.lock().unwrap();
         let password = urlencoding::decode(registry.password().unwrap_or_default())
             .unwrap_or_default()
