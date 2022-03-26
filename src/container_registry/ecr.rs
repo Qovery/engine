@@ -13,7 +13,11 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
-use crate::models::{Context, Listen, Listener, Listeners};
+use crate::events::{EngineEvent, EventMessage, GeneralStep, Stage};
+use crate::logger::Logger;
+use crate::models::{
+    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+};
 use crate::runtime::block_on;
 use retry::delay::Fixed;
 use retry::Error::Operation;
@@ -30,6 +34,7 @@ pub struct ECR {
     region: Region,
     registry_info: Option<ContainerRegistryInfo>,
     listeners: Listeners,
+    logger: Box<dyn Logger>,
 }
 
 impl ECR {
@@ -40,6 +45,7 @@ impl ECR {
         access_key_id: &str,
         secret_access_key: &str,
         region: &str,
+        logger: Box<dyn Logger>,
     ) -> Result<Self, ContainerRegistryError> {
         let mut cr = ECR {
             context,
@@ -50,6 +56,7 @@ impl ECR {
             region: Region::from_str(region).unwrap(),
             registry_info: None,
             listeners: vec![],
+            logger,
         };
 
         let credentials = cr.get_credentials()?;
@@ -57,6 +64,7 @@ impl ECR {
         let _ = registry_url.set_username(&credentials.access_token);
         let _ = registry_url.set_password(Some(&credentials.password));
 
+        cr.log_info(format!("🔓 Login to ECR registry {}", credentials.endpoint_url));
         let _ = cr
             .context
             .docker
@@ -74,6 +82,23 @@ impl ECR {
         cr.registry_info = Some(registry_info);
         cr.is_credentials_valid()?;
         Ok(cr)
+    }
+
+    pub fn log_info(&self, msg: String) {
+        self.logger.log(EngineEvent::Info(
+            self.get_event_details(Stage::General(GeneralStep::ValidateSystemRequirements)),
+            EventMessage::new_from_safe(msg.clone()),
+        ));
+
+        let lh = ListenersHelper::new(&self.listeners);
+        lh.deployment_in_progress(ProgressInfo::new(
+            ProgressScope::Environment {
+                id: self.context.execution_id().to_string(),
+            },
+            ProgressLevel::Info,
+            Some(msg),
+            self.context.execution_id(),
+        ));
     }
 
     pub fn credentials(&self) -> StaticProvider {
@@ -225,6 +250,8 @@ impl ECR {
     }
 
     fn get_or_create_repository(&self, repository_name: &str) -> Result<Repository, ContainerRegistryError> {
+        self.log_info(format!("🗂️ Provisioning container repository {}", repository_name));
+
         // check if the repository already exists
         let repository = self.get_repository(repository_name);
         if let Some(repo) = repository {

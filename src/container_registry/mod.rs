@@ -4,8 +4,8 @@ use url::Url;
 use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::errors::EngineError;
-use crate::events::EventDetails;
-use crate::models::{Context, Listen};
+use crate::events::{EventDetails, Stage, Transmitter};
+use crate::models::{Context, Listen, QoveryIdentifier};
 
 pub mod docr;
 pub mod ecr;
@@ -36,6 +36,21 @@ pub trait ContainerRegistry: Listen {
 
     // Check on the registry if a specific image already exist
     fn does_image_exists(&self, image: &Image) -> bool;
+
+    fn get_event_details(&self, stage: Stage) -> EventDetails {
+        let context = self.context();
+        let ev = EventDetails::new(
+            None,
+            QoveryIdentifier::from(context.organization_id().to_string()),
+            QoveryIdentifier::from(context.cluster_id().to_string()),
+            QoveryIdentifier::from(context.execution_id().to_string()),
+            None,
+            stage,
+            Transmitter::ContainerRegistry(self.id().to_string(), self.name().to_string()),
+        );
+
+        ev
+    }
 }
 
 pub fn to_engine_error(event_details: EventDetails, err: ContainerRegistryError) -> EngineError {

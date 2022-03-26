@@ -54,6 +54,7 @@ use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::models::DatabaseMode::MANAGED;
 use qovery_engine::runtime::block_on;
 use time::Instant;
+use url::Url;
 
 pub fn context(organization_id: &str, cluster_id: &str) -> Context {
     let organization_id = organization_id.to_string();
@@ -61,7 +62,8 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
     let execution_id = execution_id();
     let home_dir = std::env::var("WORKSPACE_ROOT_DIR").unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
     let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
-    let docker = Docker::new(None).expect("Can't init docker");
+    let docker_host = std::env::var("DOCKER_HOST").map(|x| Url::parse(&x).unwrap()).ok();
+    let docker = Docker::new(docker_host.clone()).expect("Can't init docker");
 
     let metadata = Metadata {
         dry_run_deploy: Option::from({
@@ -98,7 +100,7 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
         home_dir,
         lib_root_dir,
         true,
-        None,
+        docker_host,
         enabled_features,
         Option::from(metadata),
         docker,
