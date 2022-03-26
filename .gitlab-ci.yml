@@ -93,6 +93,8 @@ all-minimal-tests:
   stage: minimal-tests
   retry: 0
   timeout: 3 hours
+  before_script:
+    - docker/wait_docker_available.sh
   script:
     - ./helper.sh all_minimal_tests
   only:
