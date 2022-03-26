@@ -71,7 +71,7 @@ impl EngineRequest {
         cloud_provider.add_listener(progress_listener.clone());
         let cloud_provider = Arc::new(cloud_provider);
 
-        let mut container_registry = self
+        let container_registry = self
             .container_registry
             .to_engine_container_registry(context.clone(), progress_listener.clone(), logger.clone())
             .ok_or_else(|| {
