@@ -24,7 +24,6 @@ pub enum DockerError {
     Timeout(String),
 }
 
-
 lazy_static! {
     static ref LOGIN_LOCK: Mutex<()> = Mutex::new(());
 }
@@ -139,7 +138,6 @@ impl Docker {
     pub fn login(&self, registry: &Url) -> Result<(), DockerError> {
         info!("Docker login {} as user {}", registry, registry.username());
         let _lock = LOGIN_LOCK.lock().unwrap();
-        
         let password = urlencoding::decode(registry.password().unwrap_or_default())
             .unwrap_or_default()
             .to_string();
