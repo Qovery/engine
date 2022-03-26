@@ -6,7 +6,7 @@ use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::engine::EngineConfig;
-use qovery_engine::models::{Context, EnvironmentRequest, Listener, NoOpProgressListener};
+use qovery_engine::models::{Context, EnvironmentRequest, NoOpProgressListener};
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use std::sync::Arc;
 
