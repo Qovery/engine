@@ -3,9 +3,9 @@ use crate::cloud_provider::helm::{
     CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart, ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
-use crate::cloud_provider::scaleway::application::{ScwRegion, ScwZone};
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use crate::errors::CommandError;
+use crate::models::scaleway::{ScwRegion, ScwZone};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::fs::File;

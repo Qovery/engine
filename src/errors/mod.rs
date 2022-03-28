@@ -10,7 +10,7 @@ use crate::cmd::helm::HelmError;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
 use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
-use crate::models::QoveryIdentifier;
+use crate::io_models::QoveryIdentifier;
 use crate::object_storage::errors::ObjectStorageError;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;

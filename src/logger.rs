@@ -72,12 +72,12 @@ impl Logger for StdIoLogger {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cloud_provider::scaleway::application::ScwRegion;
     use crate::cloud_provider::Kind;
     use crate::errors;
     use crate::errors::EngineError;
     use crate::events::{EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
-    use crate::models::QoveryIdentifier;
+    use crate::io_models::QoveryIdentifier;
+    use crate::models::scaleway::ScwRegion;
     use tracing_test::traced_test;
     use url::Url;
     use uuid::Uuid;

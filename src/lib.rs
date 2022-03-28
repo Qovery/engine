@@ -19,6 +19,7 @@ pub mod errors;
 pub mod events;
 pub mod fs;
 pub mod git;
+pub mod io_models;
 pub mod logger;
 pub mod models;
 pub mod object_storage;

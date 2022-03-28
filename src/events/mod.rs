@@ -8,7 +8,7 @@ extern crate url;
 
 use crate::cloud_provider::Kind;
 use crate::errors::{CommandError, EngineError};
-use crate::models::QoveryIdentifier;
+use crate::io_models::QoveryIdentifier;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone)]

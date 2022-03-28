@@ -1,6 +1,6 @@
 use crate::cloud_provider::utilities::VersionsNumber;
 use crate::errors::CommandError;
-use crate::models::DatabaseKind;
+use crate::io_models::DatabaseKind;
 
 pub fn get_parameter_group_from_version(
     version: VersionsNumber,
@@ -28,7 +28,7 @@ pub fn aws_final_snapshot_name(database_name: &str) -> String {
 mod tests_aws_databases_parameters {
     use crate::cloud_provider::aws::databases::utilities::get_parameter_group_from_version;
     use crate::cloud_provider::utilities::VersionsNumber;
-    use crate::models::DatabaseKind;
+    use crate::io_models::DatabaseKind;
     use std::str::FromStr;
 
     #[test]

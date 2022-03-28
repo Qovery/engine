@@ -14,20 +14,17 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
-use crate::cloud_provider::aws::application::ApplicationAws;
 use crate::cloud_provider::aws::databases::mongodb::MongoDbAws;
 use crate::cloud_provider::aws::databases::mysql::MySQLAws;
 use crate::cloud_provider::aws::databases::postgresql::PostgreSQLAws;
 use crate::cloud_provider::aws::databases::redis::RedisAws;
 use crate::cloud_provider::aws::router::RouterAws;
-use crate::cloud_provider::digitalocean::application::ApplicationDo;
 use crate::cloud_provider::digitalocean::databases::mongodb::MongoDo;
 use crate::cloud_provider::digitalocean::databases::mysql::MySQLDo;
 use crate::cloud_provider::digitalocean::databases::postgresql::PostgresDo;
 use crate::cloud_provider::digitalocean::databases::redis::RedisDo;
 use crate::cloud_provider::digitalocean::router::RouterDo;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::scaleway::application::ApplicationScw;
 use crate::cloud_provider::scaleway::databases::mongodb::MongoDbScw;
 use crate::cloud_provider::scaleway::databases::mysql::MySQLScw;
 use crate::cloud_provider::scaleway::databases::postgresql::PostgresScw;
@@ -40,6 +37,12 @@ use crate::cloud_provider::Kind as CPKind;
 use crate::cmd::docker::Docker;
 use crate::container_registry::ContainerRegistryInfo;
 use crate::logger::Logger;
+use crate::models;
+use crate::models::application::IApplication;
+use crate::models::aws::{AwsAppExtraSettings, AwsStorageType};
+use crate::models::digital_ocean::{DoAppExtraSettings, DoStorageType};
+use crate::models::scaleway::{ScwAppExtraSettings, ScwStorageType};
+use crate::models::types::{AWS, DO, SCW};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct QoveryIdentifier {
@@ -219,65 +222,77 @@ impl Application {
         build: Build,
         cloud_provider: &dyn CloudProvider,
         logger: Box<dyn Logger>,
-    ) -> Option<Box<dyn crate::cloud_provider::service::Application>> {
+    ) -> Option<Box<dyn IApplication>> {
         let environment_variables = to_environment_variable(&self.environment_vars);
         let listeners = cloud_provider.listeners().clone();
 
         match cloud_provider.kind() {
-            CPKind::Aws => Some(Box::new(ApplicationAws::new(
-                context.clone(),
-                self.id.as_str(),
-                self.action.to_service_action(),
-                self.name.as_str(),
-                self.ports.clone(),
-                self.total_cpus.clone(),
-                self.cpu_burst.clone(),
-                self.total_ram_in_mib,
-                self.min_instances,
-                self.max_instances,
-                self.start_timeout_in_seconds,
-                build,
-                self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
-                environment_variables,
-                listeners,
-                logger.clone(),
-            ))),
-            CPKind::Do => Some(Box::new(ApplicationDo::new(
-                context.clone(),
-                self.id.as_str(),
-                self.action.to_service_action(),
-                self.name.as_str(),
-                self.ports.clone(),
-                self.total_cpus.clone(),
-                self.cpu_burst.clone(),
-                self.total_ram_in_mib,
-                self.min_instances,
-                self.max_instances,
-                self.start_timeout_in_seconds,
-                build,
-                self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
-                environment_variables,
-                listeners,
-                logger.clone(),
-            ))),
-            CPKind::Scw => Some(Box::new(ApplicationScw::new(
-                context.clone(),
-                self.id.as_str(),
-                self.action.to_service_action(),
-                self.name.as_str(),
-                self.ports.clone(),
-                self.total_cpus.clone(),
-                self.cpu_burst.clone(),
-                self.total_ram_in_mib,
-                self.min_instances,
-                self.max_instances,
-                self.start_timeout_in_seconds,
-                build,
-                self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
-                environment_variables,
-                listeners,
-                logger.clone(),
-            ))),
+            CPKind::Aws => Some(Box::new(
+                models::application::Application::<AWS>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.ports.clone(),
+                    self.total_cpus.clone(),
+                    self.cpu_burst.clone(),
+                    self.total_ram_in_mib,
+                    self.min_instances,
+                    self.max_instances,
+                    self.start_timeout_in_seconds,
+                    build,
+                    self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
+                    environment_variables,
+                    AwsAppExtraSettings {},
+                    listeners,
+                    logger.clone(),
+                )
+                .unwrap(),
+            )),
+            CPKind::Do => Some(Box::new(
+                models::application::Application::<DO>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.ports.clone(),
+                    self.total_cpus.clone(),
+                    self.cpu_burst.clone(),
+                    self.total_ram_in_mib,
+                    self.min_instances,
+                    self.max_instances,
+                    self.start_timeout_in_seconds,
+                    build,
+                    self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
+                    environment_variables,
+                    DoAppExtraSettings {},
+                    listeners,
+                    logger.clone(),
+                )
+                .unwrap(),
+            )),
+            CPKind::Scw => Some(Box::new(
+                models::application::Application::<SCW>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.ports.clone(),
+                    self.total_cpus.clone(),
+                    self.cpu_burst.clone(),
+                    self.total_ram_in_mib,
+                    self.min_instances,
+                    self.max_instances,
+                    self.start_timeout_in_seconds,
+                    build,
+                    self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
+                    environment_variables,
+                    ScwAppExtraSettings {},
+                    listeners,
+                    logger.clone(),
+                )
+                .unwrap(),
+            )),
         }
     }
 
@@ -439,17 +454,15 @@ pub enum StorageType {
 }
 
 impl Storage {
-    pub fn to_aws_storage(
-        &self,
-    ) -> crate::cloud_provider::models::Storage<crate::cloud_provider::aws::application::StorageType> {
+    pub fn to_aws_storage(&self) -> crate::cloud_provider::models::Storage<AwsStorageType> {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             name: self.name.clone(),
             storage_type: match self.storage_type {
-                StorageType::SlowHdd => crate::cloud_provider::aws::application::StorageType::SC1,
-                StorageType::Hdd => crate::cloud_provider::aws::application::StorageType::ST1,
-                StorageType::Ssd => crate::cloud_provider::aws::application::StorageType::GP2,
-                StorageType::FastSsd => crate::cloud_provider::aws::application::StorageType::IO1,
+                StorageType::SlowHdd => AwsStorageType::SC1,
+                StorageType::Hdd => AwsStorageType::ST1,
+                StorageType::Ssd => AwsStorageType::GP2,
+                StorageType::FastSsd => AwsStorageType::IO1,
             },
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
@@ -457,26 +470,22 @@ impl Storage {
         }
     }
 
-    pub fn to_do_storage(
-        &self,
-    ) -> crate::cloud_provider::models::Storage<crate::cloud_provider::digitalocean::application::StorageType> {
+    pub fn to_do_storage(&self) -> crate::cloud_provider::models::Storage<DoStorageType> {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             name: self.name.clone(),
-            storage_type: crate::cloud_provider::digitalocean::application::StorageType::Standard,
+            storage_type: DoStorageType::Standard,
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,
         }
     }
 
-    pub fn to_scw_storage(
-        &self,
-    ) -> crate::cloud_provider::models::Storage<crate::cloud_provider::scaleway::application::StorageType> {
+    pub fn to_scw_storage(&self) -> crate::cloud_provider::models::Storage<ScwStorageType> {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             name: self.name.clone(),
-            storage_type: crate::cloud_provider::scaleway::application::StorageType::BlockSsd,
+            storage_type: ScwStorageType::BlockSsd,
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,
@@ -1314,7 +1323,7 @@ impl ToTerraformString for Ipv4Addr {
 
 #[cfg(test)]
 mod tests {
-    use crate::models::{Domain, QoveryIdentifier};
+    use crate::io_models::{Domain, QoveryIdentifier};
 
     #[test]
     fn test_domain_new() {

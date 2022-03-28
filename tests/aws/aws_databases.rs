@@ -2,7 +2,7 @@ extern crate test_utilities;
 
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::models::{Action, CloneForTest, Database, DatabaseKind, DatabaseMode, Port, Protocol};
+use qovery_engine::io_models::{Action, CloneForTest, Database, DatabaseKind, DatabaseMode, Port, Protocol};
 use test_utilities::aws::aws_default_engine_config;
 use tracing::{span, Level};
 
@@ -10,7 +10,7 @@ use self::test_utilities::aws::{AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TY
 use self::test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
-use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
+use qovery_engine::io_models::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::common::{test_db, Infrastructure};
 
@@ -304,7 +304,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 };
                 app
             })
-            .collect::<Vec<qovery_engine::models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::Application>>();
         environment.routers[0].routes[0].application_name = app_name;
 
         let environment_to_redeploy = environment.clone();

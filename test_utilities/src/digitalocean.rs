@@ -7,18 +7,18 @@ use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::engine::EngineConfig;
-use qovery_engine::models::{Context, EnvironmentRequest, NoOpProgressListener};
+use qovery_engine::io_models::{Context, EnvironmentRequest, NoOpProgressListener};
 use std::sync::Arc;
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
-use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::Kind::Do;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::errors::EngineError;
 use qovery_engine::logger::Logger;
+use qovery_engine::models::digital_ocean::DoRegion;
 
 pub const DO_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const DO_KUBERNETES_MINOR_VERSION: u8 = 20;

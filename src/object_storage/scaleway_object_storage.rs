@@ -2,10 +2,10 @@ use chrono::{DateTime, Utc};
 use std::fs::File;
 use std::path::Path;
 
-use crate::cloud_provider::scaleway::application::ScwZone;
-use crate::models::{Context, StringPath};
+use crate::io_models::{Context, StringPath};
 use crate::object_storage::{Kind, ObjectStorage};
 
+use crate::models::scaleway::ScwZone;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::runtime::block_on;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};

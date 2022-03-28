@@ -6,7 +6,7 @@ use std::cell::RefCell;
 
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::dns_provider::DnsProvider;
-use qovery_engine::models::{
+use qovery_engine::io_models::{
     Action, Application, CloneForTest, Context, Database, DatabaseKind, DatabaseMode, EnvironmentRequest,
     GitCredentials, Port, Protocol, Route, Router, Storage, StorageType,
 };
@@ -22,13 +22,11 @@ use base64;
 use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
 use qovery_engine::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::environment::Environment;
 use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 use qovery_engine::cloud_provider::models::NodeGroups;
-use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
@@ -36,8 +34,10 @@ use qovery_engine::cmd::kubectl::kubernetes_get_all_hpas;
 use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::engine::EngineConfig;
 use qovery_engine::errors::CommandError;
+use qovery_engine::io_models::DatabaseMode::CONTAINER;
 use qovery_engine::logger::Logger;
-use qovery_engine::models::DatabaseMode::CONTAINER;
+use qovery_engine::models::digital_ocean::DoRegion;
+use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -1116,7 +1116,7 @@ pub fn test_db(
             app.environment_vars = db_infos.app_env_vars.clone();
             app
         })
-        .collect::<Vec<qovery_engine::models::Application>>();
+        .collect::<Vec<qovery_engine::io_models::Application>>();
 
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;

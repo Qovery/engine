@@ -1,13 +1,12 @@
 extern crate scaleway_api_rs;
 
-use crate::cloud_provider::scaleway::application::ScwZone;
-
 use self::scaleway_api_rs::models::scaleway_registry_v1_namespace::Status;
 use crate::build_platform::Image;
 use crate::cmd::docker;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
-use crate::models::{Context, Listen, Listener, Listeners};
+use crate::io_models::{Context, Listen, Listener, Listeners};
+use crate::models::scaleway::ScwZone;
 use crate::runtime::block_on;
 use url::Url;
 

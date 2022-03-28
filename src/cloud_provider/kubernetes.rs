@@ -31,11 +31,11 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter};
 use crate::fs::workspace_directory;
-use crate::logger::Logger;
-use crate::models::ProgressLevel::Info;
-use crate::models::{
+use crate::io_models::ProgressLevel::Info;
+use crate::io_models::{
     Action, Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier, StringPath,
 };
+use crate::logger::Logger;
 use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
 
@@ -1434,8 +1434,8 @@ mod tests {
     use crate::cloud_provider::utilities::VersionsNumber;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+    use crate::io_models::{ListenersHelper, QoveryIdentifier};
     use crate::logger::StdIoLogger;
-    use crate::models::{ListenersHelper, QoveryIdentifier};
 
     #[test]
     pub fn check_kubernetes_upgrade_method() {
