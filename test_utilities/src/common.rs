@@ -108,12 +108,14 @@ impl Infrastructure for EnvironmentRequest {
         engine_config: &EngineConfig,
     ) -> (Environment, TransactionResult) {
         let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let env = environment.to_environment_domain(
-            engine_config.context(),
-            engine_config.cloud_provider(),
-            engine_config.container_registry().registry_info(),
-            logger,
-        );
+        let env = environment
+            .to_environment_domain(
+                engine_config.context(),
+                engine_config.cloud_provider(),
+                engine_config.container_registry().registry_info(),
+                logger,
+            )
+            .unwrap();
 
         let env = Rc::new(RefCell::new(env));
         let _ = tx.build_environment(
@@ -135,12 +137,14 @@ impl Infrastructure for EnvironmentRequest {
         engine_config: &EngineConfig,
     ) -> TransactionResult {
         let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let env = environment.to_environment_domain(
-            engine_config.context(),
-            engine_config.cloud_provider(),
-            engine_config.container_registry().registry_info(),
-            logger,
-        );
+        let env = environment
+            .to_environment_domain(
+                engine_config.context(),
+                engine_config.cloud_provider(),
+                engine_config.container_registry().registry_info(),
+                logger,
+            )
+            .unwrap();
 
         let env = Rc::new(RefCell::new(env));
         let _ = tx.deploy_environment_with_options(
@@ -161,12 +165,14 @@ impl Infrastructure for EnvironmentRequest {
         engine_config: &EngineConfig,
     ) -> TransactionResult {
         let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let env = environment.to_environment_domain(
-            engine_config.context(),
-            engine_config.cloud_provider(),
-            engine_config.container_registry().registry_info(),
-            logger,
-        );
+        let env = environment
+            .to_environment_domain(
+                engine_config.context(),
+                engine_config.cloud_provider(),
+                engine_config.container_registry().registry_info(),
+                logger,
+            )
+            .unwrap();
         let env = Rc::new(RefCell::new(env));
         let _ = tx.pause_environment(&env);
 
@@ -180,12 +186,14 @@ impl Infrastructure for EnvironmentRequest {
         engine_config: &EngineConfig,
     ) -> TransactionResult {
         let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let env = environment.to_environment_domain(
-            engine_config.context(),
-            engine_config.cloud_provider(),
-            engine_config.container_registry().registry_info(),
-            logger,
-        );
+        let env = environment
+            .to_environment_domain(
+                engine_config.context(),
+                engine_config.cloud_provider(),
+                engine_config.container_registry().registry_info(),
+                logger,
+            )
+            .unwrap();
         let env = Rc::new(RefCell::new(env));
         let _ = tx.delete_environment(&env);
 
@@ -1474,12 +1482,14 @@ pub fn cluster_test(
             Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
         // Deploy env
-        let env = env.to_environment_domain(
-            &context,
-            engine.cloud_provider(),
-            engine.container_registry().registry_info(),
-            logger.clone(),
-        );
+        let env = env
+            .to_environment_domain(
+                &context,
+                engine.cloud_provider(),
+                engine.container_registry().registry_info(),
+                logger.clone(),
+            )
+            .unwrap();
         let env = Rc::new(RefCell::new(env));
         if let Err(err) = deploy_env_tx.deploy_environment(&env) {
             panic!("{:?}", err)
@@ -1593,12 +1603,14 @@ pub fn cluster_test(
             Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
         // Deploy env
-        let env = env.to_environment_domain(
-            &context,
-            engine.cloud_provider(),
-            engine.container_registry().registry_info(),
-            logger.clone(),
-        );
+        let env = env
+            .to_environment_domain(
+                &context,
+                engine.cloud_provider(),
+                engine.container_registry().registry_info(),
+                logger.clone(),
+            )
+            .unwrap();
         let env = Rc::new(RefCell::new(env));
         if let Err(err) = destroy_env_tx.delete_environment(&env) {
             panic!("{:?}", err)

@@ -38,7 +38,7 @@ use crate::cmd::docker::Docker;
 use crate::container_registry::ContainerRegistryInfo;
 use crate::logger::Logger;
 use crate::models;
-use crate::models::application::IApplication;
+use crate::models::application::{ApplicationError, IApplication};
 use crate::models::aws::{AwsAppExtraSettings, AwsStorageType};
 use crate::models::digital_ocean::{DoAppExtraSettings, DoStorageType};
 use crate::models::scaleway::{ScwAppExtraSettings, ScwStorageType};
@@ -112,16 +112,18 @@ impl EnvironmentRequest {
         cloud_provider: &dyn CloudProvider,
         container_registry: &ContainerRegistryInfo,
         logger: Box<dyn Logger>,
-    ) -> Environment {
-        //FIXME: remove those flatten as it hide errors regarding conversion to model data type
-        let applications = self
-            .applications
-            .iter()
-            .filter_map(|x| {
-                x.to_application_domain(context, x.to_build(container_registry), cloud_provider, logger.clone())
-            })
-            .collect::<Vec<_>>();
+    ) -> Result<Environment, ApplicationError> {
+        let mut applications = Vec::with_capacity(self.applications.len());
+        for app in &self.applications {
+            match app.to_application_domain(context, app.to_build(container_registry), cloud_provider, logger.clone()) {
+                Ok(app) => applications.push(app),
+                Err(err) => {
+                    return Err(err);
+                }
+            }
+        }
 
+        //FIXME: remove those flatten as it hide errors regarding conversion to model data type
         let routers = self
             .routers
             .iter()
@@ -134,7 +136,7 @@ impl EnvironmentRequest {
             .filter_map(|x| x.to_database_domain(context, cloud_provider, logger.clone()))
             .collect::<Vec<_>>();
 
-        Environment::new(
+        Ok(Environment::new(
             self.id.as_str(),
             self.project_id.as_str(),
             self.owner_id.as_str(),
@@ -143,7 +145,7 @@ impl EnvironmentRequest {
             applications,
             routers,
             databases,
-        )
+        ))
     }
 }
 
@@ -222,77 +224,68 @@ impl Application {
         build: Build,
         cloud_provider: &dyn CloudProvider,
         logger: Box<dyn Logger>,
-    ) -> Option<Box<dyn IApplication>> {
+    ) -> Result<Box<dyn IApplication>, ApplicationError> {
         let environment_variables = to_environment_variable(&self.environment_vars);
         let listeners = cloud_provider.listeners().clone();
 
         match cloud_provider.kind() {
-            CPKind::Aws => Some(Box::new(
-                models::application::Application::<AWS>::new(
-                    context.clone(),
-                    self.id.as_str(),
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    self.ports.clone(),
-                    self.total_cpus.clone(),
-                    self.cpu_burst.clone(),
-                    self.total_ram_in_mib,
-                    self.min_instances,
-                    self.max_instances,
-                    self.start_timeout_in_seconds,
-                    build,
-                    self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
-                    environment_variables,
-                    AwsAppExtraSettings {},
-                    listeners,
-                    logger.clone(),
-                )
-                .unwrap(),
-            )),
-            CPKind::Do => Some(Box::new(
-                models::application::Application::<DO>::new(
-                    context.clone(),
-                    self.id.as_str(),
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    self.ports.clone(),
-                    self.total_cpus.clone(),
-                    self.cpu_burst.clone(),
-                    self.total_ram_in_mib,
-                    self.min_instances,
-                    self.max_instances,
-                    self.start_timeout_in_seconds,
-                    build,
-                    self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
-                    environment_variables,
-                    DoAppExtraSettings {},
-                    listeners,
-                    logger.clone(),
-                )
-                .unwrap(),
-            )),
-            CPKind::Scw => Some(Box::new(
-                models::application::Application::<SCW>::new(
-                    context.clone(),
-                    self.id.as_str(),
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    self.ports.clone(),
-                    self.total_cpus.clone(),
-                    self.cpu_burst.clone(),
-                    self.total_ram_in_mib,
-                    self.min_instances,
-                    self.max_instances,
-                    self.start_timeout_in_seconds,
-                    build,
-                    self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
-                    environment_variables,
-                    ScwAppExtraSettings {},
-                    listeners,
-                    logger.clone(),
-                )
-                .unwrap(),
-            )),
+            CPKind::Aws => Ok(Box::new(models::application::Application::<AWS>::new(
+                context.clone(),
+                self.id.as_str(),
+                self.action.to_service_action(),
+                self.name.as_str(),
+                self.ports.clone(),
+                self.total_cpus.clone(),
+                self.cpu_burst.clone(),
+                self.total_ram_in_mib,
+                self.min_instances,
+                self.max_instances,
+                self.start_timeout_in_seconds,
+                build,
+                self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
+                environment_variables,
+                AwsAppExtraSettings {},
+                listeners,
+                logger.clone(),
+            )?)),
+            CPKind::Do => Ok(Box::new(models::application::Application::<DO>::new(
+                context.clone(),
+                self.id.as_str(),
+                self.action.to_service_action(),
+                self.name.as_str(),
+                self.ports.clone(),
+                self.total_cpus.clone(),
+                self.cpu_burst.clone(),
+                self.total_ram_in_mib,
+                self.min_instances,
+                self.max_instances,
+                self.start_timeout_in_seconds,
+                build,
+                self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
+                environment_variables,
+                DoAppExtraSettings {},
+                listeners,
+                logger.clone(),
+            )?)),
+            CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
+                context.clone(),
+                self.id.as_str(),
+                self.action.to_service_action(),
+                self.name.as_str(),
+                self.ports.clone(),
+                self.total_cpus.clone(),
+                self.cpu_burst.clone(),
+                self.total_ram_in_mib,
+                self.min_instances,
+                self.max_instances,
+                self.start_timeout_in_seconds,
+                build,
+                self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
+                environment_variables,
+                ScwAppExtraSettings {},
+                listeners,
+                logger.clone(),
+            )?)),
         }
     }
 
