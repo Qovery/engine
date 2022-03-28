@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::regions::AwsZones;
-use crate::cloud_provider::digitalocean::application::DoRegion;
 use crate::cloud_provider::digitalocean::do_api_common::{do_get_from_api, DoApiType};
 use crate::cloud_provider::digitalocean::kubernetes::doks_api::{
     get_do_kubeconfig_by_cluster_name, get_do_latest_doks_slug_from_api, get_doks_info_from_name,
@@ -40,11 +39,12 @@ use crate::events::Stage::Infrastructure;
 use crate::events::{
     EngineEvent, EnvironmentStep, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter,
 };
-use crate::logger::Logger;
-use crate::models::{
+use crate::io_models::{
     Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
     ProgressScope, QoveryIdentifier, StringPath, ToHelmString,
 };
+use crate::logger::Logger;
+use crate::models::digital_ocean::DoRegion;
 use crate::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;

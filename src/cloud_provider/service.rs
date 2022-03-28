@@ -5,7 +5,6 @@ use std::sync::mpsc::TryRecvError;
 use std::thread;
 use std::time::Duration;
 
-use crate::build_platform::Build;
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::environment::Environment;
@@ -21,12 +20,12 @@ use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_scale_replica
 use crate::cmd::structs::LabelsContent;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
-use crate::logger::Logger;
-use crate::models::ProgressLevel::Info;
-use crate::models::{
+use crate::io_models::ProgressLevel::Info;
+use crate::io_models::{
     Context, DatabaseMode, Listen, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
     QoveryIdentifier,
 };
+use crate::logger::Logger;
 
 pub trait Service: ToTransmitter {
     fn context(&self) -> &Context;
@@ -156,10 +155,6 @@ pub trait StatefulService: Service + Create + Pause + Delete {
     }
 
     fn is_managed_service(&self) -> bool;
-}
-pub trait Application: StatelessService {
-    fn get_build(&self) -> &Build;
-    fn get_build_mut(&mut self) -> &mut Build;
 }
 
 pub trait Router: StatelessService + Listen + Helm {
@@ -348,8 +343,8 @@ pub fn default_tera_context(
     context.insert("max_instances", &service.max_instances());
 
     context.insert("is_private_port", &service.private_port().is_some());
-    if service.private_port().is_some() {
-        context.insert("private_port", &service.private_port().unwrap());
+    if let Some(private_port) = service.private_port() {
+        context.insert("private_port", &private_port);
     }
 
     context.insert("version", &service.version());

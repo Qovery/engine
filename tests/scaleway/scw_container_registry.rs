@@ -1,9 +1,9 @@
 extern crate test_utilities;
 
 use self::test_utilities::utilities::{context, FuncTestsSecrets};
-use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
-use qovery_engine::models::NoOpProgressListener;
+use qovery_engine::io_models::NoOpProgressListener;
+use qovery_engine::models::scaleway::ScwZone;
 use std::sync::Arc;
 use tracing::debug;
 use uuid::Uuid;

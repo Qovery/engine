@@ -1,4 +1,4 @@
-use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
+use qovery_engine::models::digital_ocean::DoRegion;
 use qovery_engine::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use qovery_engine::object_storage::ObjectStorage;
 use tempfile::NamedTempFile;

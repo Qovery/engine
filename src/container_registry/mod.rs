@@ -5,7 +5,7 @@ use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
-use crate::models::{Context, Listen, QoveryIdentifier};
+use crate::io_models::{Context, Listen, QoveryIdentifier};
 
 pub mod docr;
 pub mod ecr;
