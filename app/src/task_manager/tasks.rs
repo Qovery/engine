@@ -12,8 +12,8 @@ use qovery_engine::cmd::docker::Docker;
 use url::Url;
 
 use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
+use qovery_engine::io_models::{Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope};
 use qovery_engine::logger::Logger;
-use qovery_engine::models::{Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope};
 use qovery_engine::object_storage::errors::ObjectStorageError;
 use qovery_engine::transaction::{RollbackError, StepName, Transaction, TransactionResult};
 

@@ -17,8 +17,10 @@ use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::engine::EngineConfig;
 use qovery_engine::error::EngineError;
+use qovery_engine::io_models::{Context, Domain, EnvironmentRequest, Features, Listener, Metadata};
 use qovery_engine::logger::Logger;
-use qovery_engine::models::{Context, Domain, EnvironmentRequest, Features, Listener, Metadata};
+use qovery_engine::models::digital_ocean::DoRegion;
+use qovery_engine::models::scaleway::ScwZone;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -262,8 +264,7 @@ impl Kubernetes {
                 self.long_id,
                 self.name.clone(),
                 self.version.clone(),
-                qovery_engine::cloud_provider::digitalocean::application::DoRegion::from_str(self.region.as_str())
-                    .unwrap(),
+                DoRegion::from_str(self.region.as_str()).unwrap(),
                 cloud_provider,
                 dns_provider,
                 self.nodes_groups.clone(),
@@ -282,13 +283,12 @@ impl Kubernetes {
                 self.long_id,
                 self.name.clone(),
                 self.version.clone(),
-                qovery_engine::cloud_provider::scaleway::application::ScwZone::from_str(self.region.as_str())
-                    .unwrap_or_else(|_| {
-                        panic!(
-                            "cannot parse `{}`, it doesn't seem to be a valid SCW zone",
-                            self.region.as_str()
-                        )
-                    }),
+                ScwZone::from_str(self.region.as_str()).unwrap_or_else(|_| {
+                    panic!(
+                        "cannot parse `{}`, it doesn't seem to be a valid SCW zone",
+                        self.region.as_str()
+                    )
+                }),
                 cloud_provider,
                 dns_provider,
                 self.nodes_groups.clone(),
@@ -351,10 +351,7 @@ impl ContainerRegistry {
                     self.name.as_str(),
                     self.options.scaleway_secret_key.as_ref()?.as_str(),
                     self.options.scaleway_project_id.as_ref()?.as_str(),
-                    qovery_engine::cloud_provider::scaleway::application::ScwZone::from_str(
-                        self.options.region.as_ref()?.as_str(),
-                    )
-                    .unwrap_or_else(|_| {
+                    ScwZone::from_str(self.options.region.as_ref()?.as_str()).unwrap_or_else(|_| {
                         panic!(
                             "cannot parse `{}`, it doesn't seem to be a valid SCW zone",
                             self.options.region.as_deref().unwrap_or_default()
