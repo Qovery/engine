@@ -2,7 +2,6 @@ use crate::build_platform::BuildError;
 use crate::cloud_provider::environment::Environment;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::thread;
 
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{Action, Application, Service};
