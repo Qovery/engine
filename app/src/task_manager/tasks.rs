@@ -351,7 +351,7 @@ impl Task for EnvironmentTask {
                             .to_string(),
                     ),
                     true,
-                    false,
+                    true,
                     false,
                 );
                 return;
@@ -365,6 +365,25 @@ impl Task for EnvironmentTask {
             engine.container_registry().registry_info(),
             logger.clone(),
         );
+
+        let env = match env {
+            Ok(env) => env,
+            Err(err) => {
+                send_progress(
+                    self,
+                    &self.request,
+                    self.action_context(ProgressLevel::Error),
+                    Some(format!(
+                        "Failed to create environment domain, please check your configuration: {}",
+                        err
+                    )),
+                    true,
+                    true,
+                    false,
+                );
+                return;
+            }
+        };
 
         let env = Rc::new(RefCell::new(env));
         let _ = match self.request.action {
