@@ -14,6 +14,7 @@ use tera::Context as TeraContext;
 use crate::cloud_provider::aws::kubernetes::helm_charts::{aws_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
+use crate::cloud_provider::aws::kubernetes::users::get_cluster_users;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
@@ -51,6 +52,7 @@ use ::function_name::named;
 pub mod helm_charts;
 pub mod node;
 pub mod roles;
+mod users;
 
 // https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -589,6 +591,19 @@ impl EKS {
 
         };
 
+        // get cluster creator name
+        let mut users: Vec<String> = vec![];
+        match get_cluster_users(
+            self.cloud_provider.access_key_id().as_str(),
+            self.cloud_provider.secret_access_key().as_str(),
+        ) {
+            Ok(result) => users = result,
+            Err(e) => self.logger().log(EngineEvent::Error(
+                EngineError::new_cannot_get_cluster_iam_user(event_details.clone(), e),
+                None,
+            )),
+        };
+
         // create AWS IAM roles
         let already_created_roles = get_default_roles_to_create();
         for role in already_created_roles {
@@ -723,6 +738,7 @@ impl EKS {
             cloudflare_email: self.dns_provider.account().to_string(),
             cloudflare_api_token: self.dns_provider.token().to_string(),
             disable_pleco: self.context.disable_pleco(),
+            users,
         };
 
         self.logger().log(EngineEvent::Info(

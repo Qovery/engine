@@ -1,0 +1,6 @@
+nameOverride: aws-ui-view
+
+fullnameOverride: "aws-ui-view"
+
+users:
+  - "qovery"

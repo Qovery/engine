@@ -1481,6 +1481,26 @@ impl EngineError {
         )
     }
 
+    /// Creates new error for IAM cluster creator which cannot be retrieved.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_cannot_get_cluster_iam_user(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message = "Error while getting IAM user.".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::CannotGetOrCreateIamRole,
+            message.to_string(),
+            message,
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
     /// Creates new error for cannot generate and copy all files from a directory to another directory.
     ///
     /// Arguments:
