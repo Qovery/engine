@@ -30,6 +30,7 @@ impl ScalewayCR {
         secret_token: &str,
         default_project_id: &str,
         zone: ScwZone,
+        listener: Listener,
     ) -> Result<ScalewayCR, ContainerRegistryError> {
         // Be sure we are logged on the registry
         let login = "nologin".to_string();
@@ -63,7 +64,7 @@ impl ScalewayCR {
             secret_token,
             zone,
             registry_info,
-            listeners: Vec::new(),
+            listeners: vec![listener],
         };
 
         Ok(cr)

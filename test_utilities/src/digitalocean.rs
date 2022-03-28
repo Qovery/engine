@@ -7,7 +7,7 @@ use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::engine::EngineConfig;
-use qovery_engine::models::{Context, EnvironmentRequest};
+use qovery_engine::models::{Context, EnvironmentRequest, NoOpProgressListener};
 use std::sync::Arc;
 
 use crate::cloudflare::dns_provider_cloudflare;
@@ -33,7 +33,14 @@ pub const DO_SELF_HOSTED_DATABASE_DISK_TYPE: &str = "do-block-storage";
 
 pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
     let secrets = FuncTestsSecrets::new();
-    DOCR::new(context.clone(), DOCR_ID, DOCR_ID, secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str()).unwrap()
+    DOCR::new(
+        context.clone(),
+        DOCR_ID,
+        DOCR_ID,
+        secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
+        Arc::new(Box::new(NoOpProgressListener {})),
+    )
+    .unwrap()
 }
 
 pub fn do_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
@@ -168,6 +175,7 @@ pub fn clean_environments(
             .DIGITAL_OCEAN_TOKEN
             .as_ref()
             .expect("DIGITAL_OCEAN_TOKEN is not set in secrets"),
+        Arc::new(Box::new(NoOpProgressListener {})),
     );
 
     // FIXME: re-enable it, or let pleco do its job ?

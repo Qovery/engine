@@ -45,6 +45,7 @@ impl ECR {
         access_key_id: &str,
         secret_access_key: &str,
         region: &str,
+        listener: Listener,
         logger: Box<dyn Logger>,
     ) -> Result<Self, ContainerRegistryError> {
         let mut cr = ECR {
@@ -55,7 +56,7 @@ impl ECR {
             secret_access_key: secret_access_key.to_string(),
             region: Region::from_str(region).unwrap(),
             registry_info: None,
-            listeners: vec![],
+            listeners: vec![listener],
             logger,
         };
 

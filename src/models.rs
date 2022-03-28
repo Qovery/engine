@@ -977,6 +977,21 @@ pub trait ProgressListener: Send + Sync {
     fn delete_error(&self, info: ProgressInfo);
 }
 
+pub struct NoOpProgressListener {}
+
+impl ProgressListener for NoOpProgressListener {
+    fn deployment_in_progress(&self, _info: ProgressInfo) {}
+    fn pause_in_progress(&self, _info: ProgressInfo) {}
+    fn delete_in_progress(&self, _info: ProgressInfo) {}
+    fn error(&self, _info: ProgressInfo) {}
+    fn deployed(&self, _info: ProgressInfo) {}
+    fn paused(&self, _info: ProgressInfo) {}
+    fn deleted(&self, _info: ProgressInfo) {}
+    fn deployment_error(&self, _info: ProgressInfo) {}
+    fn pause_error(&self, _info: ProgressInfo) {}
+    fn delete_error(&self, _info: ProgressInfo) {}
+}
+
 pub trait Listen {
     fn listeners(&self) -> &Listeners;
     fn add_listener(&mut self, listener: Listener);
