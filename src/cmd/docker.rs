@@ -1,8 +1,7 @@
 use crate::cmd::command::{CommandError, CommandKiller, QoveryCommand};
-use lazy_static::lazy_static;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
-use std::sync::Mutex;
 use url::Url;
 
 #[derive(thiserror::Error, Debug)]
@@ -21,13 +20,6 @@ pub enum DockerError {
 
     #[error("Docker command terminated due to timeout: {0}")]
     Timeout(String),
-}
-
-lazy_static! {
-    // Docker login when launched in parallel can mess up ~/.docker/config.json
-    // We use a mutex that will force serialization of logins in order to avoid that
-    // Mostly use for CI/Test when all test start in parallel and it the login phase at the same time
-    static ref LOGIN_LOCK: Mutex<()> = Mutex::new(());
 }
 
 #[derive(Debug)]
@@ -60,20 +52,34 @@ impl ContainerImage {
 pub struct Docker {
     use_buildkit: bool,
     common_envs: Vec<(String, String)>,
+    config_path: PathBuf,
+}
+
+impl Drop for Docker {
+    fn drop(&mut self) {
+        if let Err(err) = fs::remove_dir_all(&self.config_path) {
+            info!("Cannot delete tmp dir used by docker {}", err);
+        }
+    }
 }
 
 impl Docker {
     pub fn new_with_options(enable_buildkit: bool, socket_location: Option<Url>) -> Result<Self, DockerError> {
+        let config_dir = std::env::temp_dir();
         let mut docker = Docker {
             use_buildkit: enable_buildkit,
-            common_envs: vec![(
-                "DOCKER_BUILDKIT".to_string(),
-                if enable_buildkit {
-                    "1".to_string()
-                } else {
-                    "0".to_string()
-                },
-            )],
+            common_envs: vec![
+                ("DOCKER_CONFIG".to_string(), config_dir.to_string_lossy().into_owned()),
+                (
+                    "DOCKER_BUILDKIT".to_string(),
+                    if enable_buildkit {
+                        "1".to_string()
+                    } else {
+                        "0".to_string()
+                    },
+                ),
+            ],
+            config_path: config_dir,
         };
 
         // Override DOCKER_HOST if we use a TCP socket
@@ -140,7 +146,6 @@ impl Docker {
     pub fn login(&self, registry: &Url) -> Result<(), DockerError> {
         info!("Docker login {} as user {}", registry, registry.username());
 
-        let _lock = LOGIN_LOCK.lock().unwrap();
         let password = urlencoding::decode(registry.password().unwrap_or_default())
             .unwrap_or_default()
             .to_string();
