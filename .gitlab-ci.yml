@@ -321,8 +321,6 @@ aws-infra:
   timeout: 3 hours
   script:
     - ./helper.sh aws_infra
-  dependencies:
-    - build-and-lint
   when: always
   tags:
     - vm-2cpu-4gmem-0g
@@ -349,8 +347,6 @@ aws-managed-services:
   timeout: 3 hours
   script:
     - ./helper.sh aws_managed_services
-  dependencies:
-    - build-and-lint
   tags:
     - vm-2cpu-4gmem-0g
   when: always
@@ -377,8 +373,6 @@ aws-self-hosted:
   timeout: 3 hours
   script:
     - ./helper.sh aws_self_hosted
-  dependencies:
-    - build-and-lint
   tags:
     - vm-2cpu-12gmem-0g
   when: always
@@ -405,8 +399,6 @@ do-whole-enchilada:
   timeout: 3 hours
   script:
     - ./helper.sh do_whole_enchilada
-  dependencies:
-    - build-and-lint
   when: always
   tags:
     - vm-2cpu-4gmem-0g
@@ -433,8 +425,6 @@ do-infra:
   timeout: 3 hours
   script:
     - ./helper.sh do_infra
-  dependencies:
-    - build-and-lint
   when: always
   tags:
     - vm-2cpu-4gmem-0g
@@ -461,8 +451,6 @@ do-managed-services:
   timeout: 3 hours
   script:
     - ./helper.sh do_managed_services
-  dependencies:
-    - build-and-lint
   tags:
     - vm-2cpu-4gmem-0g
   when: always
@@ -489,8 +477,6 @@ do-self-hosted:
   timeout: 3 hours
   script:
     - ./helper.sh do_self_hosted
-  dependencies:
-    - build-and-lint
   tags:
     - vm-2cpu-12gmem-0g
   when: always
@@ -516,8 +502,6 @@ scw-whole-enchilada:
     retry: 0
     script:
       - ./helper.sh scw_whole_enchilada
-    dependencies:
-      - build-and-lint
     when: always
     tags:
       - vm-2cpu-4gmem-0g
@@ -544,8 +528,6 @@ scw-infra:
   timeout: 3 hours
   script:
     - ./helper.sh scw_infra
-  dependencies:
-    - build-and-lint
   when: always
   tags:
     - vm-2cpu-4gmem-0g
@@ -572,8 +554,6 @@ scw-managed-services:
   timeout: 3 hours
   script:
     - ./helper.sh scw_managed_services
-  dependencies:
-    - build-and-lint
   tags:
     - vm-2cpu-4gmem-0g
   when: always
@@ -600,8 +580,6 @@ scw-self-hosted:
   timeout: 3 hours
   script:
     - ./helper.sh scw_self_hosted
-  dependencies:
-    - build-and-lint
   tags:
     - vm-2cpu-4gmem-0g
   when: always
