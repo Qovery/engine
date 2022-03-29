@@ -25,41 +25,6 @@ pub enum EngineEvent {
         error: EngineError,
         message: Option<EventMessage>,
     },
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Waiting {
-        details: EventDetails,
-        message: EventMessage,
-    },
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Deploying {
-        details: EventDetails,
-        message: EventMessage,
-    },
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Pausing {
-        details: EventDetails,
-        message: EventMessage,
-    },
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Deleting {
-        details: EventDetails,
-        message: EventMessage,
-    },
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Deployed {
-        details: EventDetails,
-        message: EventMessage,
-    },
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Paused {
-        details: EventDetails,
-        message: EventMessage,
-    },
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Deleted {
-        details: EventDetails,
-        message: EventMessage,
-    },
 }
 
 impl From<events::EngineEvent> for EngineEvent {
@@ -79,38 +44,7 @@ impl From<events::EngineEvent> for EngineEvent {
             },
             events::EngineEvent::Error(e, m) => EngineEvent::Error {
                 error: EngineError::from(e),
-                message: match m {
-                    Some(msg) => Some(EventMessage::from(msg)),
-                    None => None,
-                },
-            },
-            events::EngineEvent::Waiting(d, m) => EngineEvent::Waiting {
-                details: EventDetails::from(d),
-                message: EventMessage::from(m),
-            },
-            events::EngineEvent::Deploying(d, m) => EngineEvent::Deploying {
-                details: EventDetails::from(d),
-                message: EventMessage::from(m),
-            },
-            events::EngineEvent::Pausing(d, m) => EngineEvent::Pausing {
-                details: EventDetails::from(d),
-                message: EventMessage::from(m),
-            },
-            events::EngineEvent::Deleting(d, m) => EngineEvent::Deleting {
-                details: EventDetails::from(d),
-                message: EventMessage::from(m),
-            },
-            events::EngineEvent::Deployed(d, m) => EngineEvent::Deployed {
-                details: EventDetails::from(d),
-                message: EventMessage::from(m),
-            },
-            events::EngineEvent::Paused(d, m) => EngineEvent::Paused {
-                details: EventDetails::from(d),
-                message: EventMessage::from(m),
-            },
-            events::EngineEvent::Deleted(d, m) => EngineEvent::Deleted {
-                details: EventDetails::from(d),
-                message: EventMessage::from(m),
+                message: m.map(EventMessage::from),
             },
         }
     }
@@ -308,10 +242,7 @@ pub struct EventDetails {
 
 impl From<events::EventDetails> for EventDetails {
     fn from(details: events::EventDetails) -> Self {
-        let provider_kind = match details.provider_kind {
-            Some(kind) => Some(Kind::from(kind)),
-            None => None,
-        };
+        let provider_kind = details.provider_kind.map(Kind::from);
         EventDetails {
             provider_kind,
             organisation_id: details.organisation_id.to_string(),

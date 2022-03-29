@@ -1,9 +1,10 @@
 extern crate test_utilities;
 
 use self::test_utilities::utilities::{context, FuncTestsSecrets};
-use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
-use test_utilities::utilities::logger;
+use qovery_engine::io_models::NoOpProgressListener;
+use qovery_engine::models::scaleway::ScwZone;
+use std::sync::Arc;
 use tracing::debug;
 use uuid::Uuid;
 
@@ -45,7 +46,7 @@ fn test_get_registry_namespace() {
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
-            logger(),
+            Arc::new(Box::new(NoOpProgressListener {})),
         )
         .unwrap();
 
@@ -65,10 +66,7 @@ fn test_get_registry_namespace() {
         assert_eq!(true, result.status.is_some());
 
         let status = result.status.unwrap();
-        assert_eq!(
-            scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready,
-            status,
-        );
+        assert_eq!(scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready, status,);
 
         // clean-up:
         container_registry.delete_registry_namespace(&image).unwrap();
@@ -95,7 +93,7 @@ fn test_create_registry_namespace() {
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
-            logger(),
+            Arc::new(Box::new(NoOpProgressListener {})),
         )
         .unwrap();
 
@@ -139,7 +137,7 @@ fn test_delete_registry_namespace() {
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
-            logger(),
+            Arc::new(Box::new(NoOpProgressListener {})),
         )
         .unwrap();
 
@@ -177,7 +175,7 @@ fn test_get_or_create_registry_namespace() {
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
-            logger(),
+            Arc::new(Box::new(NoOpProgressListener {})),
         )
         .unwrap();
 
@@ -199,10 +197,7 @@ fn test_get_or_create_registry_namespace() {
         assert_eq!(true, result.status.is_some());
 
         let status = result.status.unwrap();
-        assert_eq!(
-            scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready,
-            status,
-        );
+        assert_eq!(scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready, status,);
 
         let added_registry_result = container_registry.get_registry_namespace(&image);
         assert_eq!(true, added_registry_result.is_some());
@@ -220,10 +215,7 @@ fn test_get_or_create_registry_namespace() {
         assert_eq!(true, result.status.is_some());
 
         let status = result.status.unwrap();
-        assert_eq!(
-            scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready,
-            status,
-        );
+        assert_eq!(scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready, status,);
 
         let added_registry_result = container_registry.get_registry_namespace(&image);
         assert_eq!(true, added_registry_result.is_some());

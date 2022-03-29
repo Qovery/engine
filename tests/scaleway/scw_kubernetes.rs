@@ -4,8 +4,8 @@ use self::test_utilities::scaleway::{SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETE
 use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
-use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::models::scaleway::ScwZone;
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 
 #[cfg(feature = "test-scw-infra")]

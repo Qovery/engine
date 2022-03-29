@@ -11,7 +11,6 @@ use gethostname;
 use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
-use std::str::FromStr;
 
 use passwords::PasswordGenerator;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::doks_api::get_do_kubeconfig_by_cluster_name;
@@ -21,7 +20,7 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
 use std::fs;
-use tokio::io::AsyncWriteExt;
+use std::str::FromStr;
 use tracing::{info, warn};
 
 use crate::scaleway::{
@@ -30,14 +29,13 @@ use crate::scaleway::{
 };
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd;
 use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DIGITAL_OCEAN_SPACES_ACCESS_ID, DIGITAL_OCEAN_SPACES_SECRET_ID,
     DIGITAL_OCEAN_TOKEN, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
-use qovery_engine::models::{Context, Database, DatabaseKind, DatabaseMode, Environment, Features, Metadata};
+use qovery_engine::io_models::{Context, Database, DatabaseKind, DatabaseMode, EnvironmentRequest, Features, Metadata};
 use retry::Error::Operation;
 use serde::{Deserialize, Serialize};
 
@@ -51,10 +49,12 @@ use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::errors::CommandError;
+use qovery_engine::io_models::DatabaseMode::MANAGED;
 use qovery_engine::logger::{Logger, StdIoLogger};
-use qovery_engine::models::DatabaseMode::MANAGED;
+use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::runtime::block_on;
 use time::Instant;
+use url::Url;
 
 pub fn context(organization_id: &str, cluster_id: &str) -> Context {
     let organization_id = organization_id.to_string();
@@ -62,7 +62,8 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
     let execution_id = execution_id();
     let home_dir = std::env::var("WORKSPACE_ROOT_DIR").unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
     let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
-    let docker = Docker::new(None).expect("Can't init docker");
+    let docker_host = std::env::var("DOCKER_HOST").map(|x| Url::parse(&x).unwrap()).ok();
+    let docker = Docker::new(docker_host.clone()).expect("Can't init docker");
 
     let metadata = Metadata {
         dry_run_deploy: Option::from({
@@ -99,7 +100,7 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
         home_dir,
         lib_root_dir,
         true,
-        None,
+        docker_host,
         enabled_features,
         Option::from(metadata),
         docker,
@@ -454,14 +455,11 @@ pub fn generate_password(provider_kind: Kind, db_mode: DatabaseMode) -> String {
     password
 }
 
-pub fn check_all_connections(env: &Environment) -> Vec<bool> {
+pub fn check_all_connections(env: &EnvironmentRequest) -> Vec<bool> {
     let mut checking: Vec<bool> = Vec::with_capacity(env.routers.len());
 
     for router_to_test in &env.routers {
-        let path_to_test = format!(
-            "https://{}{}",
-            &router_to_test.default_domain, &router_to_test.routes[0].path
-        );
+        let path_to_test = format!("https://{}{}", &router_to_test.default_domain, &router_to_test.routes[0].path);
 
         checking.push(curl_path(path_to_test.as_str()));
     }
@@ -540,47 +538,19 @@ where
                     secrets.clone().DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
                     cluster_name.clone().as_str(),
                 ) {
-                    Ok(kubeconfig) => Ok(kubeconfig),
-                    Err(e) => Err(CommandError::new(e.message(), Some(e.message()))),
-                }
-                .expect("Unable to get kubeconfig");
+                    Ok(kubeconfig) => kubeconfig,
+                    Err(e) => return OperationResult::Retry(CommandError::new(e.message(), Some(e.message()))),
+                };
 
-                let workspace_directory = qovery_engine::fs::workspace_directory(
-                    context.workspace_root_dir(),
-                    context.execution_id(),
-                    format!("object-storage/scaleway_os/{}", cluster_name.clone()),
-                )
-                .map_err(|err| CommandError::new(err.to_string(), Some(err.to_string())))
-                .expect("Unable to create directory");
-
-                let file_path = format!(
-                    "{}/{}/{}",
-                    workspace_directory,
-                    format!("qovery-kubeconfigs-{}", context.cluster_id()),
-                    format!("{}.yaml", context.cluster_id())
-                );
-                let path = Path::new(file_path.as_str());
-                let parent_dir = path.parent().unwrap();
-                let _ = block_on(tokio::fs::create_dir_all(parent_dir));
-
-                match block_on(
-                    tokio::fs::OpenOptions::new()
-                        .create(true)
-                        .write(true)
-                        .truncate(true)
-                        .open(path),
-                ) {
-                    Ok(mut created_file) => match kubeconfig.is_some() {
-                        false => Err(CommandError::new(
-                            "No kubeconfig found".to_string(),
-                            Some("No kubeconfig found".to_string()),
-                        )),
-                        true => match block_on(created_file.write_all(kubeconfig.unwrap().as_bytes())) {
-                            Ok(_) => Ok(file_path),
-                            Err(e) => Err(CommandError::new(e.to_string(), Some(e.to_string()))),
-                        },
-                    },
-                    Err(e) => Err(CommandError::new(e.to_string(), Some(e.to_string()))),
+                match kubeconfig {
+                    None => Err(CommandError::new(
+                        "No kubeconfig found".to_string(),
+                        Some("No kubeconfig found".to_string()),
+                    )),
+                    Some(file_content) => {
+                        let _ = "test";
+                        Ok(file_content)
+                    }
                 }
             }
             Kind::Scw => {
@@ -666,9 +636,7 @@ where
                     }
                 }
 
-                Err(CommandError::new_from_safe_message(
-                    "Test cluster not found".to_string(),
-                ))
+                Err(CommandError::new_from_safe_message("Test cluster not found".to_string()))
             }
         };
 
@@ -718,10 +686,7 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
     match provider_kind {
         Kind::Aws => vec![
             (AWS_ACCESS_KEY_ID, secrets.AWS_ACCESS_KEY_ID.as_ref().unwrap().as_str()),
-            (
-                AWS_SECRET_ACCESS_KEY,
-                secrets.AWS_SECRET_ACCESS_KEY.as_ref().unwrap().as_str(),
-            ),
+            (AWS_SECRET_ACCESS_KEY, secrets.AWS_SECRET_ACCESS_KEY.as_ref().unwrap().as_str()),
         ],
         Kind::Do => vec![
             (
@@ -747,14 +712,8 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
             ),
         ],
         Kind::Scw => vec![
-            (
-                SCALEWAY_ACCESS_KEY,
-                secrets.SCALEWAY_ACCESS_KEY.as_ref().unwrap().as_str(),
-            ),
-            (
-                SCALEWAY_SECRET_KEY,
-                secrets.SCALEWAY_SECRET_KEY.as_ref().unwrap().as_str(),
-            ),
+            (SCALEWAY_ACCESS_KEY, secrets.SCALEWAY_ACCESS_KEY.as_ref().unwrap().as_str()),
+            (SCALEWAY_SECRET_KEY, secrets.SCALEWAY_SECRET_KEY.as_ref().unwrap().as_str()),
             (
                 SCALEWAY_DEFAULT_PROJECT_ID,
                 secrets.SCALEWAY_DEFAULT_PROJECT_ID.as_ref().unwrap().as_str(),
@@ -795,15 +754,11 @@ fn aws_s3_get_object(
 pub fn is_pod_restarted_env(
     context: Context,
     provider_kind: Kind,
-    environment_check: Environment,
+    environment_check: EnvironmentRequest,
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
 ) -> (bool, String) {
-    let namespace_name = format!(
-        "{}-{}",
-        &environment_check.project_id.clone(),
-        &environment_check.id.clone(),
-    );
+    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
@@ -830,15 +785,11 @@ pub fn is_pod_restarted_env(
 pub fn get_pods(
     context: Context,
     provider_kind: Kind,
-    environment_check: Environment,
+    environment_check: EnvironmentRequest,
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
 ) -> Result<KubernetesList<KubernetesPod>, CommandError> {
-    let namespace_name = format!(
-        "{}-{}",
-        &environment_check.project_id.clone(),
-        &environment_check.id.clone(),
-    );
+    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
@@ -903,14 +854,10 @@ pub fn generate_cluster_id(region: &str) -> String {
 pub fn get_pvc(
     context: Context,
     provider_kind: Kind,
-    environment_check: Environment,
+    environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<PVC, CommandError> {
-    let namespace_name = format!(
-        "{}-{}",
-        &environment_check.project_id.clone(),
-        &environment_check.id.clone(),
-    );
+    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
@@ -932,14 +879,10 @@ pub fn get_pvc(
 pub fn get_svc(
     context: Context,
     provider_kind: Kind,
-    environment_check: Environment,
+    environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<SVC, CommandError> {
-    let namespace_name = format!(
-        "{}-{}",
-        &environment_check.project_id.clone(),
-        &environment_check.id.clone(),
-    );
+    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 

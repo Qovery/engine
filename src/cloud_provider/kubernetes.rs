@@ -31,11 +31,11 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter};
 use crate::fs::workspace_directory;
-use crate::logger::{LogLevel, Logger};
-use crate::models::ProgressLevel::Info;
-use crate::models::{
+use crate::io_models::ProgressLevel::Info;
+use crate::io_models::{
     Action, Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier, StringPath,
 };
+use crate::logger::Logger;
 use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
 
@@ -72,7 +72,7 @@ pub trait Kubernetes: Listen {
             QoveryIdentifier::from(context.organization_id().to_string()),
             QoveryIdentifier::from(context.cluster_id().to_string()),
             QoveryIdentifier::from(context.execution_id().to_string()),
-            Some(self.region().to_string()),
+            Some(self.region()),
             stage,
             Transmitter::Kubernetes(self.id().to_string(), self.name().to_string()),
         )
@@ -97,19 +97,13 @@ pub trait Kubernetes: Listen {
                     match File::open(&local_kubeconfig_generated) {
                         Ok(_) => Some(local_kubeconfig_generated),
                         Err(err) => {
-                            self.logger().log(
-                                LogLevel::Debug,
-                                EngineEvent::Debug(
-                                    self.get_event_details(stage.clone()),
-                                    EventMessage::new(
-                                        err.to_string(),
-                                        Some(
-                                            format!("Error, couldn't open {} file", &local_kubeconfig_generated,)
-                                                .to_string(),
-                                        ),
-                                    ),
+                            self.logger().log(EngineEvent::Debug(
+                                self.get_event_details(stage.clone()),
+                                EventMessage::new(
+                                    err.to_string(),
+                                    Some(format!("Error, couldn't open {} file", &local_kubeconfig_generated,)),
                                 ),
-                            );
+                            ));
                             None
                         }
                     }
@@ -136,17 +130,10 @@ pub trait Kubernetes: Listen {
                     Ok((path, file)) => (path, file),
                     Err(err) => {
                         let error = EngineError::new_cannot_retrieve_cluster_config_file(
-                            self.get_event_details(stage.clone()),
-                            CommandError::new_from_safe_message(
-                                format!(
-                                    "Error getting file from store, error: {}",
-                                    err.message.unwrap_or_else(|| "no details.".to_string())
-                                )
-                                .to_string(),
-                            ),
+                            self.get_event_details(stage),
+                            err.into(),
                         );
-                        self.logger()
-                            .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
+                        self.logger().log(EngineEvent::Error(error.clone(), None));
                         return Err(error);
                     }
                 }
@@ -157,13 +144,10 @@ pub trait Kubernetes: Listen {
             Ok(metadata) => metadata,
             Err(err) => {
                 let error = EngineError::new_cannot_retrieve_cluster_config_file(
-                    self.get_event_details(stage.clone()),
-                    CommandError::new_from_safe_message(
-                        format!("Error getting file metadata, error: {}", err.to_string(),).to_string(),
-                    ),
+                    self.get_event_details(stage),
+                    CommandError::new_from_safe_message(format!("Error getting file metadata, error: {}", err,)),
                 );
-                self.logger()
-                    .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
+                self.logger().log(EngineEvent::Error(error.clone(), None));
                 return Err(error);
             }
         };
@@ -172,14 +156,10 @@ pub trait Kubernetes: Listen {
         permissions.set_mode(0o400);
         if let Err(err) = std::fs::set_permissions(string_path.as_str(), permissions) {
             let error = EngineError::new_cannot_retrieve_cluster_config_file(
-                self.get_event_details(stage.clone()),
-                CommandError::new_from_safe_message(format!(
-                    "Error setting file permissions, error: {}",
-                    err.to_string(),
-                )),
+                self.get_event_details(stage),
+                CommandError::new_from_safe_message(format!("Error setting file permissions, error: {}", err,)),
             );
-            self.logger()
-                .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
+            self.logger().log(EngineEvent::Error(error.clone(), None));
             return Err(error);
         }
 
@@ -203,13 +183,13 @@ pub trait Kubernetes: Listen {
             Err(err) => {
                 let error = EngineError::new_cannot_get_cluster_nodes(
                     self.get_event_details(stage),
-                    CommandError::new_from_safe_message(
-                        format!("Error while trying to get cluster nodes, error: {}", err.message()).to_string(),
-                    ),
+                    CommandError::new_from_safe_message(format!(
+                        "Error while trying to get cluster nodes, error: {}",
+                        err.message()
+                    )),
                 );
 
-                self.logger()
-                    .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
+                self.logger().log(EngineEvent::Error(error.clone(), None));
 
                 return Err(error);
             }
@@ -257,9 +237,9 @@ pub trait Kubernetes: Listen {
             Err(e) => Err(e),
             Ok(..) => match is_kubernetes_upgrade_required(
                 kubeconfig,
-                &self.version(),
+                self.version(),
                 self.cloud_provider().credentials_environment_variables(),
-                event_details.clone(),
+                event_details,
                 self.logger(),
             ) {
                 Ok(x) => self.upgrade_with_status(x),
@@ -360,7 +340,7 @@ pub trait Kubernetes: Listen {
                             envs.clone(),
                         ) {
                             return Err(EngineError::new_k8s_cannot_delete_pod(
-                                event_details.clone(),
+                                event_details,
                                 pod.metadata.name.to_string(),
                                 e,
                             ));
@@ -368,10 +348,7 @@ pub trait Kubernetes: Listen {
                     }
                 }
                 Err(e) => {
-                    return Err(EngineError::new_k8s_cannot_get_crash_looping_pods(
-                        event_details.clone(),
-                        e,
-                    ));
+                    return Err(EngineError::new_k8s_cannot_get_crash_looping_pods(event_details, e));
                 }
             },
         };
@@ -440,7 +417,7 @@ pub fn deploy_environment(
     };
 
     // create all stateful services (database)
-    for service in &environment.stateful_services {
+    for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
             service.exec_action(&stateful_deployment_target),
             kubernetes,
@@ -477,7 +454,7 @@ pub fn deploy_environment(
     };
 
     // create all stateless services (router, application...)
-    for service in &environment.stateless_services {
+    for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
             service.exec_action(&stateless_deployment_target),
             kubernetes,
@@ -495,13 +472,13 @@ pub fn deploy_environment(
     thread::sleep(std::time::Duration::from_millis(100));
 
     // check all deployed services
-    for service in &environment.stateful_services {
+    for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
             service.exec_check_action(),
             kubernetes,
             service,
             event_details.clone(),
-            logger.clone(),
+            logger,
             &stateless_deployment_target,
             &listeners_helper,
             "check deployment",
@@ -512,7 +489,7 @@ pub fn deploy_environment(
     // Quick fix: adding 100 ms delay to avoid race condition on service status update
     thread::sleep(std::time::Duration::from_millis(100));
 
-    for service in &environment.stateless_services {
+    for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
             service.exec_check_action(),
             kubernetes,
@@ -553,7 +530,7 @@ pub fn deploy_environment_error(
     };
 
     // clean up all stateful services (database)
-    for service in &environment.stateful_services {
+    for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_create_error(&stateful_deployment_target),
             kubernetes,
@@ -577,7 +554,7 @@ pub fn deploy_environment_error(
     };
 
     // clean up all stateless services (router, application...)
-    for service in &environment.stateless_services {
+    for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_create_error(&stateless_deployment_target),
             kubernetes,
@@ -615,7 +592,7 @@ pub fn pause_environment(
     };
 
     // create all stateless services (router, application...)
-    for service in &environment.stateless_services {
+    for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_pause(&stateless_deployment_target),
             kubernetes,
@@ -633,7 +610,7 @@ pub fn pause_environment(
     thread::sleep(std::time::Duration::from_millis(100));
 
     // create all stateful services (database)
-    for service in &environment.stateful_services {
+    for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_pause(&stateful_deployment_target),
             kubernetes,
@@ -650,7 +627,7 @@ pub fn pause_environment(
     // Quick fix: adding 100 ms delay to avoid race condition on service status update
     thread::sleep(std::time::Duration::from_millis(100));
 
-    for service in &environment.stateless_services {
+    for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_pause_check(),
             kubernetes,
@@ -668,7 +645,7 @@ pub fn pause_environment(
     thread::sleep(std::time::Duration::from_millis(100));
 
     // check all deployed services
-    for service in &environment.stateful_services {
+    for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_pause_check(),
             kubernetes,
@@ -706,7 +683,7 @@ pub fn delete_environment(
     };
 
     // delete all stateless services (router, application...)
-    for service in &environment.stateless_services {
+    for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_delete(&stateful_deployment_target),
             kubernetes,
@@ -724,7 +701,7 @@ pub fn delete_environment(
     thread::sleep(std::time::Duration::from_millis(100));
 
     // delete all stateful services (database)
-    for service in &environment.stateful_services {
+    for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_delete(&stateful_deployment_target),
             kubernetes,
@@ -741,7 +718,7 @@ pub fn delete_environment(
     // Quick fix: adding 100 ms delay to avoid race condition on service status update
     thread::sleep(std::time::Duration::from_millis(100));
 
-    for service in &environment.stateless_services {
+    for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_delete_check(),
             kubernetes,
@@ -759,7 +736,7 @@ pub fn delete_environment(
     thread::sleep(std::time::Duration::from_millis(100));
 
     // check all deployed services
-    for service in &environment.stateful_services {
+    for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
             service.on_delete_check(),
             kubernetes,
@@ -776,7 +753,7 @@ pub fn delete_environment(
     // do not catch potential error - to confirm
     let _ = kubectl::kubectl_exec_delete_namespace(
         kubernetes.get_kubeconfig_file_path()?,
-        &environment.namespace(),
+        environment.namespace(),
         kubernetes.cloud_provider().credentials_environment_variables(),
     );
 
@@ -806,20 +783,17 @@ where
     for object in cert_manager_objects {
         // check resource exist first
         if let Err(e) = kubectl_exec_count_all_objects(&kubernetes_config, object, envs.clone()) {
-            logger.log(
-                LogLevel::Warning,
-                EngineEvent::Deleting(
-                    event_details.clone(),
-                    EventMessage::new(
-                        format!(
-                            "Encountering issues while trying to get objects kind {}: {:?}",
-                            object,
-                            e.message()
-                        ),
-                        None,
+            logger.log(EngineEvent::Warning(
+                event_details.clone(),
+                EventMessage::new(
+                    format!(
+                        "Encountering issues while trying to get objects kind {}: {:?}",
+                        object,
+                        e.message()
                     ),
+                    None,
                 ),
-            );
+            ));
             continue;
         }
 
@@ -829,13 +803,10 @@ where
             || match kubectl_delete_objects_in_all_namespaces(&kubernetes_config, object, envs.clone()) {
                 Ok(_) => OperationResult::Ok(()),
                 Err(e) => {
-                    logger.log(
-                        LogLevel::Warning,
-                        EngineEvent::Deleting(
-                            event_details.clone(),
-                            EventMessage::new(format!("Failed to delete all {} objects, retrying...", object,), None),
-                        ),
-                    );
+                    logger.log(EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new(format!("Failed to delete all {} objects, retrying...", object,), None),
+                    ));
                     OperationResult::Retry(e)
                 }
             },
@@ -843,7 +814,7 @@ where
             Ok(_) => {}
             Err(Operation { error, .. }) => {
                 return Err(EngineError::new_cannot_uninstall_helm_chart(
-                    event_details.clone(),
+                    event_details,
                     "Cert-Manager".to_string(),
                     object.to_string(),
                     error,
@@ -851,7 +822,7 @@ where
             }
             Err(retry::Error::Internal(msg)) => {
                 return Err(EngineError::new_cannot_uninstall_helm_chart(
-                    event_details.clone(),
+                    event_details,
                     "Cert-Manager".to_string(),
                     object.to_string(),
                     CommandError::new_from_safe_message(msg),
@@ -876,19 +847,14 @@ where
     // check master versions
     let v = match kubectl_exec_version(&kubernetes_config, envs.clone()) {
         Ok(v) => v,
-        Err(e) => {
-            return Err(EngineError::new_cannot_execute_k8s_exec_version(
-                event_details.clone(),
-                e,
-            ))
-        }
+        Err(e) => return Err(EngineError::new_cannot_execute_k8s_exec_version(event_details, e)),
     };
     let raw_version = format!("{}.{}", v.server_version.major, v.server_version.minor);
     let masters_version = match VersionsNumber::from_str(raw_version.as_str()) {
         Ok(vn) => vn,
         Err(_) => {
             return Err(EngineError::new_cannot_determine_k8s_master_version(
-                event_details.clone(),
+                event_details,
                 raw_version.to_string(),
             ))
         }
@@ -898,7 +864,7 @@ where
     let mut workers_version: Vec<VersionsNumber> = vec![];
     let nodes = match kubectl_exec_get_node(kubernetes_config, envs) {
         Ok(n) => n,
-        Err(e) => return Err(EngineError::new_cannot_get_cluster_nodes(event_details.clone(), e)),
+        Err(e) => return Err(EngineError::new_cannot_get_cluster_nodes(event_details, e)),
     };
 
     for node in nodes.items {
@@ -907,7 +873,7 @@ where
             Ok(vn) => workers_version.push(vn),
             Err(_) => {
                 return Err(EngineError::new_cannot_determine_k8s_kubelet_worker_version(
-                    event_details.clone(),
+                    event_details,
                     node.status.node_info.kubelet_version.to_string(),
                 ))
             }
@@ -918,20 +884,14 @@ where
             Ok(vn) => workers_version.push(vn),
             Err(_) => {
                 return Err(EngineError::new_cannot_determine_k8s_kube_proxy_version(
-                    event_details.clone(),
+                    event_details,
                     node.status.node_info.kube_proxy_version.to_string(),
                 ))
             }
         }
     }
 
-    check_kubernetes_upgrade_status(
-        requested_version,
-        masters_version,
-        workers_version,
-        event_details.clone(),
-        logger,
-    )
+    check_kubernetes_upgrade_status(requested_version, masters_version, workers_version, event_details, logger)
 }
 
 pub fn is_kubernetes_upgradable<P>(
@@ -949,7 +909,7 @@ where
                 for pdb in pdbs.items.unwrap() {
                     if pdb.status.current_healthy < pdb.status.desired_healthy {
                         return Err(EngineError::new_k8s_pod_disruption_budget_invalid_state(
-                            event_details.clone(),
+                            event_details,
                             pdb.metadata.name,
                         ));
                     }
@@ -957,12 +917,7 @@ where
                 Ok(())
             }
         },
-        Err(err) => {
-            return Err(EngineError::new_k8s_cannot_retrieve_pods_disruption_budget(
-                event_details.clone(),
-                err,
-            ));
-        }
+        Err(err) => Err(EngineError::new_k8s_cannot_retrieve_pods_disruption_budget(event_details, err)),
     }
 }
 
@@ -985,7 +940,7 @@ where
                         ));
                     }
                 }
-                return OperationResult::Ok(());
+                OperationResult::Ok(())
             }
         }
     });
@@ -1020,16 +975,16 @@ where
                         ));
                     }
                 }
-                return OperationResult::Ok(());
+                OperationResult::Ok(())
             }
         }
     });
 
-    return match result {
+    match result {
         Ok(_) => Ok(()),
         Err(Operation { error, .. }) => Err(error),
         Err(retry::Error::Internal(e)) => Err(CommandError::new_from_safe_message(e)),
-    };
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -1073,7 +1028,7 @@ fn check_kubernetes_upgrade_status(
         Ok(v) => v,
         Err(e) => {
             return Err(EngineError::new_cannot_determine_k8s_requested_upgrade_version(
-                event_details.clone(),
+                event_details,
                 requested_version.to_string(),
                 Some(e),
             ));
@@ -1084,10 +1039,7 @@ fn check_kubernetes_upgrade_status(
     match compare_kubernetes_cluster_versions_for_upgrade(&deployed_masters_version, &wished_version) {
         Ok(x) => {
             if let Some(msg) = x.message {
-                logger.log(
-                    LogLevel::Info,
-                    EngineEvent::Deploying(event_details.clone(), EventMessage::new_from_safe(msg)),
-                );
+                logger.log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
             };
             if x.older_version_detected {
                 older_masters_version_detected = x.older_version_detected;
@@ -1099,7 +1051,7 @@ fn check_kubernetes_upgrade_status(
         Err(e) => {
             return Err(
                 EngineError::new_k8s_version_upgrade_deployed_vs_requested_versions_inconsistency(
-                    event_details.clone(),
+                    event_details,
                     deployed_masters_version,
                     wished_version,
                     e,
@@ -1110,15 +1062,12 @@ fn check_kubernetes_upgrade_status(
 
     // check workers versions
     if deployed_workers_version.is_empty() {
-        logger.log(
-            LogLevel::Warning,
-            EngineEvent::Deploying(
-                event_details.clone(),
-                EventMessage::new_from_safe(
-                    "No worker nodes found, can't check if upgrade is required for workers".to_string(),
-                ),
+        logger.log(EngineEvent::Info(
+            event_details,
+            EventMessage::new_from_safe(
+                "No worker nodes found, can't check if upgrade is required for workers".to_string(),
             ),
-        );
+        ));
 
         return Ok(KubernetesUpgradeStatus {
             required_upgrade_on,
@@ -1152,7 +1101,7 @@ fn check_kubernetes_upgrade_status(
             Err(e) => {
                 return Err(
                     EngineError::new_k8s_version_upgrade_deployed_vs_requested_versions_inconsistency(
-                        event_details.clone(),
+                        event_details,
                         node,
                         wished_version,
                         e,
@@ -1162,22 +1111,19 @@ fn check_kubernetes_upgrade_status(
         }
     }
 
-    logger.log(
-        LogLevel::Info,
-        EngineEvent::Deploying(
-            event_details.clone(),
-            EventMessage::new_from_safe(match &required_upgrade_on {
-                None => "All workers are up to date, no upgrade required".to_string(),
-                Some(node_type) => match node_type {
-                    KubernetesNodesType::Masters => "Kubernetes master upgrade required".to_string(),
-                    KubernetesNodesType::Workers => format!(
-                        "Kubernetes workers upgrade required, need to update {}/{} nodes",
-                        non_up_to_date_workers, total_workers
-                    ),
-                },
-            }),
-        ),
-    );
+    logger.log(EngineEvent::Info(
+        event_details,
+        EventMessage::new_from_safe(match &required_upgrade_on {
+            None => "All workers are up to date, no upgrade required".to_string(),
+            Some(node_type) => match node_type {
+                KubernetesNodesType::Masters => "Kubernetes master upgrade required".to_string(),
+                KubernetesNodesType::Workers => format!(
+                    "Kubernetes workers upgrade required, need to update {}/{} nodes",
+                    non_up_to_date_workers, total_workers
+                ),
+            },
+        }),
+    ));
 
     Ok(KubernetesUpgradeStatus {
         required_upgrade_on,
@@ -1235,12 +1181,12 @@ pub fn compare_kubernetes_cluster_versions_for_upgrade(
         messages.push("Older Kubernetes major version detected");
     }
 
-    if &wished_minor_version > &deployed_minor_version {
+    if wished_minor_version > deployed_minor_version {
         upgrade_required.upgraded_required = true;
         messages.push("Kubernetes minor version change detected");
     }
 
-    if &wished_minor_version < &deployed_minor_version {
+    if wished_minor_version < deployed_minor_version {
         upgrade_required.upgraded_required = false;
         upgrade_required.older_version_detected = true;
         messages.push("Older Kubernetes minor version detected");
@@ -1330,9 +1276,7 @@ where
 {
     let listeners = std::clone::Clone::clone(kubernetes.listeners());
     let logger = kubernetes.logger().clone_dyn();
-    let event_details = kubernetes
-        .get_event_details(Stage::Infrastructure(InfrastructureStep::Create))
-        .clone();
+    let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
 
     let progress_info = ProgressInfo::new(
         ProgressScope::Infrastructure {
@@ -1353,7 +1297,7 @@ where
             let listeners_helper = ListenersHelper::new(&listeners);
             let action = action;
             let progress_info = progress_info;
-            let waiting_message = waiting_message.unwrap_or("no message ...".to_string());
+            let waiting_message = waiting_message.unwrap_or_else(|| "no message ...".to_string());
 
             loop {
                 // do notify users here
@@ -1364,42 +1308,33 @@ where
                 match action {
                     Action::Create => {
                         listeners_helper.deployment_in_progress(progress_info);
-                        logger.log(
-                            LogLevel::Info,
-                            EngineEvent::Deploying(
-                                EventDetails::clone_changing_stage(
-                                    event_details,
-                                    Stage::Infrastructure(InfrastructureStep::Create),
-                                ),
-                                event_message,
+                        logger.log(EngineEvent::Info(
+                            EventDetails::clone_changing_stage(
+                                event_details,
+                                Stage::Infrastructure(InfrastructureStep::Create),
                             ),
-                        );
+                            event_message,
+                        ));
                     }
                     Action::Pause => {
                         listeners_helper.pause_in_progress(progress_info);
-                        logger.log(
-                            LogLevel::Info,
-                            EngineEvent::Pausing(
-                                EventDetails::clone_changing_stage(
-                                    event_details,
-                                    Stage::Infrastructure(InfrastructureStep::Pause),
-                                ),
-                                event_message,
+                        logger.log(EngineEvent::Info(
+                            EventDetails::clone_changing_stage(
+                                event_details,
+                                Stage::Infrastructure(InfrastructureStep::Pause),
                             ),
-                        );
+                            event_message,
+                        ));
                     }
                     Action::Delete => {
                         listeners_helper.delete_in_progress(progress_info);
-                        logger.log(
-                            LogLevel::Info,
-                            EngineEvent::Deleting(
-                                EventDetails::clone_changing_stage(
-                                    event_details,
-                                    Stage::Infrastructure(InfrastructureStep::Delete),
-                                ),
-                                event_message,
+                        logger.log(EngineEvent::Info(
+                            EventDetails::clone_changing_stage(
+                                event_details,
+                                Stage::Infrastructure(InfrastructureStep::Delete),
                             ),
-                        );
+                            event_message,
+                        ));
                     }
                     Action::Nothing => {} // should not happens
                 };
@@ -1448,10 +1383,7 @@ pub fn validate_k8s_required_cpu_and_burstable(
             context_id,
         ));
 
-        logger.log(
-            LogLevel::Warning,
-            EngineEvent::Warning(event_details, EventMessage::new_from_safe(message)),
-        );
+        logger.log(EngineEvent::Warning(event_details, EventMessage::new_from_safe(message)));
 
         set_cpu_burst = total_cpu.clone();
     }
@@ -1502,8 +1434,8 @@ mod tests {
     use crate::cloud_provider::utilities::VersionsNumber;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+    use crate::io_models::{ListenersHelper, QoveryIdentifier};
     use crate::logger::StdIoLogger;
-    use crate::models::{ListenersHelper, QoveryIdentifier};
 
     #[test]
     pub fn check_kubernetes_upgrade_method() {
@@ -1579,7 +1511,7 @@ mod tests {
             "1.17",
             version_1_17.clone(),
             vec![version_1_17.clone(), version_1_16.clone()],
-            event_details.clone(),
+            event_details,
             &logger,
         )
         .unwrap();
@@ -1596,7 +1528,7 @@ mod tests {
             "Provider version: {} | Wished version: {} | Is upgrade required: {:?}",
             provider_version.clone(),
             provider.clone(),
-            compare_kubernetes_cluster_versions_for_upgrade(&provider_version, &provider)
+            compare_kubernetes_cluster_versions_for_upgrade(provider_version, provider)
                 .unwrap()
                 .message
         )
@@ -2076,8 +2008,8 @@ mod tests {
         let milli_cpu = "250m".to_string();
         let int_cpu = "2".to_string();
 
-        assert_eq!(convert_k8s_cpu_value_to_f32(milli_cpu).unwrap(), 0.25 as f32);
-        assert_eq!(convert_k8s_cpu_value_to_f32(int_cpu).unwrap(), 2 as f32);
+        assert_eq!(convert_k8s_cpu_value_to_f32(milli_cpu).unwrap(), 0.25_f32);
+        assert_eq!(convert_k8s_cpu_value_to_f32(int_cpu).unwrap(), 2_f32);
     }
 
     #[test]
@@ -2128,7 +2060,7 @@ mod tests {
                 context_id,
                 total_cpu,
                 cpu_burst,
-                event_details.clone(),
+                event_details,
                 &logger
             )
             .unwrap(),

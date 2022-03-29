@@ -2,15 +2,13 @@ use ::function_name::named;
 use tracing::{span, warn, Level};
 
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
-use qovery_engine::models::{
-    Action, CloneForTest, Database, DatabaseKind, DatabaseMode, EnvironmentAction, Port, Protocol,
-};
+use qovery_engine::io_models::{Action, CloneForTest, Database, DatabaseKind, DatabaseMode, Port, Protocol};
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
 
-use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
+use qovery_engine::io_models::DatabaseMode::{CONTAINER, MANAGED};
 use test_utilities::common::{database_test_environment, test_db, Infrastructure};
 use test_utilities::digitalocean::{
     clean_environments, do_default_engine_config, DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE,
@@ -64,8 +62,8 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
+        let env_action = environment.clone();
+        let env_action_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -78,7 +76,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -122,10 +120,10 @@ fn deploy_an_environment_with_db_and_pause_it() {
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
+        let env_action = environment.clone();
+        let env_action_delete = environment_delete.clone();
 
-        let ret = environment.deploy_environment(&env_action.clone(), logger.clone(), &engine_config);
+        let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
         let ret = environment.pause_environment(&env_action, logger.clone(), &engine_config);
@@ -137,7 +135,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
             context.clone(),
             ProviderKind::Do,
             environment.clone(),
-            app_name.clone().as_str(),
+            app_name.as_str(),
             secrets.clone(),
         );
         assert_eq!(ret.is_ok(), true);
@@ -147,11 +145,11 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets.clone(), DO_TEST_REGION) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, DO_TEST_REGION) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -205,8 +203,8 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 
         environment_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
+        let env_action = environment.clone();
+        let env_action_for_deletion = environment_delete.clone();
 
         let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -222,16 +220,13 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(
-            &context,
-            vec![environment, environment_delete],
-            secrets.clone(),
-            DO_TEST_REGION,
-        ) {
+        if let Err(e) =
+            clean_environments(&context, vec![environment, environment_delete], secrets.clone(), DO_TEST_REGION)
+        {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -337,17 +332,17 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 };
                 app
             })
-            .collect::<Vec<qovery_engine::models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::Application>>();
         environment.routers[0].routes[0].application_name = app_name;
 
         let environment_to_redeploy = environment.clone();
         let environment_check = environment.clone();
-        let env_action_redeploy = EnvironmentAction::Environment(environment_to_redeploy.clone());
+        let env_action_redeploy = environment_to_redeploy.clone();
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
+        let env_action = environment.clone();
+        let env_action_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -383,7 +378,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 

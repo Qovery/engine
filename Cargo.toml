@@ -80,7 +80,13 @@ tracing-test = "0.1.0"
 
 [features]
 default = []
-test-all = ["test-all-self-hosted", "test-all-infra", "test-all-managed-services", "test-all-whole-enchilada"]
+test-all = ["test-all-minimal", "test-all-self-hosted", "test-all-infra", "test-all-managed-services", "test-all-whole-enchilada"]
+
+# Minimal depencies test (i.e: build, deploy nothing managed)
+test-aws-minimal = []
+test-do-minimal = []
+test-scw-minimal = []
+test-all-minimal = ["test-aws-minimal", "test-do-minimal", "test-scw-minimal"]
 
 # functionnal tests by type
 test-aws-self-hosted = []
@@ -109,4 +115,6 @@ test-do-all = ["test-do-infra", "test-do-managed-services", "test-do-self-hosted
 test-scw-all = ["test-scw-infra", "test-scw-managed-services", "test-scw-self-hosted", "test-scw-whole-enchilada"]
 
 # functionnal test with only a k8s cluster as a dependency
-test-with-kube = []
+test-local-kube = []
+test-local-docker = []
+test-all-local = ["test-local-kube", "test-local-docker"]

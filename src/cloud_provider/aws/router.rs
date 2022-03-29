@@ -4,7 +4,7 @@ use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
     default_tera_context, delete_router, deploy_stateless_service_error, send_progress_on_long_task, Action, Create,
-    Delete, Helm, Pause, Router as RRouter, Service, ServiceType, StatelessService,
+    Delete, Helm, Pause, Router as RRouter, Router, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{check_cname_for, print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
@@ -12,11 +12,11 @@ use crate::cmd::helm;
 use crate::cmd::helm::{to_engine_error, Timeout};
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage, ToTransmitter, Transmitter};
-use crate::logger::{LogLevel, Logger};
-use crate::models::{Context, Listen, Listener, Listeners};
+use crate::io_models::{Context, Listen, Listener, Listeners};
+use crate::logger::Logger;
 use ::function_name::named;
 
-pub struct Router {
+pub struct RouterAws {
     context: Context,
     id: String,
     name: String,
@@ -29,7 +29,7 @@ pub struct Router {
     logger: Box<dyn Logger>,
 }
 
-impl Router {
+impl RouterAws {
     pub fn new(
         context: Context,
         id: &str,
@@ -42,7 +42,7 @@ impl Router {
         listeners: Listeners,
         logger: Box<dyn Logger>,
     ) -> Self {
-        Router {
+        RouterAws {
             context,
             id: id.to_string(),
             name: name.to_string(),
@@ -65,7 +65,7 @@ impl Router {
     }
 }
 
-impl Service for Router {
+impl Service for RouterAws {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -133,8 +133,8 @@ impl Service for Router {
         let mut context = default_tera_context(self, kubernetes, environment);
 
         let applications = environment
-            .stateless_services
-            .iter()
+            .stateless_services()
+            .into_iter()
             .filter(|x| x.service_type() == ServiceType::Application)
             .collect::<Vec<_>>();
 
@@ -154,7 +154,7 @@ impl Service for Router {
         let route_data_templates = self
             .routes
             .iter()
-            .map(|r| {
+            .filter_map(|r| {
                 match applications
                     .iter()
                     .find(|app| app.name() == r.application_name.as_str())
@@ -167,8 +167,6 @@ impl Service for Router {
                     _ => None,
                 }
             })
-            .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
             .collect::<Vec<_>>();
 
         // autoscaler
@@ -194,27 +192,21 @@ impl Service for Router {
                 Some(hostname) => context.insert("external_ingress_hostname_default", hostname.as_str()),
                 None => {
                     // TODO(benjaminch): Handle better this one via a proper error eventually
-                    self.logger().log(
-                        LogLevel::Warning,
-                        EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new_from_safe(
-                                "Error while trying to get Load Balancer hostname from Kubernetes cluster".to_string(),
-                            ),
+                    self.logger().log(EngineEvent::Warning(
+                        event_details,
+                        EventMessage::new_from_safe(
+                            "Error while trying to get Load Balancer hostname from Kubernetes cluster".to_string(),
                         ),
-                    );
+                    ));
                 }
             },
             _ => {
                 // FIXME really?
                 // TODO(benjaminch): Handle better this one via a proper error eventually
-                self.logger().log(
-                    LogLevel::Warning,
-                    EngineEvent::Warning(
-                        event_details.clone(),
-                        EventMessage::new_from_safe("Can't fetch external ingress hostname.".to_string()),
-                    ),
-                );
+                self.logger().log(EngineEvent::Warning(
+                    event_details,
+                    EventMessage::new_from_safe("Can't fetch external ingress hostname.".to_string()),
+                ));
             }
         }
 
@@ -250,7 +242,7 @@ impl Service for Router {
     }
 }
 
-impl crate::cloud_provider::service::Router for Router {
+impl Router for RouterAws {
     fn domains(&self) -> Vec<&str> {
         let mut _domains = vec![self.default_domain.as_str()];
 
@@ -266,7 +258,7 @@ impl crate::cloud_provider::service::Router for Router {
     }
 }
 
-impl Helm for Router {
+impl Helm for RouterAws {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -288,7 +280,7 @@ impl Helm for Router {
     }
 }
 
-impl Listen for Router {
+impl Listen for RouterAws {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }
@@ -298,15 +290,19 @@ impl Listen for Router {
     }
 }
 
-impl StatelessService for Router {}
+impl StatelessService for RouterAws {
+    fn as_stateless_service(&self) -> &dyn StatelessService {
+        self
+    }
+}
 
-impl ToTransmitter for Router {
+impl ToTransmitter for RouterAws {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::Router(self.id().to_string(), self.name().to_string())
     }
 }
 
-impl Create for Router {
+impl Create for RouterAws {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -334,9 +330,9 @@ impl Create for Router {
             crate::template::generate_and_copy_all_files_into_dir(from_dir.as_str(), workspace_dir.as_str(), context)
         {
             return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details.clone(),
-                from_dir.to_string(),
-                workspace_dir.to_string(),
+                event_details,
+                from_dir,
+                workspace_dir,
                 e,
             ));
         }
@@ -361,7 +357,7 @@ impl Create for Router {
             self.selector(),
         );
 
-        helm.upgrade(&chart, &vec![])
+        helm.upgrade(&chart, &[])
             .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))
     }
 
@@ -384,19 +380,16 @@ impl Create for Router {
                 }
                 Ok(err) | Err(err) => {
                     // TODO(benjaminch): Handle better this one via a proper error eventually
-                    self.logger().log(
-                        LogLevel::Warning,
-                        EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new(
-                                format!(
-                                    "Invalid CNAME for {}. Might not be an issue if user is using a CDN.",
-                                    domain_to_check.domain,
-                                ),
-                                Some(err.to_string()),
+                    self.logger().log(EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new(
+                            format!(
+                                "Invalid CNAME for {}. Might not be an issue if user is using a CDN.",
+                                domain_to_check.domain,
                             ),
+                            Some(err.to_string()),
                         ),
-                    );
+                    ));
                 }
             }
         }
@@ -422,7 +415,7 @@ impl Create for Router {
     }
 }
 
-impl Pause for Router {
+impl Pause for RouterAws {
     #[named]
     fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
@@ -456,7 +449,7 @@ impl Pause for Router {
     }
 }
 
-impl Delete for Router {
+impl Delete for RouterAws {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
@@ -468,7 +461,7 @@ impl Delete for Router {
             event_details.clone(),
             self.logger(),
         );
-        delete_router(target, self, false, event_details)
+        delete_router(target, self, event_details)
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
@@ -486,6 +479,6 @@ impl Delete for Router {
             event_details.clone(),
             self.logger(),
         );
-        delete_router(target, self, true, event_details)
+        delete_router(target, self, event_details)
     }
 }

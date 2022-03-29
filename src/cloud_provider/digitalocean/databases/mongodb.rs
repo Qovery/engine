@@ -11,12 +11,12 @@ use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
+use crate::io_models::DatabaseMode::MANAGED;
+use crate::io_models::{Context, Listen, Listener, Listeners};
 use crate::logger::Logger;
-use crate::models::DatabaseMode::MANAGED;
-use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
 
-pub struct MongoDB {
+pub struct MongoDo {
     context: Context,
     id: String,
     action: Action,
@@ -32,7 +32,7 @@ pub struct MongoDB {
     logger: Box<dyn Logger>,
 }
 
-impl MongoDB {
+impl MongoDo {
     pub fn new(
         context: Context,
         id: &str,
@@ -48,7 +48,7 @@ impl MongoDB {
         listeners: Listeners,
         logger: Box<dyn Logger>,
     ) -> Self {
-        MongoDB {
+        MongoDo {
             context,
             action,
             id: id.to_string(),
@@ -67,7 +67,7 @@ impl MongoDB {
 
     fn matching_correct_version(&self, event_details: EventDetails) -> Result<ServiceVersionCheckResult, EngineError> {
         check_service_version(
-            get_self_hosted_mongodb_version(self.version().clone()),
+            get_self_hosted_mongodb_version(self.version()),
             self,
             event_details,
             self.logger(),
@@ -83,23 +83,23 @@ impl MongoDB {
     }
 }
 
-impl StatefulService for MongoDB {
+impl StatefulService for MongoDo {
+    fn as_stateful_service(&self) -> &dyn StatefulService {
+        self
+    }
+
     fn is_managed_service(&self) -> bool {
         self.options.mode == MANAGED
     }
 }
 
-impl ToTransmitter for MongoDB {
+impl ToTransmitter for MongoDo {
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Database(
-            self.id().to_string(),
-            self.service_type().to_string(),
-            self.name().to_string(),
-        )
+        Transmitter::Database(self.id().to_string(), self.service_type().to_string(), self.name().to_string())
     }
 }
 
-impl Service for MongoDB {
+impl Service for MongoDo {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -171,7 +171,7 @@ impl Service for MongoDB {
         context.insert("kubeconfig_path", &kube_config_file_path);
 
         kubectl::kubectl_exec_create_namespace_without_labels(
-            &environment.namespace(),
+            environment.namespace(),
             kube_config_file_path.as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
@@ -179,7 +179,7 @@ impl Service for MongoDB {
         context.insert("namespace", environment.namespace());
 
         let version = self
-            .matching_correct_version(event_details.clone())?
+            .matching_correct_version(event_details)?
             .matched_version()
             .to_string();
         context.insert("version", &version);
@@ -192,10 +192,7 @@ impl Service for MongoDB {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert(
-            "fqdn",
-            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
-        );
+        context.insert("fqdn", self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
         context.insert("database_db_name", self.name.as_str());
         context.insert("database_login", self.options.login.as_str());
@@ -213,27 +210,24 @@ impl Service for MongoDB {
         context.insert("publicly_accessible", &self.options.publicly_accessible);
 
         if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert(
-                "resource_expiration_in_seconds",
-                &self.context.resource_expiration_in_seconds(),
-            )
+            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
         }
 
         Ok(context)
     }
 
-    fn selector(&self) -> Option<String> {
-        Some(format!("app={}", self.sanitized_name()))
-    }
-
     fn logger(&self) -> &dyn Logger {
         &*self.logger
     }
+
+    fn selector(&self) -> Option<String> {
+        Some(format!("app={}", self.sanitized_name()))
+    }
 }
 
-impl Database for MongoDB {}
+impl Database for MongoDo {}
 
-impl Helm for MongoDB {
+impl Helm for MongoDo {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -255,7 +249,7 @@ impl Helm for MongoDB {
     }
 }
 
-impl Terraform for MongoDB {
+impl Terraform for MongoDo {
     fn terraform_common_resource_dir_path(&self) -> String {
         format!("{}/digitalocean/services/common", self.context.lib_root_dir())
     }
@@ -265,7 +259,7 @@ impl Terraform for MongoDB {
     }
 }
 
-impl Create for MongoDB {
+impl Create for MongoDo {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -303,7 +297,7 @@ impl Create for MongoDB {
     }
 }
 
-impl Pause for MongoDB {
+impl Pause for MongoDo {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
@@ -341,7 +335,7 @@ impl Pause for MongoDB {
     }
 }
 
-impl Delete for MongoDB {
+impl Delete for MongoDo {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
@@ -379,7 +373,7 @@ impl Delete for MongoDB {
     }
 }
 
-impl Listen for MongoDB {
+impl Listen for MongoDo {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

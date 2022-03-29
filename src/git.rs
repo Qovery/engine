@@ -11,16 +11,13 @@ use url::Url;
 // or an error to specify that we have exhausted everything we are able to provide
 fn authentication_callback<'a>(
     get_credentials: &'a impl Fn(&str) -> Vec<(CredentialType, Cred)>,
-) -> impl FnMut(&str, Option<&str>, CredentialType) -> Result<Cred, Error> + 'a {
+) -> impl FnMut(&str, Option<&str>, CredentialType) -> Result<Cred, Error> + '_ {
     let mut current_credentials: (String, Vec<(CredentialType, Cred)>) = ("".into(), vec![]);
 
-    return move |remote_url, username_from_url, allowed_types| {
+    move |remote_url, username_from_url, allowed_types| {
         // If we have changed remote, reset our available auth methods
         if remote_url != current_credentials.0 {
-            current_credentials = (
-                remote_url.to_string(),
-                get_credentials(username_from_url.unwrap_or("git")),
-            );
+            current_credentials = (remote_url.to_string(), get_credentials(username_from_url.unwrap_or("git")));
         }
         let auth_methods = &mut current_credentials.1;
 
@@ -43,7 +40,7 @@ fn authentication_callback<'a>(
                 return Ok(credential);
             }
         }
-    };
+    }
 }
 
 fn checkout<'a>(repo: &'a Repository, commit_id: &'a str) -> Result<Object<'a>, Error> {
@@ -68,17 +65,14 @@ fn checkout<'a>(repo: &'a Repository, commit_id: &'a str) -> Result<Object<'a>, 
 }
 
 fn clone<P>(
-    repository_url: &str,
+    repository_url: &Url,
     into_dir: P,
     get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
 ) -> Result<Repository, Error>
 where
     P: AsRef<Path>,
 {
-    let url = Url::parse(repository_url)
-        .map_err(|err| Error::from_str(format!("Invalid repository url {}: {}", repository_url, err).as_str()))?;
-
-    if url.scheme() != "https" {
+    if repository_url.scheme() != "https" {
         return Err(Error::from_str("Repository URL have to start with https://"));
     }
 
@@ -98,11 +92,11 @@ where
         let _ = std::fs::remove_dir_all(into_dir.as_ref());
     }
 
-    repo.clone(url.as_str(), into_dir.as_ref())
+    repo.clone(repository_url.as_str(), into_dir.as_ref())
 }
 
 pub fn clone_at_commit<P>(
-    repository_url: &str,
+    repository_url: &Url,
     commit_id: &str,
     into_dir: P,
     get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
@@ -140,7 +134,7 @@ where
 }
 
 pub fn get_parent_commit_id<P>(
-    repository_url: &str,
+    repository_url: &Url,
     commit_id: &str,
     into_dir: P,
     get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
@@ -164,6 +158,7 @@ where
 mod tests {
     use crate::git::{checkout, clone, clone_at_commit, get_parent_commit_id};
     use git2::{Cred, CredentialType};
+    use url::Url;
     use uuid::Uuid;
 
     struct DirectoryForTests {
@@ -175,7 +170,7 @@ mod tests {
         /// Since tests are runs in parallel and eventually on the same node, it will avoid having directories collisions between tests running on the same node.
         pub fn new_with_random_suffix(base_path: String) -> Self {
             DirectoryForTests {
-                path: format!("{}_{}", base_path, Uuid::new_v4().to_string()),
+                path: format!("{}_{}", base_path, Uuid::new_v4()),
             }
         }
 
@@ -196,18 +191,26 @@ mod tests {
         let repo_path = repo_dir.path();
 
         // We only allow https:// at the moment
-        let repo = clone("git@github.com:Qovery/engine.git", &repo_path, &|_| vec![]);
-        assert!(matches!(repo, Err(e) if e.message().contains("Invalid repository")));
+        let repo = clone(
+            &Url::parse("ssh://git@github.com/Qovery/engine.git").unwrap(),
+            &repo_path,
+            &|_| vec![],
+        );
+        assert!(matches!(repo, Err(e) if e.message().contains("https://")));
 
         // Repository must be empty
-        let repo = clone("https://github.com/Qovery/engine-testing.git", &repo_path, &|_| vec![]);
+        let repo = clone(
+            &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
+            &repo_path,
+            &|_| vec![],
+        );
         assert!(repo.is_ok()); // clone makes sure to empty the directory
 
         // Working case
         {
             let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_clone".to_string());
             let repo = clone(
-                "https://github.com/Qovery/engine-testing.git",
+                &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
                 clone_dir.path(),
                 &|_| vec![],
             );
@@ -224,7 +227,7 @@ mod tests {
                 )]
             };
             let repo = clone(
-                "https://gitlab.com/qovery/q-core.git",
+                &Url::parse("https://gitlab.com/qovery/q-core.git").unwrap(),
                 clone_dir.path(),
                 &get_credentials,
             );
@@ -261,7 +264,7 @@ mod tests {
     fn test_git_checkout() {
         let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_checkout".to_string());
         let repo = clone(
-            "https://github.com/Qovery/engine-testing.git",
+            &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
             clone_dir.path(),
             &|_| vec![],
         )
@@ -283,7 +286,7 @@ mod tests {
     fn test_git_parent_id() {
         let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_parent_id".to_string());
         let result = get_parent_commit_id(
-            "https://github.com/Qovery/engine-testing.git",
+            &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
             "964f02f3a3065bc7f6fb745d679b1ddb21153cc7",
             clone_dir.path(),
             &|_| vec![],
@@ -299,7 +302,7 @@ mod tests {
         let clone_dir =
             DirectoryForTests::new_with_random_suffix("/tmp/engine_test_parent_id_not_existing".to_string());
         let result = get_parent_commit_id(
-            "https://github.com/Qovery/engine-testing.git",
+            &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
             "964f02f3a3065bc7f6fb745d679b1ddb21153cc0",
             clone_dir.path(),
             &|_| vec![],
@@ -333,7 +336,7 @@ mod tests {
             ]
         };
         let repo = clone_at_commit(
-            "https://github.com/Qovery/engine-testing.git",
+            &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
             "9a9c1f4373c8128151a9def9ea3d838fa2ed33e8",
             clone_dir.path(),
             &get_credentials,

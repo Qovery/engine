@@ -1,6 +1,6 @@
 use crate::cloud_provider::aws::regions::AwsZones::*;
 use crate::cloud_provider::aws::regions::RegionAndZoneErrors::*;
-use crate::models::ToTerraformString;
+use crate::io_models::ToTerraformString;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fmt::{Display, Formatter};
@@ -102,7 +102,7 @@ pub enum AwsZones {
 
 impl ToTerraformString for AwsZones {
     fn to_terraform_format_string(&self) -> String {
-        format!("\"{}\"", self.to_string())
+        format!("\"{}\"", self)
     }
 }
 
@@ -169,11 +169,6 @@ impl FromStr for AwsRegion {
 impl AwsRegion {
     pub fn new(&self) -> &AwsRegion {
         self
-    }
-
-    pub fn to_string(&self) -> String {
-        let enum_name = format!("{}", self);
-        format!("{}", enum_name)
     }
 
     pub fn to_aws_format(&self) -> String {
@@ -303,8 +298,46 @@ impl Display for RegionAndZoneErrors {
 }
 
 impl AwsZones {
-    pub fn to_string(&self) -> String {
-        match self {
+    pub fn from_string(zone: String) -> Result<AwsZones, RegionAndZoneErrors> {
+        // create tmp region from zone and get zone name (one letter)
+        let sanitized_zone_name = zone.to_lowercase().replace('-', "").replace('_', "");
+        let mut sanitized_region = sanitized_zone_name.clone();
+        sanitized_region.pop();
+
+        // ensure the region exists
+        let region = match AwsRegion::from_str(&sanitized_region) {
+            Ok(x) => x,
+            Err(_) => return Err(RegionNotFound),
+        };
+        if region.to_string().to_lowercase() != sanitized_region {
+            return Err(RegionNotFound);
+        };
+
+        // check if the zone is currently supported
+        for zone in region.get_zones() {
+            if zone.to_string().replace('-', "") == sanitized_zone_name {
+                return Ok(zone);
+            }
+        }
+
+        Err(ZoneNotSupported)
+    }
+
+    pub fn get_region(&self) -> String {
+        let zone = self.to_string();
+        zone[0..zone.len() - 1].to_string()
+    }
+}
+
+impl fmt::Display for AwsRegion {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl fmt::Display for AwsZones {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let str = match self {
             UsEast1A => "us-east-1a",
             UsEast1B => "us-east-1b",
             UsEast1C => "us-east-1c",
@@ -371,50 +404,9 @@ impl AwsZones {
             SaEast1A => "sa-east-1a",
             SaEast1B => "sa-east-1b",
             SaEast1C => "sa-east-1c",
-        }
-        .to_string()
-    }
-
-    pub fn from_string(zone: String) -> Result<AwsZones, RegionAndZoneErrors> {
-        // create tmp region from zone and get zone name (one letter)
-        let sanitized_zone_name = zone.to_lowercase().replace("-", "").replace("_", "");
-        let mut sanitized_region = sanitized_zone_name.clone();
-        sanitized_region.pop();
-
-        // ensure the region exists
-        let region = match AwsRegion::from_str(&sanitized_region) {
-            Ok(x) => x,
-            Err(_) => return Err(RegionNotFound),
-        };
-        if region.to_string().to_lowercase() != sanitized_region {
-            return Err(RegionNotFound);
         };
 
-        // check if the zone is currently supported
-        for zone in region.get_zones() {
-            if zone.to_string().replace("-", "") == sanitized_zone_name {
-                return Ok(zone);
-            }
-        }
-
-        Err(ZoneNotSupported)
-    }
-
-    pub fn get_region(&self) -> String {
-        let zone = self.to_string();
-        zone[0..zone.len() - 1].to_string()
-    }
-}
-
-impl fmt::Display for AwsRegion {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl fmt::Display for AwsZones {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{}", str)
     }
 }
 

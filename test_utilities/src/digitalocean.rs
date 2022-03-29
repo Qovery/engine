@@ -7,18 +7,18 @@ use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::engine::EngineConfig;
-use qovery_engine::models::{Context, Environment};
+use qovery_engine::io_models::{Context, EnvironmentRequest, NoOpProgressListener};
 use std::sync::Arc;
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
-use crate::utilities::{build_platform_local_docker, logger, FuncTestsSecrets};
-use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
+use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::Kind::Do;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::errors::EngineError;
 use qovery_engine::logger::Logger;
+use qovery_engine::models::digital_ocean::DoRegion;
 
 pub const DO_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const DO_KUBERNETES_MINOR_VERSION: u8 = 20;
@@ -38,7 +38,7 @@ pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
         DOCR_ID,
         DOCR_ID,
         secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
-        logger(),
+        Arc::new(Box::new(NoOpProgressListener {})),
     )
     .unwrap()
 }
@@ -163,7 +163,7 @@ impl Cluster<DO, DoksOptions> for DO {
 
 pub fn clean_environments(
     context: &Context,
-    _environments: Vec<Environment>,
+    _environments: Vec<EnvironmentRequest>,
     secrets: FuncTestsSecrets,
     _region: DoRegion,
 ) -> Result<(), EngineError> {
@@ -175,7 +175,7 @@ pub fn clean_environments(
             .DIGITAL_OCEAN_TOKEN
             .as_ref()
             .expect("DIGITAL_OCEAN_TOKEN is not set in secrets"),
-        logger(),
+        Arc::new(Box::new(NoOpProgressListener {})),
     );
 
     // FIXME: re-enable it, or let pleco do its job ?

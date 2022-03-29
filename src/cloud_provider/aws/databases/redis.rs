@@ -14,12 +14,12 @@ use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
+use crate::io_models::DatabaseMode::MANAGED;
+use crate::io_models::{Context, Listen, Listener, Listeners};
 use crate::logger::Logger;
-use crate::models::DatabaseMode::MANAGED;
-use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
 
-pub struct Redis {
+pub struct RedisAws {
     context: Context,
     id: String,
     action: Action,
@@ -35,7 +35,7 @@ pub struct Redis {
     logger: Box<dyn Logger>,
 }
 
-impl Redis {
+impl RedisAws {
     pub fn new(
         context: Context,
         id: &str,
@@ -90,23 +90,23 @@ impl Redis {
     }
 }
 
-impl StatefulService for Redis {
+impl StatefulService for RedisAws {
+    fn as_stateful_service(&self) -> &dyn StatefulService {
+        self
+    }
+
     fn is_managed_service(&self) -> bool {
         self.options.mode == MANAGED
     }
 }
 
-impl ToTransmitter for Redis {
+impl ToTransmitter for RedisAws {
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Database(
-            self.id().to_string(),
-            self.service_type().to_string(),
-            self.name().to_string(),
-        )
+        Transmitter::Database(self.id().to_string(), self.service_type().to_string(), self.name().to_string())
     }
 }
 
-impl Service for Redis {
+impl Service for RedisAws {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -127,7 +127,7 @@ impl Service for Redis {
         // https://aws.amazon.com/about-aws/whats-new/2019/08/elasticache_supports_50_chars_cluster_name
         let prefix = "redis";
         let max_size = 47 - prefix.len(); // 50 (max Elasticache ) - 3 (k8s statefulset chars)
-        let mut new_name = self.name().replace("_", "").replace("-", "");
+        let mut new_name = self.name().replace('_', "").replace('-', "");
 
         if new_name.chars().count() > max_size {
             new_name = new_name[..max_size].to_string();
@@ -188,7 +188,7 @@ impl Service for Redis {
         context.insert("kubeconfig_path", &kube_config_file_path);
 
         kubectl::kubectl_exec_create_namespace_without_labels(
-            &environment.namespace(),
+            environment.namespace(),
             kube_config_file_path.as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
@@ -204,7 +204,7 @@ impl Service for Redis {
             "default.redis6.x"
         } else {
             return Err(EngineError::new_terraform_unsupported_context_parameter_value(
-                event_details.clone(),
+                event_details,
                 "Elasicache".to_string(),
                 "database_elasticache_parameter_group_name".to_string(),
                 format!("default.redis{}", version),
@@ -225,10 +225,7 @@ impl Service for Redis {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert(
-            "fqdn",
-            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
-        );
+        context.insert("fqdn", self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
@@ -248,10 +245,7 @@ impl Service for Redis {
         context.insert("final_snapshot_name", &aws_final_snapshot_name(self.id()));
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
         if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert(
-                "resource_expiration_in_seconds",
-                &self.context.resource_expiration_in_seconds(),
-            )
+            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
         }
 
         Ok(context)
@@ -266,9 +260,9 @@ impl Service for Redis {
     }
 }
 
-impl Database for Redis {}
+impl Database for RedisAws {}
 
-impl Helm for Redis {
+impl Helm for RedisAws {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -290,7 +284,7 @@ impl Helm for Redis {
     }
 }
 
-impl Terraform for Redis {
+impl Terraform for RedisAws {
     fn terraform_common_resource_dir_path(&self) -> String {
         format!("{}/aws/services/common", self.context.lib_root_dir())
     }
@@ -300,7 +294,7 @@ impl Terraform for Redis {
     }
 }
 
-impl Create for Redis {
+impl Create for RedisAws {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -320,12 +314,7 @@ impl Create for Redis {
 
     fn on_create_check(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        self.check_domains(
-            self.listeners.clone(),
-            vec![self.fqdn.as_str()],
-            event_details,
-            self.logger(),
-        )
+        self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()], event_details, self.logger())
     }
 
     #[named]
@@ -343,7 +332,7 @@ impl Create for Redis {
     }
 }
 
-impl Pause for Redis {
+impl Pause for RedisAws {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
@@ -381,7 +370,7 @@ impl Pause for Redis {
     }
 }
 
-impl Delete for Redis {
+impl Delete for RedisAws {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
@@ -418,7 +407,7 @@ impl Delete for Redis {
     }
 }
 
-impl Listen for Redis {
+impl Listen for RedisAws {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

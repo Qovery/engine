@@ -12,15 +12,15 @@ use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::EngineConfig;
+use qovery_engine::io_models::{Context, NoOpProgressListener};
 use qovery_engine::logger::Logger;
-use qovery_engine::models::Context;
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::error;
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
-use crate::utilities::{build_platform_local_docker, logger, FuncTestsSecrets};
+use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
 pub const AWS_TEST_REGION: AwsRegion = AwsRegion::EuWest3;
@@ -32,7 +32,7 @@ pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t3.micro";
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 7200;
 
-pub fn container_registry_ecr(context: &Context) -> ECR {
+pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR {
     let secrets = FuncTestsSecrets::new();
     if secrets.AWS_ACCESS_KEY_ID.is_none()
         || secrets.AWS_SECRET_ACCESS_KEY.is_none()
@@ -49,7 +49,8 @@ pub fn container_registry_ecr(context: &Context) -> ECR {
         secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
         secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),
         secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
-        logger(),
+        Arc::new(Box::new(NoOpProgressListener {})),
+        logger,
     )
     .unwrap()
 }
@@ -74,7 +75,7 @@ impl Cluster<AWS, Options> for AWS {
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> EngineConfig {
         // use ECR
-        let container_registry = Box::new(container_registry_ecr(context));
+        let container_registry = Box::new(container_registry_ecr(context, logger.clone()));
 
         // use LocalDocker
         let build_platform = Box::new(build_platform_local_docker(context, logger.clone()));

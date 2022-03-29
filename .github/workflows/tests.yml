@@ -23,6 +23,11 @@ jobs:
           terraform_version: 0.14.10
       - name: build-linter-utests
         run: |
+          echo "########## LINTER ##########"
+          cargo fmt --all -- --check --color=always  || (echo "Use cargo fmt to format your code"; exit 1)
+          rustup component add clippy
+          cargo clippy --locked --all --all-features --lib -- -D warnings || (echo "Solve your clippy warnings to continue"; exit 1)
+          
           export PATH=$GITHUB_WORKSPACE/bin:$PATH
           export RUSTC_WRAPPER=$GITHUB_WORKSPACE/bin/sccache
           export SCCACHE_REDIS=${{ secrets.SCCACHE_REDIS }}
@@ -34,9 +39,6 @@ jobs:
           echo "########## SHARED CACHE STATUS ##########"
           sccache --version
           sccache --show-stats
-          echo "########## LINTER ##########"
-          cargo fmt --all -- --check --color=always  || (echo "Use cargo fmt to format your code"; exit 1)
-          RUSTFLAGS="--deny warnings" cargo check || (echo "Solve your warnings to continue"; exit 1)
           echo "########## START BUILD ##########"
           cargo build --all-features
           sccache --show-stats

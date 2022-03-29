@@ -1,4 +1,4 @@
-use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
+use qovery_engine::models::digital_ocean::DoRegion;
 use qovery_engine::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use qovery_engine::object_storage::ObjectStorage;
 use tempfile::NamedTempFile;
@@ -18,8 +18,8 @@ fn test_delete_bucket_hard_delete_strategy() {
         context,
         "test-fake".to_string(),
         "test-fake".to_string(),
-        secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap().to_string(),
-        secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap().to_string(),
+        secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap(),
+        secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap(),
         TEST_REGION,
         BucketDeleteStrategy::HardDelete,
     );
@@ -49,8 +49,8 @@ fn test_delete_bucket_empty_strategy() {
         context,
         "test-fake".to_string(),
         "test-fake".to_string(),
-        secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap().to_string(),
-        secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap().to_string(),
+        secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap(),
+        secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap(),
         TEST_REGION,
         BucketDeleteStrategy::Empty,
     );
@@ -85,8 +85,8 @@ fn test_create_bucket() {
         context,
         "test-fake".to_string(),
         "test-fake".to_string(),
-        secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap().to_string(),
-        secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap().to_string(),
+        secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap(),
+        secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap(),
         TEST_REGION,
         BucketDeleteStrategy::HardDelete,
     );
@@ -116,8 +116,8 @@ fn test_recreate_bucket() {
         context,
         "test-fake".to_string(),
         "test-fake".to_string(),
-        secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap().to_string(),
-        secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap().to_string(),
+        secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap(),
+        secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap(),
         TEST_REGION,
         BucketDeleteStrategy::HardDelete,
     );
@@ -154,8 +154,8 @@ fn test_put_file() {
         context,
         "test-fake".to_string(),
         "test-fake".to_string(),
-        secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap().to_string(),
-        secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap().to_string(),
+        secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap(),
+        secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap(),
         TEST_REGION,
         BucketDeleteStrategy::HardDelete,
     );
@@ -178,10 +178,7 @@ fn test_put_file() {
 
     // validate:
     assert!(result.is_ok());
-    assert_eq!(
-        true,
-        spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok()
-    );
+    assert_eq!(true, spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok());
 
     // clean-up:
     spaces
@@ -200,8 +197,8 @@ fn test_get_file() {
         context,
         "test-fake".to_string(),
         "test-fake".to_string(),
-        secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap().to_string(),
-        secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap().to_string(),
+        secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID.unwrap(),
+        secrets.DIGITAL_OCEAN_SPACES_SECRET_ID.unwrap(),
         TEST_REGION,
         BucketDeleteStrategy::HardDelete,
     );
@@ -226,10 +223,7 @@ fn test_get_file() {
 
     // validate:
     assert!(result.is_ok());
-    assert_eq!(
-        true,
-        spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok()
-    );
+    assert_eq!(true, spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok());
 
     // clean-up:
     spaces

@@ -1,16 +1,12 @@
 extern crate scaleway_api_rs;
 
-use crate::cloud_provider::scaleway::application::ScwZone;
-use std::borrow::Borrow;
-
 use self::scaleway_api_rs::models::scaleway_registry_v1_namespace::Status;
 use crate::build_platform::Image;
 use crate::cmd::docker;
+use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
-use crate::errors::{CommandError, EngineError};
-use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, Stage, ToTransmitter, Transmitter};
-use crate::logger::{LogLevel, Logger};
-use crate::models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
+use crate::io_models::{Context, Listen, Listener, Listeners};
+use crate::models::scaleway::ScwZone;
 use crate::runtime::block_on;
 use url::Url;
 
@@ -23,7 +19,6 @@ pub struct ScalewayCR {
     zone: ScwZone,
     registry_info: ContainerRegistryInfo,
     listeners: Listeners,
-    logger: Box<dyn Logger>,
 }
 
 impl ScalewayCR {
@@ -34,18 +29,8 @@ impl ScalewayCR {
         secret_token: &str,
         default_project_id: &str,
         zone: ScwZone,
-        logger: Box<dyn Logger>,
-    ) -> Result<ScalewayCR, EngineError> {
-        let event_details = EventDetails::new(
-            None,
-            QoveryIdentifier::from(context.organization_id().to_string()),
-            QoveryIdentifier::from(context.cluster_id().to_string()),
-            QoveryIdentifier::from(context.execution_id().to_string()),
-            None,
-            Stage::General(GeneralStep::ValidateSystemRequirements),
-            Transmitter::ContainerRegistry(id.to_string(), name.to_string()),
-        );
-
+        listener: Listener,
+    ) -> Result<ScalewayCR, ContainerRegistryError> {
         // Be sure we are logged on the registry
         let login = "nologin".to_string();
         let secret_token = secret_token.to_string();
@@ -55,9 +40,7 @@ impl ScalewayCR {
         let _ = registry.set_password(Some(&secret_token));
 
         if context.docker.login(&registry).is_err() {
-            return Err(EngineError::new_client_invalid_cloud_provider_credentials(
-                event_details,
-            ));
+            return Err(ContainerRegistryError::InvalidCredentials);
         }
 
         let registry_info = ContainerRegistryInfo {
@@ -69,6 +52,7 @@ impl ScalewayCR {
                 zone.region().as_str(),
             )),
             get_image_name: Box::new(move |img_name| format!("{}/{}", img_name, img_name)),
+            get_repository_name: Box::new(|img_name| img_name.to_string()),
         };
 
         let cr = ScalewayCR {
@@ -79,8 +63,7 @@ impl ScalewayCR {
             secret_token,
             zone,
             registry_info,
-            listeners: Vec::new(),
-            logger,
+            listeners: vec![listener],
         };
 
         Ok(cr)
@@ -112,28 +95,14 @@ impl ScalewayCR {
             Some(namespace_name),
         )) {
             Ok(res) => res.namespaces,
-            Err(e) => {
-                self.logger.log(
-                    LogLevel::Warning,
-                    EngineEvent::Warning(
-                        self.get_event_details(),
-                        EventMessage::new(
-                            "Error while interacting with Scaleway API (list_namespaces).".to_string(),
-                            Some(format!("error: {}, image: {}", e, namespace_name)),
-                        ),
-                    ),
-                );
+            Err(_e) => {
                 return None;
             }
         };
 
         // We consider every registry namespace names are unique
         if let Some(registries) = scaleway_registry_namespaces {
-            if let Some(registry) = registries
-                .into_iter()
-                .filter(|r| r.status == Some(Status::Ready))
-                .next()
-            {
+            if let Some(registry) = registries.into_iter().find(|r| r.status == Some(Status::Ready)) {
                 return Some(registry);
             }
         }
@@ -155,17 +124,7 @@ impl ScalewayCR {
             Some(self.default_project_id.as_str()),
         )) {
             Ok(res) => res.images,
-            Err(e) => {
-                self.logger.log(
-                    LogLevel::Warning,
-                    EngineEvent::Warning(
-                        self.get_event_details(),
-                        EventMessage::new(
-                            "Error while interacting with Scaleway API (list_namespaces).".to_string(),
-                            Some(format!("error: {}, image: {}", e, &image.name())),
-                        ),
-                    ),
-                );
+            Err(_e) => {
                 return None;
             }
         };
@@ -183,21 +142,18 @@ impl ScalewayCR {
         None
     }
 
-    pub fn delete_image(&self, image: &Image) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Image, EngineError> {
-        let event_details = self.get_event_details();
-
+    pub fn delete_image(
+        &self,
+        image: &Image,
+    ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Image, ContainerRegistryError> {
         // https://developers.scaleway.com/en/products/registry/api/#delete-67dbf7
         let image_to_delete = self.get_image(image);
         if image_to_delete.is_none() {
-            let err = EngineError::new_container_registry_image_doesnt_exist(
-                event_details.clone(),
-                image.name().to_string(),
-                None,
-            );
-
-            self.logger.log(LogLevel::Error, EngineEvent::Error(err.clone(), None));
-
-            return Err(err);
+            return Err(ContainerRegistryError::ImageDoesntExistInRegistry {
+                registry_name: self.name.to_string(),
+                repository_name: image.registry_name.to_string(),
+                image_name: image.name.to_string(),
+            });
         }
 
         let image_to_delete = image_to_delete.unwrap();
@@ -208,26 +164,19 @@ impl ScalewayCR {
             image_to_delete.id.unwrap().as_str(),
         )) {
             Ok(res) => Ok(res),
-            Err(e) => {
-                let err = EngineError::new_container_registry_delete_image_error(
-                    event_details.clone(),
-                    image.name().to_string(),
-                    Some(CommandError::new(e.to_string(), None)),
-                );
-
-                self.logger.log(LogLevel::Error, EngineEvent::Error(err.clone(), None));
-
-                Err(err)
-            }
+            Err(e) => Err(ContainerRegistryError::CannotDeleteImage {
+                registry_name: self.name.to_string(),
+                repository_name: image.registry_name.to_string(),
+                image_name: image.name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
         }
     }
 
     pub fn create_registry_namespace(
         &self,
         namespace_name: &str,
-    ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, EngineError> {
-        let event_details = self.get_event_details();
-
+    ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, ContainerRegistryError> {
         // https://developers.scaleway.com/en/products/registry/api/#post-7a8fcc
         match block_on(scaleway_api_rs::apis::namespaces_api::create_namespace(
             &self.get_configuration(),
@@ -241,40 +190,25 @@ impl ScalewayCR {
             },
         )) {
             Ok(res) => Ok(res),
-            Err(e) => {
-                let error = EngineError::new_container_registry_namespace_creation_error(
-                    event_details.clone(),
-                    namespace_name.to_string(),
-                    self.name_with_id(),
-                    CommandError::new(e.to_string(), Some("Can't create SCW repository".to_string())),
-                );
-
-                self.logger
-                    .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
-
-                Err(error)
-            }
+            Err(e) => Err(ContainerRegistryError::CannotCreateRepository {
+                registry_name: self.name.to_string(),
+                repository_name: namespace_name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
         }
     }
 
     pub fn delete_registry_namespace(
         &self,
         namespace_name: &str,
-    ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, EngineError> {
+    ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, ContainerRegistryError> {
         // https://developers.scaleway.com/en/products/registry/api/#delete-c1ac9b
-        let event_details = self.get_event_details();
         let registry_to_delete = self.get_registry_namespace(namespace_name);
         if registry_to_delete.is_none() {
-            let error = EngineError::new_container_registry_repository_doesnt_exist(
-                event_details.clone(),
-                namespace_name.to_string(),
-                None,
-            );
-
-            self.logger
-                .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
-
-            return Err(error);
+            return Err(ContainerRegistryError::RepositoryDoesntExistInRegistry {
+                registry_name: self.name.to_string(),
+                repository_name: namespace_name.to_string(),
+            });
         }
 
         let registry_to_delete = registry_to_delete.unwrap();
@@ -285,38 +219,23 @@ impl ScalewayCR {
             registry_to_delete.id.unwrap().as_str(),
         )) {
             Ok(res) => Ok(res),
-            Err(e) => {
-                let error = EngineError::new_container_registry_delete_repository_error(
-                    event_details.clone(),
-                    namespace_name.to_string(),
-                    Some(CommandError::new(e.to_string(), None)),
-                );
-
-                self.logger
-                    .log(LogLevel::Error, EngineEvent::Error(error.clone(), None));
-
-                return Err(error);
-            }
+            Err(e) => Err(ContainerRegistryError::CannotDeleteRepository {
+                registry_name: self.name.to_string(),
+                repository_name: namespace_name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
         }
     }
 
     pub fn get_or_create_registry_namespace(
         &self,
         namespace_name: &str,
-    ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, EngineError> {
+    ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, ContainerRegistryError> {
         info!("Get/Create repository for {}", namespace_name);
 
         // check if the repository already exists
-        let event_details = self.get_event_details();
         let registry_namespace = self.get_registry_namespace(namespace_name);
         if let Some(namespace) = registry_namespace {
-            self.logger.log(
-                LogLevel::Info,
-                EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(format!("SCW repository {} already exists", namespace_name)),
-                ),
-            );
             return Ok(namespace);
         }
 
@@ -332,12 +251,6 @@ impl ScalewayCR {
             )
             .as_bytes(),
         )
-    }
-}
-
-impl ToTransmitter for ScalewayCR {
-    fn to_transmitter(&self) -> Transmitter {
-        Transmitter::ContainerRegistry(self.id().to_string(), self.name().to_string())
     }
 }
 
@@ -358,20 +271,16 @@ impl ContainerRegistry for ScalewayCR {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
-        Ok(())
-    }
-
     fn registry_info(&self) -> &ContainerRegistryInfo {
         &self.registry_info
     }
 
-    fn create_registry(&self) -> Result<(), EngineError> {
+    fn create_registry(&self) -> Result<(), ContainerRegistryError> {
         // Nothing to do, scaleway managed container registry per repository (aka `namespace` by the scw naming convention)
         Ok(())
     }
 
-    fn create_repository(&self, name: &str) -> Result<(), EngineError> {
+    fn create_repository(&self, name: &str) -> Result<(), ContainerRegistryError> {
         let _ = self.get_or_create_registry_namespace(name)?;
         Ok(())
     }
@@ -379,14 +288,14 @@ impl ContainerRegistry for ScalewayCR {
     fn does_image_exists(&self, image: &Image) -> bool {
         let image = docker::ContainerImage {
             registry: self.registry_info.endpoint.clone(),
-            name: image.name().clone(),
+            name: image.name(),
             tags: vec![image.tag.clone()],
         };
-        self.context.docker.does_image_exist_remotely(&image).is_ok()
-    }
-
-    fn logger(&self) -> &dyn Logger {
-        self.logger.borrow()
+        match self.context.docker.does_image_exist_remotely(&image) {
+            Ok(true) => true,
+            Ok(false) => false,
+            Err(_) => false,
+        }
     }
 }
 

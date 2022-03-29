@@ -2,9 +2,7 @@ extern crate test_utilities;
 
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::models::{
-    Action, CloneForTest, Database, DatabaseKind, DatabaseMode, EnvironmentAction, Port, Protocol,
-};
+use qovery_engine::io_models::{Action, CloneForTest, Database, DatabaseKind, DatabaseMode, Port, Protocol};
 use test_utilities::aws::aws_default_engine_config;
 use tracing::{span, Level};
 
@@ -12,7 +10,7 @@ use self::test_utilities::aws::{AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TY
 use self::test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
-use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
+use qovery_engine::io_models::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::common::{test_db, Infrastructure};
 
@@ -64,8 +62,8 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment.clone());
-        let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
+        let ea = environment.clone();
+        let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -73,7 +71,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -119,8 +117,8 @@ fn deploy_an_environment_with_db_and_pause_it() {
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment.clone());
-        let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
+        let ea = environment.clone();
+        let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -130,20 +128,14 @@ fn deploy_an_environment_with_db_and_pause_it() {
 
         // Check that we have actually 0 pods running for this db
         let app_name = format!("postgresql{}-0", environment.databases[0].name);
-        let ret = get_pods(
-            context.clone(),
-            Kind::Aws,
-            environment.clone(),
-            app_name.clone().as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(context, Kind::Aws, environment, app_name.as_str(), secrets);
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -199,8 +191,8 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 
         environment_delete.action = Action::Delete;
 
-        let ea = EnvironmentAction::Environment(environment.clone());
-        let ea_for_deletion = EnvironmentAction::Environment(environment_delete.clone());
+        let ea = environment.clone();
+        let ea_for_deletion = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -215,7 +207,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let ret = environment_delete.delete_environment(&ea_for_deletion, logger, &engine_config_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 
@@ -312,17 +304,17 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 };
                 app
             })
-            .collect::<Vec<qovery_engine::models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::Application>>();
         environment.routers[0].routes[0].application_name = app_name;
 
         let environment_to_redeploy = environment.clone();
         let environment_check = environment.clone();
-        let ea_redeploy = EnvironmentAction::Environment(environment_to_redeploy.clone());
+        let ea_redeploy = environment_to_redeploy.clone();
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
-        let ea = EnvironmentAction::Environment(environment.clone());
-        let ea_delete = EnvironmentAction::Environment(environment_delete.clone());
+        let ea = environment.clone();
+        let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -332,13 +324,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let database_name = format!("postgresql{}-0", &environment_check.databases[0].name);
-        match is_pod_restarted_env(
-            context.clone(),
-            Kind::Aws,
-            environment_check,
-            database_name.as_str(),
-            secrets.clone(),
-        ) {
+        match is_pod_restarted_env(context, Kind::Aws, environment_check, database_name.as_str(), secrets) {
             (true, _) => assert!(true),
             (false, _) => assert!(false),
         }
@@ -349,7 +335,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
         ));
 
-        return test_name.to_string();
+        test_name.to_string()
     })
 }
 

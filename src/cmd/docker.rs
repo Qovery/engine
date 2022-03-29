@@ -1,8 +1,8 @@
 use crate::cmd::command::{CommandError, CommandKiller, QoveryCommand};
-use crate::errors::EngineError;
-use crate::events::EventDetails;
+use lazy_static::lazy_static;
 use std::path::Path;
 use std::process::ExitStatus;
+use std::sync::Mutex;
 use url::Url;
 
 #[derive(thiserror::Error, Debug)]
@@ -21,6 +21,13 @@ pub enum DockerError {
 
     #[error("Docker command terminated due to timeout: {0}")]
     Timeout(String),
+}
+
+lazy_static! {
+    // Docker login when launched in parallel can mess up ~/.docker/config.json
+    // We use a mutex that will force serialization of logins in order to avoid that
+    // Mostly use for CI/Test when all test start in parallel and it the login phase at the same time
+    static ref LOGIN_LOCK: Mutex<()> = Mutex::new(());
 }
 
 #[derive(Debug)]
@@ -85,15 +92,15 @@ impl Docker {
         let args = vec!["buildx", "version"];
         let buildx_cmd_exist = docker_exec(
             &args,
-            &docker.get_all_envs(&vec![]),
+            &docker.get_all_envs(&[]),
             &mut |_| {},
             &mut |_| {},
             &CommandKiller::never(),
         );
-        if let Err(_) = buildx_cmd_exist {
-            return Err(DockerError::InvalidConfig(format!(
-                "Docker buildx plugin for buildkit is not correctly installed"
-            )));
+        if buildx_cmd_exist.is_err() {
+            return Err(DockerError::InvalidConfig(
+                "Docker buildx plugin for buildkit is not correctly installed".to_string(),
+            ));
         }
 
         // In order to be able to use --cache-from --cache-to for buildkit,
@@ -110,7 +117,7 @@ impl Docker {
         ];
         let _ = docker_exec(
             &args,
-            &docker.get_all_envs(&vec![]),
+            &docker.get_all_envs(&[]),
             &mut |_| {},
             &mut |_| {},
             &CommandKiller::never(),
@@ -132,7 +139,9 @@ impl Docker {
 
     pub fn login(&self, registry: &Url) -> Result<(), DockerError> {
         info!("Docker login {} as user {}", registry, registry.username());
-        let password = urlencoding::decode(&registry.password().unwrap_or_default())
+
+        let _lock = LOGIN_LOCK.lock().unwrap();
+        let password = urlencoding::decode(registry.password().unwrap_or_default())
             .unwrap_or_default()
             .to_string();
         let args = vec![
@@ -146,7 +155,7 @@ impl Docker {
 
         docker_exec(
             &args,
-            &self.get_all_envs(&vec![]),
+            &self.get_all_envs(&[]),
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
             &CommandKiller::never(),
@@ -159,8 +168,8 @@ impl Docker {
         info!("Docker check locally image exist {:?}", image);
 
         let ret = docker_exec(
-            &vec!["image", "inspect", &image.image_name()],
-            &self.get_all_envs(&vec![]),
+            &["image", "inspect", &image.image_name()],
+            &self.get_all_envs(&[]),
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
             &CommandKiller::never(),
@@ -174,8 +183,8 @@ impl Docker {
         info!("Docker check remotely image exist {:?}", image);
 
         let ret = docker_exec(
-            &vec!["manifest", "inspect", &image.image_name()],
-            &self.get_all_envs(&vec![]),
+            &["manifest", "inspect", &image.image_name()],
+            &self.get_all_envs(&[]),
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
             &CommandKiller::never(),
@@ -202,8 +211,8 @@ impl Docker {
         info!("Docker pull {:?}", image);
 
         docker_exec(
-            &vec!["pull", &image.image_name()],
-            &self.get_all_envs(&vec![]),
+            &["pull", &image.image_name()],
+            &self.get_all_envs(&[]),
             stdout_output,
             stderr_output,
             should_abort,
@@ -321,7 +330,7 @@ impl Docker {
 
         let _ = docker_exec(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
-            &self.get_all_envs(&vec![]),
+            &self.get_all_envs(&[]),
             stdout_output,
             stderr_output,
             should_abort,
@@ -386,7 +395,7 @@ impl Docker {
 
         docker_exec(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
-            &self.get_all_envs(&vec![]),
+            &self.get_all_envs(&[]),
             stdout_output,
             stderr_output,
             should_abort,
@@ -409,13 +418,39 @@ impl Docker {
         let mut args = vec!["push"];
         args.extend(image_names.iter().map(|x| x.as_str()));
 
-        docker_exec(
-            &args,
-            &self.get_all_envs(&vec![]),
-            stdout_output,
-            stderr_output,
-            should_abort,
-        )
+        docker_exec(&args, &self.get_all_envs(&[]), stdout_output, stderr_output, should_abort)
+    }
+
+    pub fn prune_images(&self) -> Result<(), DockerError> {
+        info!("Docker prune images");
+
+        let all_prunes_commands = vec![
+            vec!["container", "prune", "-f"],
+            vec!["image", "prune", "-a", "-f"],
+            vec!["builder", "prune", "-a", "-f"],
+            vec!["volume", "prune", "-f"],
+            vec!["buildx", "prune", "-a", "-f"],
+        ];
+
+        let mut errored_commands = vec![];
+        for prune in all_prunes_commands {
+            let ret = docker_exec(
+                &prune,
+                &self.get_all_envs(&[]),
+                &mut |_| {},
+                &mut |_| {},
+                &CommandKiller::never(),
+            );
+            if let Err(e) = ret {
+                errored_commands.push(e);
+            }
+        }
+
+        if !errored_commands.is_empty() {
+            return Err(errored_commands.remove(0));
+        }
+
+        Ok(())
     }
 }
 
@@ -431,7 +466,7 @@ where
     X: FnMut(String),
 {
     let mut cmd = QoveryCommand::new("docker", args, envs);
-    let ret = cmd.exec_with_abort(stdout_output, stderr_output, &cmd_killer);
+    let ret = cmd.exec_with_abort(stdout_output, stderr_output, cmd_killer);
 
     match ret {
         Ok(_) => Ok(()),
@@ -440,10 +475,6 @@ where
         Err(CommandError::ExitStatusError(err)) => Err(DockerError::ExitStatusError(err)),
         Err(CommandError::ExecutionError(err)) => Err(DockerError::ExecutionError(err)),
     }
-}
-
-pub fn to_engine_error(event_details: &EventDetails, error: DockerError) -> EngineError {
-    EngineError::new_docker_error(event_details.clone(), error)
 }
 
 // start a local registry to run this test
@@ -524,7 +555,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/Dockerfile"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
-            &vec![],
+            &[],
             &image_cache,
             false,
             &mut |msg| println!("{}", msg),
@@ -539,7 +570,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/Dockerfile.buildkit"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
-            &vec![],
+            &[],
             &image_cache,
             false,
             &mut |msg| println!("{}", msg),
@@ -571,7 +602,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/Dockerfile"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
-            &vec![],
+            &[],
             &image_cache,
             false,
             &mut |msg| println!("{}", msg),
@@ -585,7 +616,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/Dockerfile.buildkit"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
-            &vec![],
+            &[],
             &image_cache,
             false,
             &mut |msg| println!("{}", msg),
@@ -617,7 +648,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/Dockerfile"),
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
-            &vec![],
+            &[],
             &image_cache,
             false,
             &mut |msg| println!("{}", msg),
