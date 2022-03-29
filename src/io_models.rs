@@ -27,7 +27,7 @@ use crate::cloud_provider::scaleway::databases::mongodb::MongoDbScw;
 use crate::cloud_provider::scaleway::databases::mysql::MySQLScw;
 use crate::cloud_provider::scaleway::databases::postgresql::PostgresScw;
 use crate::cloud_provider::scaleway::databases::redis::RedisScw;
-use crate::cloud_provider::service::{DatabaseOptions, IRouter};
+use crate::cloud_provider::service::{DatabaseOptions, Router};
 use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
@@ -35,7 +35,7 @@ use crate::cmd::docker::Docker;
 use crate::container_registry::ContainerRegistryInfo;
 use crate::logger::Logger;
 use crate::models;
-use crate::models::application::{ApplicationError, IApplication};
+use crate::models::application::{Application, ApplicationError};
 use crate::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
 use crate::models::digital_ocean::{DoAppExtraSettings, DoRouterExtraSettings, DoStorageType};
 use crate::models::router::RouterError;
@@ -226,12 +226,12 @@ impl Application {
         build: Build,
         cloud_provider: &dyn CloudProvider,
         logger: Box<dyn Logger>,
-    ) -> Result<Box<dyn IApplication>, ApplicationError> {
+    ) -> Result<Box<dyn Application>, ApplicationError> {
         let environment_variables = to_environment_variable(&self.environment_vars);
         let listeners = cloud_provider.listeners().clone();
 
         match cloud_provider.kind() {
-            CPKind::Aws => Ok(Box::new(models::application::Application::<AWS>::new(
+            CPKind::Aws => Ok(Box::new(models::application::ApplicationImpl::<AWS>::new(
                 context.clone(),
                 self.id.as_str(),
                 self.action.to_service_action(),
@@ -250,7 +250,7 @@ impl Application {
                 listeners,
                 logger.clone(),
             )?)),
-            CPKind::Do => Ok(Box::new(models::application::Application::<DO>::new(
+            CPKind::Do => Ok(Box::new(models::application::ApplicationImpl::<DO>::new(
                 context.clone(),
                 self.id.as_str(),
                 self.action.to_service_action(),
@@ -269,7 +269,7 @@ impl Application {
                 listeners,
                 logger.clone(),
             )?)),
-            CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
+            CPKind::Scw => Ok(Box::new(models::application::ApplicationImpl::<SCW>::new(
                 context.clone(),
                 self.id.as_str(),
                 self.action.to_service_action(),
@@ -509,7 +509,7 @@ impl Router {
         context: &Context,
         cloud_provider: &dyn CloudProvider,
         logger: Box<dyn Logger>,
-    ) -> Result<Box<dyn IRouter>, RouterError> {
+    ) -> Result<Box<dyn Router>, RouterError> {
         let custom_domains = self
             .custom_domains
             .iter()
@@ -532,7 +532,7 @@ impl Router {
 
         match cloud_provider.kind() {
             CPKind::Aws => {
-                let router = Box::new(models::router::Router::<AWS>::new(
+                let router = Box::new(models::router::RouterImpl::<AWS>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.name.as_str(),
@@ -548,7 +548,7 @@ impl Router {
                 Ok(router)
             }
             CPKind::Do => {
-                let router = Box::new(models::router::Router::<DO>::new(
+                let router = Box::new(models::router::RouterImpl::<DO>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.name.as_str(),
@@ -564,7 +564,7 @@ impl Router {
                 Ok(router)
             }
             CPKind::Scw => {
-                let router = Box::new(models::router::Router::<SCW>::new(
+                let router = Box::new(models::router::RouterImpl::<SCW>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.name.as_str(),
