@@ -1,5 +1,5 @@
-use crate::cloud_provider::service::{Action, Database, IRouter, StatefulService, StatelessService};
-use crate::models::application::IApplication;
+use crate::cloud_provider::service::{Action, Database, Router, StatefulService, StatelessService};
+use crate::models::application::Application;
 
 pub struct Environment {
     namespace: String,
@@ -8,8 +8,8 @@ pub struct Environment {
     pub owner_id: String,
     pub organization_id: String,
     pub action: Action,
-    pub applications: Vec<Box<dyn IApplication>>,
-    pub routers: Vec<Box<dyn IRouter>>,
+    pub applications: Vec<Box<dyn Application>>,
+    pub routers: Vec<Box<dyn Router>>,
     pub databases: Vec<Box<dyn Database>>,
 }
 
@@ -20,8 +20,8 @@ impl Environment {
         owner_id: &str,
         organization_id: &str,
         action: Action,
-        applications: Vec<Box<dyn IApplication>>,
-        routers: Vec<Box<dyn IRouter>>,
+        applications: Vec<Box<dyn Application>>,
+        routers: Vec<Box<dyn Router>>,
         databases: Vec<Box<dyn Database>>,
     ) -> Self {
         Environment {

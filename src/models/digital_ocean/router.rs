@@ -1,10 +1,10 @@
 use crate::cloud_provider::DeploymentTarget;
 use crate::errors::EngineError;
-use crate::models::router::Router;
+use crate::models::router::RouterImpl;
 use crate::models::types::{ToTeraContext, DO};
 use tera::Context as TeraContext;
 
-impl ToTeraContext for Router<DO> {
+impl ToTeraContext for RouterImpl<DO> {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let mut context = self.default_tera_context(target)?;
         context.insert("doks_cluster_id", target.kubernetes.id());

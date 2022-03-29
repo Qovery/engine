@@ -5,12 +5,12 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
 use crate::io_models::ListenersHelper;
-use crate::models::application::Application;
+use crate::models::application::ApplicationImpl;
 use crate::models::scaleway::ScwStorageType;
 use crate::models::types::{ToTeraContext, SCW};
 use tera::Context as TeraContext;
 
-impl ToTeraContext for Application<SCW> {
+impl ToTeraContext for ApplicationImpl<SCW> {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let kubernetes = target.kubernetes;
