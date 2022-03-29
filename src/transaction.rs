@@ -14,7 +14,7 @@ use crate::io_models::{
     EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier,
 };
 use crate::logger::Logger;
-use crate::models::application::Application;
+use crate::models::application::IApplication;
 
 pub struct Transaction<'a> {
     engine: &'a EngineConfig,
@@ -131,7 +131,7 @@ impl<'a> Transaction<'a> {
 
     fn build_and_push_applications(
         &self,
-        applications: &mut [Box<dyn Application>],
+        applications: &mut [Box<dyn IApplication>],
         option: &DeploymentOption,
     ) -> Result<(), EngineError> {
         // do the same for applications

@@ -2,7 +2,7 @@ use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, deploy_stateless_service_error, send_progress_on_long_task, Action,
-    Create, Delete, Helm, Pause, Router, Service, ServiceType, StatelessService,
+    Create, Delete, Helm, IRouter, Pause, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{check_cname_for, print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
@@ -25,7 +25,7 @@ pub enum RouterError {
     InvalidConfig(String),
 }
 
-pub struct RouterImpl<T: CloudProvider> {
+pub struct Router<T: CloudProvider> {
     _marker: PhantomData<T>,
     pub(crate) context: Context,
     pub(crate) id: String,
@@ -40,7 +40,7 @@ pub struct RouterImpl<T: CloudProvider> {
     pub(crate) _extra_settings: T::RouterExtraSettings,
 }
 
-impl<T: CloudProvider> RouterImpl<T> {
+impl<T: CloudProvider> Router<T> {
     pub fn new(
         context: Context,
         id: &str,
@@ -185,13 +185,13 @@ impl<T: CloudProvider> RouterImpl<T> {
     }
 }
 
-impl<T: CloudProvider> ToTransmitter for RouterImpl<T> {
+impl<T: CloudProvider> ToTransmitter for Router<T> {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::Router(self.id.to_string(), self.name.to_string())
     }
 }
 
-impl<T: CloudProvider> Listen for RouterImpl<T> {
+impl<T: CloudProvider> Listen for Router<T> {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }
@@ -201,7 +201,7 @@ impl<T: CloudProvider> Listen for RouterImpl<T> {
     }
 }
 
-impl<T: CloudProvider> Helm for RouterImpl<T> {
+impl<T: CloudProvider> Helm for Router<T> {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -227,9 +227,9 @@ impl<T: CloudProvider> Helm for RouterImpl<T> {
     }
 }
 
-impl<T: CloudProvider> Service for RouterImpl<T>
+impl<T: CloudProvider> Service for Router<T>
 where
-    RouterImpl<T>: ToTeraContext,
+    Router<T>: ToTeraContext,
 {
     fn context(&self) -> &Context {
         &self.context
@@ -304,9 +304,9 @@ where
     }
 }
 
-impl<T: CloudProvider> Create for RouterImpl<T>
+impl<T: CloudProvider> Create for Router<T>
 where
-    RouterImpl<T>: Service,
+    Router<T>: Service,
 {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -433,9 +433,9 @@ where
     }
 }
 
-impl<T: CloudProvider> Pause for RouterImpl<T>
+impl<T: CloudProvider> Pause for Router<T>
 where
-    RouterImpl<T>: Service,
+    Router<T>: Service,
 {
     #[named]
     fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -481,9 +481,9 @@ where
     }
 }
 
-impl<T: CloudProvider> Delete for RouterImpl<T>
+impl<T: CloudProvider> Delete for Router<T>
 where
-    RouterImpl<T>: Service,
+    Router<T>: Service,
 {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -535,18 +535,18 @@ where
     }
 }
 
-impl<T: CloudProvider> StatelessService for RouterImpl<T>
+impl<T: CloudProvider> StatelessService for Router<T>
 where
-    RouterImpl<T>: Service,
+    Router<T>: Service,
 {
     fn as_stateless_service(&self) -> &dyn StatelessService {
         self
     }
 }
 
-impl<T: CloudProvider> Router for RouterImpl<T>
+impl<T: CloudProvider> IRouter for Router<T>
 where
-    RouterImpl<T>: Service,
+    Router<T>: Service,
 {
     fn domains(&self) -> Vec<&str> {
         let mut domains = Vec::with_capacity(1 + self.custom_domains.len());

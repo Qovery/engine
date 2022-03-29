@@ -157,7 +157,7 @@ pub trait StatefulService: Service + Create + Pause + Delete {
     fn is_managed_service(&self) -> bool;
 }
 
-pub trait Router: StatelessService + Listen + Helm {
+pub trait IRouter: StatelessService + Listen + Helm {
     fn domains(&self) -> Vec<&str>;
     fn has_custom_domains(&self) -> bool;
     fn check_domains(&self, event_details: EventDetails, logger: &dyn Logger) -> Result<(), EngineError> {

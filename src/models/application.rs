@@ -24,7 +24,7 @@ pub enum ApplicationError {
     InvalidConfig(String),
 }
 
-pub struct ApplicationImpl<T: CloudProvider> {
+pub struct Application<T: CloudProvider> {
     _marker: PhantomData<T>,
     pub(crate) context: Context,
     pub(crate) id: String,
@@ -46,7 +46,7 @@ pub struct ApplicationImpl<T: CloudProvider> {
 }
 
 // Here we define the common behavior among all providers
-impl<T: CloudProvider> ApplicationImpl<T> {
+impl<T: CloudProvider> Application<T> {
     pub fn new(
         context: Context,
         id: &str,
@@ -188,13 +188,13 @@ impl<T: CloudProvider> ApplicationImpl<T> {
 }
 
 // Traits implementations
-impl<T: CloudProvider> ToTransmitter for ApplicationImpl<T> {
+impl<T: CloudProvider> ToTransmitter for Application<T> {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::Application(self.id.to_string(), self.name.to_string())
     }
 }
 
-impl<T: CloudProvider> Listen for ApplicationImpl<T> {
+impl<T: CloudProvider> Listen for Application<T> {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }
@@ -204,9 +204,9 @@ impl<T: CloudProvider> Listen for ApplicationImpl<T> {
     }
 }
 
-impl<T: CloudProvider> Service for ApplicationImpl<T>
+impl<T: CloudProvider> Service for Application<T>
 where
-    ApplicationImpl<T>: ToTeraContext,
+    Application<T>: ToTeraContext,
 {
     fn context(&self) -> &Context {
         self.context()
@@ -281,7 +281,7 @@ where
     }
 }
 
-impl<T: CloudProvider> Helm for ApplicationImpl<T> {
+impl<T: CloudProvider> Helm for Application<T> {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -307,9 +307,9 @@ impl<T: CloudProvider> Helm for ApplicationImpl<T> {
     }
 }
 
-impl<T: CloudProvider> Create for ApplicationImpl<T>
+impl<T: CloudProvider> Create for Application<T>
 where
-    ApplicationImpl<T>: Service,
+    Application<T>: Service,
 {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -345,9 +345,9 @@ where
     }
 }
 
-impl<T: CloudProvider> Pause for ApplicationImpl<T>
+impl<T: CloudProvider> Pause for Application<T>
 where
-    ApplicationImpl<T>: Service,
+    Application<T>: Service,
 {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -386,9 +386,9 @@ where
     }
 }
 
-impl<T: CloudProvider> Delete for ApplicationImpl<T>
+impl<T: CloudProvider> Delete for Application<T>
 where
-    ApplicationImpl<T>: Service,
+    Application<T>: Service,
 {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -429,23 +429,23 @@ where
     }
 }
 
-impl<T: CloudProvider> StatelessService for ApplicationImpl<T>
+impl<T: CloudProvider> StatelessService for Application<T>
 where
-    ApplicationImpl<T>: Service,
+    Application<T>: Service,
 {
     fn as_stateless_service(&self) -> &dyn StatelessService {
         self
     }
 }
 
-pub trait Application: StatelessService {
+pub trait IApplication: StatelessService {
     fn get_build(&self) -> &Build;
     fn get_build_mut(&mut self) -> &mut Build;
 }
 
-impl<T: CloudProvider> Application for ApplicationImpl<T>
+impl<T: CloudProvider> IApplication for Application<T>
 where
-    ApplicationImpl<T>: Service,
+    Application<T>: Service,
 {
     fn get_build(&self) -> &Build {
         self.build()
