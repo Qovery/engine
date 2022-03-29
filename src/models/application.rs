@@ -438,12 +438,12 @@ where
     }
 }
 
-pub trait IApplication: StatelessService {
+pub trait ApplicationService: StatelessService {
     fn get_build(&self) -> &Build;
     fn get_build_mut(&mut self) -> &mut Build;
 }
 
-impl<T: CloudProvider> IApplication for Application<T>
+impl<T: CloudProvider> ApplicationService for Application<T>
 where
     Application<T>: Service,
 {

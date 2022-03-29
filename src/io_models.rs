@@ -27,7 +27,7 @@ use crate::cloud_provider::scaleway::databases::mongodb::MongoDbScw;
 use crate::cloud_provider::scaleway::databases::mysql::MySQLScw;
 use crate::cloud_provider::scaleway::databases::postgresql::PostgresScw;
 use crate::cloud_provider::scaleway::databases::redis::RedisScw;
-use crate::cloud_provider::service::{DatabaseOptions, IRouter};
+use crate::cloud_provider::service::{DatabaseOptions, RouterService};
 use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
@@ -35,7 +35,7 @@ use crate::cmd::docker::Docker;
 use crate::container_registry::ContainerRegistryInfo;
 use crate::logger::Logger;
 use crate::models;
-use crate::models::application::{ApplicationError, IApplication};
+use crate::models::application::{ApplicationError, ApplicationService};
 use crate::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
 use crate::models::digital_ocean::{DoAppExtraSettings, DoRouterExtraSettings, DoStorageType};
 use crate::models::router::RouterError;
@@ -226,7 +226,7 @@ impl Application {
         build: Build,
         cloud_provider: &dyn CloudProvider,
         logger: Box<dyn Logger>,
-    ) -> Result<Box<dyn IApplication>, ApplicationError> {
+    ) -> Result<Box<dyn ApplicationService>, ApplicationError> {
         let environment_variables = to_environment_variable(&self.environment_vars);
         let listeners = cloud_provider.listeners().clone();
 
@@ -509,7 +509,7 @@ impl Router {
         context: &Context,
         cloud_provider: &dyn CloudProvider,
         logger: Box<dyn Logger>,
-    ) -> Result<Box<dyn IRouter>, RouterError> {
+    ) -> Result<Box<dyn RouterService>, RouterError> {
         let custom_domains = self
             .custom_domains
             .iter()

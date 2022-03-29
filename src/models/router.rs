@@ -2,7 +2,7 @@ use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
     default_tera_context, delete_stateless_service, deploy_stateless_service_error, send_progress_on_long_task, Action,
-    Create, Delete, Helm, IRouter, Pause, Service, ServiceType, StatelessService,
+    Create, Delete, Helm, Pause, RouterService, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{check_cname_for, print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
@@ -544,7 +544,7 @@ where
     }
 }
 
-impl<T: CloudProvider> IRouter for Router<T>
+impl<T: CloudProvider> RouterService for Router<T>
 where
     Router<T>: Service,
 {
