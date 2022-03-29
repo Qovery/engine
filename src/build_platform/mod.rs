@@ -1,18 +1,48 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use crate::errors::{CommandError, EngineError};
+use crate::cmd::command::CommandError;
+use crate::cmd::docker::DockerError;
+use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter};
-use crate::git;
+use crate::io_models::{Context, Listen, QoveryIdentifier};
 use crate::logger::Logger;
-use crate::models::{Context, Listen, QoveryIdentifier};
-use crate::utilities::get_image_tag;
-use git2::{Cred, CredentialType};
+use crate::utilities::compute_image_tag;
 use std::fmt::{Display, Formatter, Result as FmtResult};
-use std::path::Path;
+use std::hash::Hash;
+use std::path::PathBuf;
+use url::Url;
 
-pub mod docker;
+pub mod dockerfile_utils;
 pub mod local_docker;
+
+#[derive(thiserror::Error, Debug)]
+pub enum BuildError {
+    #[error("Cannot build Application {0} due to an invalid config: {1}")]
+    InvalidConfig(String, String),
+
+    #[error("Cannot build Application {0} due to an error with git: {1}")]
+    GitError(String, git2::Error),
+
+    #[error("Build of Application {0} have been aborted at user request")]
+    Aborted(String),
+
+    #[error("Cannot build Application {0} due to an io error: {1} {2}")]
+    IoError(String, String, std::io::Error),
+
+    #[error("Cannot build Application {0} due to an error with docker: {1}")]
+    DockerError(String, DockerError),
+
+    #[error("Cannot build Application {0} due to an error with buildpack: {1}")]
+    BuildpackError(String, CommandError),
+}
+
+pub fn to_engine_error(event_details: EventDetails, err: BuildError) -> EngineError {
+    match err {
+        BuildError::Aborted(_) => EngineError::new_task_cancellation_requested(event_details),
+        _ => EngineError::new_build_error(event_details, err),
+    }
+}
 
 pub trait BuildPlatform: ToTransmitter + Listen {
     fn context(&self) -> &Context;
@@ -22,15 +52,7 @@ pub trait BuildPlatform: ToTransmitter + Listen {
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
     }
-    fn is_valid(&self) -> Result<(), EngineError>;
-    fn has_cache(&self, build: &Build) -> Result<CacheResult, EngineError>;
-    fn build(
-        &self,
-        build: Build,
-        force_build: bool,
-        is_task_canceled: &dyn Fn() -> bool,
-    ) -> Result<BuildResult, EngineError>;
-    fn build_error(&self, build: Build) -> Result<BuildResult, EngineError>;
+    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<(), BuildError>;
     fn logger(&self) -> Box<dyn Logger>;
     fn get_event_details(&self) -> EventDetails {
         let context = self.context();
@@ -49,68 +71,19 @@ pub trait BuildPlatform: ToTransmitter + Listen {
 pub struct Build {
     pub git_repository: GitRepository,
     pub image: Image,
-    pub options: BuildOptions,
+    pub environment_variables: BTreeMap<String, String>,
+    pub disable_cache: bool,
 }
 
 impl Build {
-    pub fn to_previous_build<P>(&self, clone_repo_into_dir: P) -> Result<Option<Build>, CommandError>
-    where
-        P: AsRef<Path>,
-    {
-        let parent_commit_id = git::get_parent_commit_id(
-            self.git_repository.url.as_str(),
-            self.git_repository.commit_id.as_str(),
-            clone_repo_into_dir,
-            &|_| match &self.git_repository.credentials {
-                None => vec![],
-                Some(creds) => vec![(
-                    CredentialType::USER_PASS_PLAINTEXT,
-                    Cred::userpass_plaintext(creds.login.as_str(), creds.password.as_str()).unwrap(),
-                )],
-            },
-        )
-        .map_err(|err| CommandError::new(err.to_string(), Some("Cannot get parent commit ID.".to_string())))?;
-
-        let parent_commit_id = match parent_commit_id {
-            None => return Ok(None),
-            Some(parent_commit_id) => parent_commit_id,
-        };
-
-        let mut environment_variables_map = BTreeMap::<String, String>::new();
-        for env in &self.options.environment_variables {
-            environment_variables_map.insert(env.key.clone(), env.value.clone());
-        }
-
-        let mut image = self.image.clone();
-        image.tag = get_image_tag(
+    pub fn compute_image_tag(&mut self) {
+        self.image.tag = compute_image_tag(
             &self.git_repository.root_path,
             &self.git_repository.dockerfile_path,
-            &environment_variables_map,
-            &parent_commit_id,
+            &self.environment_variables,
+            &self.git_repository.commit_id,
         );
-
-        image.commit_id = parent_commit_id.clone();
-
-        Ok(Some(Build {
-            git_repository: GitRepository {
-                url: self.git_repository.url.clone(),
-                credentials: self.git_repository.credentials.clone(),
-                ssh_keys: self.git_repository.ssh_keys.clone(),
-                commit_id: parent_commit_id,
-                dockerfile_path: self.git_repository.dockerfile_path.clone(),
-                root_path: self.git_repository.root_path.clone(),
-                buildpack_language: self.git_repository.buildpack_language.clone(),
-            },
-            image,
-            options: BuildOptions {
-                environment_variables: self.options.environment_variables.clone(),
-            },
-        }))
     }
-}
-
-pub struct BuildOptions {
-    pub environment_variables: Vec<EnvironmentVariable>,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -133,12 +106,12 @@ pub struct SshKey {
 }
 
 pub struct GitRepository {
-    pub url: String,
+    pub url: Url,
     pub credentials: Option<Credentials>,
     pub ssh_keys: Vec<SshKey>,
     pub commit_id: String,
-    pub dockerfile_path: Option<String>,
-    pub root_path: String,
+    pub dockerfile_path: Option<PathBuf>,
+    pub root_path: PathBuf,
     pub buildpack_language: Option<String>,
 }
 
@@ -148,23 +121,43 @@ pub struct Image {
     pub name: String,
     pub tag: String,
     pub commit_id: String,
-    // registry name where the image has been pushed: Optional
-    pub registry_name: Option<String>,
+    // registry name where the image has been pushed
+    pub registry_name: String,
     // registry docker json config: Optional
     pub registry_docker_json_config: Option<String>,
-    // registry secret to pull image: Optional
-    pub registry_secret: Option<String>,
     // complete registry URL where the image has been pushed
-    pub registry_url: Option<String>,
+    pub registry_url: Url,
+    pub repository_name: String,
 }
 
 impl Image {
-    pub fn name_with_tag(&self) -> String {
-        format!("{}:{}", self.name, self.tag)
+    pub fn registry_host(&self) -> &str {
+        self.registry_url.host_str().unwrap()
+    }
+    pub fn repository_name(&self) -> &str {
+        &self.repository_name
+    }
+    pub fn full_image_name_with_tag(&self) -> String {
+        format!(
+            "{}/{}:{}",
+            self.registry_url.host_str().unwrap_or_default(),
+            self.name,
+            self.tag
+        )
     }
 
-    pub fn name_with_latest_tag(&self) -> String {
-        format!("{}:latest", self.name)
+    pub fn full_image_name(&self) -> String {
+        format!("{}/{}", self.registry_url.host_str().unwrap_or_default(), self.name,)
+    }
+
+    pub fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    pub fn name_without_repository(&self) -> &str {
+        self.name
+            .strip_prefix(&format!("{}/", self.repository_name()))
+            .unwrap_or(&self.name)
     }
 }
 
@@ -175,10 +168,10 @@ impl Default for Image {
             name: "".to_string(),
             tag: "".to_string(),
             commit_id: "".to_string(),
-            registry_name: None,
+            registry_name: "".to_string(),
             registry_docker_json_config: None,
-            registry_secret: None,
-            registry_url: None,
+            registry_url: Url::parse("https://default.com").unwrap(),
+            repository_name: "".to_string(),
         }
     }
 }
@@ -193,26 +186,8 @@ impl Display for Image {
     }
 }
 
-pub struct BuildResult {
-    pub build: Build,
-}
-
-impl BuildResult {
-    pub fn new(build: Build) -> Self {
-        BuildResult { build }
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     LocalDocker,
-}
-
-type ParentBuild = Build;
-
-pub enum CacheResult {
-    MissWithoutParentBuild,
-    Miss(ParentBuild),
-    Hit,
 }

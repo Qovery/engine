@@ -63,13 +63,13 @@ pub fn get_qovery_app_version<T: DeserializeOwned>(
         Ok(x) => match x.json::<T>() {
             Ok(qa) => Ok(qa),
             Err(e) => Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe.to_string(), e),
-                Some(message_safe.to_string()),
+                format!("{}, error: {:?}", message_safe, e),
+                Some(message_safe),
             )),
         },
         Err(e) => Err(CommandError::new(
-            format!("{}, error: {:?}", message_safe.to_string(), e),
-            Some(message_safe.to_string()),
+            format!("{}, error: {:?}", message_safe, e),
+            Some(message_safe),
         )),
     }
 }

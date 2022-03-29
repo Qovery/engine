@@ -9,9 +9,8 @@ use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, GeneralStep, Stage, ToTransmitter, Transmitter};
-use crate::models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
+use crate::io_models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
 
-pub mod application;
 pub mod databases;
 pub mod do_api_common;
 pub mod kubernetes;
@@ -105,11 +104,7 @@ impl CloudProvider for DO {
         let client = DigitalOcean::new(&self.token);
         match client {
             Ok(_x) => Ok(()),
-            Err(_) => {
-                return Err(EngineError::new_client_invalid_cloud_provider_credentials(
-                    event_details,
-                ));
-            }
+            Err(_) => Err(EngineError::new_client_invalid_cloud_provider_credentials(event_details)),
         }
     }
 

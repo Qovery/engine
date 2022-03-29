@@ -1,3 +1,5 @@
+#![allow(clippy::field_reassign_with_default)]
+#![allow(clippy::large_enum_variant)]
 #![allow(deprecated)]
 
 pub mod io;
@@ -6,7 +8,7 @@ extern crate url;
 
 use crate::cloud_provider::Kind;
 use crate::errors::{CommandError, EngineError};
-use crate::models::QoveryIdentifier;
+use crate::io_models::QoveryIdentifier;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone)]
@@ -20,29 +22,6 @@ pub enum EngineEvent {
     Warning(EventDetails, EventMessage),
     /// Error: represents an error event.
     Error(EngineError, Option<EventMessage>),
-    /// Waiting: represents an engine waiting event.
-    ///
-    /// Engine is waiting for a task to be done.
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Waiting(EventDetails, EventMessage),
-    /// Deploying: represents an engine deploying event.
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Deploying(EventDetails, EventMessage),
-    /// Pausing: represents an engine pausing event.
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Pausing(EventDetails, EventMessage),
-    /// Deleting: represents an engine deleting event.
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Deleting(EventDetails, EventMessage),
-    /// Deployed: represents an engine deployed event.
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Deployed(EventDetails, EventMessage),
-    /// Paused: represents an engine paused event.
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Paused(EventDetails, EventMessage),
-    /// Deleted: represents an engine deleted event.
-    #[deprecated(note = "event status is carried by EventDetails directly")]
-    Deleted(EventDetails, EventMessage),
 }
 
 impl EngineEvent {
@@ -53,13 +32,6 @@ impl EngineEvent {
             EngineEvent::Info(details, _message) => details,
             EngineEvent::Warning(details, _message) => details,
             EngineEvent::Error(engine_error, _message) => engine_error.event_details(),
-            EngineEvent::Waiting(details, _message) => details,
-            EngineEvent::Deploying(details, _message) => details,
-            EngineEvent::Pausing(details, _message) => details,
-            EngineEvent::Deleting(details, _message) => details,
-            EngineEvent::Deployed(details, _message) => details,
-            EngineEvent::Paused(details, _message) => details,
-            EngineEvent::Deleted(details, _message) => details,
         }
     }
 
@@ -70,13 +42,6 @@ impl EngineEvent {
             EngineEvent::Info(_details, message) => message.message(message_verbosity),
             EngineEvent::Warning(_details, message) => message.message(message_verbosity),
             EngineEvent::Error(engine_error, _message) => engine_error.message(),
-            EngineEvent::Waiting(_details, message) => message.message(message_verbosity),
-            EngineEvent::Deploying(_details, message) => message.message(message_verbosity),
-            EngineEvent::Pausing(_details, message) => message.message(message_verbosity),
-            EngineEvent::Deleting(_details, message) => message.message(message_verbosity),
-            EngineEvent::Deployed(_details, message) => message.message(message_verbosity),
-            EngineEvent::Paused(_details, message) => message.message(message_verbosity),
-            EngineEvent::Deleted(_details, message) => message.message(message_verbosity),
         }
     }
 }
@@ -132,11 +97,7 @@ impl EventMessage {
             EventMessageVerbosity::SafeOnly => self.safe_message.to_string(),
             EventMessageVerbosity::FullDetails => match &self.full_details {
                 None => self.safe_message.to_string(),
-                Some(details) => format!(
-                    "{} / Full details: {}",
-                    self.safe_message.to_string(),
-                    details.to_string()
-                ),
+                Some(details) => format!("{} / Full details: {}", self.safe_message, details),
             },
         }
     }
@@ -154,7 +115,7 @@ impl Display for EventMessage {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// Stage: represents an engine event stage, can be General, Infrastructure or Environment.
 pub enum Stage {
     /// GeneralStep: general stage in the engine, usually used across all stages.
@@ -190,7 +151,7 @@ impl Display for Stage {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// GeneralStep: represents an engine general step usually shared across all engine stages
 pub enum GeneralStep {
     /// ValidateSystemRequirements: validating system requirements
@@ -218,7 +179,7 @@ impl Display for GeneralStep {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// InfrastructureStep: represents an engine infrastructure step.
 pub enum InfrastructureStep {
     /// LoadConfiguration: first step in infrastructure, aiming to load all configuration (from Terraform, etc).
@@ -255,7 +216,7 @@ impl Display for InfrastructureStep {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// EnvironmentStep: represents an engine environment step.
 pub enum EnvironmentStep {
     /// LoadConfiguration: first step in environment, aiming to load all configuration (from Terraform, etc).
@@ -309,7 +270,7 @@ type TransmitterName = String;
 /// TransmitterType: represents a transmitter type.
 type TransmitterType = String; // TODO(benjaminch): makes it a real enum / type
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// Transmitter: represents the event's source caller (transmitter).
 pub enum Transmitter {
     /// BuildPlatform: platform aiming to build applications images.
@@ -358,7 +319,7 @@ impl Display for Transmitter {
 /// Region: represents event's cloud provider region.
 type Region = String;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// EventDetails: represents an event details, carrying all useful data such as Qovery identifiers, transmitter, stage etc.
 pub struct EventDetails {
     /// provider_kind: cloud provider name. an be set to None if not linked to any provider kind.
@@ -411,7 +372,7 @@ impl EventDetails {
 
     /// TODO(benjaminch): remove this dirty hack
     pub fn clone_changing_stage(event_details: EventDetails, stage: Stage) -> Self {
-        let mut event_details = event_details.clone();
+        let mut event_details = event_details;
         event_details.stage = stage;
         event_details
     }
@@ -466,18 +427,8 @@ mod tests {
                 EventMessageVerbosity::SafeOnly,
                 "safe".to_string(),
             ),
-            (
-                "safe".to_string(),
-                None,
-                EventMessageVerbosity::SafeOnly,
-                "safe".to_string(),
-            ),
-            (
-                "safe".to_string(),
-                None,
-                EventMessageVerbosity::FullDetails,
-                "safe".to_string(),
-            ),
+            ("safe".to_string(), None, EventMessageVerbosity::SafeOnly, "safe".to_string()),
+            ("safe".to_string(), None, EventMessageVerbosity::FullDetails, "safe".to_string()),
             (
                 "safe".to_string(),
                 Some("raw".to_string()),
@@ -524,30 +475,12 @@ mod tests {
                 Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
                 InfrastructureStep::LoadConfiguration.to_string(),
             ),
-            (
-                Stage::Environment(EnvironmentStep::Pause),
-                EnvironmentStep::Pause.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Resume),
-                EnvironmentStep::Resume.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Build),
-                EnvironmentStep::Build.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Delete),
-                EnvironmentStep::Delete.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Update),
-                EnvironmentStep::Update.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Deploy),
-                EnvironmentStep::Deploy.to_string(),
-            ),
+            (Stage::Environment(EnvironmentStep::Pause), EnvironmentStep::Pause.to_string()),
+            (Stage::Environment(EnvironmentStep::Resume), EnvironmentStep::Resume.to_string()),
+            (Stage::Environment(EnvironmentStep::Build), EnvironmentStep::Build.to_string()),
+            (Stage::Environment(EnvironmentStep::Delete), EnvironmentStep::Delete.to_string()),
+            (Stage::Environment(EnvironmentStep::Update), EnvironmentStep::Update.to_string()),
+            (Stage::Environment(EnvironmentStep::Deploy), EnvironmentStep::Deploy.to_string()),
         ];
 
         for tc in test_cases {

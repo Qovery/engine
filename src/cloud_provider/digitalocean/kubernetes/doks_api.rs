@@ -27,7 +27,7 @@ pub fn get_doks_info_from_name(
         Err(e) => {
             let safe_message = "Error while trying to deserialize json received from Digital Ocean DOKS API";
             return Err(CommandError::new(
-                format!("{}, error: {}", safe_message.to_string(), e.to_string()),
+                format!("{}, error: {}", safe_message, e),
                 Some(safe_message.to_string()),
             ));
         }
@@ -51,7 +51,7 @@ fn get_doks_versions_from_api_output(json_content: &str) -> Result<Vec<Kubernete
         Err(e) => {
             let safe_message = "Error while trying to deserialize json received from Digital Ocean DOKS API";
             return Err(CommandError::new(
-                format!("{}, error: {}", safe_message.to_string(), e.to_string()),
+                format!("{}, error: {}", safe_message, e),
                 Some(safe_message.to_string()),
             ));
         }
@@ -60,7 +60,7 @@ fn get_doks_versions_from_api_output(json_content: &str) -> Result<Vec<Kubernete
 
 // get DOKS slug version from available DOKS versions
 fn get_do_kubernetes_latest_slug_version(
-    doks_versions: &Vec<KubernetesVersion>,
+    doks_versions: &[KubernetesVersion],
     wished_version: &str,
 ) -> Result<Option<String>, CommandError> {
     let wished_k8s_version = VersionsNumber::from_str(wished_version)?;
@@ -76,8 +76,43 @@ fn get_do_kubernetes_latest_slug_version(
 
     Err(CommandError::new_from_safe_message(format!(
         "DOKS version `{}` is not supported.",
-        wished_k8s_version.to_string()
+        wished_k8s_version
     )))
+}
+
+pub fn get_do_kubeconfig_by_cluster_name(token: &str, cluster_name: &str) -> Result<Option<String>, CommandError> {
+    let clusters_url = format!("{}/clusters", DoApiType::Doks.api_url());
+    let clusters_response = do_get_from_api(token, DoApiType::Doks, clusters_url);
+    let clusters: Result<DoksList, CommandError> = match clusters_response {
+        Ok(clusters_response) => match serde_json::from_str(clusters_response.as_str()) {
+            Ok(clusters) => Ok(clusters),
+            Err(e) => Err(CommandError::new_from_safe_message(e.to_string())),
+        },
+        Err(e) => Err(CommandError::new_from_safe_message(e.message())),
+    };
+
+    let clusters_copy = clusters.expect("Unable to list clusters").kubernetes_clusters;
+    let cluster_name = cluster_name.trim().to_lowercase();
+    match clusters_copy
+        .into_iter()
+        .filter(|cluster| cluster.name.trim().to_lowercase() == cluster_name)
+        .collect::<Vec<KubernetesCluster>>()
+        .first()
+    {
+        Some(cluster) => {
+            let kubeconfig_url = format!("{}/clusters/{}/kubeconfig", DoApiType::Doks.api_url(), cluster.id);
+            match do_get_from_api(token, DoApiType::Doks, kubeconfig_url) {
+                Ok(kubeconfig) => {
+                    if kubeconfig.is_empty() {
+                        return Ok(None);
+                    }
+                    Ok(Some(kubeconfig))
+                }
+                Err(e) => Err(CommandError::new_from_safe_message(e.message())),
+            }
+        }
+        None => Ok(None),
+    }
 }
 
 #[cfg(test)]

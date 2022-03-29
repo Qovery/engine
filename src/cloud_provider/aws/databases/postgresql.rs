@@ -17,12 +17,12 @@ use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
+use crate::io_models::DatabaseMode::MANAGED;
+use crate::io_models::{Context, Listen, Listener, Listeners};
 use crate::logger::Logger;
-use crate::models::DatabaseMode::MANAGED;
-use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
 
-pub struct PostgreSQL {
+pub struct PostgreSQLAws {
     context: Context,
     id: String,
     action: Action,
@@ -38,7 +38,7 @@ pub struct PostgreSQL {
     logger: Box<dyn Logger>,
 }
 
-impl PostgreSQL {
+impl PostgreSQLAws {
     pub fn new(
         context: Context,
         id: &str,
@@ -54,7 +54,7 @@ impl PostgreSQL {
         listeners: Listeners,
         logger: Box<dyn Logger>,
     ) -> Self {
-        PostgreSQL {
+        PostgreSQLAws {
             context,
             action,
             id: id.to_string(),
@@ -93,23 +93,23 @@ impl PostgreSQL {
     }
 }
 
-impl StatefulService for PostgreSQL {
+impl StatefulService for PostgreSQLAws {
+    fn as_stateful_service(&self) -> &dyn StatefulService {
+        self
+    }
+
     fn is_managed_service(&self) -> bool {
         self.options.mode == MANAGED
     }
 }
 
-impl ToTransmitter for PostgreSQL {
+impl ToTransmitter for PostgreSQLAws {
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Database(
-            self.id().to_string(),
-            self.service_type().to_string(),
-            self.name().to_string(),
-        )
+        Transmitter::Database(self.id().to_string(), self.service_type().to_string(), self.name().to_string())
     }
 }
 
-impl Service for PostgreSQL {
+impl Service for PostgreSQLAws {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -184,7 +184,7 @@ impl Service for PostgreSQL {
         context.insert("kubeconfig_path", &kube_config_file_path);
 
         kubectl::kubectl_exec_create_namespace_without_labels(
-            &environment.namespace(),
+            environment.namespace(),
             kube_config_file_path.as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
@@ -192,7 +192,7 @@ impl Service for PostgreSQL {
         context.insert("namespace", environment.namespace());
 
         let version = self
-            .matching_correct_version(self.is_managed_service(), event_details.clone())?
+            .matching_correct_version(self.is_managed_service(), event_details)?
             .matched_version()
             .to_string();
         context.insert("version", &version);
@@ -205,10 +205,7 @@ impl Service for PostgreSQL {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert(
-            "fqdn",
-            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
-        );
+        context.insert("fqdn", self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
         context.insert("database_name", self.sanitized_name().as_str());
         context.insert("database_db_name", self.name());
@@ -232,10 +229,7 @@ impl Service for PostgreSQL {
 
         context.insert("publicly_accessible", &self.options.publicly_accessible);
         if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert(
-                "resource_expiration_in_seconds",
-                &self.context.resource_expiration_in_seconds(),
-            )
+            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
         }
 
         Ok(context)
@@ -250,9 +244,9 @@ impl Service for PostgreSQL {
     }
 }
 
-impl Database for PostgreSQL {}
+impl Database for PostgreSQLAws {}
 
-impl Helm for PostgreSQL {
+impl Helm for PostgreSQLAws {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -274,7 +268,7 @@ impl Helm for PostgreSQL {
     }
 }
 
-impl Terraform for PostgreSQL {
+impl Terraform for PostgreSQLAws {
     fn terraform_common_resource_dir_path(&self) -> String {
         format!("{}/aws/services/common", self.context.lib_root_dir())
     }
@@ -284,7 +278,7 @@ impl Terraform for PostgreSQL {
     }
 }
 
-impl Create for PostgreSQL {
+impl Create for PostgreSQLAws {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -304,12 +298,7 @@ impl Create for PostgreSQL {
 
     fn on_create_check(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        self.check_domains(
-            self.listeners.clone(),
-            vec![self.fqdn.as_str()],
-            event_details,
-            self.logger(),
-        )
+        self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()], event_details, self.logger())
     }
 
     #[named]
@@ -328,7 +317,7 @@ impl Create for PostgreSQL {
     }
 }
 
-impl Pause for PostgreSQL {
+impl Pause for PostgreSQLAws {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
@@ -366,7 +355,7 @@ impl Pause for PostgreSQL {
     }
 }
 
-impl Delete for PostgreSQL {
+impl Delete for PostgreSQLAws {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
@@ -404,7 +393,7 @@ impl Delete for PostgreSQL {
     }
 }
 
-impl Listen for PostgreSQL {
+impl Listen for PostgreSQLAws {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }
@@ -451,10 +440,7 @@ fn get_managed_postgres_version(requested_version: String) -> Result<String, Com
 
 #[cfg(test)]
 mod tests_postgres {
-    use crate::cloud_provider::aws::databases::postgresql::{get_postgres_version, PostgreSQL};
-    use crate::cloud_provider::service::{Action, DatabaseOptions, Service};
-    use crate::logger::StdIoLogger;
-    use crate::models::{Context, DatabaseMode};
+    use crate::cloud_provider::aws::databases::postgresql::get_postgres_version;
 
     #[test]
     fn check_postgres_version() {
@@ -486,50 +472,5 @@ mod tests_postgres {
                 .as_str(),
             "Postgresql 1.0 version is not supported"
         );
-    }
-
-    #[test]
-    fn postgres_name_sanitizer() {
-        let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
-        let db_expected_name = "postgresqltestnamesanitizerwithtoomanycharsnotallo";
-
-        let database = PostgreSQL::new(
-            Context::new(
-                "".to_string(),
-                "".to_string(),
-                "".to_string(),
-                "".to_string(),
-                "".to_string(),
-                false,
-                None,
-                vec![],
-                None,
-            ),
-            "pgid",
-            Action::Create,
-            db_input_name,
-            "8",
-            "pgtest.qovery.io",
-            "pgid",
-            "1".to_string(),
-            512,
-            "db.t2.micro",
-            DatabaseOptions {
-                login: "".to_string(),
-                password: "".to_string(),
-                host: "".to_string(),
-                port: 5432,
-                mode: DatabaseMode::MANAGED,
-                disk_size_in_gib: 10,
-                database_disk_type: "gp2".to_string(),
-                encrypt_disk: false,
-                activate_high_availability: false,
-                activate_backups: false,
-                publicly_accessible: false,
-            },
-            vec![],
-            Box::new(StdIoLogger::new()),
-        );
-        assert_eq!(database.sanitized_name(), db_expected_name);
     }
 }

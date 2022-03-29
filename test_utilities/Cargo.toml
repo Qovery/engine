@@ -28,6 +28,8 @@ hashicorp_vault = "2.0.1"
 maplit = "1.0.2"
 uuid = { version = "0.8", features = ["v4"] }
 const_format = "0.2.22"
+url = "2.2.2"
+tokio = { version = "1.10.0", features = ["full"] }
 
 # Digital Ocean Deps
 digitalocean = "0.1.1"

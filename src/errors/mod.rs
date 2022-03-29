@@ -2,15 +2,22 @@ pub mod io;
 
 extern crate url;
 
+use crate::build_platform::BuildError;
 use crate::cloud_provider::utilities::VersionsNumber;
+use crate::cmd;
+use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
+use crate::container_registry::errors::ContainerRegistryError;
 use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
 use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
-use crate::models::QoveryIdentifier;
+use crate::io_models::QoveryIdentifier;
+use crate::object_storage::errors::ObjectStorageError;
+use std::fmt::{Display, Formatter};
+use thiserror::Error;
 use url::Url;
 
 /// CommandError: command error, mostly returned by third party tools.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub struct CommandError {
     /// message: full error message, can contains unsafe text such as passwords and tokens.
     message_raw: String,
@@ -55,6 +62,17 @@ impl CommandError {
         }
     }
 
+    /// Creates a new CommandError from legacy command error.
+    pub fn new_from_legacy_command_error(
+        legacy_command_error: cmd::command::CommandError,
+        safe_message: Option<String>,
+    ) -> Self {
+        CommandError {
+            message_raw: legacy_command_error.to_string(),
+            message_safe: safe_message,
+        }
+    }
+
     /// Create a new CommandError from a CMD command.
     pub fn new_from_command_line(
         message: String,
@@ -66,8 +84,8 @@ impl CommandError {
     ) -> Self {
         let mut unsafe_message = format!(
             "{}\ncommand: {} {}\nenv: {}",
-            message.to_string(),
-            bin.to_string(),
+            message,
+            bin,
             cmd_args.join(" "),
             envs.iter()
                 .map(|(k, v)| format!("{}={}", k, v))
@@ -83,6 +101,24 @@ impl CommandError {
         }
 
         CommandError::new(unsafe_message, Some(message))
+    }
+}
+
+impl Display for CommandError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.message().as_str())
+    }
+}
+
+impl From<ObjectStorageError> for CommandError {
+    fn from(object_storage_error: ObjectStorageError) -> Self {
+        CommandError::new_from_safe_message(object_storage_error.to_string())
+    }
+}
+
+impl From<ContainerRegistryError> for CommandError {
+    fn from(container_registry_error: ContainerRegistryError) -> Self {
+        CommandError::new_from_safe_message(container_registry_error.to_string())
     }
 }
 
@@ -107,6 +143,8 @@ pub enum Tag {
     UnsupportedZone,
     /// CannotRetrieveKubernetesConfigFile: represents an error while trying to retrieve Kubernetes config file.
     CannotRetrieveClusterConfigFile,
+    /// CannotCreateFile: represents an error while trying to create a file.
+    CannotCreateFile,
     /// CannotGetClusterNodes: represents an error while trying to get cluster's nodes.
     CannotGetClusterNodes,
     /// NotEnoughResourcesToDeployEnvironment: represents an error when trying to deploy an environment but there are not enough resources available on the cluster.
@@ -223,6 +261,8 @@ pub enum Tag {
     NotImplementedError,
     /// TaskCancellationRequested: represents an error where current task cancellation has been requested.
     TaskCancellationRequested,
+    /// BuildError: represents an error when trying to build an application.
+    BuilderError,
     /// BuilderDockerCannotFindAnyDockerfile: represents an error when trying to get a Dockerfile.
     BuilderDockerCannotFindAnyDockerfile,
     /// BuilderDockerCannotReadDockerfile: represents an error while trying to read Dockerfile.
@@ -231,6 +271,8 @@ pub enum Tag {
     BuilderDockerCannotExtractEnvVarsFromDockerfile,
     /// BuilderDockerCannotBuildContainerImage: represents an error while trying to build Docker container image.
     BuilderDockerCannotBuildContainerImage,
+    /// BuilderDockerCannotListImages: represents an error while trying to list docker images.
+    BuilderDockerCannotListImages,
     /// BuilderBuildpackInvalidLanguageFormat: represents an error where buildback requested language has wrong format.
     BuilderBuildpackInvalidLanguageFormat,
     /// BuilderBuildpackCannotBuildContainerImage: represents an error while trying to build container image with Buildpack.
@@ -239,13 +281,41 @@ pub enum Tag {
     BuilderGetBuildError,
     /// BuilderCloningRepositoryError: represents an error when builder is trying to clone a git repository.
     BuilderCloningRepositoryError,
+    /// DockerError: represents an error when trying to use docker cli.
+    DockerError,
     /// DockerPushImageError: represents an error when trying to push a docker image.
     DockerPushImageError,
     /// DockerPullImageError: represents an error when trying to pull a docker image.
     DockerPullImageError,
+    /// ContainerRegistryError: represents an error when trying to interact with a repository.
+    ContainerRegistryError,
+    /// ContainerRegistryRepositoryCreationError: represents an error when trying to create a repository.
+    ContainerRegistryRepositoryCreationError,
+    /// ContainerRegistryRepositorySetLifecycleError: represents an error when trying to set repository lifecycle policy.
+    ContainerRegistryRepositorySetLifecycleError,
+    /// ContainerRegistryGetCredentialsError: represents an error when trying to get container registry credentials.
+    ContainerRegistryGetCredentialsError,
+    /// ContainerRegistryDeleteImageError: represents an error while trying to delete an image.
+    ContainerRegistryDeleteImageError,
+    /// ContainerRegistryImageDoesntExist: represents an error, image doesn't exist in the registry.
+    ContainerRegistryImageDoesntExist,
+    /// ContainerRegistryImageUnreachableAfterPush: represents an error when image has been pushed but is unreachable.
+    ContainerRegistryImageUnreachableAfterPush,
+    /// ContainerRegistryRepositoryDoesntExist: represents an error, repository doesn't exist.
+    ContainerRegistryRepositoryDoesntExist,
+    /// ContainerRegistryDeleteRepositoryError: represents an error while trying to delete a repository.
+    ContainerRegistryDeleteRepositoryError,
+    /// ObjectStorageInvalidBucketName: represents an error, bucket name is not valid.
+    ObjectStorageInvalidBucketName,
+    /// ObjectStorageCannotEmptyBucket: represents an error while trying to empty an object storage bucket.
+    ObjectStorageCannotEmptyBucket,
+    /// ObjectStorageCannotTagBucket: represents an error while trying to tag an object storage bucket.
+    ObjectStorageCannotTagBucket,
+    /// ObjectStorageCannotActivateBucketVersioning: represents an error while trying to activate bucket versioning for bucket.
+    ObjectStorageCannotActivateBucketVersioning,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 /// EngineError: represents an engine error. Engine will always returns such errors carrying context infos easing monitoring and debugging.
 pub struct EngineError {
     /// tag: error unique identifier
@@ -337,14 +407,14 @@ impl EngineError {
 
     /// Creates new engine error from legacy engine error easing migration.
     pub fn new_from_legacy_engine_error(e: LegacyEngineError) -> Self {
-        let message = e.message.unwrap_or("".to_string());
+        let message = e.message.unwrap_or_default();
         EngineError {
             tag: Tag::Unknown,
             event_details: EventDetails::new(
                 None,
-                QoveryIdentifier::new("".to_string()),
-                QoveryIdentifier::new("".to_string()),
-                QoveryIdentifier::new(e.execution_id.to_string()),
+                QoveryIdentifier::new_from_long_id("".to_string()),
+                QoveryIdentifier::new_from_long_id("".to_string()),
+                QoveryIdentifier::new_from_long_id(e.execution_id.to_string()),
                 None,
                 Stage::General(GeneralStep::UnderMigration),
                 match e.scope {
@@ -362,7 +432,7 @@ impl EngineError {
                 },
             ),
             qovery_log_message: message.to_string(),
-            user_log_message: message.to_string(),
+            user_log_message: message,
             message: None,
             link: None,
             hint_message: None,
@@ -424,7 +494,7 @@ impl EngineError {
             event_details,
             Tag::MissingRequiredEnvVariable,
             message.to_string(),
-            message.to_string(),
+            message,
             None,
             None,
             None,
@@ -593,10 +663,29 @@ impl EngineError {
         event_details: EventDetails,
         error_message: CommandError,
     ) -> EngineError {
-        let message = "Cannot retrieve Kubernetes instance type is not supported";
+        let message = "Cannot retrieve Kubernetes kubeconfig";
         EngineError::new(
             event_details,
             Tag::CannotRetrieveClusterConfigFile,
+            message.to_string(),
+            message.to_string(),
+            Some(error_message),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for file we can't create.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error_message`: Raw error message.
+    pub fn new_cannot_create_file(event_details: EventDetails, error_message: CommandError) -> EngineError {
+        let message = "Cannot create file";
+        EngineError::new(
+            event_details,
+            Tag::CannotCreateFile,
             message.to_string(),
             message.to_string(),
             Some(error_message),
@@ -643,10 +732,7 @@ impl EngineError {
         let mut message = vec!["There is not enough resources on the cluster:".to_string()];
 
         if requested_cpu > free_cpu {
-            message.push(format!(
-                "{} CPU requested and only {} CPU available",
-                free_cpu, requested_cpu
-            ));
+            message.push(format!("{} CPU requested and only {} CPU available", free_cpu, requested_cpu));
         }
 
         if requested_ram_in_mib > free_ram_in_mib {
@@ -690,7 +776,7 @@ impl EngineError {
             event_details,
             Tag::NotEnoughResourcesToDeployEnvironment,
             message.to_string(),
-            message.to_string(),
+            message,
             None,
             None,
             Some("Consider to add one more node or upgrade your nodes configuration. If not possible, pause or delete unused environments.".to_string()),
@@ -720,7 +806,7 @@ impl EngineError {
             event_details,
             Tag::CannotUninstallHelmChart,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -760,16 +846,13 @@ impl EngineError {
         event_details: EventDetails,
         kubernetes_raw_version: String,
     ) -> EngineError {
-        let message = format!(
-            "Unable to determine Kubernetes master version: `{}`",
-            kubernetes_raw_version,
-        );
+        let message = format!("Unable to determine Kubernetes master version: `{}`", kubernetes_raw_version,);
 
         EngineError::new(
             event_details,
             Tag::CannotDetermineK8sMasterVersion,
             message.to_string(),
-            message.to_string(),
+            message,
             None,
             None,
             None,
@@ -797,7 +880,7 @@ impl EngineError {
             event_details,
             Tag::CannotDetermineK8sRequestedUpgradeVersion,
             message.to_string(),
-            message.to_string(),
+            message,
             error_message,
             None,
             None,
@@ -814,16 +897,13 @@ impl EngineError {
         event_details: EventDetails,
         kubelet_worker_raw_version: String,
     ) -> EngineError {
-        let message = format!(
-            "Unable to determine Kubelet worker version: `{}`",
-            kubelet_worker_raw_version,
-        );
+        let message = format!("Unable to determine Kubelet worker version: `{}`", kubelet_worker_raw_version,);
 
         EngineError::new(
             event_details,
             Tag::CannotDetermineK8sKubeletWorkerVersion,
             message.to_string(),
-            message.to_string(),
+            message,
             None,
             None,
             None,
@@ -846,7 +926,7 @@ impl EngineError {
             event_details,
             Tag::CannotDetermineK8sKubeProxyVersion,
             message.to_string(),
-            message.to_string(),
+            message,
             None,
             None,
             None,
@@ -883,16 +963,13 @@ impl EngineError {
     /// * `event_details`: Error linked event details.
     /// * `pod_name`: Pod name having PDB in an invalid state.
     pub fn new_k8s_pod_disruption_budget_invalid_state(event_details: EventDetails, pod_name: String) -> EngineError {
-        let message = format!(
-            "Unable to upgrade Kubernetes, pdb for app `{}` in invalid state.",
-            pod_name,
-        );
+        let message = format!("Unable to upgrade Kubernetes, pdb for app `{}` in invalid state.", pod_name,);
 
         EngineError::new(
             event_details,
             Tag::K8sPodDisruptionBudgetInInvalidState,
             message.to_string(),
-            message.to_string(),
+            message,
             None,
             None,
             None,
@@ -940,7 +1017,7 @@ impl EngineError {
             event_details,
             Tag::K8sCannotDeletePod,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_k8s_error),
             None,
             None,
@@ -1013,7 +1090,7 @@ impl EngineError {
             event_details,
             Tag::K8sUpgradeDeployedVsRequestedVersionsInconsistency,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -1045,7 +1122,7 @@ impl EngineError {
             event_details,
             Tag::K8sScaleReplicas,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -1118,7 +1195,7 @@ impl EngineError {
             event_details,
             Tag::K8sGetLogs,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -1143,7 +1220,7 @@ impl EngineError {
             event_details,
             Tag::K8sGetLogs,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -1173,7 +1250,7 @@ impl EngineError {
             event_details,
             Tag::K8sDescribe,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -1194,7 +1271,7 @@ impl EngineError {
             event_details,
             Tag::K8sHistory,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -1219,7 +1296,7 @@ impl EngineError {
             event_details,
             Tag::K8sCannotCreateNamespace,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -1249,7 +1326,7 @@ impl EngineError {
             event_details,
             Tag::K8sPodIsNotReady,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -1268,16 +1345,13 @@ impl EngineError {
         requested_version: String,
         raw_error: CommandError,
     ) -> EngineError {
-        let message = format!(
-            "Error, node is not ready with the requested version `{}`.",
-            requested_version
-        );
+        let message = format!("Error, node is not ready with the requested version `{}`.", requested_version);
 
         EngineError::new(
             event_details,
             Tag::K8sNodeIsNotReadyWithTheRequestedVersion,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -1327,7 +1401,7 @@ impl EngineError {
             event_details,
             Tag::K8sValidateRequiredCPUandBurstableError,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             Some("Please ensure your configuration is valid.".to_string()),
@@ -1347,7 +1421,7 @@ impl EngineError {
             event_details,
             Tag::CannotFindRequiredBinary,
             message.to_string(),
-            message.to_string(),
+            message,
             None,
             None,
             None,
@@ -1375,7 +1449,7 @@ impl EngineError {
             event_details,
             Tag::SubnetsCountShouldBeEven,
             message.to_string(),
-            message.to_string(),
+            message,
             None,
             None,
             None,
@@ -1400,7 +1474,7 @@ impl EngineError {
             event_details,
             Tag::CannotGetOrCreateIamRole,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -1421,16 +1495,13 @@ impl EngineError {
         to_dir: String,
         raw_error: CommandError,
     ) -> EngineError {
-        let message = format!(
-            "Error while trying to copy all files from `{}` to `{}`.",
-            from_dir, to_dir
-        );
+        let message = format!("Error while trying to copy all files from `{}` to `{}`.", from_dir, to_dir);
 
         EngineError::new(
             event_details,
             Tag::CannotCopyFilesFromDirectoryToDirectory,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -1477,7 +1548,7 @@ impl EngineError {
             event_details,
             Tag::TerraformCannotRemoveEntryOut,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -1575,7 +1646,7 @@ impl EngineError {
             event_details,
             Tag::TerraformContextUnsupportedParameterValue,
             message.to_string(),
-            message.to_string(),
+            message,
             raw_error,
             None,
             None,
@@ -1648,6 +1719,42 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
+    pub fn new_container_registry_error(event_details: EventDetails, error: ContainerRegistryError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryError,
+            error.to_string(),
+            error.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from an Build error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_build_error(event_details: EventDetails, error: BuildError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::BuilderError,
+            error.to_string(),
+            error.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from an Container Registry error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
     pub fn new_helm_error(event_details: EventDetails, error: HelmError) -> EngineError {
         let cmd_error = match &error {
             HelmError::CmdError(_, _, cmd_error) => Some(cmd_error.clone()),
@@ -1677,13 +1784,13 @@ impl EngineError {
         helm_chart: String,
         raw_error: CommandError,
     ) -> EngineError {
-        let message = format!("Error while uninstalling helm chart: `{}`.", helm_chart.to_string());
+        let message = format!("Error while uninstalling helm chart: `{}`.", helm_chart);
 
         EngineError::new(
             event_details,
             Tag::HelmChartUninstallError,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -1706,15 +1813,14 @@ impl EngineError {
     ) -> EngineError {
         let message = format!(
             "Error while trying to get helm chart `{}` history in namespace `{}`.",
-            helm_chart.to_string(),
-            namespace
+            helm_chart, namespace
         );
 
         EngineError::new(
             event_details,
             Tag::HelmHistoryError,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -1753,16 +1859,13 @@ impl EngineError {
         product_name: String,
         raw_error: CommandError,
     ) -> EngineError {
-        let message = format!(
-            "Error while trying to get supported versions for `{}`.",
-            product_name.to_string()
-        );
+        let message = format!("Error while trying to get supported versions for `{}`.", product_name);
 
         EngineError::new(
             event_details,
             Tag::CannotGetSupportedVersions,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -1781,77 +1884,14 @@ impl EngineError {
         product_name: String,
         version: String,
     ) -> EngineError {
-        let message = format!(
-            "Error, version `{}` is not supported for `{}`.",
-            version.to_string(),
-            product_name.to_string()
-        );
+        let message = format!("Error, version `{}` is not supported for `{}`.", version, product_name);
 
         EngineError::new(
             event_details,
             Tag::UnsupportedVersion,
             message.to_string(),
-            message.to_string(),
+            message,
             None,
-            None,
-            None,
-        )
-    }
-
-    /// Creates new object storage cannot create bucket.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `bucket_name`: Object storage bucket name.
-    /// * `raw_error`: Raw error message.
-    pub fn new_object_storage_cannot_create_bucket_error(
-        event_details: EventDetails,
-        bucket_name: String,
-        raw_error: CommandError,
-    ) -> EngineError {
-        let message = format!(
-            "Error, cannot create object storage bucket `{}`.",
-            bucket_name.to_string(),
-        );
-
-        EngineError::new(
-            event_details,
-            Tag::ObjectStorageCannotCreateBucket,
-            message.to_string(),
-            message.to_string(),
-            Some(raw_error),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new object storage cannot put file into bucket.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `bucket_name`: Object storage bucket name.
-    /// * `file_name`: File name to be added into the bucket.
-    /// * `raw_error`: Raw error message.
-    pub fn new_object_storage_cannot_put_file_into_bucket_error(
-        event_details: EventDetails,
-        bucket_name: String,
-        file_name: String,
-        raw_error: CommandError,
-    ) -> EngineError {
-        let message = format!(
-            "Error, cannot put file `{}` into object storage bucket `{}`.",
-            file_name.to_string(),
-            bucket_name.to_string(),
-        );
-
-        EngineError::new(
-            event_details,
-            Tag::ObjectStorageCannotPutFileIntoBucket,
-            message.to_string(),
-            message.to_string(),
-            Some(raw_error),
             None,
             None,
         )
@@ -1896,7 +1936,7 @@ impl EngineError {
             event_details,
             Tag::ClientServiceFailedToStart,
             message.to_string(),
-            message.to_string(),
+            message,
             None,
             None,
             Some("Ensure you can run it without issues with `qovery run` and check its logs from the web interface or the CLI with `qovery log`. \
@@ -1926,7 +1966,7 @@ impl EngineError {
             event_details,
             Tag::ClientServiceFailedToDeployBeforeStart,
             message.to_string(),
-            message.to_string(),
+            message,
             None,
             None,
             None,
@@ -1956,7 +1996,7 @@ impl EngineError {
             event_details,
             Tag::DatabaseFailedToStartAfterSeveralRetries,
             message.to_string(),
-            message.to_string(),
+            message,
             raw_error,
             None,
             None,
@@ -2013,16 +2053,13 @@ impl EngineError {
         raw_version_number: String,
         raw_error: CommandError,
     ) -> EngineError {
-        let message = format!(
-            "Error while trying to parse `{}` to a version number.",
-            raw_version_number
-        );
+        let message = format!("Error while trying to parse `{}` to a version number.", raw_version_number);
 
         EngineError::new(
             event_details,
             Tag::VersionNumberParsingError,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -2124,7 +2161,7 @@ impl EngineError {
             event_details,
             Tag::BuilderDockerCannotFindAnyDockerfile,
             message.to_string(),
-            message.to_string(),
+            message,
             None,
             None,
             Some("Your Dockerfile is not present at the specified location, check your settings.".to_string()),
@@ -2141,16 +2178,13 @@ impl EngineError {
         event_details: EventDetails,
         requested_language: String,
     ) -> EngineError {
-        let message = format!(
-            "Cannot build: Invalid buildpacks language format: `{}`.",
-            requested_language
-        );
+        let message = format!("Cannot build: Invalid buildpacks language format: `{}`.", requested_language);
 
         EngineError::new(
             event_details,
             Tag::BuilderBuildpackInvalidLanguageFormat,
             message.to_string(),
-            message.to_string(),
+            message,
             None,
             None,
             Some("Expected format `builder[@version]`.".to_string()),
@@ -2205,7 +2239,7 @@ impl EngineError {
             event_details,
             Tag::BuilderGetBuildError,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -2230,7 +2264,7 @@ impl EngineError {
             event_details,
             Tag::BuilderCloningRepositoryError,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -2250,6 +2284,24 @@ impl EngineError {
             Tag::NotImplementedError,
             message.to_string(),
             message.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error from an Docker error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_docker_error(event_details: EventDetails, error: DockerError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::DockerError,
+            error.to_string(),
+            error.to_string(),
             None,
             None,
             None,
@@ -2279,7 +2331,7 @@ impl EngineError {
             event_details,
             Tag::DockerPushImageError,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -2309,7 +2361,7 @@ impl EngineError {
             event_details,
             Tag::DockerPullImageError,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -2334,7 +2386,7 @@ impl EngineError {
             event_details,
             Tag::BuilderDockerCannotReadDockerfile,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -2359,7 +2411,7 @@ impl EngineError {
             event_details,
             Tag::BuilderDockerCannotExtractEnvVarsFromDockerfile,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             None,
@@ -2384,10 +2436,392 @@ impl EngineError {
             event_details,
             Tag::BuilderDockerCannotBuildContainerImage,
             message.to_string(),
-            message.to_string(),
+            message,
             Some(raw_error),
             None,
             Some("It looks like there is something wrong in your Dockerfile. Try building the application locally with `docker build --no-cache`.".to_string()),
         )
+    }
+
+    /// Creates new error when trying to create a new container registry namespace.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `repository_name`: Container repository name.
+    /// * `registry_name`: Registry to be created.
+    /// * `raw_error`: Raw error message.
+    pub fn new_container_registry_namespace_creation_error(
+        event_details: EventDetails,
+        repository_name: String,
+        registry_name: String,
+        raw_error: ContainerRegistryError,
+    ) -> EngineError {
+        let message = format!("Error, trying to create registry `{}` in `{}`.", registry_name, repository_name);
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryRepositoryCreationError,
+            message.to_string(),
+            message,
+            Some(raw_error.into()),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to set container repository lifecycle policy.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `repository_name`: Repository name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_container_registry_repository_set_lifecycle_policy_error(
+        event_details: EventDetails,
+        repository_name: String,
+        raw_error: ContainerRegistryError,
+    ) -> EngineError {
+        let message = format!("Error, trying to set lifecycle policy repository `{}`.", repository_name,);
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryRepositorySetLifecycleError,
+            message.to_string(),
+            message,
+            Some(raw_error.into()),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to get container registry credentials.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `repository_name`: Repository name.
+    pub fn new_container_registry_get_credentials_error(
+        event_details: EventDetails,
+        repository_name: String,
+    ) -> EngineError {
+        let message = format!(
+            "Failed to retrieve credentials and endpoint URL from container registry `{}`.",
+            repository_name,
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryGetCredentialsError,
+            message.to_string(),
+            message,
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to delete an image.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `image_name`: Image name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_container_registry_delete_image_error(
+        event_details: EventDetails,
+        image_name: String,
+        raw_error: ContainerRegistryError,
+    ) -> EngineError {
+        let message = format!("Failed to delete image `{}`.", image_name,);
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryDeleteImageError,
+            message.to_string(),
+            message,
+            Some(raw_error.into()),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to get image from a registry.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `image_name`: Image name.
+    pub fn new_container_registry_image_doesnt_exist(
+        event_details: EventDetails,
+        image_name: String,
+        raw_error: ContainerRegistryError,
+    ) -> EngineError {
+        let message = format!("Image `{}` doesn't exists.", image_name,);
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryImageDoesntExist,
+            message.to_string(),
+            message,
+            Some(raw_error.into()),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when image is unreachable after push.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `image_name`: Image name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_container_registry_image_unreachable_after_push(
+        event_details: EventDetails,
+        image_name: String,
+    ) -> EngineError {
+        let message = format!(
+            "Image `{}` has been pushed on registry namespace but is not yet available after some time.",
+            image_name,
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryImageUnreachableAfterPush,
+            message.to_string(),
+            message,
+            None,
+            None,
+            Some("Please try to redeploy in a few minutes.".to_string()),
+        )
+    }
+
+    /// Creates new error when trying to get image from a registry.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `repository_name`: Repository name.
+    pub fn new_container_registry_repository_doesnt_exist(
+        event_details: EventDetails,
+        repository_name: String,
+        raw_error: Option<CommandError>,
+    ) -> EngineError {
+        let message = format!("Repository `{}` doesn't exists.", repository_name,);
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryRepositoryDoesntExist,
+            message.to_string(),
+            message,
+            raw_error,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to delete repository.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `repository_name`: Repository name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_container_registry_delete_repository_error(
+        event_details: EventDetails,
+        repository_name: String,
+        raw_error: Option<CommandError>,
+    ) -> EngineError {
+        let message = format!("Failed to delete repository `{}`.", repository_name,);
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryDeleteRepositoryError,
+            message.to_string(),
+            message,
+            raw_error,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to list Docker images.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_docker_cannot_list_images(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message = "Error while trying to list docker images.";
+
+        EngineError::new(
+            event_details,
+            Tag::BuilderDockerCannotListImages,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error, object storage bucket name is not valid.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `bucket_name`: Errored bucket name.
+    pub fn new_object_storage_bucket_name_is_invalid(event_details: EventDetails, bucket_name: String) -> EngineError {
+        let message = format!("Error: bucket name `{}` is not valid.", bucket_name);
+
+        EngineError::new(
+            event_details,
+            Tag::ObjectStorageInvalidBucketName,
+            message.to_string(),
+            message,
+            None,
+            None,
+            Some("Check your cloud provider documentation to know bucket naming rules.".to_string()),
+        )
+    }
+
+    /// Creates new object storage cannot create bucket.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `bucket_name`: Object storage bucket name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_object_storage_cannot_create_bucket_error(
+        event_details: EventDetails,
+        bucket_name: String,
+        raw_error: ObjectStorageError,
+    ) -> EngineError {
+        let message = format!("Error, cannot create object storage bucket `{}`.", bucket_name,);
+
+        EngineError::new(
+            event_details,
+            Tag::ObjectStorageCannotCreateBucket,
+            message.to_string(),
+            message,
+            Some(raw_error.into()),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new object storage cannot put file into bucket.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `bucket_name`: Object storage bucket name.
+    /// * `file_name`: File name to be added into the bucket.
+    /// * `raw_error`: Raw error message.
+    pub fn new_object_storage_cannot_put_file_into_bucket_error(
+        event_details: EventDetails,
+        bucket_name: String,
+        file_name: String,
+        raw_error: ObjectStorageError,
+    ) -> EngineError {
+        let message = format!(
+            "Error, cannot put file `{}` into object storage bucket `{}`.",
+            file_name, bucket_name,
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::ObjectStorageCannotPutFileIntoBucket,
+            message.to_string(),
+            message,
+            Some(raw_error.into()),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new object storage cannot empty object storage bucket.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `bucket_name`: Object storage bucket name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_object_storage_cannot_empty_bucket(
+        event_details: EventDetails,
+        bucket_name: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!("Error while trying to empty object storage bucket `{}`.", bucket_name,);
+
+        EngineError::new(
+            event_details,
+            Tag::ObjectStorageCannotEmptyBucket,
+            message.to_string(),
+            message,
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new object storage cannot tag bucket error.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `bucket_name`: Object storage bucket name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_object_storage_cannot_tag_bucket_error(
+        event_details: EventDetails,
+        bucket_name: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!("Error while trying to tag object storage bucket `{}`.", bucket_name,);
+
+        EngineError::new(
+            event_details,
+            Tag::ObjectStorageCannotTagBucket,
+            message.to_string(),
+            message,
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new object storage cannot activate bucket versioning error.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `bucket_name`: Object storage bucket name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_object_storage_cannot_activate_bucket_versioning_error(
+        event_details: EventDetails,
+        bucket_name: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!(
+            "Error while trying to activate versioning for object storage bucket `{}`.",
+            bucket_name,
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::ObjectStorageCannotActivateBucketVersioning,
+            message.to_string(),
+            message,
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+}
+
+impl Display for EngineError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(format!("{:?}", self).as_str())
     }
 }

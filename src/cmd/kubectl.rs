@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use chrono::Duration;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::de::DeserializeOwned;
@@ -32,8 +31,8 @@ pub enum PodCondition {
 pub fn kubectl_exec_with_output<F, X>(
     args: Vec<&str>,
     envs: Vec<(&str, &str)>,
-    stdout_output: F,
-    stderr_output: X,
+    stdout_output: &mut F,
+    stderr_output: &mut X,
 ) -> Result<(), CommandError>
 where
     F: FnMut(String),
@@ -41,7 +40,7 @@ where
 {
     let mut cmd = QoveryCommand::new("kubectl", &args, &envs);
 
-    if let Err(err) = cmd.exec_with_timeout(Duration::max_value(), stdout_output, stderr_output) {
+    if let Err(err) = cmd.exec_with_output(stdout_output, stderr_output) {
         let args_string = args.join(" ");
         let msg = format!("Error on command: kubectl {}. {:?}", args_string, &err);
         error!("{}", &msg);
@@ -82,8 +81,8 @@ where
             "-o=custom-columns=:.status.containerStatuses..restartCount",
         ],
         _envs,
-        |line| output_vec.push(line),
-        |line| error!("{}", line),
+        &mut |line| output_vec.push(line),
+        &mut |line| error!("{}", line),
     )?;
 
     let output_string: String = output_vec.join("");
@@ -106,12 +105,9 @@ where
     let mut output_vec: Vec<String> = Vec::with_capacity(20);
     let mut err_output_vec: Vec<String> = Vec::with_capacity(20);
     let cmd_args = vec!["get", "svc", "-n", namespace, service_name, "-o", "json"];
-    let _ = kubectl_exec_with_output(
-        cmd_args.clone(),
-        envs.clone(),
-        |line| output_vec.push(line),
-        |line| err_output_vec.push(line),
-    )?;
+    let _ = kubectl_exec_with_output(cmd_args.clone(), envs.clone(), &mut |line| output_vec.push(line), &mut |line| {
+        err_output_vec.push(line)
+    })?;
 
     let output_string: String = output_vec.join("\n");
     let err_output_string: String = output_vec.join("\n");
@@ -124,7 +120,7 @@ where
             cmd_args.into_iter().map(|a| a.to_string()).collect(),
             envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
             Some(output_string.to_string()),
-            Some(err_output_string.to_string()),
+            Some(err_output_string),
         )),
     }
 }
@@ -166,13 +162,7 @@ where
                 return Ok(None);
             }
 
-            Ok(Some(
-                result
-                    .metadata
-                    .annotations
-                    .kubernetes_digitalocean_com_load_balancer_id
-                    .clone(),
-            ))
+            Ok(Some(result.metadata.annotations.kubernetes_digitalocean_com_load_balancer_id))
         }
         Err(e) => Err(e),
     }
@@ -197,9 +187,7 @@ where
         return Ok(None);
     }
 
-    Ok(Some(
-        result.status.load_balancer.ingress.first().unwrap().hostname.clone(),
-    ))
+    Ok(Some(result.status.load_balancer.ingress.first().unwrap().hostname.clone()))
 }
 
 pub fn kubectl_exec_is_pod_ready_with_retry<P>(
@@ -368,8 +356,8 @@ where
     let result = kubectl_exec_with_output(
         vec!["get", "namespace", namespace],
         _envs,
-        |out| info!("{:?}", out),
-        |out| warn!("{:?}", out),
+        &mut |out| info!("{:?}", out),
+        &mut |out| warn!("{:?}", out),
     );
 
     result.is_ok()
@@ -398,14 +386,14 @@ where
         let _ = kubectl_exec_with_output(
             vec!["create", "namespace", namespace],
             _envs,
-            |line| info!("{}", line),
-            |line| error!("{}", line),
+            &mut |line| info!("{}", line),
+            &mut |line| error!("{}", line),
         )?;
     }
 
     // additional labels
-    if labels.is_some() {
-        match kubectl_add_labels_to_namespace(kubernetes_config, namespace, labels.unwrap(), envs) {
+    if let Some(..) = labels {
+        match kubectl_add_labels_to_namespace(kubernetes_config, namespace, labels.unwrap_or_default(), envs) {
             Ok(_) => {}
             Err(e) => return Err(e),
         }
@@ -450,7 +438,9 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs.clone());
 
-    let _ = kubectl_exec_with_output(command_args, _envs, |line| info!("{}", line), |line| error!("{}", line))?;
+    let _ = kubectl_exec_with_output(command_args, _envs, &mut |line| info!("{}", line), &mut |line| {
+        error!("{}", line)
+    })?;
 
     Ok(())
 }
@@ -459,7 +449,7 @@ where
 pub fn does_contain_terraform_tfstate<P>(
     kubernetes_config: P,
     namespace: &str,
-    envs: &Vec<(&str, &str)>,
+    envs: &[(&str, &str)],
 ) -> Result<bool, CommandError>
 where
     P: AsRef<Path>,
@@ -526,7 +516,7 @@ pub fn kubectl_exec_delete_namespace<P>(
 where
     P: AsRef<Path>,
 {
-    if does_contain_terraform_tfstate(&kubernetes_config, &namespace, &envs)? {
+    if does_contain_terraform_tfstate(&kubernetes_config, namespace, &envs)? {
         return Err(CommandError::new_from_safe_message(
             "Namespace contains terraform tfstates in secret, can't delete it !".to_string(),
         ));
@@ -539,8 +529,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["delete", "namespace", namespace],
         _envs,
-        |line| info!("{}", line),
-        |line| error!("{}", line),
+        &mut |line| info!("{}", line),
+        &mut |line| error!("{}", line),
     )?;
 
     Ok(())
@@ -561,8 +551,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["delete", "crd", crd_name],
         _envs,
-        |line| info!("{}", line),
-        |line| error!("{}", line),
+        &mut |line| info!("{}", line),
+        &mut |line| error!("{}", line),
     )?;
 
     Ok(())
@@ -584,8 +574,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["-n", namespace, "delete", "secret", secret],
         _envs,
-        |line| info!("{}", line),
-        |line| error!("{}", line),
+        &mut |line| info!("{}", line),
+        &mut |line| error!("{}", line),
     )?;
 
     Ok(())
@@ -608,8 +598,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["logs", "--tail", "1000", "-n", namespace, "-l", selector],
         _envs,
-        |line| output_vec.push(line),
-        |line| error!("{}", line),
+        &mut |line| output_vec.push(line),
+        &mut |line| error!("{}", line),
     )?;
 
     Ok(output_vec)
@@ -632,8 +622,8 @@ where
     let _ = kubectl_exec_with_output(
         vec!["describe", "pod", "-n", namespace, "-l", selector],
         _envs,
-        |line| output_vec.push(line),
-        |line| error!("{}", line),
+        &mut |line| output_vec.push(line),
+        &mut |line| error!("{}", line),
     )?;
 
     Ok(output_vec.join("\n"))
@@ -674,21 +664,18 @@ pub fn kubectl_exec_rollout_restart_deployment<P>(
     kubernetes_config: P,
     name: &str,
     namespace: &str,
-    envs: &Vec<(&str, &str)>,
+    envs: &[(&str, &str)],
 ) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
-    let mut environment_variables: Vec<(&str, &str)> = envs.clone();
+    let mut environment_variables: Vec<(&str, &str)> = envs.to_owned();
     environment_variables.push(("KUBECONFIG", kubernetes_config.as_ref().to_str().unwrap()));
     let args = vec!["-n", namespace, "rollout", "restart", "deployment", name];
 
-    kubectl_exec_with_output(
-        args,
-        environment_variables.clone(),
-        |line| info!("{}", line),
-        |line| error!("{}", line),
-    )
+    kubectl_exec_with_output(args, environment_variables, &mut |line| info!("{}", line), &mut |line| {
+        error!("{}", line)
+    })
 }
 
 pub fn kubectl_exec_get_node<P>(
@@ -788,7 +775,7 @@ where
     P: AsRef<Path>,
 {
     kubectl_exec::<P, Configmap>(
-        vec!["get", "configmap", "-o", "json", "-n", namespace, &name],
+        vec!["get", "configmap", "-o", "json", "-n", namespace, name],
         kubernetes_config,
         envs,
     )
@@ -829,7 +816,7 @@ where
     let args = vec!["get", "event", arg_namespace.as_str(), "--sort-by='.lastTimestamp'"];
 
     let mut result_ok = String::new();
-    match kubectl_exec_with_output(args, environment_variables, |line| result_ok = line, |_| {}) {
+    match kubectl_exec_with_output(args, environment_variables, &mut |line| result_ok = line, &mut |_| {}) {
         Ok(()) => Ok(result_ok),
         Err(err) => Err(err),
     }
@@ -844,7 +831,7 @@ where
     P: AsRef<Path>,
 {
     let result = kubectl_exec::<P, KubernetesList<Item>>(
-        vec!["delete", &object.to_string(), "--all-namespaces", "--all"],
+        vec!["delete", object, "--all-namespaces", "--all"],
         kubernetes_config,
         envs,
     );
@@ -856,7 +843,7 @@ where
             if lower_case_message.contains("no resources found") || lower_case_message.ends_with(" deleted") {
                 return Ok(());
             }
-            return Err(e);
+            Err(e)
         }
     }
 }
@@ -929,8 +916,8 @@ where
             &replicas_count.to_string(),
         ],
         _envs,
-        |_| {},
-        |_| {},
+        &mut |_| {},
+        &mut |_| {},
     )
 }
 
@@ -971,21 +958,21 @@ where
             "scale",
             "--replicas",
             &replicas_count.to_string(),
-            &kind_formatted,
+            kind_formatted,
             "--selector",
             selector,
         ],
         _envs.clone(),
-        |_| {},
-        |_| {},
+        &mut |_| {},
+        &mut |_| {},
     )?;
 
     // deleting pdb in order to be able to upgrade kubernetes version
     kubectl_exec_with_output(
         vec!["-n", namespace, "delete", "pdb", "--selector", selector],
         _envs,
-        |_| {},
-        |_| {},
+        &mut |_| {},
+        &mut |_| {},
     )?;
 
     let condition = match replicas_count {
@@ -1029,8 +1016,8 @@ where
             "--timeout=300s",
         ],
         complete_envs,
-        |out| info!("{:?}", out),
-        |out| warn!("{:?}", out),
+        &mut |out| info!("{:?}", out),
+        &mut |out| warn!("{:?}", out),
     )
 }
 
@@ -1038,22 +1025,14 @@ pub fn kubectl_get_pvc<P>(kubernetes_config: P, namespace: &str, envs: Vec<(&str
 where
     P: AsRef<Path>,
 {
-    kubectl_exec::<P, PVC>(
-        vec!["get", "pvc", "-o", "json", "-n", namespace],
-        kubernetes_config,
-        envs,
-    )
+    kubectl_exec::<P, PVC>(vec!["get", "pvc", "-o", "json", "-n", namespace], kubernetes_config, envs)
 }
 
 pub fn kubectl_get_svc<P>(kubernetes_config: P, namespace: &str, envs: Vec<(&str, &str)>) -> Result<SVC, CommandError>
 where
     P: AsRef<Path>,
 {
-    kubectl_exec::<P, SVC>(
-        vec!["get", "svc", "-o", "json", "-n", namespace],
-        kubernetes_config,
-        envs,
-    )
+    kubectl_exec::<P, SVC>(vec!["get", "svc", "-o", "json", "-n", namespace], kubernetes_config, envs)
 }
 
 /// kubectl_delete_crash_looping_pods: delete crash looping pods.
@@ -1127,7 +1106,7 @@ where
                     .container_statuses
                     .as_ref()
                     .expect("Cannot get container statuses")
-                    .into_iter()
+                    .iter()
                     .any(|e| {
                         e.state.waiting.as_ref().is_some()
                         && e.state.waiting.as_ref().expect("cannot get container state").reason == KubernetesPodStatusReason::CrashLoopBackOff // check 1
@@ -1175,8 +1154,8 @@ where
             pod_to_be_deleted.metadata.namespace.as_str(),
         ],
         complete_envs,
-        |_| {},
-        |_| {},
+        &mut |_| {},
+        &mut |_| {},
     ) {
         Ok(_) => Ok(pod_to_be_deleted),
         Err(e) => Err(CommandError::new(e.message(), None)),
@@ -1193,12 +1172,9 @@ where
     _envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
-    let _ = kubectl_exec_with_output(
-        args.clone(),
-        _envs.clone(),
-        |line| output_vec.push(line),
-        |line| error!("{}", line),
-    )?;
+    let _ = kubectl_exec_with_output(args.clone(), _envs.clone(), &mut |line| output_vec.push(line), &mut |line| {
+        error!("{}", line)
+    })?;
 
     let output_string: String = output_vec.join("");
 

@@ -1,9 +1,11 @@
+#![allow(clippy::field_reassign_with_default)]
+
 use std::collections::HashMap;
 
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventDetails, EventMessage};
-use crate::logger::{LogLevel, Logger};
-use crate::models::{Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
+use crate::io_models::{Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
+use crate::logger::Logger;
 use chrono::Duration;
 use core::option::Option::{None, Some};
 use core::result::Result;
@@ -12,6 +14,7 @@ use retry::delay::Fixed;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::fmt::Write;
 use std::str::FromStr;
 use trust_dns_resolver::config::*;
 use trust_dns_resolver::proto::rr::{RData, RecordType};
@@ -167,10 +170,7 @@ pub fn generate_supported_version(
 
             if minor_min == minor_max {
                 // add short minor format targeting latest version
-                supported_versions.insert(
-                    format!("{}.{}", major.to_string(), minor_max.to_string()),
-                    latest_major_version.clone(),
-                );
+                supported_versions.insert(format!("{}.{}", major, minor_max), latest_major_version.clone());
                 if update_min.unwrap() == update_max.unwrap() {
                     let version = format!("{}.{}.{}", major, minor_min, update_min.unwrap());
                     supported_versions.insert(version.clone(), format!("{}{}", version, suffix));
@@ -184,13 +184,8 @@ pub fn generate_supported_version(
                 for minor in minor_min..minor_max + 1 {
                     // add short minor format targeting latest version
                     supported_versions.insert(
-                        format!("{}.{}", major.to_string(), minor.to_string()),
-                        format!(
-                            "{}.{}.{}",
-                            major.to_string(),
-                            minor.to_string(),
-                            update_max.unwrap().to_string()
-                        ),
+                        format!("{}.{}", major, minor),
+                        format!("{}.{}.{}", major, minor, update_max.unwrap()),
                     );
                     if update_min.unwrap() == update_max.unwrap() {
                         let version = format!("{}.{}.{}", major, minor, update_min.unwrap());
@@ -240,22 +235,6 @@ impl VersionsNumber {
         }
     }
 
-    pub fn to_string(&self) -> String {
-        let mut version = vec![self.major.to_string()];
-
-        if self.minor.is_some() {
-            version.push(self.minor.clone().unwrap())
-        }
-        if self.patch.is_some() {
-            version.push(self.patch.clone().unwrap())
-        }
-        if self.suffix.is_some() {
-            version.push(self.suffix.clone().unwrap())
-        }
-
-        version.join(".")
-    }
-
     pub fn to_major_version_string(&self) -> String {
         self.major.clone()
     }
@@ -276,9 +255,7 @@ impl FromStr for VersionsNumber {
 
     fn from_str(version: &str) -> Result<Self, Self::Err> {
         if version.trim() == "" {
-            return Err(CommandError::new_from_safe_message(
-                "version cannot be empty".to_string(),
-            ));
+            return Err(CommandError::new_from_safe_message("version cannot be empty".to_string()));
         }
 
         let mut version_split = version.splitn(4, '.').map(|v| v.trim());
@@ -286,7 +263,7 @@ impl FromStr for VersionsNumber {
         let major = match version_split.next() {
             Some(major) => {
                 let major = major.to_string();
-                major.replace("v", "")
+                major.replace('v', "")
             }
             None => {
                 return Err(CommandError::new_from_safe_message(format!(
@@ -298,7 +275,7 @@ impl FromStr for VersionsNumber {
 
         let minor = version_split.next().map(|minor| {
             let minor = minor.to_string();
-            minor.replace("+", "")
+            minor.replace('+', "")
         });
 
         let patch = version_split.next().map(|patch| patch.to_string());
@@ -314,7 +291,24 @@ impl FromStr for VersionsNumber {
 
 impl fmt::Display for VersionsNumber {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        f.write_str(&self.major)?;
+
+        if let Some(minor) = &self.minor {
+            f.write_char('.')?;
+            f.write_str(minor)?;
+        }
+
+        if let Some(patch) = &self.patch {
+            f.write_char('.')?;
+            f.write_str(patch)?;
+        }
+
+        if let Some(suffix) = &self.suffix {
+            f.write_char('.')?;
+            f.write_str(suffix)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -405,10 +399,7 @@ pub fn check_cname_for(
         match get_cname_record_value(next_resolver(), cname_to_check) {
             Some(domain) => OperationResult::Ok(domain),
             None => {
-                let msg = format!(
-                    "Cannot find domain under CNAME {}. Retrying in 5 seconds...",
-                    cname_to_check
-                );
+                let msg = format!("Cannot find domain under CNAME {}. Retrying in 5 seconds...", cname_to_check);
                 send_deployment_progress(msg.as_str());
                 OperationResult::Retry(msg)
             }
@@ -464,10 +455,10 @@ pub fn check_domain_for(
             resolver
         };
 
-        logger.log(
-            LogLevel::Info,
-            EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message.to_string())),
-        );
+        logger.log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe(message.to_string()),
+        ));
 
         let fixed_iterable = Fixed::from_millis(3000).take(100);
         let check_result = retry::retry(fixed_iterable, || match next_resolver().lookup_ip(domain) {
@@ -475,10 +466,10 @@ pub fn check_domain_for(
             Err(err) => {
                 let x = format!("Domain resolution check for '{}' is still in progress...", domain);
 
-                logger.log(
-                    LogLevel::Info,
-                    EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(x.to_string())),
-                );
+                logger.log(EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(x.to_string()),
+                ));
 
                 listener_helper.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Environment {
@@ -497,10 +488,10 @@ pub fn check_domain_for(
             Ok(_) => {
                 let x = format!("Domain {} is ready! ⚡️", domain);
 
-                logger.log(
-                    LogLevel::Info,
-                    EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message.to_string())),
-                );
+                logger.log(EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(message.to_string()),
+                ));
 
                 listener_helper.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Environment {
@@ -518,10 +509,10 @@ pub fn check_domain_for(
                     domain
                 );
 
-                logger.log(
-                    LogLevel::Warning,
-                    EngineEvent::Warning(event_details.clone(), EventMessage::new_from_safe(message.to_string())),
-                );
+                logger.log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(message.to_string()),
+                ));
 
                 listener_helper.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Environment {
@@ -539,12 +530,12 @@ pub fn check_domain_for(
 }
 
 pub fn sanitize_name(prefix: &str, name: &str) -> String {
-    format!("{}-{}", prefix, name).replace("_", "-")
+    format!("{}-{}", prefix, name).replace('_', "-")
 }
 
 pub fn managed_db_name_sanitizer(max_size: usize, prefix: &str, name: &str) -> String {
     let max_size = max_size - prefix.len();
-    let mut new_name = format!("{}{}", prefix, name.replace("_", "").replace("-", ""));
+    let mut new_name = format!("{}{}", prefix, name.replace('_', "").replace('-', ""));
     if new_name.chars().count() > max_size {
         new_name = new_name[..max_size].to_string();
     }
@@ -559,19 +550,10 @@ pub fn print_action(
     event_details: EventDetails,
     logger: &dyn Logger,
 ) {
-    let msg = format!(
-        "{}.{}.{} called for {}",
-        cloud_provider_name, struct_name, fn_name, item_name
-    );
+    let msg = format!("{}.{}.{} called for {}", cloud_provider_name, struct_name, fn_name, item_name);
     match fn_name.contains("error") {
-        true => logger.log(
-            LogLevel::Warning,
-            EngineEvent::Warning(event_details, EventMessage::new_from_safe(msg)),
-        ),
-        false => logger.log(
-            LogLevel::Info,
-            EngineEvent::Info(event_details, EventMessage::new_from_safe(msg)),
-        ),
+        true => logger.log(EngineEvent::Warning(event_details, EventMessage::new_from_safe(msg))),
+        false => logger.log(EngineEvent::Info(event_details, EventMessage::new_from_safe(msg))),
     }
 }
 
@@ -601,23 +583,17 @@ mod tests {
         let test_cases = vec![
             TestCase {
                 input: "",
-                expected_output: Err(CommandError::new_from_safe_message(
-                    "version cannot be empty".to_string(),
-                )),
+                expected_output: Err(CommandError::new_from_safe_message("version cannot be empty".to_string())),
                 description: "empty version str",
             },
             TestCase {
                 input: "    ",
-                expected_output: Err(CommandError::new_from_safe_message(
-                    "version cannot be empty".to_string(),
-                )),
+                expected_output: Err(CommandError::new_from_safe_message("version cannot be empty".to_string())),
                 description: "version a tab str",
             },
             TestCase {
                 input: " ",
-                expected_output: Err(CommandError::new_from_safe_message(
-                    "version cannot be empty".to_string(),
-                )),
+                expected_output: Err(CommandError::new_from_safe_message("version cannot be empty".to_string())),
                 description: "version as a space str",
             },
             TestCase {

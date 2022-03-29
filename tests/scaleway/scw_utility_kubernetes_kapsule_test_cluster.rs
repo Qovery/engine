@@ -2,10 +2,9 @@ extern crate test_utilities;
 
 use self::test_utilities::utilities::{context, engine_run_test, init, logger, FuncTestsSecrets};
 use ::function_name::named;
+use test_utilities::scaleway::scw_default_engine_config;
 use tracing::{span, Level};
 
-use self::test_utilities::common::Cluster;
-use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::transaction::{Transaction, TransactionResult};
 
 // Warning: This test shouldn't be ran by CI
@@ -36,7 +35,7 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
 
         let logger = logger();
         let context = context(organization_id.as_str(), cluster_id.as_str());
-        let engine = Scaleway::docker_cr_engine(&context, logger.clone());
+        let engine = scw_default_engine_config(&context, logger.clone());
         let mut tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
         // Deploy
@@ -78,7 +77,7 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
 
         let logger = logger();
         let context = context(organization_id.as_str(), cluster_id.as_str());
-        let engine = Scaleway::docker_cr_engine(&context, logger.clone());
+        let engine = scw_default_engine_config(&context, logger.clone());
         let mut tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
         // Destroy

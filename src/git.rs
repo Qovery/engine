@@ -11,16 +11,13 @@ use url::Url;
 // or an error to specify that we have exhausted everything we are able to provide
 fn authentication_callback<'a>(
     get_credentials: &'a impl Fn(&str) -> Vec<(CredentialType, Cred)>,
-) -> impl FnMut(&str, Option<&str>, CredentialType) -> Result<Cred, Error> + 'a {
+) -> impl FnMut(&str, Option<&str>, CredentialType) -> Result<Cred, Error> + '_ {
     let mut current_credentials: (String, Vec<(CredentialType, Cred)>) = ("".into(), vec![]);
 
-    return move |remote_url, username_from_url, allowed_types| {
+    move |remote_url, username_from_url, allowed_types| {
         // If we have changed remote, reset our available auth methods
         if remote_url != current_credentials.0 {
-            current_credentials = (
-                remote_url.to_string(),
-                get_credentials(username_from_url.unwrap_or("git")),
-            );
+            current_credentials = (remote_url.to_string(), get_credentials(username_from_url.unwrap_or("git")));
         }
         let auth_methods = &mut current_credentials.1;
 
@@ -43,7 +40,7 @@ fn authentication_callback<'a>(
                 return Ok(credential);
             }
         }
-    };
+    }
 }
 
 fn checkout<'a>(repo: &'a Repository, commit_id: &'a str) -> Result<Object<'a>, Error> {
@@ -68,17 +65,14 @@ fn checkout<'a>(repo: &'a Repository, commit_id: &'a str) -> Result<Object<'a>, 
 }
 
 fn clone<P>(
-    repository_url: &str,
+    repository_url: &Url,
     into_dir: P,
     get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
 ) -> Result<Repository, Error>
 where
     P: AsRef<Path>,
 {
-    let url = Url::parse(repository_url)
-        .map_err(|err| Error::from_str(format!("Invalid repository url {}: {}", repository_url, err).as_str()))?;
-
-    if url.scheme() != "https" {
+    if repository_url.scheme() != "https" {
         return Err(Error::from_str("Repository URL have to start with https://"));
     }
 
@@ -98,11 +92,11 @@ where
         let _ = std::fs::remove_dir_all(into_dir.as_ref());
     }
 
-    repo.clone(url.as_str(), into_dir.as_ref())
+    repo.clone(repository_url.as_str(), into_dir.as_ref())
 }
 
 pub fn clone_at_commit<P>(
-    repository_url: &str,
+    repository_url: &Url,
     commit_id: &str,
     into_dir: P,
     get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
@@ -140,7 +134,7 @@ where
 }
 
 pub fn get_parent_commit_id<P>(
-    repository_url: &str,
+    repository_url: &Url,
     commit_id: &str,
     into_dir: P,
     get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
@@ -164,6 +158,7 @@ where
 mod tests {
     use crate::git::{checkout, clone, clone_at_commit, get_parent_commit_id};
     use git2::{Cred, CredentialType};
+    use url::Url;
     use uuid::Uuid;
 
     struct DirectoryForTests {
@@ -175,7 +170,7 @@ mod tests {
         /// Since tests are runs in parallel and eventually on the same node, it will avoid having directories collisions between tests running on the same node.
         pub fn new_with_random_suffix(base_path: String) -> Self {
             DirectoryForTests {
-                path: format!("{}_{}", base_path, Uuid::new_v4().to_string()),
+                path: format!("{}_{}", base_path, Uuid::new_v4()),
             }
         }
 
@@ -196,18 +191,26 @@ mod tests {
         let repo_path = repo_dir.path();
 
         // We only allow https:// at the moment
-        let repo = clone("git@github.com:Qovery/engine.git", &repo_path, &|_| vec![]);
-        assert!(matches!(repo, Err(e) if e.message().contains("Invalid repository")));
+        let repo = clone(
+            &Url::parse("ssh://git@github.com/Qovery/engine.git").unwrap(),
+            &repo_path,
+            &|_| vec![],
+        );
+        assert!(matches!(repo, Err(e) if e.message().contains("https://")));
 
         // Repository must be empty
-        let repo = clone("https://github.com/Qovery/engine-testing.git", &repo_path, &|_| vec![]);
+        let repo = clone(
+            &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
+            &repo_path,
+            &|_| vec![],
+        );
         assert!(repo.is_ok()); // clone makes sure to empty the directory
 
         // Working case
         {
             let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_clone".to_string());
             let repo = clone(
-                "https://github.com/Qovery/engine-testing.git",
+                &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
                 clone_dir.path(),
                 &|_| vec![],
             );
@@ -224,7 +227,7 @@ mod tests {
                 )]
             };
             let repo = clone(
-                "https://gitlab.com/qovery/q-core.git",
+                &Url::parse("https://gitlab.com/qovery/q-core.git").unwrap(),
                 clone_dir.path(),
                 &get_credentials,
             );
@@ -261,7 +264,7 @@ mod tests {
     fn test_git_checkout() {
         let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_checkout".to_string());
         let repo = clone(
-            "https://github.com/Qovery/engine-testing.git",
+            &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
             clone_dir.path(),
             &|_| vec![],
         )
@@ -283,7 +286,7 @@ mod tests {
     fn test_git_parent_id() {
         let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_parent_id".to_string());
         let result = get_parent_commit_id(
-            "https://github.com/Qovery/engine-testing.git",
+            &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
             "964f02f3a3065bc7f6fb745d679b1ddb21153cc7",
             clone_dir.path(),
             &|_| vec![],
@@ -299,7 +302,7 @@ mod tests {
         let clone_dir =
             DirectoryForTests::new_with_random_suffix("/tmp/engine_test_parent_id_not_existing".to_string());
         let result = get_parent_commit_id(
-            "https://github.com/Qovery/engine-testing.git",
+            &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
             "964f02f3a3065bc7f6fb745d679b1ddb21153cc0",
             clone_dir.path(),
             &|_| vec![],
@@ -313,7 +316,7 @@ mod tests {
     fn test_git_submodule_with_ssh_key() {
         // Unique Key only valid for the submodule and in read access only
         // https://github.com/Qovery/dumb-logger/settings/keys
-        let ssh_key = String::from_utf8(base64::decode("LS0tLS1CRUdJTiBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0NCmIzQmxibk56YUMxclpYa3RkakVBQUFBQUJHNXZibVVBQUFBRWJtOXVaUUFBQUFBQUFBQUJBQUFCbHdBQUFBZHpjMmd0Y24NCk5oQUFBQUF3RUFBUUFBQVlFQTFGcS95ZGF6dU84T3ZRdjVUNEdxbndOMjhZV0EzaXlqanREMFdSQXhtdDZEV3lJRlVYZ1gNClZFZ1ZVYnZyYndKNGJQa0tTbkdqd1hZRUdJYkdYa0hKUTdvWTVSMnB6b1hqUkVYTzIzZEZ2aVp4bUpOcVdEVVJqSHhjc1INCndOYWxiOFVZZVBCRVI4TEQzWWpQd0lYNXdCWm5VSjZLWTJFbXhjSlBVUnV4bUlyTjI4QndiZ3FiejJPU3NJdWg4a1ZwSngNCldheitFc3JNM282NHpHMm0wa0dxMVI1VHE0enBPRWliUk1iY1ZXTldKUzRZR29JczdsRzB0ZHZndktNRnJsWktzSUw1Y2ENCkFOQzRXTlROMm1DVVFrVGpGSDVySDlDa0ZBZjZaZ0lqYklvN0s3TTc0L1B5RVhEcStyRW5vRWdzeEkzRi9NZHMydGM2RWkNClJaY2JrUmRLVnpaUzJCMXdKNDhrOGR3Sml5VytKSWY4ejEzK2FiUXVPNGR5MWRnM2gwbEZ6dm9qaVYxTjNBRXdHcmhjZEUNClo3TXNaeThKM3JvRElZSWZCczdkbmh2T1FrME1taEpKSEpMaVlEZWZCYUk4MVdGTGlqekUxejhqMG90cExlNkt0SVhQYk8NCmV5WWdod0U2aDlhSmNrOEU3WklYMjc4MGRQMW93T2g1dC9VaE0vdjFBQUFGZ082eU9GenVzamhjQUFBQUIzTnphQzF5YzINCkVBQUFHQkFOUmF2OG5XczdqdkRyMEwrVStCcXA4RGR2R0ZnTjRzbzQ3UTlGa1FNWnJlZzFzaUJWRjRGMVJJRlZHNzYyOEMNCmVHejVDa3B4bzhGMkJCaUd4bDVCeVVPNkdPVWRxYzZGNDBSRnp0dDNSYjRtY1ppVGFsZzFFWXg4WExFY0RXcFcvRkdIancNClJFZkN3OTJJejhDRitjQVdaMUNlaW1OaEpzWENUMUVic1ppS3pkdkFjRzRLbTg5amtyQ0xvZkpGYVNjVm1zL2hMS3pONk8NCnVNeHRwdEpCcXRVZVU2dU02VGhJbTBURzNGVmpWaVV1R0JxQ0xPNVJ0TFhiNEx5akJhNVdTckNDK1hHZ0RRdUZqVXpkcGcNCmxFSkU0eFIrYXgvUXBCUUgrbVlDSTJ5S095dXpPK1B6OGhGdzZ2cXhKNkJJTE1TTnhmekhiTnJYT2hJa1dYRzVFWFNsYzINClV0Z2RjQ2VQSlBIY0NZc2x2aVNIL005ZC9tbTBManVIY3RYWU40ZEpSYzc2STRsZFRkd0JNQnE0WEhSR2V6TEdjdkNkNjYNCkF5R0NId2JPM1o0YnprSk5ESm9TU1J5UzRtQTNud1dpUE5WaFM0bzh4TmMvSTlLTGFTM3VpclNGejJ6bnNtSUljQk9vZlcNCmlYSlBCTzJTRjl1L05IVDlhTURvZWJmMUlUUDc5UUFBQUFNQkFBRUFBQUdCQUxhR1pqRkwvV0NwQWtjV0lxM25LMHZRZzQNCjBuamxQcGxKQXVKTWprOVc1RGNpNkQrSVJGTC9BK29TeUcxTit2Qk9uTnliMmhIZnNzd0dxQWRjTVEwcmtISFZ6WitWbk4NCmxVSGFxdW5UQkR4aitPSUhXN0lEczFqSWtEZWZnQngyTmh5eDR3anRBTHBhVW1ja1B1SkhTcURSV3JvQkc1c01Uc3RwWmwNCnNtb0diTmxFK0o1dE9lMnhqYVYzNzdRNVd4L0FIemd0T09RemZNL3lTZjMzTDhCS1Y0a3J4eXV3ZW95T1Q5OU9ia0ltaUUNCnpTMEQxVERuUStmSTNjdm1aL3lvcDZ0clA0a01wdWtWdC93ZUhFWU5nZkdPdHVHMndwU3oyRmpNcUcyT1NFd3ZpRXM3U0YNCmlwTGNWc2dpUzg3ckI5ZFBRejFYTGhhdW9MTDliY3BlOE9sZW50VkI5VHFaU1lqaTJoeUNtZG5id25CS2QyMGVaUlh0S3QNCnh3SUpDdkpESGwyWk9wTVVUcnIydFcwSkVFZU1QSDJWMCs4amg3aGxlQ0NLcDhmdE1pcGVuWTdvelR1M1JVTUdNcjB4eTINCmhUalVJNkVGU0ppVGlKVE9ibGVhcGVPMVE1czdHaU5ibmdZQXFhN3h3RmJuYllrODJ3ekxPbzdEUjYzODhJbzVQcEFRQUENCkFNQUtXbURSMWU5bXlncm8wZmtQUDQ3dGsxMnF5bWpkQzVtRU1SNm9TOTNMbGRaK1ptKzBxVlBxN1BSQ3JPZlpLcFJSQ1UNCmJOUkM0ZFJhUHk0ek85cEdqdzE3ZlhjUGxGQzRaQUN1anhnRzhvazdYNEdGVlZEQ2lySFRySFhWN0ozNUtPMnR5MloyR2UNCms2L0dhMUpCMlBLN0tJZFlnMWpjY3lUR0FsZTlmcjIyU21nZHVoUmt2WlZsVU9mMHp2ZDhERzlVcktYUURWTERHd1QrWlkNClp2ODhYdGduZzZneU1jZXhZaHZZY04yMUo4ay9wNmM1ZGVuUXNNL0QxN0Qyck9iNE1BQUFEQkFPcDBJWitTVWxXY0xzbjMNCmVwQk1pTVAwdm5LUTI4UUd4NDl1bW14VXdhMTI0djk5YzhtTXZ5TXJPYnFsODdjZjQwWTlqdUhsSGZKSzd0MXhNdE5qU3QNCkJWRlNjU2E5Sk56S0hKRTJaYlJma1d1ZXpScytGbytKcjU0YVppQjNvcjNFeUtaamNZY2RFTG5ROHNjNmJXd25Ic29WSHkNCmNpTThtcUhudHRqeXJPZFdJRi9CTURlYjF5WkliYlQ0aWN3Y1N2TEJOVE95dllwakg1RWNsTXdXcWlsQ2NxVVJyTmtZVXMNCnJWZkFabDZuUmE5N0FNNDd6THhBT0RZT1FzbjZhdk5RQUFBTUVBNTk2ejRYZkxrQ09MT3drUi85NS90WEYzS3p4MjFsdC8NCllBVExmRlBKbHdNaGRxN1d2VG9LZWxNV0QwNUxXYlZxYitNOGU3SWZSQlducEp0V1RxMVBCY3ltT2k1TkprSmZnWWhqdGgNCjlqT1k4WTVCWWlvcENRUUFtTWc3SHF3a0xUSUdUU25IdDN5ZGFTK21TaVFTQUhLb1VKbmp4cEdLQ3ZyVGk5eHdxTFpZT1YNClZvOHFCZ003M1c1TWUyQWI0YnpPaEt4Tm9iTFpqWkxqZDJoeHRyWENJaityRXVRa09NT1hGTmR6NkFDR0hwQ09KTGp4clUNCmk4TGNwd2c5NlpWZkhCQUFBQUNtVnlaV0psUUhOMGVYZz0NCi0tLS0tRU5EIE9QRU5TU0ggUFJJVkFURSBLRVktLS0tLQ==").unwrap()).unwrap();
+        let ssh_key = String::from_utf8(base64::decode("LS0tLS1CRUdJTiBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0KYjNCbGJuTnphQzFyWlhrdGRqRUFBQUFBQkc1dmJtVUFBQUFFYm05dVpRQUFBQUFBQUFBQkFBQUFNd0FBQUF0emMyZ3RaVwpReU5UVXhPUUFBQUNBTzZlaGNrV0JrNlcwd3lTZ0FIY0dSY3JneW1IVThqRWVKRm5yQ2k1ZjZaQUFBQUpERlV0TVZ4VkxUCkZRQUFBQXR6YzJndFpXUXlOVFV4T1FBQUFDQU82ZWhja1dCazZXMHd5U2dBSGNHUmNyZ3ltSFU4akVlSkZuckNpNWY2WkEKQUFBRUQ0aGwvTmk0aGgvK3oxUm4wdWtMcm5mQ0xrN1BUWmErbVNQYk01ZS9aS0pnN3A2RnlSWUdUcGJUREpLQUFkd1pGeQp1REtZZFR5TVI0a1dlc0tMbC9wa0FBQUFDbVZ5WldKbFFITjBlWGdCQWdNPQotLS0tLUVORCBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0K").unwrap()).unwrap();
         let invalid_ssh_key = String::from_utf8(base64::decode("LS0tLS1CRUdJTiBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0KYjNCbGJuTnphQzFyWlhrdGRqRUFBQUFBQ21GbGN6STFOaTFqZEhJQUFBQUdZbU55ZVhCMEFBQUFHQUFBQUJCNzZzbWIzVgp5WFB3SE12dm8zWTB5M0FBQUFFQUFBQUFFQUFBR1hBQUFBQjNOemFDMXljMkVBQUFBREFRQUJBQUFCZ1FDOVZHbm13cjZCClRHdWxzODhEaXRXaE5IUUoxMjV0eGxHa2EzNDNxUVB2S3dSc2VxN05SdFAzY2IxbDRMZytzdWozZ0lQYU5yM295SlBoRDIKZmIxbzF1cUFiOStkbWhwQXc4L1lCa05NZkRrdDRTWEpGZjZ3dUZwa1p4SHF3czNZUXF6cjhicVJaaHA0bXlnc2VwNFVHOApBaGxVMG5CUXFBREFhS3dBcmpLeUdBeWwwenRDYVdObm9sOVRZSmZuNEpOQW5YUDFONmMxMUVaRm5wKzJsMTVoSVdNd2NKClpCMnFFeTFSZzFVNXpuOVNSOURIVXhvN2p0ZkkrdWJWbHdnelBQaDVjZzAydVc0K0JwcFg1UGlpZ04rQlBNajc3WEJ0VTQKZzU3MmRDZHBSRjk3NjJ5SDBsY21nSkRqVnhnOTludVVGRDlwVG9nUTRrUENrdUluNmcxS3JObFdqY1R2c1hFS2JVS0xqawpkQkR2Yk1tbzZBaHJXRFhDSjZqRUN0T2Jka29XMGVjTGU4cXB3Nmh5N1NmdWppSm9QbnVsazRWenMwR2xPa3VPU0JIUmhJClhSc25NaFNiNnh2dDl6QldJcklvZDZoWnhuQ0V2SWRESzlacVBnOXJpbXc4bG8rUkFwdm1ySnRINUhsbFJiYWh4K2RUU1cKM2hCa1BlMnNDL1UvRUFBQVdBVXBEOTFIQTAzSnQyNFFSSFVXRDAvVTJGMTBzZE5WN0w4bkhMeVNibFBnSFhMc3lpSTFxOQo0NXBOUEQyNElBakNzQ08rVHREcXc3MDhlNXliUWhXUCsybkxtdGQwclEyTXh3SnZwUjlGcEV6UDFyejRYUDVUbzZDN3N1CmZpd0JPZWd6bjhQT1hGSmRvRk9Ud3E3dWhaM201NE93NHZvZkFKSHdtYWtwTGZMd2R1TnQ3S1RNQkVpT3VlM0ZXTGtCR0wKQUE1RGtoYVlpVGgyajB2YU9jUWhxZVphVEp6V2tidUcvb29DK1cwcTVXcFNZdFlxREFhWEh0bG8rZGtOMFEzZVVhcm1FTQpGcy9tdEpha3dhOVhCMVgzMndKbUpIdmN0OG4vVzA1T0N5V0U1Y2szeitRQVB3a2pGK0hKOGlOZDluVk5zckx1T010a2VQCk1aMTZreTg5WUVSZVQ1QXRJU1lRd0JQU2tsTFZKL3VaOCszK2Vyc3JrOW1aakw3ZXpISnV4ZysxUmR1T3BPeWpXMTRoTGYKblJQTDlKOXgvZWZ2MFV0L3BpR3M5NEFRcFFVZnJFdXpjL1dmejRocUtzVUxnT0VnblZBWXpuSksyWHJGeTN4aWlKVkFVUQpZcm4xak9lU1oyTWV0cjJvd05VdVM3cEhGTHZIWURRWklURmxVaFlOYUx0ejV5WU9HTCtFbEVxQm4wT1FFenNESDhROEpFCk5jWGVxUjFRTE4rTUJaMFZqQ2Q3T0ExTGpXZVVrdjNMaFJER3lPS3RjWk5OeFl5MkgwRWlmYzIvRHpLMnlpcVRQWUdMbHYKOWhZTlZZcC8xOGxhUkFOL040MlVDMjRmS0hFZ2lYVTNnL3RCZkZmbEFBWThKSE9sQUJEdXFWYjJkWHZKdXFLeUJMUElqVQo5cVl5VXNOVXhWS2M2ZWh4VU4wcVlnTmV2Z0JmMXVSZkxCY2c3SjVJVDZQQ2dSa3lNenBRakY1RkhuM0J6SVMrb3ZFSnNaCk5LNklYbDJIY3FncExTWUFkTFZlZEZOUzlkVU01blpMdlJEMjkyc0FQWm5aaU91Z3pwSWNrMllFcXpscjc2NXlUakRJdWgKR3kvdFlBQ3FIZHV4S2pMdGc0OXpjZjdNN2xESGNuVEY1MlJsazEyR2x1emZGK1dhZDF3eUFKVnNyUmtqVFZYVHhnTEV6MQo4SzF0WUtVOWoyc3grUE1Vd0JxM3lQR2lTaEgydWp6em82SUc1cnVYSTAwZXVkT2t1NVVrSHhBVnJneUI1S0M2VFRMR1BYCnhQMFN5Zk12dXJycDdvMnhsK2dkSVc0c0dudEJ2V0RHRVFSY0RxbWdLV0tuNTNsbmg5U1Urcmh2UkdhRFJueENuYkNwUEUKTE82V0lKUXVPQm54bzhWcGU0R2JLc2NmSktKSzlZV2ZIOFEvYzBncnE0ZDh5ZmRwUG1uc3hHOEpoTFVuMEhpRFEzQytaMgpzU1RPeU85TDAySUZIdDdIUEY2OWRWR3c3M0pPU1FiL05GK2g5cGRVazBScGNRdGFaTm9TMHg2a3RCQXljK0o0VUpUYTliCkdENWRaSE1KVHBvcWFZUDV0dFlnMjlBQkpUUURMa0tnbWxWRGNtK28zRTN3cTlySWFXMlhpNDQrc3RnTVJVS1J5R041d1EKM2xTWjk1QXBpWFlpRkNONUVrWitUci96TDAraVdwUHRCRzlJZmlGbmlqVlVYUnpEWHZxeGE1QTQ1YUlNWDhad2U5ckxFdAphaVRaOUI5d2tVb0tYdXlDU3plQXhMTGU2aG8wLzBDbmhSR3NoVGg1UDd6aFA4bVExRGZMYlFCRU0zOHJMWlplMExVVVhZCkZpZkFXc3BFRDk2VjBMckhxRkd0Z0dzd1NQcWRBRzBPTDBWekRUbFRucDJVWDY0SEhjUzF2MUMyQnNxbllWbkJNL3p5aUYKQXhabDB4cGRPUVVuKzV2V2VHUXZsQkhGeU0vQmtXRVhMbjc1YVNQL3JwcnlZeGdOeWx2M2NiRWNYZXoyWXdLM2UrN1NnZAoxRzFZUVVtNStqNy90Q0x5aFluL1VjRzJhTHJNc3pRY1FoWTE4Sk9IOXF6a2FacWdYckFybnE0dWluT25sbFBKaGJ3ZTVrCmgvMmdyTlVqbEsrRHYxQ2dGZUVDcm9yRHo4L3ZxZW1QNXdVWWF5bFNWWVZ3UHM1bkxDQWUrVlNobFlIOXlNb3JwanNXc3MKYlg0UlAvVGd3TmNtRnBuZ21kTXppNmtIUXhSc2pUT3VxZ3Vsb01FUVZmQ3JkNGxBeWp3eVhRaEcrd2dWMXBuempCZlR4eQpZeFBrc1VGaTg3aEVkZ1RPZ2M5MHlNamVoVGhHOGRMWGEvd0NOU0hLZ1pBbFBZbWdLd2ZvcFlBMjQxdUlxR2J0WUtqSTFSCnVHU2JqSU80dUVYbkJ5eWVZTnA3Z29iR2NVc1BGV0doY1FPV05QZnl5K1crQ0xhKzVpYkJCZEF2NStVdlZZUHFGMHhTNy8KUm1TbW9BPT0KLS0tLS1FTkQgT1BFTlNTSCBQUklWQVRFIEtFWS0tLS0t").unwrap()).unwrap();
         let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_submodule".to_string());
         let get_credentials = |user: &str| {
@@ -333,7 +336,7 @@ mod tests {
             ]
         };
         let repo = clone_at_commit(
-            "https://github.com/Qovery/engine-testing.git",
+            &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
             "9a9c1f4373c8128151a9def9ea3d838fa2ed33e8",
             clone_dir.path(),
             &get_credentials,

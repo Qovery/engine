@@ -9,10 +9,9 @@ use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::errors::EngineError;
 use crate::events::{EventDetails, GeneralStep, Stage, ToTransmitter, Transmitter};
-use crate::models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
+use crate::io_models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
 use crate::runtime::block_on;
 
-pub mod application;
 pub mod databases;
 pub mod kubernetes;
 pub mod regions;
@@ -58,12 +57,7 @@ impl AWS {
     }
 
     pub fn credentials(&self) -> StaticProvider {
-        StaticProvider::new(
-            self.access_key_id.to_string(),
-            self.secret_access_key.to_string(),
-            None,
-            None,
-        )
+        StaticProvider::new(self.access_key_id.to_string(), self.secret_access_key.to_string(), None, None)
     }
 
     pub fn client(&self) -> Client {
@@ -115,11 +109,7 @@ impl CloudProvider for AWS {
 
         match s {
             Ok(_x) => Ok(()),
-            Err(_) => {
-                return Err(EngineError::new_client_invalid_cloud_provider_credentials(
-                    event_details,
-                ));
-            }
+            Err(_) => Err(EngineError::new_client_invalid_cloud_provider_credentials(event_details)),
         }
     }
 

@@ -1,19 +1,16 @@
 extern crate test_utilities;
 
 use self::test_utilities::scaleway::{SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION};
-use self::test_utilities::utilities::{
-    context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets,
-};
+use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
-use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::models::scaleway::ScwZone;
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 
 #[cfg(feature = "test-scw-infra")]
 fn create_and_destroy_kapsule_cluster(
     zone: ScwZone,
-    secrets: FuncTestsSecrets,
     test_type: ClusterTestType,
     major_boot_version: u8,
     minor_boot_version: u8,
@@ -28,11 +25,10 @@ fn create_and_destroy_kapsule_cluster(
             logger(),
             zone.as_str(),
             None,
-            secrets,
             test_type,
             major_boot_version,
             minor_boot_version,
-            ClusterDomain::Default,
+            &ClusterDomain::Default,
             vpc_network_mode,
             None,
         )
@@ -45,10 +41,8 @@ fn create_and_destroy_kapsule_cluster(
 #[test]
 fn create_and_destroy_kapsule_cluster_par_1() {
     let zone = ScwZone::Paris1;
-    let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
-        secrets,
         ClusterTestType::Classic,
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
@@ -62,10 +56,8 @@ fn create_and_destroy_kapsule_cluster_par_1() {
 #[test]
 fn create_and_destroy_kapsule_cluster_par_2() {
     let zone = ScwZone::Paris2;
-    let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
-        secrets,
         ClusterTestType::Classic,
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
@@ -79,10 +71,8 @@ fn create_and_destroy_kapsule_cluster_par_2() {
 #[test]
 fn create_pause_and_destroy_kapsule_cluster_ams_1() {
     let zone = ScwZone::Amsterdam1;
-    let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
-        secrets,
         ClusterTestType::WithPause,
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
@@ -96,10 +86,8 @@ fn create_pause_and_destroy_kapsule_cluster_ams_1() {
 #[test]
 fn create_and_destroy_kapsule_cluster_war_1() {
     let zone = ScwZone::Warsaw1;
-    let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
-        secrets,
         ClusterTestType::Classic,
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
@@ -115,10 +103,8 @@ fn create_and_destroy_kapsule_cluster_war_1() {
 #[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_par_1() {
     let zone = ScwZone::Paris1;
-    let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
-        secrets,
         ClusterTestType::WithUpgrade,
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
@@ -134,10 +120,8 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_par_1() {
 #[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_par_2() {
     let zone = ScwZone::Paris2;
-    let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
-        secrets,
         ClusterTestType::WithUpgrade,
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
@@ -153,10 +137,8 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_par_2() {
 #[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_ams_1() {
     let zone = ScwZone::Amsterdam1;
-    let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
-        secrets,
         ClusterTestType::WithUpgrade,
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,
@@ -172,10 +154,8 @@ fn create_upgrade_and_destroy_kapsule_cluster_in_ams_1() {
 #[ignore]
 fn create_upgrade_and_destroy_kapsule_cluster_in_war_1() {
     let zone = ScwZone::Warsaw1;
-    let secrets = FuncTestsSecrets::new();
     create_and_destroy_kapsule_cluster(
         zone,
-        secrets,
         ClusterTestType::WithUpgrade,
         SCW_KUBERNETES_MAJOR_VERSION,
         SCW_KUBERNETES_MINOR_VERSION,

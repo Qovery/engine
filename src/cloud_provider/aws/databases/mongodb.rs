@@ -16,12 +16,12 @@ use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
+use crate::io_models::DatabaseMode::MANAGED;
+use crate::io_models::{Context, Listen, Listener, Listeners};
 use crate::logger::Logger;
-use crate::models::DatabaseMode::MANAGED;
-use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
 
-pub struct MongoDB {
+pub struct MongoDbAws {
     context: Context,
     id: String,
     action: Action,
@@ -37,7 +37,7 @@ pub struct MongoDB {
     logger: Box<dyn Logger>,
 }
 
-impl MongoDB {
+impl MongoDbAws {
     pub fn new(
         context: Context,
         id: &str,
@@ -53,7 +53,7 @@ impl MongoDB {
         listeners: Listeners,
         logger: Box<dyn Logger>,
     ) -> Self {
-        MongoDB {
+        MongoDbAws {
             context,
             action,
             id: id.to_string(),
@@ -92,13 +92,17 @@ impl MongoDB {
     }
 }
 
-impl StatefulService for MongoDB {
+impl StatefulService for MongoDbAws {
+    fn as_stateful_service(&self) -> &dyn StatefulService {
+        self
+    }
+
     fn is_managed_service(&self) -> bool {
         self.options.mode == MANAGED
     }
 }
 
-impl Service for MongoDB {
+impl Service for MongoDbAws {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -119,7 +123,7 @@ impl Service for MongoDB {
         // https://docs.aws.amazon.com/documentdb/latest/developerguide/limits.html#limits-naming_constraints
         let prefix = "mongodb";
         let max_size = 60 - prefix.len(); // 63 (max DocumentDB) - 3 (k8s statefulset chars)
-        let mut new_name = format!("{}{}", prefix, self.name().replace("_", "").replace("-", ""));
+        let mut new_name = format!("{}{}", prefix, self.name().replace('_', "").replace('-', ""));
         if new_name.chars().count() > max_size {
             new_name = new_name[..max_size].to_string();
         }
@@ -179,7 +183,7 @@ impl Service for MongoDB {
         context.insert("kubeconfig_path", &kube_config_file_path);
 
         kubectl::kubectl_exec_create_namespace_without_labels(
-            &environment.namespace(),
+            environment.namespace(),
             kube_config_file_path.as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
@@ -187,7 +191,7 @@ impl Service for MongoDB {
         context.insert("namespace", environment.namespace());
 
         let version = self
-            .matching_correct_version(self.is_managed_service(), event_details.clone())?
+            .matching_correct_version(self.is_managed_service(), event_details)?
             .matched_version()
             .to_string();
         context.insert("version", &version);
@@ -200,10 +204,7 @@ impl Service for MongoDB {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert(
-            "fqdn",
-            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
-        );
+        context.insert("fqdn", self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
         context.insert("database_db_name", self.name.as_str());
         context.insert("database_login", self.options.login.as_str());
@@ -225,10 +226,7 @@ impl Service for MongoDB {
         context.insert("final_snapshot_name", &aws_final_snapshot_name(self.id()));
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
         if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert(
-                "resource_expiration_in_seconds",
-                &self.context.resource_expiration_in_seconds(),
-            )
+            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
         }
 
         Ok(context)
@@ -243,19 +241,15 @@ impl Service for MongoDB {
     }
 }
 
-impl Database for MongoDB {}
+impl Database for MongoDbAws {}
 
-impl ToTransmitter for MongoDB {
+impl ToTransmitter for MongoDbAws {
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Database(
-            self.id().to_string(),
-            self.service_type().to_string(),
-            self.name().to_string(),
-        )
+        Transmitter::Database(self.id().to_string(), self.service_type().to_string(), self.name().to_string())
     }
 }
 
-impl Helm for MongoDB {
+impl Helm for MongoDbAws {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -277,7 +271,7 @@ impl Helm for MongoDB {
     }
 }
 
-impl Terraform for MongoDB {
+impl Terraform for MongoDbAws {
     fn terraform_common_resource_dir_path(&self) -> String {
         format!("{}/aws/services/common", self.context.lib_root_dir())
     }
@@ -287,7 +281,7 @@ impl Terraform for MongoDB {
     }
 }
 
-impl Create for MongoDB {
+impl Create for MongoDbAws {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -307,12 +301,7 @@ impl Create for MongoDB {
 
     fn on_create_check(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        self.check_domains(
-            self.listeners.clone(),
-            vec![self.fqdn.as_str()],
-            event_details,
-            self.logger(),
-        )
+        self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()], event_details, self.logger())
     }
 
     #[named]
@@ -330,7 +319,7 @@ impl Create for MongoDB {
     }
 }
 
-impl Pause for MongoDB {
+impl Pause for MongoDbAws {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
@@ -368,7 +357,7 @@ impl Pause for MongoDB {
     }
 }
 
-impl Delete for MongoDB {
+impl Delete for MongoDbAws {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
@@ -405,7 +394,7 @@ impl Delete for MongoDB {
     }
 }
 
-impl Listen for MongoDB {
+impl Listen for MongoDbAws {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }
@@ -439,10 +428,7 @@ fn get_managed_mongodb_version(requested_version: String) -> Result<String, Comm
 
 #[cfg(test)]
 mod tests_mongodb {
-    use crate::cloud_provider::aws::databases::mongodb::{get_mongodb_version, MongoDB};
-    use crate::cloud_provider::service::{Action, DatabaseOptions, Service};
-    use crate::logger::StdIoLogger;
-    use crate::models::{Context, DatabaseMode};
+    use crate::cloud_provider::aws::databases::mongodb::get_mongodb_version;
 
     #[test]
     fn check_mongodb_version() {
@@ -466,50 +452,5 @@ mod tests_mongodb {
                 .as_str(),
             "MongoDB 3.4 version is not supported"
         );
-    }
-
-    #[test]
-    fn mongo_name_sanitizer() {
-        let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
-        let db_expected_name = "mongodbtestnamesanitizerwithtoomanycharsnotallowedwhi";
-
-        let database = MongoDB::new(
-            Context::new(
-                "".to_string(),
-                "".to_string(),
-                "".to_string(),
-                "".to_string(),
-                "".to_string(),
-                false,
-                None,
-                vec![],
-                None,
-            ),
-            "pgid",
-            Action::Create,
-            db_input_name,
-            "8",
-            "mongotest.qovery.io",
-            "pgid",
-            "1".to_string(),
-            512,
-            "db.t2.micro",
-            DatabaseOptions {
-                login: "".to_string(),
-                password: "".to_string(),
-                host: "".to_string(),
-                port: 5432,
-                mode: DatabaseMode::CONTAINER,
-                disk_size_in_gib: 10,
-                database_disk_type: "gp2".to_string(),
-                encrypt_disk: false,
-                activate_high_availability: false,
-                activate_backups: false,
-                publicly_accessible: false,
-            },
-            vec![],
-            Box::new(StdIoLogger::new()),
-        );
-        assert_eq!(database.sanitized_name(), db_expected_name);
     }
 }

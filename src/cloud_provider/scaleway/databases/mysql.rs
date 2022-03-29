@@ -13,13 +13,13 @@ use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
+use crate::io_models::DatabaseMode::MANAGED;
+use crate::io_models::{Context, Listen, Listener, Listeners};
 use crate::logger::Logger;
-use crate::models::DatabaseMode::MANAGED;
-use crate::models::{Context, Listen, Listener, Listeners};
 use ::function_name::named;
 use std::collections::HashMap;
 
-pub struct MySQL {
+pub struct MySQLScw {
     context: Context,
     id: String,
     action: Action,
@@ -35,7 +35,7 @@ pub struct MySQL {
     logger: Box<dyn Logger>,
 }
 
-impl MySQL {
+impl MySQLScw {
     pub fn new(
         context: Context,
         id: &str,
@@ -110,23 +110,23 @@ impl MySQL {
     }
 }
 
-impl StatefulService for MySQL {
+impl StatefulService for MySQLScw {
+    fn as_stateful_service(&self) -> &dyn StatefulService {
+        self
+    }
+
     fn is_managed_service(&self) -> bool {
         self.options.mode == MANAGED
     }
 }
 
-impl ToTransmitter for MySQL {
+impl ToTransmitter for MySQLScw {
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Database(
-            self.id().to_string(),
-            self.service_type().to_string(),
-            self.name().to_string(),
-        )
+        Transmitter::Database(self.id().to_string(), self.service_type().to_string(), self.name().to_string())
     }
 }
 
-impl Service for MySQL {
+impl Service for MySQLScw {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -199,7 +199,7 @@ impl Service for MySQL {
         context.insert("kubeconfig_path", &kube_config_file_path);
 
         kubectl::kubectl_exec_create_namespace_without_labels(
-            &environment.namespace(),
+            environment.namespace(),
             kube_config_file_path.as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
@@ -207,7 +207,7 @@ impl Service for MySQL {
         context.insert("namespace", environment.namespace());
 
         let version = &self
-            .matching_correct_version(self.is_managed_service(), event_details.clone())?
+            .matching_correct_version(self.is_managed_service(), event_details)?
             .matched_version();
         context.insert("version_major", &version.to_major_version_string());
         context.insert("version", &version.to_string()); // Scaleway needs to have major version only
@@ -220,10 +220,7 @@ impl Service for MySQL {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert(
-            "fqdn",
-            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
-        );
+        context.insert("fqdn", self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
         context.insert("database_login", self.options.login.as_str());
         context.insert("database_password", self.options.password.as_str());
@@ -246,27 +243,24 @@ impl Service for MySQL {
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
         context.insert("skip_final_snapshot", &self.context().is_test_cluster());
         if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert(
-                "resource_expiration_in_seconds",
-                &self.context.resource_expiration_in_seconds(),
-            )
+            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
         }
 
         Ok(context)
     }
 
-    fn selector(&self) -> Option<String> {
-        Some(format!("app={}", self.sanitized_name()))
-    }
-
     fn logger(&self) -> &dyn Logger {
         &*self.logger
     }
+
+    fn selector(&self) -> Option<String> {
+        Some(format!("app={}", self.sanitized_name()))
+    }
 }
 
-impl Database for MySQL {}
+impl Database for MySQLScw {}
 
-impl Helm for MySQL {
+impl Helm for MySQLScw {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -288,7 +282,7 @@ impl Helm for MySQL {
     }
 }
 
-impl Terraform for MySQL {
+impl Terraform for MySQLScw {
     fn terraform_common_resource_dir_path(&self) -> String {
         format!("{}/scaleway/services/common", self.context.lib_root_dir())
     }
@@ -298,7 +292,7 @@ impl Terraform for MySQL {
     }
 }
 
-impl Create for MySQL {
+impl Create for MySQLScw {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -318,12 +312,7 @@ impl Create for MySQL {
 
     fn on_create_check(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        self.check_domains(
-            self.listeners.clone(),
-            vec![self.fqdn.as_str()],
-            event_details,
-            self.logger(),
-        )
+        self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()], event_details, self.logger())
     }
 
     #[named]
@@ -342,7 +331,7 @@ impl Create for MySQL {
     }
 }
 
-impl Pause for MySQL {
+impl Pause for MySQLScw {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
@@ -380,7 +369,7 @@ impl Pause for MySQL {
     }
 }
 
-impl Delete for MySQL {
+impl Delete for MySQLScw {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
@@ -417,7 +406,7 @@ impl Delete for MySQL {
     }
 }
 
-impl Listen for MySQL {
+impl Listen for MySQLScw {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

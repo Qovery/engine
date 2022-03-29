@@ -12,7 +12,7 @@ pub struct CommandError {
 impl From<errors::CommandError> for CommandError {
     fn from(error: errors::CommandError) -> Self {
         CommandError {
-            message: error.message_safe.unwrap_or("".to_string()),
+            message: error.message_safe.unwrap_or_default(),
             message_unsafe: error.message_raw,
         }
     }
@@ -28,6 +28,7 @@ pub enum Tag {
     CannotGetWorkspaceDirectory,
     UnsupportedInstanceType,
     CannotRetrieveClusterConfigFile,
+    CannotCreateFile,
     CannotGetClusterNodes,
     NotEnoughResourcesToDeployEnvironment,
     CannotUninstallHelmChart,
@@ -74,6 +75,7 @@ pub enum Tag {
     UnsupportedVersion,
     CannotGetSupportedVersions,
     CannotGetCluster,
+    ContainerRegistryError,
     ObjectStorageCannotCreateBucket,
     ObjectStorageCannotPutFileIntoBucket,
     NoClusterFound,
@@ -88,6 +90,7 @@ pub enum Tag {
     CloudProviderClientInvalidCredentials,
     VersionNumberParsingError,
     NotImplementedError,
+    BuilderError,
     BuilderDockerCannotFindAnyDockerfile,
     BuilderDockerCannotReadDockerfile,
     BuilderDockerCannotExtractEnvVarsFromDockerfile,
@@ -96,8 +99,22 @@ pub enum Tag {
     BuilderBuildpackCannotBuildContainerImage,
     BuilderGetBuildError,
     BuilderCloningRepositoryError,
+    DockerError,
     DockerPushImageError,
     DockerPullImageError,
+    BuilderDockerCannotListImages,
+    ContainerRegistryRepositoryCreationError,
+    ContainerRegistryRepositorySetLifecycleError,
+    ContainerRegistryGetCredentialsError,
+    ContainerRegistryImageDoesntExist,
+    ContainerRegistryImageUnreachableAfterPush,
+    ContainerRegistryRepositoryDoesntExist,
+    ContainerRegistryDeleteRepositoryError,
+    ContainerRegistryDeleteImageError,
+    ObjectStorageInvalidBucketName,
+    ObjectStorageCannotEmptyBucket,
+    ObjectStorageCannotTagBucket,
+    ObjectStorageCannotActivateBucketVersioning,
 }
 
 impl From<errors::Tag> for Tag {
@@ -106,6 +123,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::Unknown => Tag::Unknown,
             errors::Tag::UnsupportedInstanceType => Tag::UnsupportedInstanceType,
             errors::Tag::CannotRetrieveClusterConfigFile => Tag::CannotRetrieveClusterConfigFile,
+            errors::Tag::CannotCreateFile => Tag::CannotCreateFile,
             errors::Tag::CannotGetClusterNodes => Tag::CannotGetClusterNodes,
             errors::Tag::NotEnoughResourcesToDeployEnvironment => Tag::NotEnoughResourcesToDeployEnvironment,
             errors::Tag::MissingRequiredEnvVariable => Tag::MissingRequiredEnvVariable,
@@ -186,6 +204,26 @@ impl From<errors::Tag> for Tag {
             errors::Tag::BuilderCloningRepositoryError => Tag::BuilderCloningRepositoryError,
             errors::Tag::DockerPushImageError => Tag::DockerPushImageError,
             errors::Tag::DockerPullImageError => Tag::DockerPullImageError,
+            errors::Tag::ContainerRegistryRepositoryCreationError => Tag::ContainerRegistryRepositoryCreationError,
+            errors::Tag::ContainerRegistryRepositorySetLifecycleError => {
+                Tag::ContainerRegistryRepositorySetLifecycleError
+            }
+            errors::Tag::ContainerRegistryGetCredentialsError => Tag::ContainerRegistryGetCredentialsError,
+            errors::Tag::ContainerRegistryDeleteImageError => Tag::ContainerRegistryDeleteImageError,
+            errors::Tag::ContainerRegistryImageDoesntExist => Tag::ContainerRegistryImageDoesntExist,
+            errors::Tag::ContainerRegistryImageUnreachableAfterPush => Tag::ContainerRegistryImageUnreachableAfterPush,
+            errors::Tag::ContainerRegistryRepositoryDoesntExist => Tag::ContainerRegistryRepositoryDoesntExist,
+            errors::Tag::ContainerRegistryDeleteRepositoryError => Tag::ContainerRegistryDeleteRepositoryError,
+            errors::Tag::BuilderDockerCannotListImages => Tag::BuilderDockerCannotListImages,
+            errors::Tag::DockerError => Tag::DockerError,
+            errors::Tag::ObjectStorageInvalidBucketName => Tag::ObjectStorageInvalidBucketName,
+            errors::Tag::ObjectStorageCannotEmptyBucket => Tag::ObjectStorageCannotEmptyBucket,
+            errors::Tag::ObjectStorageCannotTagBucket => Tag::ObjectStorageCannotTagBucket,
+            errors::Tag::ObjectStorageCannotActivateBucketVersioning => {
+                Tag::ObjectStorageCannotActivateBucketVersioning
+            }
+            errors::Tag::BuilderError => Tag::BuilderError,
+            errors::Tag::ContainerRegistryError => Tag::ContainerRegistryError,
         }
     }
 }
@@ -209,10 +247,7 @@ impl From<errors::EngineError> for EngineError {
             event_details: EventDetails::from(error.event_details),
             qovery_log_message: error.qovery_log_message,
             user_log_message: error.user_log_message,
-            message: match error.message {
-                Some(msg) => Some(CommandError::from(msg)),
-                None => None,
-            },
+            message: error.message.map(CommandError::from),
             link: error.link.map(|url| url.to_string()),
             hint_message: error.hint_message,
         }
