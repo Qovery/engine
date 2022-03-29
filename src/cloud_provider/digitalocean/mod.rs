@@ -16,7 +16,6 @@ pub mod do_api_common;
 pub mod kubernetes;
 pub mod models;
 pub mod network;
-pub mod router;
 
 pub struct DO {
     context: Context,

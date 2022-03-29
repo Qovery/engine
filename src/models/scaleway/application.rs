@@ -5,9 +5,9 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
 use crate::io_models::ListenersHelper;
-use crate::models::application::{Application, ToTeraContext};
+use crate::models::application::Application;
 use crate::models::scaleway::ScwStorageType;
-use crate::models::types::SCW;
+use crate::models::types::{ToTeraContext, SCW};
 use tera::Context as TeraContext;
 
 impl ToTeraContext for Application<SCW> {

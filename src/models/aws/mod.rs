@@ -1,4 +1,5 @@
 pub mod application;
+pub mod router;
 
 use crate::models::types::CloudProvider;
 use crate::models::types::AWS;

@@ -15,7 +15,6 @@ use crate::runtime::block_on;
 pub mod databases;
 pub mod kubernetes;
 pub mod regions;
-pub mod router;
 
 pub struct AWS {
     context: Context,
