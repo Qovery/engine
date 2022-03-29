@@ -18,19 +18,16 @@ use crate::cloud_provider::aws::databases::mongodb::MongoDbAws;
 use crate::cloud_provider::aws::databases::mysql::MySQLAws;
 use crate::cloud_provider::aws::databases::postgresql::PostgreSQLAws;
 use crate::cloud_provider::aws::databases::redis::RedisAws;
-use crate::cloud_provider::aws::router::RouterAws;
 use crate::cloud_provider::digitalocean::databases::mongodb::MongoDo;
 use crate::cloud_provider::digitalocean::databases::mysql::MySQLDo;
 use crate::cloud_provider::digitalocean::databases::postgresql::PostgresDo;
 use crate::cloud_provider::digitalocean::databases::redis::RedisDo;
-use crate::cloud_provider::digitalocean::router::RouterDo;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::scaleway::databases::mongodb::MongoDbScw;
 use crate::cloud_provider::scaleway::databases::mysql::MySQLScw;
 use crate::cloud_provider::scaleway::databases::postgresql::PostgresScw;
 use crate::cloud_provider::scaleway::databases::redis::RedisScw;
-use crate::cloud_provider::scaleway::router::RouterScw;
-use crate::cloud_provider::service::DatabaseOptions;
+use crate::cloud_provider::service::{DatabaseOptions, IRouter};
 use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
@@ -39,9 +36,10 @@ use crate::container_registry::ContainerRegistryInfo;
 use crate::logger::Logger;
 use crate::models;
 use crate::models::application::{ApplicationError, IApplication};
-use crate::models::aws::{AwsAppExtraSettings, AwsStorageType};
-use crate::models::digital_ocean::{DoAppExtraSettings, DoStorageType};
-use crate::models::scaleway::{ScwAppExtraSettings, ScwStorageType};
+use crate::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
+use crate::models::digital_ocean::{DoAppExtraSettings, DoRouterExtraSettings, DoStorageType};
+use crate::models::router::RouterError;
+use crate::models::scaleway::{ScwAppExtraSettings, ScwRouterExtraSettings, ScwStorageType};
 use crate::models::types::{AWS, DO, SCW};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -123,12 +121,16 @@ impl EnvironmentRequest {
             }
         }
 
-        //FIXME: remove those flatten as it hide errors regarding conversion to model data type
-        let routers = self
-            .routers
-            .iter()
-            .filter_map(|x| x.to_router_domain(context, cloud_provider, logger.clone()))
-            .collect::<Vec<_>>();
+        let mut routers = Vec::with_capacity(self.routers.len());
+        for router in &self.routers {
+            match router.to_router_domain(context, cloud_provider, logger.clone()) {
+                Ok(router) => routers.push(router),
+                Err(err) => {
+                    //FIXME: propagate the correct Error
+                    return Err(ApplicationError::InvalidConfig(format!("{}", err)));
+                }
+            }
+        }
 
         let databases = self
             .databases
@@ -507,7 +509,7 @@ impl Router {
         context: &Context,
         cloud_provider: &dyn CloudProvider,
         logger: Box<dyn Logger>,
-    ) -> Option<Box<dyn crate::cloud_provider::service::Router>> {
+    ) -> Result<Box<dyn IRouter>, RouterError> {
         let custom_domains = self
             .custom_domains
             .iter()
@@ -530,7 +532,7 @@ impl Router {
 
         match cloud_provider.kind() {
             CPKind::Aws => {
-                let router = Box::new(RouterAws::new(
+                let router = Box::new(models::router::Router::<AWS>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.name.as_str(),
@@ -539,13 +541,14 @@ impl Router {
                     custom_domains,
                     routes,
                     self.sticky_sessions_enabled,
+                    AwsRouterExtraSettings {},
                     listeners,
                     logger,
-                ));
-                Some(router)
+                )?);
+                Ok(router)
             }
             CPKind::Do => {
-                let router = Box::new(RouterDo::new(
+                let router = Box::new(models::router::Router::<DO>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.name.as_str(),
@@ -554,13 +557,14 @@ impl Router {
                     custom_domains,
                     routes,
                     self.sticky_sessions_enabled,
+                    DoRouterExtraSettings {},
                     listeners,
                     logger,
-                ));
-                Some(router)
+                )?);
+                Ok(router)
             }
             CPKind::Scw => {
-                let router = Box::new(RouterScw::new(
+                let router = Box::new(models::router::Router::<SCW>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.name.as_str(),
@@ -569,10 +573,11 @@ impl Router {
                     custom_domains,
                     routes,
                     self.sticky_sessions_enabled,
+                    ScwRouterExtraSettings {},
                     listeners,
                     logger,
-                ));
-                Some(router)
+                )?);
+                Ok(router)
             }
         }
     }

@@ -1,4 +1,5 @@
 mod application;
+mod router;
 
 use crate::errors::CommandError;
 use crate::models::types::CloudProvider;

@@ -8,7 +8,6 @@ use crate::io_models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
 
 pub mod databases;
 pub mod kubernetes;
-pub mod router;
 
 pub struct Scaleway {
     context: Context,

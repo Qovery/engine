@@ -157,7 +157,7 @@ pub trait StatefulService: Service + Create + Pause + Delete {
     fn is_managed_service(&self) -> bool;
 }
 
-pub trait Router: StatelessService + Listen + Helm {
+pub trait IRouter: StatelessService + Listen + Helm {
     fn domains(&self) -> Vec<&str>;
     fn has_custom_domains(&self) -> bool;
     fn check_domains(&self, event_details: EventDetails, logger: &dyn Logger) -> Result<(), EngineError> {
@@ -521,15 +521,6 @@ pub fn scale_down_application(
             replicas_count as u32,
             e,
         )
-    })
-}
-
-pub fn delete_router<T>(target: &DeploymentTarget, service: &T, event_details: EventDetails) -> Result<(), EngineError>
-where
-    T: Router,
-{
-    send_progress_on_long_task(service, crate::cloud_provider::service::Action::Delete, || {
-        delete_stateless_service(target, service, event_details.clone())
     })
 }
 
