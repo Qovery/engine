@@ -7,7 +7,7 @@ use crate::cmd::kubectl::{
     kubectl_exec_rollout_restart_deployment, kubectl_exec_with_output,
 };
 use crate::cmd::structs::HelmHistoryRow;
-use crate::errors::CommandError;
+use crate::errors::{CommandError, ErrorMessageVerbosity};
 use crate::utilities::calculate_hash;
 use semver::Version;
 use std::collections::HashMap;
@@ -205,7 +205,7 @@ pub trait HelmChart: Send {
         let payload = match self.exec(kubernetes_config, envs, payload.clone()) {
             Ok(payload) => payload,
             Err(e) => {
-                error!("Error while deploying chart: {}", e.message());
+                error!("Error while deploying chart: {}", e.message(ErrorMessageVerbosity::FullDetails));
                 self.on_deploy_failure(kubernetes_config, envs, payload)?;
                 return Err(e);
             }
@@ -502,7 +502,10 @@ impl HelmChart for CoreDNSConfigChart {
             Err(e) => return Err(e),
         };
         if let Err(e) = self.exec(kubernetes_config, envs, None) {
-            error!("Error while deploying chart: {:?}", e.message());
+            error!(
+                "Error while deploying chart: {:?}",
+                e.message(ErrorMessageVerbosity::FullDetails)
+            );
             self.on_deploy_failure(kubernetes_config, envs, None)?;
             return Err(e);
         };
