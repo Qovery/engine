@@ -195,6 +195,19 @@ where
             );
         }
 
+        // Specific for redis
+        if T::db_type() == service::DatabaseType::Redis {
+            let parameter_group_name = if self.version.major == "5" {
+                "default.redis5.0"
+            } else if self.version.major == "6" {
+                "default.redis6.x"
+            } else {
+                "redis.unknown"
+            };
+
+            context.insert("database_elasticache_parameter_group_name", parameter_group_name);
+        }
+
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
             context.insert(k, v);
         }
