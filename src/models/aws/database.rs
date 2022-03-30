@@ -173,6 +173,18 @@ impl<M: DatabaseMode, T: DatabaseType<AWS, M>> Database<AWS, M, T> {
         let version = get_version(event_details)?.matched_version().to_string();
         context.insert("version", &version);
 
+        // Specific to mysql
+        if T::db_type() == service::DatabaseType::MySQL {
+            context.insert(
+                "parameter_group_family",
+                &format!(
+                    "mysql{}.{}",
+                    self.version.major,
+                    self.version.minor.as_deref().unwrap_or_default()
+                ),
+            );
+        }
+
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
             context.insert(k, v);
         }
