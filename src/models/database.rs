@@ -61,8 +61,11 @@ pub trait DatabaseType<T: CloudProvider, M: DatabaseMode> {
 
 #[derive(thiserror::Error, Debug)]
 pub enum DatabaseError {
-    #[error("Application invalid configuration: {0}")]
+    #[error("Database invalid configuration: {0}")]
     InvalidConfig(String),
+
+    #[error("Managed database for {0:?} is not supported (yet) by provider {1}")]
+    UnsupportedManagedMode(service::DatabaseType, String),
 }
 
 pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
