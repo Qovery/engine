@@ -250,7 +250,7 @@ pub struct DatabaseOptions {
     pub publicly_accessible: bool,
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum DatabaseType {
     PostgreSQL,
     MongoDB,

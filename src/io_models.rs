@@ -16,19 +16,19 @@ use url::Url;
 use crate::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::{DatabaseOptions, RouterService};
-use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
+use crate::cloud_provider::{service, CloudProvider};
 use crate::cmd::docker::Docker;
 use crate::container_registry::ContainerRegistryInfo;
 use crate::logger::Logger;
 use crate::models;
 use crate::models::application::{ApplicationError, ApplicationService};
 use crate::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
-use crate::models::database::{Container, Managed, MongoDB, MySQL, PostgresSQL, Redis};
+use crate::models::database::{Container, DatabaseError, Managed, MongoDB, MySQL, PostgresSQL, Redis};
 use crate::models::digital_ocean::{DoAppExtraSettings, DoRouterExtraSettings, DoStorageType};
 use crate::models::router::RouterError;
 use crate::models::scaleway::{ScwAppExtraSettings, ScwRouterExtraSettings, ScwStorageType};
-use crate::models::types::{VersionsNumber, AWS, DO, SCW};
+use crate::models::types::{CloudProvider as CP, VersionsNumber, AWS, DO, SCW};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct QoveryIdentifier {
@@ -120,11 +120,16 @@ impl EnvironmentRequest {
             }
         }
 
-        let databases = self
-            .databases
-            .iter()
-            .filter_map(|x| x.to_database_domain(context, cloud_provider, logger.clone()))
-            .collect::<Vec<_>>();
+        let mut databases = Vec::with_capacity(self.databases.len());
+        for db in &self.databases {
+            match db.to_database_domain(context, cloud_provider, logger.clone()) {
+                Ok(router) => databases.push(router),
+                Err(err) => {
+                    //FIXME: propagate the correct Error
+                    return Err(ApplicationError::InvalidConfig(format!("{}", err)));
+                }
+            }
+        }
 
         Ok(Environment::new(
             self.id.as_str(),
@@ -621,7 +626,7 @@ impl Database {
         context: &Context,
         cloud_provider: &dyn CloudProvider,
         logger: Box<dyn Logger>,
-    ) -> Option<Box<dyn crate::cloud_provider::service::Database>> {
+    ) -> Result<Box<dyn crate::cloud_provider::service::Database>, DatabaseError> {
         let database_options = DatabaseOptions {
             mode: self.mode.clone(),
             login: self.username.clone(),
@@ -637,6 +642,8 @@ impl Database {
         };
 
         let listeners = cloud_provider.listeners().clone();
+        let version = VersionsNumber::from_str(self.version.as_str())
+            .map_err(|_| DatabaseError::InvalidConfig(format!("Bad version number: {}", self.version)))?;
 
         match (cloud_provider.kind(), &self.kind, &self.mode) {
             (CPKind::Aws, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
@@ -645,7 +652,7 @@ impl Database {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -656,10 +663,9 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
+                )?;
 
-                Some(Box::new(db))
+                Ok(Box::new(db))
             }
             (CPKind::Aws, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<AWS, Container, PostgresSQL>::new(
@@ -667,7 +673,7 @@ impl Database {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -678,10 +684,9 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
+                )?;
 
-                Some(Box::new(db))
+                Ok(Box::new(db))
             }
 
             (CPKind::Aws, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
@@ -690,7 +695,7 @@ impl Database {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -701,10 +706,9 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
+                )?;
 
-                Some(Box::new(db))
+                Ok(Box::new(db))
             }
             (CPKind::Aws, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<AWS, Container, MySQL>::new(
@@ -712,7 +716,7 @@ impl Database {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -723,10 +727,9 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
+                )?;
 
-                Some(Box::new(db))
+                Ok(Box::new(db))
             }
             (CPKind::Aws, DatabaseKind::Redis, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<AWS, Managed, Redis>::new(
@@ -734,7 +737,7 @@ impl Database {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -745,10 +748,9 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
+                )?;
 
-                Some(Box::new(db))
+                Ok(Box::new(db))
             }
             (CPKind::Aws, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<AWS, Container, Redis>::new(
@@ -756,7 +758,7 @@ impl Database {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -767,10 +769,9 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
+                )?;
 
-                Some(Box::new(db))
+                Ok(Box::new(db))
             }
             (CPKind::Aws, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<AWS, Managed, MongoDB>::new(
@@ -778,7 +779,7 @@ impl Database {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -789,10 +790,9 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
+                )?;
 
-                Some(Box::new(db))
+                Ok(Box::new(db))
             }
             (CPKind::Aws, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<AWS, Container, MongoDB>::new(
@@ -800,7 +800,7 @@ impl Database {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -811,20 +811,18 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
+                )?;
 
-                Some(Box::new(db))
+                Ok(Box::new(db))
             }
 
-            (CPKind::Do, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => None,
             (CPKind::Do, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, PostgresSQL>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -835,19 +833,17 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
+                )?;
 
-                Some(Box::new(db))
+                Ok(Box::new(db))
             }
-            (CPKind::Do, DatabaseKind::Mysql, DatabaseMode::MANAGED) => None,
             (CPKind::Do, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, MySQL>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -858,19 +854,17 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
+                )?;
 
-                Some(Box::new(db))
+                Ok(Box::new(db))
             }
-            (CPKind::Do, DatabaseKind::Redis, DatabaseMode::MANAGED) => None,
             (CPKind::Do, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, Redis>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -881,19 +875,17 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
+                )?;
 
-                Some(Box::new(db))
+                Ok(Box::new(db))
             }
-            (CPKind::Do, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => None,
             (CPKind::Do, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, MongoDB>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -904,11 +896,25 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
+                )?;
 
-                Some(Box::new(db))
+                Ok(Box::new(db))
             }
+            (CPKind::Do, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => Err(
+                DatabaseError::UnsupportedManagedMode(service::DatabaseType::PostgreSQL, DO::full_name().to_string()),
+            ),
+            (CPKind::Do, DatabaseKind::Mysql, DatabaseMode::MANAGED) => Err(DatabaseError::UnsupportedManagedMode(
+                service::DatabaseType::MySQL,
+                DO::full_name().to_string(),
+            )),
+            (CPKind::Do, DatabaseKind::Redis, DatabaseMode::MANAGED) => Err(DatabaseError::UnsupportedManagedMode(
+                service::DatabaseType::Redis,
+                DO::full_name().to_string(),
+            )),
+            (CPKind::Do, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => Err(DatabaseError::UnsupportedManagedMode(
+                service::DatabaseType::MongoDB,
+                DO::full_name().to_string(),
+            )),
 
             (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<SCW, Managed, PostgresSQL>::new(
@@ -916,7 +922,7 @@ impl Database {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -927,9 +933,9 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
-                Some(Box::new(db))
+                )?;
+
+                Ok(Box::new(db))
             }
             (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, PostgresSQL>::new(
@@ -937,7 +943,7 @@ impl Database {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -948,9 +954,9 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
-                Some(Box::new(db))
+                )?;
+
+                Ok(Box::new(db))
             }
             (CPKind::Scw, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<SCW, Managed, MySQL>::new(
@@ -958,7 +964,7 @@ impl Database {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -969,9 +975,9 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
-                Some(Box::new(db))
+                )?;
+
+                Ok(Box::new(db))
             }
             (CPKind::Scw, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, MySQL>::new(
@@ -979,7 +985,7 @@ impl Database {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -990,14 +996,9 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
+                )?;
 
-                Some(Box::new(db))
-            }
-            (CPKind::Scw, DatabaseKind::Redis, DatabaseMode::MANAGED) => {
-                // Not Implemented
-                None
+                Ok(Box::new(db))
             }
             (CPKind::Scw, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, Redis>::new(
@@ -1005,7 +1006,7 @@ impl Database {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -1016,14 +1017,9 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
+                )?;
 
-                Some(Box::new(db))
-            }
-            (CPKind::Scw, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
-                // Not Implemented
-                None
+                Ok(Box::new(db))
             }
             (CPKind::Scw, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, MongoDB>::new(
@@ -1031,7 +1027,7 @@ impl Database {
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    version,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
@@ -1042,11 +1038,18 @@ impl Database {
                     database_options,
                     listeners,
                     logger,
-                )
-                .unwrap();
+                )?;
 
-                Some(Box::new(db))
+                Ok(Box::new(db))
             }
+            (CPKind::Scw, DatabaseKind::Redis, DatabaseMode::MANAGED) => Err(DatabaseError::UnsupportedManagedMode(
+                service::DatabaseType::Redis,
+                SCW::full_name().to_string(),
+            )),
+            (CPKind::Scw, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => Err(DatabaseError::UnsupportedManagedMode(
+                service::DatabaseType::MongoDB,
+                SCW::full_name().to_string(),
+            )),
         }
     }
 }
