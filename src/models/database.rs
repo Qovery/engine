@@ -9,7 +9,7 @@ use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage, ToTransmitter, Transmitter};
 use crate::io_models::{Context, Listen, Listener, Listeners, ListenersHelper};
 use crate::logger::Logger;
-use crate::models::types::{CloudProvider, ToTeraContext};
+use crate::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
 use function_name::named;
 use std::borrow::Borrow;
 use std::marker::PhantomData;
@@ -65,7 +65,7 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     pub(super) id: String,
     pub(super) action: Action,
     pub(super) name: String,
-    pub(super) version: String,
+    pub(super) version: VersionsNumber,
     pub(super) fqdn: String,
     pub(super) fqdn_id: String,
     pub(super) total_cpus: String,
@@ -84,7 +84,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
         id: &str,
         action: Action,
         name: &str,
-        version: &str,
+        version: VersionsNumber,
         fqdn: &str,
         fqdn_id: &str,
         total_cpus: String,
@@ -104,7 +104,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
             action,
             id: id.to_string(),
             name: name.to_string(),
-            version: version.to_string(),
+            version,
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
             total_cpus,

@@ -221,7 +221,7 @@ where
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let check_version = |event_details| {
             check_service_version(
-                get_managed_postgres_version(self.version.clone()),
+                get_managed_postgres_version(self.version.to_string()),
                 self,
                 event_details,
                 self.logger(),
@@ -237,7 +237,7 @@ where
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let check_version = |event_details| {
             check_service_version(
-                get_self_hosted_postgres_version(self.version.clone()),
+                get_self_hosted_postgres_version(self.version.to_string()),
                 self,
                 event_details,
                 self.logger(),
@@ -256,7 +256,7 @@ where
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let check_version = |event_details| {
             check_service_version(
-                get_managed_mysql_version(self.version.clone()),
+                get_managed_mysql_version(self.version.to_string()),
                 self,
                 event_details,
                 self.logger(),
@@ -272,7 +272,7 @@ where
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let check_version = |event_details| {
             check_service_version(
-                get_self_hosted_mysql_version(self.version.clone()),
+                get_self_hosted_mysql_version(self.version.to_string()),
                 self,
                 event_details,
                 self.logger(),
@@ -289,7 +289,7 @@ where
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let check_version = |event_details| {
             check_service_version(
-                get_managed_mongodb_version(self.version.clone()),
+                get_managed_mongodb_version(self.version.to_string()),
                 self,
                 event_details,
                 self.logger(),
@@ -305,7 +305,7 @@ where
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let check_version = |event_details| {
             check_service_version(
-                get_self_hosted_mongodb_version(self.version.clone()),
+                get_self_hosted_mongodb_version(self.version.to_string()),
                 self,
                 event_details,
                 self.logger(),
@@ -323,7 +323,7 @@ where
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let check_version = |event_details| {
             check_service_version(
-                get_managed_redis_version(self.version.clone()),
+                get_managed_redis_version(self.version.to_string()),
                 self,
                 event_details,
                 self.logger(),
@@ -339,7 +339,7 @@ where
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
         let check_version = |event_details| {
             check_service_version(
-                get_self_hosted_redis_version(self.version.clone()),
+                get_self_hosted_redis_version(self.version.to_string()),
                 self,
                 event_details,
                 self.logger(),
