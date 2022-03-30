@@ -2,7 +2,7 @@ use crate::cloud_provider::service::{
     delete_stateful_service, deploy_stateful_service, scale_down_database, send_progress_on_long_task, Action, Create,
     Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
 };
-use crate::cloud_provider::utilities::{check_domain_for, print_action, sanitize_name};
+use crate::cloud_provider::utilities::{check_domain_for, managed_db_name_sanitizer, print_action, sanitize_name};
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::cmd::helm::Timeout;
 use crate::errors::EngineError;
@@ -175,7 +175,7 @@ where
     }
 
     fn sanitized_name(&self) -> String {
-        sanitize_name(T::lib_directory_name(), &self.id)
+        managed_db_name_sanitizer(60, T::lib_directory_name(), &self.id)
     }
 
     fn version(&self) -> String {

@@ -179,7 +179,6 @@ impl<M: DatabaseMode, T: DatabaseType<AWS, M>> Database<AWS, M, T> {
 
         context.insert("kubernetes_cluster_id", kubernetes.id());
         context.insert("kubernetes_cluster_name", kubernetes.name());
-
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn(target, &self.fqdn, M::is_managed()).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
@@ -198,12 +197,11 @@ impl<M: DatabaseMode, T: DatabaseType<AWS, M>> Database<AWS, M, T> {
         context.insert("database_id", &self.id());
         context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
         context.insert("tfstate_name", &get_tfstate_name(self));
-
         context.insert("skip_final_snapshot", &false);
         context.insert("final_snapshot_name", &format!("qovery-{}-final-snap", self.id));
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
-
         context.insert("publicly_accessible", &options.publicly_accessible);
+
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
         }
