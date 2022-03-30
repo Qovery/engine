@@ -441,36 +441,28 @@ fn get_managed_postgres_version(requested_version: String) -> Result<String, Com
 #[cfg(test)]
 mod tests_postgres {
     use crate::cloud_provider::aws::databases::postgresql::get_postgres_version;
+    use crate::errors::ErrorMessageVerbosity;
 
     #[test]
     fn check_postgres_version() {
         // managed version
         assert_eq!(get_postgres_version("12".to_string(), true).unwrap(), "12.8");
         assert_eq!(get_postgres_version("12.3".to_string(), true).unwrap(), "12.3");
-        assert_eq!(
-            get_postgres_version("12.3.0".to_string(), true)
-                .unwrap_err()
-                .message()
-                .as_str(),
-            "Postgresql 12.3.0 version is not supported"
-        );
-        assert_eq!(
-            get_postgres_version("11.3".to_string(), true)
-                .unwrap_err()
-                .message()
-                .as_str(),
-            "Postgresql 11.3 version is not supported"
-        );
+        assert!(get_postgres_version("12.3.0".to_string(), true)
+            .unwrap_err()
+            .message(ErrorMessageVerbosity::FullDetails)
+            .contains("Postgresql 12.3.0 version is not supported"));
+        assert!(get_postgres_version("11.3".to_string(), true)
+            .unwrap_err()
+            .message(ErrorMessageVerbosity::FullDetails)
+            .contains("Postgresql 11.3 version is not supported"));
         // self-hosted version
         assert_eq!(get_postgres_version("12".to_string(), false).unwrap(), "12.8.0");
         assert_eq!(get_postgres_version("12.8".to_string(), false).unwrap(), "12.8.0");
         assert_eq!(get_postgres_version("12.3.0".to_string(), false).unwrap(), "12.3.0");
-        assert_eq!(
-            get_postgres_version("1.0".to_string(), false)
-                .unwrap_err()
-                .message()
-                .as_str(),
-            "Postgresql 1.0 version is not supported"
-        );
+        assert!(get_postgres_version("1.0".to_string(), false)
+            .unwrap_err()
+            .message(ErrorMessageVerbosity::FullDetails)
+            .contains("Postgresql 1.0 version is not supported"));
     }
 }

@@ -28,6 +28,7 @@ pub fn aws_final_snapshot_name(database_name: &str) -> String {
 mod tests_aws_databases_parameters {
     use crate::cloud_provider::aws::databases::utilities::get_parameter_group_from_version;
     use crate::cloud_provider::utilities::VersionsNumber;
+    use crate::errors::ErrorMessageVerbosity;
     use crate::io_models::DatabaseKind;
     use std::str::FromStr;
 
@@ -49,9 +50,9 @@ mod tests_aws_databases_parameters {
             VersionsNumber::from_str("8").expect("error while trying to get version from str"),
             DatabaseKind::Mysql,
         );
-        assert_eq!(
-            mysql_parameter_group.unwrap_err().message(),
-            "Can't determine the minor version, to select parameter group for Mysql version 8"
-        );
+        assert!(mysql_parameter_group
+            .unwrap_err()
+            .message(ErrorMessageVerbosity::FullDetails)
+            .contains("Can't determine the minor version, to select parameter group for Mysql version 8"));
     }
 }

@@ -14,7 +14,7 @@ use crate::cmd::structs::{
 };
 use crate::constants::KUBECONFIG;
 use crate::error::{SimpleError, SimpleErrorKind};
-use crate::errors::CommandError;
+use crate::errors::{CommandError, ErrorMessageVerbosity};
 
 pub enum ScalingKind {
     Deployment,
@@ -839,7 +839,7 @@ where
     match result {
         Ok(_) => Ok(()),
         Err(e) => {
-            let lower_case_message = e.message().to_lowercase();
+            let lower_case_message = e.message(ErrorMessageVerbosity::FullDetails).to_lowercase();
             if lower_case_message.contains("no resources found") || lower_case_message.ends_with(" deleted") {
                 return Ok(());
             }
@@ -1158,7 +1158,7 @@ where
         &mut |_| {},
     ) {
         Ok(_) => Ok(pod_to_be_deleted),
-        Err(e) => Err(CommandError::new(e.message(), None)),
+        Err(e) => Err(e),
     }
 }
 
