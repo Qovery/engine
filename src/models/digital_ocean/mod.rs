@@ -1,4 +1,5 @@
 mod application;
+mod database;
 mod router;
 
 use crate::errors::CommandError;

@@ -1,12 +1,14 @@
 use crate::cloud_provider::service::{
-    delete_stateful_service, deploy_stateful_service, scale_down_database, send_progress_on_long_task, Action, Create,
-    Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
+    default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name, get_tfstate_suffix,
+    scale_down_database, send_progress_on_long_task, Action, Create, DatabaseOptions, Delete, Helm, Pause, Service,
+    ServiceType, ServiceVersionCheckResult, StatefulService, Terraform,
 };
 use crate::cloud_provider::utilities::{check_domain_for, managed_db_name_sanitizer, print_action};
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::cmd::helm::Timeout;
+use crate::cmd::kubectl;
 use crate::errors::EngineError;
-use crate::events::{EnvironmentStep, Stage, ToTransmitter, Transmitter};
+use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
 use crate::io_models::{Context, Listen, Listener, Listeners, ListenersHelper};
 use crate::logger::Logger;
 use crate::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
@@ -420,4 +422,67 @@ where
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> service::Database for Database<C, M, T> where
     Database<C, M, T>: ToTeraContext
 {
+}
+
+impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T> {
+    pub(super) fn to_tera_context_for_container(
+        &self,
+        target: &DeploymentTarget,
+        options: &DatabaseOptions,
+        get_version: &dyn Fn(EventDetails) -> Result<ServiceVersionCheckResult, EngineError>,
+    ) -> Result<TeraContext, EngineError>
+    where
+        Database<C, M, T>: Service,
+    {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
+        let kubernetes = target.kubernetes;
+        let environment = target.environment;
+        let mut context = default_tera_context(self, kubernetes, environment);
+
+        // we need the kubernetes config file to store tfstates file in kube secrets
+        let kube_config_file_path = kubernetes.get_kubeconfig_file_path()?;
+        context.insert("kubeconfig_path", &kube_config_file_path);
+
+        kubectl::kubectl_exec_create_namespace_without_labels(
+            environment.namespace(),
+            kube_config_file_path.as_str(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
+        );
+
+        context.insert("namespace", environment.namespace());
+
+        let version = get_version(event_details)?.matched_version().to_string();
+        context.insert("version", &version);
+
+        for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
+            context.insert(k, v);
+        }
+
+        context.insert("kubernetes_cluster_id", kubernetes.id());
+        context.insert("kubernetes_cluster_name", kubernetes.name());
+
+        context.insert("fqdn_id", self.fqdn_id.as_str());
+        context.insert("fqdn", self.fqdn(target, &self.fqdn, M::is_managed()).as_str());
+        context.insert("service_name", self.fqdn_id.as_str());
+        context.insert("database_db_name", self.name());
+        context.insert("database_login", options.login.as_str());
+        context.insert("database_password", options.password.as_str());
+        context.insert("database_port", &self.private_port());
+        context.insert("database_disk_size_in_gib", &options.disk_size_in_gib);
+        context.insert("database_instance_type", &self.database_instance_type);
+        context.insert("database_disk_type", &options.database_disk_type);
+        context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
+        context.insert("database_total_cpus", &self.total_cpus);
+        context.insert("database_fqdn", &options.host.as_str());
+        context.insert("database_id", &self.id());
+        context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
+        context.insert("tfstate_name", &get_tfstate_name(self));
+        context.insert("publicly_accessible", &self.publicly_accessible);
+
+        if self.context.resource_expiration_in_seconds().is_some() {
+            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
+        }
+
+        Ok(context)
+    }
 }

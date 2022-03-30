@@ -144,7 +144,7 @@ impl DatabaseType<AWS, Managed> for MongoDB {
 }
 
 impl<M: DatabaseMode, T: DatabaseType<AWS, M>> Database<AWS, M, T> {
-    fn to_aws_tera_context(
+    fn to_tera_context_for_aws_managed(
         &self,
         target: &DeploymentTarget,
         options: &DatabaseOptions,
@@ -225,7 +225,7 @@ where
                 self.logger(),
             )
         };
-        self.to_aws_tera_context(target, &self.options, &check_version)
+        self.to_tera_context_for_aws_managed(target, &self.options, &check_version)
     }
 }
 
@@ -242,7 +242,7 @@ where
                 self.logger(),
             )
         };
-        self.to_aws_tera_context(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options, &check_version)
     }
 }
 
@@ -261,7 +261,7 @@ where
                 self.logger(),
             )
         };
-        self.to_aws_tera_context(target, &self.options, &check_version)
+        self.to_tera_context_for_aws_managed(target, &self.options, &check_version)
     }
 }
 
@@ -278,7 +278,7 @@ where
                 self.logger(),
             )
         };
-        self.to_aws_tera_context(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options, &check_version)
     }
 }
 
@@ -297,7 +297,7 @@ where
                 self.logger(),
             )
         };
-        self.to_aws_tera_context(target, &self.options, &check_version)
+        self.to_tera_context_for_aws_managed(target, &self.options, &check_version)
     }
 }
 
@@ -315,7 +315,7 @@ where
             )
         };
 
-        self.to_aws_tera_context(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options, &check_version)
     }
 }
 
@@ -334,7 +334,7 @@ where
                 self.logger(),
             )
         };
-        self.to_aws_tera_context(target, &self.options, &check_version)
+        self.to_tera_context_for_aws_managed(target, &self.options, &check_version)
     }
 }
 
@@ -351,6 +351,6 @@ where
                 self.logger(),
             )
         };
-        self.to_aws_tera_context(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options, &check_version)
     }
 }

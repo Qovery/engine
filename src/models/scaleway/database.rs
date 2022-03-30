@@ -113,7 +113,7 @@ impl DatabaseType<SCW, Managed> for MySQL {
 // Redis and MongoDB are not supported managed db yet
 
 impl<M: DatabaseMode, T: DatabaseType<SCW, M>> Database<SCW, M, T> {
-    fn to_scaleway_tera_context(
+    fn to_tera_context_for_scaleway_managed(
         &self,
         target: &DeploymentTarget,
         options: &DatabaseOptions,
@@ -196,7 +196,7 @@ where
                 self.logger(),
             )
         };
-        self.to_scaleway_tera_context(target, &self.options, &check_version)
+        self.to_tera_context_for_scaleway_managed(target, &self.options, &check_version)
     }
 }
 
@@ -213,7 +213,7 @@ where
                 self.logger(),
             )
         };
-        self.to_scaleway_tera_context(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options, &check_version)
     }
 }
 
@@ -232,7 +232,7 @@ where
                 self.logger(),
             )
         };
-        self.to_scaleway_tera_context(target, &self.options, &check_version)
+        self.to_tera_context_for_scaleway_managed(target, &self.options, &check_version)
     }
 }
 
@@ -249,7 +249,7 @@ where
                 self.logger(),
             )
         };
-        self.to_scaleway_tera_context(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options, &check_version)
     }
 }
 
@@ -269,7 +269,7 @@ where
             )
         };
 
-        self.to_scaleway_tera_context(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options, &check_version)
     }
 }
 
@@ -288,6 +288,6 @@ where
                 self.logger(),
             )
         };
-        self.to_scaleway_tera_context(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options, &check_version)
     }
 }
