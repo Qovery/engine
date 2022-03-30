@@ -2863,6 +2863,118 @@ impl EngineError {
 
 impl Display for EngineError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(format!("{:?}", self).as_str())
+        // Note: just in case, env vars are not leaked since it can hold sensitive data such as secrets.
+        f.write_str(self.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars).as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::Kind;
+    use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+    use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+    use crate::io_models::QoveryIdentifier;
+    use crate::models::scaleway::ScwRegion;
+
+    #[test]
+    fn test_command_error_test_hidding_env_vars_in_message_safe_only() {
+        // setup:
+        let command_err = CommandError::new_with_env_vars(
+            "my raw message".to_string(),
+            Some("my safe message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+
+        // execute:
+        let res = command_err.message(ErrorMessageVerbosity::SafeOnly);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn test_command_error_test_hidding_env_vars_in_message_full_without_env_vars() {
+        // setup:
+        let command_err = CommandError::new_with_env_vars(
+            "my raw message".to_string(),
+            Some("my safe message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+
+        // execute:
+        let res = command_err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn test_engine_error_test_hidding_env_vars_in_message_safe_only() {
+        // setup:
+        let command_err = CommandError::new_with_env_vars(
+            "my raw message".to_string(),
+            Some("my safe message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+        let cluster_id = QoveryIdentifier::new_random();
+        let engine_err = EngineError::new_unknown(
+            EventDetails::new(
+                Some(Kind::Scw),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                Some(ScwRegion::Paris.as_str().to_string()),
+                Stage::Infrastructure(InfrastructureStep::Create),
+                Transmitter::Kubernetes(cluster_id.to_string(), cluster_id.to_string()),
+            ),
+            "qovery_log_message".to_string(),
+            "user_log_message".to_string(),
+            Some(command_err.clone()),
+            None,
+            None,
+        );
+
+        // execute:
+        let res = engine_err.message(ErrorMessageVerbosity::SafeOnly);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn test_engine_error_test_hidding_env_vars_in_message_full_without_env_vars() {
+        // setup:
+        let command_err = CommandError::new_with_env_vars(
+            "my raw message".to_string(),
+            Some("my safe message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+        let cluster_id = QoveryIdentifier::new_random();
+        let engine_err = EngineError::new_unknown(
+            EventDetails::new(
+                Some(Kind::Scw),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                Some(ScwRegion::Paris.as_str().to_string()),
+                Stage::Infrastructure(InfrastructureStep::Create),
+                Transmitter::Kubernetes(cluster_id.to_string(), cluster_id.to_string()),
+            ),
+            "qovery_log_message".to_string(),
+            "user_log_message".to_string(),
+            Some(command_err.clone()),
+            None,
+            None,
+        );
+
+        // execute:
+        let res = engine_err.message(ErrorMessageVerbosity::SafeOnly);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
     }
 }

@@ -578,4 +578,38 @@ mod tests {
             assert_eq!(expected_step_name, result);
         }
     }
+
+    #[test]
+    fn test_event_message_test_hidding_env_vars_in_message_safe_only() {
+        // setup:
+        let event_message = EventMessage::new_with_env_vars(
+            "my safe message".to_string(),
+            Some("my full message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+
+        // execute:
+        let res = event_message.message(EventMessageVerbosity::SafeOnly);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn test_event_message_test_hidding_env_vars_in_message_full_without_env_vars() {
+        // setup:
+        let event_message = EventMessage::new_with_env_vars(
+            "my safe message".to_string(),
+            Some("my full message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+
+        // execute:
+        let res = event_message.message(EventMessageVerbosity::FullDetailsWithoutEnvVars);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
+    }
 }

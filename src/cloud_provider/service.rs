@@ -1004,11 +1004,13 @@ where
                 service.progress_scope(),
                 ProgressLevel::Error,
                 Some(format!(
-                    "{} error {} {} : error => {:?}",
+                    "{} error {} {} : error => {}",
                     action_verb,
                     service.service_type().name().to_lowercase(),
                     service.name(),
-                    err
+                    // Note: env vars are not leaked to legacy listeners since it can holds sensitive data
+                    // such as secrets and such.
+                    err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
                 )),
                 kubernetes.context().execution_id(),
             );
