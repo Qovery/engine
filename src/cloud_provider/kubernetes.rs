@@ -27,7 +27,7 @@ use crate::cmd::kubectl::{
 };
 use crate::cmd::structs::KubernetesNodeCondition;
 use crate::dns_provider::DnsProvider;
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter};
 use crate::fs::workspace_directory;
@@ -183,10 +183,10 @@ pub trait Kubernetes: Listen {
             Err(err) => {
                 let error = EngineError::new_cannot_get_cluster_nodes(
                     self.get_event_details(stage),
-                    CommandError::new_from_safe_message(format!(
-                        "Error while trying to get cluster nodes, error: {}",
-                        err.message()
-                    )),
+                    CommandError::new(
+                        err.message(ErrorMessageVerbosity::FullDetails),
+                        Some("Error while trying to get cluster nodes.".to_string()),
+                    ),
                 );
 
                 self.logger().log(EngineEvent::Error(error.clone(), None));
@@ -267,7 +267,12 @@ pub trait Kubernetes: Listen {
     {
         let kubeconfig = match self.get_kubeconfig_file() {
             Ok((path, _)) => path,
-            Err(e) => return Err(CommandError::new(e.message(), None)),
+            Err(e) => {
+                return Err(CommandError::new(
+                    e.message(ErrorMessageVerbosity::FullDetails),
+                    Some(e.message(ErrorMessageVerbosity::SafeOnly)),
+                ))
+            }
         };
 
         send_progress_on_long_task(self, Action::Create, || {
@@ -786,12 +791,8 @@ where
             logger.log(EngineEvent::Warning(
                 event_details.clone(),
                 EventMessage::new(
-                    format!(
-                        "Encountering issues while trying to get objects kind {}: {:?}",
-                        object,
-                        e.message()
-                    ),
-                    None,
+                    format!("Encountering issues while trying to get objects kind {}", object,),
+                    Some(e.message(ErrorMessageVerbosity::FullDetails)),
                 ),
             ));
             continue;

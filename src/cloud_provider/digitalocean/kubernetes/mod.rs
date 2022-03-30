@@ -34,7 +34,7 @@ use crate::cmd::kubectl::{
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{
     EngineEvent, EnvironmentStep, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter,
@@ -692,10 +692,7 @@ impl DOKS {
                 let safe_message = "Load balancer IP wasn't able to be retrieved from UUID on DigitalOcean API and it's required for TLS setup";
                 return Err(EngineError::new_k8s_loadbalancer_configuration_issue(
                     event_details.clone(),
-                    CommandError::new(
-                        format!("{}, error: {}.", safe_message, e.message(),),
-                        Some(safe_message.to_string()),
-                    ),
+                    CommandError::new(e.message(ErrorMessageVerbosity::FullDetails), Some(safe_message.to_string())),
                 ));
             }
         };
@@ -747,7 +744,10 @@ impl DOKS {
                 .log(EngineEvent::Warning(event_details, EventMessage::new(ok_line, None))),
             Err(err) => self.logger().log(EngineEvent::Warning(
                 event_details,
-                EventMessage::new("Error trying to get kubernetes events".to_string(), Some(err.message())),
+                EventMessage::new(
+                    "Error trying to get kubernetes events".to_string(),
+                    Some(err.message(ErrorMessageVerbosity::FullDetails)),
+                ),
             )),
         };
 
@@ -906,7 +906,7 @@ impl DOKS {
                                 )),
                             )),
                             Err(e) => {
-                                if !(e.message().contains("not found")) {
+                                if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
                                     self.logger().log(EngineEvent::Warning(
                                         event_details.clone(),
                                         EventMessage::new_from_safe(format!(
@@ -926,7 +926,7 @@ impl DOKS {
                     );
                     self.logger().log(EngineEvent::Warning(
                         event_details.clone(),
-                        EventMessage::new(message_safe, Some(e.message())),
+                        EventMessage::new(message_safe, Some(e.message(ErrorMessageVerbosity::FullDetails))),
                     ));
                 }
             }
@@ -1001,7 +1001,7 @@ impl DOKS {
                         EventMessage::new_from_safe(format!("Namespace {} is fully deleted", qovery_namespace)),
                     )),
                     Err(e) => {
-                        if !(e.message().contains("not found")) {
+                        if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
                             self.logger().log(EngineEvent::Warning(
                                 event_details.clone(),
                                 EventMessage::new_from_safe(format!("Can't delete namespace {}.", qovery_namespace)),
@@ -1209,12 +1209,7 @@ impl Kubernetes for DOKS {
                         }
                         Some(content) => content,
                     },
-                    Err(e) => {
-                        return Err(EngineError::new_cannot_retrieve_cluster_config_file(
-                            event_details,
-                            CommandError::new(e.message(), Some(e.message())),
-                        ))
-                    }
+                    Err(e) => return Err(EngineError::new_cannot_retrieve_cluster_config_file(event_details, e)),
                 };
 
                 let workspace_directory = crate::fs::workspace_directory(
@@ -1263,7 +1258,10 @@ impl Kubernetes for DOKS {
         match result {
             Err(e) => Err(EngineError::new_cannot_retrieve_cluster_config_file(
                 event_details,
-                CommandError::new(e.message(), Some(e.message())),
+                CommandError::new(
+                    e.message(ErrorMessageVerbosity::FullDetails),
+                    Some(e.message(ErrorMessageVerbosity::SafeOnly)),
+                ),
             )),
             Ok((file_path, file)) => Ok((file_path, file)),
         }

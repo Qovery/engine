@@ -33,6 +33,7 @@ use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::cmd::docker::Docker;
 use crate::container_registry::ContainerRegistryInfo;
+use crate::errors::ErrorMessageVerbosity;
 use crate::logger::Logger;
 use crate::models;
 use crate::models::application::{ApplicationError, ApplicationService};
@@ -829,7 +830,13 @@ impl Database {
                         Some(db)
                     }
                     Err(e) => {
-                        error!("{}", format!("error while parsing postgres version, error: {}", e.message()));
+                        error!(
+                            "{}",
+                            format!(
+                                "error while parsing postgres version, error: {}",
+                                e.message(ErrorMessageVerbosity::FullDetails)
+                            )
+                        );
                         None
                     }
                 },
@@ -854,7 +861,13 @@ impl Database {
                         Some(db)
                     }
                     Err(e) => {
-                        error!("{}", format!("error while parsing mysql version, error: {}", e.message()));
+                        error!(
+                            "{}",
+                            format!(
+                                "error while parsing mysql version, error: {}",
+                                e.message(ErrorMessageVerbosity::FullDetails)
+                            )
+                        );
                         None
                     }
                 },
