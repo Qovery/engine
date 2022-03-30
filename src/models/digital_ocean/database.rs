@@ -81,7 +81,7 @@ where
     PostgresSQL: DatabaseType<DO, Container>,
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let check_version = |event_details| {
+        let _check_version = |event_details| {
             check_service_version(
                 get_self_hosted_postgres_version(self.version.to_string()),
                 self,
@@ -89,7 +89,7 @@ where
                 self.logger(),
             )
         };
-        self.to_tera_context_for_container(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options)
     }
 }
 
@@ -100,7 +100,7 @@ where
     MySQL: DatabaseType<DO, Container>,
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let check_version = |event_details| {
+        let _check_version = |event_details| {
             check_service_version(
                 get_self_hosted_mysql_version(self.version.to_string()),
                 self,
@@ -108,7 +108,7 @@ where
                 self.logger(),
             )
         };
-        self.to_tera_context_for_container(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options)
     }
 }
 
@@ -119,7 +119,7 @@ where
     MongoDB: DatabaseType<DO, Container>,
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let check_version = |event_details| {
+        let _check_version = |event_details| {
             check_service_version(
                 get_self_hosted_mongodb_version(self.version.to_string()),
                 self,
@@ -128,7 +128,7 @@ where
             )
         };
 
-        self.to_tera_context_for_container(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options)
     }
 }
 
@@ -139,7 +139,7 @@ where
     Redis: DatabaseType<DO, Container>,
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let check_version = |event_details| {
+        let _check_version = |event_details| {
             check_service_version(
                 get_self_hosted_redis_version(self.version.to_string()),
                 self,
@@ -147,6 +147,6 @@ where
                 self.logger(),
             )
         };
-        self.to_tera_context_for_container(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options)
     }
 }

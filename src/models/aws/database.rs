@@ -12,10 +12,7 @@ use crate::models::aws::database_utils::{
 use crate::models::database::{
     Container, Database, DatabaseMode, DatabaseType, Managed, MongoDB, MySQL, PostgresSQL, Redis,
 };
-use crate::models::database_utils::{
-    get_self_hosted_mongodb_version, get_self_hosted_mysql_version, get_self_hosted_postgres_version,
-    get_self_hosted_redis_version,
-};
+
 use crate::models::types::{ToTeraContext, AWS};
 use tera::Context as TeraContext;
 
@@ -143,16 +140,26 @@ impl DatabaseType<AWS, Managed> for MongoDB {
     }
 }
 
-impl<M: DatabaseMode, T: DatabaseType<AWS, M>> Database<AWS, M, T> {
+impl<T: DatabaseType<AWS, Managed>> Database<AWS, Managed, T>
+where
+    Database<AWS, Managed, T>: Service,
+{
+    fn get_version_aws_managed(&self, event_details: EventDetails) -> Result<ServiceVersionCheckResult, EngineError> {
+        let fn_version = match T::db_type() {
+            service::DatabaseType::PostgreSQL => get_managed_postgres_version,
+            service::DatabaseType::MongoDB => get_managed_mongodb_version,
+            service::DatabaseType::MySQL => get_managed_mysql_version,
+            service::DatabaseType::Redis => get_managed_redis_version,
+        };
+
+        check_service_version(fn_version(self.version.to_string()), self, event_details, self.logger())
+    }
+
     fn to_tera_context_for_aws_managed(
         &self,
         target: &DeploymentTarget,
         options: &DatabaseOptions,
-        get_version: &dyn Fn(EventDetails) -> Result<ServiceVersionCheckResult, EngineError>,
-    ) -> Result<TeraContext, EngineError>
-    where
-        Database<AWS, M, T>: Service,
-    {
+    ) -> Result<TeraContext, EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
@@ -170,7 +177,10 @@ impl<M: DatabaseMode, T: DatabaseType<AWS, M>> Database<AWS, M, T> {
 
         context.insert("namespace", environment.namespace());
 
-        let version = get_version(event_details)?.matched_version().to_string();
+        let version = self
+            .get_version_aws_managed(event_details)?
+            .matched_version()
+            .to_string();
         context.insert("version", &version);
 
         // Specific to mysql
@@ -192,7 +202,7 @@ impl<M: DatabaseMode, T: DatabaseType<AWS, M>> Database<AWS, M, T> {
         context.insert("kubernetes_cluster_id", kubernetes.id());
         context.insert("kubernetes_cluster_name", kubernetes.name());
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert("fqdn", self.fqdn(target, &self.fqdn, M::is_managed()).as_str());
+        context.insert("fqdn", self.fqdn(target, &self.fqdn, Managed::is_managed()).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
         context.insert("database_name", self.sanitized_name().as_str());
         context.insert("database_db_name", self.name());
@@ -229,15 +239,7 @@ where
     PostgresSQL: DatabaseType<AWS, Managed>,
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let check_version = |event_details| {
-            check_service_version(
-                get_managed_postgres_version(self.version.to_string()),
-                self,
-                event_details,
-                self.logger(),
-            )
-        };
-        self.to_tera_context_for_aws_managed(target, &self.options, &check_version)
+        self.to_tera_context_for_aws_managed(target, &self.options)
     }
 }
 
@@ -246,15 +248,7 @@ where
     PostgresSQL: DatabaseType<AWS, Container>,
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let check_version = |event_details| {
-            check_service_version(
-                get_self_hosted_postgres_version(self.version.to_string()),
-                self,
-                event_details,
-                self.logger(),
-            )
-        };
-        self.to_tera_context_for_container(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options)
     }
 }
 
@@ -265,15 +259,7 @@ where
     MySQL: DatabaseType<AWS, Managed>,
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let check_version = |event_details| {
-            check_service_version(
-                get_managed_mysql_version(self.version.to_string()),
-                self,
-                event_details,
-                self.logger(),
-            )
-        };
-        self.to_tera_context_for_aws_managed(target, &self.options, &check_version)
+        self.to_tera_context_for_aws_managed(target, &self.options)
     }
 }
 
@@ -282,15 +268,7 @@ where
     MySQL: DatabaseType<AWS, Container>,
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let check_version = |event_details| {
-            check_service_version(
-                get_self_hosted_mysql_version(self.version.to_string()),
-                self,
-                event_details,
-                self.logger(),
-            )
-        };
-        self.to_tera_context_for_container(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options)
     }
 }
 
@@ -301,15 +279,7 @@ where
     MongoDB: DatabaseType<AWS, Managed>,
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let check_version = |event_details| {
-            check_service_version(
-                get_managed_mongodb_version(self.version.to_string()),
-                self,
-                event_details,
-                self.logger(),
-            )
-        };
-        self.to_tera_context_for_aws_managed(target, &self.options, &check_version)
+        self.to_tera_context_for_aws_managed(target, &self.options)
     }
 }
 
@@ -318,16 +288,7 @@ where
     MongoDB: DatabaseType<AWS, Container>,
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let check_version = |event_details| {
-            check_service_version(
-                get_self_hosted_mongodb_version(self.version.to_string()),
-                self,
-                event_details,
-                self.logger(),
-            )
-        };
-
-        self.to_tera_context_for_container(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options)
     }
 }
 
@@ -338,15 +299,7 @@ where
     Redis: DatabaseType<AWS, Managed>,
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let check_version = |event_details| {
-            check_service_version(
-                get_managed_redis_version(self.version.to_string()),
-                self,
-                event_details,
-                self.logger(),
-            )
-        };
-        self.to_tera_context_for_aws_managed(target, &self.options, &check_version)
+        self.to_tera_context_for_aws_managed(target, &self.options)
     }
 }
 
@@ -355,14 +308,6 @@ where
     Redis: DatabaseType<AWS, Container>,
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let check_version = |event_details| {
-            check_service_version(
-                get_self_hosted_redis_version(self.version.to_string()),
-                self,
-                event_details,
-                self.logger(),
-            )
-        };
-        self.to_tera_context_for_container(target, &self.options, &check_version)
+        self.to_tera_context_for_container(target, &self.options)
     }
 }

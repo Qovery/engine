@@ -1,7 +1,7 @@
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name, get_tfstate_suffix,
-    scale_down_database, send_progress_on_long_task, Action, Create, DatabaseOptions, Delete, Helm, Pause, Service,
-    ServiceType, ServiceVersionCheckResult, StatefulService, Terraform,
+    check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
+    get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Create, DatabaseOptions, Delete, Helm,
+    Pause, Service, ServiceType, ServiceVersionCheckResult, StatefulService, Terraform,
 };
 use crate::cloud_provider::utilities::{check_domain_for, managed_db_name_sanitizer, print_action};
 use crate::cloud_provider::{service, DeploymentTarget};
@@ -11,6 +11,10 @@ use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
 use crate::io_models::{Context, Listen, Listener, Listeners, ListenersHelper};
 use crate::logger::Logger;
+use crate::models::database_utils::{
+    get_self_hosted_mongodb_version, get_self_hosted_mysql_version, get_self_hosted_postgres_version,
+    get_self_hosted_redis_version,
+};
 use crate::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
 use function_name::named;
 use std::borrow::Borrow;
@@ -424,16 +428,26 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> service::Database
 {
 }
 
-impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T> {
+impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
+where
+    Database<C, M, T>: Service,
+{
+    fn get_version(&self, event_details: EventDetails) -> Result<ServiceVersionCheckResult, EngineError> {
+        let fn_version = match T::db_type() {
+            service::DatabaseType::PostgreSQL => get_self_hosted_postgres_version,
+            service::DatabaseType::MongoDB => get_self_hosted_mongodb_version,
+            service::DatabaseType::MySQL => get_self_hosted_mysql_version,
+            service::DatabaseType::Redis => get_self_hosted_redis_version,
+        };
+
+        check_service_version(fn_version(self.version.to_string()), self, event_details, self.logger())
+    }
+
     pub(super) fn to_tera_context_for_container(
         &self,
         target: &DeploymentTarget,
         options: &DatabaseOptions,
-        get_version: &dyn Fn(EventDetails) -> Result<ServiceVersionCheckResult, EngineError>,
-    ) -> Result<TeraContext, EngineError>
-    where
-        Database<C, M, T>: Service,
-    {
+    ) -> Result<TeraContext, EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
@@ -451,7 +465,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
 
         context.insert("namespace", environment.namespace());
 
-        let version = get_version(event_details)?.matched_version().to_string();
+        let version = self.get_version(event_details)?.matched_version().to_string();
         context.insert("version", &version);
 
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
