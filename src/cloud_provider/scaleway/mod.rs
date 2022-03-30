@@ -6,7 +6,6 @@ use crate::constants::{SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWA
 use crate::events::{EventDetails, Stage, ToTransmitter, Transmitter};
 use crate::io_models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
 
-pub mod databases;
 pub mod kubernetes;
 
 pub struct Scaleway {

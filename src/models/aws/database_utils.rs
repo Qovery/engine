@@ -2,7 +2,7 @@ use crate::errors::CommandError;
 use crate::models::database_utils::{generate_supported_version, get_supported_version_to_use};
 use std::collections::HashMap;
 
-pub(crate) fn get_managed_mysql_version(requested_version: String) -> Result<String, CommandError> {
+pub(super) fn get_managed_mysql_version(requested_version: String) -> Result<String, CommandError> {
     let mut supported_mysql_versions = HashMap::new();
     // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_MySQL.html#MySQL.Concepts.VersionMgmt
 
@@ -27,7 +27,7 @@ pub(crate) fn get_managed_mysql_version(requested_version: String) -> Result<Str
     get_supported_version_to_use("RDS MySQL", supported_mysql_versions, requested_version)
 }
 
-pub(crate) fn get_managed_mongodb_version(requested_version: String) -> Result<String, CommandError> {
+pub(super) fn get_managed_mongodb_version(requested_version: String) -> Result<String, CommandError> {
     let mut supported_mongodb_versions = HashMap::new();
 
     // v3.6.0
@@ -41,7 +41,7 @@ pub(crate) fn get_managed_mongodb_version(requested_version: String) -> Result<S
     get_supported_version_to_use("DocumentDB", supported_mongodb_versions, requested_version)
 }
 
-pub(crate) fn get_managed_postgres_version(requested_version: String) -> Result<String, CommandError> {
+pub(super) fn get_managed_postgres_version(requested_version: String) -> Result<String, CommandError> {
     let mut supported_postgres_versions = HashMap::new();
 
     // https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html#PostgreSQL.Concepts
@@ -68,7 +68,7 @@ pub(crate) fn get_managed_postgres_version(requested_version: String) -> Result<
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
 }
 
-pub(crate) fn get_managed_redis_version(requested_version: String) -> Result<String, CommandError> {
+pub(super) fn get_managed_redis_version(requested_version: String) -> Result<String, CommandError> {
     let mut supported_redis_versions = HashMap::with_capacity(2);
     // https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/supported-engine-versions.html
 

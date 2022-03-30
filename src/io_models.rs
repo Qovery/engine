@@ -19,10 +19,6 @@ use crate::cloud_provider::digitalocean::databases::mysql::MySQLDo;
 use crate::cloud_provider::digitalocean::databases::postgresql::PostgresDo;
 use crate::cloud_provider::digitalocean::databases::redis::RedisDo;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::scaleway::databases::mongodb::MongoDbScw;
-use crate::cloud_provider::scaleway::databases::mysql::MySQLScw;
-use crate::cloud_provider::scaleway::databases::postgresql::PostgresScw;
-use crate::cloud_provider::scaleway::databases::redis::RedisScw;
 use crate::cloud_provider::service::{DatabaseOptions, RouterService};
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
@@ -979,7 +975,7 @@ impl Database {
             }
 
             (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
-                let db = Box::new(PostgresScw::new(
+                let db = models::database::Database::<SCW, Managed, PostgresSQL>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.action.to_service_action(),
@@ -990,15 +986,17 @@ impl Database {
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
                     self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
                     database_options,
                     listeners,
-                    logger.clone(),
-                ));
-
-                Some(db)
+                    logger,
+                )
+                .unwrap();
+                Some(Box::new(db))
             }
             (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
-                let db = Box::new(PostgresScw::new(
+                let db = models::database::Database::<SCW, Container, PostgresSQL>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.action.to_service_action(),
@@ -1009,15 +1007,17 @@ impl Database {
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
                     self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
                     database_options,
                     listeners,
-                    logger.clone(),
-                ));
-
-                Some(db)
+                    logger,
+                )
+                .unwrap();
+                Some(Box::new(db))
             }
             (CPKind::Scw, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
-                let db = Box::new(MySQLScw::new(
+                let db = models::database::Database::<SCW, Managed, MySQL>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.action.to_service_action(),
@@ -1028,15 +1028,17 @@ impl Database {
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
                     self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
                     database_options,
                     listeners,
-                    logger.clone(),
-                ));
-
-                Some(db)
+                    logger,
+                )
+                .unwrap();
+                Some(Box::new(db))
             }
             (CPKind::Scw, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
-                let db = Box::new(MySQLScw::new(
+                let db = models::database::Database::<SCW, Container, MySQL>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.action.to_service_action(),
@@ -1047,88 +1049,67 @@ impl Database {
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
                     self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
                     database_options,
                     listeners,
-                    logger.clone(),
-                ));
+                    logger,
+                )
+                .unwrap();
 
-                Some(db)
+                Some(Box::new(db))
             }
             (CPKind::Scw, DatabaseKind::Redis, DatabaseMode::MANAGED) => {
-                let db = Box::new(RedisScw::new(
-                    context.clone(),
-                    self.id.as_str(),
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    self.version.as_str(),
-                    self.fqdn.as_str(),
-                    self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    self.database_instance_type.as_str(),
-                    database_options,
-                    listeners,
-                    logger.clone(),
-                ));
-
-                Some(db)
+                // Not Implemented
+                None
             }
             (CPKind::Scw, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
-                let db = Box::new(RedisScw::new(
+                let db = models::database::Database::<SCW, Container, Redis>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    self.version.as_str(),
+                    VersionsNumber::from_str(self.version.as_str()).ok()?,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
                     self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
                     database_options,
                     listeners,
-                    logger.clone(),
-                ));
+                    logger,
+                )
+                .unwrap();
 
-                Some(db)
+                Some(Box::new(db))
             }
             (CPKind::Scw, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
-                let db = Box::new(MongoDbScw::new(
-                    context.clone(),
-                    self.id.as_str(),
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    self.version.as_str(),
-                    self.fqdn.as_str(),
-                    self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    self.database_instance_type.as_str(),
-                    database_options,
-                    listeners,
-                    logger.clone(),
-                ));
-
-                Some(db)
+                // Not Implemented
+                None
             }
             (CPKind::Scw, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
-                let db = Box::new(MongoDbScw::new(
+                let db = models::database::Database::<SCW, Container, MongoDB>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.action.to_service_action(),
                     self.name.as_str(),
-                    self.version.as_str(),
+                    VersionsNumber::from_str(self.version.as_str()).ok()?,
                     self.fqdn.as_str(),
                     self.fqdn_id.as_str(),
                     self.total_cpus.clone(),
                     self.total_ram_in_mib,
                     self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
                     database_options,
                     listeners,
-                    logger.clone(),
-                ));
+                    logger,
+                )
+                .unwrap();
 
-                Some(db)
+                Some(Box::new(db))
             }
         }
     }

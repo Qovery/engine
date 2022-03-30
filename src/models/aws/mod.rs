@@ -1,7 +1,7 @@
-pub mod application;
-pub mod database;
+mod application;
+mod database;
 mod database_utils;
-pub mod router;
+mod router;
 
 use crate::models::types::CloudProvider;
 use crate::models::types::AWS;
