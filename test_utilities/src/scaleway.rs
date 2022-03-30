@@ -1,22 +1,27 @@
 use const_format::formatcp;
-use qovery_engine::build_platform::Image;
-use qovery_engine::cloud_provider::scaleway::application::ScwZone;
+use qovery_engine::build_platform::Build;
 use qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
-use qovery_engine::cloud_provider::TerraformStateCredentials;
+use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
-use qovery_engine::engine::Engine;
-use qovery_engine::error::EngineError;
-use qovery_engine::models::{Context, Environment};
+use qovery_engine::engine::EngineConfig;
+use qovery_engine::io_models::{Context, EnvironmentRequest, NoOpProgressListener};
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
+use std::sync::Arc;
 
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
-use crate::common::{Cluster, ClusterDomain};
+use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
+use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
+use qovery_engine::cloud_provider::Kind::Scw;
+use qovery_engine::container_registry::errors::ContainerRegistryError;
+use qovery_engine::container_registry::ContainerRegistry;
+use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::logger::Logger;
+use qovery_engine::models::scaleway::ScwZone;
 use tracing::error;
 
 pub const SCW_TEST_ZONE: ScwZone = ScwZone::Paris2;
@@ -54,29 +59,59 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
         scw_secret_key.as_str(),
         scw_default_project_id.as_str(),
         SCW_TEST_ZONE,
+        Arc::new(Box::new(NoOpProgressListener {})),
+    )
+    .unwrap()
+}
+
+pub fn scw_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
+    Scaleway::docker_cr_engine(
+        &context,
+        logger,
+        SCW_TEST_ZONE.to_string().as_str(),
+        SCW_KUBERNETES_VERSION.to_string(),
+        &ClusterDomain::Default,
+        None,
     )
 }
 
 impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
-    fn docker_cr_engine(context: &Context, logger: Box<dyn Logger>) -> Engine {
+    fn docker_cr_engine(
+        context: &Context,
+        logger: Box<dyn Logger>,
+        localisation: &str,
+        kubernetes_version: String,
+        cluster_domain: &ClusterDomain,
+        vpc_network_mode: Option<VpcQoveryNetworkMode>,
+    ) -> EngineConfig {
         // use Scaleway CR
         let container_registry = Box::new(container_registry_scw(context));
 
         // use LocalDocker
-        let build_platform = Box::new(build_platform_local_docker(context));
+        let build_platform = Box::new(build_platform_local_docker(context, logger.clone()));
 
         // use Scaleway
-        let cloud_provider = Scaleway::cloud_provider(context);
+        let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(Self::cloud_provider(context));
+        let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_cloudflare(context, cluster_domain));
 
-        let dns_provider = Box::new(dns_provider_cloudflare(context, ClusterDomain::Default));
+        let cluster = get_environment_test_kubernetes(
+            Scw,
+            context,
+            cloud_provider.clone(),
+            dns_provider.clone(),
+            logger.clone(),
+            localisation,
+            kubernetes_version.as_str(),
+            vpc_network_mode,
+        );
 
-        Engine::new(
+        EngineConfig::new(
             context.clone(),
             build_platform,
             container_registry,
             cloud_provider,
             dns_provider,
-            logger,
+            cluster,
         )
     }
 
@@ -188,10 +223,10 @@ pub fn scw_object_storage(context: Context, region: ScwZone) -> ScalewayOS {
 
 pub fn clean_environments(
     context: &Context,
-    environments: Vec<Environment>,
+    environments: Vec<EnvironmentRequest>,
     secrets: FuncTestsSecrets,
     zone: ScwZone,
-) -> Result<(), EngineError> {
+) -> Result<(), ContainerRegistryError> {
     let secret_token = secrets.SCALEWAY_SECRET_KEY.unwrap();
     let project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap();
 
@@ -202,14 +237,19 @@ pub fn clean_environments(
         secret_token.as_str(),
         project_id.as_str(),
         zone,
-    );
+        Arc::new(Box::new(NoOpProgressListener {})),
+    )?;
 
     // delete images created in registry
+    let registry_url = container_registry_client.registry_info();
     for env in environments.iter() {
-        for image in env.applications.iter().map(|a| a.to_image()).collect::<Vec<Image>>() {
-            if let Err(e) = container_registry_client.delete_image(&image) {
-                return Err(e);
-            }
+        for build in env
+            .applications
+            .iter()
+            .map(|a| a.to_build(&registry_url))
+            .collect::<Vec<Build>>()
+        {
+            let _ = container_registry_client.delete_image(&build.image);
         }
     }
 

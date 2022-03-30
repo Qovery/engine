@@ -6,7 +6,7 @@ use tera::Context as TeraContext;
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Create, Database, DatabaseOptions,
-    DatabaseType, Delete, Helm, Pause, Service, ServiceType, StatefulService, Terraform,
+    DatabaseType, Delete, Helm, Pause, Service, ServiceType, ServiceVersionCheckResult, StatefulService, Terraform,
 };
 use crate::cloud_provider::utilities::{
     generate_supported_version, get_self_hosted_mongodb_version, get_supported_version_to_use, print_action,
@@ -14,13 +14,14 @@ use crate::cloud_provider::utilities::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
-use crate::error::{EngineError, EngineErrorScope, StringError};
-use crate::events::{EnvironmentStep, Stage, ToTransmitter, Transmitter};
-use crate::models::DatabaseMode::MANAGED;
-use crate::models::{Context, Listen, Listener, Listeners};
+use crate::errors::{CommandError, EngineError};
+use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
+use crate::io_models::DatabaseMode::MANAGED;
+use crate::io_models::{Context, Listen, Listener, Listeners};
+use crate::logger::Logger;
 use ::function_name::named;
 
-pub struct MongoDB {
+pub struct MongoDbAws {
     context: Context,
     id: String,
     action: Action,
@@ -33,9 +34,10 @@ pub struct MongoDB {
     database_instance_type: String,
     options: DatabaseOptions,
     listeners: Listeners,
+    logger: Box<dyn Logger>,
 }
 
-impl MongoDB {
+impl MongoDbAws {
     pub fn new(
         context: Context,
         id: &str,
@@ -49,8 +51,9 @@ impl MongoDB {
         database_instance_type: &str,
         options: DatabaseOptions,
         listeners: Listeners,
+        logger: Box<dyn Logger>,
     ) -> Self {
-        MongoDB {
+        MongoDbAws {
             context,
             action,
             id: id.to_string(),
@@ -63,11 +66,21 @@ impl MongoDB {
             database_instance_type: database_instance_type.to_string(),
             options,
             listeners,
+            logger,
         }
     }
 
-    fn matching_correct_version(&self, is_managed_services: bool) -> Result<String, EngineError> {
-        check_service_version(get_mongodb_version(self.version(), is_managed_services), self)
+    fn matching_correct_version(
+        &self,
+        is_managed_services: bool,
+        event_details: EventDetails,
+    ) -> Result<ServiceVersionCheckResult, EngineError> {
+        check_service_version(
+            get_mongodb_version(self.version(), is_managed_services),
+            self,
+            event_details,
+            self.logger(),
+        )
     }
 
     fn cloud_provider_name(&self) -> &str {
@@ -79,13 +92,17 @@ impl MongoDB {
     }
 }
 
-impl StatefulService for MongoDB {
+impl StatefulService for MongoDbAws {
+    fn as_stateful_service(&self) -> &dyn StatefulService {
+        self
+    }
+
     fn is_managed_service(&self) -> bool {
         self.options.mode == MANAGED
     }
 }
 
-impl Service for MongoDB {
+impl Service for MongoDbAws {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -106,7 +123,7 @@ impl Service for MongoDB {
         // https://docs.aws.amazon.com/documentdb/latest/developerguide/limits.html#limits-naming_constraints
         let prefix = "mongodb";
         let max_size = 60 - prefix.len(); // 63 (max DocumentDB) - 3 (k8s statefulset chars)
-        let mut new_name = format!("{}{}", prefix, self.name().replace("_", "").replace("-", ""));
+        let mut new_name = format!("{}{}", prefix, self.name().replace('_', "").replace('-', ""));
         if new_name.chars().count() > max_size {
             new_name = new_name[..max_size].to_string();
         }
@@ -155,28 +172,28 @@ impl Service for MongoDB {
     }
 
     fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
         let mut context = default_tera_context(self, target.kubernetes, target.environment);
 
         // we need the kubernetes config file to store tfstates file in kube secrets
-        let kube_config_file_path = match kubernetes.get_kubeconfig_file_path() {
-            Ok(path) => path,
-            Err(e) => {
-                return Err(e.to_legacy_engine_error());
-            }
-        };
+        let kube_config_file_path = kubernetes.get_kubeconfig_file_path()?;
+
         context.insert("kubeconfig_path", &kube_config_file_path);
 
         kubectl::kubectl_exec_create_namespace_without_labels(
-            &environment.namespace(),
+            environment.namespace(),
             kube_config_file_path.as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
         );
 
         context.insert("namespace", environment.namespace());
 
-        let version = self.matching_correct_version(self.is_managed_service())?;
+        let version = self
+            .matching_correct_version(self.is_managed_service(), event_details)?
+            .matched_version()
+            .to_string();
         context.insert("version", &version);
 
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
@@ -187,10 +204,7 @@ impl Service for MongoDB {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert(
-            "fqdn",
-            self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str(),
-        );
+        context.insert("fqdn", self.fqdn(target, &self.fqdn, self.is_managed_service()).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
         context.insert("database_db_name", self.name.as_str());
         context.insert("database_login", self.options.login.as_str());
@@ -212,41 +226,30 @@ impl Service for MongoDB {
         context.insert("final_snapshot_name", &aws_final_snapshot_name(self.id()));
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
         if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert(
-                "resource_expiration_in_seconds",
-                &self.context.resource_expiration_in_seconds(),
-            )
+            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
         }
 
         Ok(context)
     }
 
+    fn logger(&self) -> &dyn Logger {
+        &*self.logger
+    }
+
     fn selector(&self) -> Option<String> {
         Some(format!("app={}", self.sanitized_name()))
     }
-
-    fn engine_error_scope(&self) -> EngineErrorScope {
-        EngineErrorScope::Database(
-            self.id().to_string(),
-            self.service_type().name().to_string(),
-            self.name().to_string(),
-        )
-    }
 }
 
-impl Database for MongoDB {}
+impl Database for MongoDbAws {}
 
-impl ToTransmitter for MongoDB {
+impl ToTransmitter for MongoDbAws {
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Database(
-            self.id().to_string(),
-            self.service_type().to_string(),
-            self.name().to_string(),
-        )
+        Transmitter::Database(self.id().to_string(), self.service_type().to_string(), self.name().to_string())
     }
 }
 
-impl Helm for MongoDB {
+impl Helm for MongoDbAws {
     fn helm_selector(&self) -> Option<String> {
         self.selector()
     }
@@ -268,7 +271,7 @@ impl Helm for MongoDB {
     }
 }
 
-impl Terraform for MongoDB {
+impl Terraform for MongoDbAws {
     fn terraform_common_resource_dir_path(&self) -> String {
         format!("{}/aws/services/common", self.context.lib_root_dir())
     }
@@ -278,7 +281,7 @@ impl Terraform for MongoDB {
     }
 }
 
-impl Create for MongoDB {
+impl Create for MongoDbAws {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -287,37 +290,46 @@ impl Create for MongoDB {
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
-            deploy_stateful_service(target, self, event_details.clone())
+            deploy_stateful_service(target, self, event_details.clone(), &*self.logger)
         })
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
-        self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()])
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+        self.check_domains(self.listeners.clone(), vec![self.fqdn.as_str()], event_details, self.logger())
     }
 
     #[named]
     fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details,
+            self.logger(),
         );
         Ok(())
     }
 }
 
-impl Pause for MongoDB {
+impl Pause for MongoDbAws {
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details,
+            self.logger(),
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Pause, || {
@@ -331,18 +343,21 @@ impl Pause for MongoDB {
 
     #[named]
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details,
+            self.logger(),
         );
 
         Ok(())
     }
 }
 
-impl Delete for MongoDB {
+impl Delete for MongoDbAws {
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
@@ -351,10 +366,12 @@ impl Delete for MongoDB {
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details.clone(),
+            self.logger(),
         );
 
         send_progress_on_long_task(self, crate::cloud_provider::service::Action::Delete, || {
-            delete_stateful_service(target, self, event_details.clone())
+            delete_stateful_service(target, self, event_details.clone(), self.logger())
         })
     }
 
@@ -364,17 +381,20 @@ impl Delete for MongoDB {
 
     #[named]
     fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
             function_name!(),
             self.name(),
+            event_details,
+            self.logger(),
         );
         Ok(())
     }
 }
 
-impl Listen for MongoDB {
+impl Listen for MongoDbAws {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }
@@ -384,7 +404,7 @@ impl Listen for MongoDB {
     }
 }
 
-fn get_mongodb_version(requested_version: String, is_managed_service: bool) -> Result<String, StringError> {
+fn get_mongodb_version(requested_version: String, is_managed_service: bool) -> Result<String, CommandError> {
     if is_managed_service {
         get_managed_mongodb_version(requested_version)
     } else {
@@ -392,7 +412,7 @@ fn get_mongodb_version(requested_version: String, is_managed_service: bool) -> R
     }
 }
 
-fn get_managed_mongodb_version(requested_version: String) -> Result<String, StringError> {
+fn get_managed_mongodb_version(requested_version: String) -> Result<String, CommandError> {
     let mut supported_mongodb_versions = HashMap::new();
 
     // v3.6.0
@@ -408,9 +428,7 @@ fn get_managed_mongodb_version(requested_version: String) -> Result<String, Stri
 
 #[cfg(test)]
 mod tests_mongodb {
-    use crate::cloud_provider::aws::databases::mongodb::{get_mongodb_version, MongoDB};
-    use crate::cloud_provider::service::{Action, DatabaseOptions, Service};
-    use crate::models::{Context, DatabaseMode};
+    use crate::cloud_provider::aws::databases::mongodb::get_mongodb_version;
 
     #[test]
     fn check_mongodb_version() {
@@ -418,59 +436,21 @@ mod tests_mongodb {
         assert_eq!(get_mongodb_version("4".to_string(), true).unwrap(), "4.0.0");
         assert_eq!(get_mongodb_version("4.0".to_string(), true).unwrap(), "4.0.0");
         assert_eq!(
-            get_mongodb_version("4.4".to_string(), true).unwrap_err().as_str(),
+            get_mongodb_version("4.4".to_string(), true)
+                .unwrap_err()
+                .message()
+                .as_str(),
             "DocumentDB 4.4 version is not supported"
         );
         // self-hosted version
         assert_eq!(get_mongodb_version("4".to_string(), false).unwrap(), "4.4.4");
         assert_eq!(get_mongodb_version("4.2".to_string(), false).unwrap(), "4.2.12");
         assert_eq!(
-            get_mongodb_version("3.4".to_string(), false).unwrap_err().as_str(),
+            get_mongodb_version("3.4".to_string(), false)
+                .unwrap_err()
+                .message()
+                .as_str(),
             "MongoDB 3.4 version is not supported"
         );
-    }
-
-    #[test]
-    fn mongo_name_sanitizer() {
-        let db_input_name = "test-name_sanitizer-with-too-many-chars-not-allowed-which_will-be-shrinked-at-the-end";
-        let db_expected_name = "mongodbtestnamesanitizerwithtoomanycharsnotallowedwhi";
-
-        let database = MongoDB::new(
-            Context::new(
-                "".to_string(),
-                "".to_string(),
-                "".to_string(),
-                "".to_string(),
-                "".to_string(),
-                false,
-                None,
-                vec![],
-                None,
-            ),
-            "pgid",
-            Action::Create,
-            db_input_name,
-            "8",
-            "mongotest.qovery.io",
-            "pgid",
-            "1".to_string(),
-            512,
-            "db.t2.micro",
-            DatabaseOptions {
-                login: "".to_string(),
-                password: "".to_string(),
-                host: "".to_string(),
-                port: 5432,
-                mode: DatabaseMode::CONTAINER,
-                disk_size_in_gib: 10,
-                database_disk_type: "gp2".to_string(),
-                encrypt_disk: false,
-                activate_high_availability: false,
-                activate_backups: false,
-                publicly_accessible: false,
-            },
-            vec![],
-        );
-        assert_eq!(database.sanitized_name(), db_expected_name);
     }
 }

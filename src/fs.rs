@@ -107,7 +107,7 @@ pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -
     return match crate::fs::root_workspace_directory(working_root_dir, execution_id) {
         Ok(workspace_dir) => match std::fs::remove_dir_all(match workspace_dir.strip_suffix("/.") {
             Some(striped_workspace_dir) => striped_workspace_dir, // Removing extra dir name allowing to delete directory properly ("/dir/." => "dir")
-            None => workspace_dir.as_str().clone(),
+            None => &workspace_dir,
         }) {
             Ok(_) => Ok(()),
             Err(err) => {
@@ -168,15 +168,11 @@ mod tests {
         // setup:
         let execution_id: &str = "123";
         let tmp_dir = TempDir::new("workspace_directory").expect("error creating temporary dir");
-        let root_dir = format!(
-            "{}/.qovery-workspace/{}",
-            tmp_dir.path().to_str().unwrap(),
-            execution_id
-        );
+        let root_dir = format!("{}/.qovery-workspace/{}", tmp_dir.path().to_str().unwrap(), execution_id);
         let root_dir_path = Path::new(root_dir.as_str());
 
         let directories_to_create = vec![
-            format!("{}", root_dir),
+            root_dir.to_string(),
             format!("{}/.terraform", root_dir),
             format!("{}/.terraform/dir-1", root_dir),
             format!("{}/dir-1", root_dir),
@@ -215,10 +211,8 @@ mod tests {
         .collect::<Vec<File>>();
 
         // execute:
-        let result = archive_workspace_directory(
-            tmp_dir.path().to_str().expect("error getting file path string"),
-            execution_id,
-        );
+        let result =
+            archive_workspace_directory(tmp_dir.path().to_str().expect("error getting file path string"), execution_id);
 
         // verify:
         assert_eq!(true, result.is_ok());
@@ -255,7 +249,7 @@ mod tests {
         }
 
         // clean:
-        tmp_files.into_iter().for_each(|f| drop(f));
+        tmp_files.into_iter().for_each(drop);
         tmp_dir.close().expect("error closing temporary directory");
     }
 }

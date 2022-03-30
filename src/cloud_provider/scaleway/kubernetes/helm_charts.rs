@@ -3,9 +3,9 @@ use crate::cloud_provider::helm::{
     CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart, ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
-use crate::cloud_provider::scaleway::application::{ScwRegion, ScwZone};
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use crate::errors::CommandError;
+use crate::models::scaleway::{ScwRegion, ScwZone};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -117,7 +117,7 @@ pub fn scw_helm_charts(
         Err(e) => {
             let message_safe = "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?";
             return Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe.to_string(), e),
+                format!("{}, error: {:?}", message_safe, e),
                 Some(message_safe.to_string()),
             ));
         }
@@ -128,21 +128,18 @@ pub fn scw_helm_charts(
     let qovery_terraform_config: ScalewayQoveryTerraformConfig = match serde_json::from_reader(reader) {
         Ok(config) => config,
         Err(e) => {
-            let message_safe = format!(
-                "Error while parsing terraform config file {}",
-                qovery_terraform_config_file
-            );
+            let message_safe = format!("Error while parsing terraform config file {}", qovery_terraform_config_file);
             return Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe.to_string(), e),
-                Some(message_safe.to_string()),
+                format!("{}, error: {:?}", message_safe, e),
+                Some(message_safe),
             ));
         }
     };
 
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
-    let prometheus_internal_url = format!("http://prometheus-operated.{}.svc", prometheus_namespace.to_string());
+    let prometheus_internal_url = format!("http://prometheus-operated.{}.svc", prometheus_namespace);
     let loki_namespace = HelmChartNamespaces::Logging;
-    let loki_kube_dns_prefix = format!("loki.{}.svc", loki_namespace.to_string());
+    let loki_kube_dns_prefix = format!("loki.{}.svc", loki_namespace);
 
     // Qovery storage class
     let q_storage_class = CommonChart {
@@ -303,6 +300,10 @@ pub fn scw_helm_charts(
             values_files: vec![chart_path("chart_values/kube-prometheus-stack.yaml")],
             values: vec![
                 ChartSetValue {
+                    key: "installCRDs".to_string(),
+                    value: "true".to_string(),
+                },
+                ChartSetValue {
                     key: "nameOverride".to_string(),
                     value: "prometheus-operator".to_string(),
                 },
@@ -450,11 +451,7 @@ datasources:
         type: loki
         url: \"http://{}.{}.svc:3100\"
       ",
-        prometheus_internal_url.clone(),
-        &loki.chart_info.name,
-        loki_namespace.to_string(),
-        &loki.chart_info.name,
-        loki_namespace.to_string(),
+        prometheus_internal_url, &loki.chart_info.name, loki_namespace, &loki.chart_info.name, loki_namespace,
     );
 
     let grafana = CommonChart {
