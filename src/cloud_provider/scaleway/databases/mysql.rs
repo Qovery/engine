@@ -132,7 +132,7 @@ impl Service for MySQLScw {
     }
 
     fn service_type(&self) -> ServiceType {
-        ServiceType::Database(DatabaseType::MySQL(&self.options))
+        ServiceType::Database(DatabaseType::MySQL)
     }
 
     fn id(&self) -> &str {

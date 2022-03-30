@@ -294,7 +294,7 @@ impl<T: CloudProvider> Helm for Application<T> {
         format!(
             "{}/{}/charts/q-application",
             self.context.lib_root_dir(),
-            T::helm_directory_name(),
+            T::lib_directory_name(),
         )
     }
 

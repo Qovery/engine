@@ -19,7 +19,7 @@ pub trait CloudProvider {
     fn full_name() -> &'static str;
     fn registry_short_name() -> &'static str;
     fn registry_full_name() -> &'static str;
-    fn helm_directory_name() -> &'static str;
+    fn lib_directory_name() -> &'static str;
 }
 
 pub(crate) trait ToTeraContext {

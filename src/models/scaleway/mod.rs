@@ -33,7 +33,7 @@ impl CloudProvider for SCW {
         "Scaleway Container Registry"
     }
 
-    fn helm_directory_name() -> &'static str {
+    fn lib_directory_name() -> &'static str {
         "scaleway"
     }
 }

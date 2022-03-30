@@ -105,7 +105,7 @@ impl Service for MongoDo {
     }
 
     fn service_type(&self) -> ServiceType {
-        ServiceType::Database(DatabaseType::MongoDB(&self.options))
+        ServiceType::Database(DatabaseType::MongoDB)
     }
 
     fn id(&self) -> &str {

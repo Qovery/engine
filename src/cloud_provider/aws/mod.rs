@@ -12,7 +12,6 @@ use crate::events::{EventDetails, GeneralStep, Stage, ToTransmitter, Transmitter
 use crate::io_models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
 use crate::runtime::block_on;
 
-pub mod databases;
 pub mod kubernetes;
 pub mod regions;
 

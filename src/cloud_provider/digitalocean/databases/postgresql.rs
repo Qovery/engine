@@ -105,7 +105,7 @@ impl Service for PostgresDo {
     }
 
     fn service_type(&self) -> ServiceType {
-        ServiceType::Database(DatabaseType::PostgreSQL(&self.options))
+        ServiceType::Database(DatabaseType::PostgreSQL)
     }
 
     fn id(&self) -> &str {

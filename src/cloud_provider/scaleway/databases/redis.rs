@@ -105,7 +105,7 @@ impl Service for RedisScw {
     }
 
     fn service_type(&self) -> ServiceType {
-        ServiceType::Database(DatabaseType::Redis(&self.options))
+        ServiceType::Database(DatabaseType::Redis)
     }
 
     fn id(&self) -> &str {

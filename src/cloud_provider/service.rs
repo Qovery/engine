@@ -250,32 +250,32 @@ pub struct DatabaseOptions {
 }
 
 #[derive(Eq, PartialEq)]
-pub enum DatabaseType<'a> {
-    PostgreSQL(&'a DatabaseOptions),
-    MongoDB(&'a DatabaseOptions),
-    MySQL(&'a DatabaseOptions),
-    Redis(&'a DatabaseOptions),
+pub enum DatabaseType {
+    PostgreSQL,
+    MongoDB,
+    MySQL,
+    Redis,
 }
 
-impl<'a> ToString for DatabaseType<'a> {
+impl ToString for DatabaseType {
     fn to_string(&self) -> String {
         match self {
-            DatabaseType::PostgreSQL(_) => "PostgreSQL".to_string(),
-            DatabaseType::MongoDB(_) => "MongoDB".to_string(),
-            DatabaseType::MySQL(_) => "MySQL".to_string(),
-            DatabaseType::Redis(_) => "Redis".to_string(),
+            DatabaseType::PostgreSQL => "PostgreSQL".to_string(),
+            DatabaseType::MongoDB => "MongoDB".to_string(),
+            DatabaseType::MySQL => "MySQL".to_string(),
+            DatabaseType::Redis => "Redis".to_string(),
         }
     }
 }
 
 #[derive(Eq, PartialEq)]
-pub enum ServiceType<'a> {
+pub enum ServiceType {
     Application,
-    Database(DatabaseType<'a>),
+    Database(DatabaseType),
     Router,
 }
 
-impl<'a> ServiceType<'a> {
+impl ServiceType {
     pub fn name(&self) -> String {
         match self {
             ServiceType::Application => "Application".to_string(),
@@ -285,7 +285,7 @@ impl<'a> ServiceType<'a> {
     }
 }
 
-impl<'a> ToString for ServiceType<'a> {
+impl<'a> ToString for ServiceType {
     fn to_string(&self) -> String {
         self.name()
     }

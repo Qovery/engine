@@ -14,10 +14,6 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
-use crate::cloud_provider::aws::databases::mongodb::MongoDbAws;
-use crate::cloud_provider::aws::databases::mysql::MySQLAws;
-use crate::cloud_provider::aws::databases::postgresql::PostgreSQLAws;
-use crate::cloud_provider::aws::databases::redis::RedisAws;
 use crate::cloud_provider::digitalocean::databases::mongodb::MongoDo;
 use crate::cloud_provider::digitalocean::databases::mysql::MySQLDo;
 use crate::cloud_provider::digitalocean::databases::postgresql::PostgresDo;
@@ -38,6 +34,7 @@ use crate::logger::Logger;
 use crate::models;
 use crate::models::application::{ApplicationError, ApplicationService};
 use crate::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
+use crate::models::database::{Container, Managed, MongoDB, MySQL, PostgresSQL, Redis};
 use crate::models::digital_ocean::{DoAppExtraSettings, DoRouterExtraSettings, DoStorageType};
 use crate::models::router::RouterError;
 use crate::models::scaleway::{ScwAppExtraSettings, ScwRouterExtraSettings, ScwStorageType};
@@ -651,265 +648,490 @@ impl Database {
 
         let listeners = cloud_provider.listeners().clone();
 
-        match cloud_provider.kind() {
-            CPKind::Aws => match self.kind {
-                DatabaseKind::Postgresql => {
-                    let db = Box::new(PostgreSQLAws::new(
-                        context.clone(),
-                        self.id.as_str(),
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.version.as_str(),
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
-                        self.database_instance_type.as_str(),
-                        database_options,
-                        listeners,
-                        logger,
-                    ));
+        match (cloud_provider.kind(), &self.kind, &self.mode) {
+            (CPKind::Aws, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
+                let db = models::database::Database::<AWS, Managed, PostgresSQL>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )
+                .unwrap();
 
-                    Some(db)
-                }
-                DatabaseKind::Mysql => {
-                    let db = Box::new(MySQLAws::new(
-                        context.clone(),
-                        self.id.as_str(),
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.version.as_str(),
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
-                        self.database_instance_type.as_str(),
-                        database_options,
-                        listeners,
-                        logger,
-                    ));
+                Some(Box::new(db))
+            }
+            (CPKind::Aws, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<AWS, Container, PostgresSQL>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )
+                .unwrap();
 
-                    Some(db)
-                }
-                DatabaseKind::Mongodb => {
-                    let db = Box::new(MongoDbAws::new(
-                        context.clone(),
-                        self.id.as_str(),
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.version.as_str(),
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
-                        self.database_instance_type.as_str(),
-                        database_options,
-                        listeners,
-                        logger,
-                    ));
+                Some(Box::new(db))
+            }
 
-                    Some(db)
-                }
-                DatabaseKind::Redis => {
-                    let db = Box::new(RedisAws::new(
-                        context.clone(),
-                        self.id.as_str(),
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.version.as_str(),
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
-                        self.database_instance_type.as_str(),
-                        database_options,
-                        listeners,
-                        logger,
-                    ));
+            (CPKind::Aws, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
+                let db = models::database::Database::<AWS, Managed, MySQL>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )
+                .unwrap();
 
-                    Some(db)
-                }
-            },
-            CPKind::Do => match self.kind {
-                DatabaseKind::Postgresql => {
-                    let db = Box::new(PostgresDo::new(
-                        context.clone(),
-                        self.id.as_str(),
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.version.as_str(),
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
-                        self.database_instance_type.as_str(),
-                        database_options,
-                        listeners,
-                        logger,
-                    ));
+                Some(Box::new(db))
+            }
+            (CPKind::Aws, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<AWS, Container, MySQL>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )
+                .unwrap();
 
-                    Some(db)
-                }
-                DatabaseKind::Mysql => {
-                    let db = Box::new(MySQLDo::new(
-                        context.clone(),
-                        self.id.as_str(),
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.version.as_str(),
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
-                        self.database_instance_type.as_str(),
-                        database_options,
-                        listeners,
-                        logger,
-                    ));
+                Some(Box::new(db))
+            }
+            (CPKind::Aws, DatabaseKind::Redis, DatabaseMode::MANAGED) => {
+                let db = models::database::Database::<AWS, Container, Redis>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )
+                .unwrap();
 
-                    Some(db)
-                }
-                DatabaseKind::Redis => {
-                    let db = Box::new(RedisDo::new(
-                        context.clone(),
-                        self.id.as_str(),
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.version.as_str(),
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
-                        self.database_instance_type.as_str(),
-                        database_options,
-                        listeners,
-                        logger,
-                    ));
+                Some(Box::new(db))
+            }
+            (CPKind::Aws, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<AWS, Container, Redis>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )
+                .unwrap();
 
-                    Some(db)
-                }
-                DatabaseKind::Mongodb => {
-                    let db = Box::new(MongoDo::new(
-                        context.clone(),
-                        self.id.as_str(),
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.version.as_str(),
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
-                        self.database_instance_type.as_str(),
-                        database_options,
-                        listeners,
-                        logger,
-                    ));
+                Some(Box::new(db))
+            }
+            (CPKind::Aws, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
+                let db = models::database::Database::<AWS, Managed, MongoDB>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )
+                .unwrap();
 
-                    Some(db)
-                }
-            },
-            CPKind::Scw => match self.kind {
-                DatabaseKind::Postgresql => match VersionsNumber::from_str(self.version.as_str()) {
-                    Ok(v) => {
-                        let db = Box::new(PostgresScw::new(
-                            context.clone(),
-                            self.id.as_str(),
-                            self.action.to_service_action(),
-                            self.name.as_str(),
-                            v,
-                            self.fqdn.as_str(),
-                            self.fqdn_id.as_str(),
-                            self.total_cpus.clone(),
-                            self.total_ram_in_mib,
-                            self.database_instance_type.as_str(),
-                            database_options,
-                            listeners,
-                            logger.clone(),
-                        ));
+                Some(Box::new(db))
+            }
+            (CPKind::Aws, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<AWS, Container, MongoDB>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )
+                .unwrap();
 
-                        Some(db)
-                    }
-                    Err(e) => {
-                        error!(
-                            "{}",
-                            format!(
-                                "error while parsing postgres version, error: {}",
-                                e.message(ErrorMessageVerbosity::FullDetails)
-                            )
-                        );
-                        None
-                    }
-                },
-                DatabaseKind::Mysql => match VersionsNumber::from_str(self.version.as_str()) {
-                    Ok(v) => {
-                        let db = Box::new(MySQLScw::new(
-                            context.clone(),
-                            self.id.as_str(),
-                            self.action.to_service_action(),
-                            self.name.as_str(),
-                            v,
-                            self.fqdn.as_str(),
-                            self.fqdn_id.as_str(),
-                            self.total_cpus.clone(),
-                            self.total_ram_in_mib,
-                            self.database_instance_type.as_str(),
-                            database_options,
-                            listeners,
-                            logger.clone(),
-                        ));
+                Some(Box::new(db))
+            }
 
-                        Some(db)
-                    }
-                    Err(e) => {
-                        error!(
-                            "{}",
-                            format!(
-                                "error while parsing mysql version, error: {}",
-                                e.message(ErrorMessageVerbosity::FullDetails)
-                            )
-                        );
-                        None
-                    }
-                },
-                DatabaseKind::Redis => {
-                    let db = Box::new(RedisScw::new(
-                        context.clone(),
-                        self.id.as_str(),
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.version.as_str(),
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
-                        self.database_instance_type.as_str(),
-                        database_options,
-                        listeners,
-                        logger.clone(),
-                    ));
+            (CPKind::Do, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
+                let db = Box::new(PostgresDo::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger,
+                ));
 
-                    Some(db)
-                }
-                DatabaseKind::Mongodb => {
-                    let db = Box::new(MongoDbScw::new(
-                        context.clone(),
-                        self.id.as_str(),
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.version.as_str(),
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.total_cpus.clone(),
-                        self.total_ram_in_mib,
-                        self.database_instance_type.as_str(),
-                        database_options,
-                        listeners,
-                        logger,
-                    ));
+                Some(db)
+            }
+            (CPKind::Do, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
+                let db = Box::new(PostgresDo::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger,
+                ));
 
-                    Some(db)
-                }
-            },
+                Some(db)
+            }
+            (CPKind::Do, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
+                let db = Box::new(MySQLDo::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger,
+                ));
+
+                Some(db)
+            }
+            (CPKind::Do, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
+                let db = Box::new(MySQLDo::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger,
+                ));
+
+                Some(db)
+            }
+            (CPKind::Do, DatabaseKind::Redis, DatabaseMode::MANAGED) => {
+                let db = Box::new(RedisDo::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger,
+                ));
+
+                Some(db)
+            }
+            (CPKind::Do, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
+                let db = Box::new(RedisDo::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger,
+                ));
+
+                Some(db)
+            }
+            (CPKind::Do, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
+                let db = Box::new(MongoDo::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger,
+                ));
+
+                Some(db)
+            }
+            (CPKind::Do, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
+                let db = Box::new(MongoDo::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger,
+                ));
+
+                Some(db)
+            }
+
+            (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
+                let db = Box::new(PostgresScw::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger.clone(),
+                ));
+
+                Some(db)
+            }
+            (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
+                let db = Box::new(PostgresScw::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger.clone(),
+                ));
+
+                Some(db)
+            }
+            (CPKind::Scw, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
+                let db = Box::new(MySQLScw::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger.clone(),
+                ));
+
+                Some(db)
+            }
+            (CPKind::Scw, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
+                let db = Box::new(MySQLScw::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    VersionsNumber::from_str(self.version.as_str()).ok()?,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger.clone(),
+                ));
+
+                Some(db)
+            }
+            (CPKind::Scw, DatabaseKind::Redis, DatabaseMode::MANAGED) => {
+                let db = Box::new(RedisScw::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger.clone(),
+                ));
+
+                Some(db)
+            }
+            (CPKind::Scw, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
+                let db = Box::new(RedisScw::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger.clone(),
+                ));
+
+                Some(db)
+            }
+            (CPKind::Scw, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
+                let db = Box::new(MongoDbScw::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger.clone(),
+                ));
+
+                Some(db)
+            }
+            (CPKind::Scw, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
+                let db = Box::new(MongoDbScw::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options,
+                    listeners,
+                    logger.clone(),
+                ));
+
+                Some(db)
+            }
         }
     }
 }

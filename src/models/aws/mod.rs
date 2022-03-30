@@ -1,4 +1,6 @@
 pub mod application;
+pub mod database;
+mod database_utils;
 pub mod router;
 
 use crate::models::types::CloudProvider;
@@ -30,7 +32,7 @@ impl CloudProvider for AWS {
         "Elastic Container Registry"
     }
 
-    fn helm_directory_name() -> &'static str {
+    fn lib_directory_name() -> &'static str {
         "aws"
     }
 }

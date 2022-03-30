@@ -34,7 +34,7 @@ impl CloudProvider for DO {
         "Digital Ocean Container Registry"
     }
 
-    fn helm_directory_name() -> &'static str {
+    fn lib_directory_name() -> &'static str {
         "digitalocean"
     }
 }
