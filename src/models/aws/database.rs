@@ -20,7 +20,7 @@ use crate::models::types::{ToTeraContext, AWS};
 use tera::Context as TeraContext;
 
 /////////////////////////////////////////////////////////////////
-// MANAGED
+// CONTAINER
 impl DatabaseType<AWS, Container> for PostgresSQL {
     type DatabaseOptions = DatabaseOptions;
 
