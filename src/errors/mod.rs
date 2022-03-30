@@ -16,19 +16,28 @@ use std::fmt::{Display, Formatter};
 use thiserror::Error;
 use url::Url;
 
+/// ErrorMessageVerbosity: represents command error message's verbosity from minimal to full verbosity.
+pub enum ErrorMessageVerbosity {
+    SafeOnly,
+    FullDetailsWithoutEnvVars,
+    FullDetails,
+}
+
 /// CommandError: command error, mostly returned by third party tools.
 #[derive(Clone, Debug, Error, PartialEq)]
 pub struct CommandError {
-    /// message: full error message, can contains unsafe text such as passwords and tokens.
-    message_raw: String,
+    /// full_details: full error message, can contains unsafe text such as passwords and tokens.
+    full_details: String,
     /// message_safe: error message omitting displaying any protected data such as passwords and tokens.
     message_safe: Option<String>,
+    /// env_vars: environments variables including touchy data such as secret keys.
+    env_vars: Option<Vec<(String, String)>>,
 }
 
 impl CommandError {
     /// Returns CommandError message_raw. May contains unsafe text such as passwords and tokens.
     pub fn message_raw(&self) -> String {
-        self.message_raw.to_string()
+        self.full_details.to_string()
     }
 
     /// Returns CommandError message_safe omitting all unsafe text such as passwords and tokens.
@@ -36,17 +45,41 @@ impl CommandError {
         self.message_safe.clone()
     }
 
-    /// Returns error all message (safe + unsafe).
-    pub fn message(&self) -> String {
-        // TODO(benjaminch): To be revamped, not sure how we should deal with safe and unsafe messages.
-        if let Some(msg) = &self.message_safe {
-            // TODO(benjaminch): Handle raw / safe as for event message
-            if self.message_raw != *msg {
-                return format!("{} {}", msg, self.message_raw);
-            }
-        }
+    /// Returns CommandError env_vars.
+    pub fn env_vars(&self) -> Option<Vec<(String, String)>> {
+        self.env_vars.clone()
+    }
 
-        self.message_raw.to_string()
+    /// Returns error message based on verbosity.
+    pub fn message(&self, message_verbosity: ErrorMessageVerbosity) -> String {
+        match message_verbosity {
+            ErrorMessageVerbosity::SafeOnly => match &self.message_safe {
+                None => "".to_string(),
+                Some(msg) => msg.to_string(),
+            },
+            ErrorMessageVerbosity::FullDetailsWithoutEnvVars => match &self.message_safe {
+                None => self.full_details.to_string(),
+                Some(safe) => format!("{} / Full details: {}", safe, self.full_details),
+            },
+            ErrorMessageVerbosity::FullDetails => match &self.message_safe {
+                None => self.full_details.to_string(),
+                Some(safe) => match &self.env_vars {
+                    None => format!("{} / Full details: {}", safe, self.full_details),
+                    Some(env_vars) => {
+                        format!(
+                            "{} / Full details: {} / Env vars: {}",
+                            safe,
+                            self.full_details,
+                            env_vars
+                                .iter()
+                                .map(|(k, v)| format!("{}={}", k, v))
+                                .collect::<Vec<String>>()
+                                .join(" "),
+                        )
+                    }
+                },
+            },
+        }
     }
 
     /// Creates a new CommandError from safe message. To be used when message is safe.
@@ -57,8 +90,22 @@ impl CommandError {
     /// Creates a new CommandError having both a safe and an unsafe message.
     pub fn new(message_raw: String, message_safe: Option<String>) -> Self {
         CommandError {
-            message_raw,
+            full_details: message_raw,
             message_safe,
+            env_vars: None,
+        }
+    }
+
+    /// Creates a new CommandError having a safe, an unsafe message and env vars.
+    pub fn new_with_env_vars(
+        message_raw: String,
+        message_safe: Option<String>,
+        env_vars: Option<Vec<(String, String)>>,
+    ) -> Self {
+        CommandError {
+            full_details: message_raw,
+            message_safe,
+            env_vars,
         }
     }
 
@@ -68,8 +115,9 @@ impl CommandError {
         safe_message: Option<String>,
     ) -> Self {
         CommandError {
-            message_raw: legacy_command_error.to_string(),
+            full_details: legacy_command_error.to_string(),
             message_safe: safe_message,
+            env_vars: None,
         }
     }
 
@@ -82,16 +130,7 @@ impl CommandError {
         stdout: Option<String>,
         stderr: Option<String>,
     ) -> Self {
-        let mut unsafe_message = format!(
-            "{}\ncommand: {} {}\nenv: {}",
-            message,
-            bin,
-            cmd_args.join(" "),
-            envs.iter()
-                .map(|(k, v)| format!("{}={}", k, v))
-                .collect::<Vec<String>>()
-                .join(" ")
-        );
+        let mut unsafe_message = format!("{}\ncommand: {} {}", message, bin, cmd_args.join(" "),);
 
         if let Some(txt) = stdout {
             unsafe_message = format!("{}\nSTDOUT {}", unsafe_message, txt);
@@ -100,13 +139,13 @@ impl CommandError {
             unsafe_message = format!("{}\nSTDERR {}", unsafe_message, txt);
         }
 
-        CommandError::new(unsafe_message, Some(message))
+        CommandError::new_with_env_vars(unsafe_message, Some(message), Some(envs))
     }
 }
 
 impl Display for CommandError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.message().as_str())
+        f.write_str(self.message(ErrorMessageVerbosity::SafeOnly).as_str()) // By default, expose safe message only
     }
 }
 
@@ -356,9 +395,9 @@ impl EngineError {
     }
 
     /// Returns proper error message.
-    pub fn message(&self) -> String {
+    pub fn message(&self, message_verbosity: ErrorMessageVerbosity) -> String {
         match &self.message {
-            Some(msg) => msg.message(),
+            Some(msg) => msg.message(message_verbosity),
             None => self.qovery_log_message.to_string(),
         }
     }
@@ -445,7 +484,9 @@ impl EngineError {
             EngineErrorCause::Internal,
             EngineErrorScope::from(self.event_details.transmitter()),
             self.event_details.execution_id().to_string(),
-            Some(self.message()),
+            // Note: Since legacy EngineError is read directly as is in the Core, not all details are exposed
+            // since it can lead to expose secrets, hence not exposing env vars which may contains secrets.
+            Some(self.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
         )
     }
 

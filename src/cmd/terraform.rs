@@ -4,7 +4,7 @@ use retry::OperationResult;
 
 use crate::cmd::command::QoveryCommand;
 use crate::constants::TF_PLUGIN_CACHE_DIR;
-use crate::errors::CommandError;
+use crate::errors::{CommandError, ErrorMessageVerbosity};
 use rand::Rng;
 use retry::Error::Operation;
 use std::{env, fs, thread, time};
@@ -14,8 +14,12 @@ fn manage_common_issues(terraform_provider_lock: &str, err: &CommandError) -> Re
     // in order to avoid lock errors on parallel run, let's sleep a bit
     // https://github.com/hashicorp/terraform/issues/28041
 
-    if err.message().contains("Failed to install provider from shared cache")
-        || err.message().contains("Failed to install provider")
+    if err
+        .message(ErrorMessageVerbosity::FullDetails)
+        .contains("Failed to install provider from shared cache")
+        || err
+            .message(ErrorMessageVerbosity::FullDetails)
+            .contains("Failed to install provider")
     {
         let sleep_time_int = rand::thread_rng().gen_range(20..45);
         let sleep_time = time::Duration::from_secs(sleep_time_int);
@@ -33,7 +37,10 @@ fn manage_common_issues(terraform_provider_lock: &str, err: &CommandError) -> Re
                 )),
             )),
         };
-    } else if err.message().contains("Plugin reinitialization required") {
+    } else if err
+        .message(ErrorMessageVerbosity::FullDetails)
+        .contains("Plugin reinitialization required")
+    {
         // terraform init is required
         return Ok(());
     }

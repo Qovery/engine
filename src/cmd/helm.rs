@@ -8,7 +8,7 @@ use crate::cmd::command::QoveryCommand;
 use crate::cmd::helm::HelmCommand::{LIST, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{CannotRollback, CmdError, InvalidKubeConfig, ReleaseDoesNotExist};
 use crate::cmd::structs::{HelmChart, HelmListItem};
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EventDetails;
 use semver::Version;
 use serde_derive::Deserialize;
@@ -137,7 +137,7 @@ impl Helm {
         ) {
             Err(_) if stderr.contains("release: not found") => Err(ReleaseDoesNotExist(chart.name.clone())),
             Err(err) => {
-                stderr.push_str(&err.message());
+                stderr.push_str(&err.message(ErrorMessageVerbosity::FullDetails));
                 let error = CommandError::new(stderr, err.message_safe());
                 Err(CmdError(chart.name.clone(), STATUS, error))
             }
@@ -174,7 +174,7 @@ impl Helm {
         let mut stderr = String::new();
         match helm_exec_with_output(&args, &self.get_all_envs(envs), &mut |_| {}, &mut |line| stderr.push_str(&line)) {
             Err(err) => {
-                stderr.push_str(&err.message());
+                stderr.push_str(&err.message(ErrorMessageVerbosity::FullDetails));
                 let error = CommandError::new(stderr, err.message_safe());
                 Err(CmdError(chart.name.clone(), ROLLBACK, error))
             }
@@ -207,7 +207,7 @@ impl Helm {
         let mut stderr = String::new();
         match helm_exec_with_output(&args, &self.get_all_envs(envs), &mut |_| {}, &mut |line| stderr.push_str(&line)) {
             Err(err) => {
-                stderr.push_str(&err.message());
+                stderr.push_str(&err.message(ErrorMessageVerbosity::FullDetails));
                 let error = CommandError::new(stderr, err.message_safe());
                 Err(CmdError(chart.name.clone(), UNINSTALL, error))
             }
@@ -483,7 +483,7 @@ impl Helm {
 
                 // Try do define/specify a bit more the message
                 let stderr_msg: String = error_message.into_iter().collect();
-                let stderr_msg = format!("{}: {}", stderr_msg, err.message());
+                let stderr_msg = format!("{}: {}", stderr_msg, err.message(ErrorMessageVerbosity::FullDetails));
                 let error = if stderr_msg.contains("another operation (install/upgrade/rollback) is in progress") {
                     HelmError::ReleaseLocked(chart.name.clone())
                 } else if stderr_msg.contains("has been rolled back") {

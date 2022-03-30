@@ -18,7 +18,7 @@ use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::Statefulset;
 use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_scale_replicas_by_selector, ScalingKind};
 use crate::cmd::structs::LabelsContent;
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
 use crate::io_models::ProgressLevel::Info;
 use crate::io_models::{
@@ -157,7 +157,7 @@ pub trait StatefulService: Service + Create + Pause + Delete {
     fn is_managed_service(&self) -> bool;
 }
 
-pub trait Router: StatelessService + Listen + Helm {
+pub trait RouterService: StatelessService + Listen + Helm {
     fn domains(&self) -> Vec<&str>;
     fn has_custom_domains(&self) -> bool;
     fn check_domains(&self, event_details: EventDetails, logger: &dyn Logger) -> Result<(), EngineError> {
@@ -521,15 +521,6 @@ pub fn scale_down_application(
             replicas_count as u32,
             e,
         )
-    })
-}
-
-pub fn delete_router<T>(target: &DeploymentTarget, service: &T, event_details: EventDetails) -> Result<(), EngineError>
-where
-    T: Router,
-{
-    send_progress_on_long_task(service, crate::cloud_provider::service::Action::Delete, || {
-        delete_stateless_service(target, service, event_details.clone())
     })
 }
 
@@ -1065,7 +1056,10 @@ where
 
             Err(EngineError::new_k8s_service_issue(
                 event_details,
-                CommandError::new(err.message(), Some("Error with Kubernetes service".to_string())),
+                CommandError::new(
+                    err.message(ErrorMessageVerbosity::FullDetails),
+                    Some("Error with Kubernetes service".to_string()),
+                ),
             ))
         }
         _ => {

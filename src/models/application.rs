@@ -13,7 +13,7 @@ use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
 use crate::io_models::{Context, Listen, Listener, Listeners, Port, QoveryIdentifier};
 use crate::logger::Logger;
-use crate::models::types::CloudProvider;
+use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;
 use std::marker::PhantomData;
 use tera::Context as TeraContext;
@@ -202,10 +202,6 @@ impl<T: CloudProvider> Listen for Application<T> {
     fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
     }
-}
-
-pub(crate) trait ToTeraContext {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError>;
 }
 
 impl<T: CloudProvider> Service for Application<T>
@@ -442,12 +438,12 @@ where
     }
 }
 
-pub trait IApplication: StatelessService {
+pub trait ApplicationService: StatelessService {
     fn get_build(&self) -> &Build;
     fn get_build_mut(&mut self) -> &mut Build;
 }
 
-impl<T: CloudProvider> IApplication for Application<T>
+impl<T: CloudProvider> ApplicationService for Application<T>
 where
     Application<T>: Service,
 {
