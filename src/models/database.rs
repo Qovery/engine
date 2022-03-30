@@ -181,7 +181,13 @@ where
     }
 
     fn sanitized_name(&self) -> String {
-        managed_db_name_sanitizer(60, T::lib_directory_name(), &self.id)
+        // FIXME: specific case only for aws ;'(
+        // This is sad, but can't change that as it would break/wipe all container db for users
+        if C::lib_directory_name() == "aws" {
+            managed_db_name_sanitizer(60, T::lib_directory_name(), &self.id)
+        } else {
+            format!("{}-{}", T::lib_directory_name(), &self.id)
+        }
     }
 
     fn version(&self) -> String {
