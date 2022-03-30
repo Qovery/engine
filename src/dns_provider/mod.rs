@@ -1,11 +1,12 @@
 use std::net::Ipv4Addr;
 
+use crate::dns_provider::errors::DnsProviderError;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::models::{Context, Domain};
+use crate::io_models::{Context, Domain};
 
 pub mod cloudflare;
+pub mod errors;
 
 pub trait DnsProvider {
     fn context(&self) -> &Context;
@@ -20,18 +21,7 @@ pub trait DnsProvider {
     fn token(&self) -> &str;
     fn domain(&self) -> &Domain;
     fn resolvers(&self) -> Vec<Ipv4Addr>;
-    fn is_valid(&self) -> Result<(), EngineError>;
-    fn engine_error_scope(&self) -> EngineErrorScope {
-        EngineErrorScope::DnsProvider(self.id().to_string(), self.name().to_string())
-    }
-    fn engine_error(&self, cause: EngineErrorCause, message: String) -> EngineError {
-        EngineError::new(
-            cause,
-            self.engine_error_scope(),
-            self.context().execution_id(),
-            Some(message),
-        )
-    }
+    fn is_valid(&self) -> Result<(), DnsProviderError>;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

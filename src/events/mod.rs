@@ -1,61 +1,47 @@
+#![allow(clippy::field_reassign_with_default)]
+#![allow(clippy::large_enum_variant)]
+#![allow(deprecated)]
+
 pub mod io;
 
 extern crate url;
 
 use crate::cloud_provider::Kind;
-use crate::errors::EngineError;
-use crate::models::QoveryIdentifier;
+use crate::errors::{CommandError, EngineError};
+use crate::io_models::QoveryIdentifier;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone)]
 /// EngineEvent: represents an event happening in the Engine.
 pub enum EngineEvent {
+    /// Debug: represents a debug message event.
+    Debug(EventDetails, EventMessage),
+    /// Info: represents an info message event.
+    Info(EventDetails, EventMessage),
+    /// Warning: represents a warning message event.
+    Warning(EventDetails, EventMessage),
     /// Error: represents an error event.
-    Error(EngineError),
-    /// Waiting: represents an engine waiting event.
-    ///
-    /// Engine is waiting for a task to be done.
-    Waiting(EventDetails, EventMessage),
-    /// Deploying: represents an engine deploying event.
-    Deploying(EventDetails, EventMessage),
-    /// Pausing: represents an engine pausing event.
-    Pausing(EventDetails, EventMessage),
-    /// Deleting: represents an engine deleting event.
-    Deleting(EventDetails, EventMessage),
-    /// Deployed: represents an engine deployed event.
-    Deployed(EventDetails, EventMessage),
-    /// Paused: represents an engine paused event.
-    Paused(EventDetails, EventMessage),
-    /// Deleted: represents an engine deleted event.
-    Deleted(EventDetails, EventMessage),
+    Error(EngineError, Option<EventMessage>),
 }
 
 impl EngineEvent {
     /// Returns engine's event details.
     pub fn get_details(&self) -> &EventDetails {
         match self {
-            EngineEvent::Error(engine_error) => engine_error.event_details(),
-            EngineEvent::Waiting(details, _message) => details,
-            EngineEvent::Deploying(details, _message) => details,
-            EngineEvent::Pausing(details, _message) => details,
-            EngineEvent::Deleting(details, _message) => details,
-            EngineEvent::Deployed(details, _message) => details,
-            EngineEvent::Paused(details, _message) => details,
-            EngineEvent::Deleted(details, _message) => details,
+            EngineEvent::Debug(details, _message) => details,
+            EngineEvent::Info(details, _message) => details,
+            EngineEvent::Warning(details, _message) => details,
+            EngineEvent::Error(engine_error, _message) => engine_error.event_details(),
         }
     }
 
     /// Returns engine's event message.
     pub fn message(&self, message_verbosity: EventMessageVerbosity) -> String {
         match self {
-            EngineEvent::Error(engine_error) => engine_error.message(),
-            EngineEvent::Waiting(_details, event_message) => event_message.message(message_verbosity),
-            EngineEvent::Deploying(_details, event_message) => event_message.message(message_verbosity),
-            EngineEvent::Pausing(_details, event_message) => event_message.message(message_verbosity),
-            EngineEvent::Deleting(_details, event_message) => event_message.message(message_verbosity),
-            EngineEvent::Deployed(_details, event_message) => event_message.message(message_verbosity),
-            EngineEvent::Paused(_details, event_message) => event_message.message(message_verbosity),
-            EngineEvent::Deleted(_details, event_message) => event_message.message(message_verbosity),
+            EngineEvent::Debug(_details, message) => message.message(message_verbosity),
+            EngineEvent::Info(_details, message) => message.message(message_verbosity),
+            EngineEvent::Warning(_details, message) => message.message(message_verbosity),
+            EngineEvent::Error(engine_error, _message) => engine_error.message(),
         }
     }
 }
@@ -111,13 +97,15 @@ impl EventMessage {
             EventMessageVerbosity::SafeOnly => self.safe_message.to_string(),
             EventMessageVerbosity::FullDetails => match &self.full_details {
                 None => self.safe_message.to_string(),
-                Some(details) => format!(
-                    "{} / Full details: {}",
-                    self.safe_message.to_string(),
-                    details.to_string()
-                ),
+                Some(details) => format!("{} / Full details: {}", self.safe_message, details),
             },
         }
+    }
+}
+
+impl From<CommandError> for EventMessage {
+    fn from(e: CommandError) -> Self {
+        EventMessage::new(e.message_raw(), e.message_safe())
     }
 }
 
@@ -127,7 +115,7 @@ impl Display for EventMessage {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// Stage: represents an engine event stage, can be General, Infrastructure or Environment.
 pub enum Stage {
     /// GeneralStep: general stage in the engine, usually used across all stages.
@@ -163,7 +151,7 @@ impl Display for Stage {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// GeneralStep: represents an engine general step usually shared across all engine stages
 pub enum GeneralStep {
     /// ValidateSystemRequirements: validating system requirements
@@ -172,6 +160,8 @@ pub enum GeneralStep {
     RetrieveClusterConfig,
     /// RetrieveClusterResources: retrieving cluster resources
     RetrieveClusterResources,
+    /// UnderMigration: error migration hasn't been completed yet.
+    UnderMigration,
 }
 
 impl Display for GeneralStep {
@@ -183,12 +173,13 @@ impl Display for GeneralStep {
                 GeneralStep::RetrieveClusterConfig => "retrieve-cluster-config",
                 GeneralStep::RetrieveClusterResources => "retrieve-cluster-resources",
                 GeneralStep::ValidateSystemRequirements => "validate-system-requirements",
+                GeneralStep::UnderMigration => "under-migration",
             }
         )
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// InfrastructureStep: represents an engine infrastructure step.
 pub enum InfrastructureStep {
     /// LoadConfiguration: first step in infrastructure, aiming to load all configuration (from Terraform, etc).
@@ -225,7 +216,7 @@ impl Display for InfrastructureStep {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// EnvironmentStep: represents an engine environment step.
 pub enum EnvironmentStep {
     /// LoadConfiguration: first step in environment, aiming to load all configuration (from Terraform, etc).
@@ -279,7 +270,7 @@ type TransmitterName = String;
 /// TransmitterType: represents a transmitter type.
 type TransmitterType = String; // TODO(benjaminch): makes it a real enum / type
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// Transmitter: represents the event's source caller (transmitter).
 pub enum Transmitter {
     /// BuildPlatform: platform aiming to build applications images.
@@ -328,7 +319,7 @@ impl Display for Transmitter {
 /// Region: represents event's cloud provider region.
 type Region = String;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// EventDetails: represents an event details, carrying all useful data such as Qovery identifiers, transmitter, stage etc.
 pub struct EventDetails {
     /// provider_kind: cloud provider name. an be set to None if not linked to any provider kind.
@@ -381,7 +372,7 @@ impl EventDetails {
 
     /// TODO(benjaminch): remove this dirty hack
     pub fn clone_changing_stage(event_details: EventDetails, stage: Stage) -> Self {
-        let mut event_details = event_details.clone();
+        let mut event_details = event_details;
         event_details.stage = stage;
         event_details
     }
@@ -436,18 +427,8 @@ mod tests {
                 EventMessageVerbosity::SafeOnly,
                 "safe".to_string(),
             ),
-            (
-                "safe".to_string(),
-                None,
-                EventMessageVerbosity::SafeOnly,
-                "safe".to_string(),
-            ),
-            (
-                "safe".to_string(),
-                None,
-                EventMessageVerbosity::FullDetails,
-                "safe".to_string(),
-            ),
+            ("safe".to_string(), None, EventMessageVerbosity::SafeOnly, "safe".to_string()),
+            ("safe".to_string(), None, EventMessageVerbosity::FullDetails, "safe".to_string()),
             (
                 "safe".to_string(),
                 Some("raw".to_string()),
@@ -494,30 +475,12 @@ mod tests {
                 Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
                 InfrastructureStep::LoadConfiguration.to_string(),
             ),
-            (
-                Stage::Environment(EnvironmentStep::Pause),
-                EnvironmentStep::Pause.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Resume),
-                EnvironmentStep::Resume.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Build),
-                EnvironmentStep::Build.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Delete),
-                EnvironmentStep::Delete.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Update),
-                EnvironmentStep::Update.to_string(),
-            ),
-            (
-                Stage::Environment(EnvironmentStep::Deploy),
-                EnvironmentStep::Deploy.to_string(),
-            ),
+            (Stage::Environment(EnvironmentStep::Pause), EnvironmentStep::Pause.to_string()),
+            (Stage::Environment(EnvironmentStep::Resume), EnvironmentStep::Resume.to_string()),
+            (Stage::Environment(EnvironmentStep::Build), EnvironmentStep::Build.to_string()),
+            (Stage::Environment(EnvironmentStep::Delete), EnvironmentStep::Delete.to_string()),
+            (Stage::Environment(EnvironmentStep::Update), EnvironmentStep::Update.to_string()),
+            (Stage::Environment(EnvironmentStep::Deploy), EnvironmentStep::Deploy.to_string()),
         ];
 
         for tc in test_cases {

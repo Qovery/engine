@@ -14,8 +14,8 @@ use rusoto_s3::{
 };
 use tokio::io;
 
-use crate::error::{EngineError, EngineErrorCause};
-use crate::models::{Context, StringPath};
+use crate::io_models::{Context, StringPath};
+use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::{Kind, ObjectStorage};
 use crate::runtime::block_on;
 
@@ -45,9 +45,9 @@ impl S3 {
             context,
             id,
             name,
-            access_key_id: access_key_id.to_string(),
-            secret_access_key: secret_access_key.to_string(),
-            region: region.clone(),
+            access_key_id,
+            secret_access_key,
+            region,
             bucket_versioning_activated,
             bucket_ttl_in_seconds,
         }
@@ -59,7 +59,7 @@ impl S3 {
 
     fn get_s3_client(&self) -> S3Client {
         let region = RusotoRegion::from_str(&self.region.to_aws_format())
-            .expect(format!("S3 region `{}` doesn't seems to be valid.", self.region.to_aws_format()).as_str());
+            .unwrap_or_else(|_| panic!("S3 region `{}` doesn't seems to be valid.", self.region.to_aws_format()));
         let client = Client::new_with(
             self.get_credentials(),
             HttpClient::new().expect("unable to create new Http client"),
@@ -68,9 +68,12 @@ impl S3 {
         S3Client::new_with_client(client, region)
     }
 
-    fn is_bucket_name_valid(bucket_name: &str) -> Result<(), Option<String>> {
+    fn is_bucket_name_valid(bucket_name: &str) -> Result<(), ObjectStorageError> {
         if bucket_name.is_empty() {
-            return Err(Some("bucket name cannot be empty".to_string()));
+            return Err(ObjectStorageError::InvalidBucketName {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: "bucket name cannot be empty".to_string(),
+            });
         }
 
         Ok(())
@@ -90,15 +93,8 @@ impl S3 {
         .is_ok()
     }
 
-    fn empty_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
-        if let Err(message) = S3::is_bucket_name_valid(bucket_name) {
-            let message = format!(
-                "While trying to empty S3 bucket, name `{}` is invalid: {}",
-                bucket_name,
-                message.unwrap_or_else(|| "unknown error".to_string())
-            );
-            return Err(self.engine_error(EngineErrorCause::Internal, message));
-        }
+    fn empty_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
+        let _ = S3::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
@@ -131,14 +127,10 @@ impl S3 {
                     ..Default::default()
                 }),
             ) {
-                let message = format!(
-                    "While trying to empty S3 bucket `{}` region `{}`, cannot delete content: {}",
-                    bucket_name,
-                    self.region.to_aws_format(),
-                    e
-                );
-                error!("{}", message);
-                return Err(self.engine_error(EngineErrorCause::Internal, message));
+                return Err(ObjectStorageError::CannotEmptyBucket {
+                    bucket_name: bucket_name.to_string(),
+                    raw_error_message: e.to_string(),
+                });
             }
         }
 
@@ -163,20 +155,13 @@ impl ObjectStorage for S3 {
         self.name.as_str()
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), ObjectStorageError> {
         // TODO check valid credentials
         Ok(())
     }
 
-    fn create_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
-        if let Err(message) = S3::is_bucket_name_valid(bucket_name) {
-            let message = format!(
-                "While trying to create S3 bucket, name `{}` is invalid: {}",
-                bucket_name,
-                message.unwrap_or_else(|| "unknown error".to_string())
-            );
-            return Err(self.engine_error(EngineErrorCause::Internal, message));
-        }
+    fn create_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
+        let _ = S3::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
@@ -192,14 +177,10 @@ impl ObjectStorage for S3 {
             }),
             ..Default::default()
         })) {
-            let message = format!(
-                "While trying to create S3 bucket, name `{}` region `{}`: {}",
-                bucket_name,
-                self.region.to_aws_format(),
-                e
-            );
-            error!("{}", message);
-            return Err(self.engine_error(EngineErrorCause::Internal, message));
+            return Err(ObjectStorageError::CannotCreateBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: e.to_string(),
+            });
         }
 
         let creation_date: DateTime<Utc> = Utc::now();
@@ -210,53 +191,35 @@ impl ObjectStorage for S3 {
                 tag_set: vec![
                     Tag {
                         key: "CreationDate".to_string(),
-                        value: format!("{}", creation_date.to_rfc3339()),
+                        value: creation_date.to_rfc3339(),
                     },
                     Tag {
                         key: "Ttl".to_string(),
-                        value: format!("{}", self.bucket_ttl_in_seconds.unwrap_or_else(|| 0).to_string()),
+                        value: format!("{}", self.bucket_ttl_in_seconds.unwrap_or(0)),
                     },
                 ],
             },
             ..Default::default()
         })) {
-            let message = format!(
-                "While trying to add tags on S3 bucket, name `{}` region `{}`: {}",
-                bucket_name,
-                self.region.to_aws_format(),
-                e
-            );
-            error!("{}", message);
-            return Err(self.engine_error(EngineErrorCause::Internal, message));
+            return Err(ObjectStorageError::CannotTagBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: e.to_string(),
+            });
         }
 
         if self.bucket_versioning_activated {
-            if let Err(e) = block_on(s3_client.put_bucket_versioning(PutBucketVersioningRequest {
+            // Not blocking if fails for the ttime being
+            let _ = block_on(s3_client.put_bucket_versioning(PutBucketVersioningRequest {
                 bucket: bucket_name.to_string(),
                 ..Default::default()
-            })) {
-                let message = format!(
-                    "While trying to activate versioning on S3 bucket, name `{}` region `{}`: {}",
-                    bucket_name,
-                    self.region.to_aws_format(),
-                    e
-                );
-                error!("{}", message);
-            }
+            }));
         }
 
         Ok(())
     }
 
-    fn delete_bucket(&self, bucket_name: &str) -> Result<(), EngineError> {
-        if let Err(message) = S3::is_bucket_name_valid(bucket_name) {
-            let message = format!(
-                "While trying to delete S3 bucket, name `{}` is invalid: {}",
-                bucket_name,
-                message.unwrap_or_else(|| "unknown error".to_string())
-            );
-            return Err(self.engine_error(EngineErrorCause::Internal, message));
-        }
+    fn delete_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
+        let _ = S3::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
@@ -270,47 +233,37 @@ impl ObjectStorage for S3 {
             expected_bucket_owner: None,
         })) {
             Ok(_) => Ok(()),
-            Err(e) => {
-                let message = format!(
-                    "While trying to delete S3 bucket, name `{}` region `{}`: {}",
-                    bucket_name,
-                    self.region.to_aws_format(),
-                    e
-                );
-                error!("{}", message);
-                Err(self.engine_error(EngineErrorCause::Internal, message))
-            }
+            Err(e) => Err(ObjectStorageError::CannotDeleteBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
         }
     }
 
-    fn get(&self, bucket_name: &str, object_key: &str, use_cache: bool) -> Result<(StringPath, File), EngineError> {
-        if let Err(message) = S3::is_bucket_name_valid(bucket_name) {
-            let message = format!(
-                "While trying to get object `{}` from bucket `{}`, bucket name is invalid: {}",
-                object_key,
-                bucket_name,
-                message.unwrap_or_else(|| "unknown error".to_string())
-            );
-            return Err(self.engine_error(EngineErrorCause::Internal, message));
-        }
+    fn get(
+        &self,
+        bucket_name: &str,
+        object_key: &str,
+        use_cache: bool,
+    ) -> Result<(StringPath, File), ObjectStorageError> {
+        let _ = S3::is_bucket_name_valid(bucket_name)?;
 
         let workspace_directory = crate::fs::workspace_directory(
             self.context().workspace_root_dir(),
             self.context().execution_id(),
             format!("object-storage/s3/{}", self.name()),
         )
-        .map_err(|err| self.engine_error(EngineErrorCause::Internal, err.to_string()))?;
+        .map_err(|err| ObjectStorageError::CannotGetWorkspace {
+            bucket_name: bucket_name.to_string(),
+            raw_error_message: err.to_string(),
+        })?;
 
         let file_path = format!("{}/{}/{}", workspace_directory, bucket_name, object_key);
 
         if use_cache {
             // does config file already exists?
-            match File::open(file_path.as_str()) {
-                Ok(file) => {
-                    debug!("{} cache hit", file_path.as_str());
-                    return Ok((file_path, file));
-                }
-                Err(_) => debug!("{} cache miss", file_path.as_str()),
+            if let Ok(file) = File::open(file_path.as_str()) {
+                return Ok((file_path, file));
             }
         }
 
@@ -344,76 +297,50 @@ impl ObjectStorage for S3 {
                             let file = File::open(path).unwrap();
                             Ok((file_path, file))
                         }
-                        Err(e) => {
-                            let message = format!("{}", e);
-                            error!("{}", message);
-                            Err(self.engine_error(EngineErrorCause::Internal, message))
-                        }
+                        Err(e) => Err(ObjectStorageError::CannotCreateFile {
+                            bucket_name: bucket_name.to_string(),
+                            raw_error_message: e.to_string(),
+                        }),
                     },
-                    Err(e) => {
-                        let message = format!("{}", e);
-                        error!("{}", message);
-                        Err(self.engine_error(EngineErrorCause::Internal, message))
-                    }
+                    Err(e) => Err(ObjectStorageError::CannotOpenFile {
+                        bucket_name: bucket_name.to_string(),
+                        raw_error_message: e.to_string(),
+                    }),
                 }
             }
-            Err(e) => {
-                let message = format!(
-                    "While trying to get object `{}` from bucket `{}` region `{}`, error: {}",
-                    object_key,
-                    bucket_name,
-                    self.region.to_aws_format(),
-                    e
-                );
-                error!("{}", message);
-                Err(self.engine_error(EngineErrorCause::Internal, message))
-            }
+            Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
+                bucket_name: bucket_name.to_string(),
+                file_name: object_key.to_string(),
+                raw_error_message: e.to_string(),
+            }),
         }
     }
 
-    fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), EngineError> {
-        if let Err(message) = S3::is_bucket_name_valid(bucket_name) {
-            let message = format!(
-                "While trying to get object `{}` from bucket `{}`, bucket name is invalid: {}",
-                object_key,
-                bucket_name,
-                message.unwrap_or_else(|| "unknown error".to_string())
-            );
-            return Err(self.engine_error(EngineErrorCause::Internal, message));
-        }
+    fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), ObjectStorageError> {
+        let _ = S3::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
         match block_on(s3_client.put_object(PutObjectRequest {
             bucket: bucket_name.to_string(),
             key: object_key.to_string(),
-            body: Some(StreamingBody::from(match std::fs::read(file_path.clone()) {
+            body: Some(StreamingBody::from(match std::fs::read(file_path) {
                 Ok(x) => x,
                 Err(e) => {
-                    return Err(self.engine_error(
-                        EngineErrorCause::Internal,
-                        format!(
-                            "error while uploading object {} to bucket {}. {}",
-                            object_key, bucket_name, e
-                        ),
-                    ))
+                    return Err(ObjectStorageError::CannotReadFile {
+                        bucket_name: bucket_name.to_string(),
+                        raw_error_message: e.to_string(),
+                    })
                 }
             })),
             expected_bucket_owner: None,
             ..Default::default()
         })) {
             Ok(_) => Ok(()),
-            Err(e) => {
-                let message = format!(
-                    "While trying to put object `{}` from bucket `{}` region `{}`, error: {}",
-                    object_key,
-                    bucket_name,
-                    self.region.to_aws_format(),
-                    e
-                );
-                error!("{}", message);
-                Err(self.engine_error(EngineErrorCause::Internal, message))
-            }
+            Err(e) => Err(ObjectStorageError::CannotUploadFile {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
         }
     }
 }
@@ -424,7 +351,7 @@ mod tests {
 
     struct TestCase<'a> {
         bucket_name_input: &'a str,
-        expected_output: Result<(), Option<String>>,
+        expected_output: Result<(), ObjectStorageError>,
         description: &'a str,
     }
 
@@ -434,7 +361,10 @@ mod tests {
         let test_cases: Vec<TestCase> = vec![
             TestCase {
                 bucket_name_input: "",
-                expected_output: Err(Some(String::from("bucket name cannot be empty"))),
+                expected_output: Err(ObjectStorageError::InvalidBucketName {
+                    bucket_name: "".to_string(),
+                    raw_error_message: "bucket name cannot be empty".to_string(),
+                }),
                 description: "bucket name is empty",
             },
             TestCase {

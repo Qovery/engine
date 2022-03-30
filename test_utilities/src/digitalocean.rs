@@ -1,21 +1,24 @@
 use const_format::formatcp;
-use qovery_engine::build_platform::Image;
+use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DoksOptions;
 use qovery_engine::cloud_provider::digitalocean::network::vpc::VpcInitKind;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::models::NodeGroups;
-use qovery_engine::cloud_provider::TerraformStateCredentials;
+use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::docr::DOCR;
-use qovery_engine::engine::Engine;
-use qovery_engine::error::EngineError;
-use qovery_engine::models::{Context, Environment};
+use qovery_engine::engine::EngineConfig;
+use qovery_engine::io_models::{Context, EnvironmentRequest, NoOpProgressListener};
+use std::sync::Arc;
 
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::common::{Cluster, ClusterDomain};
+use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
-use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
+use qovery_engine::cloud_provider::Kind::Do;
+use qovery_engine::dns_provider::DnsProvider;
+use qovery_engine::errors::EngineError;
 use qovery_engine::logger::Logger;
+use qovery_engine::models::digital_ocean::DoRegion;
 
 pub const DO_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const DO_KUBERNETES_MINOR_VERSION: u8 = 20;
@@ -33,29 +36,60 @@ pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
     DOCR::new(
         context.clone(),
         DOCR_ID,
-        "default-docr-registry-qovery-do-test",
+        DOCR_ID,
         secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
+        Arc::new(Box::new(NoOpProgressListener {})),
+    )
+    .unwrap()
+}
+
+pub fn do_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
+    DO::docker_cr_engine(
+        &context,
+        logger,
+        DO_TEST_REGION.to_string().as_str(),
+        DO_KUBERNETES_VERSION.to_string(),
+        &ClusterDomain::Default,
+        None,
     )
 }
 
 impl Cluster<DO, DoksOptions> for DO {
-    fn docker_cr_engine(context: &Context, logger: Box<dyn Logger>) -> Engine {
+    fn docker_cr_engine(
+        context: &Context,
+        logger: Box<dyn Logger>,
+        localisation: &str,
+        kubernetes_version: String,
+        cluster_domain: &ClusterDomain,
+        vpc_network_mode: Option<VpcQoveryNetworkMode>,
+    ) -> EngineConfig {
         // use DigitalOcean Container Registry
         let container_registry = Box::new(container_registry_digital_ocean(context));
         // use LocalDocker
-        let build_platform = Box::new(build_platform_local_docker(context));
+        let build_platform = Box::new(build_platform_local_docker(context, logger.clone()));
+
         // use Digital Ocean
-        let cloud_provider = DO::cloud_provider(context);
+        let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(Self::cloud_provider(context));
+        let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_cloudflare(context, cluster_domain));
 
-        let dns_provider = Box::new(dns_provider_cloudflare(&context, ClusterDomain::Default));
+        let k = get_environment_test_kubernetes(
+            Do,
+            context,
+            cloud_provider.clone(),
+            dns_provider.clone(),
+            logger.clone(),
+            localisation,
+            kubernetes_version.as_str(),
+            vpc_network_mode,
+        );
 
-        Engine::new(
+        EngineConfig::new(
             context.clone(),
             build_platform,
             container_registry,
             cloud_provider,
             dns_provider,
-            logger,
+            k,
         )
     }
 
@@ -129,11 +163,11 @@ impl Cluster<DO, DoksOptions> for DO {
 
 pub fn clean_environments(
     context: &Context,
-    environments: Vec<Environment>,
+    _environments: Vec<EnvironmentRequest>,
     secrets: FuncTestsSecrets,
     _region: DoRegion,
 ) -> Result<(), EngineError> {
-    let do_cr = DOCR::new(
+    let _do_cr = DOCR::new(
         context.clone(),
         "test",
         "test",
@@ -141,16 +175,26 @@ pub fn clean_environments(
             .DIGITAL_OCEAN_TOKEN
             .as_ref()
             .expect("DIGITAL_OCEAN_TOKEN is not set in secrets"),
+        Arc::new(Box::new(NoOpProgressListener {})),
     );
 
+    // FIXME: re-enable it, or let pleco do its job ?
+    /*
     // delete images created in registry
+    let registry_url = do_cr.login()?;
     for env in environments.iter() {
-        for image in env.applications.iter().map(|a| a.to_image()).collect::<Vec<Image>>() {
-            if let Err(e) = do_cr.delete_image(&image) {
-                return Err(e);
-            }
+        for image in env
+            .applications
+            .iter()
+            .map(|a| a.to_image(&registry_url))
+            .collect::<Vec<Image>>()
+        {
+            //if let Err(e) = do_cr.delete_registry(&image.name) {
+            //    return Err(e);
+            //}
         }
     }
+     */
 
     Ok(())
 }

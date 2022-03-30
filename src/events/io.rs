@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use crate::cloud_provider::io::Kind;
 use crate::errors::io::EngineError;
 use crate::events;
@@ -7,72 +9,42 @@ use serde_derive::{Deserialize, Serialize};
 #[serde(tag = "type")]
 #[serde(rename_all = "lowercase")]
 pub enum EngineEvent {
+    Debug {
+        details: EventDetails,
+        message: EventMessage,
+    },
+    Info {
+        details: EventDetails,
+        message: EventMessage,
+    },
+    Warning {
+        details: EventDetails,
+        message: EventMessage,
+    },
     Error {
         error: EngineError,
-    },
-    Waiting {
-        details: EventDetails,
-        message: EventMessage,
-    },
-    Deploying {
-        details: EventDetails,
-        message: EventMessage,
-    },
-    Pausing {
-        details: EventDetails,
-        message: EventMessage,
-    },
-    Deleting {
-        details: EventDetails,
-        message: EventMessage,
-    },
-    Deployed {
-        details: EventDetails,
-        message: EventMessage,
-    },
-    Paused {
-        details: EventDetails,
-        message: EventMessage,
-    },
-    Deleted {
-        details: EventDetails,
-        message: EventMessage,
+        message: Option<EventMessage>,
     },
 }
 
 impl From<events::EngineEvent> for EngineEvent {
     fn from(event: events::EngineEvent) -> Self {
         match event {
-            events::EngineEvent::Error(e) => EngineEvent::Error {
+            events::EngineEvent::Debug(d, m) => EngineEvent::Debug {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
+            events::EngineEvent::Info(d, m) => EngineEvent::Info {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
+            events::EngineEvent::Warning(d, m) => EngineEvent::Warning {
+                details: EventDetails::from(d),
+                message: EventMessage::from(m),
+            },
+            events::EngineEvent::Error(e, m) => EngineEvent::Error {
                 error: EngineError::from(e),
-            },
-            events::EngineEvent::Waiting(d, m) => EngineEvent::Waiting {
-                details: EventDetails::from(d),
-                message: EventMessage::from(m),
-            },
-            events::EngineEvent::Deploying(d, m) => EngineEvent::Deploying {
-                details: EventDetails::from(d),
-                message: EventMessage::from(m),
-            },
-            events::EngineEvent::Pausing(d, m) => EngineEvent::Pausing {
-                details: EventDetails::from(d),
-                message: EventMessage::from(m),
-            },
-            events::EngineEvent::Deleting(d, m) => EngineEvent::Deleting {
-                details: EventDetails::from(d),
-                message: EventMessage::from(m),
-            },
-            events::EngineEvent::Deployed(d, m) => EngineEvent::Deployed {
-                details: EventDetails::from(d),
-                message: EventMessage::from(m),
-            },
-            events::EngineEvent::Paused(d, m) => EngineEvent::Paused {
-                details: EventDetails::from(d),
-                message: EventMessage::from(m),
-            },
-            events::EngineEvent::Deleted(d, m) => EngineEvent::Deleted {
-                details: EventDetails::from(d),
-                message: EventMessage::from(m),
+                message: m.map(EventMessage::from),
             },
         }
     }
@@ -118,6 +90,7 @@ pub enum GeneralStep {
     RetrieveClusterConfig,
     RetrieveClusterResources,
     ValidateSystemRequirements,
+    UnderMigration,
 }
 
 impl From<events::GeneralStep> for GeneralStep {
@@ -126,6 +99,7 @@ impl From<events::GeneralStep> for GeneralStep {
             events::GeneralStep::RetrieveClusterConfig => GeneralStep::RetrieveClusterConfig,
             events::GeneralStep::RetrieveClusterResources => GeneralStep::RetrieveClusterResources,
             events::GeneralStep::ValidateSystemRequirements => GeneralStep::ValidateSystemRequirements,
+            events::GeneralStep::UnderMigration => GeneralStep::UnderMigration,
         }
     }
 }
@@ -268,10 +242,7 @@ pub struct EventDetails {
 
 impl From<events::EventDetails> for EventDetails {
     fn from(details: events::EventDetails) -> Self {
-        let provider_kind = match details.provider_kind {
-            Some(kind) => Some(Kind::from(kind)),
-            None => None,
-        };
+        let provider_kind = details.provider_kind.map(Kind::from);
         EventDetails {
             provider_kind,
             organisation_id: details.organisation_id.to_string(),

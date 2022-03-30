@@ -2,52 +2,73 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::net::Ipv4Addr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use git2::{Cred, CredentialType, Error};
 use itertools::Itertools;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use url::Url;
 
-use crate::build_platform::{Build, BuildOptions, Credentials, GitRepository, Image, SshKey};
-use crate::cloud_provider::aws::databases::mongodb::MongoDB;
-use crate::cloud_provider::aws::databases::mysql::MySQL;
-use crate::cloud_provider::aws::databases::postgresql::PostgreSQL;
-use crate::cloud_provider::aws::databases::redis::Redis;
-use crate::cloud_provider::service::{DatabaseOptions, StatefulService, StatelessService};
+use crate::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
+use crate::cloud_provider::aws::databases::mongodb::MongoDbAws;
+use crate::cloud_provider::aws::databases::mysql::MySQLAws;
+use crate::cloud_provider::aws::databases::postgresql::PostgreSQLAws;
+use crate::cloud_provider::aws::databases::redis::RedisAws;
+use crate::cloud_provider::digitalocean::databases::mongodb::MongoDo;
+use crate::cloud_provider::digitalocean::databases::mysql::MySQLDo;
+use crate::cloud_provider::digitalocean::databases::postgresql::PostgresDo;
+use crate::cloud_provider::digitalocean::databases::redis::RedisDo;
+use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::scaleway::databases::mongodb::MongoDbScw;
+use crate::cloud_provider::scaleway::databases::mysql::MySQLScw;
+use crate::cloud_provider::scaleway::databases::postgresql::PostgresScw;
+use crate::cloud_provider::scaleway::databases::redis::RedisScw;
+use crate::cloud_provider::service::{DatabaseOptions, RouterService};
 use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
-use crate::git;
-use crate::utilities::get_image_tag;
+use crate::cmd::docker::Docker;
+use crate::container_registry::ContainerRegistryInfo;
+use crate::logger::Logger;
+use crate::models;
+use crate::models::application::{ApplicationError, ApplicationService};
+use crate::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
+use crate::models::digital_ocean::{DoAppExtraSettings, DoRouterExtraSettings, DoStorageType};
+use crate::models::router::RouterError;
+use crate::models::scaleway::{ScwAppExtraSettings, ScwRouterExtraSettings, ScwStorageType};
+use crate::models::types::{AWS, DO, SCW};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct QoveryIdentifier {
-    raw: String,
+    raw_long_id: String,
     short: String,
 }
 
 impl QoveryIdentifier {
-    pub fn new(raw: String) -> Self {
+    pub fn new(raw_long_id: String, raw_short_id: String) -> Self {
         QoveryIdentifier {
-            raw: raw.to_string(),
-            short: QoveryIdentifier::extract_short(raw.as_str()),
+            raw_long_id,
+            short: raw_short_id,
         }
     }
 
+    pub fn new_from_long_id(raw_long_id: String) -> Self {
+        QoveryIdentifier::new(raw_long_id.to_string(), QoveryIdentifier::extract_short(raw_long_id.as_str()))
+    }
+
     pub fn new_random() -> Self {
-        Self::new(uuid::Uuid::new_v4().to_string())
+        Self::new_from_long_id(uuid::Uuid::new_v4().to_string())
     }
 
     fn extract_short(raw: &str) -> String {
-        let max_execution_id_chars: usize = 7;
-        match raw.char_indices().nth(max_execution_id_chars) {
+        let max_execution_id_chars: usize = 8;
+        match raw.char_indices().nth(max_execution_id_chars - 1) {
             None => raw.to_string(),
-            Some((idx, _)) => raw[..idx].to_string(),
+            Some((_, _)) => raw[..max_execution_id_chars].to_string(),
         }
     }
 
@@ -58,26 +79,18 @@ impl QoveryIdentifier {
 
 impl From<String> for QoveryIdentifier {
     fn from(s: String) -> Self {
-        QoveryIdentifier::new(s)
+        QoveryIdentifier::new_from_long_id(s)
     }
 }
 
 impl Display for QoveryIdentifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.raw.as_str())
+        f.write_str(self.raw_long_id.as_str())
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-pub enum EnvironmentAction {
-    Environment(TargetEnvironment),
-}
-
-pub type TargetEnvironment = Environment;
-pub type FailoverEnvironment = Environment;
-
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-pub struct Environment {
+pub struct EnvironmentRequest {
     pub execution_id: String,
     pub id: String,
     pub owner_id: String,
@@ -90,60 +103,51 @@ pub struct Environment {
     pub clone_from_environment_id: Option<String>,
 }
 
-impl Environment {
-    pub fn is_valid(&self) -> Result<(), EnvironmentError> {
-        Ok(())
-    }
-
-    pub fn to_qe_environment(
+impl EnvironmentRequest {
+    pub fn to_environment_domain(
         &self,
         context: &Context,
-        built_applications: &Vec<Box<dyn crate::cloud_provider::service::Application>>,
         cloud_provider: &dyn CloudProvider,
-    ) -> crate::cloud_provider::environment::Environment {
-        let applications = self
-            .applications
-            .iter()
-            .map(|x| match built_applications.iter().find(|y| x.id.as_str() == y.id()) {
-                Some(app) => x.to_stateless_service(context, app.image().clone(), cloud_provider),
-                _ => x.to_stateless_service(context, x.to_image(), cloud_provider),
-            })
-            .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
-            .collect::<Vec<_>>();
+        container_registry: &ContainerRegistryInfo,
+        logger: Box<dyn Logger>,
+    ) -> Result<Environment, ApplicationError> {
+        let mut applications = Vec::with_capacity(self.applications.len());
+        for app in &self.applications {
+            match app.to_application_domain(context, app.to_build(container_registry), cloud_provider, logger.clone()) {
+                Ok(app) => applications.push(app),
+                Err(err) => {
+                    return Err(err);
+                }
+            }
+        }
 
-        let routers = self
-            .routers
-            .iter()
-            .map(|x| x.to_stateless_service(context, cloud_provider))
-            .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
-            .collect::<Vec<_>>();
-
-        // orders is important, first external services, then applications and then routers.
-        let mut stateless_services = applications;
-        // routers are deployed lastly to avoid to be blacklisted if we request TLS certificates
-        // while an app does not start for some reason.
-        stateless_services.extend(routers);
+        let mut routers = Vec::with_capacity(self.routers.len());
+        for router in &self.routers {
+            match router.to_router_domain(context, cloud_provider, logger.clone()) {
+                Ok(router) => routers.push(router),
+                Err(err) => {
+                    //FIXME: propagate the correct Error
+                    return Err(ApplicationError::InvalidConfig(format!("{}", err)));
+                }
+            }
+        }
 
         let databases = self
             .databases
             .iter()
-            .map(|x| x.to_stateful_service(context, cloud_provider))
-            .filter(|x| x.is_some())
-            .map(|x| x.unwrap())
+            .filter_map(|x| x.to_database_domain(context, cloud_provider, logger.clone()))
             .collect::<Vec<_>>();
 
-        let stateful_services = databases;
-
-        crate::cloud_provider::environment::Environment::new(
+        Ok(Environment::new(
             self.id.as_str(),
             self.project_id.as_str(),
             self.owner_id.as_str(),
             self.organization_id.as_str(),
-            stateless_services,
-            stateful_services,
-        )
+            self.action.to_service_action(),
+            applications,
+            routers,
+            databases,
+        ))
     }
 }
 
@@ -216,17 +220,18 @@ pub struct Application {
 }
 
 impl Application {
-    pub fn to_application<'a>(
+    pub fn to_application_domain(
         &self,
         context: &Context,
-        image: &Image,
+        build: Build,
         cloud_provider: &dyn CloudProvider,
-    ) -> Option<Box<(dyn crate::cloud_provider::service::Application)>> {
+        logger: Box<dyn Logger>,
+    ) -> Result<Box<dyn ApplicationService>, ApplicationError> {
         let environment_variables = to_environment_variable(&self.environment_vars);
         let listeners = cloud_provider.listeners().clone();
 
         match cloud_provider.kind() {
-            CPKind::Aws => Some(Box::new(crate::cloud_provider::aws::application::Application::new(
+            CPKind::Aws => Ok(Box::new(models::application::Application::<AWS>::new(
                 context.clone(),
                 self.id.as_str(),
                 self.action.to_service_action(),
@@ -238,63 +243,14 @@ impl Application {
                 self.min_instances,
                 self.max_instances,
                 self.start_timeout_in_seconds,
-                image.clone(),
+                build,
                 self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                AwsAppExtraSettings {},
                 listeners,
-            ))),
-            CPKind::Do => Some(Box::new(
-                crate::cloud_provider::digitalocean::application::Application::new(
-                    context.clone(),
-                    self.id.as_str(),
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    self.ports.clone(),
-                    self.total_cpus.clone(),
-                    self.cpu_burst.clone(),
-                    self.total_ram_in_mib,
-                    self.min_instances,
-                    self.max_instances,
-                    self.start_timeout_in_seconds,
-                    image.clone(),
-                    self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
-                    environment_variables,
-                    listeners,
-                ),
-            )),
-            CPKind::Scw => Some(Box::new(
-                crate::cloud_provider::scaleway::application::Application::new(
-                    context.clone(),
-                    self.id.as_str(),
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    self.ports.clone(),
-                    self.total_cpus.clone(),
-                    self.cpu_burst.clone(),
-                    self.total_ram_in_mib,
-                    self.min_instances,
-                    self.max_instances,
-                    self.start_timeout_in_seconds,
-                    image.clone(),
-                    self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
-                    environment_variables,
-                    listeners,
-                ),
-            )),
-        }
-    }
-
-    pub fn to_stateless_service(
-        &self,
-        context: &Context,
-        image: Image,
-        cloud_provider: &dyn CloudProvider,
-    ) -> Option<Box<dyn StatelessService>> {
-        let environment_variables = to_environment_variable(&self.environment_vars);
-        let listeners = cloud_provider.listeners().clone();
-
-        match cloud_provider.kind() {
-            CPKind::Aws => Some(Box::new(crate::cloud_provider::aws::application::Application::new(
+                logger.clone(),
+            )?)),
+            CPKind::Do => Ok(Box::new(models::application::Application::<DO>::new(
                 context.clone(),
                 self.id.as_str(),
                 self.action.to_service_action(),
@@ -306,98 +262,49 @@ impl Application {
                 self.min_instances,
                 self.max_instances,
                 self.start_timeout_in_seconds,
-                image,
-                self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
+                build,
+                self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                DoAppExtraSettings {},
                 listeners,
-            ))),
-            CPKind::Do => Some(Box::new(
-                crate::cloud_provider::digitalocean::application::Application::new(
-                    context.clone(),
-                    self.id.as_str(),
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    self.ports.clone(),
-                    self.total_cpus.clone(),
-                    self.cpu_burst.clone(),
-                    self.total_ram_in_mib,
-                    self.min_instances,
-                    self.max_instances,
-                    self.start_timeout_in_seconds,
-                    image,
-                    self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
-                    environment_variables,
-                    listeners,
-                ),
-            )),
-            CPKind::Scw => Some(Box::new(
-                crate::cloud_provider::scaleway::application::Application::new(
-                    context.clone(),
-                    self.id.as_str(),
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    self.ports.clone(),
-                    self.total_cpus.clone(),
-                    self.cpu_burst.clone(),
-                    self.total_ram_in_mib,
-                    self.min_instances,
-                    self.max_instances,
-                    self.start_timeout_in_seconds,
-                    image,
-                    self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
-                    environment_variables,
-                    listeners,
-                ),
-            )),
+                logger.clone(),
+            )?)),
+            CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
+                context.clone(),
+                self.id.as_str(),
+                self.action.to_service_action(),
+                self.name.as_str(),
+                self.ports.clone(),
+                self.total_cpus.clone(),
+                self.cpu_burst.clone(),
+                self.total_ram_in_mib,
+                self.min_instances,
+                self.max_instances,
+                self.start_timeout_in_seconds,
+                build,
+                self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
+                environment_variables,
+                ScwAppExtraSettings {},
+                listeners,
+                logger.clone(),
+            )?)),
         }
     }
 
-    pub fn to_image(&self) -> Image {
-        self.to_image_with_commit(&self.commit_id)
-    }
-
-    pub fn to_image_from_parent_commit<P>(&self, clone_repo_into_dir: P) -> Result<Option<Image>, Error>
-    where
-        P: AsRef<Path>,
-    {
-        let parent_commit_id = git::get_parent_commit_id(
-            self.git_url.as_str(),
-            self.commit_id.as_str(),
-            clone_repo_into_dir,
-            &|_| match &self.git_credentials {
-                None => vec![],
-                Some(creds) => vec![(
-                    CredentialType::USER_PASS_PLAINTEXT,
-                    Cred::userpass_plaintext(creds.login.as_str(), creds.access_token.as_str()).unwrap(),
-                )],
-            },
-        )?;
-
-        Ok(match parent_commit_id {
-            Some(id) => Some(self.to_image_with_commit(&id)),
-            None => None,
-        })
-    }
-
-    pub fn to_image_with_commit(&self, commit_id: &String) -> Image {
+    fn to_image(&self, cr_info: &ContainerRegistryInfo) -> Image {
         Image {
             application_id: self.id.clone(),
-            name: self.name.clone(),
-            tag: get_image_tag(
-                &self.root_path,
-                &self.dockerfile_path,
-                &self.environment_vars,
-                commit_id,
-            ),
+            name: (cr_info.get_image_name)(&self.name),
+            tag: "".to_string(), // It needs to be compute after creation
             commit_id: self.commit_id.clone(),
-            registry_name: None,
-            registry_secret: None,
-            registry_url: None,
-            registry_docker_json_config: None,
+            registry_name: cr_info.registry_name.clone(),
+            registry_url: cr_info.endpoint.clone(),
+            registry_docker_json_config: cr_info.registry_docker_json_config.clone(),
+            repository_name: (cr_info.get_repository_name)(&self.name),
         }
     }
 
-    pub fn to_build(&self) -> Build {
+    pub fn to_build(&self, registry_url: &ContainerRegistryInfo) -> Build {
         // Retrieve ssh keys from env variables
         const ENV_GIT_PREFIX: &str = "GIT_SSH_KEY";
         let env_ssh_keys: Vec<(String, String)> = self
@@ -425,18 +332,14 @@ impl Application {
             let passphrase = self
                 .environment_vars
                 .get(&ssh_key_name.replace(ENV_GIT_PREFIX, "GIT_SSH_PASSPHRASE"))
-                .map(|val| base64::decode(val).ok())
-                .flatten()
-                .map(|str| String::from_utf8(str).ok())
-                .flatten();
+                .and_then(|val| base64::decode(val).ok())
+                .and_then(|str| String::from_utf8(str).ok());
 
             let public_key = self
                 .environment_vars
                 .get(&ssh_key_name.replace(ENV_GIT_PREFIX, "GIT_SSH_PUBLIC_KEY"))
-                .map(|val| base64::decode(val).ok())
-                .flatten()
-                .map(|str| String::from_utf8(str).ok())
-                .flatten();
+                .and_then(|val| base64::decode(val).ok())
+                .and_then(|str| String::from_utf8(str).ok());
 
             ssh_keys.push(SshKey {
                 private_key,
@@ -445,31 +348,59 @@ impl Application {
             });
         }
 
-        Build {
+        // Convert our root path to an relative path to be able to append them correctly
+        let root_path = if Path::new(&self.root_path).is_absolute() {
+            PathBuf::from(self.root_path.trim_start_matches('/'))
+        } else {
+            PathBuf::from(&self.root_path)
+        };
+        assert!(root_path.is_relative(), "root path is not a relative path");
+
+        let dockerfile_path = self.dockerfile_path.as_ref().map(|path| {
+            if Path::new(&path).is_absolute() {
+                root_path.join(path.trim_start_matches('/'))
+            } else {
+                root_path.join(&path)
+            }
+        });
+
+        //FIXME: Return a result the function
+        let url = Url::parse(&self.git_url).unwrap_or_else(|_| Url::parse("https://invalid-git-url.com").unwrap());
+
+        let mut disable_build_cache = false;
+        let mut build = Build {
             git_repository: GitRepository {
-                url: self.git_url.clone(),
+                url,
                 credentials: self.git_credentials.as_ref().map(|credentials| Credentials {
                     login: credentials.login.clone(),
                     password: credentials.access_token.clone(),
                 }),
                 ssh_keys,
                 commit_id: self.commit_id.clone(),
-                dockerfile_path: self.dockerfile_path.clone(),
-                root_path: self.root_path.clone(),
+                dockerfile_path,
+                root_path,
                 buildpack_language: self.buildpack_language.clone(),
             },
-            image: self.to_image(),
-            options: BuildOptions {
-                environment_variables: self
-                    .environment_vars
-                    .iter()
-                    .map(|(k, v)| crate::build_platform::EnvironmentVariable {
-                        key: k.clone(),
-                        value: String::from_utf8_lossy(&base64::decode(v.as_bytes()).unwrap_or(vec![])).into_owned(),
-                    })
-                    .collect::<Vec<_>>(),
-            },
-        }
+            image: self.to_image(registry_url),
+            environment_variables: self
+                .environment_vars
+                .iter()
+                .filter_map(|(k, v)| {
+                    // Remove special vars
+                    let v = String::from_utf8_lossy(&base64::decode(v.as_bytes()).unwrap_or_default()).into_owned();
+                    if k == "QOVERY_DISABLE_BUILD_CACHE" && v.to_lowercase() == "true" {
+                        disable_build_cache = true;
+                        return None;
+                    }
+
+                    Some((k.clone(), v))
+                })
+                .collect::<BTreeMap<_, _>>(),
+            disable_cache: disable_build_cache,
+        };
+
+        build.compute_image_tag();
+        build
     }
 }
 
@@ -518,17 +449,15 @@ pub enum StorageType {
 }
 
 impl Storage {
-    pub fn to_aws_storage(
-        &self,
-    ) -> crate::cloud_provider::models::Storage<crate::cloud_provider::aws::application::StorageType> {
+    pub fn to_aws_storage(&self) -> crate::cloud_provider::models::Storage<AwsStorageType> {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             name: self.name.clone(),
             storage_type: match self.storage_type {
-                StorageType::SlowHdd => crate::cloud_provider::aws::application::StorageType::SC1,
-                StorageType::Hdd => crate::cloud_provider::aws::application::StorageType::ST1,
-                StorageType::Ssd => crate::cloud_provider::aws::application::StorageType::GP2,
-                StorageType::FastSsd => crate::cloud_provider::aws::application::StorageType::IO1,
+                StorageType::SlowHdd => AwsStorageType::SC1,
+                StorageType::Hdd => AwsStorageType::ST1,
+                StorageType::Ssd => AwsStorageType::GP2,
+                StorageType::FastSsd => AwsStorageType::IO1,
             },
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
@@ -536,26 +465,22 @@ impl Storage {
         }
     }
 
-    pub fn to_do_storage(
-        &self,
-    ) -> crate::cloud_provider::models::Storage<crate::cloud_provider::digitalocean::application::StorageType> {
+    pub fn to_do_storage(&self) -> crate::cloud_provider::models::Storage<DoStorageType> {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             name: self.name.clone(),
-            storage_type: crate::cloud_provider::digitalocean::application::StorageType::Standard,
+            storage_type: DoStorageType::Standard,
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,
         }
     }
 
-    pub fn to_scw_storage(
-        &self,
-    ) -> crate::cloud_provider::models::Storage<crate::cloud_provider::scaleway::application::StorageType> {
+    pub fn to_scw_storage(&self) -> crate::cloud_provider::models::Storage<ScwStorageType> {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
             name: self.name.clone(),
-            storage_type: crate::cloud_provider::scaleway::application::StorageType::BlockSsd,
+            storage_type: ScwStorageType::BlockSsd,
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,
@@ -579,11 +504,12 @@ pub struct Router {
 }
 
 impl Router {
-    pub fn to_stateless_service(
+    pub fn to_router_domain(
         &self,
         context: &Context,
         cloud_provider: &dyn CloudProvider,
-    ) -> Option<Box<dyn StatelessService>> {
+        logger: Box<dyn Logger>,
+    ) -> Result<Box<dyn RouterService>, RouterError> {
         let custom_domains = self
             .custom_domains
             .iter()
@@ -606,7 +532,7 @@ impl Router {
 
         match cloud_provider.kind() {
             CPKind::Aws => {
-                let router: Box<dyn StatelessService> = Box::new(crate::cloud_provider::aws::router::Router::new(
+                let router = Box::new(models::router::Router::<AWS>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.name.as_str(),
@@ -615,27 +541,14 @@ impl Router {
                     custom_domains,
                     routes,
                     self.sticky_sessions_enabled,
+                    AwsRouterExtraSettings {},
                     listeners,
-                ));
-                Some(router)
+                    logger,
+                )?);
+                Ok(router)
             }
             CPKind::Do => {
-                let router: Box<dyn StatelessService> =
-                    Box::new(crate::cloud_provider::digitalocean::router::Router::new(
-                        context.clone(),
-                        self.id.as_str(),
-                        self.name.as_str(),
-                        self.action.to_service_action(),
-                        self.default_domain.as_str(),
-                        custom_domains,
-                        routes,
-                        self.sticky_sessions_enabled,
-                        listeners,
-                    ));
-                Some(router)
-            }
-            CPKind::Scw => {
-                let router: Box<dyn StatelessService> = Box::new(crate::cloud_provider::scaleway::router::Router::new(
+                let router = Box::new(models::router::Router::<DO>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.name.as_str(),
@@ -644,9 +557,27 @@ impl Router {
                     custom_domains,
                     routes,
                     self.sticky_sessions_enabled,
+                    DoRouterExtraSettings {},
                     listeners,
-                ));
-                Some(router)
+                    logger,
+                )?);
+                Ok(router)
+            }
+            CPKind::Scw => {
+                let router = Box::new(models::router::Router::<SCW>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.name.as_str(),
+                    self.action.to_service_action(),
+                    self.default_domain.as_str(),
+                    custom_domains,
+                    routes,
+                    self.sticky_sessions_enabled,
+                    ScwRouterExtraSettings {},
+                    listeners,
+                    logger,
+                )?);
+                Ok(router)
             }
         }
     }
@@ -697,11 +628,12 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn to_stateful_service(
+    pub fn to_database_domain(
         &self,
         context: &Context,
         cloud_provider: &dyn CloudProvider,
-    ) -> Option<Box<dyn StatefulService>> {
+        logger: Box<dyn Logger>,
+    ) -> Option<Box<dyn crate::cloud_provider::service::Database>> {
         let database_options = DatabaseOptions {
             mode: self.mode.clone(),
             login: self.username.clone(),
@@ -721,7 +653,7 @@ impl Database {
         match cloud_provider.kind() {
             CPKind::Aws => match self.kind {
                 DatabaseKind::Postgresql => {
-                    let db: Box<dyn StatefulService> = Box::new(PostgreSQL::new(
+                    let db = Box::new(PostgreSQLAws::new(
                         context.clone(),
                         self.id.as_str(),
                         self.action.to_service_action(),
@@ -734,12 +666,13 @@ impl Database {
                         self.database_instance_type.as_str(),
                         database_options,
                         listeners,
+                        logger,
                     ));
 
                     Some(db)
                 }
                 DatabaseKind::Mysql => {
-                    let db: Box<dyn StatefulService> = Box::new(MySQL::new(
+                    let db = Box::new(MySQLAws::new(
                         context.clone(),
                         self.id.as_str(),
                         self.action.to_service_action(),
@@ -752,12 +685,13 @@ impl Database {
                         self.database_instance_type.as_str(),
                         database_options,
                         listeners,
+                        logger,
                     ));
 
                     Some(db)
                 }
                 DatabaseKind::Mongodb => {
-                    let db: Box<dyn StatefulService> = Box::new(MongoDB::new(
+                    let db = Box::new(MongoDbAws::new(
                         context.clone(),
                         self.id.as_str(),
                         self.action.to_service_action(),
@@ -770,12 +704,13 @@ impl Database {
                         self.database_instance_type.as_str(),
                         database_options,
                         listeners,
+                        logger,
                     ));
 
                     Some(db)
                 }
                 DatabaseKind::Redis => {
-                    let db: Box<dyn StatefulService> = Box::new(Redis::new(
+                    let db = Box::new(RedisAws::new(
                         context.clone(),
                         self.id.as_str(),
                         self.action.to_service_action(),
@@ -788,6 +723,7 @@ impl Database {
                         self.database_instance_type.as_str(),
                         database_options,
                         listeners,
+                        logger,
                     ));
 
                     Some(db)
@@ -795,79 +731,78 @@ impl Database {
             },
             CPKind::Do => match self.kind {
                 DatabaseKind::Postgresql => {
-                    let db: Box<dyn StatefulService> = Box::new(
-                        crate::cloud_provider::digitalocean::databases::postgresql::PostgreSQL::new(
-                            context.clone(),
-                            self.id.as_str(),
-                            self.action.to_service_action(),
-                            self.name.as_str(),
-                            self.version.as_str(),
-                            self.fqdn.as_str(),
-                            self.fqdn_id.as_str(),
-                            self.total_cpus.clone(),
-                            self.total_ram_in_mib,
-                            self.database_instance_type.as_str(),
-                            database_options,
-                            listeners,
-                        ),
-                    );
+                    let db = Box::new(PostgresDo::new(
+                        context.clone(),
+                        self.id.as_str(),
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        self.version.as_str(),
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options,
+                        listeners,
+                        logger,
+                    ));
 
                     Some(db)
                 }
                 DatabaseKind::Mysql => {
-                    let db: Box<dyn StatefulService> =
-                        Box::new(crate::cloud_provider::digitalocean::databases::mysql::MySQL::new(
-                            context.clone(),
-                            self.id.as_str(),
-                            self.action.to_service_action(),
-                            self.name.as_str(),
-                            self.version.as_str(),
-                            self.fqdn.as_str(),
-                            self.fqdn_id.as_str(),
-                            self.total_cpus.clone(),
-                            self.total_ram_in_mib,
-                            self.database_instance_type.as_str(),
-                            database_options,
-                            listeners,
-                        ));
+                    let db = Box::new(MySQLDo::new(
+                        context.clone(),
+                        self.id.as_str(),
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        self.version.as_str(),
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options,
+                        listeners,
+                        logger,
+                    ));
 
                     Some(db)
                 }
                 DatabaseKind::Redis => {
-                    let db: Box<dyn StatefulService> =
-                        Box::new(crate::cloud_provider::digitalocean::databases::redis::Redis::new(
-                            context.clone(),
-                            self.id.as_str(),
-                            self.action.to_service_action(),
-                            self.name.as_str(),
-                            self.version.as_str(),
-                            self.fqdn.as_str(),
-                            self.fqdn_id.as_str(),
-                            self.total_cpus.clone(),
-                            self.total_ram_in_mib,
-                            self.database_instance_type.as_str(),
-                            database_options,
-                            listeners,
-                        ));
+                    let db = Box::new(RedisDo::new(
+                        context.clone(),
+                        self.id.as_str(),
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        self.version.as_str(),
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options,
+                        listeners,
+                        logger,
+                    ));
 
                     Some(db)
                 }
                 DatabaseKind::Mongodb => {
-                    let db: Box<dyn StatefulService> =
-                        Box::new(crate::cloud_provider::digitalocean::databases::mongodb::MongoDB::new(
-                            context.clone(),
-                            self.id.as_str(),
-                            self.action.to_service_action(),
-                            self.name.as_str(),
-                            self.version.as_str(),
-                            self.fqdn.as_str(),
-                            self.fqdn_id.as_str(),
-                            self.total_cpus.clone(),
-                            self.total_ram_in_mib,
-                            self.database_instance_type.as_str(),
-                            database_options,
-                            listeners,
-                        ));
+                    let db = Box::new(MongoDo::new(
+                        context.clone(),
+                        self.id.as_str(),
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        self.version.as_str(),
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options,
+                        listeners,
+                        logger,
+                    ));
 
                     Some(db)
                 }
@@ -875,89 +810,89 @@ impl Database {
             CPKind::Scw => match self.kind {
                 DatabaseKind::Postgresql => match VersionsNumber::from_str(self.version.as_str()) {
                     Ok(v) => {
-                        let db: Box<dyn StatefulService> =
-                            Box::new(crate::cloud_provider::scaleway::databases::postgresql::PostgreSQL::new(
-                                context.clone(),
-                                self.id.as_str(),
-                                self.action.to_service_action(),
-                                self.name.as_str(),
-                                v,
-                                self.fqdn.as_str(),
-                                self.fqdn_id.as_str(),
-                                self.total_cpus.clone(),
-                                self.total_ram_in_mib,
-                                self.database_instance_type.as_str(),
-                                database_options,
-                                listeners,
-                            ));
+                        let db = Box::new(PostgresScw::new(
+                            context.clone(),
+                            self.id.as_str(),
+                            self.action.to_service_action(),
+                            self.name.as_str(),
+                            v,
+                            self.fqdn.as_str(),
+                            self.fqdn_id.as_str(),
+                            self.total_cpus.clone(),
+                            self.total_ram_in_mib,
+                            self.database_instance_type.as_str(),
+                            database_options,
+                            listeners,
+                            logger.clone(),
+                        ));
 
                         Some(db)
                     }
                     Err(e) => {
-                        error!("{}", format!("error while parsing postgres version, error: {}", e));
+                        error!("{}", format!("error while parsing postgres version, error: {}", e.message()));
                         None
                     }
                 },
                 DatabaseKind::Mysql => match VersionsNumber::from_str(self.version.as_str()) {
                     Ok(v) => {
-                        let db: Box<dyn StatefulService> =
-                            Box::new(crate::cloud_provider::scaleway::databases::mysql::MySQL::new(
-                                context.clone(),
-                                self.id.as_str(),
-                                self.action.to_service_action(),
-                                self.name.as_str(),
-                                v,
-                                self.fqdn.as_str(),
-                                self.fqdn_id.as_str(),
-                                self.total_cpus.clone(),
-                                self.total_ram_in_mib,
-                                self.database_instance_type.as_str(),
-                                database_options,
-                                listeners,
-                            ));
+                        let db = Box::new(MySQLScw::new(
+                            context.clone(),
+                            self.id.as_str(),
+                            self.action.to_service_action(),
+                            self.name.as_str(),
+                            v,
+                            self.fqdn.as_str(),
+                            self.fqdn_id.as_str(),
+                            self.total_cpus.clone(),
+                            self.total_ram_in_mib,
+                            self.database_instance_type.as_str(),
+                            database_options,
+                            listeners,
+                            logger.clone(),
+                        ));
 
                         Some(db)
                     }
                     Err(e) => {
-                        error!("{}", format!("error while parsing mysql version, error: {}", e));
+                        error!("{}", format!("error while parsing mysql version, error: {}", e.message()));
                         None
                     }
                 },
                 DatabaseKind::Redis => {
-                    let db: Box<dyn StatefulService> =
-                        Box::new(crate::cloud_provider::scaleway::databases::redis::Redis::new(
-                            context.clone(),
-                            self.id.as_str(),
-                            self.action.to_service_action(),
-                            self.name.as_str(),
-                            self.version.as_str(),
-                            self.fqdn.as_str(),
-                            self.fqdn_id.as_str(),
-                            self.total_cpus.clone(),
-                            self.total_ram_in_mib,
-                            self.database_instance_type.as_str(),
-                            database_options,
-                            listeners,
-                        ));
+                    let db = Box::new(RedisScw::new(
+                        context.clone(),
+                        self.id.as_str(),
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        self.version.as_str(),
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options,
+                        listeners,
+                        logger.clone(),
+                    ));
 
                     Some(db)
                 }
                 DatabaseKind::Mongodb => {
-                    let db: Box<dyn StatefulService> =
-                        Box::new(crate::cloud_provider::scaleway::databases::mongodb::MongoDB::new(
-                            context.clone(),
-                            self.id.as_str(),
-                            self.action.to_service_action(),
-                            self.name.as_str(),
-                            self.version.as_str(),
-                            self.fqdn.as_str(),
-                            self.fqdn_id.as_str(),
-                            self.total_cpus.clone(),
-                            self.total_ram_in_mib,
-                            self.database_instance_type.as_str(),
-                            database_options,
-                            listeners,
-                        ));
+                    let db = Box::new(MongoDbScw::new(
+                        context.clone(),
+                        self.id.as_str(),
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        self.version.as_str(),
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options,
+                        listeners,
+                        logger,
+                    ));
 
                     Some(db)
                 }
@@ -1049,6 +984,21 @@ pub trait ProgressListener: Send + Sync {
     fn delete_error(&self, info: ProgressInfo);
 }
 
+pub struct NoOpProgressListener {}
+
+impl ProgressListener for NoOpProgressListener {
+    fn deployment_in_progress(&self, _info: ProgressInfo) {}
+    fn pause_in_progress(&self, _info: ProgressInfo) {}
+    fn delete_in_progress(&self, _info: ProgressInfo) {}
+    fn error(&self, _info: ProgressInfo) {}
+    fn deployed(&self, _info: ProgressInfo) {}
+    fn paused(&self, _info: ProgressInfo) {}
+    fn deleted(&self, _info: ProgressInfo) {}
+    fn deployment_error(&self, _info: ProgressInfo) {}
+    fn pause_error(&self, _info: ProgressInfo) {}
+    fn delete_error(&self, _info: ProgressInfo) {}
+}
+
 pub trait Listen {
     fn listeners(&self) -> &Listeners;
     fn add_listener(&mut self, listener: Listener);
@@ -1115,7 +1065,7 @@ impl<'a> ListenersHelper<'a> {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(Clone)]
 pub struct Context {
     organization_id: String,
     cluster_id: String,
@@ -1123,9 +1073,10 @@ pub struct Context {
     workspace_root_dir: String,
     lib_root_dir: String,
     test_cluster: bool,
-    docker_host: Option<String>,
+    docker_host: Option<Url>,
     features: Vec<Features>,
     metadata: Option<Metadata>,
+    pub docker: Docker,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, Eq, PartialEq)]
@@ -1136,13 +1087,13 @@ pub enum Features {
 
 // trait used to reimplement clone without same fields
 // this trait is used for Context struct
-pub trait Clone2 {
+pub trait CloneForTest {
     fn clone_not_same_execution_id(&self) -> Self;
 }
 
 // for test we need to clone context but to change the directory workspace used
 // to to this we just have to suffix the execution id in tests
-impl Clone2 for Context {
+impl CloneForTest for Context {
     fn clone_not_same_execution_id(&self) -> Context {
         let mut new = self.clone();
         let suffix = rand::thread_rng()
@@ -1163,9 +1114,10 @@ impl Context {
         workspace_root_dir: String,
         lib_root_dir: String,
         test_cluster: bool,
-        docker_host: Option<String>,
+        docker_host: Option<Url>,
         features: Vec<Features>,
         metadata: Option<Metadata>,
+        docker: Docker,
     ) -> Self {
         Context {
             organization_id,
@@ -1177,6 +1129,7 @@ impl Context {
             docker_host,
             features,
             metadata,
+            docker,
         }
     }
 
@@ -1200,8 +1153,8 @@ impl Context {
         self.lib_root_dir.as_str()
     }
 
-    pub fn docker_tcp_socket(&self) -> Option<&String> {
-        self.docker_host.as_ref()
+    pub fn docker_tcp_socket(&self) -> &Option<Url> {
+        &self.docker_host
     }
 
     pub fn metadata(&self) -> Option<&Metadata> {
@@ -1235,17 +1188,7 @@ impl Context {
 
     pub fn resource_expiration_in_seconds(&self) -> Option<u32> {
         match &self.metadata {
-            Some(meta) => meta.resource_expiration_in_seconds.map(|ttl| ttl),
-            _ => None,
-        }
-    }
-
-    pub fn docker_build_options(&self) -> Option<Vec<String>> {
-        match &self.metadata {
-            Some(meta) => meta
-                .docker_build_options
-                .clone()
-                .map(|b| b.split(' ').map(|x| x.to_string()).collect()),
+            Some(meta) => meta.resource_expiration_in_seconds,
             _ => None,
         }
     }
@@ -1267,7 +1210,6 @@ impl Context {
 pub struct Metadata {
     pub dry_run_deploy: Option<bool>,
     pub resource_expiration_in_seconds: Option<u32>,
-    pub docker_build_options: Option<String>,
     pub forced_upgrade: Option<bool>,
     pub disable_pleco: Option<bool>,
 }
@@ -1276,14 +1218,12 @@ impl Metadata {
     pub fn new(
         dry_run_deploy: Option<bool>,
         resource_expiration_in_seconds: Option<u32>,
-        docker_build_options: Option<String>,
         forced_upgrade: Option<bool>,
         disable_pleco: Option<bool>,
     ) -> Self {
         Metadata {
             dry_run_deploy,
             resource_expiration_in_seconds,
-            docker_build_options,
             forced_upgrade,
             disable_pleco,
         }
@@ -1351,13 +1291,13 @@ impl Domain {
     }
 
     fn is_wildcarded(&self) -> bool {
-        self.raw.starts_with("*")
+        self.raw.starts_with('*')
     }
 }
 
 impl Display for Domain {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.raw.as_str())
+        f.write_str(self.raw.as_str())
     }
 }
 
@@ -1375,13 +1315,13 @@ impl ToHelmString for Domain {
 
 impl ToTerraformString for Ipv4Addr {
     fn to_terraform_format_string(&self) -> String {
-        format!("{{{}}}", self.to_string())
+        format!("{{{}}}", self)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::models::Domain;
+    use crate::io_models::{Domain, QoveryIdentifier};
 
     #[test]
     fn test_domain_new() {
@@ -1456,6 +1396,67 @@ mod tests {
                 "case {} : '{}'",
                 tc.description,
                 tc.input
+            );
+        }
+    }
+
+    #[test]
+    fn test_qovery_identifier_new_from_long_id() {
+        struct TestCase<'a> {
+            input: String,
+            expected_long_id_output: String,
+            expected_short_output: String,
+            description: &'a str,
+        }
+
+        // setup:
+        let test_cases: Vec<TestCase> = vec![
+            TestCase {
+                input: "".to_string(),
+                expected_long_id_output: "".to_string(),
+                expected_short_output: "".to_string(),
+                description: "empty raw long ID input",
+            },
+            TestCase {
+                input: "2a365285-992f-4285-ab96-c55ac81ecde9".to_string(),
+                expected_long_id_output: "2a365285-992f-4285-ab96-c55ac81ecde9".to_string(),
+                expected_short_output: "2a365285".to_string(),
+                description: "proper Uuid input",
+            },
+            TestCase {
+                input: "2a365285".to_string(),
+                expected_long_id_output: "2a365285".to_string(),
+                expected_short_output: "2a365285".to_string(),
+                description: "non standard Uuid input, length 8",
+            },
+            TestCase {
+                input: "2a365285hebnrfvuebr".to_string(),
+                expected_long_id_output: "2a365285hebnrfvuebr".to_string(),
+                expected_short_output: "2a365285".to_string(),
+                description: "non standard Uuid input, length longer than expected short (length 8)",
+            },
+            TestCase {
+                input: "2a365".to_string(),
+                expected_long_id_output: "2a365".to_string(),
+                expected_short_output: "2a365".to_string(),
+                description: "non standard Uuid input, length shorter than expected short (length 8)",
+            },
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let result = QoveryIdentifier::new_from_long_id(tc.input.clone());
+
+            // verify:
+            assert_eq!(
+                tc.expected_long_id_output, result.raw_long_id,
+                "case {} : '{}'",
+                tc.description, tc.input
+            );
+            assert_eq!(
+                tc.expected_short_output, result.short,
+                "case {} : '{}'",
+                tc.description, tc.input
             );
         }
     }

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 
-use crate::cmd::utilities::QoveryCommand;
+use crate::cmd::command::QoveryCommand;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DoVpc {
@@ -17,17 +17,11 @@ pub struct DoVpc {
 pub fn get_used_cidr_on_region(token: &str) {
     let mut output_from_cli = String::new();
 
-    let mut cmd = QoveryCommand::new("doctl", &vec!["vpcs", "list", "--output", "json", "-t", token], &vec![]);
-    let _ = cmd.exec_with_output(
-        |r_out| output_from_cli.push_str(&r_out),
-        |r_err| {
-            error!(
-                "DOCTL CLI error from cmd inserted, please check vpcs list command{}",
-                r_err
-            )
-        },
-    );
+    let mut cmd = QoveryCommand::new("doctl", &["vpcs", "list", "--output", "json", "-t", token], &[]);
+    let _ = cmd.exec_with_output(&mut |r_out| output_from_cli.push_str(&r_out), &mut |r_err| {
+        error!("DOCTL CLI error from cmd inserted, please check vpcs list command{}", r_err)
+    });
 
     let buff = output_from_cli.borrow();
-    let _array: Vec<DoVpc> = serde_json::from_str(&buff).expect("JSON is not well-formatted");
+    let _array: Vec<DoVpc> = serde_json::from_str(buff).expect("JSON is not well-formatted");
 }

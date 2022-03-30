@@ -3,12 +3,11 @@ use uuid::Uuid;
 
 use crate::cloud_provider::{CloudProvider, EngineError, Kind, TerraformStateCredentials};
 use crate::constants::{SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY};
-use crate::models::{Context, Listen, Listener, Listeners};
+use crate::events::{EventDetails, Stage, ToTransmitter, Transmitter};
+use crate::io_models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
 
-pub mod application;
 pub mod databases;
 pub mod kubernetes;
-pub mod router;
 
 pub struct Scaleway {
     context: Context,
@@ -119,6 +118,19 @@ impl CloudProvider for Scaleway {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn get_event_details(&self, stage: Stage) -> EventDetails {
+        let context = self.context();
+        EventDetails::new(
+            None,
+            QoveryIdentifier::from(context.organization_id().to_string()),
+            QoveryIdentifier::from(context.cluster_id().to_string()),
+            QoveryIdentifier::from(context.execution_id().to_string()),
+            None,
+            stage,
+            self.to_transmitter(),
+        )
+    }
 }
 
 impl Listen for Scaleway {
@@ -128,5 +140,11 @@ impl Listen for Scaleway {
 
     fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
+    }
+}
+
+impl ToTransmitter for Scaleway {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::CloudProvider(self.id.to_string(), self.name.to_string())
     }
 }

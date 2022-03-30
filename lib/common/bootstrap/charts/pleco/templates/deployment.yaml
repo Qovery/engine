@@ -94,6 +94,15 @@ spec:
             {{ if or (eq .Values.awsFeatures.ecr true)}}
             - --enable-ecr
             {{ end }}
+            {{ if or (eq .Values.awsFeatures.sfn true)}}
+            - --enable-sfn
+            {{ end }}
+            {{ if or (eq .Values.awsFeatures.sqs true)}}
+            - --enable-sqs
+            {{ end }}
+            {{ if or (eq .Values.awsFeatures.lambda true)}}
+            - --enable-lambda
+            {{ end }}
             {{- end }}
 
 #            Scaleway features

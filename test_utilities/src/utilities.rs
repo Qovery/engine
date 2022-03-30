@@ -9,17 +9,18 @@ use curl::easy::Easy;
 use dirs::home_dir;
 use gethostname;
 use std::collections::BTreeMap;
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
-use std::str::FromStr;
 
 use passwords::PasswordGenerator;
+use qovery_engine::cloud_provider::digitalocean::kubernetes::doks_api::get_do_kubeconfig_by_cluster_name;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
 use std::fs;
+use std::str::FromStr;
 use tracing::{info, warn};
 
 use crate::scaleway::{
@@ -28,14 +29,13 @@ use crate::scaleway::{
 };
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd;
 use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DIGITAL_OCEAN_SPACES_ACCESS_ID, DIGITAL_OCEAN_SPACES_SECRET_ID,
     DIGITAL_OCEAN_TOKEN, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
-use qovery_engine::models::{Context, Database, DatabaseKind, DatabaseMode, Environment, Features, Metadata};
+use qovery_engine::io_models::{Context, Database, DatabaseKind, DatabaseMode, EnvironmentRequest, Features, Metadata};
 use retry::Error::Operation;
 use serde::{Deserialize, Serialize};
 
@@ -44,17 +44,17 @@ use crate::digitalocean::{
     DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_SELF_HOSTED_DATABASE_DISK_TYPE,
     DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
 };
-use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
+use qovery_engine::cmd::command::QoveryCommand;
+use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
-use qovery_engine::cmd::utilities::QoveryCommand;
 use qovery_engine::errors::CommandError;
+use qovery_engine::io_models::DatabaseMode::MANAGED;
 use qovery_engine::logger::{Logger, StdIoLogger};
-use qovery_engine::models::DatabaseMode::MANAGED;
-use qovery_engine::object_storage::spaces::{BucketDeleteStrategy, Spaces};
-use qovery_engine::object_storage::ObjectStorage;
+use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::runtime::block_on;
 use time::Instant;
+use url::Url;
 
 pub fn context(organization_id: &str, cluster_id: &str) -> Context {
     let organization_id = organization_id.to_string();
@@ -62,6 +62,8 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
     let execution_id = execution_id();
     let home_dir = std::env::var("WORKSPACE_ROOT_DIR").unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
     let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
+    let docker_host = std::env::var("DOCKER_HOST").map(|x| Url::parse(&x).unwrap()).ok();
+    let docker = Docker::new(docker_host.clone()).expect("Can't init docker");
 
     let metadata = Metadata {
         dry_run_deploy: Option::from({
@@ -80,7 +82,6 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
                 None => Some(7200),
             }
         },
-        docker_build_options: Some("--network host".to_string()),
         forced_upgrade: Option::from({
             match env::var_os("forced_upgrade") {
                 Some(_) => true,
@@ -90,7 +91,7 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
         disable_pleco: Some(true),
     };
 
-    let enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
+    let enabled_features = vec![Features::LogsHistory];
 
     Context::new(
         organization_id,
@@ -99,9 +100,10 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
         home_dir,
         lib_root_dir,
         true,
-        None,
+        docker_host,
         enabled_features,
         Option::from(metadata),
+        docker,
     )
 }
 
@@ -362,8 +364,8 @@ impl FuncTestsSecrets {
     }
 }
 
-pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
-    LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker")
+pub fn build_platform_local_docker(context: &Context, logger: Box<dyn Logger>) -> LocalDocker {
+    LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker", logger).unwrap()
 }
 
 pub fn init() -> Instant {
@@ -417,12 +419,18 @@ pub fn generate_id() -> String {
     uuid
 }
 
-pub fn generate_password(allow_using_symbols: bool) -> String {
+pub fn generate_password(provider_kind: Kind, db_mode: DatabaseMode) -> String {
     // core special chars set: !#$%&*+-=?_
     // we will keep only those and exclude others
     let forbidden_chars = vec![
         '"', '\'', '(', ')', ',', '.', '/', ':', ';', '<', '>', '@', '[', '\\', ']', '^', '`', '{', '|', '}', '~',
     ];
+
+    let allow_using_symbols = provider_kind == Kind::Scw && db_mode == DatabaseMode::MANAGED;
+    if !allow_using_symbols {
+        return generate_id();
+    };
+
     let pg = PasswordGenerator::new()
         .length(32)
         .numbers(true)
@@ -447,14 +455,11 @@ pub fn generate_password(allow_using_symbols: bool) -> String {
     password
 }
 
-pub fn check_all_connections(env: &Environment) -> Vec<bool> {
+pub fn check_all_connections(env: &EnvironmentRequest) -> Vec<bool> {
     let mut checking: Vec<bool> = Vec::with_capacity(env.routers.len());
 
     for router_to_test in &env.routers {
-        let path_to_test = format!(
-            "https://{}{}",
-            &router_to_test.default_domain, &router_to_test.routes[0].path
-        );
+        let path_to_test = format!("https://{}{}", &router_to_test.default_domain, &router_to_test.routes[0].path);
 
         checking.push(curl_path(path_to_test.as_str()));
     }
@@ -528,64 +533,24 @@ where
                 )
             }
             Kind::Do => {
-                let region_raw = secrets
-                    .DIGITAL_OCEAN_DEFAULT_REGION
-                    .as_ref()
-                    .expect(&"DIGITAL_OCEAN_DEFAULT_REGION should be set".to_string())
-                    .to_string();
+                let cluster_name = format!("qovery-{}", context.cluster_id());
+                let kubeconfig = match get_do_kubeconfig_by_cluster_name(
+                    secrets.clone().DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
+                    cluster_name.clone().as_str(),
+                ) {
+                    Ok(kubeconfig) => kubeconfig,
+                    Err(e) => return OperationResult::Retry(CommandError::new(e.message(), Some(e.message()))),
+                };
 
-                match DoRegion::from_str(region_raw.as_str()) {
-                    Ok(region) => {
-                        let spaces = Spaces::new(
-                            context.clone(),
-                            "fake".to_string(),
-                            "fake".to_string(),
-                            secrets
-                                .DIGITAL_OCEAN_SPACES_ACCESS_ID
-                                .as_ref()
-                                .expect(&"DIGITAL_OCEAN_SPACES_ACCESS_ID should be set".to_string())
-                                .to_string(),
-                            secrets
-                                .DIGITAL_OCEAN_SPACES_SECRET_ID
-                                .as_ref()
-                                .expect(&"DIGITAL_OCEAN_SPACES_SECRET_ID should be set".to_string())
-                                .to_string(),
-                            region,
-                            BucketDeleteStrategy::HardDelete,
-                        );
-
-                        match spaces.get(
-                            kubernetes_config_bucket_name.as_str(),
-                            kubernetes_config_object_key.as_str(),
-                            false,
-                        ) {
-                            Ok((_, mut file)) => {
-                                let mut content = String::new();
-                                match file.read_to_string(&mut content) {
-                                    Ok(_) => Ok(content),
-                                    Err(e) => {
-                                        let message_safe = "Error while trying to read file";
-                                        Err(CommandError::new(
-                                            format!("{}, error: {}", message_safe.to_string(), e),
-                                            Some(message_safe.to_string()),
-                                        ))
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                let message_safe = "Error  while trying to get kubeconfig from spaces";
-                                Err(CommandError::new(
-                                    format!(
-                                        "{}, error: {}",
-                                        message_safe.to_string(),
-                                        e.message.unwrap_or("no error message".to_string())
-                                    ),
-                                    Some(message_safe.to_string()),
-                                ))
-                            }
-                        }
+                match kubeconfig {
+                    None => Err(CommandError::new(
+                        "No kubeconfig found".to_string(),
+                        Some("No kubeconfig found".to_string()),
+                    )),
+                    Some(file_content) => {
+                        let _ = "test";
+                        Ok(file_content)
                     }
-                    Err(e) => Err(e),
                 }
             }
             Kind::Scw => {
@@ -671,9 +636,7 @@ where
                     }
                 }
 
-                Err(CommandError::new_from_safe_message(
-                    "Test cluster not found".to_string(),
-                ))
+                Err(CommandError::new_from_safe_message("Test cluster not found".to_string()))
             }
         };
 
@@ -723,10 +686,7 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
     match provider_kind {
         Kind::Aws => vec![
             (AWS_ACCESS_KEY_ID, secrets.AWS_ACCESS_KEY_ID.as_ref().unwrap().as_str()),
-            (
-                AWS_SECRET_ACCESS_KEY,
-                secrets.AWS_SECRET_ACCESS_KEY.as_ref().unwrap().as_str(),
-            ),
+            (AWS_SECRET_ACCESS_KEY, secrets.AWS_SECRET_ACCESS_KEY.as_ref().unwrap().as_str()),
         ],
         Kind::Do => vec![
             (
@@ -752,14 +712,8 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
             ),
         ],
         Kind::Scw => vec![
-            (
-                SCALEWAY_ACCESS_KEY,
-                secrets.SCALEWAY_ACCESS_KEY.as_ref().unwrap().as_str(),
-            ),
-            (
-                SCALEWAY_SECRET_KEY,
-                secrets.SCALEWAY_SECRET_KEY.as_ref().unwrap().as_str(),
-            ),
+            (SCALEWAY_ACCESS_KEY, secrets.SCALEWAY_ACCESS_KEY.as_ref().unwrap().as_str()),
+            (SCALEWAY_SECRET_KEY, secrets.SCALEWAY_SECRET_KEY.as_ref().unwrap().as_str()),
             (
                 SCALEWAY_DEFAULT_PROJECT_ID,
                 secrets.SCALEWAY_DEFAULT_PROJECT_ID.as_ref().unwrap().as_str(),
@@ -800,15 +754,11 @@ fn aws_s3_get_object(
 pub fn is_pod_restarted_env(
     context: Context,
     provider_kind: Kind,
-    environment_check: Environment,
+    environment_check: EnvironmentRequest,
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
 ) -> (bool, String) {
-    let namespace_name = format!(
-        "{}-{}",
-        &environment_check.project_id.clone(),
-        &environment_check.id.clone(),
-    );
+    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
@@ -835,15 +785,11 @@ pub fn is_pod_restarted_env(
 pub fn get_pods(
     context: Context,
     provider_kind: Kind,
-    environment_check: Environment,
+    environment_check: EnvironmentRequest,
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
 ) -> Result<KubernetesList<KubernetesPod>, CommandError> {
-    let namespace_name = format!(
-        "{}-{}",
-        &environment_check.project_id.clone(),
-        &environment_check.id.clone(),
-    );
+    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
@@ -908,14 +854,10 @@ pub fn generate_cluster_id(region: &str) -> String {
 pub fn get_pvc(
     context: Context,
     provider_kind: Kind,
-    environment_check: Environment,
+    environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<PVC, CommandError> {
-    let namespace_name = format!(
-        "{}-{}",
-        &environment_check.project_id.clone(),
-        &environment_check.id.clone(),
-    );
+    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
@@ -937,14 +879,10 @@ pub fn get_pvc(
 pub fn get_svc(
     context: Context,
     provider_kind: Kind,
-    environment_check: Environment,
+    environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<SVC, CommandError> {
-    let namespace_name = format!(
-        "{}-{}",
-        &environment_check.project_id.clone(),
-        &environment_check.id.clone(),
-    );
+    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
