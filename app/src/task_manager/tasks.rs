@@ -12,6 +12,7 @@ use qovery_engine::cmd::docker::Docker;
 use url::Url;
 
 use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
+use qovery_engine::errors::ErrorMessageVerbosity;
 use qovery_engine::io_models::{Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope};
 use qovery_engine::logger::Logger;
 use qovery_engine::object_storage::errors::ObjectStorageError;
@@ -592,7 +593,11 @@ fn handle_transaction_result(
                 task,
                 request,
                 action_context,
-                Some(format_engine_error_output(engine_error.to_legacy_engine_error(), None)),
+                Some(format_engine_error_output(
+                    engine_error.to_legacy_engine_error(),
+                    None,
+                    ErrorMessageVerbosity::FullDetailsWithoutEnvVars,
+                )),
                 true,
                 false,
                 false,
@@ -608,6 +613,7 @@ fn handle_transaction_result(
                 Some(format_engine_error_output(
                     engine_error.to_legacy_engine_error(),
                     Some(rollback_err),
+                    ErrorMessageVerbosity::FullDetailsWithoutEnvVars,
                 )),
                 true,
                 false,
@@ -623,7 +629,11 @@ fn handle_transaction_result(
     }
 }
 
-fn format_engine_error_output(engine_error: EngineError, rollback_error: Option<RollbackError>) -> String {
+fn format_engine_error_output(
+    engine_error: EngineError,
+    rollback_error: Option<RollbackError>,
+    verbosity: ErrorMessageVerbosity,
+) -> String {
     let scope = match engine_error.scope {
         EngineErrorScope::Engine => String::from("Engine"),
         EngineErrorScope::BuildPlatform(id, name) => format!("Build platform '{}' with id '{}'", name, id),
@@ -641,7 +651,7 @@ fn format_engine_error_output(engine_error: EngineError, rollback_error: Option<
     let rollback_engine_error_message = match rollback_error {
         Some(RollbackError::CommitError(rollback_engine_error)) => Some(format!(
             "{} (event_details: {:?})",
-            rollback_engine_error.message(),
+            rollback_engine_error.message(verbosity),
             rollback_engine_error.event_details(),
         )),
         _ => None,
