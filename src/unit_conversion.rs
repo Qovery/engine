@@ -19,7 +19,7 @@ pub fn cpu_string_to_float<T: Into<String>>(cpu: T) -> f32 {
     }
 
     // the result is in millis, so convert it to float
-    let cpu = cpu.replace("m", "");
+    let cpu = cpu.replace('m', "");
     match cpu.parse::<f32>() {
         Ok(v) if v >= 0.0 => v / 1000.0,
         _ => 0.0,

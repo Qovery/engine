@@ -6,6 +6,7 @@ pub type Id = String;
 pub type Name = String;
 
 #[derive(Debug)]
+#[deprecated(note = "errors.EngineError to be used instead")]
 pub struct EngineError {
     pub cause: EngineErrorCause,
     pub scope: EngineErrorScope,
@@ -25,6 +26,10 @@ impl EngineError {
             execution_id: execution_id.into(),
             message: message.map(|message| message.into()),
         }
+    }
+
+    pub fn is_cancel(&self) -> bool {
+        self.cause == EngineErrorCause::Canceled
     }
 }
 
@@ -60,13 +65,15 @@ impl From<Transmitter> for EngineErrorScope {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum EngineErrorCause {
     Internal,
+    Canceled,
     User(&'static str),
 }
 
 #[derive(Debug)]
+#[deprecated(note = "errors.CommandError to be used instead")]
 pub struct SimpleError {
     pub kind: SimpleErrorKind,
     pub message: Option<String>,
@@ -103,20 +110,17 @@ pub fn cast_simple_error_to_engine_error<X, T: Into<String>>(
     match input {
         Err(simple_error) => {
             let message = match simple_error.kind {
-                SimpleErrorKind::Command(exit_status) => format!(
-                    "{} ({})",
-                    simple_error.message.unwrap_or("<no message>".into()),
-                    exit_status
-                ),
-                SimpleErrorKind::Other => simple_error.message.unwrap_or("<no message>".into()),
+                SimpleErrorKind::Command(exit_status) => {
+                    format!(
+                        "{} ({})",
+                        simple_error.message.unwrap_or_else(|| "<no message>".into()),
+                        exit_status
+                    )
+                }
+                SimpleErrorKind::Other => simple_error.message.unwrap_or_else(|| "<no message>".into()),
             };
 
-            Err(EngineError::new(
-                EngineErrorCause::Internal,
-                scope,
-                execution_id,
-                Some(message),
-            ))
+            Err(EngineError::new(EngineErrorCause::Internal, scope, execution_id, Some(message)))
         }
         Ok(x) => Ok(x),
     }

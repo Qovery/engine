@@ -5,17 +5,16 @@ use rusoto_credential::StaticProvider;
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 use uuid::Uuid;
 
-use crate::cloud_provider::{CloudProvider, EngineError, Kind, TerraformStateCredentials};
+use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
-use crate::error::EngineErrorCause;
-use crate::models::{Context, Listen, Listener, Listeners};
+use crate::errors::EngineError;
+use crate::events::{EventDetails, GeneralStep, Stage, ToTransmitter, Transmitter};
+use crate::io_models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
 use crate::runtime::block_on;
 
-pub mod application;
 pub mod databases;
 pub mod kubernetes;
 pub mod regions;
-pub mod router;
 
 pub struct AWS {
     context: Context,
@@ -57,12 +56,7 @@ impl AWS {
     }
 
     pub fn credentials(&self) -> StaticProvider {
-        StaticProvider::new(
-            self.access_key_id.to_string(),
-            self.secret_access_key.to_string(),
-            None,
-            None,
-        )
+        StaticProvider::new(self.access_key_id.to_string(), self.secret_access_key.to_string(), None, None)
     }
 
     pub fn client(&self) -> Client {
@@ -108,20 +102,13 @@ impl CloudProvider for AWS {
     }
 
     fn is_valid(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::General(GeneralStep::RetrieveClusterConfig));
         let client = StsClient::new_with_client(self.client(), Region::default());
         let s = block_on(client.get_caller_identity(GetCallerIdentityRequest::default()));
 
         match s {
             Ok(_x) => Ok(()),
-            Err(_) => {
-                return Err(self.engine_error(
-                    EngineErrorCause::User(
-                        "Your AWS account seems to be no longer valid (bad Credentials). \
-                    Please contact your Organization administrator to fix or change the Credentials.",
-                    ),
-                    format!("failed to login to AWS {}", self.name_with_id()),
-                ));
-            }
+            Err(_) => Err(EngineError::new_client_invalid_cloud_provider_credentials(event_details)),
         }
     }
 
@@ -150,6 +137,19 @@ impl CloudProvider for AWS {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn get_event_details(&self, stage: Stage) -> EventDetails {
+        let context = self.context();
+        EventDetails::new(
+            None,
+            QoveryIdentifier::from(context.organization_id().to_string()),
+            QoveryIdentifier::from(context.cluster_id().to_string()),
+            QoveryIdentifier::from(context.execution_id().to_string()),
+            None,
+            stage,
+            self.to_transmitter(),
+        )
+    }
 }
 
 impl Listen for AWS {
@@ -159,5 +159,11 @@ impl Listen for AWS {
 
     fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
+    }
+}
+
+impl ToTransmitter for AWS {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::CloudProvider(self.id.to_string(), self.name.to_string())
     }
 }

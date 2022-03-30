@@ -5,8 +5,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use crate::models::{Context, Listen};
+use crate::errors::EngineError;
+use crate::events::{EventDetails, Stage, ToTransmitter};
+use crate::io_models::{Context, Listen};
 
 pub mod aws;
 pub mod digitalocean;
@@ -21,7 +22,7 @@ pub mod scaleway;
 pub mod service;
 pub mod utilities;
 
-pub trait CloudProvider: Listen {
+pub trait CloudProvider: Listen + ToTransmitter {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
@@ -41,18 +42,8 @@ pub trait CloudProvider: Listen {
     /// environment variables to inject to generate Terraform files from templates
     fn tera_context_environment_variables(&self) -> Vec<(&str, &str)>;
     fn terraform_state_credentials(&self) -> &TerraformStateCredentials;
-    fn engine_error_scope(&self) -> EngineErrorScope {
-        EngineErrorScope::CloudProvider(self.id().to_string(), self.name().to_string())
-    }
-    fn engine_error(&self, cause: EngineErrorCause, message: String) -> EngineError {
-        EngineError::new(
-            cause,
-            self.engine_error_scope(),
-            self.context().execution_id(),
-            Some(message),
-        )
-    }
     fn as_any(&self) -> &dyn Any;
+    fn get_event_details(&self, stage: Stage) -> EventDetails;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]

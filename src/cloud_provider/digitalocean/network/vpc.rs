@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::cloud_provider::digitalocean::application::DoRegion;
 use crate::cloud_provider::digitalocean::do_api_common::{do_get_from_api, DoApiType};
 use crate::cloud_provider::digitalocean::models::vpc::{Vpc, Vpcs};
 use crate::errors::CommandError;
+use crate::models::digital_ocean::DoRegion;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -15,8 +15,8 @@ pub enum VpcInitKind {
 impl ToString for VpcInitKind {
     fn to_string(&self) -> String {
         match self {
-            &VpcInitKind::Autodetect => "autodetect".to_string(),
-            &VpcInitKind::Manual => "manual".to_string(),
+            VpcInitKind::Autodetect => "autodetect".to_string(),
+            VpcInitKind::Manual => "manual".to_string(),
         }
     }
 }
@@ -129,7 +129,7 @@ fn do_get_vpcs_from_api_output(json_content: &str) -> Result<Vec<Vpc>, CommandEr
         Err(e) => {
             let message_safe = "Error while trying to deserialize json received from Digital Ocean VPC API";
             Err(CommandError::new(
-                format!("{}, error: {}", message_safe.to_string(), e),
+                format!("{}, error: {}", message_safe, e),
                 Some(message_safe.to_string()),
             ))
         }
@@ -169,11 +169,11 @@ fn is_do_reserved_vpc_subnets(region: DoRegion, subnet: &str) -> bool {
 
 #[cfg(test)]
 mod tests_do_vpcs {
-    use crate::cloud_provider::digitalocean::application::DoRegion;
     use crate::cloud_provider::digitalocean::network::vpc::{
         do_get_vpcs_from_api_output, get_do_vpc_from_name, get_do_vpc_from_subnet, get_random_available_subnet,
         is_do_reserved_vpc_subnets, VpcInitKind,
     };
+    use crate::models::digital_ocean::DoRegion;
 
     fn do_get_vpc_json() -> String {
         // https://developers.digitalocean.com/documentation/v2/#retrieve-an-existing-load-balancer
@@ -286,11 +286,9 @@ mod tests_do_vpcs {
         // DO reserved subnet in the same region
         assert!(get_do_vpc_from_subnet("10.19.0.0/16".to_string(), vpcs.clone(), DoRegion::Frankfurt).is_err());
         // DO reserved subnet in another region
-        assert!(
-            get_do_vpc_from_subnet("10.19.0.0/16".to_string(), vpcs, DoRegion::London)
-                .unwrap()
-                .is_none()
-        );
+        assert!(get_do_vpc_from_subnet("10.19.0.0/16".to_string(), vpcs, DoRegion::London)
+            .unwrap()
+            .is_none());
     }
 
     #[test]
@@ -307,7 +305,7 @@ mod tests_do_vpcs {
         let json_content = do_get_vpc_json();
         let existing_vpcs = do_get_vpcs_from_api_output(&json_content).unwrap();
 
-        assert!(get_random_available_subnet(existing_vpcs.clone(), DoRegion::Frankfurt).is_ok());
+        assert!(get_random_available_subnet(existing_vpcs, DoRegion::Frankfurt).is_ok());
     }
 
     #[test]

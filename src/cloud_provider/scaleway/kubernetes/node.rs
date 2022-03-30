@@ -82,7 +82,7 @@ impl FromStr for ScwInstancesType {
             "render-s" => Ok(ScwInstancesType::RenderS),
             _ => {
                 let message = format!("`{}` instance type is not supported", s);
-                return Err(CommandError::new(message.clone(), Some(message)));
+                Err(CommandError::new(message.clone(), Some(message)))
             }
         }
     }

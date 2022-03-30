@@ -1,8 +1,11 @@
+#![allow(clippy::field_reassign_with_default)]
+
 use std::collections::HashMap;
 
-use crate::cloud_provider::models::CpuLimits;
-use crate::error::{EngineError, StringError};
-use crate::models::{Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
+use crate::errors::{CommandError, EngineError};
+use crate::events::{EngineEvent, EventDetails, EventMessage};
+use crate::io_models::{Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
+use crate::logger::Logger;
 use chrono::Duration;
 use core::option::Option::{None, Some};
 use core::result::Result;
@@ -11,13 +14,13 @@ use retry::delay::Fixed;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::num::ParseFloatError;
+use std::fmt::Write;
 use std::str::FromStr;
 use trust_dns_resolver::config::*;
 use trust_dns_resolver::proto::rr::{RData, RecordType};
 use trust_dns_resolver::Resolver;
 
-pub fn get_self_hosted_postgres_version(requested_version: String) -> Result<String, StringError> {
+pub fn get_self_hosted_postgres_version(requested_version: String) -> Result<String, CommandError> {
     let mut supported_postgres_versions = HashMap::new();
 
     // https://hub.docker.com/r/bitnami/postgresql/tags?page=1&ordering=last_updated
@@ -41,7 +44,7 @@ pub fn get_self_hosted_postgres_version(requested_version: String) -> Result<Str
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
 }
 
-pub fn get_self_hosted_mysql_version(requested_version: String) -> Result<String, StringError> {
+pub fn get_self_hosted_mysql_version(requested_version: String) -> Result<String, CommandError> {
     let mut supported_mysql_versions = HashMap::new();
     // https://hub.docker.com/r/bitnami/mysql/tags?page=1&ordering=last_updated
 
@@ -56,7 +59,7 @@ pub fn get_self_hosted_mysql_version(requested_version: String) -> Result<String
     get_supported_version_to_use("MySQL", supported_mysql_versions, requested_version)
 }
 
-pub fn get_self_hosted_mongodb_version(requested_version: String) -> Result<String, StringError> {
+pub fn get_self_hosted_mongodb_version(requested_version: String) -> Result<String, CommandError> {
     let mut supported_mongodb_versions = HashMap::new();
 
     // https://hub.docker.com/r/bitnami/mongodb/tags?page=1&ordering=last_updated
@@ -80,7 +83,7 @@ pub fn get_self_hosted_mongodb_version(requested_version: String) -> Result<Stri
     get_supported_version_to_use("MongoDB", supported_mongodb_versions, requested_version)
 }
 
-pub fn get_self_hosted_redis_version(requested_version: String) -> Result<String, StringError> {
+pub fn get_self_hosted_redis_version(requested_version: String) -> Result<String, CommandError> {
     let mut supported_redis_versions = HashMap::with_capacity(4);
     // https://hub.docker.com/r/bitnami/redis/tags?page=1&ordering=last_updated
 
@@ -96,11 +99,8 @@ pub fn get_supported_version_to_use(
     database_name: &str,
     all_supported_versions: HashMap<String, String>,
     version_to_check: String,
-) -> Result<String, StringError> {
-    let version = match VersionsNumber::from_str(version_to_check.as_str()) {
-        Ok(version) => version,
-        Err(e) => return Err(e),
-    };
+) -> Result<String, CommandError> {
+    let version = VersionsNumber::from_str(version_to_check.as_str())?;
 
     // if a patch version is required
     if version.patch.is_some() {
@@ -112,10 +112,10 @@ pub fn get_supported_version_to_use(
         )) {
             Some(version) => Ok(version.to_string()),
             None => {
-                return Err(format!(
+                return Err(CommandError::new_from_safe_message(format!(
                     "{} {} version is not supported",
                     database_name, version_to_check
-                ));
+                )));
             }
         };
     }
@@ -125,10 +125,10 @@ pub fn get_supported_version_to_use(
         return match all_supported_versions.get(&format!("{}.{}", version.major, version.minor.unwrap())) {
             Some(version) => Ok(version.to_string()),
             None => {
-                return Err(format!(
+                return Err(CommandError::new_from_safe_message(format!(
                     "{} {} version is not supported",
                     database_name, version_to_check
-                ));
+                )));
             }
         };
     };
@@ -137,10 +137,10 @@ pub fn get_supported_version_to_use(
     match all_supported_versions.get(&version.major) {
         Some(version) => Ok(version.to_string()),
         None => {
-            return Err(format!(
+            return Err(CommandError::new_from_safe_message(format!(
                 "{} {} version is not supported",
                 database_name, version_to_check
-            ));
+            )));
         }
     }
 }
@@ -170,10 +170,7 @@ pub fn generate_supported_version(
 
             if minor_min == minor_max {
                 // add short minor format targeting latest version
-                supported_versions.insert(
-                    format!("{}.{}", major.to_string(), minor_max.to_string()),
-                    latest_major_version.clone(),
-                );
+                supported_versions.insert(format!("{}.{}", major, minor_max), latest_major_version.clone());
                 if update_min.unwrap() == update_max.unwrap() {
                     let version = format!("{}.{}.{}", major, minor_min, update_min.unwrap());
                     supported_versions.insert(version.clone(), format!("{}{}", version, suffix));
@@ -187,13 +184,8 @@ pub fn generate_supported_version(
                 for minor in minor_min..minor_max + 1 {
                     // add short minor format targeting latest version
                     supported_versions.insert(
-                        format!("{}.{}", major.to_string(), minor.to_string()),
-                        format!(
-                            "{}.{}.{}",
-                            major.to_string(),
-                            minor.to_string(),
-                            update_max.unwrap().to_string()
-                        ),
+                        format!("{}.{}", major, minor),
+                        format!("{}.{}.{}", major, minor, update_max.unwrap()),
                     );
                     if update_min.unwrap() == update_max.unwrap() {
                         let version = format!("{}.{}.{}", major, minor, update_min.unwrap());
@@ -243,22 +235,6 @@ impl VersionsNumber {
         }
     }
 
-    pub fn to_string(&self) -> String {
-        let mut version = vec![self.major.to_string()];
-
-        if self.minor.is_some() {
-            version.push(self.minor.clone().unwrap())
-        }
-        if self.patch.is_some() {
-            version.push(self.patch.clone().unwrap())
-        }
-        if self.suffix.is_some() {
-            version.push(self.suffix.clone().unwrap())
-        }
-
-        version.join(".")
-    }
-
     pub fn to_major_version_string(&self) -> String {
         self.major.clone()
     }
@@ -275,11 +251,11 @@ impl VersionsNumber {
 }
 
 impl FromStr for VersionsNumber {
-    type Err = StringError;
+    type Err = CommandError;
 
     fn from_str(version: &str) -> Result<Self, Self::Err> {
         if version.trim() == "" {
-            return Err(StringError::from("version cannot be empty"));
+            return Err(CommandError::new_from_safe_message("version cannot be empty".to_string()));
         }
 
         let mut version_split = version.splitn(4, '.').map(|v| v.trim());
@@ -287,19 +263,19 @@ impl FromStr for VersionsNumber {
         let major = match version_split.next() {
             Some(major) => {
                 let major = major.to_string();
-                major.replace("v", "")
+                major.replace('v', "")
             }
             None => {
-                return Err(format!(
+                return Err(CommandError::new_from_safe_message(format!(
                     "please check the version you've sent ({}), it can't be checked",
                     version
-                ))
+                )))
             }
         };
 
         let minor = version_split.next().map(|minor| {
             let minor = minor.to_string();
-            minor.replace("+", "")
+            minor.replace('+', "")
         });
 
         let patch = version_split.next().map(|patch| patch.to_string());
@@ -315,7 +291,24 @@ impl FromStr for VersionsNumber {
 
 impl fmt::Display for VersionsNumber {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        f.write_str(&self.major)?;
+
+        if let Some(minor) = &self.minor {
+            f.write_char('.')?;
+            f.write_str(minor)?;
+        }
+
+        if let Some(patch) = &self.patch {
+            f.write_char('.')?;
+            f.write_str(patch)?;
+        }
+
+        if let Some(suffix) = &self.suffix {
+            f.write_char('.')?;
+            f.write_str(suffix)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -406,10 +399,7 @@ pub fn check_cname_for(
         match get_cname_record_value(next_resolver(), cname_to_check) {
             Some(domain) => OperationResult::Ok(domain),
             None => {
-                let msg = format!(
-                    "Cannot find domain under CNAME {}. Retrying in 5 seconds...",
-                    cname_to_check
-                );
+                let msg = format!("Cannot find domain under CNAME {}. Retrying in 5 seconds...", cname_to_check);
                 send_deployment_progress(msg.as_str());
                 OperationResult::Retry(msg)
             }
@@ -438,19 +428,23 @@ pub fn check_domain_for(
     domains_to_check: Vec<&str>,
     execution_id: &str,
     context_id: &str,
+    event_details: EventDetails,
+    logger: &dyn Logger,
 ) -> Result<(), EngineError> {
     let resolvers = dns_resolvers();
 
     for domain in domains_to_check {
+        let message = format!(
+            "Let's check domain resolution for '{}'. Please wait, it can take some time...",
+            domain
+        );
+
         listener_helper.deployment_in_progress(ProgressInfo::new(
             ProgressScope::Environment {
                 id: execution_id.to_string(),
             },
             ProgressLevel::Info,
-            Some(format!(
-                "Let's check domain resolution for '{}'. Please wait, it can take some time...",
-                domain
-            )),
+            Some(message.to_string()),
             execution_id,
         ));
 
@@ -460,13 +454,22 @@ pub fn check_domain_for(
             ix += 1;
             resolver
         };
+
+        logger.log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe(message.to_string()),
+        ));
+
         let fixed_iterable = Fixed::from_millis(3000).take(100);
         let check_result = retry::retry(fixed_iterable, || match next_resolver().lookup_ip(domain) {
             Ok(lookup_ip) => OperationResult::Ok(lookup_ip),
             Err(err) => {
                 let x = format!("Domain resolution check for '{}' is still in progress...", domain);
 
-                info!("{}", x);
+                logger.log(EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(x.to_string()),
+                ));
 
                 listener_helper.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Environment {
@@ -485,7 +488,10 @@ pub fn check_domain_for(
             Ok(_) => {
                 let x = format!("Domain {} is ready! ⚡️", domain);
 
-                info!("{}", x);
+                logger.log(EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(message.to_string()),
+                ));
 
                 listener_helper.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Environment {
@@ -503,7 +509,10 @@ pub fn check_domain_for(
                     domain
                 );
 
-                warn!("{}", message);
+                logger.log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(message.to_string()),
+                ));
 
                 listener_helper.deployment_in_progress(ProgressInfo::new(
                     ProgressScope::Environment {
@@ -521,133 +530,38 @@ pub fn check_domain_for(
 }
 
 pub fn sanitize_name(prefix: &str, name: &str) -> String {
-    format!("{}-{}", prefix, name).replace("_", "-")
+    format!("{}-{}", prefix, name).replace('_', "-")
 }
 
 pub fn managed_db_name_sanitizer(max_size: usize, prefix: &str, name: &str) -> String {
     let max_size = max_size - prefix.len();
-    let mut new_name = format!("{}{}", prefix, name.replace("_", "").replace("-", ""));
+    let mut new_name = format!("{}{}", prefix, name.replace('_', "").replace('-', ""));
     if new_name.chars().count() > max_size {
         new_name = new_name[..max_size].to_string();
     }
     new_name
 }
 
-pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, ParseFloatError> {
-    if value.ends_with('m') {
-        let mut value_number_string = value;
-        value_number_string.pop();
-        return match value_number_string.parse::<f32>() {
-            Ok(n) => {
-                Ok(n * 0.001) // return in milli cpu the value
-            }
-            Err(e) => Err(e),
-        };
-    }
-
-    match value.parse::<f32>() {
-        Ok(n) => Ok(n),
-        Err(e) => Err(e),
-    }
-}
-
-pub fn validate_k8s_required_cpu_and_burstable(
-    listener_helper: &ListenersHelper,
-    execution_id: &str,
-    context_id: &str,
-    total_cpu: String,
-    cpu_burst: String,
-) -> Result<CpuLimits, ParseFloatError> {
-    let total_cpu_float = convert_k8s_cpu_value_to_f32(total_cpu.clone())?;
-    let cpu_burst_float = convert_k8s_cpu_value_to_f32(cpu_burst.clone())?;
-    let mut set_cpu_burst = cpu_burst.clone();
-
-    if cpu_burst_float < total_cpu_float {
-        let message = format!(
-            "CPU burst value '{}' was lower than the desired total of CPUs {}, using burstable value. Please ensure your configuration is valid",
-            cpu_burst,
-            total_cpu,
-        );
-
-        warn!("{}", message);
-
-        listener_helper.error(ProgressInfo::new(
-            ProgressScope::Environment {
-                id: execution_id.to_string(),
-            },
-            ProgressLevel::Warn,
-            Some(message),
-            context_id,
-        ));
-        set_cpu_burst = total_cpu.clone();
-    }
-
-    Ok(CpuLimits {
-        cpu_limit: set_cpu_burst,
-        cpu_request: total_cpu,
-    })
-}
-
-pub fn print_action(cloud_provider_name: &str, struct_name: &str, fn_name: &str, item_name: &str) {
-    let msg = format!(
-        "{}.{}.{} called for {}",
-        cloud_provider_name, struct_name, fn_name, item_name
-    );
+pub fn print_action(
+    cloud_provider_name: &str,
+    struct_name: &str,
+    fn_name: &str,
+    item_name: &str,
+    event_details: EventDetails,
+    logger: &dyn Logger,
+) {
+    let msg = format!("{}.{}.{} called for {}", cloud_provider_name, struct_name, fn_name, item_name);
     match fn_name.contains("error") {
-        true => warn!("{}", msg),
-        false => info!("{}", msg),
+        true => logger.log(EngineEvent::Warning(event_details, EventMessage::new_from_safe(msg))),
+        false => logger.log(EngineEvent::Info(event_details, EventMessage::new_from_safe(msg))),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::models::CpuLimits;
-    use crate::cloud_provider::utilities::{
-        convert_k8s_cpu_value_to_f32, dns_resolvers, get_cname_record_value, validate_k8s_required_cpu_and_burstable,
-        VersionsNumber,
-    };
-    use crate::error::StringError;
-    use crate::models::ListenersHelper;
+    use crate::cloud_provider::utilities::{dns_resolvers, get_cname_record_value, VersionsNumber};
+    use crate::errors::CommandError;
     use std::str::FromStr;
-
-    #[test]
-    pub fn test_k8s_milli_cpu_convert() {
-        let milli_cpu = "250m".to_string();
-        let int_cpu = "2".to_string();
-
-        assert_eq!(convert_k8s_cpu_value_to_f32(milli_cpu).unwrap(), 0.25 as f32);
-        assert_eq!(convert_k8s_cpu_value_to_f32(int_cpu).unwrap(), 2 as f32);
-    }
-
-    #[test]
-    pub fn test_cpu_set() {
-        let v = vec![];
-        let listener_helper = ListenersHelper::new(&v);
-        let execution_id = "execution_id";
-        let context_id = "context_id";
-
-        let mut total_cpu = "0.25".to_string();
-        let mut cpu_burst = "1".to_string();
-        assert_eq!(
-            validate_k8s_required_cpu_and_burstable(&listener_helper, execution_id, context_id, total_cpu, cpu_burst)
-                .unwrap(),
-            CpuLimits {
-                cpu_request: "0.25".to_string(),
-                cpu_limit: "1".to_string()
-            }
-        );
-
-        total_cpu = "1".to_string();
-        cpu_burst = "0.5".to_string();
-        assert_eq!(
-            validate_k8s_required_cpu_and_burstable(&listener_helper, execution_id, context_id, total_cpu, cpu_burst)
-                .unwrap(),
-            CpuLimits {
-                cpu_request: "1".to_string(),
-                cpu_limit: "1".to_string()
-            }
-        );
-    }
 
     #[test]
     pub fn test_cname_resolution() {
@@ -662,24 +576,24 @@ mod tests {
         // setup:
         struct TestCase<'a> {
             input: &'a str,
-            expected_output: Result<VersionsNumber, StringError>,
+            expected_output: Result<VersionsNumber, CommandError>,
             description: &'a str,
         }
 
         let test_cases = vec![
             TestCase {
                 input: "",
-                expected_output: Err(StringError::from("version cannot be empty")),
+                expected_output: Err(CommandError::new_from_safe_message("version cannot be empty".to_string())),
                 description: "empty version str",
             },
             TestCase {
                 input: "    ",
-                expected_output: Err(StringError::from("version cannot be empty")),
+                expected_output: Err(CommandError::new_from_safe_message("version cannot be empty".to_string())),
                 description: "version a tab str",
             },
             TestCase {
                 input: " ",
-                expected_output: Err(StringError::from("version cannot be empty")),
+                expected_output: Err(CommandError::new_from_safe_message("version cannot be empty".to_string())),
                 description: "version as a space str",
             },
             TestCase {

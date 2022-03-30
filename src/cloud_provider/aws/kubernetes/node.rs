@@ -10,6 +10,7 @@ pub enum AwsInstancesType {
     T2Xlarge,   // 4 cores 16Gb RAM
     T3Large,    // 2 cores 8Gb RAM
     T3Xlarge,   // 4 cores 16Gb RAM
+    T3aMedium,  // 2 cores 4Gb RAM
     T3aLarge,   // 2 cores 8Gb RAM
     T3a2xlarge, // 8 cores 32Gb RAM
 }
@@ -21,6 +22,7 @@ impl InstanceType for AwsInstancesType {
             AwsInstancesType::T2Xlarge => "t2x.large",
             AwsInstancesType::T3Large => "t3.large",
             AwsInstancesType::T3Xlarge => "t3.xlarge",
+            AwsInstancesType::T3aMedium => "t3a.medium",
             AwsInstancesType::T3aLarge => "t3a.large",
             AwsInstancesType::T3a2xlarge => "t3a.2xlarge",
         }
@@ -35,6 +37,7 @@ impl AwsInstancesType {
             AwsInstancesType::T2Xlarge => "t2x.large",
             AwsInstancesType::T3Large => "t3.large",
             AwsInstancesType::T3Xlarge => "t3.xlarge",
+            AwsInstancesType::T3aMedium => "t3a.medium",
             AwsInstancesType::T3aLarge => "t3a.large",
             AwsInstancesType::T3a2xlarge => "t3a.2xlarge",
         }
@@ -48,6 +51,7 @@ impl fmt::Display for AwsInstancesType {
             AwsInstancesType::T2Xlarge => write!(f, "t2x.large"),
             AwsInstancesType::T3Large => write!(f, "t3.large"),
             AwsInstancesType::T3Xlarge => write!(f, "t3.xlarge"),
+            AwsInstancesType::T3aMedium => write!(f, "t3a.medium"),
             AwsInstancesType::T3aLarge => write!(f, "t3a.large"),
             AwsInstancesType::T3a2xlarge => write!(f, "t3a.2xlarge"),
         }
@@ -63,11 +67,12 @@ impl FromStr for AwsInstancesType {
             "t2x.large" => Ok(AwsInstancesType::T2Xlarge),
             "t3.large" => Ok(AwsInstancesType::T3Large),
             "t3.xlarge" => Ok(AwsInstancesType::T3Xlarge),
+            "t3a.medium" => Ok(AwsInstancesType::T3aMedium),
             "t3a.large" => Ok(AwsInstancesType::T3aLarge),
             "t3a.2xlarge" => Ok(AwsInstancesType::T3a2xlarge),
             _ => {
                 let message = format!("`{}` instance type is not supported", s);
-                return Err(CommandError::new(message.clone(), Some(message)));
+                Err(CommandError::new(message.clone(), Some(message)))
             }
         }
     }

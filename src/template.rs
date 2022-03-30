@@ -22,10 +22,12 @@ where
             let error_msg = match e.kind {
                 tera::ErrorKind::TemplateNotFound(x) => format!("template not found: {}", x),
                 tera::ErrorKind::Msg(x) => format!("tera error: {}", x),
-                tera::ErrorKind::CircularExtend { tpl, inheritance_chain } => format!(
-                    "circular extend - template: {}, inheritance chain: {:?}",
-                    tpl, inheritance_chain
-                ),
+                tera::ErrorKind::CircularExtend { tpl, inheritance_chain } => {
+                    format!(
+                        "circular extend - template: {}, inheritance chain: {:?}",
+                        tpl, inheritance_chain
+                    )
+                }
                 tera::ErrorKind::MissingParent { current, parent } => {
                     format!("missing parent - current: {}, parent: {}", current, parent)
                 }
@@ -83,12 +85,11 @@ where
         .follow_links(true)
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.file_name().to_str().map(|s| s.contains(".j2.")).unwrap_or(false))
-        .collect::<Vec<_>>();
+        .filter(|e| e.file_name().to_str().map(|s| s.contains(".j2.")).unwrap_or(false));
 
     let mut results: Vec<RenderedTemplate> = vec![];
 
-    for file in files.into_iter() {
+    for file in files {
         let path_str = file.path().to_str().unwrap();
         let j2_path = path_str.replace(root_dir_str, "");
 

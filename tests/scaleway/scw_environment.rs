@@ -6,22 +6,70 @@ use self::test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_pvc, init, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
 use ::function_name::named;
-use qovery_engine::build_platform::{BuildPlatform, CacheResult};
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::container_registry::{ContainerRegistry, PullResult};
-use qovery_engine::models::{Action, Clone2, EnvironmentAction, Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::{Action, CloneForTest, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use std::collections::BTreeMap;
-use std::time::SystemTime;
+use std::thread;
+use std::time::Duration;
 use test_utilities::common::Infrastructure;
-use test_utilities::scaleway::container_registry_scw;
-use test_utilities::utilities::build_platform_local_docker;
+use test_utilities::scaleway::scw_default_engine_config;
 use tracing::{span, warn, Level};
 
 // Note: All those tests relies on a test cluster running on Scaleway infrastructure.
 // This cluster should be live in order to have those tests passing properly.
 
-#[cfg(feature = "test-scw-self-hosted")]
+#[cfg(feature = "test-scw-minimal")]
+#[named]
+#[test]
+fn scaleway_test_build_phase() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
+                .as_str(),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("SCALEWAY_TEST_CLUSTER_ID")
+                .as_str(),
+        );
+        let engine_config = scw_default_engine_config(&context, logger.clone());
+        let environment = test_utilities::common::working_minimal_environment(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
+
+        let env_action = environment.clone();
+
+        let (env, ret) = environment.build_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        // Check the the image exist in the registry
+        let img_exist = engine_config
+            .container_registry()
+            .does_image_exists(&env.applications[0].get_build().image);
+        assert!(img_exist);
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-minimal")]
 #[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
@@ -46,7 +94,9 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
                 .expect("SCALEWAY_TEST_CLUSTER_ID")
                 .as_str(),
         );
+        let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -61,117 +111,21 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
         environment_for_delete.routers = vec![];
         environment_for_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
+        let env_action = environment.clone();
+        let env_action_for_delete = environment_for_delete.clone();
 
-        match environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(result, TransactionResult::Ok));
 
-        match environment_for_delete.delete_environment(Kind::Scw, &context_for_delete, &env_action_for_delete, logger)
-        {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result =
+            environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
+        assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
         test_name.to_string()
-    })
-}
-
-#[cfg(feature = "test-scw-self-hosted")]
-#[named]
-#[test]
-fn test_build_cache() {
-    let test_name = function_name!();
-    engine_run_test(|| {
-        init();
-        let span = span!(Level::INFO, "test", name = test_name);
-        let _enter = span.enter();
-
-        let secrets = FuncTestsSecrets::new();
-        let context = context(
-            secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
-        );
-
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
-
-        let scr = container_registry_scw(&context);
-        let local_docker = build_platform_local_docker(&context);
-        let app = environment.applications.first().unwrap();
-        let image = app.to_image();
-
-        let app_build = app.to_build();
-        let _ = match local_docker.has_cache(&app_build) {
-            Ok(CacheResult::Hit) => assert!(false),
-            Ok(CacheResult::Miss(_)) => assert!(true),
-            Ok(CacheResult::MissWithoutParentBuild) => assert!(false),
-            Err(_) => assert!(false),
-        };
-
-        let _ = match scr.pull(&image).unwrap() {
-            PullResult::Some(_) => assert!(false),
-            PullResult::None => assert!(true),
-        };
-
-        let build_result = local_docker.build(app.to_build(), false).unwrap();
-
-        let _ = match scr.push(&build_result.build.image, false) {
-            Ok(_) => assert!(true),
-            Err(_) => assert!(false),
-        };
-
-        // TODO clean local docker cache
-
-        let start_pull_time = SystemTime::now();
-        let _ = match scr.pull(&build_result.build.image).unwrap() {
-            PullResult::Some(_) => assert!(true),
-            PullResult::None => assert!(false),
-        };
-
-        let pull_duration = SystemTime::now().duration_since(start_pull_time).unwrap();
-
-        let _ = match local_docker.has_cache(&build_result.build) {
-            Ok(CacheResult::Hit) => assert!(true),
-            Ok(CacheResult::Miss(_)) => assert!(false),
-            Ok(CacheResult::MissWithoutParentBuild) => assert!(false),
-            Err(_) => assert!(false),
-        };
-
-        let start_pull_time = SystemTime::now();
-        let _ = match scr.pull(&image).unwrap() {
-            PullResult::Some(_) => assert!(true),
-            PullResult::None => assert!(false),
-        };
-
-        let pull_duration_2 = SystemTime::now().duration_since(start_pull_time).unwrap();
-
-        if pull_duration_2.as_millis() > pull_duration.as_millis() {
-            assert!(false);
-        }
-
-        return test_name.to_string();
     })
 }
 
@@ -200,7 +154,9 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
                 .expect("SCALEWAY_TEST_CLUSTER_ID")
                 .as_str(),
         );
+        let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
 
         let mut environment = test_utilities::common::non_working_environment(
             &context,
@@ -215,23 +171,20 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
+        let env_action = environment.clone();
+        let env_action_for_delete = environment_for_delete.clone();
 
-        match environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(result, TransactionResult::UnrecoverableError(_, _)));
 
-        match environment_for_delete.delete_environment(Kind::Scw, &context_for_delete, &env_action_for_delete, logger)
-        {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
+        let result =
+            environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
+        assert!(matches!(
+            result,
+            TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
+        ));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -264,7 +217,9 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
                 .expect("SCALEWAY_TEST_CLUSTER_ID")
                 .as_str(),
         );
+        let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
         let environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -274,14 +229,11 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
                 .as_str(),
         );
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
+        let env_action = environment.clone();
         let selector = format!("appId={}", environment.applications[0].id);
 
-        match environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(result, TransactionResult::Ok));
 
         let ret = get_pods(
             context.clone(),
@@ -293,11 +245,8 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
-        match environment.pause_environment(Kind::Scw, &context_for_delete, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.pause_environment(&env_action, logger.clone(), &engine_config_for_delete);
+        assert!(matches!(result, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
         let ret = get_pods(
@@ -312,11 +261,9 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
-        match environment.deploy_environment(Kind::Scw, &ctx_resume, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let engine_config_resume = scw_default_engine_config(&ctx_resume, logger.clone());
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config_resume);
+        assert!(matches!(result, TransactionResult::Ok));
 
         let ret = get_pods(
             context.clone(),
@@ -329,13 +276,10 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
         // Cleanup
-        match environment.delete_environment(Kind::Scw, &context_for_delete, &env_action, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.delete_environment(&env_action, logger, &engine_config_for_delete);
+        assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -368,7 +312,9 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
                 .expect("SCALEWAY_TEST_CLUSTER_ID")
                 .as_str(),
         );
+        let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -395,28 +341,22 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
                 app.dockerfile_path = None;
                 app
             })
-            .collect::<Vec<qovery_engine::models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::Application>>();
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
+        let env_action = environment.clone();
+        let env_action_for_delete = environment_for_delete.clone();
 
-        match environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(result, TransactionResult::Ok));
 
-        match environment_for_delete.delete_environment(Kind::Scw, &context_for_delete, &env_action_for_delete, logger)
-        {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result =
+            environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
+        assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -449,7 +389,9 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
                 .expect("SCALEWAY_TEST_CLUSTER_ID")
                 .as_str(),
         );
+        let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
         let environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -462,22 +404,16 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_delete = EnvironmentAction::Environment(environment_delete.clone());
+        let env_action = environment.clone();
+        let env_action_for_delete = environment_delete.clone();
 
-        match environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(result, TransactionResult::Ok));
 
-        match environment_delete.delete_environment(Kind::Scw, &context_for_delete, &env_action_for_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
+        assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -510,7 +446,9 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
                 .expect("SCALEWAY_TEST_CLUSTER_ID")
                 .as_str(),
         );
+        let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
+        let engine_config_for_deletion = scw_default_engine_config(&context_for_deletion, logger.clone());
 
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
@@ -536,19 +474,16 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
                 }];
                 app
             })
-            .collect::<Vec<qovery_engine::models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::Application>>();
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
+        let env_action = environment.clone();
+        let env_action_delete = environment_delete.clone();
 
-        match environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(result, TransactionResult::Ok));
 
         match get_pvc(context.clone(), Kind::Scw, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
@@ -558,13 +493,10 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
             Err(_) => assert!(false),
         };
 
-        match environment_delete.delete_environment(Kind::Scw, &context_for_deletion, &env_action_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment_delete.delete_environment(&env_action_delete, logger, &engine_config_for_deletion);
+        assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -596,7 +528,9 @@ fn deploy_a_working_environment_and_pause_it() {
                 .expect("SCALEWAY_TEST_CLUSTER_ID")
                 .as_str(),
         );
+        let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
         let environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -606,14 +540,11 @@ fn deploy_a_working_environment_and_pause_it() {
                 .as_str(),
         );
 
-        let ea = EnvironmentAction::Environment(environment.clone());
+        let ea = environment.clone();
         let selector = format!("appId={}", environment.applications[0].id);
 
-        match environment.deploy_environment(Kind::Scw, &context, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(&ea, logger.clone(), &engine_config);
+        assert!(matches!(result, TransactionResult::Ok));
 
         let ret = get_pods(
             context.clone(),
@@ -625,11 +556,8 @@ fn deploy_a_working_environment_and_pause_it() {
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
-        match environment.pause_environment(Kind::Scw, &context_for_delete, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.pause_environment(&ea, logger.clone(), &engine_config_for_delete);
+        assert!(matches!(result, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
         let ret = get_pods(
@@ -644,29 +572,18 @@ fn deploy_a_working_environment_and_pause_it() {
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
-        match environment.deploy_environment(Kind::Scw, &ctx_resume, &ea, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let engine_config_resume = scw_default_engine_config(&ctx_resume, logger.clone());
+        let result = environment.deploy_environment(&ea, logger.clone(), &engine_config_resume);
+        assert!(matches!(result, TransactionResult::Ok));
 
-        let ret = get_pods(
-            context.clone(),
-            Kind::Scw,
-            environment.clone(),
-            selector.as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(context, Kind::Scw, environment.clone(), selector.as_str(), secrets);
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
         // Cleanup
-        match environment.delete_environment(Kind::Scw, &context_for_delete, &ea, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-        return test_name.to_string();
+        let result = environment.delete_environment(&ea, logger, &engine_config_for_delete);
+        assert!(matches!(result, TransactionResult::Ok));
+        test_name.to_string()
     })
 }
 
@@ -695,13 +612,15 @@ fn scaleway_kapsule_redeploy_same_app() {
                 .expect("SCALEWAY_TEST_CLUSTER_ID")
                 .as_str(),
         );
+        let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_bis = context.clone_not_same_execution_id();
+        let engine_config_bis = scw_default_engine_config(&context_bis, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
+        let engine_config_for_deletion = scw_default_engine_config(&context_for_deletion, logger.clone());
 
         let mut environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
-                .clone()
                 .DEFAULT_TEST_DOMAIN
                 .as_ref()
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
@@ -723,7 +642,7 @@ fn scaleway_kapsule_redeploy_same_app() {
                 }];
                 app
             })
-            .collect::<Vec<qovery_engine::models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::Application>>();
 
         let environment_redeploy = environment.clone();
         let environment_check1 = environment.clone();
@@ -731,15 +650,12 @@ fn scaleway_kapsule_redeploy_same_app() {
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_redeploy = EnvironmentAction::Environment(environment_redeploy.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_delete.clone());
+        let env_action = environment.clone();
+        let env_action_redeploy = environment_redeploy.clone();
+        let env_action_delete = environment_delete.clone();
 
-        match environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(result, TransactionResult::Ok));
 
         match get_pvc(context.clone(), Kind::Scw, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
@@ -754,15 +670,12 @@ fn scaleway_kapsule_redeploy_same_app() {
             context.clone(),
             Kind::Scw,
             environment_check1,
-            app_name.clone().as_str(),
+            app_name.as_str(),
             secrets.clone(),
         );
 
-        match environment_redeploy.deploy_environment(Kind::Scw, &context_bis, &env_action_redeploy, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment_redeploy.deploy_environment(&env_action_redeploy, logger.clone(), &engine_config_bis);
+        assert!(matches!(result, TransactionResult::Ok));
 
         let (_, number2) = is_pod_restarted_env(
             context.clone(),
@@ -775,13 +688,10 @@ fn scaleway_kapsule_redeploy_same_app() {
         // nothing changed in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
 
-        match environment_delete.delete_environment(Kind::Scw, &context_for_deletion, &env_action_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment_delete.delete_environment(&env_action_delete, logger, &engine_config_for_deletion);
+        assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -814,8 +724,11 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
                 .expect("SCALEWAY_TEST_CLUSTER_ID")
                 .as_str(),
         );
+        let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_not_working = context.clone_not_same_execution_id();
+        let engine_config_for_not_working = scw_default_engine_config(&context_for_not_working, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
 
         // env part generation
         let environment = test_utilities::common::working_minimal_environment(
@@ -838,38 +751,30 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
                 app.environment_vars = BTreeMap::default();
                 app
             })
-            .collect::<Vec<qovery_engine::models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::Application>>();
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
 
         // environment actions
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_not_working = EnvironmentAction::Environment(environment_for_not_working.clone());
-        let env_action_delete = EnvironmentAction::Environment(environment_for_delete.clone());
+        let env_action = environment.clone();
+        let env_action_not_working = environment_for_not_working.clone();
+        let env_action_delete = environment_for_delete.clone();
 
-        match environment_for_not_working.deploy_environment(
-            Kind::Scw,
-            &context_for_not_working,
+        let result = environment_for_not_working.deploy_environment(
             &env_action_not_working,
             logger.clone(),
-        ) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
-        match environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
-        match environment_for_delete.delete_environment(Kind::Scw, &context_for_delete, &env_action_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+            &engine_config_for_not_working,
+        );
+        assert!(matches!(result, TransactionResult::UnrecoverableError(_, _)));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(result, TransactionResult::Ok));
+
+        let result = environment_for_delete.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
+        assert!(matches!(result, TransactionResult::Ok));
+
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -906,6 +811,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
                 .expect("SCALEWAY_TEST_CLUSTER_ID")
                 .as_str(),
         );
+        let engine_config = scw_default_engine_config(&context, logger.clone());
         let environment = test_utilities::common::working_minimal_environment(
             &context,
             secrets
@@ -917,6 +823,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
 
         // not working 1
         let context_for_not_working_1 = context.clone_not_same_execution_id();
+        let engine_config_for_not_working_1 = scw_default_engine_config(&context_for_not_working_1, logger.clone());
         let mut not_working_env_1 = environment.clone();
         not_working_env_1.applications = not_working_env_1
             .applications
@@ -928,67 +835,58 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
                 app.environment_vars = BTreeMap::default();
                 app
             })
-            .collect::<Vec<qovery_engine::models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::Application>>();
 
         // not working 2
         let context_for_not_working_2 = context.clone_not_same_execution_id();
+        let engine_config_for_not_working_2 = scw_default_engine_config(&context_for_not_working_2, logger.clone());
         let not_working_env_2 = not_working_env_1.clone();
 
         // work for delete
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_not_working_1 = EnvironmentAction::Environment(not_working_env_1.clone());
-        let env_action_not_working_2 = EnvironmentAction::Environment(not_working_env_2.clone());
-        let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
+        let env_action = environment.clone();
+        let env_action_not_working_1 = not_working_env_1.clone();
+        let env_action_not_working_2 = not_working_env_2.clone();
+        let env_action_delete = delete_env.clone();
 
         // OK
-        match environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(result, TransactionResult::Ok));
 
         // FAIL and rollback
-        match not_working_env_1.deploy_environment(
-            Kind::Scw,
-            &context_for_not_working_1,
+        let result = not_working_env_1.deploy_environment(
             &env_action_not_working_1,
             logger.clone(),
-        ) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(true),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
+            &engine_config_for_not_working_1,
+        );
+        assert!(matches!(
+            result,
+            TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)
+        ));
 
         // FAIL and Rollback again
-        match not_working_env_2.deploy_environment(
-            Kind::Scw,
-            &context_for_not_working_2,
+        let result = not_working_env_2.deploy_environment(
             &env_action_not_working_2,
             logger.clone(),
-        ) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(true),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
+            &engine_config_for_not_working_2,
+        );
+        assert!(matches!(
+            result,
+            TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)
+        ));
 
         // Should be working
-        match environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(result, TransactionResult::Ok));
 
-        match delete_env.delete_environment(Kind::Scw, &context_for_delete, &env_action_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = delete_env.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
+        assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -1022,6 +920,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
                 .expect("SCALEWAY_TEST_CLUSTER_ID")
                 .as_str(),
         );
+        let engine_config = scw_default_engine_config(&context, logger.clone());
         let environment = test_utilities::common::non_working_environment(
             &context,
             secrets
@@ -1032,25 +931,20 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
         );
 
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_delete = EnvironmentAction::Environment(delete_env.clone());
+        let env_action = environment.clone();
+        let env_action_delete = delete_env.clone();
 
-        match environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(false),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(true),
-        };
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(result, TransactionResult::UnrecoverableError(_, _)));
 
-        match delete_env.delete_environment(Kind::Scw, &context_for_delete, &env_action_delete, logger) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = delete_env.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
+        assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -1083,7 +977,9 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
                 .expect("SCALEWAY_TEST_CLUSTER_ID is not set in secrets")
                 .as_str(),
         );
+        let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
         let environment = test_utilities::common::environment_only_http_server_router_with_sticky_session(
             &context,
             secrets
@@ -1096,26 +992,22 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
 
-        let env_action = EnvironmentAction::Environment(environment.clone());
-        let env_action_for_delete = EnvironmentAction::Environment(environment_for_delete.clone());
+        let env_action = environment.clone();
+        let env_action_for_delete = environment_for_delete.clone();
 
-        match environment.deploy_environment(Kind::Scw, &context, &env_action, logger.clone()) {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        assert!(matches!(result, TransactionResult::Ok));
 
+        // let time for nginx to reload the config
+        thread::sleep(Duration::from_secs(10));
         // checking cookie is properly set on the app
         assert!(routers_sessions_are_sticky(environment.routers.clone()));
 
-        match environment_for_delete.delete_environment(Kind::Scw, &context_for_delete, &env_action_for_delete, logger)
-        {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let result =
+            environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
+        assert!(matches!(result, TransactionResult::Ok));
 
-        if let Err(e) = clean_environments(&context, vec![environment.clone()], secrets.clone(), SCW_TEST_ZONE) {
+        if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 

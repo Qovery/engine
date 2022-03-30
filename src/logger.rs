@@ -1,16 +1,8 @@
 use crate::events::{EngineEvent, EventMessageVerbosity};
 use tracing;
 
-#[derive(Debug, Clone)]
-pub enum LogLevel {
-    Debug,
-    Info,
-    Warning,
-    Error,
-}
-
 pub trait Logger: Send + Sync {
-    fn log(&self, log_level: LogLevel, event: EngineEvent);
+    fn log(&self, event: EngineEvent);
     fn clone_dyn(&self) -> Box<dyn Logger>;
 }
 
@@ -37,7 +29,7 @@ impl Default for StdIoLogger {
 }
 
 impl Logger for StdIoLogger {
-    fn log(&self, log_level: LogLevel, event: EngineEvent) {
+    fn log(&self, event: EngineEvent) {
         let event_details = event.get_details();
         let stage = event_details.stage();
         let execution_id = event_details.execution_id().to_string();
@@ -63,11 +55,11 @@ impl Logger for StdIoLogger {
             transmitter = event_details.transmitter().to_string().as_str(),
         )
         .in_scope(|| {
-            match log_level {
-                LogLevel::Debug => debug!("{}", event.message(EventMessageVerbosity::FullDetails)),
-                LogLevel::Info => info!("{}", event.message(EventMessageVerbosity::FullDetails)),
-                LogLevel::Warning => warn!("{}", event.message(EventMessageVerbosity::FullDetails)),
-                LogLevel::Error => error!("{}", event.message(EventMessageVerbosity::FullDetails)),
+            match event {
+                EngineEvent::Debug(_, _) => debug!("{}", event.message(EventMessageVerbosity::FullDetails)),
+                EngineEvent::Info(_, _) => info!("{}", event.message(EventMessageVerbosity::FullDetails)),
+                EngineEvent::Warning(_, _) => warn!("{}", event.message(EventMessageVerbosity::FullDetails)),
+                EngineEvent::Error(_, _) => error!("{}", event.message(EventMessageVerbosity::FullDetails)),
             };
         });
     }
@@ -80,18 +72,17 @@ impl Logger for StdIoLogger {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cloud_provider::scaleway::application::ScwRegion;
     use crate::cloud_provider::Kind;
     use crate::errors;
     use crate::errors::EngineError;
     use crate::events::{EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
-    use crate::models::QoveryIdentifier;
+    use crate::io_models::QoveryIdentifier;
+    use crate::models::scaleway::ScwRegion;
     use tracing_test::traced_test;
     use url::Url;
     use uuid::Uuid;
 
     struct TestCase<'a> {
-        log_level: LogLevel,
         event: EngineEvent,
         description: &'a str,
     }
@@ -100,11 +91,11 @@ mod tests {
     #[test]
     fn test_log() {
         // setup:
-        let orga_id = QoveryIdentifier::new(Uuid::new_v4().to_string());
-        let cluster_id = QoveryIdentifier::new(Uuid::new_v4().to_string());
+        let orga_id = QoveryIdentifier::new_from_long_id(Uuid::new_v4().to_string());
+        let cluster_id = QoveryIdentifier::new_from_long_id(Uuid::new_v4().to_string());
         let cluster_name = format!("qovery-{}", cluster_id);
-        let execution_id = QoveryIdentifier::new(Uuid::new_v4().to_string());
-        let app_id = QoveryIdentifier::new(Uuid::new_v4().to_string());
+        let execution_id = QoveryIdentifier::new_from_long_id(Uuid::new_v4().to_string());
+        let app_id = QoveryIdentifier::new_from_long_id(Uuid::new_v4().to_string());
         let app_name = format!("simple-app-{}", app_id);
         let qovery_message = "Qovery message";
         let user_message = "User message";
@@ -115,31 +106,32 @@ mod tests {
 
         let test_cases = vec![
             TestCase {
-                log_level: LogLevel::Error,
-                event: EngineEvent::Error(EngineError::new_unknown(
-                    EventDetails::new(
-                        Some(Kind::Scw),
-                        orga_id.clone(),
-                        cluster_id.clone(),
-                        execution_id.clone(),
-                        Some(ScwRegion::Paris.as_str().to_string()),
-                        Stage::Infrastructure(InfrastructureStep::Create),
-                        Transmitter::Kubernetes(cluster_id.to_string(), cluster_name.to_string()),
+                event: EngineEvent::Error(
+                    EngineError::new_unknown(
+                        EventDetails::new(
+                            Some(Kind::Scw),
+                            orga_id.clone(),
+                            cluster_id.clone(),
+                            execution_id.clone(),
+                            Some(ScwRegion::Paris.as_str().to_string()),
+                            Stage::Infrastructure(InfrastructureStep::Create),
+                            Transmitter::Kubernetes(cluster_id.to_string(), cluster_name.to_string()),
+                        ),
+                        qovery_message.to_string(),
+                        user_message.to_string(),
+                        Some(errors::CommandError::new(
+                            safe_message.to_string(),
+                            Some(raw_message.to_string()),
+                        )),
+                        Some(link),
+                        Some(hint.to_string()),
                     ),
-                    qovery_message.to_string(),
-                    user_message.to_string(),
-                    Some(errors::CommandError::new(
-                        safe_message.to_string(),
-                        Some(raw_message.to_string()),
-                    )),
-                    Some(link.clone()),
-                    Some(hint.to_string()),
-                )),
+                    None,
+                ),
                 description: "Error event",
             },
             TestCase {
-                log_level: LogLevel::Info,
-                event: EngineEvent::Deploying(
+                event: EngineEvent::Info(
                     EventDetails::new(
                         Some(Kind::Scw),
                         orga_id.clone(),
@@ -147,15 +139,14 @@ mod tests {
                         execution_id.clone(),
                         Some(ScwRegion::Paris.as_str().to_string()),
                         Stage::Infrastructure(InfrastructureStep::Create),
-                        Transmitter::Kubernetes(cluster_id.to_string(), cluster_name.to_string()),
+                        Transmitter::Kubernetes(cluster_id.to_string(), cluster_name),
                     ),
                     EventMessage::new(raw_message.to_string(), Some(safe_message.to_string())),
                 ),
                 description: "Deploying info event",
             },
             TestCase {
-                log_level: LogLevel::Debug,
-                event: EngineEvent::Pausing(
+                event: EngineEvent::Debug(
                     EventDetails::new(
                         Some(Kind::Scw),
                         orga_id.clone(),
@@ -170,8 +161,7 @@ mod tests {
                 description: "Pausing application debug event",
             },
             TestCase {
-                log_level: LogLevel::Warning,
-                event: EngineEvent::Pausing(
+                event: EngineEvent::Warning(
                     EventDetails::new(
                         Some(Kind::Scw),
                         orga_id.clone(),
@@ -179,7 +169,7 @@ mod tests {
                         execution_id.clone(),
                         Some(ScwRegion::Paris.as_str().to_string()),
                         Stage::Environment(EnvironmentStep::Delete),
-                        Transmitter::Application(app_id.to_string(), app_name.to_string()),
+                        Transmitter::Application(app_id.to_string(), app_name),
                     ),
                     EventMessage::new(raw_message.to_string(), Some(safe_message.to_string())),
                 ),
@@ -191,15 +181,15 @@ mod tests {
 
         for tc in test_cases {
             // execute:
-            logger.log(tc.log_level.clone(), tc.event.clone());
+            logger.log(tc.event.clone());
 
             // validate:
             assert!(
-                logs_contain(match tc.log_level {
-                    LogLevel::Debug => "DEBUG",
-                    LogLevel::Info => "INFO",
-                    LogLevel::Warning => "WARN",
-                    LogLevel::Error => "ERROR",
+                logs_contain(match tc.event {
+                    EngineEvent::Debug(_, _) => "DEBUG",
+                    EngineEvent::Info(_, _) => "INFO",
+                    EngineEvent::Warning(_, _) => "WARN",
+                    EngineEvent::Error(_, _) => "ERROR",
                 }),
                 "{}",
                 tc.description
@@ -216,7 +206,7 @@ mod tests {
                 tc.description
             );
             assert!(
-                logs_contain(format!("execution_id=\"{}\"", execution_id.to_string()).as_str()),
+                logs_contain(format!("execution_id=\"{}\"", execution_id).as_str()),
                 "{}",
                 tc.description
             );
@@ -253,17 +243,17 @@ mod tests {
             );
 
             assert!(
-                logs_contain(format!("stage=\"{}\"", details.stage().to_string()).as_str()),
+                logs_contain(format!("stage=\"{}\"", details.stage()).as_str()),
                 "{}",
                 tc.description
             );
             assert!(
-                logs_contain(format!("step=\"{}\"", details.stage().sub_step_name().to_string()).as_str()),
+                logs_contain(format!("step=\"{}\"", details.stage().sub_step_name()).as_str()),
                 "{}",
                 tc.description
             );
             assert!(
-                logs_contain(format!("transmitter=\"{}\"", details.transmitter().to_string()).as_str()),
+                logs_contain(format!("transmitter=\"{}\"", details.transmitter()).as_str()),
                 "{}",
                 tc.description
             );

@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 extern crate tera;
 #[macro_use]
 extern crate tracing;
@@ -17,11 +19,11 @@ pub mod errors;
 pub mod events;
 pub mod fs;
 pub mod git;
+pub mod io_models;
 pub mod logger;
 pub mod models;
 pub mod object_storage;
 pub mod runtime;
-pub mod session;
 mod string;
 mod template;
 pub mod transaction;

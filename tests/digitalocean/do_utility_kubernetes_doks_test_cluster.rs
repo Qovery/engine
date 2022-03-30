@@ -1,14 +1,11 @@
 extern crate test_utilities;
 
-use self::test_utilities::cloudflare::dns_provider_cloudflare;
 use self::test_utilities::utilities::{context, engine_run_test, init, logger, FuncTestsSecrets};
 use ::function_name::named;
-use qovery_engine::cloud_provider::digitalocean::DO;
+use test_utilities::digitalocean::do_default_engine_config;
 use tracing::{span, Level};
 
-use self::test_utilities::common::{Cluster, ClusterDomain};
-use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
-use qovery_engine::transaction::TransactionResult;
+use qovery_engine::transaction::{Transaction, TransactionResult};
 
 // Warning: This test shouldn't be ran by CI
 // Note: this test creates the test cluster where all application tests will be ran
@@ -35,42 +32,18 @@ fn create_digitalocean_kubernetes_doks_test_cluster() {
             .DIGITAL_OCEAN_TEST_CLUSTER_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set");
-        let cluster_name = format!("qovery-{}", cluster_id.clone());
 
         let logger = logger();
         let context = context(organization_id.as_str(), cluster_id.as_str());
-        let engine = DO::docker_cr_engine(&context, logger.clone());
-        let session = engine.session().unwrap();
-        let mut tx = session.transaction();
-
-        let do_cluster = DO::cloud_provider(&context);
-        let nodes = DO::kubernetes_nodes();
-        let cloudflare = dns_provider_cloudflare(&context, ClusterDomain::Default);
-
-        let kubernetes = DOKS::new(
-            context.clone(),
-            cluster_id.to_string(),
-            uuid::Uuid::new_v4(),
-            cluster_name.to_string(),
-            test_utilities::digitalocean::DO_KUBERNETES_VERSION.to_string(),
-            test_utilities::digitalocean::DO_TEST_REGION,
-            do_cluster.as_ref(),
-            &cloudflare,
-            nodes,
-            DO::kubernetes_cluster_options(secrets, Option::from(cluster_name.to_string())),
-            logger.as_ref(),
-        )
-        .unwrap();
+        let engine = do_default_engine_config(&context, logger.clone());
+        let mut tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
         // Deploy
-        if let Err(err) = tx.create_kubernetes(&kubernetes) {
+        if let Err(err) = tx.create_kubernetes() {
             panic!("{:?}", err)
         }
-        let _ = match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = tx.commit();
+        assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()
     });
@@ -101,42 +74,18 @@ fn destroy_digitalocean_kubernetes_doks_test_cluster() {
             .DIGITAL_OCEAN_TEST_CLUSTER_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set");
-        let cluster_name = format!("qovery-{}", cluster_id.clone());
 
         let logger = logger();
         let context = context(organization_id.as_str(), cluster_id.as_str());
-        let engine = DO::docker_cr_engine(&context, logger.clone());
-        let session = engine.session().unwrap();
-        let mut tx = session.transaction();
-
-        let do_cluster = DO::cloud_provider(&context);
-        let nodes = DO::kubernetes_nodes();
-        let cloudflare = dns_provider_cloudflare(&context, ClusterDomain::Default);
-
-        let kubernetes = DOKS::new(
-            context.clone(),
-            cluster_id.to_string(),
-            uuid::Uuid::new_v4(),
-            cluster_name.to_string(),
-            test_utilities::digitalocean::DO_KUBERNETES_VERSION.to_string(),
-            test_utilities::digitalocean::DO_TEST_REGION,
-            do_cluster.as_ref(),
-            &cloudflare,
-            nodes,
-            DO::kubernetes_cluster_options(secrets, Option::from(cluster_name.to_string())),
-            logger.as_ref(),
-        )
-        .unwrap();
+        let engine = do_default_engine_config(&context, logger.clone());
+        let mut tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
         // Destroy
-        if let Err(err) = tx.delete_kubernetes(&kubernetes) {
+        if let Err(err) = tx.delete_kubernetes() {
             panic!("{:?}", err)
         }
-        match tx.commit() {
-            TransactionResult::Ok => assert!(true),
-            TransactionResult::Rollback(_) => assert!(false),
-            TransactionResult::UnrecoverableError(_, _) => assert!(false),
-        };
+        let ret = tx.commit();
+        assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()
     });
