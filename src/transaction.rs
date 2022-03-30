@@ -430,7 +430,7 @@ impl<'a> Transaction<'a> {
 
         match result {
             Err(err) => {
-                warn!("infrastructure ROLLBACK STARTED! an error occurred {:?}", err);
+                warn!("infrastructure ROLLBACK STARTED! an error occurred {}", err);
                 match self.rollback() {
                     Ok(_) => {
                         // an error occurred on infrastructure deployment BUT rolledback is OK
@@ -601,17 +601,24 @@ impl Clone for Step {
     }
 }
 
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum RollbackError {
+    #[error("Commit error: {0}")]
     CommitError(Box<EngineError>),
+    #[error("No failover environment")]
     NoFailoverEnvironment,
+    #[error("Nothing")]
     Nothing,
 }
 
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum TransactionResult {
+    #[error("Ok")]
     Ok,
+    #[error("Canceled")]
     Canceled,
+    #[error("Rollback: {0}")]
     Rollback(EngineError),
+    #[error("Unrecoverable error: {0}, {1}")]
     UnrecoverableError(EngineError, RollbackError),
 }
