@@ -4,10 +4,6 @@ terraform {
       source = "hashicorp/aws"
       version    = "~> 3.66.0"
     }
-    kubernetes = {
-      source = "hashicorp/kubernetes"
-      version = "~> 2.9.0"
-    }
     external = {
       source = "hashicorp/external"
       version = "~> 1.2"

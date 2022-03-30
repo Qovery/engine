@@ -539,7 +539,7 @@ where
                     cluster_name.clone().as_str(),
                 ) {
                     Ok(kubeconfig) => kubeconfig,
-                    Err(e) => return OperationResult::Retry(CommandError::new(e.message(), Some(e.message()))),
+                    Err(e) => return OperationResult::Retry(e),
                 };
 
                 match kubeconfig {

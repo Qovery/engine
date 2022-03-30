@@ -14,7 +14,6 @@ use tera::Context as TeraContext;
 use crate::cloud_provider::aws::kubernetes::helm_charts::{aws_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
-use crate::cloud_provider::aws::kubernetes::users::get_cluster_users;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
@@ -36,7 +35,7 @@ use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, 
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::{
@@ -52,7 +51,6 @@ use ::function_name::named;
 pub mod helm_charts;
 pub mod node;
 pub mod roles;
-mod users;
 
 // https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -591,19 +589,6 @@ impl EKS {
 
         };
 
-        // get cluster creator name
-        let mut users: Vec<String> = vec![];
-        match get_cluster_users(
-            self.cloud_provider.access_key_id().as_str(),
-            self.cloud_provider.secret_access_key().as_str(),
-        ) {
-            Ok(result) => users = result,
-            Err(e) => self.logger().log(EngineEvent::Error(
-                EngineError::new_cannot_get_cluster_iam_user(event_details.clone(), e),
-                None,
-            )),
-        };
-
         // create AWS IAM roles
         let already_created_roles = get_default_roles_to_create();
         for role in already_created_roles {
@@ -738,7 +723,6 @@ impl EKS {
             cloudflare_email: self.dns_provider.account().to_string(),
             cloudflare_api_token: self.dns_provider.token().to_string(),
             disable_pleco: self.context.disable_pleco(),
-            users,
         };
 
         self.logger().log(EngineEvent::Info(
@@ -779,7 +763,10 @@ impl EKS {
                 .log(EngineEvent::Info(event_details, EventMessage::new(ok_line, None))),
             Err(err) => self.logger().log(EngineEvent::Warning(
                 event_details,
-                EventMessage::new("Error trying to get kubernetes events".to_string(), Some(err.message())),
+                EventMessage::new(
+                    "Error trying to get kubernetes events".to_string(),
+                    Some(err.message(ErrorMessageVerbosity::FullDetails)),
+                ),
             )),
         };
 
@@ -1027,7 +1014,7 @@ impl EKS {
                 let safe_message = "Skipping Kubernetes uninstall because it can't be reached.";
                 self.logger().log(EngineEvent::Warning(
                     event_details.clone(),
-                    EventMessage::new(safe_message.to_string(), Some(e.message())),
+                    EventMessage::new(safe_message.to_string(), Some(e.message(ErrorMessageVerbosity::FullDetails))),
                 ));
 
                 skip_kubernetes_step = true;
@@ -1100,7 +1087,7 @@ impl EKS {
                                 )),
                             )),
                             Err(e) => {
-                                if !(e.message().contains("not found")) {
+                                if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
                                     self.logger().log(EngineEvent::Warning(
                                         event_details.clone(),
                                         EventMessage::new_from_safe(format!(
@@ -1120,7 +1107,7 @@ impl EKS {
                     );
                     self.logger().log(EngineEvent::Warning(
                         event_details.clone(),
-                        EventMessage::new(message_safe, Some(e.message())),
+                        EventMessage::new(message_safe, Some(e.message(ErrorMessageVerbosity::FullDetails))),
                     ));
                 }
             }
@@ -1198,7 +1185,7 @@ impl EKS {
                         EventMessage::new_from_safe(format!("Namespace {} is fully deleted", qovery_namespace)),
                     )),
                     Err(e) => {
-                        if !(e.message().contains("not found")) {
+                        if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
                             self.logger().log(EngineEvent::Warning(
                                 event_details.clone(),
                                 EventMessage::new_from_safe(format!("Can't delete namespace {}.", qovery_namespace)),

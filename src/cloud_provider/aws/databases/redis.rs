@@ -438,29 +438,24 @@ fn get_managed_redis_version(requested_version: String) -> Result<String, Comman
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::aws::databases::redis::get_redis_version;
+    use crate::errors::ErrorMessageVerbosity;
 
     #[test]
     fn check_redis_version() {
         // managed version
         assert_eq!(get_redis_version("6".to_string(), true).unwrap(), "6.x");
         assert_eq!(get_redis_version("5".to_string(), true).unwrap(), "5.0.6");
-        assert_eq!(
-            get_redis_version("1.0".to_string(), true)
-                .unwrap_err()
-                .message()
-                .as_str(),
-            "Elasticache 1.0 version is not supported"
-        );
+        assert!(get_redis_version("1.0".to_string(), true)
+            .unwrap_err()
+            .message(ErrorMessageVerbosity::FullDetails)
+            .contains("Elasticache 1.0 version is not supported"));
 
         // self-hosted version
         assert_eq!(get_redis_version("6".to_string(), false).unwrap(), "6.0.9");
         assert_eq!(get_redis_version("6.0".to_string(), false).unwrap(), "6.0.9");
-        assert_eq!(
-            get_redis_version("1.0".to_string(), false)
-                .unwrap_err()
-                .message()
-                .as_str(),
-            "Redis 1.0 version is not supported"
-        );
+        assert!(get_redis_version("1.0".to_string(), false)
+            .unwrap_err()
+            .message(ErrorMessageVerbosity::FullDetails)
+            .contains("Redis 1.0 version is not supported"));
     }
 }

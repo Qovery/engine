@@ -54,7 +54,6 @@ pub struct ChartsConfigPrerequisites {
     pub disable_pleco: bool,
     // qovery options form json input
     pub infra_options: Options,
-    pub users: Vec<String>,
 }
 
 pub fn aws_helm_charts(
@@ -254,22 +253,11 @@ pub fn aws_helm_charts(
         },
     };
 
-    let users = chart_config_prerequisites
-        .users
-        .clone()
-        .into_iter()
-        .enumerate()
-        .map(|(index, user)| ChartSetValue {
-            key: format!("users[{}]", index),
-            value: user,
-        })
-        .collect();
     let aws_ui_view = CommonChart {
         chart_info: ChartInfo {
             name: "aws-ui-view".to_string(),
             path: chart_path("charts/aws-ui-view"),
             namespace: HelmChartNamespaces::KubeSystem,
-            values: users,
             ..Default::default()
         },
     };
