@@ -429,28 +429,23 @@ fn get_managed_mongodb_version(requested_version: String) -> Result<String, Comm
 #[cfg(test)]
 mod tests_mongodb {
     use crate::cloud_provider::aws::databases::mongodb::get_mongodb_version;
+    use crate::errors::ErrorMessageVerbosity;
 
     #[test]
     fn check_mongodb_version() {
         // managed version
         assert_eq!(get_mongodb_version("4".to_string(), true).unwrap(), "4.0.0");
         assert_eq!(get_mongodb_version("4.0".to_string(), true).unwrap(), "4.0.0");
-        assert_eq!(
-            get_mongodb_version("4.4".to_string(), true)
-                .unwrap_err()
-                .message()
-                .as_str(),
-            "DocumentDB 4.4 version is not supported"
-        );
+        assert!(get_mongodb_version("4.4".to_string(), true)
+            .unwrap_err()
+            .message(ErrorMessageVerbosity::FullDetails)
+            .contains("DocumentDB 4.4 version is not supported"));
         // self-hosted version
         assert_eq!(get_mongodb_version("4".to_string(), false).unwrap(), "4.4.4");
         assert_eq!(get_mongodb_version("4.2".to_string(), false).unwrap(), "4.2.12");
-        assert_eq!(
-            get_mongodb_version("3.4".to_string(), false)
-                .unwrap_err()
-                .message()
-                .as_str(),
-            "MongoDB 3.4 version is not supported"
-        );
+        assert!(get_mongodb_version("3.4".to_string(), false)
+            .unwrap_err()
+            .message(ErrorMessageVerbosity::FullDetails)
+            .contains("MongoDB 3.4 version is not supported"));
     }
 }

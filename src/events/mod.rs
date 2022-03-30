@@ -7,7 +7,7 @@ pub mod io;
 extern crate url;
 
 use crate::cloud_provider::Kind;
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::io_models::QoveryIdentifier;
 use std::fmt::{Display, Formatter};
 
@@ -41,7 +41,7 @@ impl EngineEvent {
             EngineEvent::Debug(_details, message) => message.message(message_verbosity),
             EngineEvent::Info(_details, message) => message.message(message_verbosity),
             EngineEvent::Warning(_details, message) => message.message(message_verbosity),
-            EngineEvent::Error(engine_error, _message) => engine_error.message(),
+            EngineEvent::Error(engine_error, _message) => engine_error.message(message_verbosity.into()),
         }
     }
 }
@@ -49,7 +49,18 @@ impl EngineEvent {
 /// EventMessageVerbosity: represents event message's verbosity from minimal to full verbosity.
 pub enum EventMessageVerbosity {
     SafeOnly,
+    FullDetailsWithoutEnvVars,
     FullDetails,
+}
+
+impl From<EventMessageVerbosity> for ErrorMessageVerbosity {
+    fn from(verbosity: EventMessageVerbosity) -> Self {
+        match verbosity {
+            EventMessageVerbosity::SafeOnly => ErrorMessageVerbosity::SafeOnly,
+            EventMessageVerbosity::FullDetailsWithoutEnvVars => ErrorMessageVerbosity::FullDetailsWithoutEnvVars,
+            EventMessageVerbosity::FullDetails => ErrorMessageVerbosity::FullDetails,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -59,6 +70,8 @@ pub struct EventMessage {
     safe_message: String,
     // String containing full details including touchy data (passwords and tokens).
     full_details: Option<String>,
+    // Environments variables including touchy data such as secret keys.
+    env_vars: Option<Vec<(String, String)>>,
 }
 
 impl EventMessage {
@@ -72,6 +85,26 @@ impl EventMessage {
         EventMessage {
             safe_message,
             full_details,
+            env_vars: None,
+        }
+    }
+
+    /// Creates e new EventMessage with environment variables.
+    ///
+    /// Arguments
+    ///
+    /// * `safe_message`: Event safe message string (from which all unsafe text such as passwords and tokens has been removed).
+    /// * `full_details`: Event raw message string (which may include unsafe text such as passwords and tokens).
+    /// * `env_vars`: Event environment variables (which may contains unsafe text such as secrets keys).
+    pub fn new_with_env_vars(
+        safe_message: String,
+        full_details: Option<String>,
+        env_vars: Option<Vec<(String, String)>>,
+    ) -> Self {
+        EventMessage {
+            safe_message,
+            full_details,
+            env_vars,
         }
     }
 
@@ -84,6 +117,7 @@ impl EventMessage {
         EventMessage {
             safe_message,
             full_details: None,
+            env_vars: None,
         }
     }
 
@@ -95,9 +129,27 @@ impl EventMessage {
     pub fn message(&self, message_verbosity: EventMessageVerbosity) -> String {
         match message_verbosity {
             EventMessageVerbosity::SafeOnly => self.safe_message.to_string(),
-            EventMessageVerbosity::FullDetails => match &self.full_details {
+            EventMessageVerbosity::FullDetailsWithoutEnvVars => match &self.full_details {
                 None => self.safe_message.to_string(),
                 Some(details) => format!("{} / Full details: {}", self.safe_message, details),
+            },
+            EventMessageVerbosity::FullDetails => match &self.full_details {
+                None => self.safe_message.to_string(),
+                Some(details) => match &self.env_vars {
+                    None => format!("{} / Full details: {}", self.safe_message, details),
+                    Some(env_vars) => {
+                        format!(
+                            "{} / Full details: {} / Env vars: {}",
+                            self.safe_message,
+                            details,
+                            env_vars
+                                .iter()
+                                .map(|(k, v)| format!("{}={}", k, v))
+                                .collect::<Vec<String>>()
+                                .join(" "),
+                        )
+                    }
+                },
             },
         }
     }
@@ -105,7 +157,7 @@ impl EventMessage {
 
 impl From<CommandError> for EventMessage {
     fn from(e: CommandError) -> Self {
-        EventMessage::new(e.message_raw(), e.message_safe())
+        EventMessage::new_with_env_vars(e.message_raw(), e.message_safe(), e.env_vars())
     }
 }
 
@@ -420,27 +472,61 @@ mod tests {
     #[test]
     fn test_event_message() {
         // setup:
-        let test_cases: Vec<(String, Option<String>, EventMessageVerbosity, String)> = vec![
+        let test_cases: Vec<(
+            String,
+            Option<String>,
+            Option<Vec<(String, String)>>,
+            EventMessageVerbosity,
+            String,
+        )> = vec![
             (
                 "safe".to_string(),
                 Some("raw".to_string()),
+                Some(vec![("env".to_string(), "value".to_string())]),
                 EventMessageVerbosity::SafeOnly,
                 "safe".to_string(),
             ),
-            ("safe".to_string(), None, EventMessageVerbosity::SafeOnly, "safe".to_string()),
-            ("safe".to_string(), None, EventMessageVerbosity::FullDetails, "safe".to_string()),
+            (
+                "safe".to_string(),
+                None,
+                None,
+                EventMessageVerbosity::SafeOnly,
+                "safe".to_string(),
+            ),
+            (
+                "safe".to_string(),
+                None,
+                None,
+                EventMessageVerbosity::FullDetails,
+                "safe".to_string(),
+            ),
             (
                 "safe".to_string(),
                 Some("raw".to_string()),
+                None,
                 EventMessageVerbosity::FullDetails,
                 "safe / Full details: raw".to_string(),
+            ),
+            (
+                "safe".to_string(),
+                Some("raw".to_string()),
+                Some(vec![("env".to_string(), "value".to_string())]),
+                EventMessageVerbosity::FullDetailsWithoutEnvVars,
+                "safe / Full details: raw".to_string(),
+            ),
+            (
+                "safe".to_string(),
+                Some("raw".to_string()),
+                Some(vec![("env".to_string(), "value".to_string())]),
+                EventMessageVerbosity::FullDetails,
+                "safe / Full details: raw / Env vars: env=value".to_string(),
             ),
         ];
 
         for tc in test_cases {
             // execute:
-            let (safe_message, raw_message, verbosity, expected) = tc;
-            let event_message = EventMessage::new(safe_message, raw_message);
+            let (safe_message, raw_message, env_vars, verbosity, expected) = tc;
+            let event_message = EventMessage::new_with_env_vars(safe_message, raw_message, env_vars);
 
             // validate:
             assert_eq!(expected, event_message.message(verbosity));
