@@ -729,7 +729,7 @@ impl Database {
                 Some(Box::new(db))
             }
             (CPKind::Aws, DatabaseKind::Redis, DatabaseMode::MANAGED) => {
-                let db = models::database::Database::<AWS, Container, Redis>::new(
+                let db = models::database::Database::<AWS, Managed, Redis>::new(
                     context.clone(),
                     self.id.as_str(),
                     self.action.to_service_action(),
