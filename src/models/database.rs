@@ -1,7 +1,7 @@
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
-    get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Create, DatabaseOptions, Delete, Helm,
-    Pause, Service, ServiceType, ServiceVersionCheckResult, StatefulService, Terraform,
+    get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Create, DatabaseOptions,
+    DatabaseService, Delete, Helm, Pause, Service, ServiceType, ServiceVersionCheckResult, StatefulService, Terraform,
 };
 use crate::cloud_provider::utilities::{check_domain_for, managed_db_name_sanitizer, print_action};
 use crate::cloud_provider::{service, DeploymentTarget};
@@ -432,7 +432,7 @@ where
     }
 }
 
-impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> service::Database for Database<C, M, T> where
+impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> DatabaseService for Database<C, M, T> where
     Database<C, M, T>: ToTeraContext
 {
 }

@@ -174,7 +174,7 @@ pub trait RouterService: StatelessService + Listen + Helm {
     }
 }
 
-pub trait Database: StatefulService {
+pub trait DatabaseService: StatefulService {
     fn check_domains(
         &self,
         listeners: Listeners,
@@ -462,7 +462,7 @@ where
 
 pub fn scale_down_database(
     target: &DeploymentTarget,
-    service: &impl Database,
+    service: &impl DatabaseService,
     replicas_count: usize,
 ) -> Result<(), EngineError> {
     if service.is_managed_service() {

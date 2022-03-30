@@ -626,7 +626,7 @@ impl Database {
         context: &Context,
         cloud_provider: &dyn CloudProvider,
         logger: Box<dyn Logger>,
-    ) -> Result<Box<dyn crate::cloud_provider::service::Database>, DatabaseError> {
+    ) -> Result<Box<dyn crate::cloud_provider::service::DatabaseService>, DatabaseError> {
         let database_options = DatabaseOptions {
             mode: self.mode.clone(),
             login: self.username.clone(),
