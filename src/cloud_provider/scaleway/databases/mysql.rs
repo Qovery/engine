@@ -5,9 +5,7 @@ use crate::cloud_provider::service::{
     get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Create, Database, DatabaseOptions,
     DatabaseType, Delete, Helm, Pause, Service, ServiceType, ServiceVersionCheckResult, StatefulService, Terraform,
 };
-use crate::cloud_provider::utilities::{
-    get_self_hosted_mysql_version, get_supported_version_to_use, print_action, sanitize_name, VersionsNumber,
-};
+use crate::cloud_provider::utilities::{print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
@@ -16,6 +14,8 @@ use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmi
 use crate::io_models::DatabaseMode::MANAGED;
 use crate::io_models::{Context, Listen, Listener, Listeners};
 use crate::logger::Logger;
+use crate::models::database_utils::{get_self_hosted_mysql_version, get_supported_version_to_use};
+use crate::models::types::VersionsNumber;
 use ::function_name::named;
 use std::collections::HashMap;
 

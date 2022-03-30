@@ -1,5 +1,5 @@
-use crate::cloud_provider::utilities::{generate_supported_version, get_supported_version_to_use};
 use crate::errors::CommandError;
+use crate::models::database_utils::{generate_supported_version, get_supported_version_to_use};
 use std::collections::HashMap;
 
 pub(crate) fn get_managed_mysql_version(requested_version: String) -> Result<String, CommandError> {
@@ -80,12 +80,12 @@ pub(crate) fn get_managed_redis_version(requested_version: String) -> Result<Str
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::utilities::{
-        get_self_hosted_mongodb_version, get_self_hosted_mysql_version, get_self_hosted_postgres_version,
-        get_self_hosted_redis_version,
-    };
     use crate::models::aws::database_utils::{
         get_managed_mongodb_version, get_managed_mysql_version, get_managed_postgres_version, get_managed_redis_version,
+    };
+    use crate::models::database_utils::{
+        get_self_hosted_mongodb_version, get_self_hosted_mysql_version, get_self_hosted_postgres_version,
+        get_self_hosted_redis_version,
     };
 
     #[test]

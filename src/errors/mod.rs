@@ -3,7 +3,6 @@ pub mod io;
 extern crate url;
 
 use crate::build_platform::BuildError;
-use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cmd;
 use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
@@ -11,6 +10,7 @@ use crate::container_registry::errors::ContainerRegistryError;
 use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
 use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
 use crate::io_models::QoveryIdentifier;
+use crate::models::types::VersionsNumber;
 use crate::object_storage::errors::ObjectStorageError;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;

@@ -24,7 +24,6 @@ use crate::cloud_provider::scaleway::databases::mysql::MySQLScw;
 use crate::cloud_provider::scaleway::databases::postgresql::PostgresScw;
 use crate::cloud_provider::scaleway::databases::redis::RedisScw;
 use crate::cloud_provider::service::{DatabaseOptions, RouterService};
-use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CPKind;
 use crate::cmd::docker::Docker;
@@ -38,7 +37,7 @@ use crate::models::database::{Container, Managed, MongoDB, MySQL, PostgresSQL, R
 use crate::models::digital_ocean::{DoAppExtraSettings, DoRouterExtraSettings, DoStorageType};
 use crate::models::router::RouterError;
 use crate::models::scaleway::{ScwAppExtraSettings, ScwRouterExtraSettings, ScwStorageType};
-use crate::models::types::{AWS, DO, SCW};
+use crate::models::types::{VersionsNumber, AWS, DO, SCW};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct QoveryIdentifier {

@@ -2,10 +2,6 @@ use crate::cloud_provider::service::{
     check_service_version, default_tera_context, get_tfstate_name, get_tfstate_suffix, DatabaseOptions, Service,
     ServiceVersionCheckResult,
 };
-use crate::cloud_provider::utilities::{
-    get_self_hosted_mongodb_version, get_self_hosted_mysql_version, get_self_hosted_postgres_version,
-    get_self_hosted_redis_version,
-};
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::errors::EngineError;
@@ -15,6 +11,10 @@ use crate::models::aws::database_utils::{
 };
 use crate::models::database::{
     Container, Database, DatabaseMode, DatabaseType, Managed, MongoDB, MySQL, PostgresSQL, Redis,
+};
+use crate::models::database_utils::{
+    get_self_hosted_mongodb_version, get_self_hosted_mysql_version, get_self_hosted_postgres_version,
+    get_self_hosted_redis_version,
 };
 use crate::models::types::{ToTeraContext, AWS};
 use tera::Context as TeraContext;

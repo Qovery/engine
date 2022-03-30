@@ -10,7 +10,7 @@ use tera::Context as TeraContext;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::utilities::{check_domain_for, VersionsNumber};
+use crate::cloud_provider::utilities::check_domain_for;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd;
 use crate::cmd::helm;
@@ -26,6 +26,7 @@ use crate::io_models::{
     QoveryIdentifier,
 };
 use crate::logger::Logger;
+use crate::models::types::VersionsNumber;
 
 pub trait Service: ToTransmitter {
     fn context(&self) -> &Context;
