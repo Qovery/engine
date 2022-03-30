@@ -18,7 +18,6 @@ use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::models::{CpuLimits, NodeGroups};
 use crate::cloud_provider::service::CheckAction;
-use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::cmd::kubectl::{
@@ -36,6 +35,7 @@ use crate::io_models::{
     Action, Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier, StringPath,
 };
 use crate::logger::Logger;
+use crate::models::types::VersionsNumber;
 use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
 
@@ -1425,18 +1425,18 @@ pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, CommandError> 
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::Kind::Aws;
-    use std::str::FromStr;
 
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, convert_k8s_cpu_value_to_f32,
         validate_k8s_required_cpu_and_burstable, KubernetesNodesType,
     };
     use crate::cloud_provider::models::CpuLimits;
-    use crate::cloud_provider::utilities::VersionsNumber;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::{ListenersHelper, QoveryIdentifier};
     use crate::logger::StdIoLogger;
+    use crate::models::types::VersionsNumber;
+    use std::str::FromStr;
 
     #[test]
     pub fn check_kubernetes_upgrade_method() {

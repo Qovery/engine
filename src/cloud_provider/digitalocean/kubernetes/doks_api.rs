@@ -1,8 +1,8 @@
 use crate::cloud_provider::digitalocean::do_api_common::{do_get_from_api, DoApiType};
 use crate::cloud_provider::digitalocean::models::doks::KubernetesCluster;
 use crate::cloud_provider::digitalocean::models::doks::{DoksList, DoksOptions, KubernetesVersion};
-use crate::cloud_provider::utilities::VersionsNumber;
 use crate::errors::CommandError;
+use crate::models::types::VersionsNumber;
 use std::str::FromStr;
 
 pub fn get_doks_info_from_name(

@@ -11,7 +11,6 @@ use crate::errors::EngineError;
 use crate::events::{EventDetails, GeneralStep, Stage, ToTransmitter, Transmitter};
 use crate::io_models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
 
-pub mod databases;
 pub mod do_api_common;
 pub mod kubernetes;
 pub mod models;
