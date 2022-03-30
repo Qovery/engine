@@ -228,6 +228,7 @@ where
         self.to_aws_tera_context(target, &self.options, &check_version)
     }
 }
+
 impl ToTeraContext for Database<AWS, Container, PostgresSQL>
 where
     PostgresSQL: DatabaseType<AWS, Container>,
@@ -263,6 +264,7 @@ where
         self.to_aws_tera_context(target, &self.options, &check_version)
     }
 }
+
 impl ToTeraContext for Database<AWS, Container, MySQL>
 where
     MySQL: DatabaseType<AWS, Container>,
@@ -280,6 +282,8 @@ where
     }
 }
 
+////////////////////////////////////////////////////////////////////////:
+// MongoDB
 impl ToTeraContext for Database<AWS, Managed, MongoDB>
 where
     MongoDB: DatabaseType<AWS, Managed>,
@@ -296,6 +300,7 @@ where
         self.to_aws_tera_context(target, &self.options, &check_version)
     }
 }
+
 impl ToTeraContext for Database<AWS, Container, MongoDB>
 where
     MongoDB: DatabaseType<AWS, Container>,
@@ -314,6 +319,8 @@ where
     }
 }
 
+////////////////////////////////////////////////////////////////////////:
+// Redis
 impl ToTeraContext for Database<AWS, Managed, Redis>
 where
     Redis: DatabaseType<AWS, Managed>,
@@ -330,6 +337,7 @@ where
         self.to_aws_tera_context(target, &self.options, &check_version)
     }
 }
+
 impl ToTeraContext for Database<AWS, Container, Redis>
 where
     Redis: DatabaseType<AWS, Container>,

@@ -80,7 +80,7 @@ pub(crate) fn get_managed_redis_version(requested_version: String) -> Result<Str
 
 #[cfg(test)]
 mod tests {
-    use crate::errors::ErrorMessageVerbosity::FullDetails;
+    use crate::errors::ErrorMessageVerbosity::SafeOnly;
     use crate::models::aws::database_utils::{
         get_managed_mongodb_version, get_managed_mysql_version, get_managed_postgres_version, get_managed_redis_version,
     };
@@ -97,14 +97,14 @@ mod tests {
         assert_eq!(
             get_managed_postgres_version("12.3.0".to_string())
                 .unwrap_err()
-                .message(FullDetails)
+                .message(SafeOnly)
                 .as_str(),
             "Postgresql 12.3.0 version is not supported"
         );
         assert_eq!(
             get_managed_postgres_version("11.3".to_string())
                 .unwrap_err()
-                .message(FullDetails)
+                .message(SafeOnly)
                 .as_str(),
             "Postgresql 11.3 version is not supported"
         );
@@ -115,7 +115,7 @@ mod tests {
         assert_eq!(
             get_self_hosted_postgres_version("1.0".to_string())
                 .unwrap_err()
-                .message(FullDetails)
+                .message(SafeOnly)
                 .as_str(),
             "Postgresql 1.0 version is not supported"
         );
@@ -129,7 +129,7 @@ mod tests {
         assert_eq!(
             get_managed_redis_version("1.0".to_string())
                 .unwrap_err()
-                .message(FullDetails)
+                .message(SafeOnly)
                 .as_str(),
             "Elasticache 1.0 version is not supported"
         );
@@ -140,7 +140,7 @@ mod tests {
         assert_eq!(
             get_self_hosted_redis_version("1.0".to_string())
                 .unwrap_err()
-                .message(FullDetails)
+                .message(SafeOnly)
                 .as_str(),
             "Redis 1.0 version is not supported"
         );
@@ -155,7 +155,7 @@ mod tests {
         assert_eq!(
             get_managed_mysql_version("8.0.18".to_string())
                 .unwrap_err()
-                .message(FullDetails)
+                .message(SafeOnly)
                 .as_str(),
             "RDS MySQL 8.0.18 version is not supported"
         );
@@ -166,7 +166,7 @@ mod tests {
         assert_eq!(
             get_self_hosted_mysql_version("1.0".to_string())
                 .unwrap_err()
-                .message(FullDetails)
+                .message(SafeOnly)
                 .as_str(),
             "MySQL 1.0 version is not supported"
         );
@@ -180,7 +180,7 @@ mod tests {
         assert_eq!(
             get_managed_mongodb_version("4.4".to_string())
                 .unwrap_err()
-                .message(FullDetails)
+                .message(SafeOnly)
                 .as_str(),
             "DocumentDB 4.4 version is not supported"
         );
@@ -190,7 +190,7 @@ mod tests {
         assert_eq!(
             get_self_hosted_mongodb_version("3.4".to_string())
                 .unwrap_err()
-                .message(FullDetails)
+                .message(SafeOnly)
                 .as_str(),
             "MongoDB 3.4 version is not supported"
         );
