@@ -449,6 +449,7 @@ fn get_managed_mysql_version(requested_version: String) -> Result<String, Comman
 #[cfg(test)]
 mod tests_mysql {
     use crate::cloud_provider::aws::databases::mysql::get_mysql_version;
+    use crate::errors::ErrorMessageVerbosity;
 
     #[test]
     fn check_mysql_version() {
@@ -456,23 +457,17 @@ mod tests_mysql {
         assert_eq!(get_mysql_version("8".to_string(), true).unwrap(), "8.0.26");
         assert_eq!(get_mysql_version("8.0".to_string(), true).unwrap(), "8.0.26");
         assert_eq!(get_mysql_version("8.0.16".to_string(), true).unwrap(), "8.0.16");
-        assert_eq!(
-            get_mysql_version("8.0.18".to_string(), true)
-                .unwrap_err()
-                .message()
-                .as_str(),
-            "RDS MySQL 8.0.18 version is not supported"
-        );
+        assert!(get_mysql_version("8.0.18".to_string(), true)
+            .unwrap_err()
+            .message(ErrorMessageVerbosity::FullDetails)
+            .contains("RDS MySQL 8.0.18 version is not supported"));
         // self-hosted version
         assert_eq!(get_mysql_version("5".to_string(), false).unwrap(), "5.7.34");
         assert_eq!(get_mysql_version("5.7".to_string(), false).unwrap(), "5.7.34");
         assert_eq!(get_mysql_version("5.7.31".to_string(), false).unwrap(), "5.7.31");
-        assert_eq!(
-            get_mysql_version("1.0".to_string(), false)
-                .unwrap_err()
-                .message()
-                .as_str(),
-            "MySQL 1.0 version is not supported"
-        );
+        assert!(get_mysql_version("1.0".to_string(), false)
+            .unwrap_err()
+            .message(ErrorMessageVerbosity::FullDetails)
+            .contains("MySQL 1.0 version is not supported"));
     }
 }
