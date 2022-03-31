@@ -717,6 +717,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "993a608597367c6377b258c25d7120740f00ed23a2252b729b1932dd7866f908"
 
 [[package]]
+name = "derivative"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
+dependencies = [
+ "proc-macro2 1.0.27",
+ "quote 1.0.7",
+ "syn 1.0.73",
+]
+
+[[package]]
 name = "deunicode"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2610,6 +2621,7 @@ dependencies = [
  "base64 0.13.0",
  "chrono",
  "cmd_lib",
+ "derivative",
  "digitalocean",
  "dirs",
  "flate2",
