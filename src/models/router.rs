@@ -218,7 +218,7 @@ impl<T: CloudProvider> Helm for Router<T> {
         format!(
             "{}/{}/chart_values/nginx-ingress",
             self.context.lib_root_dir(),
-            T::helm_directory_name()
+            T::lib_directory_name()
         )
     }
 
@@ -333,7 +333,7 @@ where
         let from_dir = format!(
             "{}/{}/charts/q-ingress-tls",
             self.context.lib_root_dir(),
-            T::helm_directory_name()
+            T::lib_directory_name()
         );
         if let Err(e) =
             crate::template::generate_and_copy_all_files_into_dir(from_dir.as_str(), workspace_dir.as_str(), context)

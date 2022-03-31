@@ -25,7 +25,7 @@ use crate::cloud_provider::kubernetes::{
 };
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
-use crate::cloud_provider::utilities::{print_action, VersionsNumber};
+use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{
@@ -45,6 +45,7 @@ use crate::io_models::{
 };
 use crate::logger::Logger;
 use crate::models::digital_ocean::DoRegion;
+use crate::models::types::VersionsNumber;
 use crate::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;

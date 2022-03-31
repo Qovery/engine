@@ -220,7 +220,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
             None,
         );
         for pdb in pdbs.expect("Unable to get pdbs").items.expect("Unable to get pdbs") {
-            assert_eq!(pdb.metadata.name.contains(&environment.applications[0].name), false)
+            assert_eq!(pdb.metadata.name.contains(&environment.applications[0].id), false)
         }
 
         // Check we can resume the env
@@ -265,7 +265,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         );
         let mut filtered_pdb = false;
         for pdb in pdbs.expect("Unable to get pdbs").items.expect("Unable to get pdbs") {
-            if pdb.metadata.name.contains(&environment.applications[0].name) {
+            if pdb.metadata.name.contains(&environment.applications[0].id) {
                 filtered_pdb = true;
                 break;
             }
