@@ -1,5 +1,6 @@
 pub mod io;
 
+extern crate derivative;
 extern crate url;
 
 use crate::build_platform::BuildError;
@@ -12,6 +13,7 @@ use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
 use crate::io_models::QoveryIdentifier;
 use crate::models::types::VersionsNumber;
 use crate::object_storage::errors::ObjectStorageError;
+use derivative::Derivative;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 use url::Url;
@@ -24,13 +26,16 @@ pub enum ErrorMessageVerbosity {
 }
 
 /// CommandError: command error, mostly returned by third party tools.
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Derivative, Clone, Error, PartialEq)]
+#[derivative(Debug)]
 pub struct CommandError {
     /// full_details: full error message, can contains unsafe text such as passwords and tokens.
     full_details: String,
     /// message_safe: error message omitting displaying any protected data such as passwords and tokens.
     message_safe: Option<String>,
     /// env_vars: environments variables including touchy data such as secret keys.
+    /// env_vars field is ignored from any wild Debug printing because of it touchy data it carries.
+    #[derivative(Debug = "ignore")]
     env_vars: Option<Vec<(String, String)>>,
 }
 
@@ -2972,6 +2977,57 @@ mod tests {
 
         // execute:
         let res = engine_err.message(ErrorMessageVerbosity::SafeOnly);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn test_command_error_test_hidding_env_vars_in_debug() {
+        // setup:
+        let command_err = CommandError::new_with_env_vars(
+            "my raw message".to_string(),
+            Some("my safe message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+
+        // execute:
+        let res = format!("{:?}", command_err);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn test_engine_error_test_hidding_env_vars_in_debug() {
+        // setup:
+        let command_err = CommandError::new_with_env_vars(
+            "my raw message".to_string(),
+            Some("my safe message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+        let cluster_id = QoveryIdentifier::new_random();
+        let engine_err = EngineError::new_unknown(
+            EventDetails::new(
+                Some(Kind::Scw),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                Some(ScwRegion::Paris.as_str().to_string()),
+                Stage::Infrastructure(InfrastructureStep::Create),
+                Transmitter::Kubernetes(cluster_id.to_string(), cluster_id.to_string()),
+            ),
+            "qovery_log_message".to_string(),
+            "user_log_message".to_string(),
+            Some(command_err.clone()),
+            None,
+            None,
+        );
+
+        // execute:
+        let res = format!("{:?}", engine_err);
 
         // verify:
         assert!(!res.contains("my_secret"));
