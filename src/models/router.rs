@@ -7,7 +7,7 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::utilities::{check_cname_for, print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm;
-use crate::cmd::helm::{to_engine_error, Timeout};
+use crate::cmd::helm::to_engine_error;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage, ToTransmitter, Transmitter};
 use crate::io_models::{Context, Listen, Listener, Listeners};
@@ -261,10 +261,6 @@ where
 
     fn private_port(&self) -> Option<u16> {
         None
-    }
-
-    fn start_timeout(&self) -> Timeout<u32> {
-        Timeout::Default
     }
 
     fn total_cpus(&self) -> String {
