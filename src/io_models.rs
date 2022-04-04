@@ -187,6 +187,19 @@ pub struct Port {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct ApplicationAdvanceSettings {
+    pub deployment_delay_start_time_sec: u32,
+}
+
+impl Default for ApplicationAdvanceSettings {
+    fn default() -> Self {
+        ApplicationAdvanceSettings {
+            deployment_delay_start_time_sec: 30,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Application {
     pub id: String,
     pub name: String,
@@ -205,11 +218,12 @@ pub struct Application {
     pub total_ram_in_mib: u32,
     pub min_instances: u32,
     pub max_instances: u32,
-    pub start_timeout_in_seconds: u32,
     pub storage: Vec<Storage>,
     /// Key is a String, Value is a base64 encoded String
     /// Use BTreeMap to get Hash trait which is not available on HashMap
     pub environment_vars: BTreeMap<String, String>,
+    #[serde(default)]
+    pub advance_settings: ApplicationAdvanceSettings,
 }
 
 impl Application {
@@ -235,10 +249,10 @@ impl Application {
                 self.total_ram_in_mib,
                 self.min_instances,
                 self.max_instances,
-                self.start_timeout_in_seconds,
                 build,
                 self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                self.advance_settings.clone(),
                 AwsAppExtraSettings {},
                 listeners,
                 logger.clone(),
@@ -254,10 +268,10 @@ impl Application {
                 self.total_ram_in_mib,
                 self.min_instances,
                 self.max_instances,
-                self.start_timeout_in_seconds,
                 build,
                 self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                self.advance_settings.clone(),
                 DoAppExtraSettings {},
                 listeners,
                 logger.clone(),
@@ -273,10 +287,10 @@ impl Application {
                 self.total_ram_in_mib,
                 self.min_instances,
                 self.max_instances,
-                self.start_timeout_in_seconds,
                 build,
                 self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                self.advance_settings.clone(),
                 ScwAppExtraSettings {},
                 listeners,
                 logger.clone(),

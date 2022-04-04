@@ -5,7 +5,6 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::utilities::{check_domain_for, managed_db_name_sanitizer, print_action};
 use crate::cloud_provider::{service, DeploymentTarget};
-use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
@@ -203,10 +202,6 @@ where
 
     fn private_port(&self) -> Option<u16> {
         Some(self.private_port)
-    }
-
-    fn start_timeout(&self) -> Timeout<u32> {
-        Timeout::Default
     }
 
     fn total_cpus(&self) -> String {

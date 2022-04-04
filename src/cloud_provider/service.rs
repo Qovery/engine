@@ -14,7 +14,6 @@ use crate::cloud_provider::utilities::check_domain_for;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd;
 use crate::cmd::helm;
-use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::Statefulset;
 use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_scale_replicas_by_selector, ScalingKind};
 use crate::cmd::structs::LabelsContent;
@@ -66,7 +65,6 @@ pub trait Service: ToTransmitter {
     fn version(&self) -> String;
     fn action(&self) -> &Action;
     fn private_port(&self) -> Option<u16>;
-    fn start_timeout(&self) -> Timeout<u32>;
     fn total_cpus(&self) -> String;
     fn cpu_burst(&self) -> String;
     fn total_ram_in_mib(&self) -> u32;
@@ -326,7 +324,6 @@ pub fn default_tera_context(
     environment: &Environment,
 ) -> TeraContext {
     let mut context = TeraContext::new();
-
     context.insert("id", service.id());
     context.insert("owner_id", environment.owner_id.as_str());
     context.insert("project_id", environment.project_id.as_str());
