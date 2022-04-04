@@ -35,14 +35,14 @@ use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, 
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
-use crate::logger::Logger;
-use crate::models::{
+use crate::io_models::{
     Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, QoveryIdentifier, ToHelmString,
     ToTerraformString,
 };
+use crate::logger::Logger;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
@@ -763,7 +763,10 @@ impl EKS {
                 .log(EngineEvent::Info(event_details, EventMessage::new(ok_line, None))),
             Err(err) => self.logger().log(EngineEvent::Warning(
                 event_details,
-                EventMessage::new("Error trying to get kubernetes events".to_string(), Some(err.message())),
+                EventMessage::new(
+                    "Error trying to get kubernetes events".to_string(),
+                    Some(err.message(ErrorMessageVerbosity::FullDetails)),
+                ),
             )),
         };
 
@@ -1011,7 +1014,7 @@ impl EKS {
                 let safe_message = "Skipping Kubernetes uninstall because it can't be reached.";
                 self.logger().log(EngineEvent::Warning(
                     event_details.clone(),
-                    EventMessage::new(safe_message.to_string(), Some(e.message())),
+                    EventMessage::new(safe_message.to_string(), Some(e.message(ErrorMessageVerbosity::FullDetails))),
                 ));
 
                 skip_kubernetes_step = true;
@@ -1084,7 +1087,7 @@ impl EKS {
                                 )),
                             )),
                             Err(e) => {
-                                if !(e.message().contains("not found")) {
+                                if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
                                     self.logger().log(EngineEvent::Warning(
                                         event_details.clone(),
                                         EventMessage::new_from_safe(format!(
@@ -1104,7 +1107,7 @@ impl EKS {
                     );
                     self.logger().log(EngineEvent::Warning(
                         event_details.clone(),
-                        EventMessage::new(message_safe, Some(e.message())),
+                        EventMessage::new(message_safe, Some(e.message(ErrorMessageVerbosity::FullDetails))),
                     ));
                 }
             }
@@ -1182,7 +1185,7 @@ impl EKS {
                         EventMessage::new_from_safe(format!("Namespace {} is fully deleted", qovery_namespace)),
                     )),
                     Err(e) => {
-                        if !(e.message().contains("not found")) {
+                        if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
                             self.logger().log(EngineEvent::Warning(
                                 event_details.clone(),
                                 EventMessage::new_from_safe(format!("Can't delete namespace {}.", qovery_namespace)),

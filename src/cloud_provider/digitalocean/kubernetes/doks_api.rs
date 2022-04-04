@@ -1,8 +1,8 @@
 use crate::cloud_provider::digitalocean::do_api_common::{do_get_from_api, DoApiType};
 use crate::cloud_provider::digitalocean::models::doks::KubernetesCluster;
 use crate::cloud_provider::digitalocean::models::doks::{DoksList, DoksOptions, KubernetesVersion};
-use crate::cloud_provider::utilities::VersionsNumber;
 use crate::errors::CommandError;
+use crate::models::types::VersionsNumber;
 use std::str::FromStr;
 
 pub fn get_doks_info_from_name(
@@ -88,7 +88,7 @@ pub fn get_do_kubeconfig_by_cluster_name(token: &str, cluster_name: &str) -> Res
             Ok(clusters) => Ok(clusters),
             Err(e) => Err(CommandError::new_from_safe_message(e.to_string())),
         },
-        Err(e) => Err(CommandError::new_from_safe_message(e.message())),
+        Err(e) => Err(e),
     };
 
     let clusters_copy = clusters.expect("Unable to list clusters").kubernetes_clusters;
@@ -108,7 +108,7 @@ pub fn get_do_kubeconfig_by_cluster_name(token: &str, cluster_name: &str) -> Res
                     }
                     Ok(Some(kubeconfig))
                 }
-                Err(e) => Err(CommandError::new_from_safe_message(e.message())),
+                Err(e) => Err(e),
             }
         }
         None => Ok(None),

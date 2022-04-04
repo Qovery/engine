@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::cloud_provider::aws::regions::AwsZones;
-use crate::cloud_provider::digitalocean::application::DoRegion;
 use crate::cloud_provider::digitalocean::do_api_common::{do_get_from_api, DoApiType};
 use crate::cloud_provider::digitalocean::kubernetes::doks_api::{
     get_do_kubeconfig_by_cluster_name, get_do_latest_doks_slug_from_api, get_doks_info_from_name,
@@ -26,7 +25,7 @@ use crate::cloud_provider::kubernetes::{
 };
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
-use crate::cloud_provider::utilities::{print_action, VersionsNumber};
+use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{
@@ -35,16 +34,18 @@ use crate::cmd::kubectl::{
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{
     EngineEvent, EnvironmentStep, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter,
 };
-use crate::logger::Logger;
-use crate::models::{
+use crate::io_models::{
     Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
     ProgressScope, QoveryIdentifier, StringPath, ToHelmString,
 };
+use crate::logger::Logger;
+use crate::models::digital_ocean::DoRegion;
+use crate::models::types::VersionsNumber;
 use crate::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
@@ -692,10 +693,7 @@ impl DOKS {
                 let safe_message = "Load balancer IP wasn't able to be retrieved from UUID on DigitalOcean API and it's required for TLS setup";
                 return Err(EngineError::new_k8s_loadbalancer_configuration_issue(
                     event_details.clone(),
-                    CommandError::new(
-                        format!("{}, error: {}.", safe_message, e.message(),),
-                        Some(safe_message.to_string()),
-                    ),
+                    CommandError::new(e.message(ErrorMessageVerbosity::FullDetails), Some(safe_message.to_string())),
                 ));
             }
         };
@@ -747,7 +745,10 @@ impl DOKS {
                 .log(EngineEvent::Warning(event_details, EventMessage::new(ok_line, None))),
             Err(err) => self.logger().log(EngineEvent::Warning(
                 event_details,
-                EventMessage::new("Error trying to get kubernetes events".to_string(), Some(err.message())),
+                EventMessage::new(
+                    "Error trying to get kubernetes events".to_string(),
+                    Some(err.message(ErrorMessageVerbosity::FullDetails)),
+                ),
             )),
         };
 
@@ -906,7 +907,7 @@ impl DOKS {
                                 )),
                             )),
                             Err(e) => {
-                                if !(e.message().contains("not found")) {
+                                if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
                                     self.logger().log(EngineEvent::Warning(
                                         event_details.clone(),
                                         EventMessage::new_from_safe(format!(
@@ -926,7 +927,7 @@ impl DOKS {
                     );
                     self.logger().log(EngineEvent::Warning(
                         event_details.clone(),
-                        EventMessage::new(message_safe, Some(e.message())),
+                        EventMessage::new(message_safe, Some(e.message(ErrorMessageVerbosity::FullDetails))),
                     ));
                 }
             }
@@ -1001,7 +1002,7 @@ impl DOKS {
                         EventMessage::new_from_safe(format!("Namespace {} is fully deleted", qovery_namespace)),
                     )),
                     Err(e) => {
-                        if !(e.message().contains("not found")) {
+                        if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
                             self.logger().log(EngineEvent::Warning(
                                 event_details.clone(),
                                 EventMessage::new_from_safe(format!("Can't delete namespace {}.", qovery_namespace)),
@@ -1209,12 +1210,7 @@ impl Kubernetes for DOKS {
                         }
                         Some(content) => content,
                     },
-                    Err(e) => {
-                        return Err(EngineError::new_cannot_retrieve_cluster_config_file(
-                            event_details,
-                            CommandError::new(e.message(), Some(e.message())),
-                        ))
-                    }
+                    Err(e) => return Err(EngineError::new_cannot_retrieve_cluster_config_file(event_details, e)),
                 };
 
                 let workspace_directory = crate::fs::workspace_directory(
@@ -1263,7 +1259,10 @@ impl Kubernetes for DOKS {
         match result {
             Err(e) => Err(EngineError::new_cannot_retrieve_cluster_config_file(
                 event_details,
-                CommandError::new(e.message(), Some(e.message())),
+                CommandError::new(
+                    e.message(ErrorMessageVerbosity::FullDetails),
+                    Some(e.message(ErrorMessageVerbosity::SafeOnly)),
+                ),
             )),
             Ok((file_path, file)) => Ok((file_path, file)),
         }

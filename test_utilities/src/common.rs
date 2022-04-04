@@ -6,7 +6,7 @@ use std::cell::RefCell;
 
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::dns_provider::DnsProvider;
-use qovery_engine::models::{
+use qovery_engine::io_models::{
     Action, Application, CloneForTest, Context, Database, DatabaseKind, DatabaseMode, EnvironmentRequest,
     GitCredentials, Port, Protocol, Route, Router, Storage, StorageType,
 };
@@ -22,13 +22,11 @@ use base64;
 use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EKS};
 use qovery_engine::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::digitalocean::application::DoRegion;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::environment::Environment;
 use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 use qovery_engine::cloud_provider::models::NodeGroups;
-use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
@@ -36,8 +34,10 @@ use qovery_engine::cmd::kubectl::kubernetes_get_all_hpas;
 use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::engine::EngineConfig;
 use qovery_engine::errors::CommandError;
+use qovery_engine::io_models::DatabaseMode::CONTAINER;
 use qovery_engine::logger::Logger;
-use qovery_engine::models::DatabaseMode::CONTAINER;
+use qovery_engine::models::digital_ocean::DoRegion;
+use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -108,12 +108,14 @@ impl Infrastructure for EnvironmentRequest {
         engine_config: &EngineConfig,
     ) -> (Environment, TransactionResult) {
         let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let env = environment.to_environment_domain(
-            engine_config.context(),
-            engine_config.cloud_provider(),
-            engine_config.container_registry().registry_info(),
-            logger,
-        );
+        let env = environment
+            .to_environment_domain(
+                engine_config.context(),
+                engine_config.cloud_provider(),
+                engine_config.container_registry().registry_info(),
+                logger,
+            )
+            .unwrap();
 
         let env = Rc::new(RefCell::new(env));
         let _ = tx.build_environment(
@@ -135,12 +137,14 @@ impl Infrastructure for EnvironmentRequest {
         engine_config: &EngineConfig,
     ) -> TransactionResult {
         let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let env = environment.to_environment_domain(
-            engine_config.context(),
-            engine_config.cloud_provider(),
-            engine_config.container_registry().registry_info(),
-            logger,
-        );
+        let env = environment
+            .to_environment_domain(
+                engine_config.context(),
+                engine_config.cloud_provider(),
+                engine_config.container_registry().registry_info(),
+                logger,
+            )
+            .unwrap();
 
         let env = Rc::new(RefCell::new(env));
         let _ = tx.deploy_environment_with_options(
@@ -161,12 +165,14 @@ impl Infrastructure for EnvironmentRequest {
         engine_config: &EngineConfig,
     ) -> TransactionResult {
         let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let env = environment.to_environment_domain(
-            engine_config.context(),
-            engine_config.cloud_provider(),
-            engine_config.container_registry().registry_info(),
-            logger,
-        );
+        let env = environment
+            .to_environment_domain(
+                engine_config.context(),
+                engine_config.cloud_provider(),
+                engine_config.container_registry().registry_info(),
+                logger,
+            )
+            .unwrap();
         let env = Rc::new(RefCell::new(env));
         let _ = tx.pause_environment(&env);
 
@@ -180,12 +186,14 @@ impl Infrastructure for EnvironmentRequest {
         engine_config: &EngineConfig,
     ) -> TransactionResult {
         let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let env = environment.to_environment_domain(
-            engine_config.context(),
-            engine_config.cloud_provider(),
-            engine_config.container_registry().registry_info(),
-            logger,
-        );
+        let env = environment
+            .to_environment_domain(
+                engine_config.context(),
+                engine_config.cloud_provider(),
+                engine_config.container_registry().registry_info(),
+                logger,
+            )
+            .unwrap();
         let env = Rc::new(RefCell::new(env));
         let _ = tx.delete_environment(&env);
 
@@ -290,7 +298,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 min_instances: 2,
                 max_instances: 2,
                 cpu_burst: "100m".to_string(),
-                start_timeout_in_seconds: 60,
+                advance_settings: Default::default(),
             },
             Application {
                 id: generate_id(),
@@ -336,7 +344,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 min_instances: 2,
                 max_instances: 2,
                 cpu_burst: "100m".to_string(),
-                start_timeout_in_seconds: 60,
+                advance_settings: Default::default(),
             },
             Application {
                 id: generate_id(),
@@ -384,7 +392,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 min_instances: 2,
                 max_instances: 2,
                 cpu_burst: "100m".to_string(),
-                start_timeout_in_seconds: 60,
+                advance_settings: Default::default(),
             },
         ],
         routers: vec![
@@ -545,7 +553,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
             min_instances: 2,
             max_instances: 2,
             cpu_burst: "100m".to_string(),
-            start_timeout_in_seconds: 60,
+            advance_settings: Default::default(),
         }],
         routers: vec![Router {
             id: router_id,
@@ -600,7 +608,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             min_instances: 1,
             max_instances: 1,
             cpu_burst: "100m".to_string(),
-            start_timeout_in_seconds: 120,
+            advance_settings: Default::default(),
         }],
         routers: vec![],
         databases: vec![],
@@ -713,7 +721,7 @@ pub fn environnement_2_app_2_routers_1_psql(
                 min_instances: 2,
                 max_instances: 2,
                 cpu_burst: "100m".to_string(),
-                start_timeout_in_seconds: 60,
+                advance_settings: Default::default(),
             },
             Application {
                 id: generate_id(),
@@ -759,7 +767,7 @@ pub fn environnement_2_app_2_routers_1_psql(
                 min_instances: 2,
                 max_instances: 2,
                 cpu_burst: "100m".to_string(),
-                start_timeout_in_seconds: 60,
+                advance_settings: Default::default(),
             },
         ],
         routers: vec![
@@ -856,7 +864,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             min_instances: 2,
             max_instances: 2,
             cpu_burst: "100m".to_string(),
-            start_timeout_in_seconds: 60,
+            advance_settings: Default::default(),
         }],
         routers: vec![Router {
             id: generate_id(),
@@ -917,7 +925,7 @@ pub fn environment_only_http_server(context: &Context) -> EnvironmentRequest {
             min_instances: 2,
             max_instances: 2,
             cpu_burst: "100m".to_string(),
-            start_timeout_in_seconds: 60,
+            advance_settings: Default::default(),
         }],
         routers: vec![],
         databases: vec![],
@@ -966,7 +974,7 @@ pub fn environment_only_http_server_router(context: &Context, test_domain: &str)
             min_instances: 2,
             max_instances: 2,
             cpu_burst: "100m".to_string(),
-            start_timeout_in_seconds: 60,
+            advance_settings: Default::default(),
         }],
         routers: vec![Router {
             id: generate_id(),
@@ -1116,7 +1124,7 @@ pub fn test_db(
             app.environment_vars = db_infos.app_env_vars.clone();
             app
         })
-        .collect::<Vec<qovery_engine::models::Application>>();
+        .collect::<Vec<qovery_engine::io_models::Application>>();
 
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;
@@ -1474,12 +1482,14 @@ pub fn cluster_test(
             Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
         // Deploy env
-        let env = env.to_environment_domain(
-            &context,
-            engine.cloud_provider(),
-            engine.container_registry().registry_info(),
-            logger.clone(),
-        );
+        let env = env
+            .to_environment_domain(
+                &context,
+                engine.cloud_provider(),
+                engine.container_registry().registry_info(),
+                logger.clone(),
+            )
+            .unwrap();
         let env = Rc::new(RefCell::new(env));
         if let Err(err) = deploy_env_tx.deploy_environment(&env) {
             panic!("{:?}", err)
@@ -1593,12 +1603,14 @@ pub fn cluster_test(
             Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
         // Deploy env
-        let env = env.to_environment_domain(
-            &context,
-            engine.cloud_provider(),
-            engine.container_registry().registry_info(),
-            logger.clone(),
-        );
+        let env = env
+            .to_environment_domain(
+                &context,
+                engine.cloud_provider(),
+                engine.container_registry().registry_info(),
+                logger.clone(),
+            )
+            .unwrap();
         let env = Rc::new(RefCell::new(env));
         if let Err(err) = destroy_env_tx.delete_environment(&env) {
             panic!("{:?}", err)

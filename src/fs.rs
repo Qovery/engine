@@ -174,7 +174,7 @@ where
         .map(|e| e.to_string())
         .ok_or_else(|| Error::from(ErrorKind::NotFound));
 
-    let string_path = format!("{}/{}_{}_backup.yaml", root_path?, chart_name, resource_name);
+    let string_path = format!("{}/{}-{}-q-backup.yaml", root_path?, chart_name, resource_name);
     let str_path = string_path.as_str();
     let path = Path::new(str_path);
 
@@ -198,10 +198,8 @@ where
 pub fn remove_lines_starting_with(path: String, starter: &str) -> Result<String, std::io::Error> {
     info!("editing yaml backup file {}", path);
 
-    let mut file = OpenOptions::new()
+    let file = OpenOptions::new()
         .read(true)
-        .write(true)
-        .truncate(true)
         .open(path.as_str())
         .map_err(|_| Error::from(ErrorKind::NotFound))?;
 
@@ -211,6 +209,12 @@ pub fn remove_lines_starting_with(path: String, starter: &str) -> Result<String,
         .map(|line| line.unwrap())
         .collect::<Vec<String>>()
         .join("\n");
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(path.as_str())
+        .map_err(|_| Error::from(ErrorKind::NotFound))?;
 
     match file.write(content.as_bytes()) {
         Err(e) => Err(e),

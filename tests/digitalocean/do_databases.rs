@@ -2,13 +2,13 @@ use ::function_name::named;
 use tracing::{span, warn, Level};
 
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
-use qovery_engine::models::{Action, CloneForTest, Database, DatabaseKind, DatabaseMode, Port, Protocol};
+use qovery_engine::io_models::{Action, CloneForTest, Database, DatabaseKind, DatabaseMode, Port, Protocol};
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
 
-use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
+use qovery_engine::io_models::DatabaseMode::{CONTAINER, MANAGED};
 use test_utilities::common::{database_test_environment, test_db, Infrastructure};
 use test_utilities::digitalocean::{
     clean_environments, do_default_engine_config, DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE,
@@ -332,7 +332,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 };
                 app
             })
-            .collect::<Vec<qovery_engine::models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::Application>>();
         environment.routers[0].routes[0].application_name = app_name;
 
         let environment_to_redeploy = environment.clone();

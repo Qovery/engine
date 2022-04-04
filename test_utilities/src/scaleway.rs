@@ -1,12 +1,11 @@
 use const_format::formatcp;
 use qovery_engine::build_platform::Build;
-use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::engine::EngineConfig;
-use qovery_engine::models::{Context, EnvironmentRequest, NoOpProgressListener};
+use qovery_engine::io_models::{Context, EnvironmentRequest, NoOpProgressListener};
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use std::sync::Arc;
 
@@ -22,6 +21,7 @@ use qovery_engine::container_registry::errors::ContainerRegistryError;
 use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::logger::Logger;
+use qovery_engine::models::scaleway::ScwZone;
 use tracing::error;
 
 pub const SCW_TEST_ZONE: ScwZone = ScwZone::Paris2;

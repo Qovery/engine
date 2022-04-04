@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::cloud_provider::digitalocean::application::DoRegion;
 use crate::cloud_provider::digitalocean::do_api_common::{do_get_from_api, DoApiType};
 use crate::cloud_provider::digitalocean::models::vpc::{Vpc, Vpcs};
 use crate::errors::CommandError;
+use crate::models::digital_ocean::DoRegion;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -169,11 +169,11 @@ fn is_do_reserved_vpc_subnets(region: DoRegion, subnet: &str) -> bool {
 
 #[cfg(test)]
 mod tests_do_vpcs {
-    use crate::cloud_provider::digitalocean::application::DoRegion;
     use crate::cloud_provider::digitalocean::network::vpc::{
         do_get_vpcs_from_api_output, get_do_vpc_from_name, get_do_vpc_from_subnet, get_random_available_subnet,
         is_do_reserved_vpc_subnets, VpcInitKind,
     };
+    use crate::models::digital_ocean::DoRegion;
 
     fn do_get_vpc_json() -> String {
         // https://developers.digitalocean.com/documentation/v2/#retrieve-an-existing-load-balancer

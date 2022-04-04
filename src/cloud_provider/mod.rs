@@ -7,7 +7,7 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, ToTransmitter};
-use crate::models::{Context, Listen};
+use crate::io_models::{Context, Listen};
 
 pub mod aws;
 pub mod digitalocean;

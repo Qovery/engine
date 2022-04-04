@@ -7,9 +7,9 @@ use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::command::QoveryCommand;
 use crate::cmd::helm::HelmCommand::{LIST, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{CannotRollback, CmdError, InvalidKubeConfig, ReleaseDoesNotExist};
-use crate::cmd::kubectl::{kubectl_create_secret_from_file, kubectl_get_resource_yaml};
+use crate::cmd::kubectl::{kubectl_apply_with_path, kubectl_create_secret_from_file, kubectl_get_resource_yaml};
 use crate::cmd::structs::{HelmChart, HelmListItem};
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EventDetails;
 use crate::fs::{create_yaml_backup_file, remove_lines_starting_with};
 use semver::Version;
@@ -139,7 +139,7 @@ impl Helm {
         ) {
             Err(_) if stderr.contains("release: not found") => Err(ReleaseDoesNotExist(chart.name.clone())),
             Err(err) => {
-                stderr.push_str(&err.message());
+                stderr.push_str(&err.message(ErrorMessageVerbosity::FullDetails));
                 let error = CommandError::new(stderr, err.message_safe());
                 Err(CmdError(chart.name.clone(), STATUS, error))
             }
@@ -176,7 +176,7 @@ impl Helm {
         let mut stderr = String::new();
         match helm_exec_with_output(&args, &self.get_all_envs(envs), &mut |_| {}, &mut |line| stderr.push_str(&line)) {
             Err(err) => {
-                stderr.push_str(&err.message());
+                stderr.push_str(&err.message(ErrorMessageVerbosity::FullDetails));
                 let error = CommandError::new(stderr, err.message_safe());
                 Err(CmdError(chart.name.clone(), ROLLBACK, error))
             }
@@ -209,7 +209,7 @@ impl Helm {
         let mut stderr = String::new();
         match helm_exec_with_output(&args, &self.get_all_envs(envs), &mut |_| {}, &mut |line| stderr.push_str(&line)) {
             Err(err) => {
-                stderr.push_str(&err.message());
+                stderr.push_str(&err.message(ErrorMessageVerbosity::FullDetails));
                 let error = CommandError::new(stderr, err.message_safe());
                 Err(CmdError(chart.name.clone(), UNINSTALL, error))
             }
@@ -485,7 +485,7 @@ impl Helm {
 
                 // Try do define/specify a bit more the message
                 let stderr_msg: String = error_message.into_iter().collect();
-                let stderr_msg = format!("{}: {}", stderr_msg, err.message());
+                let stderr_msg = format!("{}: {}", stderr_msg, err.message(ErrorMessageVerbosity::FullDetails));
                 let error = if stderr_msg.contains("another operation (install/upgrade/rollback) is in progress") {
                     HelmError::ReleaseLocked(chart.name.clone())
                 } else if stderr_msg.contains("has been rolled back") {
@@ -587,6 +587,7 @@ impl Helm {
                     CommandError::new(e.to_string(), Some(e.to_string())),
                 ));
             }
+
             if let Err(e) = remove_lines_starting_with(backup_info.1.clone(), "uid") {
                 return Err(CmdError(
                     chart.name.clone(),
@@ -595,7 +596,7 @@ impl Helm {
                 ));
             }
 
-            let backup_name = format!("{}-{}-backup", chart.name, backup_info.0);
+            let backup_name = format!("{}-{}-q-backup", chart.name, backup_info.0);
             if let Err(e) = kubectl_create_secret_from_file(
                 &self.kubernetes_config,
                 envs.to_vec(),
@@ -615,16 +616,21 @@ impl Helm {
         Ok(backup_infos)
     }
 
-    // pub fn apply_chart_backup(&self, envs: &[(&str, &str)], chart_name: String) -> Result<(), HelmError> {
-    //     match kubectl_apply_with_path(&self.kubernetes_config, envs.to_vec(), backup_path) {
-    //         Ok(_) => Ok(()),
-    //         Err(e) => CmdError(
-    //             chart_name,
-    //             HelmCommand::UPGRADE,
-    //             CommandError::new(e.message_raw(), e.message_safe()),
-    //         ),
-    //     }
-    // }
+    pub fn apply_chart_backup(
+        &self,
+        envs: &[(&str, &str)],
+        chart_name: String,
+        backup_path: &str,
+    ) -> Result<(), HelmError> {
+        match kubectl_apply_with_path(&self.kubernetes_config, envs.to_vec(), backup_path) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(CmdError(
+                chart_name,
+                HelmCommand::UPGRADE,
+                CommandError::new(e.message_raw(), e.message_safe()),
+            )),
+        }
+    }
 }
 
 fn helm_exec_with_output<STDOUT, STDERR>(

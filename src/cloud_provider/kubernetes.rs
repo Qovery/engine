@@ -18,7 +18,6 @@ use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::models::{CpuLimits, NodeGroups};
 use crate::cloud_provider::service::CheckAction;
-use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::cmd::kubectl::{
@@ -27,15 +26,16 @@ use crate::cmd::kubectl::{
 };
 use crate::cmd::structs::KubernetesNodeCondition;
 use crate::dns_provider::DnsProvider;
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter};
 use crate::fs::workspace_directory;
-use crate::logger::Logger;
-use crate::models::ProgressLevel::Info;
-use crate::models::{
+use crate::io_models::ProgressLevel::Info;
+use crate::io_models::{
     Action, Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier, StringPath,
 };
+use crate::logger::Logger;
+use crate::models::types::VersionsNumber;
 use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
 
@@ -183,10 +183,10 @@ pub trait Kubernetes: Listen {
             Err(err) => {
                 let error = EngineError::new_cannot_get_cluster_nodes(
                     self.get_event_details(stage),
-                    CommandError::new_from_safe_message(format!(
-                        "Error while trying to get cluster nodes, error: {}",
-                        err.message()
-                    )),
+                    CommandError::new(
+                        err.message(ErrorMessageVerbosity::FullDetails),
+                        Some("Error while trying to get cluster nodes.".to_string()),
+                    ),
                 );
 
                 self.logger().log(EngineEvent::Error(error.clone(), None));
@@ -267,7 +267,12 @@ pub trait Kubernetes: Listen {
     {
         let kubeconfig = match self.get_kubeconfig_file() {
             Ok((path, _)) => path,
-            Err(e) => return Err(CommandError::new(e.message(), None)),
+            Err(e) => {
+                return Err(CommandError::new(
+                    e.message(ErrorMessageVerbosity::FullDetails),
+                    Some(e.message(ErrorMessageVerbosity::SafeOnly)),
+                ))
+            }
         };
 
         send_progress_on_long_task(self, Action::Create, || {
@@ -786,12 +791,8 @@ where
             logger.log(EngineEvent::Warning(
                 event_details.clone(),
                 EventMessage::new(
-                    format!(
-                        "Encountering issues while trying to get objects kind {}: {:?}",
-                        object,
-                        e.message()
-                    ),
-                    None,
+                    format!("Encountering issues while trying to get objects kind {}", object,),
+                    Some(e.message(ErrorMessageVerbosity::FullDetails)),
                 ),
             ));
             continue;
@@ -1424,18 +1425,18 @@ pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, CommandError> 
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::Kind::Aws;
-    use std::str::FromStr;
 
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, convert_k8s_cpu_value_to_f32,
         validate_k8s_required_cpu_and_burstable, KubernetesNodesType,
     };
     use crate::cloud_provider::models::CpuLimits;
-    use crate::cloud_provider::utilities::VersionsNumber;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+    use crate::io_models::{ListenersHelper, QoveryIdentifier};
     use crate::logger::StdIoLogger;
-    use crate::models::{ListenersHelper, QoveryIdentifier};
+    use crate::models::types::VersionsNumber;
+    use std::str::FromStr;
 
     #[test]
     pub fn check_kubernetes_upgrade_method() {

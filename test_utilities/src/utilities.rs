@@ -11,7 +11,6 @@ use gethostname;
 use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
-use std::str::FromStr;
 
 use passwords::PasswordGenerator;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::doks_api::get_do_kubeconfig_by_cluster_name;
@@ -21,6 +20,7 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
 use std::fs;
+use std::str::FromStr;
 use tracing::{info, warn};
 
 use crate::scaleway::{
@@ -29,14 +29,13 @@ use crate::scaleway::{
 };
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd;
 use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DIGITAL_OCEAN_SPACES_ACCESS_ID, DIGITAL_OCEAN_SPACES_SECRET_ID,
     DIGITAL_OCEAN_TOKEN, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
-use qovery_engine::models::{Context, Database, DatabaseKind, DatabaseMode, EnvironmentRequest, Features, Metadata};
+use qovery_engine::io_models::{Context, Database, DatabaseKind, DatabaseMode, EnvironmentRequest, Features, Metadata};
 use retry::Error::Operation;
 use serde::{Deserialize, Serialize};
 
@@ -50,8 +49,9 @@ use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::errors::CommandError;
+use qovery_engine::io_models::DatabaseMode::MANAGED;
 use qovery_engine::logger::{Logger, StdIoLogger};
-use qovery_engine::models::DatabaseMode::MANAGED;
+use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::runtime::block_on;
 use time::Instant;
 use url::Url;
@@ -539,7 +539,7 @@ where
                     cluster_name.clone().as_str(),
                 ) {
                     Ok(kubeconfig) => kubeconfig,
-                    Err(e) => return OperationResult::Retry(CommandError::new(e.message(), Some(e.message()))),
+                    Err(e) => return OperationResult::Retry(e),
                 };
 
                 match kubeconfig {

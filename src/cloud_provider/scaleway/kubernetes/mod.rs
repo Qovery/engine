@@ -10,7 +10,6 @@ use crate::cloud_provider::kubernetes::{
 };
 use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
-use crate::cloud_provider::scaleway::application::ScwZone;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::scaleway::kubernetes::node::{ScwInstancesType, ScwNodeGroup};
 use crate::cloud_provider::utilities::print_action;
@@ -20,13 +19,14 @@ use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
-use crate::logger::Logger;
-use crate::models::{
+use crate::io_models::{
     Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, QoveryIdentifier, ToHelmString,
 };
+use crate::logger::Logger;
+use crate::models::scaleway::ScwZone;
 use crate::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
@@ -995,7 +995,10 @@ impl Kapsule {
                 .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(ok_line))),
             Err(err) => self.logger().log(EngineEvent::Warning(
                 event_details,
-                EventMessage::new("Error trying to get kubernetes events".to_string(), Some(err.message())),
+                EventMessage::new(
+                    "Error trying to get kubernetes events".to_string(),
+                    Some(err.message(ErrorMessageVerbosity::FullDetails)),
+                ),
             )),
         };
 
@@ -1135,7 +1138,7 @@ impl Kapsule {
                             Err(e) => {
                                 let safe_message = format!("Error while looking at the API metric value {}", metric_name);
                                 OperationResult::Retry(
-                                    EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), CommandError::new(format!("{}, error: {}", safe_message, e.message()), Some(safe_message))))
+                                    EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), CommandError::new(e.message(ErrorMessageVerbosity::FullDetails), Some(safe_message))))
                             }
                         };
                     });
@@ -1306,7 +1309,7 @@ impl Kapsule {
                                 )),
                             )),
                             Err(e) => {
-                                if !(e.message().contains("not found")) {
+                                if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
                                     self.logger().log(EngineEvent::Warning(
                                         event_details.clone(),
                                         EventMessage::new_from_safe(format!(
@@ -1326,7 +1329,7 @@ impl Kapsule {
                     );
                     self.logger().log(EngineEvent::Warning(
                         event_details.clone(),
-                        EventMessage::new(message_safe, Some(e.message())),
+                        EventMessage::new(message_safe, Some(e.message(ErrorMessageVerbosity::FullDetails))),
                     ));
                 }
             }
@@ -1401,7 +1404,7 @@ impl Kapsule {
                         EventMessage::new_from_safe(format!("Namespace {} is fully deleted", qovery_namespace)),
                     )),
                     Err(e) => {
-                        if !(e.message().contains("not found")) {
+                        if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
                             self.logger().log(EngineEvent::Warning(
                                 event_details.clone(),
                                 EventMessage::new_from_safe(format!("Can't delete namespace {}.", qovery_namespace)),

@@ -1,35 +1,46 @@
-use tera::Context as TeraContext;
-
 use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
-    default_tera_context, delete_router, deploy_stateless_service_error, send_progress_on_long_task, Action, Create,
-    Delete, Helm, Pause, Router as RRouter, Router, Service, ServiceType, StatelessService,
+    default_tera_context, delete_stateless_service, deploy_stateless_service_error, send_progress_on_long_task, Action,
+    Create, Delete, Helm, Pause, RouterService, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{check_cname_for, print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm;
-use crate::cmd::helm::{to_engine_error, Timeout};
+use crate::cmd::helm::to_engine_error;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage, ToTransmitter, Transmitter};
+use crate::io_models::{Context, Listen, Listener, Listeners};
 use crate::logger::Logger;
-use crate::models::{Context, Listen, Listener, Listeners};
-use ::function_name::named;
+use crate::models::types::CloudProvider;
+use crate::models::types::ToTeraContext;
+use function_name::named;
+use std::borrow::Borrow;
+use std::marker::PhantomData;
+use tera::Context as TeraContext;
 
-pub struct RouterAws {
-    context: Context,
-    id: String,
-    name: String,
-    action: Action,
-    default_domain: String,
-    custom_domains: Vec<CustomDomain>,
-    sticky_sessions_enabled: bool,
-    routes: Vec<Route>,
-    listeners: Listeners,
-    logger: Box<dyn Logger>,
+#[derive(thiserror::Error, Debug)]
+pub enum RouterError {
+    #[error("Router invalid configuration: {0}")]
+    InvalidConfig(String),
 }
 
-impl RouterAws {
+pub struct Router<T: CloudProvider> {
+    _marker: PhantomData<T>,
+    pub(crate) context: Context,
+    pub(crate) id: String,
+    pub(crate) action: Action,
+    pub(crate) name: String,
+    pub(crate) default_domain: String,
+    pub(crate) custom_domains: Vec<CustomDomain>,
+    pub(crate) sticky_sessions_enabled: bool,
+    pub(crate) routes: Vec<Route>,
+    pub(crate) listeners: Listeners,
+    pub(crate) logger: Box<dyn Logger>,
+    pub(crate) _extra_settings: T::RouterExtraSettings,
+}
+
+impl<T: CloudProvider> Router<T> {
     pub fn new(
         context: Context,
         id: &str,
@@ -39,10 +50,12 @@ impl RouterAws {
         custom_domains: Vec<CustomDomain>,
         routes: Vec<Route>,
         sticky_sessions_enabled: bool,
+        extra_settings: T::RouterExtraSettings,
         listeners: Listeners,
         logger: Box<dyn Logger>,
-    ) -> Self {
-        RouterAws {
+    ) -> Result<Self, RouterError> {
+        Ok(Self {
+            _marker: PhantomData,
             context,
             id: id.to_string(),
             name: name.to_string(),
@@ -53,80 +66,18 @@ impl RouterAws {
             routes,
             listeners,
             logger,
-        }
+            _extra_settings: extra_settings,
+        })
     }
 
-    fn cloud_provider_name(&self) -> &str {
-        "aws"
+    fn selector(&self) -> Option<String> {
+        Some(format!("routerId={}", self.id))
     }
 
-    fn struct_name(&self) -> &str {
-        "router"
-    }
-}
-
-impl Service for RouterAws {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
-    fn service_type(&self) -> ServiceType {
-        ServiceType::Router
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn sanitized_name(&self) -> String {
-        sanitize_name("router", self.name())
-    }
-
-    fn version(&self) -> String {
-        "1.0".to_string()
-    }
-
-    fn action(&self) -> &Action {
-        &self.action
-    }
-
-    fn private_port(&self) -> Option<u16> {
-        None
-    }
-
-    fn start_timeout(&self) -> Timeout<u32> {
-        Timeout::Default
-    }
-
-    fn total_cpus(&self) -> String {
-        "1".to_string()
-    }
-
-    fn cpu_burst(&self) -> String {
-        unimplemented!()
-    }
-
-    fn total_ram_in_mib(&self) -> u32 {
-        1
-    }
-
-    fn min_instances(&self) -> u32 {
-        1
-    }
-
-    fn max_instances(&self) -> u32 {
-        1
-    }
-
-    fn publicly_accessible(&self) -> bool {
-        false
-    }
-
-    fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError>
+    where
+        Self: Service,
+    {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
@@ -212,8 +163,8 @@ impl Service for RouterAws {
 
         let router_default_domain_hash = crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
 
-        let tls_domain = format!("*.{}", kubernetes.dns_provider().domain());
-        context.insert("router_tls_domain", tls_domain.as_str());
+        let tls_domain = kubernetes.dns_provider().domain().wildcarded();
+        context.insert("router_tls_domain", tls_domain.to_string().as_str());
         context.insert("router_default_domain", self.default_domain.as_str());
         context.insert("router_default_domain_hash", router_default_domain_hash.as_str());
         context.insert("custom_domains", &custom_domain_data_templates);
@@ -232,55 +183,15 @@ impl Service for RouterAws {
 
         Ok(context)
     }
+}
 
-    fn logger(&self) -> &dyn Logger {
-        &*self.logger
-    }
-
-    fn selector(&self) -> Option<String> {
-        Some(format!("routerId={}", self.id))
+impl<T: CloudProvider> ToTransmitter for Router<T> {
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::Router(self.id.to_string(), self.name.to_string())
     }
 }
 
-impl Router for RouterAws {
-    fn domains(&self) -> Vec<&str> {
-        let mut _domains = vec![self.default_domain.as_str()];
-
-        for domain in &self.custom_domains {
-            _domains.push(domain.domain.as_str());
-        }
-
-        _domains
-    }
-
-    fn has_custom_domains(&self) -> bool {
-        !self.custom_domains.is_empty()
-    }
-}
-
-impl Helm for RouterAws {
-    fn helm_selector(&self) -> Option<String> {
-        self.selector()
-    }
-
-    fn helm_release_name(&self) -> String {
-        crate::string::cut(format!("router-{}", self.id()), 50)
-    }
-
-    fn helm_chart_dir(&self) -> String {
-        format!("{}/common/charts/ingress-nginx", self.context().lib_root_dir())
-    }
-
-    fn helm_chart_values_dir(&self) -> String {
-        format!("{}/aws/chart_values/nginx-ingress", self.context.lib_root_dir())
-    }
-
-    fn helm_chart_external_name_service_dir(&self) -> String {
-        String::new()
-    }
-}
-
-impl Listen for RouterAws {
+impl<T: CloudProvider> Listen for Router<T> {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }
@@ -290,25 +201,115 @@ impl Listen for RouterAws {
     }
 }
 
-impl StatelessService for RouterAws {
-    fn as_stateless_service(&self) -> &dyn StatelessService {
-        self
+impl<T: CloudProvider> Helm for Router<T> {
+    fn helm_selector(&self) -> Option<String> {
+        self.selector()
+    }
+
+    fn helm_release_name(&self) -> String {
+        crate::string::cut(format!("router-{}", self.id), 50)
+    }
+
+    fn helm_chart_dir(&self) -> String {
+        format!("{}/common/charts/ingress-nginx", self.context.lib_root_dir())
+    }
+
+    fn helm_chart_values_dir(&self) -> String {
+        format!(
+            "{}/{}/chart_values/nginx-ingress",
+            self.context.lib_root_dir(),
+            T::lib_directory_name()
+        )
+    }
+
+    fn helm_chart_external_name_service_dir(&self) -> String {
+        String::new()
     }
 }
 
-impl ToTransmitter for RouterAws {
-    fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Router(self.id().to_string(), self.name().to_string())
+impl<T: CloudProvider> Service for Router<T>
+where
+    Router<T>: ToTeraContext,
+{
+    fn context(&self) -> &Context {
+        &self.context
+    }
+
+    fn service_type(&self) -> ServiceType {
+        ServiceType::Router
+    }
+
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn sanitized_name(&self) -> String {
+        sanitize_name("router", self.id())
+    }
+
+    fn version(&self) -> String {
+        "1.0".to_string()
+    }
+
+    fn action(&self) -> &Action {
+        &self.action
+    }
+
+    fn private_port(&self) -> Option<u16> {
+        None
+    }
+
+    fn total_cpus(&self) -> String {
+        "1".to_string()
+    }
+
+    fn cpu_burst(&self) -> String {
+        "1".to_string()
+    }
+
+    fn total_ram_in_mib(&self) -> u32 {
+        1
+    }
+
+    fn min_instances(&self) -> u32 {
+        1
+    }
+
+    fn max_instances(&self) -> u32 {
+        1
+    }
+
+    fn publicly_accessible(&self) -> bool {
+        false
+    }
+
+    fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+        self.to_tera_context(target)
+    }
+
+    fn logger(&self) -> &dyn Logger {
+        self.logger.borrow()
+    }
+
+    fn selector(&self) -> Option<String> {
+        self.selector()
     }
 }
 
-impl Create for RouterAws {
+impl<T: CloudProvider> Create for Router<T>
+where
+    Router<T>: Service,
+{
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
+            T::short_name(),
+            "router",
             function_name!(),
             self.name(),
             event_details.clone(),
@@ -325,7 +326,11 @@ impl Create for RouterAws {
         // the nginx-ingress must be available to get the external dns target if necessary
         let context = self.tera_context(target)?;
 
-        let from_dir = format!("{}/aws/charts/q-ingress-tls", self.context.lib_root_dir());
+        let from_dir = format!(
+            "{}/{}/charts/q-ingress-tls",
+            self.context.lib_root_dir(),
+            T::lib_directory_name()
+        );
         if let Err(e) =
             crate::template::generate_and_copy_all_files_into_dir(from_dir.as_str(), workspace_dir.as_str(), context)
         {
@@ -361,8 +366,17 @@ impl Create for RouterAws {
             .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))
     }
 
+    #[named]
     fn on_create_check(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+        print_action(
+            T::short_name(),
+            "router",
+            function_name!(),
+            self.name(),
+            event_details.clone(),
+            self.logger(),
+        );
 
         // check non custom domains
         self.check_domains(event_details.clone(), self.logger())?;
@@ -376,7 +390,7 @@ impl Create for RouterAws {
                 self.context.execution_id(),
             ) {
                 Ok(cname) if cname.trim_end_matches('.') == domain_to_check.target_domain.trim_end_matches('.') => {
-                    continue
+                    continue;
                 }
                 Ok(err) | Err(err) => {
                     // TODO(benjaminch): Handle better this one via a proper error eventually
@@ -401,8 +415,8 @@ impl Create for RouterAws {
     fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
+            T::short_name(),
+            "router",
             function_name!(),
             self.name(),
             event_details,
@@ -415,13 +429,16 @@ impl Create for RouterAws {
     }
 }
 
-impl Pause for RouterAws {
+impl<T: CloudProvider> Pause for Router<T>
+where
+    Router<T>: Service,
+{
     #[named]
     fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
         print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
+            T::short_name(),
+            "router",
             function_name!(),
             self.name(),
             event_details,
@@ -430,7 +447,18 @@ impl Pause for RouterAws {
         Ok(())
     }
 
+    #[named]
     fn on_pause_check(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
+        print_action(
+            T::short_name(),
+            "router",
+            function_name!(),
+            self.name(),
+            event_details,
+            self.logger(),
+        );
+
         Ok(())
     }
 
@@ -438,8 +466,8 @@ impl Pause for RouterAws {
     fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
         print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
+            T::short_name(),
+            "router",
             function_name!(),
             self.name(),
             event_details,
@@ -449,22 +477,39 @@ impl Pause for RouterAws {
     }
 }
 
-impl Delete for RouterAws {
+impl<T: CloudProvider> Delete for Router<T>
+where
+    Router<T>: Service,
+{
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
+            T::short_name(),
+            "router",
             function_name!(),
             self.name(),
             event_details.clone(),
             self.logger(),
         );
-        delete_router(target, self, event_details)
+
+        send_progress_on_long_task(self, Action::Delete, || {
+            delete_stateless_service(target, self, event_details.clone())
+        })
     }
 
+    #[named]
     fn on_delete_check(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
+        print_action(
+            T::short_name(),
+            "router",
+            function_name!(),
+            self.name(),
+            event_details,
+            self.logger(),
+        );
+
         Ok(())
     }
 
@@ -472,13 +517,45 @@ impl Delete for RouterAws {
     fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
+            T::short_name(),
+            "router",
             function_name!(),
             self.name(),
             event_details.clone(),
             self.logger(),
         );
-        delete_router(target, self, event_details)
+
+        send_progress_on_long_task(self, Action::Delete, || {
+            delete_stateless_service(target, self, event_details.clone())
+        })
+    }
+}
+
+impl<T: CloudProvider> StatelessService for Router<T>
+where
+    Router<T>: Service,
+{
+    fn as_stateless_service(&self) -> &dyn StatelessService {
+        self
+    }
+}
+
+impl<T: CloudProvider> RouterService for Router<T>
+where
+    Router<T>: Service,
+{
+    fn domains(&self) -> Vec<&str> {
+        let mut domains = Vec::with_capacity(1 + self.custom_domains.len());
+        domains.push(self.default_domain.as_str());
+
+        for domain in &self.custom_domains {
+            domains.push(domain.domain.as_str());
+        }
+
+        domains
+    }
+
+    fn has_custom_domains(&self) -> bool {
+        !self.custom_domains.is_empty()
     }
 }

@@ -4,14 +4,17 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::service::{Action, Application, Service};
+use crate::cloud_provider::service::{Action, Service};
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::to_engine_error;
 use crate::engine::{EngineConfig, EngineConfigError};
 use crate::errors::{EngineError, Tag};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, Transmitter};
+use crate::io_models::{
+    EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier,
+};
 use crate::logger::Logger;
-use crate::models::{EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier};
+use crate::models::application::ApplicationService;
 
 pub struct Transaction<'a> {
     engine: &'a EngineConfig,
@@ -128,7 +131,7 @@ impl<'a> Transaction<'a> {
 
     fn build_and_push_applications(
         &self,
-        applications: &mut [Box<dyn Application>],
+        applications: &mut [Box<dyn ApplicationService>],
         option: &DeploymentOption,
     ) -> Result<(), EngineError> {
         // do the same for applications
@@ -191,9 +194,9 @@ impl<'a> Transaction<'a> {
             // logging
             let image_name = app.get_build().image.full_image_name_with_tag();
             let msg = match &build_result {
-                Ok(_) => format!("✅ Container {} is built", &image_name),
-                Err(BuildError::Aborted(_)) => format!("🚫 Container {} build has been canceled", &image_name),
-                Err(err) => format!("❌ Container {} failed to be build: {}", &image_name, err),
+                Ok(_) => format!("✅ Container image {} is built and ready to use", &image_name),
+                Err(BuildError::Aborted(_)) => format!("🚫 Container image {} build has been canceled", &image_name),
+                Err(err) => format!("❌ Container image {} failed to be build: {}", &image_name, err),
             };
 
             let progress_info = ProgressInfo::new(

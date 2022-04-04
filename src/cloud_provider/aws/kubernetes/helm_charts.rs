@@ -253,6 +253,15 @@ pub fn aws_helm_charts(
         },
     };
 
+    let aws_ui_view = CommonChart {
+        chart_info: ChartInfo {
+            name: "aws-ui-view".to_string(),
+            path: chart_path("charts/aws-ui-view"),
+            namespace: HelmChartNamespaces::KubeSystem,
+            ..Default::default()
+        },
+    };
+
     let cluster_autoscaler = CommonChart {
         chart_info: ChartInfo {
             name: "cluster-autoscaler".to_string(),
@@ -1157,6 +1166,7 @@ datasources:
         Box::new(q_storage_class),
         Box::new(coredns_config),
         Box::new(aws_vpc_cni_chart),
+        Box::new(aws_ui_view),
     ];
 
     let level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];

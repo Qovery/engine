@@ -6,14 +6,14 @@ use serde_derive::{Deserialize, Serialize};
 #[serde(rename_all = "lowercase")]
 pub struct CommandError {
     message: String,
-    message_unsafe: String,
+    full_details: String,
 }
 
 impl From<errors::CommandError> for CommandError {
     fn from(error: errors::CommandError) -> Self {
         CommandError {
             message: error.message_safe.unwrap_or_default(),
-            message_unsafe: error.message_raw,
+            full_details: error.full_details,
         }
     }
 }

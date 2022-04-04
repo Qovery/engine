@@ -17,10 +17,10 @@ use crate::cmd::docker::{ContainerImage, Docker, DockerError};
 use crate::events::{EngineEvent, EventDetails, EventMessage, ToTransmitter, Transmitter};
 use crate::fs::workspace_directory;
 use crate::git;
-use crate::logger::Logger;
-use crate::models::{
+use crate::io_models::{
     Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
+use crate::logger::Logger;
 
 const BUILD_DURATION_TIMEOUT_SEC: u64 = 30 * 60;
 
