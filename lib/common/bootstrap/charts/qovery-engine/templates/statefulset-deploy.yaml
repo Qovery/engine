@@ -30,7 +30,9 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{ if and .Values.buildContainer.enable .Values.volumes.useNetworkDisks }}
       serviceAccountName: {{ include "qovery-engine.serviceAccountName" . }}
+      {{ end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       {{- with .Values.nodeSelector }}
