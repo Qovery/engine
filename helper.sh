@@ -355,10 +355,12 @@ autoscaler.enabled="false",\
 autoscaler.min_replicas="15",\
 engineResources.limits.cpu="1",\
 engineResources.limits.memory="4Gi",\
-engineResources.limits.ephemeral-storage="50Gi",\
+engineResources.limits.ephemeral-storage="20Gi",\
 engineResources.requests.cpu="300m",\
 engineResources.requests.memory="4Gi",\
-engineResources.requests.ephemeral-storage="50Gi"
+engineResources.requests.ephemeral-storage="20Gi",\
+buildResources.requests.ephemeral-storage="30Gi",\
+buildResources.limits.ephemeral-storage="30Gi"
 }
 
 function upgrade_on_dev() {
