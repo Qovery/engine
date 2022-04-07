@@ -72,14 +72,16 @@ impl LocalDocker {
 
         // ensure there is enough disk space left before building a new image
         let docker_path_string = "/var/lib/docker";
+        let root_path_string = "/";
         let docker_path = Path::new(docker_path_string);
+        let root_path = Path::new(root_path_string);
 
         // get system info
         let mut system = sysinfo::System::new_all();
         system.refresh_all();
 
         for disk in system.get_disks() {
-            if disk.get_mount_point() == docker_path {
+            if disk.get_mount_point() == docker_path || disk.get_mount_point() == root_path {
                 let event_details = self.get_event_details();
                 if let Err(e) = check_docker_space_usage_and_clean(
                     &self.context.docker,
@@ -513,7 +515,8 @@ fn check_docker_space_usage_and_clean(
     event_details: EventDetails,
     logger: &dyn Logger,
 ) -> Result<(), DockerError> {
-    let docker_max_disk_percentage_usage_before_purge = 60; // arbitrary percentage that should make the job anytime
+    // since we use local storage, this % should not be too high to avoid reaching limits on ephemeral storage
+    let docker_max_disk_percentage_usage_before_purge = 20; // arbitrary percentage that should make the job anytime
     let available_space = docker_path_size_info.get_available_space();
     let docker_percentage_remaining = available_space * 100 / docker_path_size_info.get_total_space();
 
