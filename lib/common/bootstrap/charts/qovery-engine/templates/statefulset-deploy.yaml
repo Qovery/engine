@@ -112,6 +112,7 @@ spec:
               mountPath: {{ .Values.volumes.qoveryWorkspace.path }}
             - name: docker-graph-storage
               mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
+  {{ if .Values.volumes.useNetworkDisks }}
   volumeClaimTemplates:
   - metadata:
       name: docker-graph-storage
@@ -135,4 +136,9 @@ spec:
       resources:
         requests:
           storage: {{ .Values.volumes.qoveryWorkspace.size }}
+  {{ else }}
+      volumes:
+        - name: docker-graph-storage
+          emptyDir: {}
+  {{ end }}
 {{ end }}
