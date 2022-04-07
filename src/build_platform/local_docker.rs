@@ -13,7 +13,7 @@ use crate::build_platform::{Build, BuildError, BuildPlatform, Credentials, Kind}
 use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, QoveryCommand};
-use crate::cmd::docker::{ContainerImage, Docker, DockerError};
+use crate::cmd::docker::{BuildResult, ContainerImage, Docker, DockerError};
 use crate::events::{EngineEvent, EventDetails, EventMessage, ToTransmitter, Transmitter};
 use crate::fs::workspace_directory;
 use crate::git;
@@ -106,7 +106,7 @@ impl LocalDocker {
         into_dir_docker_style: &str,
         lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
-    ) -> Result<(), BuildError> {
+    ) -> Result<BuildResult, BuildError> {
         // logger
         let log_info = {
             let app_id = build.image.application_id.clone();
@@ -147,18 +147,22 @@ impl LocalDocker {
         build.environment_variables.retain(|k, _| dockerfile_args.contains(k));
         build.compute_image_tag();
 
+        let mut build_result = BuildResult::new();
+
         // Prepare image we want to build
         let image_to_build = ContainerImage {
             registry: build.image.registry_url.clone(),
             name: build.image.name(),
             tags: vec![build.image.tag.clone(), "latest".to_string()],
         };
+        build_result.build_candidate_image(Some(image_to_build.clone()));
 
         let image_cache = ContainerImage {
             registry: build.image.registry_url.clone(),
             name: build.image.name(),
             tags: vec!["latest".to_string()],
         };
+        build_result.source_cached_image(Some(image_cache.clone()));
 
         // Check if the image does not exist already remotely, if yes, we skip the build
         let image_name = image_to_build.image_name();
@@ -167,10 +171,12 @@ impl LocalDocker {
             log_info(format!("🎯 Skipping build. Image already exist in the registry {}", image_name));
 
             // skip build
-            return Ok(());
+            build_result.image_exists_remotely(true);
+            return Ok(build_result);
         }
 
-        log_info(format!("⛏️ Building image. It does not exist remotely {}", image_name));
+        log_info(format!("⛏️Building image. It does not exist remotely {}", image_name));
+
         // Actually do the build of the image
         let env_vars: Vec<(&str, &str)> = build
             .environment_variables
@@ -191,7 +197,7 @@ impl LocalDocker {
         );
 
         match exit_status {
-            Ok(_) => Ok(()),
+            Ok(build_result) => Ok(build_result),
             Err(DockerError::Aborted(msg)) => Err(BuildError::Aborted(msg)),
             Err(err) => Err(BuildError::DockerError(build.image.application_id.clone(), err)),
         }
@@ -204,9 +210,23 @@ impl LocalDocker {
         use_build_cache: bool,
         lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
-    ) -> Result<(), BuildError> {
+    ) -> Result<BuildResult, BuildError> {
+        const LATEST_TAG: &str = "latest";
         let name_with_tag = build.image.full_image_name_with_tag();
-        let name_with_latest_tag = format!("{}:latest", build.image.full_image_name());
+        let container_image = ContainerImage::new(
+            build.image.registry_url.clone(),
+            build.image.name.to_string(),
+            vec![build.image.tag.to_string()],
+        );
+        let container_image_cache = ContainerImage::new(
+            build.image.registry_url.clone(),
+            build.image.name.to_string(),
+            vec![LATEST_TAG.to_string()],
+        );
+        let name_with_latest_tag = format!("{}:{}", build.image.full_image_name(), LATEST_TAG);
+        let mut build_result = BuildResult::new();
+        build_result.build_candidate_image(Some(container_image));
+        build_result.source_cached_image(Some(container_image_cache));
 
         let mut exit_status: Result<(), command::CommandError> = Err(command::CommandError::ExecutionError(
             Error::new(ErrorKind::InvalidData, "No builder names".to_string()),
@@ -312,7 +332,10 @@ impl LocalDocker {
         }
 
         match exit_status {
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                build_result.built(true);
+                Ok(build_result)
+            }
             Err(Killed(msg)) => Err(BuildError::Aborted(msg)),
             Err(err) => Err(BuildError::BuildpackError(build.image.application_id.clone(), err)),
         }
@@ -351,7 +374,7 @@ impl BuildPlatform for LocalDocker {
         self.name.as_str()
     }
 
-    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<(), BuildError> {
+    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<BuildResult, BuildError> {
         let event_details = self.get_event_details();
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let app_id = build.image.application_id.clone();
@@ -375,8 +398,7 @@ impl BuildPlatform for LocalDocker {
             self.context.execution_id(),
         ));
         self.logger
-            .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(msg)));
-        // LOGGING
+            .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
 
         // Create callback that will be called by git to provide credentials per user
         // If people use submodule, they need to provide us their ssh key
@@ -484,6 +506,20 @@ impl BuildPlatform for LocalDocker {
                 is_task_canceled,
             )
         };
+
+        // log image building infos
+        if let Ok(build_result) = &result {
+            listeners_helper.deployment_in_progress(ProgressInfo::new(
+                ProgressScope::Application { id: app_id },
+                ProgressLevel::Info,
+                Some(build_result.to_string()),
+                self.context.execution_id(),
+            ));
+            self.logger.log(EngineEvent::Info(
+                event_details,
+                EventMessage::new_from_safe(build_result.to_string()),
+            ));
+        }
 
         result
     }
