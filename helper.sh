@@ -349,14 +349,16 @@ environmentVariables.VAULT_ADDR="$CI_VAULT_ADDR",\
 environmentVariables.VAULT_ROLE_ID="$CI_VAULT_ENGINE_PROD_ROLE_ID",\
 environmentVariables.VAULT_SECRET_ID="$CI_VAULT_ENGINE_PROD_SECRET_ID",\
 buildContainer.enable="true",\
-volumes.qoveryWorkspace.size="50Gi",\
+volumes.useNetworkDisks="false",\
 metrics.enable="true",\
 autoscaler.enabled="false",\
 autoscaler.min_replicas="15",\
 engineResources.limits.cpu="1",\
 engineResources.limits.memory="4Gi",\
+engineResources.limits.ephemeral-storage="50Gi",\
 engineResources.requests.cpu="300m",\
-engineResources.requests.memory="4Gi"
+engineResources.requests.memory="4Gi",\
+engineResources.requests.ephemeral-storage="50Gi"
 }
 
 function upgrade_on_dev() {
