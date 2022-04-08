@@ -773,7 +773,10 @@ impl EngineError {
         desired_nodes: i32,
         max_nodes: i32,
     ) -> EngineError {
-        let message = format!("The desired number of nodes {} can't be greater than the maximum value {}", desired_nodes, max_nodes);
+        let message = format!(
+            "The desired number of nodes {} can't be greater than the maximum value {}",
+            desired_nodes, max_nodes
+        );
 
         EngineError::new(
             event_details,
