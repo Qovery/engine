@@ -1,5 +1,6 @@
 use crate::cmd::command::{CommandError, CommandKiller, QoveryCommand};
 use lazy_static::lazy_static;
+use std::fmt::{Display, Formatter};
 use std::path::Path;
 use std::process::ExitStatus;
 use std::sync::Mutex;
@@ -30,7 +31,110 @@ lazy_static! {
     static ref LOGIN_LOCK: Mutex<()> = Mutex::new(());
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
+pub struct BuildResult {
+    source_cached_image: Option<ContainerImage>,
+    build_candidate_image: Option<ContainerImage>,
+    cached_image_pulled: bool,
+    image_exists_remotely: bool,
+    built: bool,
+    pushed: bool,
+}
+
+impl BuildResult {
+    pub fn new() -> Self {
+        Self {
+            source_cached_image: None,
+            build_candidate_image: None,
+            cached_image_pulled: false,
+            image_exists_remotely: false,
+            built: false,
+            pushed: false,
+        }
+    }
+
+    pub fn source_cached_image(&mut self, source_cached_image: Option<ContainerImage>) -> &mut Self {
+        self.source_cached_image = source_cached_image;
+        self
+    }
+
+    pub fn build_candidate_image(&mut self, build_candidate_image: Option<ContainerImage>) -> &mut Self {
+        self.build_candidate_image = build_candidate_image;
+        self
+    }
+
+    pub fn cached_image_pulled(&mut self, cached_image_pulled: bool) -> &mut Self {
+        self.cached_image_pulled = cached_image_pulled;
+        self
+    }
+
+    pub fn image_exists_remotely(&mut self, image_exists_remotely: bool) -> &mut Self {
+        self.image_exists_remotely = image_exists_remotely;
+        self
+    }
+
+    pub fn built(&mut self, built: bool) -> &mut Self {
+        self.built = built;
+        self
+    }
+
+    pub fn pushed(&mut self, pushed: bool) -> &mut Self {
+        self.pushed = pushed;
+        self
+    }
+}
+
+impl Default for BuildResult {
+    fn default() -> Self {
+        BuildResult::new()
+    }
+}
+
+impl Display for BuildResult {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Build summary:")?;
+
+        match &self.build_candidate_image {
+            Some(image) => f.write_str(format!("\n\t🐳️ image to be built: `{}`", image.image_name()).as_str())?,
+            None => return f.write_str("\n\t⁉️ no image to be built provided"),
+        };
+
+        // image remotely exists?
+        match &self.image_exists_remotely {
+            true => f.write_str("\n\t♻️ image exists remotely")?,
+            false => f.write_str("\n\t🕳 image doesn't exist remotely")?,
+        };
+
+        // cache
+        // TODO(benjaminch): check whether cached image exists locally before pulling in order to get more details here
+        match &self.source_cached_image {
+            Some(cache) => {
+                f.write_str(format!("\n\t🍀 cached image provided: `{}`", cache.image_name()).as_str())?;
+                match self.cached_image_pulled {
+                    true => f.write_str("\n\t✔️ cached image pulled")?,
+                    false => f.write_str("\n\t⁉️ cached image not pulled (most likely doesn't exists remotely)")?,
+                }
+            }
+            None => f.write_str("\n\t🕳 no cached image provided")?,
+        };
+
+        // image built
+        match self.built {
+            true => f.write_str("\n\t🎉 image built")?,
+            false => f.write_str("\n\t‼️ image not built")?,
+        };
+
+        // image pushed
+        match self.pushed {
+            true => f.write_str("\n\t🚀 image pushed")?,
+            false => f.write_str("\n\t‼️ image not pushed")?,
+        };
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct ContainerImage {
     pub registry: Url,
     pub name: String,
@@ -38,6 +142,10 @@ pub struct ContainerImage {
 }
 
 impl ContainerImage {
+    pub fn new(registry: Url, name: String, tags: Vec<String>) -> Self {
+        ContainerImage { registry, name, tags }
+    }
+
     pub fn image_names(&self) -> Vec<String> {
         let host = if let Some(port) = self.registry.port() {
             format!("{}:{}", self.registry.host_str().unwrap_or_default(), port)
@@ -230,14 +338,17 @@ impl Docker {
         stdout_output: &mut Stdout,
         stderr_output: &mut Stderr,
         should_abort: &CommandKiller,
-    ) -> Result<(), DockerError>
+    ) -> Result<BuildResult, DockerError>
     where
         Stdout: FnMut(String),
         Stderr: FnMut(String),
     {
+        let mut build_result = BuildResult::new();
+
         // if there is no tags, nothing to build
         if image_to_build.tags.is_empty() {
-            return Ok(());
+            build_result.built = false;
+            return Ok(build_result);
         }
 
         // Do some checks
@@ -293,15 +404,22 @@ impl Docker {
         stdout_output: &mut Stdout,
         stderr_output: &mut Stderr,
         should_abort: &CommandKiller,
-    ) -> Result<(), DockerError>
+    ) -> Result<BuildResult, DockerError>
     where
         Stdout: FnMut(String),
         Stderr: FnMut(String),
     {
         info!("Docker build {:?}", image_to_build.image_name());
 
+        let mut build_result = BuildResult::new();
+        build_result.build_candidate_image(Some(image_to_build.clone()));
+        build_result.source_cached_image(Some(cache.clone()));
+
         // Best effort to pull the cache, if it does not exist that's ok too
-        let _ = self.pull(cache, stdout_output, stderr_output, should_abort);
+        match self.pull(cache, stdout_output, stderr_output, should_abort) {
+            Ok(_) => build_result.cached_image_pulled(true),
+            Err(_) => build_result.cached_image_pulled(false),
+        };
 
         let mut args_string: Vec<String> = vec![
             "build".to_string(),
@@ -318,7 +436,7 @@ impl Docker {
 
         for img_cache_name in cache.image_names() {
             args_string.push("--tag".to_string());
-            args_string.push(img_cache_name)
+            args_string.push(img_cache_name.to_string());
         }
 
         for (k, v) in build_args {
@@ -335,12 +453,14 @@ impl Docker {
             stderr_output,
             should_abort,
         )?;
+        build_result.built(true);
 
         if push_after_build {
             let _ = self.push(image_to_build, stdout_output, stderr_output, should_abort)?;
+            build_result.pushed(true);
         }
 
-        Ok(())
+        Ok(build_result)
     }
 
     fn build_with_buildkit<Stdout, Stderr>(
@@ -354,12 +474,16 @@ impl Docker {
         stdout_output: &mut Stdout,
         stderr_output: &mut Stderr,
         should_abort: &CommandKiller,
-    ) -> Result<(), DockerError>
+    ) -> Result<BuildResult, DockerError>
     where
         Stdout: FnMut(String),
         Stderr: FnMut(String),
     {
         info!("Docker buildkit build {:?}", image_to_build.image_name());
+
+        let mut build_result = BuildResult::new();
+        build_result.build_candidate_image(Some(image_to_build.clone()));
+        build_result.source_cached_image(Some(cache.clone()));
 
         let mut args_string: Vec<String> = vec![
             "buildx".to_string(),
@@ -367,6 +491,7 @@ impl Docker {
             "--progress=plain".to_string(),
             "--network=host".to_string(),
             if push_after_build {
+                build_result.pushed(true);
                 "--output=type=registry".to_string() // tell buildkit to push image to registry
             } else {
                 "--output=type=docker".to_string() // tell buildkit to load the image into docker after build
@@ -393,13 +518,20 @@ impl Docker {
 
         args_string.push(context.to_str().unwrap_or_default().to_string());
 
-        docker_exec(
+        match docker_exec(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(&[]),
             stdout_output,
             stderr_output,
             should_abort,
-        )
+        ) {
+            Ok(_) => {
+                build_result.cached_image_pulled(true); // --cache-from
+                build_result.built(true);
+                Ok(build_result)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     pub fn push<Stdout, Stderr>(
