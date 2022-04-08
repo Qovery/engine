@@ -76,7 +76,7 @@ pub struct NodeGroups {
 
 impl NodeGroups {
     pub fn get_desired_node(&self, event_details: EventDetails, actual_nodes_count: i32) -> Result<i32, EngineError> {
-        return if actual_nodes_count <= self.min_nodes {
+        if actual_nodes_count <= self.min_nodes {
             Result::Ok(self.min_nodes)
         } else if self.min_nodes <= actual_nodes_count && actual_nodes_count <= self.max_nodes {
             Result::Ok(actual_nodes_count)
@@ -86,7 +86,7 @@ impl NodeGroups {
                 actual_nodes_count,
                 self.max_nodes,
             ))
-        };
+        }
     }
 }
 

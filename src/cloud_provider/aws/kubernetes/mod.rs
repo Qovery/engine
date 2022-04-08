@@ -570,7 +570,7 @@ impl EKS {
                 self.cloud_provider.credentials_environment_variables().clone(),
             ) {
                 Err(e) => OperationResult::Retry(e),
-                Ok(nodes) => return OperationResult::Ok(nodes.items.len() as i32),
+                Ok(nodes) => OperationResult::Ok(nodes.items.len() as i32),
             }
         });
 
