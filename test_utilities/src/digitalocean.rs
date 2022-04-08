@@ -11,7 +11,9 @@ use qovery_engine::io_models::{Context, EnvironmentRequest, NoOpProgressListener
 use std::sync::Arc;
 
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain, KUBERNETES_MIN_NODES, KUBERNETES_MAX_NODES};
+use crate::common::{
+    get_environment_test_kubernetes, Cluster, ClusterDomain, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES,
+};
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::Kind::Do;

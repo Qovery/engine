@@ -1654,7 +1654,6 @@ pub fn cluster_test(
                     vpc_network_mode.clone(),
                     min_nodes,
                     max_nodes,
-
                 ),
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,

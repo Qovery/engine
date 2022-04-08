@@ -12,7 +12,9 @@ use std::sync::Arc;
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
-use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain, KUBERNETES_MIN_NODES, KUBERNETES_MAX_NODES};
+use crate::common::{
+    get_environment_test_kubernetes, Cluster, ClusterDomain, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES,
+};
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
@@ -162,8 +164,10 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
 
     fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups> {
         // Note: Dev1M is a bit too small to handle engine + local docker, hence using Dev1L
-        vec![NodeGroups::new("groupscw0".to_string(), min_nodes, max_nodes, "dev1-l".to_string(), 0)
-            .expect("Problem while setup SCW nodes")]
+        vec![
+            NodeGroups::new("groupscw0".to_string(), min_nodes, max_nodes, "dev1-l".to_string(), 0)
+                .expect("Problem while setup SCW nodes"),
+        ]
     }
 
     fn kubernetes_cluster_options(secrets: FuncTestsSecrets, _cluster_name: Option<String>) -> KapsuleOptions {
