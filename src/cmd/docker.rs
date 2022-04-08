@@ -92,45 +92,53 @@ impl Default for BuildResult {
 
 impl Display for BuildResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Build summary:")?;
+        if self.build_candidate_image.is_none() {
+            return f.write_str(
+                r#"
+Build summary:
+    ⁉️ no image to be built provided
+"#,
+            );
+        }
 
-        match &self.build_candidate_image {
-            Some(image) => f.write_str(format!("\n\t🐳️ image to be built: `{}`", image.image_name()).as_str())?,
-            None => return f.write_str("\n\t⁉️ no image to be built provided"),
-        };
-
-        // image remotely exists?
-        match &self.image_exists_remotely {
-            true => f.write_str("\n\t♻️ image exists remotely")?,
-            false => f.write_str("\n\t🕳 image doesn't exist remotely")?,
-        };
-
-        // cache
-        // TODO(benjaminch): check whether cached image exists locally before pulling in order to get more details here
-        match &self.source_cached_image {
-            Some(cache) => {
-                f.write_str(format!("\n\t🍀 cached image provided: `{}`", cache.image_name()).as_str())?;
-                match self.cached_image_pulled {
-                    true => f.write_str("\n\t✔️ cached image pulled")?,
-                    false => f.write_str("\n\t⁉️ cached image not pulled (most likely doesn't exists remotely)")?,
-                }
+        let image_to_be_built = self
+            .build_candidate_image
+            .as_ref()
+            .expect("cannot get image to be built");
+        let output = format!(
+            r#"
+Build summary:
+    🐳️ image to be built: `{}`
+    {}
+    {}
+    {}
+    {}
+    {}"#,
+            image_to_be_built.image_name(),
+            match &self.image_exists_remotely {
+                true => "♻️ image exists remotely",
+                false => "🕳 image doesn't exist remotely",
+            },
+            // TODO(benjaminch): check whether cached image exists locally before pulling in order to get more details here
+            match &self.source_cached_image {
+                Some(cache) => format!("🍀 cached image provided: `{}`", cache.image_name()),
+                None => "🕳 no cached image provided".to_string(),
+            },
+            match self.cached_image_pulled {
+                true => "✔️ cached image pulled",
+                false => "⁉️ cached image not pulled (most likely doesn't exists remotely)",
+            },
+            match self.built {
+                true => "🎉 image built",
+                false => "‼️ image not built",
+            },
+            match self.pushed {
+                true => "🚀 image pushed",
+                false => "‼️ image not pushed",
             }
-            None => f.write_str("\n\t🕳 no cached image provided")?,
-        };
+        );
 
-        // image built
-        match self.built {
-            true => f.write_str("\n\t🎉 image built")?,
-            false => f.write_str("\n\t‼️ image not built")?,
-        };
-
-        // image pushed
-        match self.pushed {
-            true => f.write_str("\n\t🚀 image pushed")?,
-            false => f.write_str("\n\t‼️ image not pushed")?,
-        };
-
-        Ok(())
+        f.write_str(output.as_str())
     }
 }
 
