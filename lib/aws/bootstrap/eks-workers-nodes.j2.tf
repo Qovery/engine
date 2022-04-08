@@ -18,14 +18,14 @@ resource "aws_eks_node_group" "eks_cluster_workers_{{ loop.index }}" {
   )
 
   scaling_config {
-    desired_size = "{{ eks_worker_node.min_nodes }}"
+    desired_size = "{{ eks_worker_desired_nodes }}"
     max_size     = "{{ eks_worker_node.max_nodes }}"
     min_size     = "{{ eks_worker_node.min_nodes }}"
   }
 
   lifecycle {
     // don't update the desired size and let the cluster-autoscaler do the job
-    ignore_changes = [scaling_config[0].desired_size]
+    // ignore_changes = [scaling_config[0].desired_size]
     create_before_destroy = true
   }
 

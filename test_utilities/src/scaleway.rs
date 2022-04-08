@@ -12,7 +12,7 @@ use std::sync::Arc;
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
-use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
+use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain, KUBERNETES_MIN_NODES, KUBERNETES_MAX_NODES};
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
@@ -72,6 +72,8 @@ pub fn scw_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> 
         SCW_KUBERNETES_VERSION.to_string(),
         &ClusterDomain::Default,
         None,
+        KUBERNETES_MIN_NODES,
+        KUBERNETES_MAX_NODES,
     )
 }
 
@@ -83,6 +85,8 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         kubernetes_version: String,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
+        min_nodes: i32,
+        max_nodes: i32,
     ) -> EngineConfig {
         // use Scaleway CR
         let container_registry = Box::new(container_registry_scw(context));
@@ -103,6 +107,8 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             localisation,
             kubernetes_version.as_str(),
             vpc_network_mode,
+            min_nodes,
+            max_nodes,
         );
 
         EngineConfig::new(
@@ -154,9 +160,9 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         ))
     }
 
-    fn kubernetes_nodes() -> Vec<NodeGroups> {
+    fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups> {
         // Note: Dev1M is a bit too small to handle engine + local docker, hence using Dev1L
-        vec![NodeGroups::new("groupscw0".to_string(), 5, 10, "dev1-l".to_string(), 0)
+        vec![NodeGroups::new("groupscw0".to_string(), min_nodes, max_nodes, "dev1-l".to_string(), 0)
             .expect("Problem while setup SCW nodes")]
     }
 

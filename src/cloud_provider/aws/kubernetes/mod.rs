@@ -17,20 +17,14 @@ use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
-use crate::cloud_provider::kubernetes::{
-    is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
-    KubernetesNodesType, KubernetesUpgradeStatus, ProviderOptions,
-};
+use crate::cloud_provider::kubernetes::{is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes, KubernetesNodesType, KubernetesUpgradeStatus, ProviderOptions};
 use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
 use crate::cmd::helm::{to_engine_error, Helm};
-use crate::cmd::kubectl::{
-    kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events,
-    kubectl_exec_scale_replicas, ScalingKind,
-};
+use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events, kubectl_exec_get_node, kubectl_exec_scale_replicas, ScalingKind};
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider;
@@ -442,7 +436,7 @@ impl EKS {
                         Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
                         None => self.logger().log(EngineEvent::Error(
                             EngineError::new_missing_required_env_variable(
-                                event_details,
+                                event_details.clone(),
                                 "VAULT_SECRET_ID".to_string(),
                             ),
                             None,
@@ -499,7 +493,15 @@ impl EKS {
         context.insert("kubernetes_cluster_name", &self.name());
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("eks_region_cluster_id", region_cluster_id.as_str());
+
+        let desired_nodes = match self.get_desired_nodes_count(event_details) {
+            Err(e) => return Err(e),
+            Ok(value) => value
+        };
+
         context.insert("eks_worker_nodes", &self.nodes_groups);
+        context.insert("eks_worker_desired_nodes", &desired_nodes);
+
         context.insert("eks_zone_a_subnet_blocks_private", &eks_zone_a_subnet_blocks_private);
         context.insert("eks_zone_b_subnet_blocks_private", &eks_zone_b_subnet_blocks_private);
         context.insert("eks_zone_c_subnet_blocks_private", &eks_zone_c_subnet_blocks_private);
@@ -545,6 +547,33 @@ impl EKS {
         context.insert("discord_api_key", self.options.discord_api_key.as_str());
 
         Ok(context)
+    }
+
+    fn get_desired_nodes_count(&self, event_details: EventDetails) -> Result<i32, EngineError> {
+        let min_nodes = match self.nodes_groups.is_empty() {
+            false => self.nodes_groups.first().unwrap().min_nodes,
+            true => 0
+        };
+        let kubeconfig = match self.get_kubeconfig_file() {
+            Ok((path, _)) => path,
+            Err(_) => return Ok(min_nodes),
+        };
+        let get_node_result = retry::retry(Fixed::from_millis(10000).take(60), || {
+            match kubectl_exec_get_node(kubeconfig.clone(), self.cloud_provider.credentials_environment_variables().clone()) {
+                Err(e) => OperationResult::Retry(e),
+                Ok(nodes) => return OperationResult::Ok(nodes.items.len() as i32)
+            }
+        });
+
+        let actual_nodes_count = match get_node_result {
+            Ok(value) => value,
+            Err(Operation { error, .. }) => return Err(EngineError::new_cluster_has_no_worker_nodes(event_details, Option::Some(error))),
+            Err(retry::Error::Internal(e)) => return Err(EngineError::new_cluster_has_no_worker_nodes(event_details, Option::Some(CommandError::new_from_safe_message(e)))),
+        };
+        return match self.nodes_groups.is_empty() {
+            false => self.nodes_groups.first().unwrap().get_desired_node(event_details, actual_nodes_count),
+            true => Ok(0)
+        };
     }
 
     fn create(&self) -> Result<(), EngineError> {

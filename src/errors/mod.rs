@@ -191,6 +191,8 @@ pub enum Tag {
     CannotCreateFile,
     /// CannotGetClusterNodes: represents an error while trying to get cluster's nodes.
     CannotGetClusterNodes,
+    /// NotEnoughNodesAvailableToDeployEnvironment: represents an error when trying to deploy an environment but there the desired number of nodes exceeds the maximum value.
+    NotEnoughNodesAvailableToDeployEnvironment,
     /// NotEnoughResourcesToDeployEnvironment: represents an error when trying to deploy an environment but there are not enough resources available on the cluster.
     NotEnoughResourcesToDeployEnvironment,
     /// CannotUninstallHelmChart: represents an error when trying to uninstall an helm chart on the cluster, uninstallation couldn't be proceeded.
@@ -756,6 +758,31 @@ impl EngineError {
             Some(error_message),
             None,
             None,
+        )
+    }
+
+    /// Creates new error for cannot deploy because the desired number of nodes is greater than the maximum allowed.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `desired_nodes`: The desired number of nodes.
+    /// * `max_nodes`: The maximum number of nodes allowed.
+    pub fn new_cannot_deploy_max_nodes_exceeded(
+        event_details: EventDetails,
+        desired_nodes: i32,
+        max_nodes: i32,
+    ) -> EngineError {
+        let message = format!("The desired number of nodes {} can't be greater than the maximum value {}", desired_nodes, max_nodes);
+
+        EngineError::new(
+            event_details,
+            Tag::NotEnoughNodesAvailableToDeployEnvironment,
+            message.to_string(),
+            message,
+            None,
+            None,
+            Some("Consider to upgrade your nodes configuration.".to_string()),
         )
     }
 

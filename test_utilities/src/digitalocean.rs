@@ -11,7 +11,7 @@ use qovery_engine::io_models::{Context, EnvironmentRequest, NoOpProgressListener
 use std::sync::Arc;
 
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
+use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain, KUBERNETES_MIN_NODES, KUBERNETES_MAX_NODES};
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::Kind::Do;
@@ -51,6 +51,8 @@ pub fn do_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> E
         DO_KUBERNETES_VERSION.to_string(),
         &ClusterDomain::Default,
         None,
+        KUBERNETES_MIN_NODES,
+        KUBERNETES_MAX_NODES,
     )
 }
 
@@ -62,6 +64,8 @@ impl Cluster<DO, DoksOptions> for DO {
         kubernetes_version: String,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
+        min_nodes: i32,
+        max_nodes: i32,
     ) -> EngineConfig {
         // use DigitalOcean Container Registry
         let container_registry = Box::new(container_registry_digital_ocean(context));
@@ -81,6 +85,8 @@ impl Cluster<DO, DoksOptions> for DO {
             localisation,
             kubernetes_version.as_str(),
             vpc_network_mode,
+            min_nodes,
+            max_nodes,
         );
 
         EngineConfig::new(
@@ -131,9 +137,9 @@ impl Cluster<DO, DoksOptions> for DO {
         ))
     }
 
-    fn kubernetes_nodes() -> Vec<NodeGroups> {
+    fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups> {
         vec![
-            NodeGroups::new("groupdoks0".to_string(), 5, 10, "s-4vcpu-8gb".to_string(), 0)
+            NodeGroups::new("groupdoks0".to_string(), min_nodes, max_nodes, "s-4vcpu-8gb".to_string(), 0)
                 .expect("Problem while setup DOKS nodes"),
         ]
     }

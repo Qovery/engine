@@ -19,7 +19,7 @@ use std::sync::Arc;
 use tracing::error;
 
 use crate::cloudflare::dns_provider_cloudflare;
-use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
+use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain, KUBERNETES_MIN_NODES, KUBERNETES_MAX_NODES};
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
@@ -63,6 +63,8 @@ pub fn aws_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> 
         AWS_KUBERNETES_VERSION.to_string(),
         &ClusterDomain::Default,
         None,
+        KUBERNETES_MIN_NODES,
+        KUBERNETES_MAX_NODES,
     )
 }
 impl Cluster<AWS, Options> for AWS {
@@ -73,6 +75,8 @@ impl Cluster<AWS, Options> for AWS {
         kubernetes_version: String,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
+        min_nodes: i32,
+        max_nodes: i32,
     ) -> EngineConfig {
         // use ECR
         let container_registry = Box::new(container_registry_ecr(context, logger.clone()));
@@ -93,6 +97,8 @@ impl Cluster<AWS, Options> for AWS {
             localisation,
             kubernetes_version.as_str(),
             vpc_network_mode,
+            min_nodes,
+            max_nodes,
         );
 
         EngineConfig::new(
@@ -140,9 +146,9 @@ impl Cluster<AWS, Options> for AWS {
         ))
     }
 
-    fn kubernetes_nodes() -> Vec<NodeGroups> {
+    fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups> {
         vec![
-            NodeGroups::new("groupeks0".to_string(), 5, 10, "t3a.large".to_string(), 100)
+            NodeGroups::new("groupeks0".to_string(), min_nodes, max_nodes, "t3a.large".to_string(), 100)
                 .expect("Problem while setup EKS nodes"),
         ]
     }
