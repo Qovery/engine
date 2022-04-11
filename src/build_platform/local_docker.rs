@@ -6,15 +6,15 @@ use std::time::Duration;
 use std::{env, fs};
 
 use git2::{Cred, CredentialType};
-use sysinfo::{Disk, DiskExt, SystemExt};
+use sysinfo::{DiskExt, RefreshKind, SystemExt};
 
 use crate::build_platform::dockerfile_utils::extract_dockerfile_args;
 use crate::build_platform::{Build, BuildError, BuildPlatform, Credentials, Kind};
 use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, QoveryCommand};
-use crate::cmd::docker::{BuildResult, ContainerImage, Docker, DockerError};
-use crate::events::{EngineEvent, EventDetails, EventMessage, ToTransmitter, Transmitter};
+use crate::cmd::docker::{BuildResult, ContainerImage, DockerError};
+use crate::events::{EngineEvent, EventMessage, ToTransmitter, Transmitter};
 use crate::fs::workspace_directory;
 use crate::git;
 use crate::io_models::{
@@ -61,6 +61,8 @@ impl LocalDocker {
     }
 
     fn reclaim_space_if_needed(&self) {
+        // ensure there is enough disk space left before building a new image
+        // For CI, we should skip this job
         if env::var_os("CI").is_some() {
             self.logger.log(EngineEvent::Info(
                 self.get_event_details(),
@@ -70,32 +72,47 @@ impl LocalDocker {
             return;
         }
 
-        // ensure there is enough disk space left before building a new image
-        let docker_path_string = "/var/lib/docker";
-        let root_path_string = "/";
-        let docker_path = Path::new(docker_path_string);
-        let root_path = Path::new(root_path_string);
+        // arbitrary percentage that should make the job anytime
+        const DISK_FREE_SPACE_PERCENTAGE_BEFORE_PURGE: u64 = 20;
+        let mount_points_to_check = vec![Path::new("/var/lib/docker"), Path::new("/")];
+        let mut disk_free_space_percent: u64 = 100;
 
-        // get system info
-        let mut system = sysinfo::System::new_all();
-        system.refresh_all();
+        let sys_info = sysinfo::System::new_with_specifics(RefreshKind::new().with_disks().with_disks_list());
+        let should_reclaim_space = sys_info.get_disks().iter().any(|disk| {
+            // Check disk own the mount point we are interested in
+            if !mount_points_to_check.contains(&disk.get_mount_point()) {
+                return false;
+            }
 
-        for disk in system.get_disks() {
-            if disk.get_mount_point() == docker_path || disk.get_mount_point() == root_path {
-                let event_details = self.get_event_details();
-                if let Err(e) = check_docker_space_usage_and_clean(
-                    &self.context.docker,
-                    disk,
-                    event_details.clone(),
-                    &*self.logger(),
-                ) {
-                    self.logger.log(EngineEvent::Warning(
-                        event_details,
-                        EventMessage::new(e.to_string(), Some(e.to_string())),
-                    ));
-                }
-                break;
-            };
+            // Check if we have hit our threshold regarding remaining disk space
+            disk_free_space_percent = disk.get_available_space() * 100 / disk.get_total_space();
+            if disk_free_space_percent <= DISK_FREE_SPACE_PERCENTAGE_BEFORE_PURGE {
+                return true;
+            }
+
+            false
+        });
+
+        if !should_reclaim_space {
+            debug!(
+                "Docker skipping image purge, still {} % disk free space",
+                disk_free_space_percent
+            );
+            return;
+        }
+
+        let msg = format!(
+            "Purging docker images to reclaim disk space. Only {} % disk free space, This may take some time",
+            disk_free_space_percent
+        );
+        self.logger
+            .log(EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(msg)));
+
+        // Request a purge if a disk is being low on space
+        if let Err(err) = self.context.docker.prune_images() {
+            let msg = format!("Error while purging docker images: {}", err);
+            self.logger
+                .log(EngineEvent::Warning(self.get_event_details(), EventMessage::new_from_safe(msg)));
         }
     }
 
@@ -175,7 +192,7 @@ impl LocalDocker {
             return Ok(build_result);
         }
 
-        log_info(format!("⛏️Building image. It does not exist remotely {}", image_name));
+        log_info(format!("⛏️ Building image. It does not exist remotely {}", image_name));
 
         // Actually do the build of the image
         let env_vars: Vec<(&str, &str)> = build
@@ -543,40 +560,4 @@ impl ToTransmitter for LocalDocker {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::BuildPlatform(self.id().to_string(), self.name().to_string())
     }
-}
-
-fn check_docker_space_usage_and_clean(
-    docker: &Docker,
-    docker_path_size_info: &Disk,
-    event_details: EventDetails,
-    logger: &dyn Logger,
-) -> Result<(), DockerError> {
-    // since we use local storage, this % should not be too high to avoid reaching limits on ephemeral storage
-    let docker_max_disk_percentage_usage_before_purge = 20; // arbitrary percentage that should make the job anytime
-    let available_space = docker_path_size_info.get_available_space();
-    let docker_percentage_remaining = available_space * 100 / docker_path_size_info.get_total_space();
-
-    if docker_percentage_remaining < docker_max_disk_percentage_usage_before_purge || available_space == 0 {
-        logger.log(EngineEvent::Warning(
-            event_details,
-            EventMessage::new_from_safe(format!(
-                "Docker disk remaining ({}%) is lower than {}%, requesting cleaning (purge)",
-                docker_percentage_remaining, docker_max_disk_percentage_usage_before_purge
-            )),
-        ));
-
-        return docker.prune_images();
-    };
-
-    logger.log(EngineEvent::Info(
-        event_details,
-        EventMessage::new_from_safe(format!(
-            "No need to purge old docker images, only {}% ({}/{}) disk used",
-            100 - docker_percentage_remaining,
-            docker_path_size_info.get_available_space(),
-            docker_path_size_info.get_total_space(),
-        )),
-    ));
-
-    Ok(())
 }

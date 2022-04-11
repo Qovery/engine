@@ -565,11 +565,11 @@ impl Docker {
         info!("Docker prune images");
 
         let all_prunes_commands = vec![
+            vec!["buildx", "prune", "-a", "-f"],
             vec!["container", "prune", "-f"],
             vec!["image", "prune", "-a", "-f"],
             vec!["builder", "prune", "-a", "-f"],
             vec!["volume", "prune", "-f"],
-            vec!["buildx", "prune", "-a", "-f"],
         ];
 
         let mut errored_commands = vec![];
