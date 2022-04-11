@@ -31,14 +31,16 @@ impl Logger for NatsLogger {
                 let subject = nats::subjects::Subject::new_for_engine_event(event.clone());
 
                 if let Err(e) = self.nats_connection.publish(&subject, json_string.as_bytes()) {
-                    let message_safe = "cannot publish event object to NATS subject";
-                    let message_raw = format!("{}: {}", message_safe, e);
                     self.std_logger.log(EngineEvent::Error(
                         EngineError::new_unknown(
                             event_details.clone(),
                             error_message_qovery,
                             error_message_user,
-                            Some(CommandError::new(message_raw, Some(message_safe.to_string()))),
+                            Some(CommandError::new(
+                                "cannot publish event object to NATS subject".to_string(),
+                                Some(e.to_string()),
+                                None,
+                            )),
                             None,
                             None,
                         ),
@@ -47,14 +49,16 @@ impl Logger for NatsLogger {
                 }
             }
             Err(e) => {
-                let message_safe = "cannot serialize event object to JSON";
-                let message_raw = format!("{}: {}", message_safe, e);
                 self.std_logger.log(EngineEvent::Error(
                     EngineError::new_unknown(
                         event_details.clone(),
                         error_message_qovery,
                         error_message_user,
-                        Some(CommandError::new(message_raw.to_string(), Some(message_safe.to_string()))),
+                        Some(CommandError::new(
+                            "cannot serialize event object to JSON".to_string(),
+                            Some(e.to_string()),
+                            None,
+                        )),
                         None,
                         None,
                     ),
