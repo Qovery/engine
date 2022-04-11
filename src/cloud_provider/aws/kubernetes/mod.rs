@@ -45,8 +45,12 @@ use crate::io_models::{
 use crate::logger::Logger;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
+use crate::runtime::block_on;
 use crate::string::terraform_list_format;
 use ::function_name::named;
+use rusoto_core::credential::StaticProvider;
+use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
+use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest};
 
 pub mod helm_charts;
 pub mod node;
@@ -500,13 +504,14 @@ impl EKS {
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("eks_region_cluster_id", region_cluster_id.as_str());
 
-        let desired_nodes = match self.get_desired_nodes_count(event_details) {
+        let (update_desired_node, desired_nodes) = match self.should_update_desired_nodes(event_details) {
             Err(e) => return Err(e),
             Ok(value) => value,
         };
 
         context.insert("eks_worker_nodes", &self.nodes_groups);
         context.insert("eks_worker_desired_nodes", &desired_nodes);
+        context.insert("eks_worker_update_desired_nodes", &update_desired_node);
 
         context.insert("eks_zone_a_subnet_blocks_private", &eks_zone_a_subnet_blocks_private);
         context.insert("eks_zone_b_subnet_blocks_private", &eks_zone_b_subnet_blocks_private);
@@ -555,14 +560,76 @@ impl EKS {
         Ok(context)
     }
 
-    fn get_desired_nodes_count(&self, event_details: EventDetails) -> Result<i32, EngineError> {
-        let min_nodes = match self.nodes_groups.is_empty() {
-            false => self.nodes_groups.first().unwrap().min_nodes,
-            true => 0,
+    // Return a pair of:
+    // update_desired_node: bool
+    // desired_nodes_count: i32
+    fn should_update_desired_nodes(&self, event_details: EventDetails) -> Result<(bool, i32), EngineError> {
+        let future_node_group = match self.nodes_groups.is_empty() {
+            false => self.nodes_groups.first().unwrap(),
+            true => {
+                return Err(EngineError::new_cluster_has_no_worker_nodes(
+                    event_details,
+                    Option::Some(CommandError::new_from_safe_message(
+                        "Could not find node_group in terra context".to_string(),
+                    )),
+                ))
+            }
         };
+
+        let region = RusotoRegion::from_str(&self.region())
+            .unwrap_or_else(|_| panic!("S3 region `{}` doesn't seems to be valid.", self.region.to_aws_format()));
+        let credentials = StaticProvider::new(
+            self.cloud_provider.access_key_id(),
+            self.cloud_provider.secret_access_key(),
+            None,
+            None,
+        );
+        let client = Client::new_with(credentials, HttpClient::new().expect("unable to create new Http client"));
+        let eks_client = EksClient::new_with_client(client, region);
+
+        let node_groups = match block_on(eks_client.list_nodegroups(ListNodegroupsRequest {
+            cluster_name: self.cluster_name(),
+            ..Default::default()
+        })) {
+            Ok(res) => res.nodegroups.unwrap_or_default(),
+            Err(_) => return Ok((false, future_node_group.min_nodes)),
+        };
+
+        if node_groups.is_empty() {
+            return Err(EngineError::new_cluster_has_no_worker_nodes(
+                event_details,
+                Option::Some(CommandError::new_from_safe_message(format!(
+                    "Could not find node_groups for cluster {}",
+                    self.cluster_name()
+                ))),
+            ));
+        }
+
+        let actual_nodes_group = match block_on(eks_client.describe_nodegroup(DescribeNodegroupRequest {
+            cluster_name: self.cluster_name(),
+            nodegroup_name: node_groups.first().unwrap().to_string(),
+        })) {
+            Ok(res) => res.nodegroup.unwrap_or_default(),
+            Err(error) => {
+                return Err(EngineError::new_cluster_has_no_worker_nodes(
+                    event_details,
+                    Option::Some(CommandError::new_from_safe_message(error.to_string())),
+                ))
+            }
+        };
+
+        let scaling_config = match actual_nodes_group.scaling_config {
+            Some(value) => value,
+            None => return Ok((false, 0)),
+        };
+
+        let should_update_desired_nodes = scaling_config.min_size.unwrap_or_default()
+            != i64::from(future_node_group.min_nodes)
+            || scaling_config.max_size.unwrap_or_default() != i64::from(future_node_group.max_nodes);
+
         let kubeconfig = match self.get_kubeconfig_file() {
             Ok((path, _)) => path,
-            Err(_) => return Ok(min_nodes),
+            Err(_) => return Ok((false, scaling_config.desired_size.unwrap() as i32)),
         };
         let get_node_result = retry::retry(Fixed::from_millis(10000).take(60), || {
             match kubectl_exec_get_node(
@@ -586,14 +653,11 @@ impl EKS {
                 ))
             }
         };
-        return match self.nodes_groups.is_empty() {
-            false => self
-                .nodes_groups
-                .first()
-                .unwrap()
-                .get_desired_node(event_details, actual_nodes_count),
-            true => Ok(0),
-        };
+
+        match future_node_group.get_desired_nodes(event_details, actual_nodes_count) {
+            Ok(desired_nodes) => Ok((should_update_desired_nodes, desired_nodes)),
+            Err(error) => Err(error),
+        }
     }
 
     fn create(&self) -> Result<(), EngineError> {

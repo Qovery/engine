@@ -24,6 +24,10 @@ resource "aws_eks_node_group" "eks_cluster_workers_{{ loop.index }}" {
   }
 
   lifecycle {
+    // don't update the desired size and let the cluster-autoscaler do the job
+    {% if not eks_worker_update_desired_nodes %}
+    ignore_changes = [scaling_config[0].desired_size]
+    {% endif %}
     create_before_destroy = true
   }
 
