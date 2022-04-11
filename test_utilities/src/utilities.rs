@@ -543,10 +543,7 @@ where
                 };
 
                 match kubeconfig {
-                    None => Err(CommandError::new(
-                        "No kubeconfig found".to_string(),
-                        Some("No kubeconfig found".to_string()),
-                    )),
+                    None => Err(CommandError::new_from_safe_message("No kubeconfig found".to_string())),
                     Some(file_content) => {
                         let _ = "test";
                         Ok(file_content)
@@ -581,10 +578,10 @@ where
                 ));
 
                 if let Err(e) = clusters_res {
-                    let message_safe = "Error while trying to get clusters";
                     return OperationResult::Retry(CommandError::new(
-                        format!("{}, error: {}", message_safe.to_string(), e.to_string()),
-                        Some(message_safe.to_string()),
+                        "Error while trying to get clusters".to_string(),
+                        Some(e.to_string()),
+                        None,
                     ));
                 }
 
@@ -626,8 +623,9 @@ where
                                     Err(e) => {
                                         let message_safe = "Error while trying to get clusters";
                                         return OperationResult::Retry(CommandError::new(
-                                            format!("{}, error: {}", message_safe.to_string(), e.to_string()),
-                                            Some(message_safe.to_string()),
+                                            message_safe.to_string(),
+                                            Some(e.to_string()),
+                                            None,
                                         ));
                                     }
                                 };
@@ -659,13 +657,7 @@ where
         .write(true)
         .truncate(true)
         .open(file_path.as_ref())
-        .map_err(|e| {
-            let message_safe = format!("Error opening kubeconfig file.");
-            CommandError::new(
-                format!("{}, error: {}", message_safe.to_string(), e.to_string()),
-                Some(message_safe.to_string()),
-            )
-        })?;
+        .map_err(|e| CommandError::new("Error opening kubeconfig file.".to_string(), Some(e.to_string()), None))?;
     let _ = kubernetes_config_file
         .write_all(file_content.as_bytes())
         .map_err(|_| CommandError::new_from_safe_message("Error while trying to write into file.".to_string()))?;

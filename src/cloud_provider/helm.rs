@@ -155,11 +155,10 @@ pub trait HelmChart: Send {
         let chart = self.get_chart_info();
         for file in chart.values_files.iter() {
             if let Err(e) = fs::metadata(file) {
-                let safe_message =
-                    format!("Can't access helm chart override file `{}` for chart `{}`", file, chart.name,);
                 return Err(CommandError::new(
-                    format!("{}, error: {:?}", safe_message, e),
-                    Some(safe_message),
+                    format!("Can't access helm chart override file `{}` for chart `{}`", file, chart.name,),
+                    Some(e.to_string()),
+                    None,
                 ));
             }
         }
@@ -304,10 +303,10 @@ fn deploy_parallel_charts(
                 }
             }
             Err(e) => {
-                let safe_message = "Thread panicked during parallel charts deployments.";
                 let error = Err(CommandError::new(
-                    format!("{}, error: {:?}", safe_message, e),
-                    Some(safe_message.to_string()),
+                    "Thread panicked during parallel charts deployments.".to_string(),
+                    Some(format!("{:?}", e)),
+                    None,
                 ));
                 errors.push(error);
             }

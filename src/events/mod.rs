@@ -162,7 +162,7 @@ impl EventMessage {
 
 impl From<CommandError> for EventMessage {
     fn from(e: CommandError) -> Self {
-        EventMessage::new_with_env_vars(e.message_raw(), e.message_safe(), e.env_vars())
+        EventMessage::new_with_env_vars(e.message_safe(), e.message_raw(), e.env_vars())
     }
 }
 

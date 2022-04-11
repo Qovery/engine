@@ -33,28 +33,22 @@ pub fn do_get_from_api(token: &str, api_type: DoApiType, url_api: String) -> Res
     let res = reqwest::blocking::Client::new().get(url_api).headers(headers).send();
 
     match res {
-        Ok(response) => {
-            match response.status() {
-                StatusCode::OK => Ok(response.text().expect("Cannot get response text")),
-                StatusCode::UNAUTHORIZED => {
-                    let message_safe = format!(
+        Ok(response) => match response.status() {
+            StatusCode::OK => Ok(response.text().expect("Cannot get response text")),
+            StatusCode::UNAUTHORIZED => {
+                return Err(CommandError::new(
+                    format!(
                         "Could not get {} information, ensure your DigitalOcean token is valid.",
                         api_type
-                    );
-                    return Err(CommandError::new(
-                        format!("{}, response: {:?}", message_safe, response),
-                        Some(message_safe),
-                    ));
-                }
-                _ => {
-                    let message_safe = format!("Unknown status code received from Digital Ocean Kubernetes API while retrieving {} information.", api_type);
-                    return Err(CommandError::new(
-                        format!("{}, response: {:?}", message_safe, response),
-                        Some(message_safe),
-                    ));
-                }
+                    ),
+                    Some(format!("response: {:?}", response)),
+                    None,
+                ));
             }
-        }
+            _ => {
+                return Err(CommandError::new(format!("Unknown status code received from Digital Ocean Kubernetes API while retrieving {} information.", api_type), Some(format!("response: {:?}", response)), None));
+            }
+        },
         Err(_) => Err(CommandError::new_from_safe_message(format!(
             "Unable to get a response from Digital Ocean {} API",
             api_type
