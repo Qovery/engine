@@ -35,3 +35,9 @@ variable "instance_class" {
   default = "{{database_instance_type}}"
   type = string
 }
+
+variable "password" {
+  description = "Redis auth token"
+  default = "{{ database_password }}"
+  type = string
+}

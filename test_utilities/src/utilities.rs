@@ -419,37 +419,31 @@ pub fn generate_id() -> String {
     uuid
 }
 
-pub fn generate_password(provider_kind: Kind, db_mode: DatabaseMode) -> String {
-    // core special chars set: !#$%&*+-=?_
+pub fn generate_password() -> String {
+    // core special chars set: -
     // we will keep only those and exclude others
     let forbidden_chars = vec![
-        '"', '\'', '(', ')', ',', '.', '/', ':', ';', '<', '>', '@', '[', '\\', ']', '^', '`', '{', '|', '}', '~',
+        '!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '.', '/', ':', ';', '<', '=', '>', '?', '@', '[',
+        '\\', ']', '^', '_', '`', '{', '|', '}', '~',
     ];
 
-    let allow_using_symbols = provider_kind == Kind::Scw && db_mode == DatabaseMode::MANAGED;
-    if !allow_using_symbols {
-        return generate_id();
-    };
-
     let pg = PasswordGenerator::new()
-        .length(32)
+        .length(28)
         .numbers(true)
         .lowercase_letters(true)
         .uppercase_letters(true)
-        .symbols(allow_using_symbols)
+        .symbols(true)
         .spaces(false)
         .exclude_similar_characters(true)
         .strict(true);
 
-    let mut password = pg
+    let mut password = "fake".to_string() + &pg
         .generate_one()
         .expect("error while trying to generate a password")
         .to_string();
 
-    if allow_using_symbols {
-        for forbidden_char in forbidden_chars {
-            password = password.replace(forbidden_char, "%");
-        }
+    for forbidden_char in forbidden_chars {
+        password = password.replace(forbidden_char, "-");
     }
 
     password

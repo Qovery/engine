@@ -223,7 +223,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     let database_port_mongo = 27017;
     let database_db_name_mongo = "my-mongodb".to_string();
     let database_username_mongo = "superuser".to_string();
-    let database_password_mongo = generate_password(provider_kind.clone(), DatabaseMode::CONTAINER);
+    let database_password_mongo = generate_password();
     let database_uri_mongo = format!(
         "mongodb://{}:{}@{}:{}/{}",
         database_username_mongo,
@@ -238,7 +238,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     let fqdn = get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()).to_string();
     let database_port = 5432;
     let database_username = "superuser".to_string();
-    let database_password = generate_password(provider_kind.clone(), DatabaseMode::CONTAINER);
+    let database_password = generate_password();
     let database_name = "postgres".to_string();
 
     // pSQL 2 management part
@@ -640,7 +640,7 @@ pub fn environnement_2_app_2_routers_1_psql(
 
     let database_port = 5432;
     let database_username = "superuser".to_string();
-    let database_password = generate_password(provider_kind.clone(), DatabaseMode::CONTAINER);
+    let database_password = generate_password();
     let database_name = "postgres".to_string();
 
     let suffix = generate_id();
@@ -1047,7 +1047,7 @@ pub fn test_db(
 
     let app_id = generate_id();
     let database_username = "superuser".to_string();
-    let database_password = generate_password(provider_kind.clone(), database_mode.clone());
+    let database_password = generate_password();
     let db_kind_str = db_kind.name().to_string();
     let db_id = generate_id();
     let database_host = format!("{}-{}", db_id, db_kind_str.clone());

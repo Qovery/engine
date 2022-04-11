@@ -29,7 +29,7 @@ data "aws_security_group" "selected" {
 }
 
 resource "helm_release" "elasticache_instance_external_name" {
-  name = "${aws_elasticache_cluster.elasticache_cluster.id}-externalname"
+  name = "${aws_elasticache_replication_group.elasticache_group.replication_group_id}-externalname"
   chart = "external-name-svc"
   namespace = "{{namespace}}"
   atomic = true
@@ -37,7 +37,7 @@ resource "helm_release" "elasticache_instance_external_name" {
 
   set {
     name = "target_hostname"
-    value = aws_elasticache_cluster.elasticache_cluster.cache_nodes.0.address
+    value = aws_elasticache_replication_group.elasticache_group.primary_endpoint_address
   }
 
   set {
@@ -61,38 +61,33 @@ resource "helm_release" "elasticache_instance_external_name" {
   }
 
   depends_on = [
-    aws_elasticache_cluster.elasticache_cluster
+    aws_elasticache_replication_group.elasticache_group
   ]
 }
 
-resource "aws_elasticache_cluster" "elasticache_cluster" {
-  cluster_id = var.elasticache_identifier
-
+resource "aws_elasticache_replication_group" "elasticache_group" {
+  replication_group_id = var.elasticache_identifier
+  replication_group_description = "Qovery's Redis resource"
   tags = local.redis_database_tags
 
+  #AUTH
+  transit_encryption_enabled = true
+  auth_token = var.password
+
   # Elasticache instance basics
-  port = var.port
-  engine_version = var.elasticache_version
+  port                          = var.port
+  engine = "redis"
+  engine_version                = var.elasticache_version
+  node_type = var.instance_class
+  number_cache_clusters = var.elasticache_instances_number
+  parameter_group_name = var.parameter_group_name
+  at_rest_encryption_enabled = true
   # Thanks GOD AWS for not using SemVer and adding your own versioning system,
   # need to add this dirty trick while Hashicorp fix this issue
   # https://github.com/hashicorp/terraform-provider-aws/issues/15625
   lifecycle {
     ignore_changes = [engine_version]
   }
-
-  {%- if replication_group_id is defined %}
-  # todo: add cluster mode and replicas support
-  {%- else %}
-  engine = "redis"
-  node_type = var.instance_class
-  num_cache_nodes = var.elasticache_instances_number
-  parameter_group_name = var.parameter_group_name
-  {%- endif %}
-
-  {%- if snapshot is defined and snapshot["snapshot_id"] %}
-  # Snapshot
-  snapshot_name = var.snapshot_identifier
-  {%- endif %}
 
   # Network
   # WARNING: this value cna't get fetch from data sources and is linked to the bootstrap phase
@@ -110,5 +105,10 @@ resource "aws_elasticache_cluster" "elasticache_cluster" {
   snapshot_retention_limit = var.backup_retention_period
   {%- if not skip_final_snapshot %}
   final_snapshot_identifier = var.final_snapshot_name
+  {%- endif %}
+
+  # Snapshot
+  {%- if snapshot is defined and snapshot["snapshot_id"] %}
+  snapshot_name = var.snapshot_identifier
   {%- endif %}
 }

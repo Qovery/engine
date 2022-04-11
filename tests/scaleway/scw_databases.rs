@@ -279,7 +279,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_password(Kind::Scw, database_mode.clone());
+        let database_password = generate_password();
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
