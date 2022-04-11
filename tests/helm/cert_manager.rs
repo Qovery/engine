@@ -155,7 +155,7 @@ fn test_apply_chart_backup() {
 
     let tmp_dir = TempDir::new("workspace_directory").expect("error creating temporary dir");
     let root_dir_path = Path::new(tmp_dir.path());
-    let backup_infos = helm
+    let _ = helm
         .prepare_chart_backup(root_dir_path, &cert_manager.chart_info, &vec![], vec!["cert".to_string()])
         .unwrap();
 

@@ -7,11 +7,13 @@ use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::command::QoveryCommand;
 use crate::cmd::helm::HelmCommand::{LIST, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{CannotRollback, CmdError, InvalidKubeConfig, ReleaseDoesNotExist};
-use crate::cmd::kubectl::{kubectl_apply_with_path, kubectl_create_secret_from_file, kubectl_get_resource_yaml};
+use crate::cmd::kubectl::{
+    kubectl_apply_with_path, kubectl_create_secret_from_file, kubectl_exec_get_secrets, kubectl_get_resource_yaml,
+};
 use crate::cmd::structs::{HelmChart, HelmListItem};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EventDetails;
-use crate::fs::{create_yaml_backup_file, remove_lines_starting_with};
+use crate::fs::{create_yaml_backup_file, create_yaml_file_from_secret, remove_lines_starting_with};
 use semver::Version;
 use serde_derive::Deserialize;
 use std::fs::File;
@@ -616,20 +618,48 @@ impl Helm {
         Ok(backup_infos)
     }
 
-    pub fn apply_chart_backup(
+    pub fn apply_chart_backup<P>(
         &self,
+        workspace_root_dir: P,
         envs: &[(&str, &str)],
-        chart_name: String,
-        backup_path: &str,
-    ) -> Result<(), HelmError> {
-        match kubectl_apply_with_path(&self.kubernetes_config, envs.to_vec(), backup_path) {
-            Ok(_) => Ok(()),
-            Err(e) => Err(CmdError(
-                chart_name,
+        chart: &ChartInfo,
+    ) -> Result<(), HelmError>
+    where
+        P: AsRef<Path>,
+    {
+        let secrets = kubectl_exec_get_secrets(
+            &self.kubernetes_config,
+            chart.clone().namespace.to_string().as_str(),
+            "",
+            envs.to_vec(),
+        )
+        .map_err(|e| {
+            CmdError(
+                chart.clone().name,
                 HelmCommand::UPGRADE,
                 CommandError::new(e.message_raw(), e.message_safe()),
-            )),
+            )
+        })?
+        .items;
+
+        for secret in secrets {
+            let path = create_yaml_file_from_secret(
+                &workspace_root_dir,
+                secret.clone(),
+                chart.clone().name,
+                secret.metadata.name.clone(),
+            )?;
+            match kubectl_apply_with_path(&self.kubernetes_config, envs.to_vec(), path.as_str()) {
+                Ok(_) => Ok(()),
+                Err(e) =>  return Err(CmdError(
+                    chart.clone().name,
+                    HelmCommand::UPGRADE,
+                    CommandError::new(e.message_raw(), e.message_safe()),
+                )),
+            }
         }
+
+        Ok(())
     }
 }
 

@@ -255,26 +255,25 @@ pub fn create_yaml_file_from_secret<P>(
     secret: SecretItem,
     chart_name: String,
     resource_name: String,
-) -> Result<(), CommandError>
+) -> Result<String, CommandError>
 where
     P: AsRef<Path>,
 {
     let message = format!("Unable to decode secret for {}/{}", chart_name, resource_name);
-    for (_secret_name, secret_content) in secret.data {
-        let content = decode(secret_content)
-            .map_err(|_| CommandError::new(message.clone(), Some(message.clone())))?
-            .iter()
-            .map(|x| x.to_string())
-            .collect();
-        if let Err(e) =
-            create_yaml_backup_file(working_root_dir.as_ref(), chart_name.clone(), resource_name.clone(), content)
-        {
+    let (_secret_name, secret_content) = secret.data[0];
+
+    let content = decode(secret_content)
+        .map_err(|_| CommandError::new(message.clone(), Some(message.clone())))?
+        .iter()
+        .map(|x| x.to_string())
+        .collect();
+    match create_yaml_backup_file(working_root_dir.as_ref(), chart_name.clone(), resource_name.clone(), content) {
+        Ok(path) => Ok(path),
+        Err(e) => {
             let message = format!("Unable to create backup file for {}/{}: {}", chart_name, resource_name, e);
-            return Err(CommandError::new(message.clone(), Some(message)));
+            Err(CommandError::new(message.clone(), Some(message)))
         }
     }
-
-    Ok(())
 }
 
 #[cfg(test)]
