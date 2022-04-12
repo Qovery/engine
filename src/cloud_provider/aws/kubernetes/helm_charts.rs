@@ -993,7 +993,7 @@ datasources:
     let mut qovery_agent = CommonChart {
         chart_info: ChartInfo {
             name: "qovery-agent".to_string(),
-            path: chart_path("common/charts/qovery-agent"),
+            path: chart_path("common/charts/qovery/qovery-agent"),
             namespace: HelmChartNamespaces::Qovery,
             values: vec![
                 ChartSetValue {

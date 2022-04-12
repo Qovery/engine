@@ -675,7 +675,7 @@ pub fn get_chart_for_shell_agent(
     let shell_agent = CommonChart {
         chart_info: ChartInfo {
             name: "shell-agent".to_string(),
-            path: chart_path("common/charts/qovery-shell-agent"),
+            path: chart_path("common/charts/qovery/qovery-shell-agent"),
             namespace: HelmChartNamespaces::Qovery,
             values: vec![
                 ChartSetValue {

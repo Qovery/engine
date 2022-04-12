@@ -1,0 +1,15 @@
+name: release-chart
+on:
+  push:
+    branches: 'dev'
+
+jobs:
+  release-chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Publish Helm chart
+        uses: stefanprodan/helm-gh-pages@master
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          charts_dir: lib/common/bootstrap/charts/qovery/
