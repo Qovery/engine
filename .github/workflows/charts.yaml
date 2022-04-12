@@ -1,7 +1,7 @@
 name: release-chart
 on:
   push:
-    branches: 'dev'
+    branches: ['dev', 'main']
 
 jobs:
   release-chart:
