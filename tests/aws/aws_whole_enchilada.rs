@@ -76,9 +76,6 @@ fn create_resize_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             .as_str()
     );
 
-    let environment = test_utilities::common::working_minimal_environment(&context, cluster_domain.as_str());
-    let env_action = environment;
-
     engine_run_test(|| {
         cluster_test(
             function_name!(),
