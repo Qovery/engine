@@ -766,16 +766,16 @@ impl EngineError {
     /// Arguments:
     ///
     /// * `event_details`: Error linked event details.
-    /// * `desired_nodes`: The desired number of nodes.
+    /// * `actual_nodes`: The actual number of nodes running.
     /// * `max_nodes`: The maximum number of nodes allowed.
     pub fn new_cannot_deploy_max_nodes_exceeded(
         event_details: EventDetails,
-        desired_nodes: i32,
+        actual_nodes: i32,
         max_nodes: i32,
     ) -> EngineError {
         let message = format!(
-            "The desired number of nodes {} can't be greater than the maximum value {}",
-            desired_nodes, max_nodes
+            "The actual number of nodes {} can't be greater than the maximum value {}",
+            actual_nodes, max_nodes
         );
 
         EngineError::new(

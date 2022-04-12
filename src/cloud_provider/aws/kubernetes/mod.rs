@@ -563,7 +563,7 @@ impl EKS {
     /// Returns a tuple of (update_desired_node: bool, desired_nodes_count: i32).
     fn should_update_desired_nodes(&self, event_details: EventDetails) -> Result<(bool, i32), EngineError> {
         let future_node_group = match self.nodes_groups.is_empty() {
-            false => self.nodes_groups.first().unwrap(),
+            false => self.nodes_groups.first().expect("unable to get node_group"),
             true => {
                 return Err(EngineError::new_cluster_has_no_worker_nodes(
                     event_details,
