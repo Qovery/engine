@@ -560,9 +560,7 @@ impl EKS {
         Ok(context)
     }
 
-    // Return a pair of:
-    // update_desired_node: bool
-    // desired_nodes_count: i32
+    /// Returns a tuple of (update_desired_node: bool, desired_nodes_count: i32).
     fn should_update_desired_nodes(&self, event_details: EventDetails) -> Result<(bool, i32), EngineError> {
         let future_node_group = match self.nodes_groups.is_empty() {
             false => self.nodes_groups.first().unwrap(),
@@ -576,8 +574,16 @@ impl EKS {
             }
         };
 
-        let region = RusotoRegion::from_str(&self.region())
-            .unwrap_or_else(|_| panic!("S3 region `{}` doesn't seems to be valid.", self.region.to_aws_format()));
+        let region = match RusotoRegion::from_str(&self.region()) {
+            Ok(value) => value,
+            Err(error) => {
+                return Err(EngineError::new_unsupported_region(
+                    event_details,
+                    "".to_string(),
+                    CommandError::new_from_safe_message(error.to_string()),
+                ))
+            }
+        };
         let credentials = StaticProvider::new(
             self.cloud_provider.access_key_id(),
             self.cloud_provider.secret_access_key(),
