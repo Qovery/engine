@@ -70,10 +70,10 @@ impl FromStr for AwsInstancesType {
             "t3a.medium" => Ok(AwsInstancesType::T3aMedium),
             "t3a.large" => Ok(AwsInstancesType::T3aLarge),
             "t3a.2xlarge" => Ok(AwsInstancesType::T3a2xlarge),
-            _ => {
-                let message = format!("`{}` instance type is not supported", s);
-                Err(CommandError::new(message.clone(), Some(message)))
-            }
+            _ => Err(CommandError::new_from_safe_message(format!(
+                "`{}` instance type is not supported",
+                s
+            ))),
         }
     }
 }

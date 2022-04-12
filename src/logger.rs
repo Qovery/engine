@@ -122,6 +122,7 @@ mod tests {
                         Some(errors::CommandError::new(
                             safe_message.to_string(),
                             Some(raw_message.to_string()),
+                            None,
                         )),
                         Some(link),
                         Some(hint.to_string()),

@@ -17,7 +17,7 @@ use crate::cmd::helm;
 use crate::cmd::kubectl::ScalingKind::Statefulset;
 use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_scale_replicas_by_selector, ScalingKind};
 use crate::cmd::structs::LabelsContent;
-use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
 use crate::io_models::ProgressLevel::Info;
 use crate::io_models::{
@@ -1056,10 +1056,7 @@ where
 
             Err(EngineError::new_k8s_service_issue(
                 event_details,
-                CommandError::new(
-                    err.message(ErrorMessageVerbosity::FullDetails),
-                    Some("Error with Kubernetes service".to_string()),
-                ),
+                err.underlying_error().unwrap_or_default(),
             ))
         }
         _ => {

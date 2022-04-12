@@ -111,10 +111,10 @@ impl FromStr for DoInstancesType {
             "s-20vcpu-96gb" => Ok(DoInstancesType::S20vcpu96gb),
             "s-24vcpu-128gb" => Ok(DoInstancesType::S24vcpu128gb),
             "s-32vcpu-192gb" => Ok(DoInstancesType::S32vcpu192gb),
-            _ => {
-                let message = format!("`{}` instance type is not supported", s);
-                Err(CommandError::new(message.clone(), Some(message)))
-            }
+            _ => Err(CommandError::new_from_safe_message(format!(
+                "`{}` instance type is not supported",
+                s
+            ))),
         }
     }
 }
