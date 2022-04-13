@@ -181,13 +181,7 @@ pub trait Kubernetes: Listen {
         ) {
             Ok(k) => k,
             Err(err) => {
-                let error = EngineError::new_cannot_get_cluster_nodes(
-                    self.get_event_details(stage),
-                    CommandError::new(
-                        err.message(ErrorMessageVerbosity::FullDetails),
-                        Some("Error while trying to get cluster nodes.".to_string()),
-                    ),
-                );
+                let error = EngineError::new_cannot_get_cluster_nodes(self.get_event_details(stage), err);
 
                 self.logger().log(EngineEvent::Error(error.clone(), None));
 
@@ -267,12 +261,7 @@ pub trait Kubernetes: Listen {
     {
         let kubeconfig = match self.get_kubeconfig_file() {
             Ok((path, _)) => path,
-            Err(e) => {
-                return Err(CommandError::new(
-                    e.message(ErrorMessageVerbosity::FullDetails),
-                    Some(e.message(ErrorMessageVerbosity::SafeOnly)),
-                ))
-            }
+            Err(e) => return Err(e.underlying_error().unwrap_or_default()),
         };
 
         send_progress_on_long_task(self, Action::Create, || {
@@ -313,7 +302,10 @@ pub trait Kubernetes: Listen {
             format!("bootstrap/{}", self.id()),
         )
         .map_err(|err| {
-            EngineError::new_cannot_get_workspace_directory(event_details, CommandError::new(err.to_string(), None))
+            EngineError::new_cannot_get_workspace_directory(
+                event_details,
+                CommandError::new("Error creating workspace directory.".to_string(), Some(err.to_string()), None),
+            )
         })
     }
 
@@ -1404,11 +1396,9 @@ pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, CommandError> 
                 Ok(n * 0.001) // return in milli cpu the value
             }
             Err(e) => Err(CommandError::new(
-                e.to_string(),
-                Some(format!(
-                    "Error while trying to parse `{}` to float 32.",
-                    value_number_string.as_str()
-                )),
+                format!("Error while trying to parse `{}` to float 32.", value_number_string.as_str()),
+                Some(e.to_string()),
+                None,
             )),
         };
     }
@@ -1416,8 +1406,9 @@ pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, CommandError> 
     match value.parse::<f32>() {
         Ok(n) => Ok(n),
         Err(e) => Err(CommandError::new(
-            e.to_string(),
-            Some(format!("Error while trying to parse `{}` to float 32.", value.as_str())),
+            format!("Error while trying to parse `{}` to float 32.", value.as_str()),
+            Some(e.to_string()),
+            None,
         )),
     }
 }

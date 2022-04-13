@@ -6,15 +6,15 @@ use std::time::Duration;
 use std::{env, fs};
 
 use git2::{Cred, CredentialType};
-use sysinfo::{Disk, DiskExt, SystemExt};
+use sysinfo::{DiskExt, RefreshKind, SystemExt};
 
 use crate::build_platform::dockerfile_utils::extract_dockerfile_args;
 use crate::build_platform::{Build, BuildError, BuildPlatform, Credentials, Kind};
 use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, QoveryCommand};
-use crate::cmd::docker::{ContainerImage, Docker, DockerError};
-use crate::events::{EngineEvent, EventDetails, EventMessage, ToTransmitter, Transmitter};
+use crate::cmd::docker::{BuildResult, ContainerImage, DockerError};
+use crate::events::{EngineEvent, EventMessage, ToTransmitter, Transmitter};
 use crate::fs::workspace_directory;
 use crate::git;
 use crate::io_models::{
@@ -61,6 +61,8 @@ impl LocalDocker {
     }
 
     fn reclaim_space_if_needed(&self) {
+        // ensure there is enough disk space left before building a new image
+        // For CI, we should skip this job
         if env::var_os("CI").is_some() {
             self.logger.log(EngineEvent::Info(
                 self.get_event_details(),
@@ -70,30 +72,47 @@ impl LocalDocker {
             return;
         }
 
-        // ensure there is enough disk space left before building a new image
-        let docker_path_string = "/var/lib/docker";
-        let docker_path = Path::new(docker_path_string);
+        // arbitrary percentage that should make the job anytime
+        const DISK_FREE_SPACE_PERCENTAGE_BEFORE_PURGE: u64 = 20;
+        let mount_points_to_check = vec![Path::new("/var/lib/docker"), Path::new("/")];
+        let mut disk_free_space_percent: u64 = 100;
 
-        // get system info
-        let mut system = sysinfo::System::new_all();
-        system.refresh_all();
+        let sys_info = sysinfo::System::new_with_specifics(RefreshKind::new().with_disks().with_disks_list());
+        let should_reclaim_space = sys_info.get_disks().iter().any(|disk| {
+            // Check disk own the mount point we are interested in
+            if !mount_points_to_check.contains(&disk.get_mount_point()) {
+                return false;
+            }
 
-        for disk in system.get_disks() {
-            if disk.get_mount_point() == docker_path {
-                let event_details = self.get_event_details();
-                if let Err(e) = check_docker_space_usage_and_clean(
-                    &self.context.docker,
-                    disk,
-                    event_details.clone(),
-                    &*self.logger(),
-                ) {
-                    self.logger.log(EngineEvent::Warning(
-                        event_details,
-                        EventMessage::new(e.to_string(), Some(e.to_string())),
-                    ));
-                }
-                break;
-            };
+            // Check if we have hit our threshold regarding remaining disk space
+            disk_free_space_percent = disk.get_available_space() * 100 / disk.get_total_space();
+            if disk_free_space_percent <= DISK_FREE_SPACE_PERCENTAGE_BEFORE_PURGE {
+                return true;
+            }
+
+            false
+        });
+
+        if !should_reclaim_space {
+            debug!(
+                "Docker skipping image purge, still {} % disk free space",
+                disk_free_space_percent
+            );
+            return;
+        }
+
+        let msg = format!(
+            "Purging docker images to reclaim disk space. Only {} % disk free space, This may take some time",
+            disk_free_space_percent
+        );
+        self.logger
+            .log(EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(msg)));
+
+        // Request a purge if a disk is being low on space
+        if let Err(err) = self.context.docker.prune_images() {
+            let msg = format!("Error while purging docker images: {}", err);
+            self.logger
+                .log(EngineEvent::Warning(self.get_event_details(), EventMessage::new_from_safe(msg)));
         }
     }
 
@@ -104,7 +123,7 @@ impl LocalDocker {
         into_dir_docker_style: &str,
         lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
-    ) -> Result<(), BuildError> {
+    ) -> Result<BuildResult, BuildError> {
         // logger
         let log_info = {
             let app_id = build.image.application_id.clone();
@@ -145,18 +164,22 @@ impl LocalDocker {
         build.environment_variables.retain(|k, _| dockerfile_args.contains(k));
         build.compute_image_tag();
 
+        let mut build_result = BuildResult::new();
+
         // Prepare image we want to build
         let image_to_build = ContainerImage {
             registry: build.image.registry_url.clone(),
             name: build.image.name(),
             tags: vec![build.image.tag.clone(), "latest".to_string()],
         };
+        build_result.build_candidate_image(Some(image_to_build.clone()));
 
         let image_cache = ContainerImage {
             registry: build.image.registry_url.clone(),
             name: build.image.name(),
             tags: vec!["latest".to_string()],
         };
+        build_result.source_cached_image(Some(image_cache.clone()));
 
         // Check if the image does not exist already remotely, if yes, we skip the build
         let image_name = image_to_build.image_name();
@@ -165,10 +188,12 @@ impl LocalDocker {
             log_info(format!("🎯 Skipping build. Image already exist in the registry {}", image_name));
 
             // skip build
-            return Ok(());
+            build_result.image_exists_remotely(true);
+            return Ok(build_result);
         }
 
         log_info(format!("⛏️ Building image. It does not exist remotely {}", image_name));
+
         // Actually do the build of the image
         let env_vars: Vec<(&str, &str)> = build
             .environment_variables
@@ -189,7 +214,7 @@ impl LocalDocker {
         );
 
         match exit_status {
-            Ok(_) => Ok(()),
+            Ok(build_result) => Ok(build_result),
             Err(DockerError::Aborted(msg)) => Err(BuildError::Aborted(msg)),
             Err(err) => Err(BuildError::DockerError(build.image.application_id.clone(), err)),
         }
@@ -202,9 +227,23 @@ impl LocalDocker {
         use_build_cache: bool,
         lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
-    ) -> Result<(), BuildError> {
+    ) -> Result<BuildResult, BuildError> {
+        const LATEST_TAG: &str = "latest";
         let name_with_tag = build.image.full_image_name_with_tag();
-        let name_with_latest_tag = format!("{}:latest", build.image.full_image_name());
+        let container_image = ContainerImage::new(
+            build.image.registry_url.clone(),
+            build.image.name.to_string(),
+            vec![build.image.tag.to_string()],
+        );
+        let container_image_cache = ContainerImage::new(
+            build.image.registry_url.clone(),
+            build.image.name.to_string(),
+            vec![LATEST_TAG.to_string()],
+        );
+        let name_with_latest_tag = format!("{}:{}", build.image.full_image_name(), LATEST_TAG);
+        let mut build_result = BuildResult::new();
+        build_result.build_candidate_image(Some(container_image));
+        build_result.source_cached_image(Some(container_image_cache));
 
         let mut exit_status: Result<(), command::CommandError> = Err(command::CommandError::ExecutionError(
             Error::new(ErrorKind::InvalidData, "No builder names".to_string()),
@@ -310,7 +349,10 @@ impl LocalDocker {
         }
 
         match exit_status {
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                build_result.built(true);
+                Ok(build_result)
+            }
             Err(Killed(msg)) => Err(BuildError::Aborted(msg)),
             Err(err) => Err(BuildError::BuildpackError(build.image.application_id.clone(), err)),
         }
@@ -349,7 +391,7 @@ impl BuildPlatform for LocalDocker {
         self.name.as_str()
     }
 
-    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<(), BuildError> {
+    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<BuildResult, BuildError> {
         let event_details = self.get_event_details();
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let app_id = build.image.application_id.clone();
@@ -373,8 +415,7 @@ impl BuildPlatform for LocalDocker {
             self.context.execution_id(),
         ));
         self.logger
-            .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(msg)));
-        // LOGGING
+            .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
 
         // Create callback that will be called by git to provide credentials per user
         // If people use submodule, they need to provide us their ssh key
@@ -483,6 +524,20 @@ impl BuildPlatform for LocalDocker {
             )
         };
 
+        // log image building infos
+        if let Ok(build_result) = &result {
+            listeners_helper.deployment_in_progress(ProgressInfo::new(
+                ProgressScope::Application { id: app_id },
+                ProgressLevel::Info,
+                Some(build_result.to_string()),
+                self.context.execution_id(),
+            ));
+            self.logger.log(EngineEvent::Info(
+                event_details,
+                EventMessage::new_from_safe(build_result.to_string()),
+            ));
+        }
+
         result
     }
 
@@ -505,39 +560,4 @@ impl ToTransmitter for LocalDocker {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::BuildPlatform(self.id().to_string(), self.name().to_string())
     }
-}
-
-fn check_docker_space_usage_and_clean(
-    docker: &Docker,
-    docker_path_size_info: &Disk,
-    event_details: EventDetails,
-    logger: &dyn Logger,
-) -> Result<(), DockerError> {
-    let docker_max_disk_percentage_usage_before_purge = 60; // arbitrary percentage that should make the job anytime
-    let available_space = docker_path_size_info.get_available_space();
-    let docker_percentage_remaining = available_space * 100 / docker_path_size_info.get_total_space();
-
-    if docker_percentage_remaining < docker_max_disk_percentage_usage_before_purge || available_space == 0 {
-        logger.log(EngineEvent::Warning(
-            event_details,
-            EventMessage::new_from_safe(format!(
-                "Docker disk remaining ({}%) is lower than {}%, requesting cleaning (purge)",
-                docker_percentage_remaining, docker_max_disk_percentage_usage_before_purge
-            )),
-        ));
-
-        return docker.prune_images();
-    };
-
-    logger.log(EngineEvent::Info(
-        event_details,
-        EventMessage::new_from_safe(format!(
-            "No need to purge old docker images, only {}% ({}/{}) disk used",
-            100 - docker_percentage_remaining,
-            docker_path_size_info.get_available_space(),
-            docker_path_size_info.get_total_space(),
-        )),
-    ));
-
-    Ok(())
 }

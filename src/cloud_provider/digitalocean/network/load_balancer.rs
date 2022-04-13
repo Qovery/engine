@@ -17,11 +17,12 @@ pub fn get_ip_from_do_load_balancer_api_output(json_content: &str) -> Result<Ipv
         Ok(lb) => match Ipv4Addr::from_str(&lb.load_balancer.ip) {
             Ok(ip) => Ok(ip),
             Err(e) => Err(CommandError::new(
-                e.to_string(),
-                Some(format!(
+                format!(
                     "Info returned from DO API is not a valid IP, received '{:?}' instead.",
                     &lb.load_balancer.ip,
-                )),
+                ),
+                Some(e.to_string()),
+                None,
             )),
         },
         Err(_) => Err(CommandError::new_from_safe_message(
@@ -42,10 +43,9 @@ pub fn do_get_load_balancer_ip(token: &str, load_balancer_id: &str) -> Result<Ip
                 get_ip_from_do_load_balancer_api_output(content.as_str())
             }
             _ => Err(CommandError::new(
-                format!("{:?}", response),
-                Some(
                     "Unknown status code received from Digital Ocean Kubernetes API while retrieving load balancer information.".to_string(),
-                ),
+                    Some(format!("response: {:?}", response)),
+                None,
             )),
         },
         Err(_) => {

@@ -24,13 +24,11 @@ pub fn get_doks_info_from_name(
 
             Ok(cluster_info)
         }
-        Err(e) => {
-            let safe_message = "Error while trying to deserialize json received from Digital Ocean DOKS API";
-            return Err(CommandError::new(
-                format!("{}, error: {}", safe_message, e),
-                Some(safe_message.to_string()),
-            ));
-        }
+        Err(e) => Err(CommandError::new(
+            "Error while trying to deserialize json received from Digital Ocean DOKS API".to_string(),
+            Some(e.to_string()),
+            None,
+        )),
     }
 }
 
@@ -48,13 +46,11 @@ fn get_doks_versions_from_api_output(json_content: &str) -> Result<Vec<Kubernete
 
     match res_doks_options {
         Ok(options) => Ok(options.options.versions),
-        Err(e) => {
-            let safe_message = "Error while trying to deserialize json received from Digital Ocean DOKS API";
-            return Err(CommandError::new(
-                format!("{}, error: {}", safe_message, e),
-                Some(safe_message.to_string()),
-            ));
-        }
+        Err(e) => Err(CommandError::new(
+            "Error while trying to deserialize json received from Digital Ocean DOKS API".to_string(),
+            Some(e.to_string()),
+            None,
+        )),
     }
 }
 
