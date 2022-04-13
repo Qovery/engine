@@ -50,7 +50,7 @@ use crate::string::terraform_list_format;
 use ::function_name::named;
 use rusoto_core::credential::StaticProvider;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
-use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest};
+use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest, NodegroupScalingConfig};
 
 pub mod helm_charts;
 pub mod node;
@@ -574,59 +574,12 @@ impl EKS {
             }
         };
 
-        let region = match RusotoRegion::from_str(&self.region()) {
-            Ok(value) => value,
-            Err(error) => {
-                return Err(EngineError::new_unsupported_region(
-                    event_details,
-                    "".to_string(),
-                    CommandError::new_from_safe_message(error.to_string()),
-                ))
-            }
-        };
-        let credentials = StaticProvider::new(
-            self.cloud_provider.access_key_id(),
-            self.cloud_provider.secret_access_key(),
-            None,
-            None,
-        );
-        let client = Client::new_with(credentials, HttpClient::new().expect("unable to create new Http client"));
-        let eks_client = EksClient::new_with_client(client, region);
-
-        let node_groups = match block_on(eks_client.list_nodegroups(ListNodegroupsRequest {
-            cluster_name: self.cluster_name(),
-            ..Default::default()
-        })) {
-            Ok(res) => res.nodegroups.unwrap_or_default(),
-            Err(_) => return Ok((false, future_node_group.min_nodes)),
-        };
-
-        if node_groups.is_empty() {
-            return Err(EngineError::new_cluster_has_no_worker_nodes(
-                event_details,
-                Option::Some(CommandError::new_from_safe_message(format!(
-                    "Could not find node_groups for cluster {}",
-                    self.cluster_name()
-                ))),
-            ));
-        }
-
-        let actual_nodes_group = match block_on(eks_client.describe_nodegroup(DescribeNodegroupRequest {
-            cluster_name: self.cluster_name(),
-            nodegroup_name: node_groups.first().unwrap().to_string(),
-        })) {
-            Ok(res) => res.nodegroup.unwrap_or_default(),
-            Err(error) => {
-                return Err(EngineError::new_cluster_has_no_worker_nodes(
-                    event_details,
-                    Option::Some(CommandError::new_from_safe_message(error.to_string())),
-                ))
-            }
-        };
-
-        let scaling_config = match actual_nodes_group.scaling_config {
-            Some(value) => value,
-            None => return Ok((false, 0)),
+        let scaling_config = match self.get_node_scaling_config(event_details.clone()) {
+            Ok(value) => match value {
+                Some(v) => v,
+                None => return Ok((false, future_node_group.min_nodes)),
+            },
+            Err(error) => return Err(error),
         };
 
         let should_update_desired_nodes = scaling_config.min_size.unwrap_or_default()
@@ -637,7 +590,7 @@ impl EKS {
             Ok((path, _)) => path,
             Err(_) => return Ok((false, scaling_config.desired_size.unwrap() as i32)),
         };
-        let get_node_result = retry::retry(Fixed::from_millis(10000).take(60), || {
+        let get_node_result = retry::retry(Fixed::from_millis(10000).take(5), || {
             match kubectl_exec_get_node(
                 kubeconfig.clone(),
                 self.cloud_provider.credentials_environment_variables().clone(),
@@ -664,6 +617,74 @@ impl EKS {
             Ok(desired_nodes) => Ok((should_update_desired_nodes, desired_nodes)),
             Err(error) => Err(error),
         }
+    }
+
+    /// Returns a rusoto eks client using the current configuration.
+    fn get_rusoto_eks_client(&self, event_details: EventDetails) -> Result<EksClient, EngineError> {
+        let region = match RusotoRegion::from_str(&self.region()) {
+            Ok(value) => value,
+            Err(error) => {
+                return Err(EngineError::new_unsupported_region(
+                    event_details,
+                    "".to_string(),
+                    CommandError::new_from_safe_message(error.to_string()),
+                ))
+            }
+        };
+
+        let credentials = StaticProvider::new(
+            self.cloud_provider.access_key_id(),
+            self.cloud_provider.secret_access_key(),
+            None,
+            None,
+        );
+
+        let client = Client::new_with(credentials, HttpClient::new().expect("unable to create new Http client"));
+        Ok(EksClient::new_with_client(client, region))
+    }
+
+    /// Returns the scaling config of a node_group by node_group_name.
+    fn get_node_scaling_config(
+        &self,
+        event_details: EventDetails,
+    ) -> Result<Option<NodegroupScalingConfig>, EngineError> {
+        let eks_client = match self.get_rusoto_eks_client(event_details.clone()) {
+            Ok(value) => value,
+            Err(error) => return Err(error),
+        };
+
+        let node_groups = match block_on(eks_client.list_nodegroups(ListNodegroupsRequest {
+            cluster_name: self.cluster_name(),
+            ..Default::default()
+        })) {
+            Ok(res) => res.nodegroups.unwrap_or_default(),
+            Err(_) => return Ok(Option::None),
+        };
+
+        if node_groups.is_empty() {
+            return Err(EngineError::new_cluster_has_no_worker_nodes(
+                event_details,
+                Option::Some(CommandError::new_from_safe_message(format!(
+                    "Could not find node_groups for cluster {}",
+                    self.cluster_name()
+                ))),
+            ));
+        }
+
+        let actual_nodes_group = match block_on(eks_client.describe_nodegroup(DescribeNodegroupRequest {
+            cluster_name: self.cluster_name(),
+            nodegroup_name: node_groups.first().unwrap().to_string(),
+        })) {
+            Ok(res) => res.nodegroup.unwrap_or_default(),
+            Err(error) => {
+                return Err(EngineError::new_cluster_has_no_worker_nodes(
+                    event_details,
+                    Option::Some(CommandError::new_from_safe_message(error.to_string())),
+                ))
+            }
+        };
+
+        Ok(actual_nodes_group.scaling_config)
     }
 
     fn create(&self) -> Result<(), EngineError> {
