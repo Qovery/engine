@@ -22,7 +22,8 @@ use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::cmd::kubectl::{
     kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_delete_pod,
-    kubectl_exec_get_node, kubectl_exec_version, kubectl_get_crash_looping_pods, kubernetes_get_all_pdbs,
+    kubectl_exec_get_node, kubectl_exec_is_namespace_present, kubectl_exec_version, kubectl_get_crash_looping_pods,
+    kubernetes_get_all_pdbs,
 };
 use crate::cmd::structs::KubernetesNodeCondition;
 use crate::dns_provider::DnsProvider;
@@ -668,6 +669,19 @@ pub fn delete_environment(
 ) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
+    let kubeconfig = kubernetes.get_kubeconfig_file_path()?;
+
+    // check if environment is not already deleted
+    // speed up delete env because of terraform requiring apply + destroy
+    if !kubectl_exec_is_namespace_present(
+        kubeconfig.clone(),
+        environment.namespace(),
+        kubernetes.cloud_provider().credentials_environment_variables(),
+    ) {
+        info!("no need to delete environment {}, already absent", environment.namespace());
+        return Ok(());
+    };
+
     let stateful_deployment_target = DeploymentTarget {
         kubernetes,
         environment,
@@ -749,7 +763,7 @@ pub fn delete_environment(
 
     // do not catch potential error - to confirm
     let _ = kubectl::kubectl_exec_delete_namespace(
-        kubernetes.get_kubeconfig_file_path()?,
+        kubeconfig,
         environment.namespace(),
         kubernetes.cloud_provider().credentials_environment_variables(),
     );
