@@ -470,7 +470,7 @@ impl EngineError {
                     EngineErrorScope::ObjectStorage(id, name) => Transmitter::ObjectStorage(id, name),
                     EngineErrorScope::Environment(id, name) => Transmitter::Environment(id, name),
                     EngineErrorScope::Database(id, db_type, name) => Transmitter::Database(id, db_type, name),
-                    EngineErrorScope::Application(id, name) => Transmitter::Application(id, name),
+                    EngineErrorScope::Application(id, name, commit) => Transmitter::Application(id, name, commit),
                     EngineErrorScope::Router(id, name) => Transmitter::Router(id, name),
                 },
             ),
