@@ -643,7 +643,9 @@ fn format_engine_error_output(
         EngineErrorScope::DnsProvider(id, name) => format!("DNS provider '{}' with id '{}'", name, id),
         EngineErrorScope::Environment(id, name) => format!("Environment '{}' with id '{}'", name, id),
         EngineErrorScope::Database(id, type_, name) => format!("{} Database '{}' with id '{}'", type_, name, id),
-        EngineErrorScope::Application(id, name) => format!("Application '{}' with id '{}'", name, id),
+        EngineErrorScope::Application(id, name, version) => {
+            format!("Application '{}' with id '{}' and version '{}'", name, id, version)
+        }
         EngineErrorScope::Router(id, name) => format!("Router '{}' with id '{}'", name, id),
         EngineErrorScope::ObjectStorage(id, name) => format!("Object Storage '{}' with id '{}'", name, id),
     };
