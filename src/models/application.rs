@@ -1,5 +1,7 @@
 use crate::build_platform::Build;
-use crate::cloud_provider::models::{EnvironmentVariable, Storage};
+use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate, Storage};
 use crate::cloud_provider::service::{delete_stateless_service, scale_down_application};
 use crate::cloud_provider::service::{
     deploy_stateless_service_error, deploy_user_stateless_service, send_progress_on_long_task, Action, Create, Delete,
@@ -7,11 +9,10 @@ use crate::cloud_provider::service::{
 };
 use crate::cloud_provider::utilities::{print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
-use crate::io_models::{Context, Listen, Listener, Listeners, Port, QoveryIdentifier};
+use crate::io_models::{ApplicationAdvanceSettings, Context, Listen, Listener, Listeners, Port, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;
@@ -26,23 +27,23 @@ pub enum ApplicationError {
 
 pub struct Application<T: CloudProvider> {
     _marker: PhantomData<T>,
-    pub(crate) context: Context,
-    pub(crate) id: String,
-    pub(crate) action: Action,
-    pub(crate) name: String,
-    pub(crate) ports: Vec<Port>,
-    pub(crate) total_cpus: String,
-    pub(crate) cpu_burst: String,
-    pub(crate) total_ram_in_mib: u32,
-    pub(crate) min_instances: u32,
-    pub(crate) max_instances: u32,
-    pub(crate) start_timeout_in_seconds: u32,
-    pub(crate) build: Build,
-    pub(crate) storage: Vec<Storage<T::StorageTypes>>,
-    pub(crate) environment_variables: Vec<EnvironmentVariable>,
-    pub(crate) listeners: Listeners,
-    pub(crate) logger: Box<dyn Logger>,
-    pub(crate) _extra_settings: T::AppExtraSettings,
+    pub(super) context: Context,
+    pub(super) id: String,
+    pub(super) action: Action,
+    pub(super) name: String,
+    pub(super) ports: Vec<Port>,
+    pub(super) total_cpus: String,
+    pub(super) cpu_burst: String,
+    pub(super) total_ram_in_mib: u32,
+    pub(super) min_instances: u32,
+    pub(super) max_instances: u32,
+    pub(super) build: Build,
+    pub(super) storage: Vec<Storage<T::StorageTypes>>,
+    pub(super) environment_variables: Vec<EnvironmentVariable>,
+    pub(super) listeners: Listeners,
+    pub(super) logger: Box<dyn Logger>,
+    pub(super) advance_settings: ApplicationAdvanceSettings,
+    pub(super) _extra_settings: T::AppExtraSettings,
 }
 
 // Here we define the common behavior among all providers
@@ -58,10 +59,10 @@ impl<T: CloudProvider> Application<T> {
         total_ram_in_mib: u32,
         min_instances: u32,
         max_instances: u32,
-        start_timeout_in_seconds: u32,
         build: Build,
         storage: Vec<Storage<T::StorageTypes>>,
         environment_variables: Vec<EnvironmentVariable>,
+        advance_settings: ApplicationAdvanceSettings,
         extra_settings: T::AppExtraSettings,
         listeners: Listeners,
         logger: Box<dyn Logger>,
@@ -80,14 +81,73 @@ impl<T: CloudProvider> Application<T> {
             total_ram_in_mib,
             min_instances,
             max_instances,
-            start_timeout_in_seconds,
             build,
             storage,
             environment_variables,
             listeners,
             logger,
+            advance_settings,
             _extra_settings: extra_settings,
         })
+    }
+
+    pub(super) fn default_tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
+        let mut context = TeraContext::new();
+        context.insert("id", self.id());
+        context.insert("owner_id", environment.owner_id.as_str());
+        context.insert("project_id", environment.project_id.as_str());
+        context.insert("organization_id", environment.organization_id.as_str());
+        context.insert("environment_id", environment.id.as_str());
+        context.insert("region", kubernetes.region().as_str());
+        context.insert("zone", kubernetes.zone());
+        context.insert("name", self.name());
+        context.insert("sanitized_name", &self.sanitized_name());
+        context.insert("namespace", environment.namespace());
+        context.insert("cluster_name", kubernetes.name());
+        context.insert("total_cpus", &self.total_cpus());
+        context.insert("total_ram_in_mib", &self.total_ram_in_mib());
+        context.insert("min_instances", &self.min_instances());
+        context.insert("max_instances", &self.max_instances());
+
+        if let Some(private_port) = self.public_port() {
+            context.insert("is_private_port", &true);
+            context.insert("private_port", &private_port);
+        } else {
+            context.insert("is_private_port", &false);
+        }
+
+        context.insert("version", &self.commit_id());
+
+        let commit_id = self.build.image.commit_id.as_str();
+        context.insert("helm_app_version", &commit_id[..7]);
+        context.insert("image_name_with_tag", &self.build.image.full_image_name_with_tag());
+        context.insert(
+            "start_timeout_in_seconds",
+            &self.advance_settings.deployment_delay_start_time_sec,
+        );
+
+        let environment_variables = self
+            .environment_variables
+            .iter()
+            .map(|ev| EnvironmentVariableDataTemplate {
+                key: ev.key.clone(),
+                value: ev.value.clone(),
+            })
+            .collect::<Vec<_>>();
+
+        context.insert("environment_variables", &environment_variables);
+        context.insert("ports", &self.ports);
+        context.insert("is_registry_secret", &true);
+        context.insert("registry_secret", self.build().image.registry_host());
+
+        // TODO: Remove this
+        context.insert("clone", &false);
+
+        if self.context.resource_expiration_in_seconds().is_some() {
+            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
+        }
+
+        context
     }
 
     pub fn is_stateful(&self) -> bool {
@@ -123,10 +183,6 @@ impl<T: CloudProvider> Application<T> {
             .iter()
             .find(|port| port.publicly_accessible)
             .map(|port| port.port as u16)
-    }
-
-    pub fn start_timeout(&self) -> u32 {
-        (self.start_timeout_in_seconds + 10) * 4
     }
 
     pub fn total_cpus(&self) -> String {
@@ -169,7 +225,7 @@ impl<T: CloudProvider> Application<T> {
         &mut self.build
     }
 
-    pub fn sanitize_name(&self) -> String {
+    pub fn sanitized_name(&self) -> String {
         sanitize_name("app", self.id())
     }
 
@@ -225,7 +281,7 @@ where
     }
 
     fn sanitized_name(&self) -> String {
-        self.sanitize_name()
+        self.sanitized_name()
     }
 
     fn version(&self) -> String {
@@ -238,10 +294,6 @@ where
 
     fn private_port(&self) -> Option<u16> {
         self.public_port()
-    }
-
-    fn start_timeout(&self) -> Timeout<u32> {
-        Timeout::Value(self.start_timeout())
     }
 
     fn total_cpus(&self) -> String {
@@ -294,7 +346,7 @@ impl<T: CloudProvider> Helm for Application<T> {
         format!(
             "{}/{}/charts/q-application",
             self.context.lib_root_dir(),
-            T::helm_directory_name(),
+            T::lib_directory_name(),
         )
     }
 

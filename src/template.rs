@@ -46,7 +46,7 @@ where
                 tera::ErrorKind::Utf8Conversion { .. } => "utf-8 conversion issue".to_string(),
             };
 
-            return Err(CommandError::new(context.into_json().to_string(), Some(error_msg)));
+            return Err(CommandError::new(error_msg, Some(context.into_json().to_string()), None));
         }
     };
 
@@ -65,7 +65,11 @@ where
     P: AsRef<Path>,
 {
     match crate::fs::copy_files(from.as_ref(), to.as_ref(), true) {
-        Err(err) => Err(CommandError::new(err.to_string(), None)),
+        Err(err) => Err(CommandError::new(
+            "Error copying template files.".to_string(),
+            Some(err.to_string()),
+            None,
+        )),
         Ok(x) => Ok(x),
     }
 }
@@ -121,11 +125,17 @@ pub fn write_rendered_templates(rendered_templates: &[RenderedTemplate], into: &
         let _ = fs::remove_file(dest.as_str());
 
         // create an empty file
-        let mut f = fs::File::create(&dest).map_err(|e| CommandError::new(e.to_string(), None))?;
+        let mut f = fs::File::create(&dest).map_err(|e| {
+            CommandError::new(
+                "Error while creating template destination file.".to_string(),
+                Some(e.to_string()),
+                None,
+            )
+        })?;
 
         // write rendered template into the new file
         f.write_all(rt.content.as_bytes())
-            .map_err(|e| CommandError::new(e.to_string(), None))?;
+            .map_err(|e| CommandError::new("Error while rendering template.".to_string(), Some(e.to_string()), None))?;
 
         // perform specific action based on the extension
         let extension = Path::new(&dest).extension().and_then(OsStr::to_str);

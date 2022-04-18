@@ -7,7 +7,7 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::utilities::{check_cname_for, print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm;
-use crate::cmd::helm::{to_engine_error, Timeout};
+use crate::cmd::helm::to_engine_error;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage, ToTransmitter, Transmitter};
 use crate::io_models::{Context, Listen, Listener, Listeners};
@@ -218,7 +218,7 @@ impl<T: CloudProvider> Helm for Router<T> {
         format!(
             "{}/{}/chart_values/nginx-ingress",
             self.context.lib_root_dir(),
-            T::helm_directory_name()
+            T::lib_directory_name()
         )
     }
 
@@ -261,10 +261,6 @@ where
 
     fn private_port(&self) -> Option<u16> {
         None
-    }
-
-    fn start_timeout(&self) -> Timeout<u32> {
-        Timeout::Default
     }
 
     fn total_cpus(&self) -> String {
@@ -333,7 +329,7 @@ where
         let from_dir = format!(
             "{}/{}/charts/q-ingress-tls",
             self.context.lib_root_dir(),
-            T::helm_directory_name()
+            T::lib_directory_name()
         );
         if let Err(e) =
             crate::template::generate_and_copy_all_files_into_dir(from_dir.as_str(), workspace_dir.as_str(), context)

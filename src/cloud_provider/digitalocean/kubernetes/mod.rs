@@ -25,7 +25,7 @@ use crate::cloud_provider::kubernetes::{
 };
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
-use crate::cloud_provider::utilities::{print_action, VersionsNumber};
+use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{
@@ -45,6 +45,7 @@ use crate::io_models::{
 };
 use crate::logger::Logger;
 use crate::models::digital_ocean::DoRegion;
+use crate::models::types::VersionsNumber;
 use crate::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
@@ -689,11 +690,13 @@ impl DOKS {
         ) {
             Ok(x) => x.to_string(),
             Err(e) => {
-                let safe_message = "Load balancer IP wasn't able to be retrieved from UUID on DigitalOcean API and it's required for TLS setup";
                 return Err(EngineError::new_k8s_loadbalancer_configuration_issue(
                     event_details.clone(),
-                    CommandError::new(e.message(ErrorMessageVerbosity::FullDetails), Some(safe_message.to_string())),
-                ));
+                    CommandError::new(
+                        format!("Load balancer IP wasn't able to be retrieved from UUID on DigitalOcean API and it's required for TLS setup, {}", e.message_safe()),
+                    e.message_raw(),
+                        e.env_vars(),
+                )));
             }
         };
 
@@ -1078,7 +1081,7 @@ impl DOKS {
             )),
             Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
                 event_details,
-                CommandError::new(msg, None),
+                CommandError::new("Error while performing Terraform destroy.".to_string(), Some(msg), None),
             )),
         }
     }
@@ -1192,7 +1195,11 @@ impl Kubernetes for DOKS {
                 Ok(file) => Ok((StringPath::from(&local_kubeconfig_generated), file)),
                 Err(e) => Err(EngineError::new_cannot_retrieve_cluster_config_file(
                     event_details.clone(),
-                    CommandError::new(e.to_string(), Some(e.to_string())),
+                    CommandError::new(
+                        "Error while trying to open Kubeconfig file.".to_string(),
+                        Some(e.to_string()),
+                        None,
+                    ),
                 )),
             },
             None => {
@@ -1220,7 +1227,11 @@ impl Kubernetes for DOKS {
                 .map_err(|err| {
                     EngineError::new_cannot_retrieve_cluster_config_file(
                         event_details.clone(),
-                        CommandError::new(err.to_string(), Some(err.to_string())),
+                        CommandError::new(
+                            "Error while trying to create workspace directory.".to_string(),
+                            Some(err.to_string()),
+                            None,
+                        ),
                     )
                 })
                 .expect("Unable to create directory");
@@ -1244,12 +1255,20 @@ impl Kubernetes for DOKS {
                         }
                         Err(e) => Err(EngineError::new_cannot_retrieve_cluster_config_file(
                             event_details.clone(),
-                            CommandError::new(e.to_string(), Some(e.to_string())),
+                            CommandError::new(
+                                "Error while trying to write Kubeconfig file content".to_string(),
+                                Some(e.to_string()),
+                                None,
+                            ),
                         )),
                     },
                     Err(e) => Err(EngineError::new_cannot_create_file(
                         event_details.clone(),
-                        CommandError::new(e.to_string(), Some(e.to_string())),
+                        CommandError::new(
+                            "Error while trying to create Kubeconfig file.".to_string(),
+                            Some(e.to_string()),
+                            None,
+                        ),
                     )),
                 }
             }
@@ -1258,10 +1277,7 @@ impl Kubernetes for DOKS {
         match result {
             Err(e) => Err(EngineError::new_cannot_retrieve_cluster_config_file(
                 event_details,
-                CommandError::new(
-                    e.message(ErrorMessageVerbosity::FullDetails),
-                    Some(e.message(ErrorMessageVerbosity::SafeOnly)),
-                ),
+                e.underlying_error().unwrap_or_default(),
             )),
             Ok((file_path, file)) => Ok((file_path, file)),
         }
