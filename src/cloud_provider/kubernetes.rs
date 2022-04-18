@@ -819,22 +819,24 @@ where
             },
         ) {
             Ok(_) => {}
-            Err(Operation { error, .. }) => {
-                return Err(EngineError::new_cannot_uninstall_helm_chart(
-                    event_details,
+            Err(Operation { error, .. }) => logger.log(EngineEvent::Error(
+                EngineError::new_cannot_uninstall_helm_chart(
+                    event_details.clone(),
                     "Cert-Manager".to_string(),
                     object.to_string(),
                     error,
-                ))
-            }
-            Err(retry::Error::Internal(msg)) => {
-                return Err(EngineError::new_cannot_uninstall_helm_chart(
-                    event_details,
+                ),
+                None,
+            )),
+            Err(retry::Error::Internal(msg)) => logger.log(EngineEvent::Error(
+                EngineError::new_cannot_uninstall_helm_chart(
+                    event_details.clone(),
                     "Cert-Manager".to_string(),
                     object.to_string(),
                     CommandError::new_from_safe_message(msg),
-                ))
-            }
+                ),
+                None,
+            )),
         }
     }
 
