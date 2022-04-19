@@ -64,12 +64,6 @@ variable "vpc_cidr_set" {
   type = string
 }
 
-variable "kubernetes_full_cluster_id" {
-  description = "Kubernetes full cluster id"
-  default     = "{{ kubernetes_full_cluster_id }}"
-  type        = string
-}
-
 variable "kubernetes_cluster_id" {
   description = "Kubernetes cluster name"
   default     = "{{ doks_cluster_id }}"

@@ -111,12 +111,6 @@ variable "eks_k8s_versions" {
   type = map(string)
 }
 
-variable "kubernetes_full_cluster_id" {
-  description = "Kubernetes full cluster id"
-  default     = "{{ kubernetes_full_cluster_id }}"
-  type        = string
-}
-
 variable "kubernetes_cluster_id" {
   description = "Kubernetes cluster id"
   default     = "{{ kubernetes_cluster_id }}"
