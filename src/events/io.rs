@@ -163,6 +163,7 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
 type TransmitterId = String;
 type TransmitterName = String;
 type TransmitterType = String;
+type TransmitterVersion = String;
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -204,6 +205,7 @@ pub enum Transmitter {
     Application {
         id: TransmitterId,
         name: TransmitterName,
+        commit: TransmitterVersion,
     },
     Router {
         id: TransmitterId,
@@ -222,7 +224,7 @@ impl From<events::Transmitter> for Transmitter {
             events::Transmitter::ObjectStorage(id, name) => Transmitter::ObjectStorage { id, name },
             events::Transmitter::Environment(id, name) => Transmitter::Environment { id, name },
             events::Transmitter::Database(id, db_type, name) => Transmitter::Database { id, db_type, name },
-            events::Transmitter::Application(id, name) => Transmitter::Application { id, name },
+            events::Transmitter::Application(id, name, commit) => Transmitter::Application { id, name, commit },
             events::Transmitter::Router(id, name) => Transmitter::Router { id, name },
         }
     }

@@ -36,6 +36,9 @@ pub trait Service: ToTransmitter {
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
     }
+    fn name_with_id_and_version(&self) -> String {
+        format!("{} ({}) version: {}", self.name(), self.id(), self.version())
+    }
     fn workspace_directory(&self) -> String {
         let dir_root = match self.service_type() {
             ServiceType::Application => "applications",
@@ -1215,17 +1218,17 @@ where
         Action::Create => Some(format!(
             "{} '{}' deployment is in progress...",
             service.service_type().name(),
-            service.name_with_id()
+            service.name_with_id_and_version(),
         )),
         Action::Pause => Some(format!(
             "{} '{}' pause is in progress...",
             service.service_type().name(),
-            service.name_with_id()
+            service.name_with_id_and_version(),
         )),
         Action::Delete => Some(format!(
             "{} '{}' deletion is in progress...",
             service.service_type().name(),
-            service.name_with_id()
+            service.name_with_id_and_version(),
         )),
         Action::Nothing => None,
     };
