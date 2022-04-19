@@ -73,7 +73,7 @@ impl LocalDocker {
         }
 
         // arbitrary percentage that should make the job anytime
-        const DISK_FREE_SPACE_PERCENTAGE_BEFORE_PURGE: u64 = 20;
+        const DISK_FREE_SPACE_PERCENTAGE_BEFORE_PURGE: u64 = 40;
         let mount_points_to_check = vec![Path::new("/var/lib/docker"), Path::new("/")];
         let mut disk_free_space_percent: u64 = 100;
 

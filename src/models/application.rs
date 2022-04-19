@@ -246,7 +246,7 @@ impl<T: CloudProvider> Application<T> {
 // Traits implementations
 impl<T: CloudProvider> ToTransmitter for Application<T> {
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Application(self.id.to_string(), self.name.to_string())
+        Transmitter::Application(self.id.to_string(), self.name.to_string(), self.commit_id())
     }
 }
 
@@ -278,6 +278,10 @@ where
 
     fn name(&self) -> &str {
         self.name()
+    }
+
+    fn name_with_id_and_version(&self) -> String {
+        format!("{} ({}) commit: {}", self.name(), self.id(), self.commit_id())
     }
 
     fn sanitized_name(&self) -> String {

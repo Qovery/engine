@@ -4,6 +4,7 @@ use std::process::ExitStatus;
 pub type Type = String;
 pub type Id = String;
 pub type Name = String;
+pub type Version = String;
 
 #[derive(Debug)]
 #[deprecated(note = "errors.EngineError to be used instead")]
@@ -44,7 +45,7 @@ pub enum EngineErrorScope {
     ObjectStorage(Id, Name),
     Environment(Id, Name),
     Database(Id, Type, Name),
-    Application(Id, Name),
+    Application(Id, Name, Version),
     Router(Id, Name),
 }
 
@@ -59,7 +60,7 @@ impl From<Transmitter> for EngineErrorScope {
             Transmitter::ObjectStorage(id, name) => EngineErrorScope::ObjectStorage(id, name),
             Transmitter::Environment(id, name) => EngineErrorScope::Environment(id, name),
             Transmitter::Database(id, db_type, name) => EngineErrorScope::Database(id, db_type, name),
-            Transmitter::Application(id, name) => EngineErrorScope::Application(id, name),
+            Transmitter::Application(id, name, commit) => EngineErrorScope::Application(id, name, commit),
             Transmitter::Router(id, name) => EngineErrorScope::Router(id, name),
         }
     }
