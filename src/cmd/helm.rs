@@ -512,7 +512,11 @@ impl Helm {
 
                 // Try do define/specify a bit more the message
                 let stderr_msg: String = error_message.into_iter().collect();
-                let stderr_msg = format!("{}: {}", stderr_msg, err.message(ErrorMessageVerbosity::FullDetails));
+                let stderr_msg = format!(
+                    "{}: {}",
+                    stderr_msg,
+                    err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
+                );
                 let error = if stderr_msg.contains("another operation (install/upgrade/rollback) is in progress") {
                     HelmError::ReleaseLocked(chart.name.clone())
                 } else if stderr_msg.contains("has been rolled back") {
