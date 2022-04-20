@@ -27,7 +27,7 @@ pub trait CloudProvider {
     fn lib_directory_name() -> &'static str;
 }
 
-pub(crate) trait ToTeraContext {
+pub trait ToTeraContext {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError>;
 }
 
