@@ -364,6 +364,7 @@ pub trait KubernetesNode {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     Eks,
+    Ec2,
     Doks,
     ScwKapsule,
 }
@@ -372,6 +373,7 @@ impl Display for Kind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Kind::Eks => "EKS",
+            Kind::Ec2 => "EC2",
             Kind::Doks => "DOKS",
             Kind::ScwKapsule => "ScwKapsule",
         })
@@ -401,6 +403,10 @@ pub fn deploy_environment(
 
     let stateful_deployment_target = match kubernetes.kind() {
         Kind::Eks => DeploymentTarget {
+            kubernetes,
+            environment,
+        },
+        Kind::Ec2 => DeploymentTarget {
             kubernetes,
             environment,
         },
@@ -1790,7 +1796,7 @@ mod tests {
                     "systemUUID": "EC2E8B4C-92F9-213B-09B5-C0CD11A7EEB7"
                 }
             }
-        } 
+        }
     ],
     "kind": "List",
     "metadata": {

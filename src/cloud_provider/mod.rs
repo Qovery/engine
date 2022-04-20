@@ -52,12 +52,6 @@ pub enum Kind {
     Aws,
     Do,
     Scw,
-    Edge(Edge),
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
-pub enum Edge {
-    Aws,
 }
 
 impl Display for Kind {
@@ -66,7 +60,6 @@ impl Display for Kind {
             Kind::Aws => "AWS",
             Kind::Do => "Digital Ocean",
             Kind::Scw => "Scaleway",
-            Kind::Edge(Edge::Aws) => "Edge AWS",
         })
     }
 }
