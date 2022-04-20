@@ -13,6 +13,7 @@ use qovery_engine::io_models::{
 
 use crate::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
 use crate::digitalocean::{DO_KUBERNETES_VERSION, DO_TEST_REGION};
+use crate::edge_aws_rs::AWS_K3S_VERSION;
 use crate::scaleway::{SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
 use crate::utilities::{
     db_disk_type, db_infos, db_instance_type, generate_id, generate_password, get_pvc, get_svc, get_svc_name, init,
@@ -29,7 +30,7 @@ use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
-use qovery_engine::cloud_provider::{CloudProvider, Kind};
+use qovery_engine::cloud_provider::{CloudProvider, Edge, Kind};
 use qovery_engine::cmd::kubectl::kubernetes_get_all_hpas;
 use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::engine::EngineConfig;
@@ -1135,10 +1136,11 @@ pub fn test_db(
         Kind::Aws => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
         Kind::Do => (DO_TEST_REGION.to_string(), DO_KUBERNETES_VERSION.to_string()),
         Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
+        Kind::Edge(Edge::Aws) => (AWS_TEST_REGION.to_string(), AWS_K3S_VERSION.to_string()),
     };
 
     let engine_config = match provider_kind {
-        Kind::Aws => AWS::docker_cr_engine(
+        Kind::Aws | Kind::Edge(Edge::Aws) => AWS::docker_cr_engine(
             &context,
             logger.clone(),
             localisation.as_str(),

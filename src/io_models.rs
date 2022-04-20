@@ -16,8 +16,8 @@ use url::Url;
 use crate::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::{DatabaseOptions, RouterService};
-use crate::cloud_provider::Kind as CPKind;
 use crate::cloud_provider::{service, CloudProvider};
+use crate::cloud_provider::{Edge, Kind as CPKind, Kind};
 use crate::cmd::docker::Docker;
 use crate::container_registry::ContainerRegistryInfo;
 use crate::logger::Logger;
@@ -292,6 +292,25 @@ impl Application {
                 environment_variables,
                 self.advance_settings.clone(),
                 ScwAppExtraSettings {},
+                listeners,
+                logger.clone(),
+            )?)),
+            Kind::Edge(Edge::Aws) => Ok(Box::new(models::application::Application::<AWS>::new(
+                context.clone(),
+                self.id.as_str(),
+                self.action.to_service_action(),
+                self.name.as_str(),
+                self.ports.clone(),
+                self.total_cpus.clone(),
+                self.cpu_burst.clone(),
+                self.total_ram_in_mib,
+                self.min_instances,
+                self.max_instances,
+                build,
+                self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
+                environment_variables,
+                self.advance_settings.clone(),
+                AwsAppExtraSettings {},
                 listeners,
                 logger.clone(),
             )?)),
@@ -581,6 +600,22 @@ impl Router {
                     routes,
                     self.sticky_sessions_enabled,
                     ScwRouterExtraSettings {},
+                    listeners,
+                    logger,
+                )?);
+                Ok(router)
+            }
+            Kind::Edge(Edge::Aws) => {
+                let router = Box::new(models::router::Router::<AWS>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.name.as_str(),
+                    self.action.to_service_action(),
+                    self.default_domain.as_str(),
+                    custom_domains,
+                    routes,
+                    self.sticky_sessions_enabled,
+                    AwsRouterExtraSettings {},
                     listeners,
                     logger,
                 )?);
@@ -1064,6 +1099,176 @@ impl Database {
                 service::DatabaseType::MongoDB,
                 SCW::full_name().to_string(),
             )),
+
+            (CPKind::Edge(Edge::Aws), DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
+                let db = models::database::Database::<AWS, Managed, PostgresSQL>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    version,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )?;
+
+                Ok(Box::new(db))
+            }
+            (CPKind::Edge(Edge::Aws), DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<AWS, Container, PostgresSQL>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    version,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )?;
+
+                Ok(Box::new(db))
+            }
+
+            (CPKind::Edge(Edge::Aws), DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
+                let db = models::database::Database::<AWS, Managed, MySQL>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    version,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )?;
+
+                Ok(Box::new(db))
+            }
+            (CPKind::Edge(Edge::Aws), DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<AWS, Container, MySQL>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    version,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )?;
+
+                Ok(Box::new(db))
+            }
+            (CPKind::Edge(Edge::Aws), DatabaseKind::Redis, DatabaseMode::MANAGED) => {
+                let db = models::database::Database::<AWS, Managed, Redis>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    version,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )?;
+
+                Ok(Box::new(db))
+            }
+            (CPKind::Edge(Edge::Aws), DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<AWS, Container, Redis>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    version,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )?;
+
+                Ok(Box::new(db))
+            }
+            (CPKind::Edge(Edge::Aws), DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
+                let db = models::database::Database::<AWS, Managed, MongoDB>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    version,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )?;
+
+                Ok(Box::new(db))
+            }
+            (CPKind::Edge(Edge::Aws), DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
+                let db = models::database::Database::<AWS, Container, MongoDB>::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    version,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.total_cpus.clone(),
+                    self.total_ram_in_mib,
+                    self.database_instance_type.as_str(),
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    listeners,
+                    logger,
+                )?;
+
+                Ok(Box::new(db))
+            }
         }
     }
 }
