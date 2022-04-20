@@ -73,7 +73,7 @@ impl fmt::Display for VpcQoveryNetworkMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Options {
+pub struct EksOptions {
     // AWS related
     pub eks_zone_a_subnet_blocks: Vec<String>,
     pub eks_zone_b_subnet_blocks: Vec<String>,
@@ -117,7 +117,7 @@ pub struct Options {
     pub tls_email_report: String,
 }
 
-impl ProviderOptions for Options {}
+impl ProviderOptions for EksOptions {}
 
 pub struct EKS {
     context: Context,
@@ -132,7 +132,7 @@ pub struct EKS {
     s3: S3,
     nodes_groups: Vec<NodeGroups>,
     template_directory: String,
-    options: Options,
+    options: EksOptions,
     listeners: Listeners,
     logger: Box<dyn Logger>,
 }
@@ -148,7 +148,7 @@ impl EKS {
         zones: Vec<String>,
         cloud_provider: Arc<Box<dyn CloudProvider>>,
         dns_provider: Arc<Box<dyn DnsProvider>>,
-        options: Options,
+        options: EksOptions,
         nodes_groups: Vec<NodeGroups>,
         logger: Box<dyn Logger>,
     ) -> Result<Self, EngineError> {
@@ -1783,6 +1783,159 @@ impl Kubernetes for EKS {
 }
 
 impl Listen for EKS {
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
+    }
+}
+
+pub struct Ec2Options {}
+
+impl ProviderOptions for Ec2Options {}
+
+pub struct EC2 {
+    context: Context,
+    id: String,
+    long_id: uuid::Uuid,
+    name: String,
+    version: String,
+    region: AwsRegion,
+    zones: Vec<AwsZones>,
+    cloud_provider: Arc<Box<dyn CloudProvider>>,
+    dns_provider: Arc<Box<dyn DnsProvider>>,
+    s3: S3,
+    template_directory: String,
+    options: Ec2Options,
+    listeners: Listeners,
+    logger: Box<dyn Logger>,
+}
+
+impl Kubernetes for EC2 {
+    fn context(&self) -> &Context {
+        todo!()
+    }
+
+    fn kind(&self) -> Kind {
+        todo!()
+    }
+
+    fn id(&self) -> &str {
+        todo!()
+    }
+
+    fn name(&self) -> &str {
+        todo!()
+    }
+
+    fn version(&self) -> &str {
+        todo!()
+    }
+
+    fn region(&self) -> String {
+        todo!()
+    }
+
+    fn zone(&self) -> &str {
+        todo!()
+    }
+
+    fn aws_zones(&self) -> Option<Vec<AwsZones>> {
+        todo!()
+    }
+
+    fn cloud_provider(&self) -> &dyn CloudProvider {
+        todo!()
+    }
+
+    fn dns_provider(&self) -> &dyn DnsProvider {
+        todo!()
+    }
+
+    fn logger(&self) -> &dyn Logger {
+        todo!()
+    }
+
+    fn config_file_store(&self) -> &dyn ObjectStorage {
+        todo!()
+    }
+
+    fn is_valid(&self) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn on_create(&self) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn on_create_error(&self) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn on_upgrade(&self) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn on_upgrade_error(&self) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn on_downgrade(&self) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn on_downgrade_error(&self) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn on_pause(&self) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn on_pause_error(&self) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn on_delete(&self) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn on_delete_error(&self) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn deploy_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn pause_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+        todo!()
+    }
+
+    fn delete_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
+        todo!()
+    }
+}
+
+impl Listen for EC2 {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }

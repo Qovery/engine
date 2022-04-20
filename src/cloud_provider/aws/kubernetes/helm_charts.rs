@@ -1,4 +1,4 @@
-use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
+use crate::cloud_provider::aws::kubernetes::{EksOptions, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
     get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo, ChartPayload, ChartSetValue,
     ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces,
@@ -53,7 +53,7 @@ pub struct ChartsConfigPrerequisites {
     pub cloudflare_api_token: String,
     pub disable_pleco: bool,
     // qovery options form json input
-    pub infra_options: Options,
+    pub infra_options: EksOptions,
 }
 
 pub fn aws_helm_charts(
