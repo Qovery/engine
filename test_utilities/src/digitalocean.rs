@@ -3,6 +3,7 @@ use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DoksOptions;
 use qovery_engine::cloud_provider::digitalocean::network::vpc::VpcInitKind;
 use qovery_engine::cloud_provider::digitalocean::DO;
+use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::docr::DOCR;
@@ -13,6 +14,7 @@ use std::sync::Arc;
 use crate::cloudflare::dns_provider_cloudflare;
 use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
+use qovery_engine::cloud_provider::kubernetes::Kind;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::Kind::Do;
 use qovery_engine::dns_provider::DnsProvider;
@@ -48,6 +50,7 @@ pub fn do_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> E
         &context,
         logger,
         DO_TEST_REGION.to_string().as_str(),
+        KKind::Doks,
         DO_KUBERNETES_VERSION.to_string(),
         &ClusterDomain::Default,
         None,
@@ -59,6 +62,7 @@ impl Cluster<DO, DoksOptions> for DO {
         context: &Context,
         logger: Box<dyn Logger>,
         localisation: &str,
+        kubernetes_kind: KKind,
         kubernetes_version: String,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
@@ -76,6 +80,7 @@ impl Cluster<DO, DoksOptions> for DO {
             Do,
             context,
             cloud_provider.clone(),
+            kubernetes_kind,
             dns_provider.clone(),
             logger.clone(),
             localisation,

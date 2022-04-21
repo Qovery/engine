@@ -5,6 +5,7 @@ use const_format::formatcp;
 use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
+use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
 use qovery_engine::cloud_provider::Kind::Aws;
@@ -60,16 +61,19 @@ pub fn aws_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> 
         &context,
         logger,
         AWS_TEST_REGION.to_string().as_str(),
+        KKind::Eks,
         AWS_KUBERNETES_VERSION.to_string(),
         &ClusterDomain::Default,
         None,
     )
 }
+
 impl Cluster<AWS, Options> for AWS {
     fn docker_cr_engine(
         context: &Context,
         logger: Box<dyn Logger>,
         localisation: &str,
+        kubernetes_kind: KKind,
         kubernetes_version: String,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
@@ -84,10 +88,11 @@ impl Cluster<AWS, Options> for AWS {
         let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(AWS::cloud_provider(context));
         let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_cloudflare(context, cluster_domain));
 
-        let k = get_environment_test_kubernetes(
+        let kubernetes = get_environment_test_kubernetes(
             Aws,
             context,
             cloud_provider.clone(),
+            kubernetes_kind,
             dns_provider.clone(),
             logger.clone(),
             localisation,
@@ -101,7 +106,7 @@ impl Cluster<AWS, Options> for AWS {
             container_registry,
             cloud_provider,
             dns_provider,
-            k,
+            kubernetes,
         )
     }
 

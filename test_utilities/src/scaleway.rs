@@ -1,28 +1,31 @@
-use const_format::formatcp;
-use qovery_engine::build_platform::Build;
-use qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions;
-use qovery_engine::cloud_provider::scaleway::Scaleway;
-use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
-use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
-use qovery_engine::engine::EngineConfig;
-use qovery_engine::io_models::{Context, EnvironmentRequest, NoOpProgressListener};
-use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use std::sync::Arc;
 
-use crate::cloudflare::dns_provider_cloudflare;
-use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
+use const_format::formatcp;
+use tracing::error;
 
-use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
+use qovery_engine::build_platform::Build;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
+use qovery_engine::cloud_provider::kubernetes::Kind;
+use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
+use qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions;
+use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::Kind::Scw;
+use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::errors::ContainerRegistryError;
+use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::dns_provider::DnsProvider;
+use qovery_engine::engine::EngineConfig;
+use qovery_engine::io_models::{Context, EnvironmentRequest, NoOpProgressListener};
 use qovery_engine::logger::Logger;
 use qovery_engine::models::scaleway::ScwZone;
-use tracing::error;
+use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
+
+use crate::cloudflare::dns_provider_cloudflare;
+use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
+use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
 pub const SCW_TEST_ZONE: ScwZone = ScwZone::Paris2;
 pub const SCW_KUBERNETES_MAJOR_VERSION: u8 = 1;
@@ -69,6 +72,7 @@ pub fn scw_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> 
         &context,
         logger,
         SCW_TEST_ZONE.to_string().as_str(),
+        KKind::ScwKapsule,
         SCW_KUBERNETES_VERSION.to_string(),
         &ClusterDomain::Default,
         None,
@@ -80,6 +84,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         context: &Context,
         logger: Box<dyn Logger>,
         localisation: &str,
+        kubernetes_kind: KKind,
         kubernetes_version: String,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
@@ -98,6 +103,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             Scw,
             context,
             cloud_provider.clone(),
+            Kind::ScwKapsule,
             dns_provider.clone(),
             logger.clone(),
             localisation,

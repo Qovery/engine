@@ -1,6 +1,7 @@
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::WithNatGateways;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
+use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::Kind;
 use std::str::FromStr;
 use test_utilities::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
@@ -38,6 +39,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
         cluster_test(
             function_name!(),
             Kind::Aws,
+            KKind::Eks,
             context.clone(),
             logger(),
             region,

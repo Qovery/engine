@@ -3,6 +3,8 @@ extern crate test_utilities;
 use self::test_utilities::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
 use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 use ::function_name::named;
+use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
+
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
@@ -27,6 +29,7 @@ fn create_and_destroy_edge_aws_cluster(
         cluster_test(
             test_name,
             Kind::Aws,
+            KKind::Ec2,
             context(
                 generate_id().as_str(),
                 generate_cluster_id(region.to_string().as_str()).as_str(),
