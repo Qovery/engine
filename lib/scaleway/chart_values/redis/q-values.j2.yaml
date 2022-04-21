@@ -2,7 +2,7 @@
 ## ref: https://hub.docker.com/r/bitnami/redis/tags/
 ##
 image:
-  registry: quay.io
+  registry: docker.io
   repository: bitnami/redis
   ## Bitnami Redis image tag
   ## ref: https://github.com/bitnami/bitnami-docker-redis#supported-tags-and-respective-dockerfile-links
