@@ -2,7 +2,7 @@ extern crate serde;
 extern crate serde_derive;
 
 use const_format::formatcp;
-use qovery_engine::cloud_provider::aws::kubernetes::{EksOptions, VpcQoveryNetworkMode};
+use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::models::NodeGroups;
@@ -65,7 +65,7 @@ pub fn aws_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> 
         None,
     )
 }
-impl Cluster<AWS, EksOptions> for AWS {
+impl Cluster<AWS, Options> for AWS {
     fn docker_cr_engine(
         context: &Context,
         logger: Box<dyn Logger>,
@@ -147,8 +147,8 @@ impl Cluster<AWS, EksOptions> for AWS {
         ]
     }
 
-    fn kubernetes_cluster_options(secrets: FuncTestsSecrets, _cluster_name: Option<String>) -> EksOptions {
-        EksOptions {
+    fn kubernetes_cluster_options(secrets: FuncTestsSecrets, _cluster_name: Option<String>) -> Options {
+        Options {
             eks_zone_a_subnet_blocks: vec!["10.0.0.0/20".to_string(), "10.0.16.0/20".to_string()],
             eks_zone_b_subnet_blocks: vec!["10.0.32.0/20".to_string(), "10.0.48.0/20".to_string()],
             eks_zone_c_subnet_blocks: vec!["10.0.64.0/20".to_string(), "10.0.80.0/20".to_string()],
