@@ -169,7 +169,7 @@ impl EKS {
             }
         }
 
-        let s3 = s3(&context, &region, cloud_provider.as_ref());
+        let s3 = s3(&context, &region, &**cloud_provider);
 
         // copy listeners from CloudProvider
         let listeners = cloud_provider.listeners().clone();
@@ -580,7 +580,7 @@ impl Kubernetes for EKS {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Create, || downgrade())
+        send_progress_on_long_task(self, Action::Create, downgrade)
     }
 
     #[named]
@@ -799,7 +799,7 @@ impl EC2 {
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
 
         let aws_zones = aws_zones(zones, &region, &event_details)?;
-        let s3 = s3(&context, &region, cloud_provider.as_ref());
+        let s3 = s3(&context, &region, &**cloud_provider);
 
         // copy listeners from CloudProvider
         let listeners = cloud_provider.listeners().clone();
@@ -964,7 +964,7 @@ impl Kubernetes for EC2 {
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Create, || downgrade())
+        send_progress_on_long_task(self, Action::Create, downgrade)
     }
 
     #[named]
@@ -1178,7 +1178,7 @@ fn aws_zones(
     Ok(aws_zones)
 }
 
-fn s3(context: &Context, region: &AwsRegion, cloud_provider: &Box<dyn CloudProvider>) -> S3 {
+fn s3(context: &Context, region: &AwsRegion, cloud_provider: &dyn CloudProvider) -> S3 {
     S3::new(
         context.clone(),
         "s3-temp-id".to_string(),
@@ -1229,7 +1229,7 @@ fn managed_dns_resolvers_terraform_format(dns_provider: &dyn DnsProvider) -> Str
 fn tera_context(
     kubernetes: &dyn Kubernetes,
     zones: &Vec<AwsZones>,
-    node_groups: &Vec<NodeGroups>,
+    node_groups: &[NodeGroups],
     options: &Options,
 ) -> Result<TeraContext, EngineError> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
