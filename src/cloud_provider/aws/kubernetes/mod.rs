@@ -73,8 +73,9 @@ impl fmt::Display for VpcQoveryNetworkMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EksOptions {
+pub struct Options {
     // AWS related
+    // TODO add ec2_zone_x_subnet_blocks
     pub eks_zone_a_subnet_blocks: Vec<String>,
     pub eks_zone_b_subnet_blocks: Vec<String>,
     pub eks_zone_c_subnet_blocks: Vec<String>,
@@ -117,7 +118,7 @@ pub struct EksOptions {
     pub tls_email_report: String,
 }
 
-impl ProviderOptions for EksOptions {}
+impl ProviderOptions for Options {}
 
 pub struct EKS {
     context: Context,
@@ -132,7 +133,7 @@ pub struct EKS {
     s3: S3,
     nodes_groups: Vec<NodeGroups>,
     template_directory: String,
-    options: EksOptions,
+    options: Options,
     listeners: Listeners,
     logger: Box<dyn Logger>,
 }
@@ -148,36 +149,14 @@ impl EKS {
         zones: Vec<String>,
         cloud_provider: Arc<Box<dyn CloudProvider>>,
         dns_provider: Arc<Box<dyn DnsProvider>>,
-        options: EksOptions,
+        options: Options,
         nodes_groups: Vec<NodeGroups>,
         logger: Box<dyn Logger>,
     ) -> Result<Self, EngineError> {
-        let event_details = EventDetails::new(
-            Some(cloud_provider.kind()),
-            QoveryIdentifier::new_from_long_id(context.organization_id().to_string()),
-            QoveryIdentifier::new_from_long_id(context.cluster_id().to_string()),
-            QoveryIdentifier::new_from_long_id(context.execution_id().to_string()),
-            Some(region.to_string()),
-            Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
-            Transmitter::Kubernetes(id.to_string(), name.to_string()),
-        );
-
+        let event_details = event_details(&cloud_provider, id, name, &region, &context);
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
 
-        let mut aws_zones: Vec<AwsZones> = Vec::with_capacity(3);
-        for zone in zones {
-            match AwsZones::from_string(zone.to_string()) {
-                Ok(x) => aws_zones.push(x),
-                Err(e) => {
-                    return Err(EngineError::new_unsupported_zone(
-                        event_details,
-                        region.to_string(),
-                        zone,
-                        CommandError::new_from_safe_message(e.to_string()),
-                    ))
-                }
-            };
-        }
+        let mut aws_zones = aws_zones(zones, &region, &event_details)?;
 
         for node_group in &nodes_groups {
             if let Err(e) = AwsInstancesType::from_str(node_group.instance_type.as_str()) {
@@ -190,17 +169,7 @@ impl EKS {
             }
         }
 
-        // TODO export this
-        let s3 = S3::new(
-            context.clone(),
-            "s3-temp-id".to_string(),
-            "default-s3".to_string(),
-            cloud_provider.access_key_id(),
-            cloud_provider.secret_access_key(),
-            region.clone(),
-            true,
-            context.resource_expiration_in_seconds(),
-        );
+        let s3 = s3(&context, &region, cloud_provider.as_ref());
 
         // copy listeners from CloudProvider
         let listeners = cloud_provider.listeners().clone();
@@ -1792,10 +1761,6 @@ impl Listen for EKS {
     }
 }
 
-pub struct Ec2Options {}
-
-impl ProviderOptions for Ec2Options {}
-
 pub struct EC2 {
     context: Context,
     id: String,
@@ -1808,9 +1773,50 @@ pub struct EC2 {
     dns_provider: Arc<Box<dyn DnsProvider>>,
     s3: S3,
     template_directory: String,
-    options: Ec2Options,
+    options: Options,
     listeners: Listeners,
     logger: Box<dyn Logger>,
+}
+
+impl EC2 {
+    pub fn new(
+        context: Context,
+        id: &str,
+        long_id: uuid::Uuid,
+        name: &str,
+        version: &str,
+        region: AwsRegion,
+        zones: Vec<String>,
+        cloud_provider: Arc<Box<dyn CloudProvider>>,
+        dns_provider: Arc<Box<dyn DnsProvider>>,
+        options: Options,
+        logger: Box<dyn Logger>,
+    ) -> Result<Self, EngineError> {
+        let event_details = event_details(&cloud_provider, id, name, &region, &context);
+        let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
+
+        let mut aws_zones = aws_zones(zones, &region, &event_details)?;
+        let s3 = s3(&context, &region, cloud_provider.as_ref());
+
+        // copy listeners from CloudProvider
+        let listeners = cloud_provider.listeners().clone();
+        Ok(EC2 {
+            context,
+            id: id.to_string(),
+            long_id,
+            name: name.to_string(),
+            version: version.to_string(),
+            region,
+            zones: aws_zones,
+            cloud_provider,
+            dns_provider,
+            s3,
+            options,
+            template_directory,
+            logger,
+            listeners,
+        })
+    }
 }
 
 impl Kubernetes for EC2 {
@@ -1943,4 +1949,59 @@ impl Listen for EC2 {
     fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
     }
+}
+
+fn event_details<S: Into<String>>(
+    cloud_provider: &Box<dyn CloudProvider>,
+    kubernetes_id: S,
+    kubernetes_name: S,
+    kubernetes_region: &AwsRegion,
+    context: &Context,
+) -> EventDetails {
+    EventDetails::new(
+        Some(cloud_provider.kind()),
+        QoveryIdentifier::new_from_long_id(context.organization_id().to_string()),
+        QoveryIdentifier::new_from_long_id(context.cluster_id().to_string()),
+        QoveryIdentifier::new_from_long_id(context.execution_id().to_string()),
+        Some(kubernetes_region.to_string()),
+        Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
+        Transmitter::Kubernetes(kubernetes_id.into(), kubernetes_name.into()),
+    )
+}
+
+fn aws_zones(
+    zones: Vec<String>,
+    region: &AwsRegion,
+    event_details: &EventDetails,
+) -> Result<Vec<AwsZones>, EngineError> {
+    let mut aws_zones = vec![];
+
+    for zone in zones {
+        match AwsZones::from_string(zone.to_string()) {
+            Ok(x) => aws_zones.push(x),
+            Err(e) => {
+                return Err(EngineError::new_unsupported_zone(
+                    event_details.clone(),
+                    region.to_string(),
+                    zone,
+                    CommandError::new_from_safe_message(e.to_string()),
+                ))
+            }
+        };
+    }
+
+    Ok(aws_zones)
+}
+
+fn s3(context: &Context, region: &AwsRegion, cloud_provider: &Box<dyn CloudProvider>) -> S3 {
+    S3::new(
+        context.clone(),
+        "s3-temp-id".to_string(),
+        "default-s3".to_string(),
+        cloud_provider.access_key_id(),
+        cloud_provider.secret_access_key(),
+        region.clone(),
+        true,
+        context.resource_expiration_in_seconds(),
+    )
 }
