@@ -64,7 +64,7 @@ spec:
                   name: {{ sanitized_name }}
                   key: {{ ev.key }}
             {%- endfor %}
-            {%- if private_port %}
+          {%- if private_port %}
           ports:
             {%- for port in ports %}
             - containerPort: {{ port.port }}
@@ -81,7 +81,7 @@ spec:
               port: {{ private_port }}
             initialDelaySeconds: {{ start_timeout_in_seconds }}
             periodSeconds: 20
-            {%- endif %}
+          {%- endif %}
           resources:
             limits:
               cpu: {{ cpu_burst }}
@@ -89,4 +89,29 @@ spec:
             requests:
               cpu: {{ total_cpus }}
               memory: {{ total_ram_in_mib }}Mi
+
+        - name: {{ sanitized_name }}-sidecar
+          image: busybox
+          command: ["/bin/sh", "-c", "while true; do sleep 5; done"]
+          {%- if private_port %}
+          livenessProbe:
+            tcpSocket:
+              port: {{ private_port }}
+            initialDelaySeconds: {{ start_timeout_in_seconds }}
+            failureThreshold: 1
+            periodSeconds: 5
+          {%- endif %}
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - echo "-- APPLICATION STARTED --" >/proc/1/fd/1
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - echo "-- APPLICATION SHUTDOWN --" >/proc/1/fd/1
 {%- endif %}
