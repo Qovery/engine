@@ -1375,21 +1375,21 @@ pub fn get_cluster_test_kubernetes<'a>(
     localisation: &str,
     aws_zones: Option<Vec<AwsZones>>,
     cloud_provider: Arc<Box<dyn CloudProvider>>,
+    kubernetes_provider: KKind,
     dns_provider: Arc<Box<dyn DnsProvider>>,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
     logger: Box<dyn Logger>,
 ) -> Box<dyn Kubernetes + 'a> {
-    let k: Box<dyn Kubernetes>;
-
-    match provider_kind {
-        Kind::Aws => {
+    let kubernetes: Box<dyn Kubernetes> = match kubernetes_provider {
+        KKind::Eks => {
             let mut options = AWS::kubernetes_cluster_options(secrets, None);
             let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
             if vpc_network_mode.is_some() {
                 options.vpc_qovery_network_mode = vpc_network_mode.expect("No vpc network mode");
             }
             let aws_zones = aws_zones.unwrap().into_iter().map(|zone| zone.to_string()).collect();
-            k = Box::new(
+
+            Box::new(
                 EKS::new(
                     context.clone(),
                     cluster_id.as_str(),
@@ -1405,47 +1405,68 @@ pub fn get_cluster_test_kubernetes<'a>(
                     logger,
                 )
                 .unwrap(),
-            );
+            )
         }
-        Kind::Do => {
-            k = Box::new(
-                DOKS::new(
-                    context.clone(),
-                    cluster_id.clone(),
-                    uuid::Uuid::new_v4(),
-                    cluster_name.clone(),
-                    boot_version,
-                    DoRegion::from_str(localisation.clone()).expect("Unknown region set for DOKS"),
-                    cloud_provider,
-                    dns_provider,
-                    DO::kubernetes_nodes(),
-                    DO::kubernetes_cluster_options(secrets, Option::from(cluster_name)),
-                    logger,
-                )
-                .unwrap(),
-            );
-        }
-        Kind::Scw => {
-            k = Box::new(
-                Kapsule::new(
-                    context.clone(),
-                    cluster_id.clone(),
-                    uuid::Uuid::new_v4(),
-                    cluster_name.clone(),
-                    boot_version,
-                    ScwZone::from_str(localisation.clone()).expect("Unknown zone set for Kapsule"),
-                    cloud_provider,
-                    dns_provider,
-                    Scaleway::kubernetes_nodes(),
-                    Scaleway::kubernetes_cluster_options(secrets, None),
-                    logger,
-                )
-                .unwrap(),
-            );
-        }
-    }
+        KKind::Ec2 => {
+            let mut options = AWS::kubernetes_cluster_options(secrets, None);
+            let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
+            if vpc_network_mode.is_some() {
+                options.vpc_qovery_network_mode = vpc_network_mode.expect("No vpc network mode");
+            }
+            let aws_zones = aws_zones.unwrap().into_iter().map(|zone| zone.to_string()).collect();
 
-    return k;
+            Box::new(
+                EC2::new(
+                    context.clone(),
+                    cluster_id.as_str(),
+                    uuid::Uuid::new_v4(),
+                    cluster_name.as_str(),
+                    boot_version.as_str(),
+                    aws_region.clone(),
+                    aws_zones,
+                    cloud_provider,
+                    dns_provider,
+                    options,
+                    logger,
+                )
+                .unwrap(),
+            )
+        }
+        KKind::Doks => Box::new(
+            DOKS::new(
+                context.clone(),
+                cluster_id.clone(),
+                uuid::Uuid::new_v4(),
+                cluster_name.clone(),
+                boot_version,
+                DoRegion::from_str(localisation.clone()).expect("Unknown region set for DOKS"),
+                cloud_provider,
+                dns_provider,
+                DO::kubernetes_nodes(),
+                DO::kubernetes_cluster_options(secrets, Option::from(cluster_name)),
+                logger,
+            )
+            .unwrap(),
+        ),
+        KKind::ScwKapsule => Box::new(
+            Kapsule::new(
+                context.clone(),
+                cluster_id.clone(),
+                uuid::Uuid::new_v4(),
+                cluster_name.clone(),
+                boot_version,
+                ScwZone::from_str(localisation.clone()).expect("Unknown zone set for Kapsule"),
+                cloud_provider,
+                dns_provider,
+                Scaleway::kubernetes_nodes(),
+                Scaleway::kubernetes_cluster_options(secrets, None),
+                logger,
+            )
+            .unwrap(),
+        ),
+    };
+
+    return kubernetes;
 }
 
 pub fn cluster_test(
