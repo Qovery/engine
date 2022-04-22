@@ -31,7 +31,9 @@ resource "aws_instance" "web" {
   associate_public_ip_address = true
 
   # security
-  #vpc_security_group_ids = [aws_vpc.ec2.*.id]
+  vpc_security_group_ids = [aws_vpc.ec2.id]
+  subnet_id = aws_subnet.ec2_zone_a.id
+  security_groups = [aws_security_group.ec2_cluster.id]
 
   user_data = local.bootstrap
 
