@@ -498,7 +498,7 @@ impl EKS {
         context.insert("eks_cidr_subnet", &eks_cidr_subnet);
         context.insert("kubernetes_cluster_name", &self.name());
         context.insert("kubernetes_cluster_id", self.id());
-        context.insert("kubernetes_full_cluster_id", self.context.cluster_id());
+        context.insert("kubernetes_full_cluster_id", &self.long_id);
         context.insert("eks_region_cluster_id", region_cluster_id.as_str());
         context.insert("eks_worker_nodes", &self.nodes_groups);
         context.insert("eks_zone_a_subnet_blocks_private", &eks_zone_a_subnet_blocks_private);

@@ -468,7 +468,7 @@ impl Kapsule {
 
         // Kubernetes
         context.insert("test_cluster", &self.context.is_test_cluster());
-        context.insert("kubernetes_full_cluster_id", self.context().cluster_id());
+        context.insert("kubernetes_full_cluster_id", &self.long_id);
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("kubernetes_cluster_name", self.cluster_name().as_str());
         context.insert("kubernetes_cluster_version", self.version());
