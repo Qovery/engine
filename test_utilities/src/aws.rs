@@ -32,6 +32,8 @@ pub const AWS_KUBERNETES_VERSION: &'static str =
 pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t3.micro";
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 7200;
+pub const K3S_KUBERNETES_MAJOR_VERSION: u8 = 1;
+pub const K3S_KUBERNETES_MINOR_VERSION: u8 = 20;
 
 pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR {
     let secrets = FuncTestsSecrets::new();
@@ -208,9 +210,20 @@ impl Cluster<AWS, Options> for AWS {
             vpc_qovery_network_mode: VpcQoveryNetworkMode::WithoutNatGateways,
             vpc_cidr_block: "10.0.0.0/16".to_string(),
             eks_cidr_subnet: "20".to_string(),
+            ec2_cidr_subnet: "20".to_string(),
             vpc_custom_routing_table: vec![],
             eks_access_cidr_blocks: secrets
                 .EKS_ACCESS_CIDR_BLOCKS
+                .as_ref()
+                .unwrap()
+                .replace("\"", "")
+                .replace("[", "")
+                .replace("]", "")
+                .split(",")
+                .map(|c| c.to_string())
+                .collect(),
+            ec2_access_cidr_blocks: secrets
+                .EKS_ACCESS_CIDR_BLOCKS // FIXME ? use an EC2_ACCESS_CIDR_BLOCKS?
                 .unwrap()
                 .replace("\"", "")
                 .replace("[", "")

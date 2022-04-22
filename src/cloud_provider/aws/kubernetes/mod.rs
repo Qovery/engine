@@ -81,8 +81,10 @@ pub struct Options {
     pub vpc_qovery_network_mode: VpcQoveryNetworkMode,
     pub vpc_cidr_block: String,
     pub eks_cidr_subnet: String,
+    pub ec2_cidr_subnet: String,
     pub vpc_custom_routing_table: Vec<VpcCustomRoutingTable>,
     pub eks_access_cidr_blocks: Vec<String>,
+    pub ec2_access_cidr_blocks: Vec<String>,
     pub rds_cidr_subnet: String,
     pub documentdb_cidr_subnet: String,
     pub elasticache_cidr_subnet: String,
@@ -438,6 +440,8 @@ fn tera_context(
     context.insert("eks_zone_c_subnet_blocks_private", &eks_zone_c_subnet_blocks_private);
     context.insert("eks_masters_version", &kubernetes.version());
     context.insert("eks_workers_version", &kubernetes.version());
+    context.insert("ec2_masters_version", &kubernetes.version());
+    context.insert("ec2_workers_version", &kubernetes.version());
     context.insert("eks_cloudwatch_log_group", &eks_cloudwatch_log_group);
     context.insert("eks_access_cidr_blocks", &eks_access_cidr_blocks);
 
