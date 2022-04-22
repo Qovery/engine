@@ -75,7 +75,9 @@ impl fmt::Display for VpcQoveryNetworkMode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Options {
     // AWS related
-    // TODO add ec2_zone_x_subnet_blocks
+    pub ec2_zone_a_subnet_blocks: Vec<String>,
+    pub ec2_zone_b_subnet_blocks: Vec<String>,
+    pub ec2_zone_c_subnet_blocks: Vec<String>,
     pub eks_zone_a_subnet_blocks: Vec<String>,
     pub eks_zone_b_subnet_blocks: Vec<String>,
     pub eks_zone_c_subnet_blocks: Vec<String>,
@@ -154,7 +156,7 @@ impl EKS {
         logger: Box<dyn Logger>,
     ) -> Result<Self, EngineError> {
         let event_details = event_details(&cloud_provider, id, name, &region, &context);
-        let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
+        let template_directory = format!("{}/aws/bootstrap-eks", context.lib_root_dir());
 
         let aws_zones = aws_zones(zones, &region, &event_details)?;
 
@@ -796,7 +798,7 @@ impl EC2 {
         logger: Box<dyn Logger>,
     ) -> Result<Self, EngineError> {
         let event_details = event_details(&cloud_provider, id, name, &region, &context);
-        let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
+        let template_directory = format!("{}/aws/bootstrap-ec2", context.lib_root_dir());
 
         let aws_zones = aws_zones(zones, &region, &event_details)?;
         let s3 = s3(&context, &region, &**cloud_provider);
@@ -1267,6 +1269,30 @@ fn tera_context(
         VpcQoveryNetworkMode::WithoutNatGateways => {}
     };
 
+    let mut ec2_zone_a_subnet_blocks_private = format_ips(&options.ec2_zone_a_subnet_blocks);
+    let mut ec2_zone_b_subnet_blocks_private = format_ips(&options.ec2_zone_b_subnet_blocks);
+    let mut ec2_zone_c_subnet_blocks_private = format_ips(&options.ec2_zone_c_subnet_blocks);
+
+    match options.vpc_qovery_network_mode {
+        VpcQoveryNetworkMode::WithNatGateways => {
+            let max_subnet_zone_a = check_odd_subnets(event_details.clone(), "a", &ec2_zone_a_subnet_blocks_private)?;
+            let max_subnet_zone_b = check_odd_subnets(event_details.clone(), "b", &ec2_zone_b_subnet_blocks_private)?;
+            let max_subnet_zone_c = check_odd_subnets(event_details.clone(), "c", &ec2_zone_c_subnet_blocks_private)?;
+
+            let ec2_zone_a_subnet_blocks_public: Vec<String> =
+                ec2_zone_a_subnet_blocks_private.drain(max_subnet_zone_a..).collect();
+            let ec2_zone_b_subnet_blocks_public: Vec<String> =
+                ec2_zone_b_subnet_blocks_private.drain(max_subnet_zone_b..).collect();
+            let ec2_zone_c_subnet_blocks_public: Vec<String> =
+                ec2_zone_c_subnet_blocks_private.drain(max_subnet_zone_c..).collect();
+
+            context.insert("ec2_zone_a_subnet_blocks_public", &ec2_zone_a_subnet_blocks_public);
+            context.insert("ec2_zone_b_subnet_blocks_public", &ec2_zone_b_subnet_blocks_public);
+            context.insert("ec2_zone_c_subnet_blocks_public", &ec2_zone_c_subnet_blocks_public);
+        }
+        VpcQoveryNetworkMode::WithoutNatGateways => {}
+    };
+
     context.insert("vpc_qovery_network_mode", &options.vpc_qovery_network_mode.to_string());
 
     let rds_zone_a_subnet_blocks = format_ips(&options.rds_zone_a_subnet_blocks);
@@ -1434,7 +1460,10 @@ fn tera_context(
     context.insert("kubernetes_cluster_id", kubernetes.id());
     context.insert("kubernetes_full_cluster_id", kubernetes.context().cluster_id());
     context.insert("eks_region_cluster_id", region_cluster_id.as_str());
-    context.insert("eks_worker_nodes", &node_groups); // FIXME
+    context.insert("eks_worker_nodes", &node_groups);
+    context.insert("ec2_zone_a_subnet_blocks_private", &ec2_zone_a_subnet_blocks_private);
+    context.insert("ec2_zone_b_subnet_blocks_private", &ec2_zone_b_subnet_blocks_private);
+    context.insert("ec2_zone_c_subnet_blocks_private", &ec2_zone_c_subnet_blocks_private);
     context.insert("eks_zone_a_subnet_blocks_private", &eks_zone_a_subnet_blocks_private);
     context.insert("eks_zone_b_subnet_blocks_private", &eks_zone_b_subnet_blocks_private);
     context.insert("eks_zone_c_subnet_blocks_private", &eks_zone_c_subnet_blocks_private);
@@ -1792,8 +1821,8 @@ fn pause(
         ));
     }
 
-    // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
-    // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
+    // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap-{type}/common/charts directory.
+    // this is due to the required dependencies of lib/aws/bootstrap-{type}/*.tf files
     let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir());
     let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
     if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str()) {
@@ -1916,6 +1945,7 @@ fn pause(
             kubernetes
                 .logger()
                 .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(message)));
+
             Ok(())
         }
         Err(e) => Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e)),
