@@ -56,57 +56,84 @@ variable "vpc_cidr_block" {
   type = string
 }
 
-# Kubernetes
+# ec2
 
-variable "eks_subnets_zone_a_private" {
-  description = "EKS private subnets Zone A"
-  default = {{ eks_zone_a_subnet_blocks_private }}
+variable "ec2_image_info" {
+  description = "EC2 image information"
+  default = {
+    "name" = "debian-10-amd64*"
+    "owners" = "136693071363"
+  }
+  type = map(string)
+}
+
+variable "ec2_instance" {
+  description = "EC2 instance configuration"
+  default = {
+    "instance_type" = "t3.micro"
+  }
+  type = map(string)
+}
+
+variable "k3s_config" {
+  description = "K3s configuration"
+  default = {
+    "version" = "v1.20.15+k3s1"
+    "channel" = "latest"
+    "exec" = "--disable=traefik"
+  }
+  type = map(string)
+}
+
+variable "ec2_subnets_zone_a_private" {
+  description = "EC2 private subnets Zone A"
+  default = {{ ec2_zone_a_subnet_blocks_private }}
   type = list(string)
 }
 
-variable "eks_subnets_zone_b_private" {
-  description = "EKS private subnets Zone B"
-  default = {{ eks_zone_b_subnet_blocks_private }}
+variable "ec2_subnets_zone_b_private" {
+  description = "EC2 private subnets Zone B"
+  default = {{ ec2_zone_b_subnet_blocks_private }}
   type = list(string)
 }
 
-variable "eks_subnets_zone_c_private" {
-  description = "EKS private subnets Zone C"
-  default = {{ eks_zone_c_subnet_blocks_private }}
+variable "ec2_subnets_zone_c_private" {
+  description = "EC2 private subnets Zone C"
+  default = {{ ec2_zone_c_subnet_blocks_private }}
   type = list(string)
 }
 
 {% if vpc_qovery_network_mode == "WithNatGateways" %}
-variable "eks_subnets_zone_a_public" {
-  description = "EKS public subnets Zone A"
-  default = {{ eks_zone_a_subnet_blocks_public }}
+variable "ec2_subnets_zone_a_public" {
+  description = "EC2 public subnets Zone A"
+  default = {{ ec2_zone_a_subnet_blocks_public }}
   type = list(string)
 }
 
-variable "eks_subnets_zone_b_public" {
-  description = "EKS public subnets Zone B"
-  default = {{ eks_zone_b_subnet_blocks_public }}
+variable "ec2_subnets_zone_b_public" {
+  description = "EC2 public subnets Zone B"
+  default = {{ ec2_zone_b_subnet_blocks_public }}
   type = list(string)
 }
 
-variable "eks_subnets_zone_c_public" {
-  description = "EKS public subnets Zone C"
-  default = {{ eks_zone_c_subnet_blocks_public }}
+variable "ec2_subnets_zone_c_public" {
+  description = "EC2 public subnets Zone C"
+  default = {{ ec2_zone_c_subnet_blocks_public }}
   type = list(string)
 }
 {% endif %}
 
-variable "eks_cidr_subnet" {
-  description = "EKS CIDR (x.x.x.x/CIDR)"
-  default     = {{ eks_cidr_subnet }}
+variable "ec2_cidr_subnet" {
+  description = "EC2 CIDR (x.x.x.x/CIDR)"
+  default     = {{ ec2_cidr_subnet }}
   type        = number
 }
 
-variable "eks_k8s_versions" {
+variable "ec2_k8s_versions" {
   description = "Kubernetes version"
   default = {
-    "masters": "{{ eks_masters_version }}",
-    "workers": "{{ eks_workers_version }}",
+    "masters": "{{ ec2_masters_version }}",
+    "workers": "{{ ec2_workers_version }}",
   }
   type = map(string)
 }
@@ -129,16 +156,10 @@ variable "kubernetes_cluster_name" {
   type        = string
 }
 
-variable "eks_access_cidr_blocks" {
+variable "ec2_access_cidr_blocks" {
   description = "Kubernetes CIDR Block"
-  default     = {{ eks_access_cidr_blocks }}
+  default     = {{ ec2_access_cidr_blocks }}
   type        = list(string)
-}
-
-variable "eks_cloudwatch_log_group" {
-  description = "AWS cloudwatch log group for EKS"
-  default = "qovery-{{ eks_cloudwatch_log_group }}"
-  type = string
 }
 
 # S3 bucket name
@@ -147,23 +168,6 @@ variable "s3_bucket_kubeconfig" {
   description = "S3 bucket containing kubeconfigs"
   default = "{{ s3_kubeconfig_bucket }}"
   type = string
-}
-
-# Engine info
-
-variable "qovery_engine_info" {
-  description = "Qovery engine info"
-  default = {
-    "token" = "{{ engine_version_controller_token }}"
-    "api_fqdn" = "{{ qovery_api_url }}"
-  }
-  type = map(string)
-}
-
-variable "qovery_engine_replicas" {
-  description = "This variable is used to get random ID generated for the engine"
-  default = "2"
-  type = number
 }
 
 # Agent info
@@ -285,14 +289,6 @@ variable "elasticsearch_cidr_subnet" {
   description = "Elasticsearch CIDR (x.x.x.x/CIDR)"
   default     = {{ elasticsearch_cidr_subnet }}
   type        = number
-}
-
-# Helm alert manager discord
-
-variable "discord_api_key" {
-  description = "discord url with token for used for alerting"
-  default = "{{ discord_api_key }}"
-  type = string
 }
 
 # Qovery features

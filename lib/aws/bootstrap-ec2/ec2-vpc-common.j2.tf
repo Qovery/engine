@@ -1,42 +1,35 @@
 data "aws_availability_zones" "available" {}
 
 locals {
-  tags_eks_vpc = merge(
+  tags_ec2_vpc = merge(
   local.tags_common,
   {
-    Name = "qovery-eks-workers",
+    Name = "qovery-ec2-workers",
     "kubernetes.io/cluster/qovery-${var.kubernetes_cluster_id}" = "shared",
     "kubernetes.io/role/elb" = 1,
     {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds,{% endif %}
   }
   )
 
-  tags_eks_vpc_public = merge(
-  local.tags_eks_vpc,
+  tags_ec2_vpc_public = merge(
+  local.tags_ec2_vpc,
   {
     "Public" = "true"
-  }
-  )
-
-  tags_eks_vpc_private = merge(
-  local.tags_eks,
-  {
-    "Public" = "false"
   }
   )
 }
 
 # VPC
-resource "aws_vpc" "eks" {
+resource "aws_vpc" "ec2" {
   cidr_block = var.vpc_cidr_block
   enable_dns_hostnames = true
 
-  tags = local.tags_eks_vpc
+  tags = local.tags_ec2_vpc
 }
 
 # Internet gateway
-resource "aws_internet_gateway" "eks_cluster" {
-  vpc_id = aws_vpc.eks.id
+resource "aws_internet_gateway" "ec2_instance" {
+  vpc_id = aws_vpc.ec2.id
 
-  tags = local.tags_eks_vpc
+  tags = local.tags_ec2_vpc
 }
