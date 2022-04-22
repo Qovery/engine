@@ -8,7 +8,7 @@ resource "aws_s3_bucket" "kubeconfigs_bucket" {
   }
 
   tags = merge(
-    local.tags_eks,
+    local.tags_ec2,
     {
       "Name" = "Kubernetes kubeconfig"
     }
@@ -27,7 +27,7 @@ resource "aws_s3_bucket" "kubeconfigs_bucket" {
 resource "aws_kms_key" "s3_kubeconfig_kms_encryption" {
   description             = "s3 kubeconfig encryption"
   tags = merge(
-    local.tags_eks,
+    local.tags_ec2,
     {
       "Name" = "Kubeconfig Encryption"
     }

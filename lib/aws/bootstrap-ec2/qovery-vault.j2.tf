@@ -23,7 +23,7 @@ resource "vault_generic_secret" "cluster-access" {
 EOT
 
   depends_on = [
-    aws_eks_cluster.eks_cluster,
+    aws_ec2_cluster.ec2_cluster,
   ]
 }
 {% endif %}
