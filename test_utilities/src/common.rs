@@ -20,7 +20,9 @@ use crate::utilities::{
     FuncTestsSecrets,
 };
 use base64;
-use qovery_engine::cloud_provider::aws::kubernetes::{VpcQoveryNetworkMode, EC2, EKS};
+use qovery_engine::cloud_provider::aws::kubernetes::ec2::EC2;
+use qovery_engine::cloud_provider::aws::kubernetes::eks::EKS;
+use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
