@@ -443,7 +443,6 @@ fn using_nats_server(
 
     let (sig_term_tx, sig_term_rx) = unbounded::<bool>();
     {
-        let nc = nc.clone();
         let thread_name = "sigterm-dispatcher".to_string();
         let task_manager = task_manager.clone();
         let _ = thread::Builder::new()
@@ -454,12 +453,6 @@ fn using_nats_server(
                     .recv()
                     .map_err(|err| error!("sigterm received with error {}", err));
                 warn!("Termination signal received - graceful termination in progress...");
-
-                let _ = nc
-                    .drain()
-                    .map_err(|err| error!("Cannot drain/unsubscribe {:?}: {}", nc, err));
-
-                info!("Unsubscribed from all subjects");
                 task_manager.stop();
                 info!("Requested TaskManager to stop receiving new tasks");
             })
@@ -485,7 +478,7 @@ fn using_nats_server(
     if let Mode::Local = mode {
         spawn_task_poller(
             task_manager.clone(),
-            nc,
+            nc.clone(),
             task_selector,
             mode,
             workspace_root_dir,
@@ -505,6 +498,12 @@ fn using_nats_server(
 
     info!("server started and listening for incoming requests");
     task_manager.wait_shutdown();
+    info!("TaskManager stopped");
+
+    info!("Unsubscribed from all nats subjects");
+    let _ = nc
+        .drain()
+        .map_err(|err| error!("Cannot drain/unsubscribe {:?}: {}", nc, err));
 
     warn!("end of execution");
     Ok(())
