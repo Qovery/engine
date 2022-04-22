@@ -286,8 +286,10 @@ fn tera_context(
     let vpc_cidr_block = options.vpc_cidr_block.clone();
     let eks_cloudwatch_log_group = format!("/aws/eks/{}/cluster", kubernetes.id());
     let eks_cidr_subnet = options.eks_cidr_subnet.clone();
+    let ec2_cidr_subnet = options.ec2_cidr_subnet.clone();
 
     let eks_access_cidr_blocks = format_ips(&options.eks_access_cidr_blocks);
+    let ec2_access_cidr_blocks = format_ips(&options.ec2_access_cidr_blocks);
 
     let qovery_api_url = options.qovery_api_url.clone();
     let rds_cidr_subnet = options.rds_cidr_subnet.clone();
@@ -427,6 +429,7 @@ fn tera_context(
     // AWS - EKS
     context.insert("aws_availability_zones", &aws_zones);
     context.insert("eks_cidr_subnet", &eks_cidr_subnet);
+    context.insert("ec2_cidr_subnet", &ec2_cidr_subnet);
     context.insert("kubernetes_cluster_name", kubernetes.name());
     context.insert("kubernetes_cluster_id", kubernetes.id());
     context.insert("kubernetes_full_cluster_id", kubernetes.context().cluster_id());
@@ -444,6 +447,7 @@ fn tera_context(
     context.insert("ec2_workers_version", &kubernetes.version());
     context.insert("eks_cloudwatch_log_group", &eks_cloudwatch_log_group);
     context.insert("eks_access_cidr_blocks", &eks_access_cidr_blocks);
+    context.insert("ec2_access_cidr_blocks", &ec2_access_cidr_blocks);
 
     // AWS - RDS
     context.insert("rds_cidr_subnet", &rds_cidr_subnet);
