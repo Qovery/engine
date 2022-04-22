@@ -1,6 +1,5 @@
 extern crate test_utilities;
 
-use self::test_utilities::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
 use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 use ::function_name::named;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
@@ -10,12 +9,13 @@ use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithN
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::Kind;
 use std::str::FromStr;
+use test_utilities::aws::{K3S_KUBERNETES_MAJOR_VERSION, K3S_KUBERNETES_MINOR_VERSION};
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 
 pub const AWS_K3S_VERSION: &str = "v1.20.15+k3s1";
 
 #[cfg(feature = "test-aws-infra")]
-fn create_and_destroy_edge_aws_cluster(
+fn create_and_destroy_aws_ec2_k3s_cluster(
     region: String,
     test_type: ClusterTestType,
     major_boot_version: u8,
@@ -55,13 +55,13 @@ fn create_and_destroy_edge_aws_cluster(
 #[cfg(feature = "test-aws-infra")]
 #[named]
 #[test]
-fn create_and_destroy_edge_aws_cluster_eu_west_3() {
+fn create_and_destroy_aws_ec2_k3s_cluster_eu_west_3() {
     let region = "eu-west-3".to_string();
-    create_and_destroy_eks_cluster(
+    create_and_destroy_aws_ec2_k3s_cluster(
         region,
         ClusterTestType::Classic,
-        K3S_MAJOR_VERSION,
-        K3S_MINOR_VERSION,
+        K3S_KUBERNETES_MAJOR_VERSION,
+        K3S_KUBERNETES_MINOR_VERSION,
         WithoutNatGateways,
         function_name!(),
     );
