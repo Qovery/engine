@@ -1170,37 +1170,36 @@ where
     P: AsRef<Path>,
     T: DeserializeOwned,
 {
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-    _envs.extend(envs);
+    let mut extended_envs = Vec::with_capacity(envs.len() + 1);
+    extended_envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    extended_envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
-    let _ = kubectl_exec_with_output(args.clone(), _envs.clone(), &mut |line| output_vec.push(line), &mut |line| {
-        error!("{}", line)
-    })?;
+    let mut err_vec = Vec::new();
+    let _ = kubectl_exec_with_output(
+        args.clone(),
+        extended_envs.clone(),
+        &mut |line| output_vec.push(line),
+        &mut |line| {
+            err_vec.push(line.to_string());
+            error!("{}", line)
+        },
+    )?;
 
     let output_string: String = output_vec.join("");
 
     let result = match serde_json::from_str::<T>(output_string.as_str()) {
         Ok(x) => x,
         Err(err) => {
-            let args_string = args.join(" ");
-            let mut env_vars_in_vec = Vec::new();
-            let _ = _envs.into_iter().map(|x| {
-                env_vars_in_vec.push(x.0.to_string());
-                env_vars_in_vec.push(x.1.to_string());
-            });
-            let environment_variables = env_vars_in_vec.join(" ");
             return Err(CommandError::new(
-                format!(
-                    "JSON parsing error on {:?} on command: {} kubectl {}, output: {}. {:?}",
-                    std::any::type_name::<T>(),
-                    environment_variables,
-                    args_string,
-                    output_string,
-                    err
+                "JSON parsing error on kubectl command.".to_string(),
+                Some(err.to_string()),
+                Some(
+                    extended_envs
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect::<Vec<(String, String)>>(),
                 ),
-                Some("JSON parsing error on kubectl command.".to_string()),
             ));
         }
     };

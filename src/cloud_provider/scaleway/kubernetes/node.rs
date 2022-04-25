@@ -80,10 +80,10 @@ impl FromStr for ScwInstancesType {
             "dev1-l" => Ok(ScwInstancesType::Dev1L),
             "dev1-xl" => Ok(ScwInstancesType::Dev1Xl),
             "render-s" => Ok(ScwInstancesType::RenderS),
-            _ => {
-                let message = format!("`{}` instance type is not supported", s);
-                Err(CommandError::new(message.clone(), Some(message)))
-            }
+            _ => Err(CommandError::new_from_safe_message(format!(
+                "`{}` instance type is not supported",
+                s
+            ))),
         }
     }
 }

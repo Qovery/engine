@@ -355,7 +355,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
-        let database_name = format!("postgresql-{}-0", &environment_check.databases[0].name);
+        let database_name = format!("postgresql-{}-0", &environment_check.databases[0].id);
         match is_pod_restarted_env(
             context.clone(),
             ProviderKind::Do,

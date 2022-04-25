@@ -498,6 +498,7 @@ impl EKS {
         context.insert("eks_cidr_subnet", &eks_cidr_subnet);
         context.insert("kubernetes_cluster_name", &self.name());
         context.insert("kubernetes_cluster_id", self.id());
+        context.insert("kubernetes_full_cluster_id", &self.long_id);
         context.insert("eks_region_cluster_id", region_cluster_id.as_str());
         context.insert("eks_worker_nodes", &self.nodes_groups);
         context.insert("eks_zone_a_subnet_blocks_private", &eks_zone_a_subnet_blocks_private);
@@ -890,8 +891,9 @@ impl EKS {
                                     match metric.value.parse::<i32>() {
                                         Ok(job_count) if job_count > 0 => current_engine_jobs += 1,
                                         Err(e) => {
-                                            let safe_message = "Error while looking at the API metric value"; 
-                                            return OperationResult::Retry(EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), CommandError::new(format!("{}, error: {}", safe_message, e), Some(safe_message.to_string()))));
+                                            return OperationResult::Retry(EngineError::new_cannot_get_k8s_api_custom_metrics(
+                                                event_details.clone(),
+                                                CommandError::new("Error while looking at the API metric value".to_string(), Some(e.to_string()), None)));
                                         }
                                         _ => {}
                                     }
@@ -1262,7 +1264,7 @@ impl EKS {
             )),
             Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
                 event_details,
-                CommandError::new(msg, None),
+                CommandError::new("Error while trying to perform Terraform destroy".to_string(), Some(msg), None),
             )),
         }
     }

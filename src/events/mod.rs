@@ -162,7 +162,7 @@ impl EventMessage {
 
 impl From<CommandError> for EventMessage {
     fn from(e: CommandError) -> Self {
-        EventMessage::new_with_env_vars(e.message_raw(), e.message_safe(), e.env_vars())
+        EventMessage::new_with_env_vars(e.message_safe(), e.message_raw(), e.env_vars())
     }
 }
 
@@ -326,6 +326,8 @@ type TransmitterId = String;
 type TransmitterName = String;
 /// TransmitterType: represents a transmitter type.
 type TransmitterType = String; // TODO(benjaminch): makes it a real enum / type
+/// TransmitterVersion: represents a transmitter version.
+type TransmitterVersion = String;
 
 #[derive(Debug, Clone, PartialEq)]
 /// Transmitter: represents the event's source caller (transmitter).
@@ -347,7 +349,7 @@ pub enum Transmitter {
     /// Database: database engine part.
     Database(TransmitterId, TransmitterType, TransmitterName),
     /// Application: application engine part.
-    Application(TransmitterId, TransmitterName),
+    Application(TransmitterId, TransmitterName, TransmitterVersion),
     /// Router: router engine part.
     Router(TransmitterId, TransmitterName),
 }
@@ -366,7 +368,8 @@ impl Display for Transmitter {
                 Transmitter::ObjectStorage(id, name) => format!("object_strorage({}, {})", id, name),
                 Transmitter::Environment(id, name) => format!("environment({}, {})", id, name),
                 Transmitter::Database(id, db_type, name) => format!("database({}, {}, {})", id, db_type, name),
-                Transmitter::Application(id, name) => format!("application({}, {})", id, name),
+                Transmitter::Application(id, name, version) =>
+                    format!("application({}, {}, commit: {})", id, name, version),
                 Transmitter::Router(id, name) => format!("router({}, {})", id, name),
             }
         )

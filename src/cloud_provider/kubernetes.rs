@@ -22,7 +22,8 @@ use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::cmd::kubectl::{
     kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_delete_pod,
-    kubectl_exec_get_node, kubectl_exec_version, kubectl_get_crash_looping_pods, kubernetes_get_all_pdbs,
+    kubectl_exec_get_node, kubectl_exec_is_namespace_present, kubectl_exec_version, kubectl_get_crash_looping_pods,
+    kubernetes_get_all_pdbs,
 };
 use crate::cmd::structs::KubernetesNodeCondition;
 use crate::dns_provider::DnsProvider;
@@ -181,13 +182,7 @@ pub trait Kubernetes: Listen {
         ) {
             Ok(k) => k,
             Err(err) => {
-                let error = EngineError::new_cannot_get_cluster_nodes(
-                    self.get_event_details(stage),
-                    CommandError::new(
-                        err.message(ErrorMessageVerbosity::FullDetails),
-                        Some("Error while trying to get cluster nodes.".to_string()),
-                    ),
-                );
+                let error = EngineError::new_cannot_get_cluster_nodes(self.get_event_details(stage), err);
 
                 self.logger().log(EngineEvent::Error(error.clone(), None));
 
@@ -267,12 +262,7 @@ pub trait Kubernetes: Listen {
     {
         let kubeconfig = match self.get_kubeconfig_file() {
             Ok((path, _)) => path,
-            Err(e) => {
-                return Err(CommandError::new(
-                    e.message(ErrorMessageVerbosity::FullDetails),
-                    Some(e.message(ErrorMessageVerbosity::SafeOnly)),
-                ))
-            }
+            Err(e) => return Err(e.underlying_error().unwrap_or_default()),
         };
 
         send_progress_on_long_task(self, Action::Create, || {
@@ -313,7 +303,10 @@ pub trait Kubernetes: Listen {
             format!("bootstrap/{}", self.id()),
         )
         .map_err(|err| {
-            EngineError::new_cannot_get_workspace_directory(event_details, CommandError::new(err.to_string(), None))
+            EngineError::new_cannot_get_workspace_directory(
+                event_details,
+                CommandError::new("Error creating workspace directory.".to_string(), Some(err.to_string()), None),
+            )
         })
     }
 
@@ -676,6 +669,19 @@ pub fn delete_environment(
 ) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
+    let kubeconfig = kubernetes.get_kubeconfig_file_path()?;
+
+    // check if environment is not already deleted
+    // speed up delete env because of terraform requiring apply + destroy
+    if !kubectl_exec_is_namespace_present(
+        kubeconfig.clone(),
+        environment.namespace(),
+        kubernetes.cloud_provider().credentials_environment_variables(),
+    ) {
+        info!("no need to delete environment {}, already absent", environment.namespace());
+        return Ok(());
+    };
+
     let stateful_deployment_target = DeploymentTarget {
         kubernetes,
         environment,
@@ -757,7 +763,7 @@ pub fn delete_environment(
 
     // do not catch potential error - to confirm
     let _ = kubectl::kubectl_exec_delete_namespace(
-        kubernetes.get_kubeconfig_file_path()?,
+        kubeconfig,
         environment.namespace(),
         kubernetes.cloud_provider().credentials_environment_variables(),
     );
@@ -813,22 +819,24 @@ where
             },
         ) {
             Ok(_) => {}
-            Err(Operation { error, .. }) => {
-                return Err(EngineError::new_cannot_uninstall_helm_chart(
-                    event_details,
+            Err(Operation { error, .. }) => logger.log(EngineEvent::Error(
+                EngineError::new_cannot_uninstall_helm_chart(
+                    event_details.clone(),
                     "Cert-Manager".to_string(),
                     object.to_string(),
                     error,
-                ))
-            }
-            Err(retry::Error::Internal(msg)) => {
-                return Err(EngineError::new_cannot_uninstall_helm_chart(
-                    event_details,
+                ),
+                None,
+            )),
+            Err(retry::Error::Internal(msg)) => logger.log(EngineEvent::Error(
+                EngineError::new_cannot_uninstall_helm_chart(
+                    event_details.clone(),
                     "Cert-Manager".to_string(),
                     object.to_string(),
                     CommandError::new_from_safe_message(msg),
-                ))
-            }
+                ),
+                None,
+            )),
         }
     }
 
@@ -1404,11 +1412,9 @@ pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, CommandError> 
                 Ok(n * 0.001) // return in milli cpu the value
             }
             Err(e) => Err(CommandError::new(
-                e.to_string(),
-                Some(format!(
-                    "Error while trying to parse `{}` to float 32.",
-                    value_number_string.as_str()
-                )),
+                format!("Error while trying to parse `{}` to float 32.", value_number_string.as_str()),
+                Some(e.to_string()),
+                None,
             )),
         };
     }
@@ -1416,8 +1422,9 @@ pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, CommandError> 
     match value.parse::<f32>() {
         Ok(n) => Ok(n),
         Err(e) => Err(CommandError::new(
-            e.to_string(),
-            Some(format!("Error while trying to parse `{}` to float 32.", value.as_str())),
+            format!("Error while trying to parse `{}` to float 32.", value.as_str()),
+            Some(e.to_string()),
+            None,
         )),
     }
 }

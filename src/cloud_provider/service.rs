@@ -17,7 +17,7 @@ use crate::cmd::helm;
 use crate::cmd::kubectl::ScalingKind::Statefulset;
 use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_scale_replicas_by_selector, ScalingKind};
 use crate::cmd::structs::LabelsContent;
-use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
 use crate::io_models::ProgressLevel::Info;
 use crate::io_models::{
@@ -35,6 +35,9 @@ pub trait Service: ToTransmitter {
     fn sanitized_name(&self) -> String;
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
+    }
+    fn name_with_id_and_version(&self) -> String {
+        format!("{} ({}) version: {}", self.name(), self.id(), self.version())
     }
     fn workspace_directory(&self) -> String {
         let dir_root = match self.service_type() {
@@ -1056,10 +1059,7 @@ where
 
             Err(EngineError::new_k8s_service_issue(
                 event_details,
-                CommandError::new(
-                    err.message(ErrorMessageVerbosity::FullDetails),
-                    Some("Error with Kubernetes service".to_string()),
-                ),
+                err.underlying_error().unwrap_or_default(),
             ))
         }
         _ => {
@@ -1218,17 +1218,17 @@ where
         Action::Create => Some(format!(
             "{} '{}' deployment is in progress...",
             service.service_type().name(),
-            service.name_with_id()
+            service.name_with_id_and_version(),
         )),
         Action::Pause => Some(format!(
             "{} '{}' pause is in progress...",
             service.service_type().name(),
-            service.name_with_id()
+            service.name_with_id_and_version(),
         )),
         Action::Delete => Some(format!(
             "{} '{}' deletion is in progress...",
             service.service_type().name(),
-            service.name_with_id()
+            service.name_with_id_and_version(),
         )),
         Action::Nothing => None,
     };

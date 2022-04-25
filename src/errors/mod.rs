@@ -30,9 +30,9 @@ pub enum ErrorMessageVerbosity {
 #[derivative(Debug)]
 pub struct CommandError {
     /// full_details: full error message, can contains unsafe text such as passwords and tokens.
-    full_details: String,
+    full_details: Option<String>,
     /// message_safe: error message omitting displaying any protected data such as passwords and tokens.
-    message_safe: Option<String>,
+    message_safe: String,
     /// env_vars: environments variables including touchy data such as secret keys.
     /// env_vars field is ignored from any wild Debug printing because of it touchy data it carries.
     #[derivative(Debug = "ignore")]
@@ -41,13 +41,13 @@ pub struct CommandError {
 
 impl CommandError {
     /// Returns CommandError message_raw. May contains unsafe text such as passwords and tokens.
-    pub fn message_raw(&self) -> String {
-        self.full_details.to_string()
+    pub fn message_raw(&self) -> Option<String> {
+        self.full_details.clone()
     }
 
     /// Returns CommandError message_safe omitting all unsafe text such as passwords and tokens.
-    pub fn message_safe(&self) -> Option<String> {
-        self.message_safe.clone()
+    pub fn message_safe(&self) -> String {
+        self.message_safe.to_string()
     }
 
     /// Returns CommandError env_vars.
@@ -58,23 +58,20 @@ impl CommandError {
     /// Returns error message based on verbosity.
     pub fn message(&self, message_verbosity: ErrorMessageVerbosity) -> String {
         match message_verbosity {
-            ErrorMessageVerbosity::SafeOnly => match &self.message_safe {
-                None => "".to_string(),
-                Some(msg) => msg.to_string(),
+            ErrorMessageVerbosity::SafeOnly => self.message_safe.to_string(),
+            ErrorMessageVerbosity::FullDetailsWithoutEnvVars => match &self.full_details {
+                None => self.message(ErrorMessageVerbosity::SafeOnly),
+                Some(full_details) => format!("{} / Full details: {}", self.message_safe, full_details),
             },
-            ErrorMessageVerbosity::FullDetailsWithoutEnvVars => match &self.message_safe {
-                None => self.full_details.to_string(),
-                Some(safe) => format!("{} / Full details: {}", safe, self.full_details),
-            },
-            ErrorMessageVerbosity::FullDetails => match &self.message_safe {
-                None => self.full_details.to_string(),
-                Some(safe) => match &self.env_vars {
-                    None => format!("{} / Full details: {}", safe, self.full_details),
+            ErrorMessageVerbosity::FullDetails => match &self.full_details {
+                None => self.message(ErrorMessageVerbosity::SafeOnly),
+                Some(full_details) => match &self.env_vars {
+                    None => format!("{} / Full details: {}", self.message_safe, full_details),
                     Some(env_vars) => {
                         format!(
                             "{} / Full details: {} / Env vars: {}",
-                            safe,
-                            self.full_details,
+                            self.message_safe,
+                            full_details,
                             env_vars
                                 .iter()
                                 .map(|(k, v)| format!("{}={}", k, v))
@@ -89,24 +86,11 @@ impl CommandError {
 
     /// Creates a new CommandError from safe message. To be used when message is safe.
     pub fn new_from_safe_message(message: String) -> Self {
-        CommandError::new(message.clone(), Some(message))
+        CommandError::new(message, None, None)
     }
 
-    /// Creates a new CommandError having both a safe and an unsafe message.
-    pub fn new(message_raw: String, message_safe: Option<String>) -> Self {
-        CommandError {
-            full_details: message_raw,
-            message_safe,
-            env_vars: None,
-        }
-    }
-
-    /// Creates a new CommandError having a safe, an unsafe message and env vars.
-    pub fn new_with_env_vars(
-        message_raw: String,
-        message_safe: Option<String>,
-        env_vars: Option<Vec<(String, String)>>,
-    ) -> Self {
+    /// Creates a new CommandError having both a safe, an unsafe message and env vars.
+    pub fn new(message_safe: String, message_raw: Option<String>, env_vars: Option<Vec<(String, String)>>) -> Self {
         CommandError {
             full_details: message_raw,
             message_safe,
@@ -120,8 +104,8 @@ impl CommandError {
         safe_message: Option<String>,
     ) -> Self {
         CommandError {
-            full_details: legacy_command_error.to_string(),
-            message_safe: safe_message,
+            full_details: Some(legacy_command_error.to_string()),
+            message_safe: safe_message.unwrap_or_else(|| "No message".to_string()),
             env_vars: None,
         }
     }
@@ -144,7 +128,17 @@ impl CommandError {
             unsafe_message = format!("{}\nSTDERR {}", unsafe_message, txt);
         }
 
-        CommandError::new_with_env_vars(unsafe_message, Some(message), Some(envs))
+        CommandError::new(message, Some(unsafe_message), Some(envs))
+    }
+}
+
+impl Default for CommandError {
+    fn default() -> Self {
+        Self {
+            full_details: None,
+            message_safe: "Unknown command error".to_string(),
+            env_vars: None,
+        }
     }
 }
 
@@ -370,8 +364,8 @@ pub struct EngineError {
     qovery_log_message: String,
     /// user_log_message: message targeted toward Qovery users, might avoid any useless info for users such as Qovery specific identifiers and so on.
     user_log_message: String,
-    /// raw_message: raw error message such as command input / output.
-    message: Option<CommandError>,
+    /// underlying_error: raw error message such as command input / output.
+    underlying_error: Option<CommandError>,
     /// link: link to error documentation (qovery blog, forum, etc.)
     link: Option<Url>,
     /// hint_message: an hint message aiming to give an hint to the user. For example: "Happens when application port has been changed but application hasn't been restarted.".
@@ -401,10 +395,15 @@ impl EngineError {
 
     /// Returns proper error message.
     pub fn message(&self, message_verbosity: ErrorMessageVerbosity) -> String {
-        match &self.message {
+        match &self.underlying_error {
             Some(msg) => msg.message(message_verbosity),
             None => self.qovery_log_message.to_string(),
         }
+    }
+
+    /// Returns Engine's underlying error.
+    pub fn underlying_error(&self) -> Option<CommandError> {
+        self.underlying_error.clone()
     }
 
     /// Returns error's link.
@@ -443,7 +442,7 @@ impl EngineError {
             tag,
             qovery_log_message,
             user_log_message,
-            message,
+            underlying_error: message,
             link,
             hint_message,
         }
@@ -471,13 +470,13 @@ impl EngineError {
                     EngineErrorScope::ObjectStorage(id, name) => Transmitter::ObjectStorage(id, name),
                     EngineErrorScope::Environment(id, name) => Transmitter::Environment(id, name),
                     EngineErrorScope::Database(id, db_type, name) => Transmitter::Database(id, db_type, name),
-                    EngineErrorScope::Application(id, name) => Transmitter::Application(id, name),
+                    EngineErrorScope::Application(id, name, commit) => Transmitter::Application(id, name, commit),
                     EngineErrorScope::Router(id, name) => Transmitter::Router(id, name),
                 },
             ),
             qovery_log_message: message.to_string(),
             user_log_message: message,
-            message: None,
+            underlying_error: None,
             link: None,
             hint_message: None,
         }
@@ -2884,9 +2883,9 @@ mod tests {
     #[test]
     fn test_command_error_test_hidding_env_vars_in_message_safe_only() {
         // setup:
-        let command_err = CommandError::new_with_env_vars(
-            "my raw message".to_string(),
-            Some("my safe message".to_string()),
+        let command_err = CommandError::new(
+            "my safe message".to_string(),
+            Some("my raw message".to_string()),
             Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
         );
 
@@ -2901,9 +2900,9 @@ mod tests {
     #[test]
     fn test_command_error_test_hidding_env_vars_in_message_full_without_env_vars() {
         // setup:
-        let command_err = CommandError::new_with_env_vars(
-            "my raw message".to_string(),
-            Some("my safe message".to_string()),
+        let command_err = CommandError::new(
+            "my safe message".to_string(),
+            Some("my raw message".to_string()),
             Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
         );
 
@@ -2918,9 +2917,9 @@ mod tests {
     #[test]
     fn test_engine_error_test_hidding_env_vars_in_message_safe_only() {
         // setup:
-        let command_err = CommandError::new_with_env_vars(
-            "my raw message".to_string(),
-            Some("my safe message".to_string()),
+        let command_err = CommandError::new(
+            "my safe message".to_string(),
+            Some("my raw message".to_string()),
             Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
         );
         let cluster_id = QoveryIdentifier::new_random();
@@ -2936,7 +2935,7 @@ mod tests {
             ),
             "qovery_log_message".to_string(),
             "user_log_message".to_string(),
-            Some(command_err.clone()),
+            Some(command_err),
             None,
             None,
         );
@@ -2952,9 +2951,9 @@ mod tests {
     #[test]
     fn test_engine_error_test_hidding_env_vars_in_message_full_without_env_vars() {
         // setup:
-        let command_err = CommandError::new_with_env_vars(
-            "my raw message".to_string(),
-            Some("my safe message".to_string()),
+        let command_err = CommandError::new(
+            "my safe message".to_string(),
+            Some("my raw message".to_string()),
             Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
         );
         let cluster_id = QoveryIdentifier::new_random();
@@ -2970,7 +2969,7 @@ mod tests {
             ),
             "qovery_log_message".to_string(),
             "user_log_message".to_string(),
-            Some(command_err.clone()),
+            Some(command_err),
             None,
             None,
         );
@@ -2986,9 +2985,9 @@ mod tests {
     #[test]
     fn test_command_error_test_hidding_env_vars_in_debug() {
         // setup:
-        let command_err = CommandError::new_with_env_vars(
-            "my raw message".to_string(),
-            Some("my safe message".to_string()),
+        let command_err = CommandError::new(
+            "my safe message".to_string(),
+            Some("my raw message".to_string()),
             Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
         );
 
@@ -3003,9 +3002,9 @@ mod tests {
     #[test]
     fn test_engine_error_test_hidding_env_vars_in_debug() {
         // setup:
-        let command_err = CommandError::new_with_env_vars(
-            "my raw message".to_string(),
-            Some("my safe message".to_string()),
+        let command_err = CommandError::new(
+            "my safe message".to_string(),
+            Some("my raw message".to_string()),
             Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
         );
         let cluster_id = QoveryIdentifier::new_random();
@@ -3021,7 +3020,7 @@ mod tests {
             ),
             "qovery_log_message".to_string(),
             "user_log_message".to_string(),
-            Some(command_err.clone()),
+            Some(command_err),
             None,
             None,
         );
