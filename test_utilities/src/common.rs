@@ -52,7 +52,7 @@ pub enum RegionActivationStatus {
 }
 
 pub enum ClusterDomain {
-    Default,
+    Default { cluster_id: String },
     Custom(String),
 }
 
@@ -1143,7 +1143,9 @@ pub fn test_db(
             logger.clone(),
             localisation.as_str(),
             kubernetes_version.clone(),
-            &ClusterDomain::Default,
+            &ClusterDomain::Default {
+                cluster_id: context.cluster_id().to_string(),
+            },
             None,
         ),
         Kind::Do => DO::docker_cr_engine(
@@ -1151,7 +1153,9 @@ pub fn test_db(
             logger.clone(),
             localisation.as_str(),
             kubernetes_version.clone(),
-            &ClusterDomain::Default,
+            &ClusterDomain::Default {
+                cluster_id: context.cluster_id().to_string(),
+            },
             None,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
@@ -1159,7 +1163,9 @@ pub fn test_db(
             logger.clone(),
             localisation.as_str(),
             kubernetes_version.clone(),
-            &ClusterDomain::Default,
+            &ClusterDomain::Default {
+                cluster_id: context.cluster_id().to_string(),
+            },
             None,
         ),
     };
@@ -1194,7 +1200,7 @@ pub fn test_db(
             };
         }
         DatabaseMode::MANAGED => {
-            match get_svc(context, provider_kind.clone(), environment.clone(), secrets.clone()) {
+            match get_svc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(svc) => {
                     let service = svc
                         .items
@@ -1217,13 +1223,17 @@ pub fn test_db(
         }
     }
 
+    let cluster_id = context.cluster_id().to_string();
+
     let engine_config_for_delete = match provider_kind {
         Kind::Aws => AWS::docker_cr_engine(
             &context_for_delete,
             logger.clone(),
             localisation.as_str(),
             kubernetes_version,
-            &ClusterDomain::Default,
+            &ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
             None,
         ),
         Kind::Do => DO::docker_cr_engine(
@@ -1231,7 +1241,9 @@ pub fn test_db(
             logger.clone(),
             localisation.as_str(),
             kubernetes_version,
-            &ClusterDomain::Default,
+            &ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
             None,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
@@ -1239,7 +1251,9 @@ pub fn test_db(
             logger.clone(),
             localisation.as_str(),
             kubernetes_version,
-            &ClusterDomain::Default,
+            &ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
             None,
         ),
     };

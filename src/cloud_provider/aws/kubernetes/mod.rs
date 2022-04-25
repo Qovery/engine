@@ -414,6 +414,7 @@ impl EKS {
             "managed_dns_resolvers_terraform_format",
             &managed_dns_resolvers_terraform_format,
         );
+        context.insert("wildcard_managed_dns", &self.dns_provider().domain().wildcarded().to_string());
 
         match self.dns_provider.kind() {
             dns_provider::Kind::Cloudflare => {
