@@ -9,6 +9,7 @@ use crate::errors::CommandError;
 use base64::decode;
 use flate2::write::GzEncoder;
 use flate2::Compression;
+use serde::__private::from_utf8_lossy;
 use std::ffi::OsStr;
 use walkdir::WalkDir;
 
@@ -157,13 +158,20 @@ pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> R
 pub fn create_yaml_backup_file<P>(
     working_root_dir: P,
     chart_name: String,
-    resource_name: String,
+    resource_name: Option<String>,
     content: String,
 ) -> Result<String, std::io::Error>
 where
     P: AsRef<Path>,
 {
-    info!("creating yaml backup file for {}", resource_name);
+    match resource_name.is_some() {
+        true => info!(
+            "creating yaml backup file for {}/{}",
+            chart_name,
+            resource_name.as_ref().unwrap()
+        ),
+        false => info!("creating yaml backup file for {}", chart_name),
+    };
 
     let dir = working_root_dir.as_ref().join("backups");
 
@@ -174,7 +182,15 @@ where
         .map(|e| e.to_string())
         .ok_or_else(|| Error::from(ErrorKind::NotFound));
 
-    let string_path = format!("{}/{}-{}-q-backup.yaml", root_path?, chart_name, resource_name);
+    let string_path = match resource_name.is_some() {
+        true => format!(
+            "{}/{}-{}-q-backup.yaml",
+            root_path?,
+            chart_name,
+            resource_name.as_ref().unwrap()
+        ),
+        false => format!("{}/{}.yaml", root_path?, chart_name),
+    };
     let str_path = string_path.as_str();
     let path = Path::new(str_path);
 
@@ -237,7 +253,7 @@ where
             .to_str()
             .ok_or_else(|| Error::from(ErrorKind::NotFound))?
             .to_string()
-            .contains("backup.yaml")
+            .contains("-q-backup.yaml")
         {
             backup_paths.push(file.path().to_str().expect("No file path").to_string())
         }
@@ -250,27 +266,25 @@ where
     Ok(backup_paths)
 }
 
-pub fn create_yaml_file_from_secret<P>(
-    working_root_dir: P,
-    secret: SecretItem,
-    chart_name: String,
-    resource_name: String,
-) -> Result<String, CommandError>
+pub fn create_yaml_file_from_secret<P>(working_root_dir: P, secret: SecretItem) -> Result<String, CommandError>
 where
     P: AsRef<Path>,
 {
-    let message = format!("Unable to decode secret for {}/{}", chart_name, resource_name);
-    let (_secret_name, secret_content) = secret.data[0];
+    let message = format!("Unable to decode secret {}", secret.metadata.name.clone());
+    let secret_data = secret.data.values().next();
+    let secret_content = match secret_data.is_some() {
+        true => secret_data.unwrap().to_string(),
+        false => return Err(CommandError::new(message.clone(), Some(message))),
+    };
 
-    let content = decode(secret_content)
-        .map_err(|_| CommandError::new(message.clone(), Some(message.clone())))?
-        .iter()
-        .map(|x| x.to_string())
-        .collect();
-    match create_yaml_backup_file(working_root_dir.as_ref(), chart_name.clone(), resource_name.clone(), content) {
+    let content = match decode(secret_content) {
+        Ok(bytes) => from_utf8_lossy(&bytes[1..bytes.len() - 1]).to_string(),
+        Err(_) => return Err(CommandError::new(message.clone(), Some(message))),
+    };
+    match create_yaml_backup_file(working_root_dir.as_ref(), secret.metadata.name.clone(), None, content) {
         Ok(path) => Ok(path),
         Err(e) => {
-            let message = format!("Unable to create backup file for {}/{}: {}", chart_name, resource_name, e);
+            let message = format!("Unable to create backup file from secret {}: {}", secret.metadata.name, e);
             Err(CommandError::new(message.clone(), Some(message)))
         }
     }

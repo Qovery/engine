@@ -3,8 +3,12 @@ use qovery_engine::cloud_provider::helm::{
     deploy_charts_levels, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
 };
 use qovery_engine::cmd::helm::Helm;
-use qovery_engine::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_secrets};
+use qovery_engine::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_secrets, kubectl_get_resource_yaml};
 use qovery_engine::cmd::structs::SecretItem;
+use qovery_engine::fs::list_yaml_backup_files;
+use serde_derive::Deserialize;
+use serde_derive::Serialize;
+use std::fs;
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -13,6 +17,77 @@ use std::thread::sleep;
 use std::time::Duration;
 use tempdir::TempDir;
 use test_utilities::utilities::FuncTestsSecrets;
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Certificate {
+    pub api_version: String,
+    pub items: Vec<Item>,
+    pub kind: String,
+    pub metadata: Metadata2,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Item {
+    pub api_version: String,
+    pub kind: String,
+    pub metadata: Metadata,
+    pub spec: Spec,
+    pub status: Status,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Metadata {
+    pub annotations: Annotations,
+    pub creation_timestamp: String,
+    pub generation: i64,
+    pub labels: Labels,
+    pub name: String,
+    pub namespace: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Annotations {
+    #[serde(rename = "meta.helm.sh/release-name")]
+    pub meta_helm_sh_release_name: String,
+    #[serde(rename = "meta.helm.sh/release-namespace")]
+    pub meta_helm_sh_release_namespace: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Labels {
+    #[serde(rename = "app.kubernetes.io/managed-by")]
+    pub app_kubernetes_io_managed_by: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Spec {
+    pub dns_names: Vec<String>,
+    pub issuer_ref: IssuerRef,
+    pub secret_name: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IssuerRef {
+    pub kind: String,
+    pub name: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Status {}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Metadata2 {
+    pub self_link: String,
+}
 
 fn cert_manager_conf() -> (Helm, PathBuf, CommonChart, CommonChart) {
     let vault_secrets = FuncTestsSecrets::new();
@@ -156,8 +231,35 @@ fn test_apply_chart_backup() {
     let tmp_dir = TempDir::new("workspace_directory").expect("error creating temporary dir");
     let root_dir_path = Path::new(tmp_dir.path());
     let _ = helm
-        .prepare_chart_backup(root_dir_path, &cert_manager.chart_info, &vec![], vec!["cert".to_string()])
+        .prepare_chart_backup(
+            root_dir_path,
+            cert_manager_config.get_chart_info(),
+            &vec![],
+            vec!["cert".to_string()],
+        )
         .unwrap();
+
+    match helm.apply_chart_backup(root_dir_path, &vec![], cert_manager_config.get_chart_info()) {
+        Err(_) => {
+            assert!(false)
+        }
+        Ok(..) => {
+            let string_path = list_yaml_backup_files(root_dir_path).unwrap().first().unwrap().clone();
+            let str_path = string_path.as_str();
+            let path = Path::new(str_path);
+            let backup_string = fs::read_to_string(path).unwrap();
+            let cert_string = kubectl_get_resource_yaml(
+                kube_config.as_path(),
+                vec![],
+                "cert",
+                Some(cert_manager_config.namespace().as_str()),
+            )
+            .unwrap();
+            let backup_cert = serde_yaml::from_str::<Certificate>(backup_string.as_str()).unwrap();
+            let cert = serde_yaml::from_str::<Certificate>(cert_string.as_str()).unwrap();
+            assert_eq!(backup_cert.items.first().unwrap().spec, cert.items.first().unwrap().spec)
+        }
+    };
 
     let _ = kubectl_exec_delete_namespace(kube_config.as_path(), "cert-manager", vec![]);
 }

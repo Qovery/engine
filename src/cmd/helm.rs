@@ -565,7 +565,7 @@ impl Helm {
             match create_yaml_backup_file(
                 workspace_root_dir.as_ref(),
                 chart.name.to_string(),
-                backup.0.clone(),
+                Some(backup.0.clone()),
                 backup.1,
             ) {
                 Ok(path) => {
@@ -643,20 +643,28 @@ impl Helm {
         .items;
 
         for secret in secrets {
-            let path = create_yaml_file_from_secret(
-                &workspace_root_dir,
-                secret.clone(),
-                chart.clone().name,
-                secret.metadata.name.clone(),
-            )?;
-            match kubectl_apply_with_path(&self.kubernetes_config, envs.to_vec(), path.as_str()) {
-                Ok(_) => Ok(()),
-                Err(e) =>  return Err(CmdError(
-                    chart.clone().name,
-                    HelmCommand::UPGRADE,
-                    CommandError::new(e.message_raw(), e.message_safe()),
-                )),
-            }
+            if secret.metadata.name.contains("-q-backup") {
+                let path = match create_yaml_file_from_secret(&workspace_root_dir, secret.clone()) {
+                    Ok(path) => path,
+                    Err(e) => {
+                        return Err(CmdError(
+                            chart.clone().name,
+                            HelmCommand::UPGRADE,
+                            CommandError::new(e.message_raw(), e.message_safe()),
+                        ))
+                    }
+                };
+                match kubectl_apply_with_path(&self.kubernetes_config, envs.to_vec(), path.as_str()) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        return Err(CmdError(
+                            chart.clone().name,
+                            HelmCommand::UPGRADE,
+                            CommandError::new(e.message_raw(), e.message_safe()),
+                        ))
+                    }
+                };
+            };
         }
 
         Ok(())
