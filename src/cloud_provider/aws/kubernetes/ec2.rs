@@ -48,7 +48,7 @@ impl EC2 {
         options: Options,
         logger: Box<dyn Logger>,
     ) -> Result<Self, EngineError> {
-        let event_details = kubernetes::event_details(&cloud_provider, id, name, &region, &context);
+        let event_details = kubernetes::event_details(&**cloud_provider, id, name, &region, &context);
         let template_directory = format!("{}/aws-ec2/bootstrap", context.lib_root_dir());
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
