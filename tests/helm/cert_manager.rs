@@ -165,6 +165,7 @@ fn cert_manager_conf() -> (Helm, PathBuf, CommonChart, CommonChart) {
     (helm, kube_config, cert_manager, cert_manager_config)
 }
 
+#[cfg(feature = "test-with-kube")]
 #[test]
 fn test_create_chart_backup() {
     let (helm, kube_config, cert_manager, cert_manager_config) = cert_manager_conf();
@@ -192,18 +193,18 @@ fn test_create_chart_backup() {
     .unwrap();
     assert_eq!(backup_infos.len(), 1);
 
-    for (name, path) in backup_infos {
-        let backup_name = format!("{}-{}-q-backup", &cert_manager.chart_info.name, name.clone());
-        assert!(Path::new(path.as_str()).exists());
+    for backup_info in backup_infos {
+        let backup_name = format!("{}-{}-q-backup", &cert_manager.chart_info.name, backup_info.name.clone());
+        assert!(Path::new(backup_info.path.as_str()).exists());
         let secret = secrets
             .items
             .clone()
             .into_iter()
             .filter(|secret| secret.metadata.name == backup_name)
             .collect::<Vec<SecretItem>>();
-        let secret_content = decode(secret[0].data[&name].clone()).unwrap();
+        let secret_content = decode(secret[0].data[&backup_info.name].clone()).unwrap();
         let content = from_utf8(secret_content.as_slice()).unwrap().to_string();
-        let file = OpenOptions::new().read(true).open(path.as_str()).unwrap();
+        let file = OpenOptions::new().read(true).open(backup_info.path.as_str()).unwrap();
         let file_content = BufReader::new(file.try_clone().unwrap())
             .lines()
             .map(|line| line.unwrap())
@@ -217,6 +218,7 @@ fn test_create_chart_backup() {
     let _ = kubectl_exec_delete_namespace(kube_config.as_path(), "cert-manager", vec![]);
 }
 
+#[cfg(feature = "test-with-kube")]
 #[test]
 fn test_apply_chart_backup() {
     let (helm, kube_config, cert_manager, cert_manager_config) = cert_manager_conf();
@@ -266,6 +268,7 @@ fn test_apply_chart_backup() {
     let _ = kubectl_exec_delete_namespace(kube_config.as_path(), "cert-manager", vec![]);
 }
 
+#[cfg(feature = "test-with-kube")]
 #[test]
 fn test_should_not_create_chart_backup() {
     let (helm, kube_config, cert_manager, cert_manager_config) = cert_manager_conf();
@@ -292,6 +295,7 @@ fn test_should_not_create_chart_backup() {
     let _ = kubectl_exec_delete_namespace(kube_config.as_path(), "cert-manager", vec![]);
 }
 
+#[cfg(feature = "test-with-kube")]
 #[test]
 fn test_should_apply_chart_backup() {
     let (helm, kube_config, cert_manager, mut cert_manager_config) = cert_manager_conf();

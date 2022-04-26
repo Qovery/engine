@@ -88,6 +88,18 @@ pub struct ReleaseStatus {
     pub info: ReleaseInfo,
 }
 
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct Backup {
+    pub name: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct BackupInfos {
+    pub name: String,
+    pub path: String,
+}
+
 impl ReleaseStatus {
     fn is_locked(&self) -> bool {
         self.info.status.starts_with("pending-")
@@ -500,14 +512,13 @@ impl Helm {
         let root_dir_path = Path::new(tmp_dir.as_path());
 
         if chart.backup_resources.is_some() {
-            match self.prepare_chart_backup(
+            if let Err(e) = self.prepare_chart_backup(
                 root_dir_path,
                 chart,
                 &self.get_all_envs(envs),
                 chart.backup_resources.as_ref().unwrap().to_vec(),
             ) {
-                Ok(_) => {}
-                Err(e) => return Err(e),
+                return Err(e);
             };
         };
 
@@ -527,9 +538,8 @@ impl Helm {
             // Ok is ok
             Ok(_) => {
                 if chart.backup_resources.is_some() {
-                    match self.apply_chart_backup(root_dir_path, &self.get_all_envs(envs), chart) {
-                        Ok(_) => {}
-                        Err(e) => return Err(e),
+                    if let Err(e) = self.apply_chart_backup(root_dir_path, &self.get_all_envs(envs), chart) {
+                        return Err(e);
                     };
                 };
                 Ok(())
@@ -595,11 +605,11 @@ impl Helm {
         chart: &ChartInfo,
         envs: &[(&str, &str)],
         backup_resources: Vec<String>,
-    ) -> Result<Vec<(String, String)>, HelmError>
+    ) -> Result<Vec<BackupInfos>, HelmError>
     where
         P: AsRef<Path>,
     {
-        let mut backups: Vec<(String, String)> = vec![];
+        let mut backups: Vec<Backup> = vec![];
         for backup_resource in backup_resources {
             match kubectl_get_resource_yaml(
                 &self.kubernetes_config,
@@ -608,8 +618,11 @@ impl Helm {
                 Some(chart.get_namespace_string().as_str()),
             ) {
                 Ok(content) => {
-                    if !content.contains("No resources found") {
-                        backups.push((backup_resource, content));
+                    if !content.to_lowercase().contains("no resources found") {
+                        backups.push(Backup {
+                            name: backup_resource,
+                            content,
+                        });
                     };
                 }
                 Err(e) => {
@@ -618,9 +631,9 @@ impl Helm {
             };
         }
 
-        let mut backup_infos: Vec<(String, String)> = vec![];
+        let mut backup_infos: Vec<BackupInfos> = vec![];
 
-        if backups.len() == 0 {
+        if backups.is_empty() {
             return Ok(backup_infos);
         }
 
@@ -628,47 +641,62 @@ impl Helm {
             match create_yaml_backup_file(
                 workspace_root_dir.as_ref(),
                 chart.name.to_string(),
-                Some(backup.0.clone()),
-                backup.1,
+                Some(backup.name.clone()),
+                backup.content,
             ) {
                 Ok(path) => {
-                    backup_infos.push((backup.0, path));
+                    backup_infos.push(BackupInfos {
+                        name: backup.name,
+                        path,
+                    });
                 }
                 Err(e) => {
                     return Err(CmdError(
                         chart.name.clone(),
                         HelmCommand::UPGRADE,
-                        CommandError::new(e.to_string(), Some(e.to_string()), None),
+                        CommandError::new(
+                            format!("Error while creating YAML backup file for {}.", backup.name),
+                            Some(e.to_string()),
+                            None,
+                        ),
                     ))
                 }
             }
         }
 
         for backup_info in backup_infos.clone() {
-            if let Err(e) = remove_lines_starting_with(backup_info.1.clone(), "resourceVersion") {
+            if let Err(e) = remove_lines_starting_with(backup_info.path.clone(), "resourceVersion") {
                 return Err(CmdError(
                     chart.name.clone(),
                     HelmCommand::UPGRADE,
-                    CommandError::new(e.to_string(), Some(e.to_string()), None),
+                    CommandError::new(
+                        format!("Error while editing YAML backup file {}.", backup_info.name),
+                        Some(e.to_string()),
+                        None,
+                    ),
                 ));
             }
 
-            if let Err(e) = remove_lines_starting_with(backup_info.1.clone(), "uid") {
+            if let Err(e) = remove_lines_starting_with(backup_info.path.clone(), "uid") {
                 return Err(CmdError(
                     chart.name.clone(),
                     HelmCommand::UPGRADE,
-                    CommandError::new(e.to_string(), Some(e.to_string()), None),
+                    CommandError::new(
+                        format!("Error while editing YAML backup file {}.", backup_info.name),
+                        Some(e.to_string()),
+                        None,
+                    ),
                 ));
             }
 
-            let backup_name = format!("{}-{}-q-backup", chart.name, backup_info.0);
+            let backup_name = format!("{}-{}-q-backup", chart.name, backup_info.name);
             if let Err(e) = kubectl_create_secret_from_file(
                 &self.kubernetes_config,
                 envs.to_vec(),
                 Some(chart.namespace.to_string().as_str()),
                 backup_name,
-                backup_info.0,
-                backup_info.1,
+                backup_info.name,
+                backup_info.path,
             ) {
                 return Err(CmdError(
                     chart.name.clone(),
@@ -770,25 +798,16 @@ pub fn to_engine_error(event_details: &EventDetails, error: HelmError) -> Engine
     EngineError::new_helm_error(event_details.clone(), error)
 }
 
-// #[cfg(feature = "test-with-kube")]
+#[cfg(feature = "test-with-kube")]
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::helm::{
-        deploy_charts_levels, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
-    };
+    use crate::cloud_provider::helm::{ChartInfo, ChartSetValue};
     use crate::cmd::command::QoveryCommand;
     use crate::cmd::helm::{helm_exec_with_output, Helm, HelmError};
-    use crate::cmd::kubectl::{kubectl_apply_with_path, kubectl_exec_delete_namespace, kubectl_exec_get_secrets};
-    use crate::cmd::structs::SecretItem;
-    use crate::errors::EngineError;
     use semver::Version;
-    use std::borrow::Borrow;
-    use std::path::Path;
     use std::sync::{Arc, Barrier};
     use std::thread;
-    use std::thread::sleep;
     use std::time::Duration;
-    use tempdir::TempDir;
 
     struct HelmTestCtx {
         helm: Helm,
@@ -816,36 +835,6 @@ mod tests {
             let mut kube_config = dirs::home_dir().unwrap();
             kube_config.push(".kube/config");
             let helm = Helm::new(kube_config.to_str().unwrap(), &vec![]).unwrap();
-
-            let cleanup = HelmTestCtx { helm, charts };
-            cleanup.cleanup();
-            cleanup
-        }
-
-        fn new_cert_manager(release_name: &str) -> HelmTestCtx {
-            let charts = vec![
-                ChartInfo::new_from_custom_namespace(
-                    release_name.to_string(),
-                    "lib/common/bootstrap/charts/cert-manager".to_string(),
-                    "cert-manager".to_string(),
-                    600,
-                    vec!["tests/helm/cert_manager.yaml".to_string()],
-                    false,
-                    None,
-                ),
-                ChartInfo::new_from_custom_namespace(
-                    release_name.to_string(),
-                    "lib/common/bootstrap/charts/cert-manager-configs".to_string(),
-                    "cert-manager".to_string(),
-                    600,
-                    vec!["tests/helm/cert_manager_conf.yaml".to_string()],
-                    false,
-                    None,
-                ),
-            ];
-            let mut kube_config = dirs::home_dir().unwrap();
-            kube_config.push(".kube/config");
-            let helm = Helm::new(kube_config.to_str().unwrap(), &[]).unwrap();
 
             let cleanup = HelmTestCtx { helm, charts };
             cleanup.cleanup();

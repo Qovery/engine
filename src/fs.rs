@@ -160,27 +160,24 @@ pub fn create_yaml_backup_file<P>(
     chart_name: String,
     resource_name: Option<String>,
     content: String,
-) -> Result<String, std::io::Error>
+) -> Result<String, CommandError>
 where
     P: AsRef<Path>,
 {
-    match resource_name.is_some() {
-        true => info!(
-            "creating yaml backup file for {}/{}",
-            chart_name,
-            resource_name.as_ref().unwrap()
-        ),
-        false => info!("creating yaml backup file for {}", chart_name),
-    };
-
     let dir = working_root_dir.as_ref().join("backups");
 
-    create_dir_all(&dir)?;
+    if let Err(e) = create_dir_all(&dir) {
+        return Err(CommandError::new(
+            "Unable to create root dir path.".to_string(),
+            Some(e.to_string()),
+            None,
+        ));
+    }
 
     let root_path = dir
         .to_str()
         .map(|e| e.to_string())
-        .ok_or_else(|| Error::from(ErrorKind::NotFound));
+        .ok_or_else(|| CommandError::new_from_safe_message("Unable to get backups root dir path.".to_string()));
 
     let string_path = match resource_name.is_some() {
         true => format!(
@@ -195,29 +192,35 @@ where
     let path = Path::new(str_path);
 
     let mut file = match File::create(&path) {
-        Err(e) => return Err(e),
+        Err(e) => {
+            return Err(CommandError::new(
+                format!("Unable to create YAML backup file for chart {}.", chart_name),
+                Some(e.to_string()),
+                None,
+            ))
+        }
         Ok(file) => file,
     };
 
     match file.write(content.as_bytes()) {
-        Err(e) => Err(e),
-        Ok(_) => {
-            file.flush()?;
-            Ok(path
-                .to_str()
-                .map(|e| e.to_string())
-                .ok_or_else(|| Error::from(ErrorKind::NotFound))?)
-        }
+        Err(e) => Err(CommandError::new(
+            format!("Unable to edit YAML backup file for chart {}.", chart_name),
+            Some(e.to_string()),
+            None,
+        )),
+        Ok(_) => Ok(path.to_str().map(|e| e.to_string()).ok_or_else(|| {
+            CommandError::new_from_safe_message(format!(
+                "Unable to get YAML backup file path for chart {}.",
+                chart_name
+            ))
+        })?),
     }
 }
 
-pub fn remove_lines_starting_with(path: String, starter: &str) -> Result<String, std::io::Error> {
-    info!("editing yaml backup file {}", path);
-
-    let file = OpenOptions::new()
-        .read(true)
-        .open(path.as_str())
-        .map_err(|_| Error::from(ErrorKind::NotFound))?;
+pub fn remove_lines_starting_with(path: String, starter: &str) -> Result<String, CommandError> {
+    let file = OpenOptions::new().read(true).open(path.as_str()).map_err(|e| {
+        CommandError::new(format!("Unable to open YAML backup file {}.", path), Some(e.to_string()), None)
+    })?;
 
     let content = BufReader::new(file.try_clone().unwrap())
         .lines()
@@ -230,15 +233,21 @@ pub fn remove_lines_starting_with(path: String, starter: &str) -> Result<String,
         .write(true)
         .truncate(true)
         .open(path.as_str())
-        .map_err(|_| Error::from(ErrorKind::NotFound))?;
+        .map_err(|e| {
+            CommandError::new(format!("Unable to edit YAML backup file {}.", path), Some(e.to_string()), None)
+        })?;
 
     match file.write(content.as_bytes()) {
-        Err(e) => Err(e),
+        Err(e) => Err(CommandError::new(
+            format!("Unable to edit YAML backup file {}.", path),
+            Some(e.to_string()),
+            None,
+        )),
         Ok(_) => Ok(path),
     }
 }
 
-pub fn list_yaml_backup_files<P>(working_root_dir: P) -> Result<Vec<String>, std::io::Error>
+pub fn list_yaml_backup_files<P>(working_root_dir: P) -> Result<Vec<String>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -251,16 +260,27 @@ where
         if file
             .file_name()
             .to_str()
-            .ok_or_else(|| Error::from(ErrorKind::NotFound))?
+            .ok_or_else(|| {
+                CommandError::new_from_safe_message(format!("Unable to get YAML backup file name {:?}.", file))
+            })?
             .to_string()
             .contains("-q-backup.yaml")
         {
-            backup_paths.push(file.path().to_str().expect("No file path").to_string())
+            backup_paths.push(
+                file.path()
+                    .to_str()
+                    .ok_or_else(|| {
+                        CommandError::new_from_safe_message(format!("Unable to get YAML backup file name {:?}.", file))
+                    })?
+                    .to_string(),
+            )
         }
     }
 
     if backup_paths.is_empty() {
-        return Err(Error::from(ErrorKind::NotFound));
+        return Err(CommandError::new_from_safe_message(
+            "Unable to get YAML backup files".to_string(),
+        ));
     }
 
     Ok(backup_paths)
@@ -270,23 +290,24 @@ pub fn create_yaml_file_from_secret<P>(working_root_dir: P, secret: SecretItem) 
 where
     P: AsRef<Path>,
 {
-    let message = format!("Unable to decode secret {}", secret.metadata.name.clone());
+    let message = format!("Unable to decode secret {}", secret.metadata.name);
     let secret_data = secret.data.values().next();
     let secret_content = match secret_data.is_some() {
         true => secret_data.unwrap().to_string(),
-        false => return Err(CommandError::new(message.clone(), Some(message), None)),
+        false => return Err(CommandError::new_from_safe_message(message)),
     };
 
     let content = match decode(secret_content) {
         Ok(bytes) => from_utf8_lossy(&bytes[1..bytes.len() - 1]).to_string(),
-        Err(_) => return Err(CommandError::new(message.clone(), Some(message), None)),
+        Err(e) => return Err(CommandError::new(message, Some(e.to_string()), None)),
     };
     match create_yaml_backup_file(working_root_dir.as_ref(), secret.metadata.name.clone(), None, content) {
         Ok(path) => Ok(path),
-        Err(e) => {
-            let message = format!("Unable to create backup file from secret {}: {}", secret.metadata.name, e);
-            Err(CommandError::new(message.clone(), Some(message), None))
-        }
+        Err(e) => Err(CommandError::new(
+            format!("Unable to create backup file from secret {}", secret.metadata.name),
+            Some(e.to_string()),
+            None,
+        )),
     }
 }
 
