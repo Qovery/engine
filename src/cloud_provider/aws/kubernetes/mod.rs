@@ -492,7 +492,7 @@ fn create(
     kubernetes: &dyn Kubernetes,
     kubernetes_long_id: uuid::Uuid,
     template_directory: &str,
-    aws_zones: &Vec<AwsZones>,
+    aws_zones: &[AwsZones],
     node_groups: &[NodeGroups],
     options: &Options,
 ) -> Result<(), EngineError> {
@@ -754,7 +754,7 @@ fn downgrade_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
 fn pause(
     kubernetes: &dyn Kubernetes,
     template_directory: &str,
-    aws_zones: &Vec<AwsZones>,
+    aws_zones: &[AwsZones],
     node_groups: &[NodeGroups],
     options: &Options,
 ) -> Result<(), EngineError> {
@@ -940,7 +940,7 @@ fn pause_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
 fn delete(
     kubernetes: &dyn Kubernetes,
     template_directory: &str,
-    aws_zones: &Vec<AwsZones>,
+    aws_zones: &[AwsZones],
     node_groups: &[NodeGroups],
     options: &Options,
 ) -> Result<(), EngineError> {
