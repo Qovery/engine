@@ -110,7 +110,7 @@ pub struct Options {
 impl ProviderOptions for Options {}
 
 fn event_details<S: Into<String>>(
-    cloud_provider: &Box<dyn CloudProvider>,
+    cloud_provider: &dyn CloudProvider,
     kubernetes_id: S,
     kubernetes_name: S,
     kubernetes_region: &AwsRegion,
@@ -201,7 +201,7 @@ fn managed_dns_resolvers_terraform_format(dns_provider: &dyn DnsProvider) -> Str
 
 fn tera_context(
     kubernetes: &dyn Kubernetes,
-    zones: &Vec<AwsZones>,
+    zones: &[AwsZones],
     node_groups: &[NodeGroups],
     options: &Options,
 ) -> Result<TeraContext, EngineError> {
@@ -493,7 +493,7 @@ fn create(
     kubernetes_long_id: uuid::Uuid,
     template_directory: &str,
     aws_zones: &Vec<AwsZones>,
-    node_groups: &Vec<NodeGroups>,
+    node_groups: &[NodeGroups],
     options: &Options,
 ) -> Result<(), EngineError> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
@@ -755,7 +755,7 @@ fn pause(
     kubernetes: &dyn Kubernetes,
     template_directory: &str,
     aws_zones: &Vec<AwsZones>,
-    node_groups: &Vec<NodeGroups>,
+    node_groups: &[NodeGroups],
     options: &Options,
 ) -> Result<(), EngineError> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
@@ -941,7 +941,7 @@ fn delete(
     kubernetes: &dyn Kubernetes,
     template_directory: &str,
     aws_zones: &Vec<AwsZones>,
-    node_groups: &Vec<NodeGroups>,
+    node_groups: &[NodeGroups],
     options: &Options,
 ) -> Result<(), EngineError> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
