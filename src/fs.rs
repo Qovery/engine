@@ -274,18 +274,18 @@ where
     let secret_data = secret.data.values().next();
     let secret_content = match secret_data.is_some() {
         true => secret_data.unwrap().to_string(),
-        false => return Err(CommandError::new(message.clone(), Some(message))),
+        false => return Err(CommandError::new(message.clone(), Some(message), None)),
     };
 
     let content = match decode(secret_content) {
         Ok(bytes) => from_utf8_lossy(&bytes[1..bytes.len() - 1]).to_string(),
-        Err(_) => return Err(CommandError::new(message.clone(), Some(message))),
+        Err(_) => return Err(CommandError::new(message.clone(), Some(message), None)),
     };
     match create_yaml_backup_file(working_root_dir.as_ref(), secret.metadata.name.clone(), None, content) {
         Ok(path) => Ok(path),
         Err(e) => {
             let message = format!("Unable to create backup file from secret {}: {}", secret.metadata.name, e);
-            Err(CommandError::new(message.clone(), Some(message)))
+            Err(CommandError::new(message.clone(), Some(message), None))
         }
     }
 }
@@ -432,7 +432,7 @@ mod tests {
         let mut file_path = create_yaml_backup_file(
             tmp_dir.path().to_str().unwrap(),
             "test".to_string(),
-            "test".to_string(),
+            Some("test".to_string()),
             content.to_string(),
         )
         .expect("No such file");

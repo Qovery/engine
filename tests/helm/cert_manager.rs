@@ -55,6 +55,8 @@ pub struct Annotations {
     pub meta_helm_sh_release_name: String,
     #[serde(rename = "meta.helm.sh/release-namespace")]
     pub meta_helm_sh_release_namespace: String,
+    #[serde(default, rename = "kubectl.kubernetes.io/last-applied-configuration")]
+    pub last_applied_configuration: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -260,6 +262,83 @@ fn test_apply_chart_backup() {
             assert_eq!(backup_cert.items.first().unwrap().spec, cert.items.first().unwrap().spec)
         }
     };
+
+    let _ = kubectl_exec_delete_namespace(kube_config.as_path(), "cert-manager", vec![]);
+}
+
+#[test]
+fn test_should_not_create_chart_backup() {
+    let (helm, kube_config, cert_manager, cert_manager_config) = cert_manager_conf();
+
+    let lvl_1: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager.clone())];
+    let lvl_2: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager_config.clone())];
+
+    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_1], false).map_err(|_| assert!(false));
+
+    sleep(Duration::from_secs(30));
+
+    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_2], false).map_err(|_| assert!(false));
+
+    let tmp_dir = TempDir::new("workspace_directory").expect("error creating temporary dir");
+    let root_dir_path = Path::new(tmp_dir.path());
+
+    // trying to create a backup from an unknown (toto) resource
+    let backup_infos = helm
+        .prepare_chart_backup(root_dir_path, &cert_manager.chart_info, &vec![], vec!["toto".to_string()])
+        .unwrap();
+
+    assert_eq!(backup_infos.len(), 0);
+
+    let _ = kubectl_exec_delete_namespace(kube_config.as_path(), "cert-manager", vec![]);
+}
+
+#[test]
+fn test_should_apply_chart_backup() {
+    let (helm, kube_config, cert_manager, mut cert_manager_config) = cert_manager_conf();
+
+    let lvl_1: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager.clone())];
+    let lvl_2: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager_config.clone())];
+
+    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_1], false).map_err(|_| assert!(false));
+
+    sleep(Duration::from_secs(30));
+
+    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_2], false).map_err(|_| assert!(false));
+
+    sleep(Duration::from_secs(30));
+
+    cert_manager_config.chart_info.backup_resources = Some(vec!["cert".to_string()]);
+
+    let lvl_2_bis: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager_config.clone())];
+
+    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_2_bis], false).map_err(|_| assert!(false));
+
+    let secrets = kubectl_exec_get_secrets(
+        &helm.kubernetes_config,
+        cert_manager.chart_info.namespace.to_string().as_str(),
+        "",
+        vec![],
+    )
+    .unwrap();
+
+    let cert_secret = secrets
+        .items
+        .into_iter()
+        .filter(|secret| secret.metadata.name == "cert-manager-configs-cert-q-backup")
+        .collect::<Vec<SecretItem>>();
+
+    assert_eq!(cert_secret.len(), 1);
+
+    let cert_string = kubectl_get_resource_yaml(
+        kube_config.as_path(),
+        vec![],
+        "cert",
+        Some(cert_manager_config.namespace().as_str()),
+    )
+    .unwrap();
+    let cert = serde_yaml::from_str::<Certificate>(cert_string.as_str()).unwrap();
+
+    assert_ne!(cert.items[0].metadata.annotations.last_applied_configuration, "");
 
     let _ = kubectl_exec_delete_namespace(kube_config.as_path(), "cert-manager", vec![]);
 }

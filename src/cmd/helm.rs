@@ -496,6 +496,21 @@ impl Helm {
 
         let mut error_message: Vec<String> = vec![];
 
+        let tmp_dir = std::env::temp_dir();
+        let root_dir_path = Path::new(tmp_dir.as_path());
+
+        if chart.backup_resources.is_some() {
+            match self.prepare_chart_backup(
+                root_dir_path,
+                chart,
+                &self.get_all_envs(envs),
+                chart.backup_resources.as_ref().unwrap().to_vec(),
+            ) {
+                Ok(_) => {}
+                Err(e) => return Err(e),
+            };
+        };
+
         let helm_ret = helm_exec_with_output(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(envs),
@@ -510,7 +525,15 @@ impl Helm {
 
         match helm_ret {
             // Ok is ok
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                if chart.backup_resources.is_some() {
+                    match self.apply_chart_backup(root_dir_path, &self.get_all_envs(envs), chart) {
+                        Ok(_) => {}
+                        Err(e) => return Err(e),
+                    };
+                };
+                Ok(())
+            }
             Err(err) => {
                 error!("Helm error: {:?}", err);
 
@@ -585,19 +608,22 @@ impl Helm {
                 Some(chart.get_namespace_string().as_str()),
             ) {
                 Ok(content) => {
-                    backups.push((backup_resource, content));
+                    if !content.contains("No resources found") {
+                        backups.push((backup_resource, content));
+                    };
                 }
                 Err(e) => {
-                    return Err(CmdError(
-                        chart.name.clone(),
-                        HelmCommand::UPGRADE,
-                        CommandError::new(e.message_raw(), e.message_safe()),
-                    ))
+                    error!("Kubectl error: {:?}", e.message_safe())
                 }
-            }
+            };
         }
 
         let mut backup_infos: Vec<(String, String)> = vec![];
+
+        if backups.len() == 0 {
+            return Ok(backup_infos);
+        }
+
         for backup in backups.clone() {
             match create_yaml_backup_file(
                 workspace_root_dir.as_ref(),
@@ -612,7 +638,7 @@ impl Helm {
                     return Err(CmdError(
                         chart.name.clone(),
                         HelmCommand::UPGRADE,
-                        CommandError::new(e.to_string(), Some(e.to_string())),
+                        CommandError::new(e.to_string(), Some(e.to_string()), None),
                     ))
                 }
             }
@@ -623,7 +649,7 @@ impl Helm {
                 return Err(CmdError(
                     chart.name.clone(),
                     HelmCommand::UPGRADE,
-                    CommandError::new(e.to_string(), Some(e.to_string())),
+                    CommandError::new(e.to_string(), Some(e.to_string()), None),
                 ));
             }
 
@@ -631,7 +657,7 @@ impl Helm {
                 return Err(CmdError(
                     chart.name.clone(),
                     HelmCommand::UPGRADE,
-                    CommandError::new(e.to_string(), Some(e.to_string())),
+                    CommandError::new(e.to_string(), Some(e.to_string()), None),
                 ));
             }
 
@@ -647,7 +673,7 @@ impl Helm {
                 return Err(CmdError(
                     chart.name.clone(),
                     HelmCommand::UPGRADE,
-                    CommandError::new(e.message_raw(), e.message_safe()),
+                    CommandError::new(e.message_safe(), e.message_raw(), None),
                 ));
             }
         }
@@ -674,7 +700,7 @@ impl Helm {
             CmdError(
                 chart.clone().name,
                 HelmCommand::UPGRADE,
-                CommandError::new(e.message_raw(), e.message_safe()),
+                CommandError::new(e.message_safe(), e.message_raw(), None),
             )
         })?
         .items;
@@ -687,7 +713,7 @@ impl Helm {
                         return Err(CmdError(
                             chart.clone().name,
                             HelmCommand::UPGRADE,
-                            CommandError::new(e.message_raw(), e.message_safe()),
+                            CommandError::new(e.message_safe(), e.message_raw(), None),
                         ))
                     }
                 };
@@ -697,7 +723,7 @@ impl Helm {
                         return Err(CmdError(
                             chart.clone().name,
                             HelmCommand::UPGRADE,
-                            CommandError::new(e.message_raw(), e.message_safe()),
+                            CommandError::new(e.message_safe(), e.message_raw(), None),
                         ))
                     }
                 };

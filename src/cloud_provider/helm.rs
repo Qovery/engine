@@ -82,6 +82,7 @@ pub struct ChartInfo {
     pub yaml_files_content: Vec<ChartValuesGenerated>,
     pub parse_stderr_for_error: bool,
     pub k8s_selector: Option<String>,
+    pub backup_resources: Option<Vec<String>>,
 }
 
 impl ChartInfo {
@@ -146,6 +147,7 @@ impl Default for ChartInfo {
             yaml_files_content: vec![],
             parse_stderr_for_error: true,
             k8s_selector: None,
+            backup_resources: None,
         }
     }
 }
