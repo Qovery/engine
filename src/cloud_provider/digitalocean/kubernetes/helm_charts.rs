@@ -1,7 +1,8 @@
 use crate::cloud_provider::digitalocean::kubernetes::DoksOptions;
 use crate::cloud_provider::helm::{
-    get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo, ChartSetValue, ChartValuesGenerated,
-    CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart, ShellAgentContext,
+    get_chart_for_cluster_agent, get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo,
+    ChartSetValue, ChartValuesGenerated, ClusterAgentContext, CommonChart, CoreDNSConfigChart, HelmChart,
+    HelmChartNamespaces, PrometheusOperatorConfigChart, ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::errors::CommandError;
@@ -793,6 +794,17 @@ datasources:
         },
     };
 
+    let cluster_agent_context = ClusterAgentContext {
+        api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
+        api_token: &chart_config_prerequisites.infra_options.agent_version_controller_token,
+        organization_long_id: &chart_config_prerequisites.organization_long_id,
+        cluster_id: &chart_config_prerequisites.cluster_id,
+        cluster_long_id: &chart_config_prerequisites.cluster_long_id,
+        cluster_token: &chart_config_prerequisites.infra_options.qovery_cluster_secret_token,
+        grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
+    };
+    let cluster_agent = get_chart_for_cluster_agent(cluster_agent_context, chart_path)?;
+
     let shell_context = ShellAgentContext {
         api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
         api_token: &chart_config_prerequisites.infra_options.agent_version_controller_token,
@@ -1038,6 +1050,7 @@ datasources:
     let mut level_6: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
         Box::new(qovery_agent),
+        Box::new(cluster_agent),
         Box::new(shell_agent),
         Box::new(qovery_engine),
         Box::new(digital_mobius),
