@@ -14,7 +14,7 @@ use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 
 pub const AWS_K3S_VERSION: &str = "v1.20.15+k3s1";
 
-#[cfg(feature = "test-aws-infra")]
+#[cfg(feature = "test-aws-infra-ec2")]
 fn create_and_destroy_aws_ec2_k3s_cluster(
     region: String,
     test_type: ClusterTestType,
@@ -52,7 +52,7 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
     It is useful to keep 2 clusters deployment tests to run in // to validate there is no name collision (overlaping)
 */
 
-#[cfg(feature = "test-aws-infra")]
+#[cfg(feature = "test-aws-infra-ec2")]
 #[named]
 #[test]
 fn create_and_destroy_aws_ec2_k3s_cluster_eu_west_3() {

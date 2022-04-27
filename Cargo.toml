@@ -101,9 +101,10 @@ test-scw-managed-services = []
 test-all-managed-services = ["test-aws-managed-services", "test-do-managed-services", "test-scw-managed-services"]
 
 test-aws-infra = []
+test-aws-infra-ec2 = []
 test-do-infra = []
 test-scw-infra = []
-test-all-infra = ["test-aws-infra", "test-do-infra", "test-scw-infra"]
+test-all-infra = ["test-aws-infra", "test-aws-infra-ec2", "test-do-infra", "test-scw-infra"]
 
 test-aws-whole-enchilada = []
 test-do-whole-enchilada = []
@@ -111,7 +112,7 @@ test-scw-whole-enchilada = []
 test-all-whole-enchilada = ["test-aws-whole-enchilada", "test-do-whole-enchilada", "test-scw-whole-enchilada"]
 
 # functionnal tests by provider
-test-aws-all = ["test-aws-infra", "test-aws-managed-services", "test-aws-self-hosted", "test-aws-whole-enchilada"]
+test-aws-all = ["test-aws-infra", "test-aws-infra-ec2", "test-aws-managed-services", "test-aws-self-hosted", "test-aws-whole-enchilada"]
 test-do-all = ["test-do-infra", "test-do-managed-services", "test-do-self-hosted", "test-do-whole-enchilada"]
 test-scw-all = ["test-scw-infra", "test-scw-managed-services", "test-scw-self-hosted", "test-scw-whole-enchilada"]
 
