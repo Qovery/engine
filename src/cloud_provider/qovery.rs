@@ -34,6 +34,7 @@ pub enum QoveryAppName {
     Agent,
     Engine,
     ShellAgent,
+    ClusterAgent,
 }
 
 pub fn get_qovery_app_version<T: DeserializeOwned>(
@@ -50,6 +51,7 @@ pub fn get_qovery_app_version<T: DeserializeOwned>(
         QoveryAppName::Agent => "agent",
         QoveryAppName::Engine => "engine",
         QoveryAppName::ShellAgent => "shellAgent",
+        QoveryAppName::ClusterAgent => "clusterAgent",
     };
 
     let url = format!(

@@ -164,6 +164,13 @@ pub fn create_yaml_backup_file<P>(
 where
     P: AsRef<Path>,
 {
+    if content.is_empty() {
+        return Err(CommandError::new_from_safe_message(format!(
+            "No content to write to file for {}/{:?}.",
+            chart_name, resource_name
+        )));
+    };
+
     let dir = working_root_dir.as_ref().join("backups");
 
     if let Err(e) = create_dir_all(&dir) {
