@@ -774,7 +774,7 @@ fn pause(
 
     kubernetes.logger().log(EngineEvent::Info(
         kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
-        EventMessage::new_from_safe(format!("Preparing {} cluster pause.", kubernetes.kind())),
+        EventMessage::new_from_safe("Preparing cluster pause.".to_string()),
     ));
 
     let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
@@ -911,7 +911,7 @@ fn pause(
 
     kubernetes.logger().log(EngineEvent::Info(
         event_details.clone(),
-        EventMessage::new_from_safe("Pausing EKS cluster deployment.".to_string()),
+        EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
     ));
 
     match terraform_exec(temp_dir.as_str(), terraform_args) {
@@ -1149,13 +1149,10 @@ fn delete(
                         event_details.clone(),
                         EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
                     )),
-                    Err(e) => {
-                        let message_safe = format!("Can't delete chart `{}`: {}", &chart.name, e);
-                        kubernetes.logger().log(EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new(message_safe, Some(e.to_string())),
-                        ))
-                    }
+                    Err(e) => kubernetes.logger().log(EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new(format!("Can't delete chart `{}`", &chart.name), Some(e.to_string())),
+                    )),
                 }
             }
         }
@@ -1201,23 +1198,17 @@ fn delete(
                             event_details.clone(),
                             EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
                         )),
-                        Err(e) => {
-                            let message_safe = format!("Error deleting chart `{}`: {}", chart.name, e);
-                            kubernetes.logger().log(EngineEvent::Warning(
-                                event_details.clone(),
-                                EventMessage::new(message_safe, Some(e.to_string())),
-                            ))
-                        }
+                        Err(e) => kubernetes.logger().log(EngineEvent::Warning(
+                            event_details.clone(),
+                            EventMessage::new(format!("Error deleting chart `{}`", chart.name), Some(e.to_string())),
+                        )),
                     }
                 }
             }
-            Err(e) => {
-                let message_safe = "Unable to get helm list";
-                kubernetes.logger().log(EngineEvent::Warning(
-                    event_details.clone(),
-                    EventMessage::new(message_safe.to_string(), Some(e.to_string())),
-                ))
-            }
+            Err(e) => kubernetes.logger().log(EngineEvent::Warning(
+                event_details.clone(),
+                EventMessage::new("Unable to get helm list".to_string(), Some(e.to_string())),
+            )),
         }
     };
 
