@@ -13,7 +13,6 @@ use qovery_engine::io_models::{
 
 use crate::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
 use crate::digitalocean::{DO_KUBERNETES_VERSION, DO_TEST_REGION};
-use crate::edge_aws_rs::AWS_K3S_VERSION;
 use crate::scaleway::{SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
 use crate::utilities::{
     db_disk_type, db_infos, db_instance_type, generate_id, generate_password, get_pvc, get_svc, get_svc_name, init,
@@ -28,7 +27,7 @@ use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::environment::Environment;
-use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
+use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
@@ -65,7 +64,7 @@ pub trait Cluster<T, U> {
         context: &Context,
         logger: Box<dyn Logger>,
         localisation: &str,
-        kubernetes_kind: KKind,
+        kubernetes_kind: KubernetesKind,
         kubernetes_version: String,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
@@ -1147,7 +1146,7 @@ pub fn test_db(
             &context,
             logger.clone(),
             localisation.as_str(),
-            KKind::Eks,
+            KubernetesKind::Eks,
             kubernetes_version.clone(),
             &ClusterDomain::Default,
             None,
@@ -1156,7 +1155,7 @@ pub fn test_db(
             &context,
             logger.clone(),
             localisation.as_str(),
-            KKind::Doks,
+            KubernetesKind::Doks,
             kubernetes_version.clone(),
             &ClusterDomain::Default,
             None,
@@ -1165,7 +1164,7 @@ pub fn test_db(
             &context,
             logger.clone(),
             localisation.as_str(),
-            KKind::ScwKapsule,
+            KubernetesKind::ScwKapsule,
             kubernetes_version.clone(),
             &ClusterDomain::Default,
             None,
@@ -1230,7 +1229,7 @@ pub fn test_db(
             &context_for_delete,
             logger.clone(),
             localisation.as_str(),
-            KKind::Eks,
+            KubernetesKind::Eks,
             kubernetes_version,
             &ClusterDomain::Default,
             None,
@@ -1239,7 +1238,7 @@ pub fn test_db(
             &context_for_delete,
             logger.clone(),
             localisation.as_str(),
-            KKind::Doks,
+            KubernetesKind::Doks,
             kubernetes_version,
             &ClusterDomain::Default,
             None,
@@ -1248,7 +1247,7 @@ pub fn test_db(
             &context_for_delete,
             logger.clone(),
             localisation.as_str(),
-            KKind::ScwKapsule,
+            KubernetesKind::ScwKapsule,
             kubernetes_version,
             &ClusterDomain::Default,
             None,
@@ -1262,20 +1261,19 @@ pub fn test_db(
 }
 
 pub fn get_environment_test_kubernetes<'a>(
-    provider_kind: Kind,
     context: &Context,
     cloud_provider: Arc<Box<dyn CloudProvider>>,
-    kubernetes_kind: KKind,
+    kubernetes_kind: KubernetesKind,
+    kubernetes_version: &str,
     dns_provider: Arc<Box<dyn DnsProvider>>,
     logger: Box<dyn Logger>,
     localisation: &str,
-    kubernetes_version: &str,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
 ) -> Box<dyn Kubernetes> {
     let secrets = FuncTestsSecrets::new();
 
     let kubernetes: Box<dyn Kubernetes> = match kubernetes_kind {
-        KKind::Eks => {
+        KubernetesKind::Eks => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
             let mut options = AWS::kubernetes_cluster_options(secrets, None);
             if vpc_network_mode.is_some() {
@@ -1300,7 +1298,7 @@ pub fn get_environment_test_kubernetes<'a>(
                 .unwrap(),
             )
         }
-        KKind::Ec2 => {
+        KubernetesKind::Ec2 => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
             let mut options = AWS::kubernetes_cluster_options(secrets, None);
             if vpc_network_mode.is_some() {
@@ -1324,7 +1322,7 @@ pub fn get_environment_test_kubernetes<'a>(
                 .unwrap(),
             )
         }
-        KKind::Doks => {
+        KubernetesKind::Doks => {
             let region = DoRegion::from_str(localisation).expect("DO region not supported");
             Box::new(
                 DOKS::new(
@@ -1343,7 +1341,7 @@ pub fn get_environment_test_kubernetes<'a>(
                 .unwrap(),
             )
         }
-        KKind::ScwKapsule => {
+        KubernetesKind::ScwKapsule => {
             let zone = ScwZone::from_str(localisation).expect("SCW zone not supported");
             Box::new(
                 Kapsule::new(
@@ -1368,7 +1366,6 @@ pub fn get_environment_test_kubernetes<'a>(
 }
 
 pub fn get_cluster_test_kubernetes<'a>(
-    provider_kind: Kind,
     secrets: FuncTestsSecrets,
     context: &Context,
     cluster_id: String,
@@ -1377,13 +1374,13 @@ pub fn get_cluster_test_kubernetes<'a>(
     localisation: &str,
     aws_zones: Option<Vec<AwsZones>>,
     cloud_provider: Arc<Box<dyn CloudProvider>>,
-    kubernetes_provider: KKind,
+    kubernetes_provider: KubernetesKind,
     dns_provider: Arc<Box<dyn DnsProvider>>,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
     logger: Box<dyn Logger>,
 ) -> Box<dyn Kubernetes + 'a> {
     let kubernetes: Box<dyn Kubernetes> = match kubernetes_provider {
-        KKind::Eks => {
+        KubernetesKind::Eks => {
             let mut options = AWS::kubernetes_cluster_options(secrets, None);
             let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
             if vpc_network_mode.is_some() {
@@ -1409,7 +1406,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                 .unwrap(),
             )
         }
-        KKind::Ec2 => {
+        KubernetesKind::Ec2 => {
             let mut options = AWS::kubernetes_cluster_options(secrets, None);
             let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
             if vpc_network_mode.is_some() {
@@ -1434,7 +1431,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                 .unwrap(),
             )
         }
-        KKind::Doks => Box::new(
+        KubernetesKind::Doks => Box::new(
             DOKS::new(
                 context.clone(),
                 cluster_id.clone(),
@@ -1450,7 +1447,7 @@ pub fn get_cluster_test_kubernetes<'a>(
             )
             .unwrap(),
         ),
-        KKind::ScwKapsule => Box::new(
+        KubernetesKind::ScwKapsule => Box::new(
             Kapsule::new(
                 context.clone(),
                 cluster_id.clone(),
@@ -1474,7 +1471,7 @@ pub fn get_cluster_test_kubernetes<'a>(
 pub fn cluster_test(
     test_name: &str,
     provider_kind: Kind,
-    kubernetes_kind: KKind,
+    kubernetes_kind: KubernetesKind,
     context: Context,
     logger: Box<dyn Logger>,
     localisation: &str,
@@ -1606,7 +1603,7 @@ pub fn cluster_test(
                     &context,
                     logger.clone(),
                     localisation,
-                    KKind::Eks,
+                    KubernetesKind::Eks,
                     upgrade_to_version,
                     cluster_domain,
                     vpc_network_mode.clone(),
@@ -1615,7 +1612,7 @@ pub fn cluster_test(
                     &context,
                     logger.clone(),
                     localisation,
-                    KKind::Doks,
+                    KubernetesKind::Doks,
                     upgrade_to_version,
                     cluster_domain,
                     vpc_network_mode.clone(),
@@ -1624,7 +1621,7 @@ pub fn cluster_test(
                     &context,
                     logger.clone(),
                     localisation,
-                    KKind::ScwKapsule,
+                    KubernetesKind::ScwKapsule,
                     upgrade_to_version,
                     cluster_domain,
                     vpc_network_mode.clone(),

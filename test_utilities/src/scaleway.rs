@@ -5,13 +5,11 @@ use tracing::error;
 
 use qovery_engine::build_platform::Build;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
-use qovery_engine::cloud_provider::kubernetes::Kind;
-use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
+use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
-use qovery_engine::cloud_provider::Kind::Scw;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::errors::ContainerRegistryError;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
@@ -72,7 +70,7 @@ pub fn scw_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> 
         &context,
         logger,
         SCW_TEST_ZONE.to_string().as_str(),
-        KKind::ScwKapsule,
+        KubernetesKind::ScwKapsule,
         SCW_KUBERNETES_VERSION.to_string(),
         &ClusterDomain::Default,
         None,
@@ -84,7 +82,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         context: &Context,
         logger: Box<dyn Logger>,
         localisation: &str,
-        kubernetes_kind: KKind,
+        kubernetes_kind: KubernetesKind,
         kubernetes_version: String,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
@@ -100,14 +98,13 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_cloudflare(context, cluster_domain));
 
         let cluster = get_environment_test_kubernetes(
-            Scw,
             context,
             cloud_provider.clone(),
-            Kind::ScwKapsule,
+            kubernetes_kind.clone(),
+            kubernetes_version.as_str(),
             dns_provider.clone(),
             logger.clone(),
             localisation,
-            kubernetes_version.as_str(),
             vpc_network_mode,
         );
 

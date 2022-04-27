@@ -5,10 +5,9 @@ use const_format::formatcp;
 use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
+use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
-use qovery_engine::cloud_provider::Kind::Aws;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::dns_provider::DnsProvider;
@@ -63,7 +62,7 @@ pub fn aws_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> 
         &context,
         logger,
         AWS_TEST_REGION.to_string().as_str(),
-        KKind::Eks,
+        KubernetesKind::Eks,
         AWS_KUBERNETES_VERSION.to_string(),
         &ClusterDomain::Default,
         None,
@@ -75,7 +74,7 @@ impl Cluster<AWS, Options> for AWS {
         context: &Context,
         logger: Box<dyn Logger>,
         localisation: &str,
-        kubernetes_kind: KKind,
+        kubernetes_kind: KubernetesKind,
         kubernetes_version: String,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
@@ -91,14 +90,13 @@ impl Cluster<AWS, Options> for AWS {
         let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_cloudflare(context, cluster_domain));
 
         let kubernetes = get_environment_test_kubernetes(
-            Aws,
             context,
             cloud_provider.clone(),
             kubernetes_kind,
+            kubernetes_version.as_str(),
             dns_provider.clone(),
             logger.clone(),
             localisation,
-            kubernetes_version.as_str(),
             vpc_network_mode,
         );
 
