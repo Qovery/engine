@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::cloud_provider::aws::kubernetes::EKS;
+use qovery_engine::cloud_provider::aws::kubernetes::{ec2::EC2, eks::EKS};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
@@ -296,6 +296,23 @@ impl Kubernetes {
                     self.options.clone(),
                 )
                 .expect("What's wronnnnng -- JSON Options payload for Scaleway is not the expected one"),
+                logger,
+            ) {
+                Ok(res) => Ok(Box::new(res)),
+                Err(e) => Err(e.to_legacy_engine_error()),
+            },
+            qovery_engine::cloud_provider::kubernetes::Kind::Ec2 => match EC2::new(
+                context.clone(),
+                self.id.as_str(),
+                self.long_id,
+                self.name.as_str(),
+                self.version.as_str(),
+                AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
+                cloud_provider.zones().clone(),
+                cloud_provider,
+                dns_provider,
+                serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(self.options.clone())
+                    .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 logger,
             ) {
                 Ok(res) => Ok(Box::new(res)),
