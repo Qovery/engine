@@ -939,7 +939,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port.clone(),
                 db_name: database_db_name.to_string(),
-                app_commit: "3fdc7e784c1d98b80446be7ff25e35370306d9a8".to_string(),
+                app_commit: "da5dd2b58b78576921373fcb4d4bddc796a804a8".to_string(),
                 app_env_vars: btreemap! {
                     "IS_DOCUMENTDB".to_string() => base64::encode((database_mode == MANAGED).to_string()),
                     "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(db_fqdn.clone()),
@@ -957,7 +957,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port.clone(),
                 db_name: database_db_name.to_string(),
-                app_commit: "fc8a87b39cdee84bb789893fb823e3e62a1999c0".to_string(),
+                app_commit: "42f6553b6be617f954f903e01236e225bbb9f468".to_string(),
                 app_env_vars: btreemap! {
                     "MYSQL_HOST".to_string() => base64::encode(db_fqdn.clone()),
                     "MYSQL_PORT".to_string() => base64::encode(database_port.to_string()),
@@ -977,7 +977,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port.clone(),
                 db_name: database_db_name.to_string(),
-                app_commit: "c3eda167df49fa9757f281d6f3655ba46287c61d".to_string(),
+                app_commit: "61c7a9b55a085229583b6a394dd168a4159dfd09".to_string(),
                 app_env_vars: btreemap! {
                      "PG_DBNAME".to_string() => base64::encode(database_db_name.clone()),
                      "PG_HOST".to_string() => base64::encode(db_fqdn.clone()),
@@ -993,7 +993,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port.clone(),
                 db_name: database_db_name.to_string(),
-                app_commit: "80ad41fbe9549f8de8dbe2ca4dd5d23e8ffc92de".to_string(),
+                app_commit: "e4b1162741ce162b834b68498e43bf60f0f58cbe".to_string(),
                 app_env_vars: btreemap! {
                 "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED).to_string()),
                 "REDIS_HOST".to_string()      => base64::encode(db_fqdn.clone()),
