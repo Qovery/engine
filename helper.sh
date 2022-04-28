@@ -611,6 +611,9 @@ do_whole_enchilada)
 aws_infra)
   run_tests test-aws-infra $commit_id 20
   ;;
+aws_infra_ec2)
+  run_tests test-aws-infra-ec2 $commit_id 20
+  ;;
 scw_infra)
   run_tests test-scw-infra $commit_id 20
   ;;

@@ -341,6 +341,32 @@ aws-infra:
     expire_in: 2 week
   interruptible: true
 
+aws-infra-ec2:
+  stage: tests
+  retry: 0
+  timeout: 3 hours
+  script:
+    - ./helper.sh aws_infra_ec2
+  when: always
+  tags:
+    - vm-2cpu-4gmem-0g
+  only:
+    refs:
+      - dev
+    variables:
+      - $TESTS_TO_RUN =~ /test-aws-infra-ec2/
+      - $TESTS_TO_RUN =~ /test-aws-all/
+      - $TESTS_TO_RUN =~ /test-all/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
 aws-managed-services:
   stage: tests
   retry: 0
