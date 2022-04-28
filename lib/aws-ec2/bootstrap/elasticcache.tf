@@ -1,6 +1,6 @@
 locals {
   tags_elasticache = merge(
-    aws_ec2_cluster.ec2_cluster.tags,
+    aws_instance.ec2_instance.tags,
     {
       "Service" = "Elasticache"
     }
@@ -43,21 +43,21 @@ resource "aws_route_table_association" "elasticache_cluster_zone_a" {
   count = length(var.elasticache_subnets_zone_a)
 
   subnet_id      = aws_subnet.elasticache_zone_a.*.id[count.index]
-  route_table_id = aws_route_table.ec2_cluster.id
+  route_table_id = aws_route_table.ec2_instance.id
 }
 
 resource "aws_route_table_association" "elasticache_cluster_zone_b" {
   count = length(var.elasticache_subnets_zone_b)
 
   subnet_id      = aws_subnet.elasticache_zone_b.*.id[count.index]
-  route_table_id = aws_route_table.ec2_cluster.id
+  route_table_id = aws_route_table.ec2_instance.id
 }
 
 resource "aws_route_table_association" "elasticache_cluster_zone_c" {
   count = length(var.elasticache_subnets_zone_c)
 
   subnet_id      = aws_subnet.elasticache_zone_c.*.id[count.index]
-  route_table_id = aws_route_table.ec2_cluster.id
+  route_table_id = aws_route_table.ec2_instance.id
 }
 
 resource "aws_elasticache_subnet_group" "elasticache" {
@@ -74,7 +74,7 @@ resource "aws_security_group_rule" "elasticache_remote_access" {
   description       = "Allow Redis incoming access from anywhere"
   from_port         = 6379
   protocol          = "tcp"
-  security_group_id = aws_security_group.ec2_cluster_workers.id
+  security_group_id = aws_security_group.ec2_instance.id
   to_port           = 6379
   type              = "ingress"
 }

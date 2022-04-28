@@ -32,7 +32,7 @@ resource "aws_subnet" "ec2_zone_c" {
   tags = local.tags_ec2_vpc
 }
 
-resource "aws_route_table" "ec2_cluster" {
+resource "aws_route_table" "ec2_instance" {
   vpc_id = aws_vpc.ec2.id
 
   route {
@@ -50,23 +50,23 @@ resource "aws_route_table" "ec2_cluster" {
   tags = local.tags_ec2_vpc
 }
 
-resource "aws_route_table_association" "ec2_cluster_zone_a" {
+resource "aws_route_table_association" "ec2_instance_zone_a" {
   count = length(var.ec2_subnets_zone_a_private)
 
   subnet_id = aws_subnet.ec2_zone_a.*.id[count.index]
-  route_table_id = aws_route_table.ec2_cluster.id
+  route_table_id = aws_route_table.ec2_instance.id
 }
 
-resource "aws_route_table_association" "ec2_cluster_zone_b" {
+resource "aws_route_table_association" "ec2_instance_zone_b" {
   count = length(var.ec2_subnets_zone_b_private)
 
   subnet_id = aws_subnet.ec2_zone_b.*.id[count.index]
-  route_table_id = aws_route_table.ec2_cluster.id
+  route_table_id = aws_route_table.ec2_instance.id
 }
 
-resource "aws_route_table_association" "ec2_cluster_zone_c" {
+resource "aws_route_table_association" "ec2_instance_zone_c" {
   count = length(var.ec2_subnets_zone_c_private)
 
   subnet_id = aws_subnet.ec2_zone_c.*.id[count.index]
-  route_table_id = aws_route_table.ec2_cluster.id
+  route_table_id = aws_route_table.ec2_instance.id
 }

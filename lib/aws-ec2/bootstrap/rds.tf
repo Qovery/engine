@@ -15,7 +15,7 @@ data "aws_iam_policy_document" "rds_enhanced_monitoring" {
 
 locals {
   tags_rds = merge(
-    aws_ec2_cluster.ec2_cluster.tags,
+    aws_instance.ec2_instance.tags,
     {
       "Service" = "RDS"
     }
@@ -57,21 +57,21 @@ resource "aws_route_table_association" "rds_cluster_zone_a" {
   count = length(var.rds_subnets_zone_a)
 
   subnet_id      = aws_subnet.rds_zone_a.*.id[count.index]
-  route_table_id = aws_route_table.ec2_cluster.id
+  route_table_id = aws_route_table.ec2_instance.id
 }
 
 resource "aws_route_table_association" "rds_cluster_zone_b" {
   count = length(var.rds_subnets_zone_b)
 
   subnet_id      = aws_subnet.rds_zone_b.*.id[count.index]
-  route_table_id = aws_route_table.ec2_cluster.id
+  route_table_id = aws_route_table.ec2_instance.id
 }
 
 resource "aws_route_table_association" "rds_cluster_zone_c" {
   count = length(var.rds_subnets_zone_c)
 
   subnet_id      = aws_subnet.rds_zone_c.*.id[count.index]
-  route_table_id = aws_route_table.ec2_cluster.id
+  route_table_id = aws_route_table.ec2_instance.id
 }
 
 resource "aws_db_subnet_group" "rds" {
@@ -102,7 +102,7 @@ resource "aws_security_group_rule" "postgres_remote_access" {
   description       = "Allow RDS PostgreSQL incoming access from anywhere"
   from_port         = 5432
   protocol          = "tcp"
-  security_group_id = aws_security_group.ec2_cluster_workers.id
+  security_group_id = aws_security_group.ec2_instance.id
   to_port           = 5432
   type              = "ingress"
 }
@@ -112,7 +112,7 @@ resource "aws_security_group_rule" "mysql_remote_access" {
   description       = "Allow RDS MySQL incoming access from anywhere"
   from_port         = 3306
   protocol          = "tcp"
-  security_group_id = aws_security_group.ec2_cluster_workers.id
+  security_group_id = aws_security_group.ec2_instance.id
   to_port           = 3306
   type              = "ingress"
 }
