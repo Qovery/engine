@@ -674,7 +674,7 @@ impl Kapsule {
                             match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
                                 Ok(_) => self.logger().log(EngineEvent::Info(
                                     event_details.clone(),
-                                    EventMessage::new_from_safe(format!("successfully removed {}", &entry)),
+                                    EventMessage::new_from_safe(format!("Successfully removed {}", &entry)),
                                 )),
                                 Err(e) => {
                                     return Err(EngineError::new_terraform_cannot_remove_entry_out(
@@ -909,7 +909,7 @@ impl Kapsule {
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe(
-                "all node groups for this cluster are ready from cloud provider API".to_string(),
+                "All node groups for this cluster are ready from cloud provider API".to_string(),
             ),
         ));
 
@@ -1005,7 +1005,7 @@ impl Kapsule {
                 event_details,
                 EventMessage::new(
                     "Error trying to get kubernetes events".to_string(),
-                    Some(err.message(ErrorMessageVerbosity::FullDetails)),
+                    Some(err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
                 ),
             )),
         };
@@ -1046,7 +1046,7 @@ impl Kapsule {
 
         self.logger().log(EngineEvent::Info(
             self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
-            EventMessage::new_from_safe("Preparing SCW cluster pause.".to_string()),
+            EventMessage::new_from_safe("Preparing cluster pause.".to_string()),
         ));
 
         let temp_dir = self.get_temp_dir(event_details.clone())?;
@@ -1177,7 +1177,7 @@ impl Kapsule {
         );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe("Pausing SCW cluster deployment.".to_string()),
+            EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
         ));
 
         match terraform_exec(temp_dir.as_str(), terraform_args) {
@@ -1212,7 +1212,7 @@ impl Kapsule {
         );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe("Preparing to delete SCW cluster.".to_string()),
+            EventMessage::new_from_safe("Preparing to delete cluster.".to_string()),
         ));
 
         let temp_dir = self.get_temp_dir(event_details.clone())?;
@@ -1335,7 +1335,10 @@ impl Kapsule {
                     );
                     self.logger().log(EngineEvent::Warning(
                         event_details.clone(),
-                        EventMessage::new(message_safe, Some(e.message(ErrorMessageVerbosity::FullDetails))),
+                        EventMessage::new(
+                            message_safe,
+                            Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                        ),
                     ));
                 }
             }
@@ -1605,7 +1608,7 @@ impl Kubernetes for Kapsule {
         );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe("Start preparing SCW cluster upgrade process".to_string()),
+            EventMessage::new_from_safe("Start preparing cluster upgrade process".to_string()),
         ));
 
         let temp_dir = self.get_temp_dir(event_details.clone())?;
