@@ -9,6 +9,7 @@ use crate::errors::CommandError;
 use base64::decode;
 use flate2::write::GzEncoder;
 use flate2::Compression;
+use itertools::Itertools;
 use serde::__private::from_utf8_lossy;
 use std::ffi::OsStr;
 use walkdir::WalkDir;
@@ -224,17 +225,87 @@ where
     }
 }
 
-pub fn remove_lines_starting_with(path: String, starter: &str) -> Result<String, CommandError> {
+pub fn remove_lines_starting_with(path: String, starters: Vec<&str>) -> Result<String, CommandError> {
     let file = OpenOptions::new().read(true).open(path.as_str()).map_err(|e| {
         CommandError::new(format!("Unable to open YAML backup file {}.", path), Some(e.to_string()), None)
     })?;
 
-    let content = BufReader::new(file.try_clone().unwrap())
+    let mut content = BufReader::new(file.try_clone().unwrap())
         .lines()
-        .filter(|line| !line.as_ref().unwrap().contains(starter))
         .map(|line| line.unwrap())
-        .collect::<Vec<String>>()
-        .join("\n");
+        .collect::<Vec<String>>();
+
+    for starter in starters {
+        content = content
+            .into_iter()
+            .filter(|line| !line.contains(starter))
+            .collect::<Vec<String>>()
+    }
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(path.as_str())
+        .map_err(|e| {
+            CommandError::new(format!("Unable to edit YAML backup file {}.", path), Some(e.to_string()), None)
+        })?;
+
+    match file.write(content.join("\n").as_bytes()) {
+        Err(e) => Err(CommandError::new(
+            format!("Unable to edit YAML backup file {}.", path),
+            Some(e.to_string()),
+            None,
+        )),
+        Ok(_) => Ok(path),
+    }
+}
+
+pub fn truncate_file_from_word(path: String, truncate_from: &str) -> Result<String, CommandError> {
+    let file = OpenOptions::new().read(true).open(path.as_str()).map_err(|e| {
+        CommandError::new(format!("Unable to open YAML backup file {}.", path), Some(e.to_string()), None)
+    })?;
+
+    let content_vec = BufReader::new(file.try_clone().unwrap())
+        .lines()
+        .map(|line| line.unwrap())
+        .collect::<Vec<String>>();
+
+    let truncate_from_index = match content_vec.iter().rposition(|line| line.contains(truncate_from)) {
+        None => content_vec.len(),
+        Some(index) => index,
+    };
+
+    let content = Vec::from(&content_vec[..truncate_from_index]).join("\n");
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(path.as_str())
+        .map_err(|e| {
+            CommandError::new(format!("Unable to edit YAML backup file {}.", path), Some(e.to_string()), None)
+        })?;
+
+    match file.write(content.as_bytes()) {
+        Err(e) => Err(CommandError::new(
+            format!("Unable to edit YAML backup file {}.", path),
+            Some(e.to_string()),
+            None,
+        )),
+        Ok(_) => Ok(path),
+    }
+}
+
+pub fn indent_file(path: String) -> Result<String, CommandError> {
+    let file = OpenOptions::new().read(true).open(path.as_str()).map_err(|e| {
+        CommandError::new(format!("Unable to open YAML backup file {}.", path), Some(e.to_string()), None)
+    })?;
+
+    let file_content = BufReader::new(file.try_clone().unwrap())
+        .lines()
+        .map(|line| line.unwrap())
+        .collect::<Vec<String>>();
+
+    let content = file_content.iter().map(|line| line[2..].to_string()).join("\n");
 
     let mut file = OpenOptions::new()
         .write(true)

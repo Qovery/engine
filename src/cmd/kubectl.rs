@@ -1329,6 +1329,27 @@ where
     kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, false)
 }
 
+pub fn kubectl_delete_secret<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: Option<&str>,
+    secret_name: String,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let mut cmd_args = vec!["delete", "secret", secret_name.as_str()];
+    match namespace {
+        Some(n) => {
+            cmd_args.push("-n");
+            cmd_args.push(n);
+        }
+        None => cmd_args.push("--all-namespaces"),
+    }
+
+    kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, false)
+}
+
 pub fn kubectl_create_secret_from_file<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,

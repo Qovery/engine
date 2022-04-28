@@ -8,12 +8,16 @@ use crate::cmd::command::QoveryCommand;
 use crate::cmd::helm::HelmCommand::{LIST, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{CannotRollback, CmdError, InvalidKubeConfig, ReleaseDoesNotExist};
 use crate::cmd::kubectl::{
-    kubectl_apply_with_path, kubectl_create_secret_from_file, kubectl_exec_get_secrets, kubectl_get_resource_yaml,
+    kubectl_apply_with_path, kubectl_create_secret_from_file, kubectl_delete_secret, kubectl_exec_get_secrets,
+    kubectl_get_resource_yaml,
 };
 use crate::cmd::structs::{HelmChart, HelmListItem};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EventDetails;
-use crate::fs::{create_yaml_backup_file, create_yaml_file_from_secret, remove_lines_starting_with};
+use crate::fs::{
+    create_yaml_backup_file, create_yaml_file_from_secret, indent_file, remove_lines_starting_with,
+    truncate_file_from_word,
+};
 use semver::Version;
 use serde_derive::Deserialize;
 use std::fs::File;
@@ -665,7 +669,10 @@ impl Helm {
         }
 
         for backup_info in backup_infos.clone() {
-            if let Err(e) = remove_lines_starting_with(backup_info.path.clone(), "resourceVersion") {
+            if let Err(e) = remove_lines_starting_with(
+                backup_info.path.clone(),
+                vec!["resourceVersion", "uid", "apiVersion: v1", "items", "kind: List"],
+            ) {
                 return Err(CmdError(
                     chart.name.clone(),
                     HelmCommand::UPGRADE,
@@ -677,7 +684,19 @@ impl Helm {
                 ));
             }
 
-            if let Err(e) = remove_lines_starting_with(backup_info.path.clone(), "uid") {
+            if let Err(e) = truncate_file_from_word(backup_info.path.clone(), "metadata") {
+                return Err(CmdError(
+                    chart.name.clone(),
+                    HelmCommand::UPGRADE,
+                    CommandError::new(
+                        format!("Error while editing YAML backup file {}.", backup_info.name),
+                        Some(e.to_string()),
+                        None,
+                    ),
+                ));
+            }
+
+            if let Err(e) = indent_file(backup_info.path.clone()) {
                 return Err(CmdError(
                     chart.name.clone(),
                     HelmCommand::UPGRADE,
@@ -737,25 +756,53 @@ impl Helm {
             if secret.metadata.name.contains("-q-backup") {
                 let path = match create_yaml_file_from_secret(&workspace_root_dir, secret.clone()) {
                     Ok(path) => path,
-                    Err(e) => {
-                        return Err(CmdError(
-                            chart.clone().name,
-                            HelmCommand::UPGRADE,
-                            CommandError::new(e.message_safe(), e.message_raw(), None),
-                        ))
-                    }
+                    Err(e) => match e.message_safe().to_lowercase().contains("no content") {
+                        true => match kubectl_delete_secret(
+                            &self.kubernetes_config,
+                            envs.to_vec(),
+                            Some(chart.clone().namespace.to_string().as_str()),
+                            secret.metadata.name,
+                        ) {
+                            Ok(_) => continue,
+                            Err(e) => {
+                                return Err(CmdError(
+                                    chart.clone().name,
+                                    HelmCommand::UPGRADE,
+                                    CommandError::new(e.message_safe(), e.message_raw(), None),
+                                ))
+                            }
+                        },
+                        false => {
+                            return Err(CmdError(
+                                chart.clone().name,
+                                HelmCommand::UPGRADE,
+                                CommandError::new(e.message_safe(), e.message_raw(), None),
+                            ))
+                        }
+                    },
                 };
-                match kubectl_apply_with_path(&self.kubernetes_config, envs.to_vec(), path.as_str()) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        return Err(CmdError(
-                            chart.clone().name,
-                            HelmCommand::UPGRADE,
-                            CommandError::new(e.message_safe(), e.message_raw(), None),
-                        ))
-                    }
+
+                if let Err(e) = kubectl_apply_with_path(&self.kubernetes_config, envs.to_vec(), path.as_str()) {
+                    return Err(CmdError(
+                        chart.clone().name,
+                        HelmCommand::UPGRADE,
+                        CommandError::new(e.message_safe(), e.message_raw(), None),
+                    ));
                 };
-            };
+
+                if let Err(e) = kubectl_delete_secret(
+                    &self.kubernetes_config,
+                    envs.to_vec(),
+                    Some(chart.clone().namespace.to_string().as_str()),
+                    secret.metadata.name,
+                ) {
+                    return Err(CmdError(
+                        chart.clone().name,
+                        HelmCommand::UPGRADE,
+                        CommandError::new(e.message_safe(), e.message_raw(), None),
+                    ));
+                };
+            }
         }
 
         Ok(())

@@ -295,7 +295,7 @@ fn test_should_not_create_chart_backup() {
     let _ = kubectl_exec_delete_namespace(kube_config.as_path(), "cert-manager", vec![]);
 }
 
-#[cfg(feature = "test-with-kube")]
+// #[cfg(feature = "test-with-kube")]
 #[test]
 fn test_should_apply_chart_backup() {
     let (helm, kube_config, cert_manager, mut cert_manager_config) = cert_manager_conf();
@@ -331,7 +331,7 @@ fn test_should_apply_chart_backup() {
         .filter(|secret| secret.metadata.name == "cert-manager-configs-cert-q-backup")
         .collect::<Vec<SecretItem>>();
 
-    assert_eq!(cert_secret.len(), 1);
+    assert_eq!(cert_secret.len(), 0);
 
     let cert_string = kubectl_get_resource_yaml(
         kube_config.as_path(),
