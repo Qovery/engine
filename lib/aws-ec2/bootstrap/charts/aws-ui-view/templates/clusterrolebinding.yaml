@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "aws-ui-view.fullname" . }}
+subjects:
+  - kind: Group
+    name: Admins
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: {{ include "aws-ui-view.fullname" . }}
+  apiGroup: rbac.authorization.k8s.io
