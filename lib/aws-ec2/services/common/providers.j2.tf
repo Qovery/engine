@@ -27,14 +27,14 @@ provider "aws" {
   secret_key = "{{ aws_secret_key }}"
 }
 
-data aws_eks_cluster eks_cluster {
+data aws_instance eks_cluster {
   name = "qovery-{{kubernetes_cluster_id}}"
 }
 
 provider "helm" {
   kubernetes {
-    host = data.aws_eks_cluster.eks_cluster.endpoint
-    cluster_ca_certificate = base64decode(data.aws_eks_cluster.eks_cluster.certificate_authority.0.data)
+    host = data.aws_instance.eks_cluster.endpoint
+    cluster_ca_certificate = base64decode(data.aws_instance.eks_cluster.certificate_authority.0.data)
     load_config_file = false
     exec {
       api_version = "client.authentication.k8s.io/v1alpha1"

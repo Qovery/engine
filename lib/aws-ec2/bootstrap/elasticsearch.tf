@@ -43,21 +43,21 @@ resource "aws_route_table_association" "elasticsearch_cluster_zone_a" {
   count = length(var.elasticsearch_subnets_zone_a)
 
   subnet_id      = aws_subnet.elasticsearch_zone_a.*.id[count.index]
-  route_table_id = aws_route_table.ec2_cluster.id
+  route_table_id = aws_route_table.ec2_instance.id
 }
 
 resource "aws_route_table_association" "elasticsearch_cluster_zone_b" {
   count = length(var.elasticsearch_subnets_zone_b)
 
   subnet_id      = aws_subnet.elasticsearch_zone_b.*.id[count.index]
-  route_table_id = aws_route_table.ec2_cluster.id
+  route_table_id = aws_route_table.ec2_instance.id
 }
 
 resource "aws_route_table_association" "elasticsearch_cluster_zone_c" {
   count = length(var.elasticsearch_subnets_zone_c)
 
   subnet_id      = aws_subnet.elasticsearch_zone_c.*.id[count.index]
-  route_table_id = aws_route_table.ec2_cluster.id
+  route_table_id = aws_route_table.ec2_instance.id
 }
 
 resource "aws_security_group" "elasticsearch" {

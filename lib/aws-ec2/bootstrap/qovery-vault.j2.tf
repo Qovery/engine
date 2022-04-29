@@ -1,6 +1,3 @@
-locals {
-  kubeconfig_base64 = base64encode(local.kubeconfig)
-}
 // do not run for tests clusters to avoid uncleaned info.
 // do not try to use count into resource, it will fails trying to connect to vault
 {% if vault_auth_method != "none" and not test_cluster %}
@@ -11,7 +8,6 @@ resource "vault_generic_secret" "cluster-access" {
 {
   "cloud_provider": "${var.cloud_provider}",
   "cluster_name": "${var.kubernetes_cluster_name}",
-  "KUBECONFIG_b64": "${local.kubeconfig_base64}",
   "organization_id": "${var.organization_id}",
   "test_cluster": "${var.test_cluster}",
   "grafana_login": "{{ grafana_admin_user }}",
@@ -21,9 +17,14 @@ resource "vault_generic_secret" "cluster-access" {
   "AWS_DEFAULT_REGION": "{{ aws_region }}"
 }
 EOT
+  # TODO: add kubeconfig content to vault
+  # "KUBECONFIG_b64": "${local.kubeconfig_base64}",
+  # locals {
+  #    kubeconfig_base64 = base64encode(local.kubeconfig)
+  # }
 
   depends_on = [
-    aws_ec2_cluster.ec2_cluster,
+    aws_instance.ec2_instance,
   ]
 }
 {% endif %}

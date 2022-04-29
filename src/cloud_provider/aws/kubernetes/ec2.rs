@@ -17,6 +17,7 @@ use function_name::named;
 use std::borrow::Borrow;
 use std::sync::Arc;
 
+/// EC2 kubernetes provider allowing to deploy a cluster on single EC2 node.
 pub struct EC2 {
     context: Context,
     id: String,

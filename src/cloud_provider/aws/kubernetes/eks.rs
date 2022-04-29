@@ -25,6 +25,7 @@ use std::borrow::Borrow;
 use std::str::FromStr;
 use std::sync::Arc;
 
+/// EKS kubernetes provider allowing to deploy an EKS cluster.
 pub struct EKS {
     context: Context,
     id: String,

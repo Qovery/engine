@@ -16,7 +16,7 @@ data "aws_ami" "debian" {
   owners = [var.ec2_image_info.owners]
 }
 
-resource "aws_instance" "web" {
+resource "aws_instance" "ec2_instance" {
   ami           = data.aws_ami.debian.id
   instance_type = var.ec2_instance.instance_type
 
@@ -31,16 +31,21 @@ resource "aws_instance" "web" {
   associate_public_ip_address = true
 
   # security
-  vpc_security_group_ids = [aws_vpc.ec2.id]
-  subnet_id = aws_subnet.ec2_zone_a.id
-  security_groups = [aws_security_group.ec2_cluster.id]
+  vpc_security_group_ids = [aws_security_group.ec2_instance.id]
+  subnet_id = aws_subnet.ec2_zone_a[0].id
+  security_groups = [aws_security_group.ec2_instance.id]
 
   user_data = local.bootstrap
 
-  tags = {
-    Name = "HelloWorld"
-  }
+  tags = merge(
+      local.tags_common,
+      {
+        "Service" = "EC2"
+      }
+    )
 }
+
+resource "time_static" "on_ec2_create" {}
 
 locals {
   bootstrap = <<BOOTSTRAP
