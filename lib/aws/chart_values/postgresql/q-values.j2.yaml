@@ -326,10 +326,9 @@ persistence:
     - ReadWriteOnce
   size: {{ database_disk_size_in_gib }}Gi
   annotations:
-    ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseName: {{ sanitized_name }}
+    databaseLongId: {{ long_id }}
 
 ## updateStrategy for PostgreSQL StatefulSet and its slaves StatefulSets
 ## ref: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies
@@ -349,14 +348,14 @@ master:
   affinity: {}
   tolerations: []
   labels:
-    ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
+    databaseLongId: {{ long_id }}
   annotations: {}
   podLabels:
-    ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
+    databaseLongId: {{ long_id }}
   podAnnotations: {}
   priorityClassName: ""
   ## Extra init containers

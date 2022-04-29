@@ -44,10 +44,9 @@ fullnameOverride: '{{ sanitized_name }}'
 clusterDomain: cluster.local
 
 commonLabels:
-  ownerId: {{ owner_id }}
   envId: {{ environment_id }}
   databaseId: {{ id }}
-  databaseName: '{{ sanitized_name }}'
+  databaseLongId: {{ long_id }}
 
 ## Init containers parameters:
 ## volumePermissions: Change the owner and group of the persistent volume mountpoint to runAsUser:fsGroup values from the securityContext section.
@@ -315,10 +314,9 @@ master:
     ## PVC annotations
     ##
     annotations:
-      ownerId: {{ owner_id }}
       envId: {{ environment_id }}
       databaseId: {{ id }}
-      databaseName: '{{ sanitized_name }}'
+      databaseLongId: {{ long_id }}
 
     ## Persistent Volume Access Mode
     ##

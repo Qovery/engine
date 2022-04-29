@@ -445,7 +445,7 @@ pub fn environment_3_apps_3_routers_3_databases(
             Database {
                 kind: DatabaseKind::Postgresql,
                 action: Action::Create,
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: database_name.clone(),
                 version: "11.8.0".to_string(),
                 fqdn_id: fqdn.clone(),
@@ -467,7 +467,7 @@ pub fn environment_3_apps_3_routers_3_databases(
             Database {
                 kind: DatabaseKind::Postgresql,
                 action: Action::Create,
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: database_name_2.clone(),
                 version: "11.8.0".to_string(),
                 fqdn_id: fqdn_2.clone(),
@@ -489,7 +489,7 @@ pub fn environment_3_apps_3_routers_3_databases(
             Database {
                 kind: DatabaseKind::Mongodb,
                 action: Action::Create,
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: database_db_name_mongo.clone(),
                 version: version_mongo.to_string(),
                 fqdn_id: database_host_mongo.clone(),
@@ -661,7 +661,7 @@ pub fn environnement_2_app_2_routers_1_psql(
         databases: vec![Database {
             kind: DatabaseKind::Postgresql,
             action: Action::Create,
-            id: generate_id(),
+            long_id: Uuid::new_v4(),
             name: database_name.clone(),
             version: "11.8.0".to_string(),
             fqdn_id: fqdn.clone(),
@@ -1087,7 +1087,7 @@ pub fn test_db(
     let db = Database {
         kind: db_kind.clone(),
         action: Action::Create,
-        id: db_id.clone(),
+        long_id: Uuid::new_v4(),
         name: db_id.clone(),
         version: version.to_string(),
         fqdn_id: database_host.clone(),

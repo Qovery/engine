@@ -15,10 +15,12 @@ use crate::models::database_utils::{
     get_self_hosted_redis_version,
 };
 use crate::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
+use crate::utilities::to_short_id;
 use function_name::named;
 use std::borrow::Borrow;
 use std::marker::PhantomData;
 use tera::Context as TeraContext;
+use uuid::Uuid;
 
 /////////////////////////////////////////////////////////////////
 // Database mode
@@ -71,6 +73,7 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     _marker: PhantomData<(C, M, T)>,
     pub(super) context: Context,
     pub(super) id: String,
+    pub(super) long_id: Uuid,
     pub(super) action: Action,
     pub(super) name: String,
     pub(super) version: VersionsNumber,
@@ -89,7 +92,7 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T> {
     pub fn new(
         context: Context,
-        id: &str,
+        long_id: Uuid,
         action: Action,
         name: &str,
         version: VersionsNumber,
@@ -110,7 +113,8 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
             _marker: PhantomData,
             context,
             action,
-            id: id.to_string(),
+            id: to_short_id(&long_id),
+            long_id,
             name: name.to_string(),
             version,
             fqdn: fqdn.to_string(),
@@ -479,6 +483,7 @@ where
         context.insert("kubernetes_cluster_id", kubernetes.id());
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
+        context.insert("long_id", &self.long_id);
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn(target, &self.fqdn, M::is_managed()).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
