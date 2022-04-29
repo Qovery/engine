@@ -292,9 +292,10 @@ master:
     ## PVC annotations
     ##
     annotations:
+      ownerId: {{ owner_id }}
       envId: {{ environment_id }}
       databaseId: {{ id }}
-      databaseLongId: {{ long_id }}
+      databaseName: '{{ sanitized_name }}'
 
     ## Persistent Volume Access Mode
     ##

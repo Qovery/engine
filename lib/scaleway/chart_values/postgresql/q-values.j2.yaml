@@ -169,9 +169,10 @@ persistence:
     - ReadWriteOnce
   size: {{ database_disk_size_in_gib }}Gi
   annotations:
+    ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseLongId: {{ long_id }}
+    databaseName: '{{ sanitized_name }}'
 
 ##
 ## PostgreSQL Master parameters

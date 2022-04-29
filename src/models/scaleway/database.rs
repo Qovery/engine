@@ -139,7 +139,6 @@ impl<M: DatabaseMode, T: DatabaseType<SCW, M>> Database<SCW, M, T> {
         );
 
         context.insert("namespace", environment.namespace());
-        context.insert("long_id", &self.long_id);
 
         let version = get_version(event_details)?.matched_version();
         context.insert("version_major", &version.to_major_version_string());
