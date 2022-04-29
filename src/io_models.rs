@@ -666,7 +666,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<AWS, Managed, PostgresSQL>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -687,7 +687,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<AWS, Container, PostgresSQL>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -709,7 +709,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<AWS, Managed, MySQL>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -730,7 +730,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<AWS, Container, MySQL>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -751,7 +751,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Redis, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<AWS, Managed, Redis>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -772,7 +772,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<AWS, Container, Redis>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -793,7 +793,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<AWS, Managed, MongoDB>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -814,7 +814,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<AWS, Container, MongoDB>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -836,7 +836,7 @@ impl Database {
             (CPKind::Do, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, PostgresSQL>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -857,7 +857,7 @@ impl Database {
             (CPKind::Do, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, MySQL>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -878,7 +878,7 @@ impl Database {
             (CPKind::Do, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, Redis>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -899,7 +899,7 @@ impl Database {
             (CPKind::Do, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, MongoDB>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -936,7 +936,7 @@ impl Database {
             (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<SCW, Managed, PostgresSQL>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -957,7 +957,7 @@ impl Database {
             (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, PostgresSQL>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -978,7 +978,7 @@ impl Database {
             (CPKind::Scw, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<SCW, Managed, MySQL>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -999,7 +999,7 @@ impl Database {
             (CPKind::Scw, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, MySQL>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -1020,7 +1020,7 @@ impl Database {
             (CPKind::Scw, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, Redis>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -1041,7 +1041,7 @@ impl Database {
             (CPKind::Scw, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, MongoDB>::new(
                     context.clone(),
-                    self.long_id.clone(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
