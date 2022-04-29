@@ -15,9 +15,11 @@ use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmi
 use crate::io_models::{ApplicationAdvanceSettings, Context, Listen, Listener, Listeners, Port, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::models::types::{CloudProvider, ToTeraContext};
+use crate::utilities::to_short_id;
 use function_name::named;
 use std::marker::PhantomData;
 use tera::Context as TeraContext;
+use uuid::Uuid;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ApplicationError {
@@ -29,6 +31,7 @@ pub struct Application<T: CloudProvider> {
     _marker: PhantomData<T>,
     pub(super) context: Context,
     pub(super) id: String,
+    pub(super) long_id: Uuid,
     pub(super) action: Action,
     pub(super) name: String,
     pub(super) ports: Vec<Port>,
@@ -50,7 +53,7 @@ pub struct Application<T: CloudProvider> {
 impl<T: CloudProvider> Application<T> {
     pub fn new(
         context: Context,
-        id: &str,
+        long_id: Uuid,
         action: Action,
         name: &str,
         ports: Vec<Port>,
@@ -72,7 +75,8 @@ impl<T: CloudProvider> Application<T> {
         Ok(Self {
             _marker: PhantomData,
             context,
-            id: id.to_string(),
+            id: to_short_id(&long_id),
+            long_id,
             action,
             name: name.to_string(),
             ports,
@@ -94,6 +98,7 @@ impl<T: CloudProvider> Application<T> {
     pub(super) fn default_tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
         let mut context = TeraContext::new();
         context.insert("id", self.id());
+        context.insert("long_id", &self.long_id);
         context.insert("owner_id", environment.owner_id.as_str());
         context.insert("project_id", environment.project_id.as_str());
         context.insert("organization_id", environment.organization_id.as_str());
@@ -139,9 +144,6 @@ impl<T: CloudProvider> Application<T> {
         context.insert("ports", &self.ports);
         context.insert("is_registry_secret", &true);
         context.insert("registry_secret", self.build().image.registry_host());
-
-        // TODO: Remove this
-        context.insert("clone", &false);
 
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())

@@ -12,6 +12,7 @@ use rand::distributions::Alphanumeric;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use url::Url;
+use uuid::Uuid;
 
 use crate::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
 use crate::cloud_provider::environment::Environment;
@@ -29,6 +30,7 @@ use crate::models::digital_ocean::{DoAppExtraSettings, DoRouterExtraSettings, Do
 use crate::models::router::RouterError;
 use crate::models::scaleway::{ScwAppExtraSettings, ScwRouterExtraSettings, ScwStorageType};
 use crate::models::types::{CloudProvider as CP, VersionsNumber, AWS, DO, SCW};
+use crate::utilities::to_short_id;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct QoveryIdentifier {
@@ -201,7 +203,7 @@ impl Default for ApplicationAdvanceSettings {
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Application {
-    pub id: String,
+    pub long_id: Uuid,
     pub name: String,
     pub action: Action,
     pub git_url: String,
@@ -240,7 +242,7 @@ impl Application {
         match cloud_provider.kind() {
             CPKind::Aws => Ok(Box::new(models::application::Application::<AWS>::new(
                 context.clone(),
-                self.id.as_str(),
+                self.long_id,
                 self.action.to_service_action(),
                 self.name.as_str(),
                 self.ports.clone(),
@@ -259,7 +261,7 @@ impl Application {
             )?)),
             CPKind::Do => Ok(Box::new(models::application::Application::<DO>::new(
                 context.clone(),
-                self.id.as_str(),
+                self.long_id,
                 self.action.to_service_action(),
                 self.name.as_str(),
                 self.ports.clone(),
@@ -278,7 +280,7 @@ impl Application {
             )?)),
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
                 context.clone(),
-                self.id.as_str(),
+                self.long_id,
                 self.action.to_service_action(),
                 self.name.as_str(),
                 self.ports.clone(),
@@ -300,7 +302,7 @@ impl Application {
 
     fn to_image(&self, cr_info: &ContainerRegistryInfo) -> Image {
         Image {
-            application_id: self.id.clone(),
+            application_id: to_short_id(&self.long_id),
             name: (cr_info.get_image_name)(&self.name),
             tag: "".to_string(), // It needs to be compute after creation
             commit_id: self.commit_id.clone(),
@@ -439,6 +441,7 @@ pub struct GitCredentials {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Storage {
     pub id: String,
+    pub long_id: Uuid,
     pub name: String,
     pub storage_type: StorageType,
     pub size_in_gib: u16,

@@ -6,6 +6,7 @@ metadata:
   name: {{ sanitized_name }}
   namespace: {{ namespace }}
   labels:
+    appLongId: {{ long_id }}
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     appId: {{ id }}
@@ -24,6 +25,7 @@ spec:
   template:
     metadata:
       labels:
+        appLongId: {{ long_id }}
         ownerId: {{ owner_id }}
         envId: {{ environment_id }}
         appId: {{ id }}
@@ -91,27 +93,6 @@ spec:
 {%- endfor %}
   volumeClaimTemplates:
 {%- for s in storage %}
-{% if clone %}
-  - metadata:
-      name: {{ s.id }}
-      labels:
-        ownerId: {{ owner_id }}
-        envId: {{ environment_id }}
-        appId: {{ id }}
-        app: {{ sanitized_name }}
-        diskId: {{ s.id }}
-        diskType: {{ s.storage_type }}
-    spec:
-      accessModes:
-        - ReadWriteOnce
-      storageClassName: {{ s.storage_type }}
-      dataSource:
-        name: {{ s.id }}
-        kind: PersistentVolumeClaim
-      resources:
-        requests:
-          storage: {{ disk.size_in_gib }}Gi
-{% else %}
   - metadata:
       name: {{ s.id }}
       labels:
@@ -127,6 +108,5 @@ spec:
       resources:
         requests:
           storage: {{ s.size_in_gib }}Gi
-{%- endif %}
 {%- endfor %}
 {%- endif %}
