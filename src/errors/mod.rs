@@ -175,6 +175,8 @@ pub enum Tag {
     CannotGetWorkspaceDirectory,
     /// UnsupportedInstanceType: represents an unsupported instance type for the given cloud provider.
     UnsupportedInstanceType,
+    /// UnsupportedClusterKind: represents an unsupported cluster kind by Qovery.
+    UnsupportedClusterKind,
     /// UnsupportedRegion: represents an unsupported region for the given cloud provider.
     UnsupportedRegion,
     /// UnsupportedZone: represents an unsupported zone in region for the given cloud provider.
@@ -247,6 +249,8 @@ pub enum Tag {
     CannotCopyFilesFromDirectoryToDirectory,
     /// CannotPauseClusterTasksAreRunning: represents an error where we cannot pause the cluster because some tasks are still running in the engine.
     CannotPauseClusterTasksAreRunning,
+    /// TerraformQoveryConfigMismatch: terraform qovery config retrieve mismatch
+    TerraformQoveryConfigMismatch,
     /// TerraformCannotRemoveEntryOut: represents an error where we cannot remove an entry out of Terraform.
     TerraformCannotRemoveEntryOut,
     /// TerraformNoStateFileExists: represents an error where there is no Terraform state file.
@@ -620,6 +624,32 @@ impl EngineError {
             Some(error_message),
             None, // TODO(documentation): Create a page entry to details this error
             Some("Selected instance type is not supported, please check provider's documentation.".to_string()),
+        )
+    }
+
+    /// Creates new error for unsupported cluster kind.
+    ///
+    /// Qovery doesn't support this kind of clusters.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `requested_kind`: Raw requested instance type string.
+    /// * `error_message`: Raw error message.
+    pub fn new_unsupported_cluster_kind(
+        event_details: EventDetails,
+        new_unsupported_cluster_kind: &str,
+        error_message: CommandError,
+    ) -> EngineError {
+        let message = format!("`{}` cluster kind is not supported", new_unsupported_cluster_kind);
+        EngineError::new(
+            event_details,
+            Tag::UnsupportedClusterKind,
+            message.to_string(),
+            message,
+            Some(error_message),
+            None, // TODO(documentation): Create a page entry to details this error
+            Some("Selected cluster kind is not supported, please check Qovery's documentation.".to_string()),
         )
     }
 
@@ -1570,6 +1600,26 @@ impl EngineError {
             message.to_string(),
             message.to_string(),
             raw_error,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for terraform qovery config mismatch
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_terraform_qovery_config_mismatch(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message = "Error while trying to use Qovery Terraform generated config.";
+
+        EngineError::new(
+            event_details,
+            Tag::TerraformQoveryConfigMismatch,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
             None,
             None,
         )

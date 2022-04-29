@@ -73,6 +73,7 @@ pub enum Tag {
     HelmHistoryError,
     CannotGetAnyAvailableVPC,
     UnsupportedVersion,
+    UnsupportedClusterKind,
     CannotGetSupportedVersions,
     CannotGetCluster,
     ContainerRegistryError,
@@ -83,6 +84,7 @@ pub enum Tag {
     CloudProviderApiMissingInfo,
     K8sValidateRequiredCPUandBurstableError,
     TerraformContextUnsupportedParameterValue,
+    TerraformQoveryConfigMismatch,
     ClientServiceFailedToStart,
     ClientServiceFailedToDeployBeforeStart,
     DatabaseFailedToStartAfterSeveralRetries,
@@ -224,6 +226,8 @@ impl From<errors::Tag> for Tag {
             }
             errors::Tag::BuilderError => Tag::BuilderError,
             errors::Tag::ContainerRegistryError => Tag::ContainerRegistryError,
+            errors::Tag::UnsupportedClusterKind => Tag::UnsupportedClusterKind,
+            errors::Tag::TerraformQoveryConfigMismatch => Tag::TerraformQoveryConfigMismatch,
         }
     }
 }

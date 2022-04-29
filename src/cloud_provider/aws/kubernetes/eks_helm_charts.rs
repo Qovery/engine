@@ -16,7 +16,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AwsQoveryTerraformConfig {
+pub struct AwsEksQoveryTerraformConfig {
     pub aws_iam_eks_user_mapper_key: String,
     pub aws_iam_eks_user_mapper_secret: String,
     pub aws_iam_cluster_autoscaler_key: String,
@@ -28,7 +28,7 @@ pub struct AwsQoveryTerraformConfig {
     pub aws_iam_loki_storage_secret: String,
 }
 
-pub struct ChartsConfigPrerequisites {
+pub struct EksChartsConfigPrerequisites {
     pub organization_id: String,
     pub organization_long_id: uuid::Uuid,
     pub cluster_id: String,
@@ -56,9 +56,9 @@ pub struct ChartsConfigPrerequisites {
     pub infra_options: Options,
 }
 
-pub fn aws_helm_charts(
+pub fn eks_aws_helm_charts(
     qovery_terraform_config_file: &str,
-    chart_config_prerequisites: &ChartsConfigPrerequisites,
+    chart_config_prerequisites: &EksChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
     kubernetes_config: &Path,
     envs: &[(String, String)],
@@ -76,7 +76,7 @@ pub fn aws_helm_charts(
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
     let reader = BufReader::new(content_file);
-    let qovery_terraform_config: AwsQoveryTerraformConfig = match serde_json::from_reader(reader) {
+    let qovery_terraform_config: AwsEksQoveryTerraformConfig = match serde_json::from_reader(reader) {
         Ok(config) => config,
         Err(e) => {
             return Err(CommandError::new(

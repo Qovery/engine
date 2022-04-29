@@ -9,7 +9,10 @@ use core::option::Option::{None, Some};
 use core::result::Result;
 use core::result::Result::{Err, Ok};
 use retry::delay::Fixed;
-use retry::OperationResult;
+use retry::{Error, OperationResult};
+use std::fmt;
+use std::net::ToSocketAddrs;
+use std::net::{SocketAddr, TcpStream as NetTcpStream};
 use trust_dns_resolver::config::*;
 use trust_dns_resolver::proto::rr::{RData, RecordType};
 use trust_dns_resolver::Resolver;
@@ -244,6 +247,78 @@ pub fn managed_db_name_sanitizer(max_size: usize, prefix: &str, name: &str) -> S
     new_name
 }
 
+#[derive(PartialEq, Debug)]
+pub enum TcpCheckErrors {
+    DomainNotResolvable,
+    PortNotOpen,
+    UnknownError,
+}
+
+pub enum TcpCheckSource<'a> {
+    SocketAddr(SocketAddr),
+    DnsName(&'a str),
+}
+
+impl fmt::Display for TcpCheckSource<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TcpCheckSource::SocketAddr(x) => write!(f, "{}", x),
+            TcpCheckSource::DnsName(x) => write!(f, "{}", x),
+        }
+    }
+}
+
+pub fn check_tcp_port_is_open(address: &TcpCheckSource, port: u16) -> Result<(), TcpCheckErrors> {
+    let timeout = core::time::Duration::from_secs(1);
+
+    let ip = match address {
+        TcpCheckSource::SocketAddr(x) => x.clone(),
+        TcpCheckSource::DnsName(x) => {
+            let address = format!("{}:{}", x, port);
+            match address.to_socket_addrs() {
+                Ok(x) => {
+                    let ips: Vec<SocketAddr> = x.collect();
+                    ips[0]
+                }
+                Err(_) => return Err(TcpCheckErrors::DomainNotResolvable),
+            }
+        }
+    };
+
+    match NetTcpStream::connect_timeout(&ip, timeout) {
+        Ok(_) => Ok(()),
+        Err(_) => Err(TcpCheckErrors::PortNotOpen),
+    }
+}
+
+pub fn wait_until_port_is_open(
+    address: &TcpCheckSource,
+    port: u16,
+    max_timeout: usize,
+    logger: &dyn Logger,
+    event_details: EventDetails,
+) -> Result<(), TcpCheckErrors> {
+    let fixed_iterable = Fixed::from(core::time::Duration::from_secs(1)).take(max_timeout);
+    let check_result = retry::retry(fixed_iterable, || match check_tcp_port_is_open(address, port) {
+        Ok(_) => OperationResult::Ok(()),
+        Err(e) => {
+            logger.log(EngineEvent::Info(
+                event_details.clone(),
+                EventMessage::new_from_safe(format!("{}:{} is still not ready: {:?}. retrying...", address, port, e)),
+            ));
+            OperationResult::Retry(e)
+        }
+    });
+
+    match check_result {
+        Ok(_) => Ok(()),
+        Err(e) => match e {
+            Error::Operation { error, .. } => Err(error),
+            Error::Internal(_) => Err(TcpCheckErrors::UnknownError),
+        },
+    }
+}
+
 pub fn print_action(
     cloud_provider_name: &str,
     struct_name: &str,
@@ -261,10 +336,30 @@ pub fn print_action(
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::utilities::{dns_resolvers, get_cname_record_value};
+    use crate::cloud_provider::utilities::{
+        check_tcp_port_is_open, dns_resolvers, get_cname_record_value, TcpCheckErrors, TcpCheckSource,
+    };
     use crate::errors::CommandError;
     use crate::models::types::VersionsNumber;
     use std::str::FromStr;
+
+    #[test]
+    pub fn test_port_open() {
+        let address_ok = "www.qovery.com";
+        let port_ok: u16 = 443;
+        let address_nok = "www.abcdefghijklmnopqrstuvwxyz.com";
+        let port_nok: u16 = 4430;
+
+        assert!(check_tcp_port_is_open(&TcpCheckSource::DnsName(address_ok), port_ok).is_ok());
+        assert_eq!(
+            check_tcp_port_is_open(&TcpCheckSource::DnsName(address_nok), port_ok).unwrap_err(),
+            TcpCheckErrors::DomainNotResolvable
+        );
+        assert_eq!(
+            check_tcp_port_is_open(&TcpCheckSource::DnsName(address_ok), port_nok).unwrap_err(),
+            TcpCheckErrors::PortNotOpen
+        );
+    }
 
     #[test]
     pub fn test_cname_resolution() {

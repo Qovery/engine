@@ -1,15 +1,8 @@
 locals {
   qovery_tf_config = <<TF_CONFIG
 {
-  "aws_iam_eks_user_mapper_key": "",
-  "aws_iam_eks_user_mapper_secret": "",
-  "aws_iam_cluster_autoscaler_key": "",
-  "aws_iam_cluster_autoscaler_secret": "",
-  "aws_iam_cloudwatch_key": "",
-  "aws_iam_cloudwatch_secret": "",
-  "loki_storage_config_aws_s3": "",
-  "aws_iam_loki_storage_key": "",
-  "aws_iam_loki_storage_secret": ""
+  "aws_ec2_public_hostname": "${aws_instance.ec2_instance.public_dns}",
+  "aws_ec2_kubernetes_port": "${random_integer.kubernetes_external_port.result}"
 }
 TF_CONFIG
 }

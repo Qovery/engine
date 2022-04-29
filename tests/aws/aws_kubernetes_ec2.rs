@@ -12,8 +12,6 @@ use std::str::FromStr;
 use test_utilities::aws::{K3S_KUBERNETES_MAJOR_VERSION, K3S_KUBERNETES_MINOR_VERSION};
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 
-pub const _AWS_K3S_VERSION: &str = "v1.20.15+k3s1";
-
 #[cfg(feature = "test-aws-infra-ec2")]
 fn create_and_destroy_aws_ec2_k3s_cluster(
     region: String,
