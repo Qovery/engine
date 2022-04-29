@@ -330,7 +330,7 @@ pub fn default_tera_context(
 ) -> TeraContext {
     let mut context = TeraContext::new();
     context.insert("id", service.id());
-    context.insert("long_id", service.id());
+    context.insert("long_id", service.long_id());
     context.insert("owner_id", environment.owner_id.as_str());
     context.insert("project_id", environment.project_id.as_str());
     context.insert("organization_id", environment.organization_id.as_str());
