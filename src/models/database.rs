@@ -487,7 +487,6 @@ where
         context.insert("kubernetes_cluster_id", kubernetes.id());
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
-        context.insert("long_id", &self.long_id);
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn(target, &self.fqdn, M::is_managed()).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
