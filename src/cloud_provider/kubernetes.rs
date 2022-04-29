@@ -131,7 +131,7 @@ pub trait Kubernetes: Listen {
                     Ok((path, file)) => retry::OperationResult::Ok((path, file)),
                     Err(err) => {
                         let error = EngineError::new_cannot_retrieve_cluster_config_file(
-                            self.get_event_details(stage),
+                            self.get_event_details(stage.clone()),
                             err.into(),
                         );
                         self.logger().log(EngineEvent::Error(error.clone(), None));
