@@ -165,13 +165,6 @@ pub fn create_yaml_backup_file<P>(
 where
     P: AsRef<Path>,
 {
-    if content.is_empty() {
-        return Err(CommandError::new_from_safe_message(format!(
-            "No content to write to file for {}/{:?}.",
-            chart_name, resource_name
-        )));
-    };
-
     let dir = working_root_dir.as_ref().join("backups");
 
     if let Err(e) = create_dir_all(&dir) {
@@ -535,8 +528,7 @@ mod tests {
             content.to_string(),
         )
         .expect("No such file");
-        file_path = remove_lines_starting_with(file_path, "resourceVersion").unwrap();
-        file_path = remove_lines_starting_with(file_path, "uid").unwrap();
+        file_path = remove_lines_starting_with(file_path, vec!["resourceVersion", "uid"]).unwrap();
 
         let file = OpenOptions::new()
             .read(true)

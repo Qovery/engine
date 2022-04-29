@@ -176,6 +176,7 @@ where
         );
 
         context.insert("namespace", environment.namespace());
+        context.insert("long_id", &self.long_id);
 
         let version = self
             .get_version_aws_managed(event_details)?

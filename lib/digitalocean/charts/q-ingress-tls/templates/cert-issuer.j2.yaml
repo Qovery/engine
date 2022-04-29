@@ -6,7 +6,7 @@ metadata:
   name: {{ id }}
   namespace: {{ namespace }}
   labels:
-    ownerId: {{ owner_id }}
+    routerLongId: {{ long_id }}
 spec:
   acme:
     server: {{ spec_acme_server }}

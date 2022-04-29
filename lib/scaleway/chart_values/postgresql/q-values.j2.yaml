@@ -169,10 +169,9 @@ persistence:
     - ReadWriteOnce
   size: {{ database_disk_size_in_gib }}Gi
   annotations:
-    ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseName: '{{ sanitized_name }}'
+    databaseLongId: {{ long_id }}
 
 ##
 ## PostgreSQL Master parameters
@@ -187,14 +186,14 @@ master:
   affinity: {}
   tolerations: []
   labels:
-    ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
+    databaseLongId: {{ long_id }}
   annotations: {}
   podLabels:
-    ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
+    databaseLongId: {{ long_id }}
   podAnnotations: {}
   priorityClassName: ""
   ## Extra init containers

@@ -14,10 +14,12 @@ use crate::io_models::{Context, Listen, Listener, Listeners};
 use crate::logger::Logger;
 use crate::models::types::CloudProvider;
 use crate::models::types::ToTeraContext;
+use crate::utilities::to_short_id;
 use function_name::named;
 use std::borrow::Borrow;
 use std::marker::PhantomData;
 use tera::Context as TeraContext;
+use uuid::Uuid;
 
 #[derive(thiserror::Error, Debug)]
 pub enum RouterError {
@@ -29,6 +31,7 @@ pub struct Router<T: CloudProvider> {
     _marker: PhantomData<T>,
     pub(crate) context: Context,
     pub(crate) id: String,
+    pub(crate) long_id: Uuid,
     pub(crate) action: Action,
     pub(crate) name: String,
     pub(crate) default_domain: String,
@@ -43,7 +46,7 @@ pub struct Router<T: CloudProvider> {
 impl<T: CloudProvider> Router<T> {
     pub fn new(
         context: Context,
-        id: &str,
+        long_id: Uuid,
         name: &str,
         action: Action,
         default_domain: &str,
@@ -57,7 +60,8 @@ impl<T: CloudProvider> Router<T> {
         Ok(Self {
             _marker: PhantomData,
             context,
-            id: id.to_string(),
+            id: to_short_id(&long_id),
+            long_id,
             name: name.to_string(),
             action,
             default_domain: default_domain.to_string(),
@@ -241,6 +245,10 @@ where
 
     fn id(&self) -> &str {
         &self.id
+    }
+
+    fn long_id(&self) -> &Uuid {
+        &self.long_id
     }
 
     fn name(&self) -> &str {

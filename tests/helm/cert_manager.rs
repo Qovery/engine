@@ -295,7 +295,7 @@ fn test_should_not_create_chart_backup() {
     let _ = kubectl_exec_delete_namespace(kube_config.as_path(), "cert-manager", vec![]);
 }
 
-// #[cfg(feature = "test-with-kube")]
+#[cfg(feature = "test-with-kube")]
 #[test]
 fn test_should_apply_chart_backup() {
     let (helm, kube_config, cert_manager, mut cert_manager_config) = cert_manager_conf();
