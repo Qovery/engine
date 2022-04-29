@@ -402,7 +402,7 @@ pub fn environment_3_apps_3_routers_3_databases(
         ],
         routers: vec![
             Router {
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: "main".to_string(),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
@@ -415,7 +415,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 sticky_sessions_enabled: false,
             },
             Router {
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: "second-router".to_string(),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
@@ -428,7 +428,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 sticky_sessions_enabled: false,
             },
             Router {
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: "third-router".to_string(),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
@@ -517,7 +517,6 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
     let suffix = generate_id();
     let application_id = generate_id();
     let application_name = format!("{}-{}", "simple-app".to_string(), &suffix);
-    let router_id = generate_id();
     let router_name = "main".to_string();
     let application_domain = format!("{}.{}.{}", application_id, context.cluster_id().to_string(), test_domain);
     EnvironmentRequest {
@@ -561,7 +560,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
             advance_settings: Default::default(),
         }],
         routers: vec![Router {
-            id: router_id,
+            long_id: Uuid::new_v4(),
             name: router_name,
             action: Action::Create,
             default_domain: application_domain,
@@ -778,7 +777,7 @@ pub fn environnement_2_app_2_routers_1_psql(
         ],
         routers: vec![
             Router {
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: "main".to_string(),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
@@ -791,7 +790,7 @@ pub fn environnement_2_app_2_routers_1_psql(
                 sticky_sessions_enabled: false,
             },
             Router {
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: "second-router".to_string(),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
@@ -873,7 +872,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             advance_settings: Default::default(),
         }],
         routers: vec![Router {
-            id: generate_id(),
+            long_id: Uuid::new_v4(),
             name: "main".to_string(),
             action: Action::Create,
             default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
@@ -984,7 +983,7 @@ pub fn environment_only_http_server_router(context: &Context, test_domain: &str)
             advance_settings: Default::default(),
         }],
         routers: vec![Router {
-            id: generate_id(),
+            long_id: Uuid::new_v4(),
             name: "main".to_string(),
             action: Action::Create,
             default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),

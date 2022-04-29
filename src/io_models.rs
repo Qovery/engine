@@ -500,7 +500,7 @@ impl Storage {
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Router {
-    pub id: String,
+    pub long_id: Uuid,
     pub name: String,
     pub action: Action,
     pub default_domain: String,
@@ -544,7 +544,7 @@ impl Router {
             CPKind::Aws => {
                 let router = Box::new(models::router::Router::<AWS>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.name.as_str(),
                     self.action.to_service_action(),
                     self.default_domain.as_str(),
@@ -560,7 +560,7 @@ impl Router {
             CPKind::Do => {
                 let router = Box::new(models::router::Router::<DO>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.name.as_str(),
                     self.action.to_service_action(),
                     self.default_domain.as_str(),
@@ -576,7 +576,7 @@ impl Router {
             CPKind::Scw => {
                 let router = Box::new(models::router::Router::<SCW>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.name.as_str(),
                     self.action.to_service_action(),
                     self.default_domain.as_str(),
