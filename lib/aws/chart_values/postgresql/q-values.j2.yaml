@@ -329,7 +329,7 @@ persistence:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseLongId: {{ long_id }}
+    databaseName: {{ sanitized_name }}
 
 ## updateStrategy for PostgreSQL StatefulSet and its slaves StatefulSets
 ## ref: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies
