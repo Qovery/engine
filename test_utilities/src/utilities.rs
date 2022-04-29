@@ -53,6 +53,7 @@ use qovery_engine::io_models::DatabaseMode::MANAGED;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::runtime::block_on;
+use qovery_engine::utilities::to_short_id;
 use time::Instant;
 use url::Url;
 
@@ -897,7 +898,7 @@ pub fn db_fqnd(db: Database) -> String {
     match db.publicly_accessible {
         true => db.fqdn,
         false => match db.mode == MANAGED {
-            true => format!("{}-dns", db.id),
+            true => format!("{}-dns", to_short_id(&db.long_id)),
             false => match db.kind {
                 DatabaseKind::Postgresql => "postgresqlpostgres",
                 DatabaseKind::Mysql => "mysqlmysqldatabase",

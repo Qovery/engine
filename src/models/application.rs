@@ -337,6 +337,10 @@ where
     fn selector(&self) -> Option<String> {
         self.selector()
     }
+
+    fn long_id(&self) -> &Uuid {
+        &self.long_id
+    }
 }
 
 impl<T: CloudProvider> Helm for Application<T> {

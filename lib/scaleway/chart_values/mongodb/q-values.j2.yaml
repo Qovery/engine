@@ -145,17 +145,16 @@ replicaSet:
 
 # Additional abels to apply to the deployment or statefulsets
 labels:
-  ownerId: {{ owner_id }}
   envId: {{ environment_id }}
   databaseId: {{ id }}
-  databaseName: '{{ sanitized_name }}'
+  databaseLongId: {{ long_id }}
 
 
 # Additional pod labels to apply
 podLabels:
-  ownerId: {{ owner_id }}
   envId: {{ environment_id }}
   databaseId: {{ id }}
+  databaseLongId: {{ long_id }}
 
 ## updateStrategy for MongoDB Primary, Secondary and Arbitrer statefulsets
 ## ref: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies
@@ -197,10 +196,9 @@ persistence:
     - ReadWriteOnce
   size: {{ database_disk_size_in_gib }}Gi
   annotations:
-    ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseName: '{{ sanitized_name }}'
+    databaseLongId: {{ long_id }}
     # volume.beta.kubernetes.io/storage-class=scw-sbv-ssd-0:
 
 ## Prometheus Exporter / Metrics

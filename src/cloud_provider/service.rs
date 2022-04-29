@@ -6,6 +6,7 @@ use std::thread;
 use std::time::Duration;
 
 use tera::Context as TeraContext;
+use uuid::Uuid;
 
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::ChartInfo;
@@ -31,6 +32,7 @@ pub trait Service: ToTransmitter {
     fn context(&self) -> &Context;
     fn service_type(&self) -> ServiceType;
     fn id(&self) -> &str;
+    fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
     fn sanitized_name(&self) -> String;
     fn name_with_id(&self) -> String {
@@ -328,6 +330,7 @@ pub fn default_tera_context(
 ) -> TeraContext {
     let mut context = TeraContext::new();
     context.insert("id", service.id());
+    context.insert("long_id", service.id());
     context.insert("owner_id", environment.owner_id.as_str());
     context.insert("project_id", environment.project_id.as_str());
     context.insert("organization_id", environment.organization_id.as_str());
