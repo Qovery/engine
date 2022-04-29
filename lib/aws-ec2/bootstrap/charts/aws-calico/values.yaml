@@ -1,0 +1,54 @@
+fullnameOverride: calico
+
+serviceAccount:
+  create: true
+
+podSecurityPolicy:
+  create: false
+
+calico:
+  tag: v3.13.4
+
+  typha:
+    logseverity: Info #Debug, Info, Warning, Error, Fatal
+    image: quay.io/calico/typha
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "96Mi"
+        cpu: "100m"
+    tolerations: []
+    nodeSelector:
+      beta.kubernetes.io/os: linux
+  node:
+    logseverity: Info #Debug, Info, Warning, Error, Fatal
+    image: quay.io/calico/node
+    resources:
+      requests:
+        memory: "32Mi"
+        cpu: "20m"
+      limits:
+        memory: "64Mi"
+        cpu: "100m"
+    extraEnv: []
+    # - name: SOME_VAR
+    #   value: 'some value'
+    nodeSelector:
+      beta.kubernetes.io/os: linux
+  typha_autoscaler:
+    resources:
+      requests:
+        memory: "16Mi"
+        cpu: "10m"
+      limits:
+        memory: "32Mi"
+        cpu: "10m"
+    tolerations: []
+    nodeSelector:
+      beta.kubernetes.io/os: linux
+
+autoscaler:
+  tag: "1.7.1"
+  image: k8s.gcr.io/cluster-proportional-autoscaler-amd64
