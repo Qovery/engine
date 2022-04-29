@@ -196,9 +196,10 @@ persistence:
     - ReadWriteOnce
   size: {{ database_disk_size_in_gib }}Gi
   annotations:
+    ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseLongId: {{ long_id }}
+    databaseName: '{{ sanitized_name }}'
     # volume.beta.kubernetes.io/storage-class=scw-sbv-ssd-0:
 
 ## Prometheus Exporter / Metrics
