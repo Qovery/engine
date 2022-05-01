@@ -143,7 +143,7 @@ pub trait Kubernetes: Listen {
                 Err(Operation { error, .. }) => return Err(error),
                 Err(retry::Error::Internal(msg)) => {
                     return Err(EngineError::new_cannot_retrieve_cluster_config_file(
-                        self.get_event_details(stage.clone()),
+                        self.get_event_details(stage),
                         CommandError::new("Error while trying to get kubeconfig file.".to_string(), Some(msg), None),
                     ))
                 }
@@ -154,7 +154,7 @@ pub trait Kubernetes: Listen {
             Ok(metadata) => metadata,
             Err(err) => {
                 let error = EngineError::new_cannot_retrieve_cluster_config_file(
-                    self.get_event_details(stage.clone()),
+                    self.get_event_details(stage),
                     CommandError::new_from_safe_message(format!("Error getting file metadata, error: {}", err,)),
                 );
                 self.logger().log(EngineEvent::Error(error.clone(), None));
@@ -166,7 +166,7 @@ pub trait Kubernetes: Listen {
         permissions.set_mode(0o400);
         if let Err(err) = std::fs::set_permissions(string_path.as_str(), permissions) {
             let error = EngineError::new_cannot_retrieve_cluster_config_file(
-                self.get_event_details(stage.clone()),
+                self.get_event_details(stage),
                 CommandError::new_from_safe_message(format!("Error setting file permissions, error: {}", err,)),
             );
             self.logger().log(EngineEvent::Error(error.clone(), None));
