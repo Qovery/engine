@@ -31,7 +31,7 @@ use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{
     do_kubectl_exec_get_loadbalancer_id, kubectl_exec_get_all_namespaces, kubectl_exec_get_events,
 };
-use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
+use crate::cmd::terraform::terraform_init_validate_plan_apply;
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
@@ -539,36 +539,6 @@ impl DOKS {
             format!("Deploying DOKS {} cluster deployment with id {}", self.name(), self.id()).as_str(),
             &listeners_helper,
         );
-
-        // temporary: remove helm/kube management from terraform
-        match terraform_init_validate_state_list(temp_dir.as_str()) {
-            Ok(x) => {
-                let items_type = vec!["helm_release", "kubernetes_namespace"];
-                for item in items_type {
-                    for entry in x.clone() {
-                        if entry.starts_with(item) {
-                            match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
-                                Ok(_) => self.logger().log(EngineEvent::Info(
-                                    event_details.clone(),
-                                    EventMessage::new_from_safe(format!("successfully removed {}", &entry)),
-                                )),
-                                Err(e) => {
-                                    return Err(EngineError::new_terraform_cannot_remove_entry_out(
-                                        event_details,
-                                        entry.to_string(),
-                                        e,
-                                    ))
-                                }
-                            }
-                        };
-                    }
-                }
-            }
-            Err(e) => self.logger().log(EngineEvent::Error(
-                EngineError::new_terraform_state_does_not_exist(event_details.clone(), e),
-                None,
-            )),
-        };
 
         // Logs bucket
         if let Err(e) = self.spaces.create_bucket(self.logs_bucket_name().as_str()) {

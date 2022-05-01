@@ -73,6 +73,7 @@ pub enum Tag {
     HelmHistoryError,
     CannotGetAnyAvailableVPC,
     UnsupportedVersion,
+    UnsupportedClusterKind,
     CannotGetSupportedVersions,
     CannotGetCluster,
     ContainerRegistryError,
@@ -224,6 +225,7 @@ impl From<errors::Tag> for Tag {
             }
             errors::Tag::BuilderError => Tag::BuilderError,
             errors::Tag::ContainerRegistryError => Tag::ContainerRegistryError,
+            errors::Tag::UnsupportedClusterKind => Tag::UnsupportedClusterKind,
         }
     }
 }

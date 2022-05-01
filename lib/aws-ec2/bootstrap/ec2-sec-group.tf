@@ -22,3 +22,19 @@ resource "aws_security_group_rule" "https" {
   to_port           = 443
   type              = "ingress"
 }
+
+# randomize inbound kubernetes port number for more security
+resource "random_integer" "kubernetes_external_port" {
+  min = 1024
+  max = 65534
+}
+
+resource "aws_security_group_rule" "kubernetes" {
+  cidr_blocks       = ["0.0.0.0/0"]
+  description       = "Kubernetes connectivity"
+  from_port         = random_integer.kubernetes_external_port.result
+  protocol          = "tcp"
+  security_group_id = aws_security_group.ec2_instance.id
+  to_port           = random_integer.kubernetes_external_port.result
+  type              = "ingress"
+}

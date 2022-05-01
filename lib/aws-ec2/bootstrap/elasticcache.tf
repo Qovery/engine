@@ -66,15 +66,3 @@ resource "aws_elasticache_subnet_group" "elasticache" {
   name = "elasticache-${aws_vpc.ec2.id}"
   subnet_ids = flatten([aws_subnet.elasticache_zone_a.*.id, aws_subnet.elasticache_zone_b.*.id, aws_subnet.elasticache_zone_c.*.id])
 }
-
-# Todo: create a bastion to avoid this
-
-resource "aws_security_group_rule" "elasticache_remote_access" {
-  cidr_blocks       = ["0.0.0.0/0"]
-  description       = "Allow Redis incoming access from anywhere"
-  from_port         = 6379
-  protocol          = "tcp"
-  security_group_id = aws_security_group.ec2_instance.id
-  to_port           = 6379
-  type              = "ingress"
-}
