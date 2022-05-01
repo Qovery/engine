@@ -79,7 +79,7 @@ variable "k3s_config" {
   description = "K3s configuration"
   default = {
     "version" = "v1.20.15+k3s1"
-    "channel" = "latest"
+    "channel" = "stable"
     "exec" = "--disable=traefik"
   }
   type = map(string)

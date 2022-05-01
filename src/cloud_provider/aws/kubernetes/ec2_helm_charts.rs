@@ -12,9 +12,8 @@ use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AwsEc2QoveryTerraformConfig {
-    pub loki_storage_config_aws_s3: String,
-    pub aws_iam_loki_storage_key: String,
-    pub aws_iam_loki_storage_secret: String,
+    pub aws_ec2_public_hostname: String,
+    pub aws_ec2_kubernetes_port: String,
 }
 
 pub struct Ec2ChartsConfigPrerequisites {

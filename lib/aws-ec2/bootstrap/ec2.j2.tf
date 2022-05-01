@@ -33,10 +33,14 @@ resource "aws_instance" "ec2_instance" {
   # security
   vpc_security_group_ids = [aws_security_group.ec2_instance.id]
   subnet_id = aws_subnet.ec2_zone_a[0].id
-  security_groups = [aws_security_group.ec2_instance.id]
 
   user_data = local.bootstrap
-  user_data_replace_on_change = false
+  user_data_replace_on_change = true
+
+#  lifecycle {
+#    // user data changes, forces to restart the EC2 instance
+#    ignore_changes = [user_data]
+#  }
 
   tags = merge(
       local.tags_common,
@@ -57,7 +61,7 @@ locals {
 #!/bin/bash
 
 export KUBECONFIG_FILENAME="${var.kubernetes_cluster_id}.yaml"
-export KUBECONFIG_PATH="/tmp/$KUBECONFIG_FILENAME"
+export NEW_KUBECONFIG_PATH="/tmp/$KUBECONFIG_FILENAME"
 
 apt-get update
 apt-get -y install curl s3cmd
@@ -74,8 +78,10 @@ while [ ! -f /etc/rancher/k3s/k3s.yaml ] ; do
 done
 
 # Calico will be installed and metadata won't be accessible anymore, it can only be done during bootstrap
-sed -r "s/127.0.0.1:6443/$(curl -s http://169.254.169.254/latest/meta-data/public-hostname):${random_integer.kubernetes_external_port.result}/g" /etc/rancher/k3s/k3s.yaml > $KUBECONFIG_PATH
-s3cmd --access_key={{ aws_access_key }} --secret_key={{ aws_secret_key }} --region={{ aws_region }} put $KUBECONFIG_PATH s3://${var.s3_bucket_kubeconfig}/$KUBECONFIG_FILENAME
-rm -f $KUBECONFIG_PATH
+public_hostname="$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)"
+sed "s/127.0.0.1/$public_hostname/g" /etc/rancher/k3s/k3s.yaml > $NEW_KUBECONFIG_PATH
+sed -i "s/:6443/:${random_integer.kubernetes_external_port.result}/g" $NEW_KUBECONFIG_PATH
+s3cmd --access_key={{ aws_access_key }} --secret_key={{ aws_secret_key }} --region={{ aws_region }} put $NEW_KUBECONFIG_PATH s3://${var.s3_bucket_kubeconfig}/$KUBECONFIG_FILENAME
+rm -f $NEW_KUBECONFIG_PATH
 BOOTSTRAP
 }
