@@ -896,7 +896,7 @@ mod tests {
                 "value": false
               }
             ],
-            "image": "quay.io/bitnami/postgresql:10.16.0",
+            "image": "docker.io/bitnami/postgresql:10.16.0",
             "imagePullPolicy": "IfNotPresent",
             "livenessProbe": {
               "exec": {
@@ -1129,7 +1129,7 @@ mod tests {
                 "value": false
               }
             ],
-            "image": "quay.io/bitnami/postgresql:10.16.0",
+            "image": "docker.io/bitnami/postgresql:10.16.0",
             "imagePullPolicy": "IfNotPresent",
             "livenessProbe": {
               "exec": {

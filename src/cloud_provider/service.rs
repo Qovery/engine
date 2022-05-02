@@ -6,19 +6,19 @@ use std::thread;
 use std::time::Duration;
 
 use tera::Context as TeraContext;
+use uuid::Uuid;
 
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::utilities::{check_domain_for, VersionsNumber};
+use crate::cloud_provider::utilities::check_domain_for;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd;
 use crate::cmd::helm;
-use crate::cmd::helm::Timeout;
 use crate::cmd::kubectl::ScalingKind::Statefulset;
 use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_scale_replicas_by_selector, ScalingKind};
 use crate::cmd::structs::LabelsContent;
-use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
 use crate::io_models::ProgressLevel::Info;
 use crate::io_models::{
@@ -26,15 +26,20 @@ use crate::io_models::{
     QoveryIdentifier,
 };
 use crate::logger::Logger;
+use crate::models::types::VersionsNumber;
 
 pub trait Service: ToTransmitter {
     fn context(&self) -> &Context;
     fn service_type(&self) -> ServiceType;
     fn id(&self) -> &str;
+    fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
     fn sanitized_name(&self) -> String;
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
+    }
+    fn name_with_id_and_version(&self) -> String {
+        format!("{} ({}) version: {}", self.name(), self.id(), self.version())
     }
     fn workspace_directory(&self) -> String {
         let dir_root = match self.service_type() {
@@ -65,7 +70,6 @@ pub trait Service: ToTransmitter {
     fn version(&self) -> String;
     fn action(&self) -> &Action;
     fn private_port(&self) -> Option<u16>;
-    fn start_timeout(&self) -> Timeout<u32>;
     fn total_cpus(&self) -> String;
     fn cpu_burst(&self) -> String;
     fn total_ram_in_mib(&self) -> u32;
@@ -173,7 +177,7 @@ pub trait RouterService: StatelessService + Listen + Helm {
     }
 }
 
-pub trait Database: StatefulService {
+pub trait DatabaseService: StatefulService {
     fn check_domains(
         &self,
         listeners: Listeners,
@@ -249,33 +253,33 @@ pub struct DatabaseOptions {
     pub publicly_accessible: bool,
 }
 
-#[derive(Eq, PartialEq)]
-pub enum DatabaseType<'a> {
-    PostgreSQL(&'a DatabaseOptions),
-    MongoDB(&'a DatabaseOptions),
-    MySQL(&'a DatabaseOptions),
-    Redis(&'a DatabaseOptions),
+#[derive(Debug, Eq, PartialEq)]
+pub enum DatabaseType {
+    PostgreSQL,
+    MongoDB,
+    MySQL,
+    Redis,
 }
 
-impl<'a> ToString for DatabaseType<'a> {
+impl ToString for DatabaseType {
     fn to_string(&self) -> String {
         match self {
-            DatabaseType::PostgreSQL(_) => "PostgreSQL".to_string(),
-            DatabaseType::MongoDB(_) => "MongoDB".to_string(),
-            DatabaseType::MySQL(_) => "MySQL".to_string(),
-            DatabaseType::Redis(_) => "Redis".to_string(),
+            DatabaseType::PostgreSQL => "PostgreSQL".to_string(),
+            DatabaseType::MongoDB => "MongoDB".to_string(),
+            DatabaseType::MySQL => "MySQL".to_string(),
+            DatabaseType::Redis => "Redis".to_string(),
         }
     }
 }
 
 #[derive(Eq, PartialEq)]
-pub enum ServiceType<'a> {
+pub enum ServiceType {
     Application,
-    Database(DatabaseType<'a>),
+    Database(DatabaseType),
     Router,
 }
 
-impl<'a> ServiceType<'a> {
+impl ServiceType {
     pub fn name(&self) -> String {
         match self {
             ServiceType::Application => "Application".to_string(),
@@ -285,7 +289,7 @@ impl<'a> ServiceType<'a> {
     }
 }
 
-impl<'a> ToString for ServiceType<'a> {
+impl<'a> ToString for ServiceType {
     fn to_string(&self) -> String {
         self.name()
     }
@@ -325,8 +329,8 @@ pub fn default_tera_context(
     environment: &Environment,
 ) -> TeraContext {
     let mut context = TeraContext::new();
-
     context.insert("id", service.id());
+    context.insert("long_id", service.long_id());
     context.insert("owner_id", environment.owner_id.as_str());
     context.insert("project_id", environment.project_id.as_str());
     context.insert("organization_id", environment.organization_id.as_str());
@@ -461,7 +465,7 @@ where
 
 pub fn scale_down_database(
     target: &DeploymentTarget,
-    service: &impl Database,
+    service: &impl DatabaseService,
     replicas_count: usize,
 ) -> Result<(), EngineError> {
     if service.is_managed_service() {
@@ -1007,6 +1011,8 @@ where
                     action_verb,
                     service.service_type().name().to_lowercase(),
                     service.name(),
+                    // Note: env vars are not leaked to legacy listeners since it can holds sensitive data
+                    // such as secrets and such.
                     err
                 )),
                 kubernetes.context().execution_id(),
@@ -1056,10 +1062,7 @@ where
 
             Err(EngineError::new_k8s_service_issue(
                 event_details,
-                CommandError::new(
-                    err.message(ErrorMessageVerbosity::FullDetails),
-                    Some("Error with Kubernetes service".to_string()),
-                ),
+                err.underlying_error().unwrap_or_default(),
             ))
         }
         _ => {
@@ -1218,17 +1221,17 @@ where
         Action::Create => Some(format!(
             "{} '{}' deployment is in progress...",
             service.service_type().name(),
-            service.name_with_id()
+            service.name_with_id_and_version(),
         )),
         Action::Pause => Some(format!(
             "{} '{}' pause is in progress...",
             service.service_type().name(),
-            service.name_with_id()
+            service.name_with_id_and_version(),
         )),
         Action::Delete => Some(format!(
             "{} '{}' deletion is in progress...",
             service.service_type().name(),
-            service.name_with_id()
+            service.name_with_id_and_version(),
         )),
         Action::Nothing => None,
     };

@@ -6,6 +6,7 @@ metadata:
   name: {{ sanitized_name }}
   namespace: {{ namespace }}
   labels:
+    appLongId: {{ long_id }}
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     appId: {{ id }}
@@ -29,12 +30,14 @@ spec:
   template:
     metadata:
       labels:
+        appLongId: {{ long_id }}
         ownerId: {{ owner_id }}
         envId: {{ environment_id }}
         appId: {{ id }}
         app: {{ sanitized_name }}
       annotations:
         checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
+        appCommitId: {{ version }}
     spec:
       affinity:
         podAntiAffinity:

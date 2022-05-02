@@ -31,10 +31,8 @@ fn manage_common_issues(terraform_provider_lock: &str, err: &CommandError) -> Re
             Ok(_) => Ok(()),
             Err(e) => Err(CommandError::new(
                 format!("Wasn't able to delete terraform lock file {}", &terraform_provider_lock),
-                Some(format!(
-                    "Wasn't able to delete terraform lock file {}, error: {:?}",
-                    &terraform_provider_lock, e
-                )),
+                Some(e.to_string()),
+                None,
             )),
         };
     } else if err
@@ -78,7 +76,11 @@ fn terraform_init_validate(root_dir: &str) -> Result<(), CommandError> {
     match result {
         Ok(_) => Ok(()),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(CommandError::new(e, None)),
+        Err(retry::Error::Internal(e)) => Err(CommandError::new(
+            "Error while performing Terraform validate.".to_string(),
+            Some(e),
+            None,
+        )),
     }
 }
 
@@ -103,7 +105,11 @@ pub fn terraform_init_validate_plan_apply(root_dir: &str, dry_run: bool) -> Resu
         return match result {
             Ok(_) => Ok(()),
             Err(Operation { error, .. }) => Err(error),
-            Err(retry::Error::Internal(e)) => Err(CommandError::new(e, None)),
+            Err(retry::Error::Internal(e)) => Err(CommandError::new(
+                "Error while performing Terraform validate.".to_string(),
+                Some(e),
+                None,
+            )),
         };
     }
 
@@ -135,7 +141,11 @@ pub fn terraform_init_validate_destroy(root_dir: &str, run_apply_before_destroy:
     match result {
         Ok(_) => Ok(()),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(CommandError::new(e, None)),
+        Err(retry::Error::Internal(e)) => Err(CommandError::new(
+            "Error while performing Terraform destroy".to_string(),
+            Some(e),
+            None,
+        )),
     }
 }
 
@@ -159,7 +169,11 @@ fn terraform_plan_apply(root_dir: &str) -> Result<(), CommandError> {
     match result {
         Ok(_) => Ok(()),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(CommandError::new(e, None)),
+        Err(retry::Error::Internal(e)) => Err(CommandError::new(
+            "Error while performing Terraform plan and apply.".to_string(),
+            Some(e),
+            None,
+        )),
     }
 }
 
@@ -183,7 +197,11 @@ pub fn terraform_init_validate_state_list(root_dir: &str) -> Result<Vec<String>,
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(CommandError::new(e, None)),
+        Err(retry::Error::Internal(e)) => Err(CommandError::new(
+            "Error while performing Terraform state list.".to_string(),
+            Some(e),
+            None,
+        )),
     }
 }
 
@@ -199,7 +217,8 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Co
 
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    let mut cmd = QoveryCommand::new("terraform", &args, &[(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())]);
+    let envs = &[(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())];
+    let mut cmd = QoveryCommand::new("terraform", &args, envs);
     cmd.set_current_dir(root_dir);
 
     let result = cmd.exec_with_output(
@@ -213,11 +232,18 @@ pub fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Co
         },
     );
 
-    stdout.extend(stderr);
+    stdout.extend(stderr.clone());
 
     match result {
         Ok(_) => Ok(stdout),
-        Err(_) => Err(CommandError::new(stdout.join("\n"), None)),
+        Err(_) => Err(CommandError::new_from_command_line(
+            "Error while performing Terraform command.".to_string(),
+            "terraform".to_string(),
+            args.iter().map(|e| e.to_string()).collect(),
+            envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            Some(stdout.join(" ")),
+            Some(stderr.join(" ")),
+        )),
     }
 }
 

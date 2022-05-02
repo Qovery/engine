@@ -4,11 +4,13 @@
 
 pub mod io;
 
+extern crate derivative;
 extern crate url;
 
 use crate::cloud_provider::Kind;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::io_models::QoveryIdentifier;
+use derivative::Derivative;
 use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone)]
@@ -63,7 +65,8 @@ impl From<EventMessageVerbosity> for ErrorMessageVerbosity {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
 /// EventMessage: represents an event message.
 pub struct EventMessage {
     // Message which is known to be safe: doesn't expose any credentials nor touchy info.
@@ -71,6 +74,8 @@ pub struct EventMessage {
     // String containing full details including touchy data (passwords and tokens).
     full_details: Option<String>,
     // Environments variables including touchy data such as secret keys.
+    // env_vars field is ignored from any wild Debug printing because of it touchy data it carries.
+    #[derivative(Debug = "ignore")]
     env_vars: Option<Vec<(String, String)>>,
 }
 
@@ -157,7 +162,7 @@ impl EventMessage {
 
 impl From<CommandError> for EventMessage {
     fn from(e: CommandError) -> Self {
-        EventMessage::new_with_env_vars(e.message_raw(), e.message_safe(), e.env_vars())
+        EventMessage::new_with_env_vars(e.message_safe(), e.message_raw(), e.env_vars())
     }
 }
 
@@ -321,6 +326,8 @@ type TransmitterId = String;
 type TransmitterName = String;
 /// TransmitterType: represents a transmitter type.
 type TransmitterType = String; // TODO(benjaminch): makes it a real enum / type
+/// TransmitterVersion: represents a transmitter version.
+type TransmitterVersion = String;
 
 #[derive(Debug, Clone, PartialEq)]
 /// Transmitter: represents the event's source caller (transmitter).
@@ -342,7 +349,7 @@ pub enum Transmitter {
     /// Database: database engine part.
     Database(TransmitterId, TransmitterType, TransmitterName),
     /// Application: application engine part.
-    Application(TransmitterId, TransmitterName),
+    Application(TransmitterId, TransmitterName, TransmitterVersion),
     /// Router: router engine part.
     Router(TransmitterId, TransmitterName),
 }
@@ -361,7 +368,8 @@ impl Display for Transmitter {
                 Transmitter::ObjectStorage(id, name) => format!("object_strorage({}, {})", id, name),
                 Transmitter::Environment(id, name) => format!("environment({}, {})", id, name),
                 Transmitter::Database(id, db_type, name) => format!("database({}, {}, {})", id, db_type, name),
-                Transmitter::Application(id, name) => format!("application({}, {})", id, name),
+                Transmitter::Application(id, name, version) =>
+                    format!("application({}, {}, commit: {})", id, name, version),
                 Transmitter::Router(id, name) => format!("router({}, {})", id, name),
             }
         )
@@ -577,5 +585,56 @@ mod tests {
             // validate:
             assert_eq!(expected_step_name, result);
         }
+    }
+
+    #[test]
+    fn test_event_message_test_hidding_env_vars_in_message_safe_only() {
+        // setup:
+        let event_message = EventMessage::new_with_env_vars(
+            "my safe message".to_string(),
+            Some("my full message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+
+        // execute:
+        let res = event_message.message(EventMessageVerbosity::SafeOnly);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn test_event_message_test_hidding_env_vars_in_message_full_without_env_vars() {
+        // setup:
+        let event_message = EventMessage::new_with_env_vars(
+            "my safe message".to_string(),
+            Some("my full message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+
+        // execute:
+        let res = event_message.message(EventMessageVerbosity::FullDetailsWithoutEnvVars);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn test_event_message_test_hidding_env_vars_in_debug() {
+        // setup:
+        let event_message = EventMessage::new_with_env_vars(
+            "my safe message".to_string(),
+            Some("my full message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+
+        // execute:
+        let res = format!("{:?}", event_message);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
     }
 }

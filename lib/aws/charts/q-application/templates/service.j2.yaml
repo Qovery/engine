@@ -9,6 +9,7 @@ metadata:
     appId: {{ id }}
     app: {{ sanitized_name }}
     envId: {{ environment_id }}
+    appLongId: {{ long_id }}
 spec:
   type: ClusterIP
   ports:

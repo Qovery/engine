@@ -1,7 +1,8 @@
 use crate::cloud_provider::digitalocean::kubernetes::DoksOptions;
 use crate::cloud_provider::helm::{
-    get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo, ChartSetValue, ChartValuesGenerated,
-    CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart, ShellAgentContext,
+    get_chart_for_cluster_agent, get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo,
+    ChartSetValue, ChartValuesGenerated, ClusterAgentContext, CommonChart, CoreDNSConfigChart, HelmChart,
+    HelmChartNamespaces, PrometheusOperatorConfigChart, ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::errors::CommandError;
@@ -120,10 +121,10 @@ pub fn do_helm_charts(
     let content_file = match File::open(&qovery_terraform_config_file) {
         Ok(x) => x,
         Err(e) => {
-            let message_safe = "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?";
             return Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe, e),
-                Some(message_safe.to_string()),
+                "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?".to_string(),
+                Some(e.to_string()),
+                None,
             ));
         }
     };
@@ -133,10 +134,10 @@ pub fn do_helm_charts(
     let qovery_terraform_config: DigitalOceanQoveryTerraformConfig = match serde_json::from_reader(reader) {
         Ok(config) => config,
         Err(e) => {
-            let message_safe = format!("Error while parsing terraform config file {}", qovery_terraform_config_file);
             return Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe, e),
-                Some(message_safe),
+                format!("Error while parsing terraform config file {}", qovery_terraform_config_file),
+                Some(e.to_string()),
+                None,
             ));
         }
     };
@@ -740,7 +741,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "environmentVariables.DO_VOLUME_TIMEOUT".to_string(),
-                    value: 168.to_string(),
+                    value: 168i32.to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.PLECO_IDENTIFIER".to_string(),
@@ -793,6 +794,17 @@ datasources:
         },
     };
 
+    let cluster_agent_context = ClusterAgentContext {
+        api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
+        api_token: &chart_config_prerequisites.infra_options.agent_version_controller_token,
+        organization_long_id: &chart_config_prerequisites.organization_long_id,
+        cluster_id: &chart_config_prerequisites.cluster_id,
+        cluster_long_id: &chart_config_prerequisites.cluster_long_id,
+        cluster_token: &chart_config_prerequisites.infra_options.qovery_cluster_secret_token,
+        grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
+    };
+    let cluster_agent = get_chart_for_cluster_agent(cluster_agent_context, chart_path)?;
+
     let shell_context = ShellAgentContext {
         api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
         api_token: &chart_config_prerequisites.infra_options.agent_version_controller_token,
@@ -814,7 +826,7 @@ datasources:
     let mut qovery_agent = CommonChart {
         chart_info: ChartInfo {
             name: "qovery-agent".to_string(),
-            path: chart_path("common/charts/qovery-agent"),
+            path: chart_path("common/charts/qovery/qovery-agent"),
             namespace: HelmChartNamespaces::Qovery,
             values: vec![
                 ChartSetValue {
@@ -1038,6 +1050,7 @@ datasources:
     let mut level_6: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
         Box::new(qovery_agent),
+        Box::new(cluster_agent),
         Box::new(shell_agent),
         Box::new(qovery_engine),
         Box::new(digital_mobius),

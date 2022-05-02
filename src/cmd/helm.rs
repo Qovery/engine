@@ -138,7 +138,11 @@ impl Helm {
             Err(_) if stderr.contains("release: not found") => Err(ReleaseDoesNotExist(chart.name.clone())),
             Err(err) => {
                 stderr.push_str(&err.message(ErrorMessageVerbosity::FullDetails));
-                let error = CommandError::new(stderr, err.message_safe());
+                let error = CommandError::new(
+                    err.message_safe(),
+                    Some(stderr),
+                    Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+                );
                 Err(CmdError(chart.name.clone(), STATUS, error))
             }
             Ok(_) => {
@@ -175,7 +179,11 @@ impl Helm {
         match helm_exec_with_output(&args, &self.get_all_envs(envs), &mut |_| {}, &mut |line| stderr.push_str(&line)) {
             Err(err) => {
                 stderr.push_str(&err.message(ErrorMessageVerbosity::FullDetails));
-                let error = CommandError::new(stderr, err.message_safe());
+                let error = CommandError::new(
+                    err.message_safe(),
+                    Some(stderr),
+                    Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+                );
                 Err(CmdError(chart.name.clone(), ROLLBACK, error))
             }
             Ok(_) => Ok(()),
@@ -208,7 +216,11 @@ impl Helm {
         match helm_exec_with_output(&args, &self.get_all_envs(envs), &mut |_| {}, &mut |line| stderr.push_str(&line)) {
             Err(err) => {
                 stderr.push_str(&err.message(ErrorMessageVerbosity::FullDetails));
-                let error = CommandError::new(stderr, err.message_safe());
+                let error = CommandError::new(
+                    err.message_safe(),
+                    Some(stderr),
+                    Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+                );
                 Err(CmdError(chart.name.clone(), UNINSTALL, error))
             }
             Ok(_) => Ok(()),
@@ -279,14 +291,19 @@ impl Helm {
 
                 Ok(helms_charts)
             }
-            Err(e) => {
-                let message_safe = "Error while deserializing all helms names";
-                Err(HelmError::CmdError(
-                    "none".to_string(),
-                    LIST,
-                    CommandError::new(format!("{}, error: {}", message_safe, e), Some(message_safe.to_string())),
-                ))
-            }
+            Err(e) => Err(HelmError::CmdError(
+                "none".to_string(),
+                LIST,
+                CommandError::new(
+                    "Error while deserializing all helms names".to_string(),
+                    Some(e.to_string()),
+                    Some(
+                        envs.iter()
+                            .map(|(k, v)| (k.to_string(), v.to_string()))
+                            .collect::<Vec<(String, String)>>(),
+                    ),
+                ),
+            )),
         }
     }
 
@@ -338,10 +355,14 @@ impl Helm {
 
             // no need to validate yaml as it will be done by helm
             if let Err(e) = file_create() {
-                let safe_message = format!("Error while writing yaml content to file `{}`", &file_path);
                 let cmd_err = CommandError::new(
-                    format!("{}\nContent\n{}\nError: {}", safe_message, value_file.yaml_content, e),
-                    Some(safe_message),
+                    format!("Error while writing yaml content to file `{}`", &file_path),
+                    Some(format!("Content\n{}\nError: {}", value_file.yaml_content, e)),
+                    Some(
+                        envs.iter()
+                            .map(|(k, v)| (k.to_string(), v.to_string()))
+                            .collect::<Vec<(String, String)>>(),
+                    ),
                 );
                 return Err(HelmError::CmdError(chart.name.clone(), HelmCommand::UPGRADE, cmd_err));
             };
@@ -375,7 +396,11 @@ impl Helm {
                 Err(CmdError(
                     chart.name.clone(),
                     HelmCommand::DIFF,
-                    CommandError::new(stderr_msg.clone(), Some(stderr_msg)),
+                    CommandError::new(
+                        "Helm error".to_string(),
+                        Some(stderr_msg),
+                        Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+                    ),
                 ))
             }
         }
@@ -445,10 +470,14 @@ impl Helm {
 
             // no need to validate yaml as it will be done by helm
             if let Err(e) = file_create() {
-                let safe_message = format!("Error while writing yaml content to file `{}`", &file_path);
                 let cmd_err = CommandError::new(
-                    format!("{}\nContent\n{}\nError: {}", safe_message, value_file.yaml_content, e),
-                    Some(safe_message),
+                    format!("Error while writing yaml content to file `{}`", &file_path),
+                    Some(format!("Content\n{}\nError: {}", value_file.yaml_content, e)),
+                    Some(
+                        envs.iter()
+                            .map(|(k, v)| (k.to_string(), v.to_string()))
+                            .collect::<Vec<(String, String)>>(),
+                    ),
                 );
                 return Err(HelmError::CmdError(chart.name.clone(), HelmCommand::UPGRADE, cmd_err));
             };
@@ -483,7 +512,11 @@ impl Helm {
 
                 // Try do define/specify a bit more the message
                 let stderr_msg: String = error_message.into_iter().collect();
-                let stderr_msg = format!("{}: {}", stderr_msg, err.message(ErrorMessageVerbosity::FullDetails));
+                let stderr_msg = format!(
+                    "{}: {}",
+                    stderr_msg,
+                    err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
+                );
                 let error = if stderr_msg.contains("another operation (install/upgrade/rollback) is in progress") {
                     HelmError::ReleaseLocked(chart.name.clone())
                 } else if stderr_msg.contains("has been rolled back") {
@@ -494,7 +527,11 @@ impl Helm {
                     CmdError(
                         chart.name.clone(),
                         HelmCommand::UPGRADE,
-                        CommandError::new(stderr_msg.clone(), Some(stderr_msg)),
+                        CommandError::new(
+                            "Helm error".to_string(),
+                            Some(stderr_msg),
+                            Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+                        ),
                     )
                 };
 
@@ -541,7 +578,15 @@ where
     // It means that the command successfully ran, but it didn't terminate as expected
     let mut cmd = QoveryCommand::new("helm", args, envs);
     match cmd.exec_with_output(stdout_output, stderr_output) {
-        Err(err) => Err(CommandError::new(format!("{:?}", err), None)),
+        Err(err) => Err(CommandError::new(
+            "Error while executing Helm command.".to_string(),
+            Some(format!("{:?}", err)),
+            Some(
+                envs.iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect::<Vec<(String, String)>>(),
+            ),
+        )),
         _ => Ok(()),
     }
 }
