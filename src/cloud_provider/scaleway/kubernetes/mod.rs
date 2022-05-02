@@ -238,10 +238,13 @@ impl Kapsule {
         )) {
             Ok(x) => x,
             Err(e) => {
-                let msg = format!("wasn't able to retrieve SCW cluster information from the API. {:?}", e);
                 return Err(EngineError::new_cannot_get_cluster_error(
                     event_details,
-                    CommandError::new(msg.clone(), Some(msg)),
+                    CommandError::new(
+                        "Error, wasn't able to retrieve SCW cluster information from the API.".to_string(),
+                        Some(e.to_string()),
+                        None,
+                    ),
                 ));
             }
         };
@@ -251,13 +254,12 @@ impl Kapsule {
         if cluster_info_content.is_empty() {
             return Ok(None);
         } else if cluster_info_content.len() != 1_usize {
-            let msg = format!(
-                "too many clusters found with this name, where 1 was expected. {:?}",
-                &cluster_info_content.len()
-            );
             return Err(EngineError::new_multiple_cluster_found_expected_one_error(
                 event_details,
-                CommandError::new(msg.clone(), Some(msg)),
+                CommandError::new_from_safe_message(format!(
+                    "Error, too many clusters found ({}) with this name, where 1 was expected.",
+                    &cluster_info_content.len()
+                )),
             ));
         }
 
@@ -290,34 +292,35 @@ impl Kapsule {
         )) {
             Ok(x) => x,
             Err(e) => {
-                let msg = format!("error while trying to get SCW pool info from cluster {}", &cluster_id);
-                let msg_with_error = format!("{}. {:?}", msg, e);
                 return Err(ScwNodeGroupErrors::CloudProviderApiError(CommandError::new(
-                    msg_with_error,
-                    Some(msg),
+                    format!("Error while trying to get SCW pool info from cluster {}.", &cluster_id),
+                    Some(e.to_string()),
+                    None,
                 )));
             }
         };
 
         // ensure pool are present
         if pools.pools.is_none() {
-            let msg = format!(
-                "No SCW pool found from the SCW API for cluster {}/{}",
-                &cluster_id,
-                &cluster_info.name.unwrap_or_else(|| "unknown cluster".to_string())
-            );
-            return Err(ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(msg.clone(), Some(msg))));
+            return Err(ScwNodeGroupErrors::NoNodePoolFound(CommandError::new_from_safe_message(
+                format!(
+                    "Error, no SCW pool found from the SCW API for cluster {}/{}",
+                    &cluster_id,
+                    &cluster_info.name.unwrap_or_else(|| "unknown cluster".to_string())
+                ),
+            )));
         }
 
         // create sanitized nodegroup pools
         let mut nodegroup_pool: Vec<ScwNodeGroup> = Vec::with_capacity(pools.total_count.unwrap_or(0 as f32) as usize);
         for ng in pools.pools.unwrap() {
             if ng.id.is_none() {
-                let msg = format!("error while trying to validate SCW pool ID from cluster {}", &cluster_id);
-                return Err(ScwNodeGroupErrors::NodeGroupValidationError(CommandError::new(
-                    msg.clone(),
-                    Some(msg),
-                )));
+                return Err(ScwNodeGroupErrors::NodeGroupValidationError(
+                    CommandError::new_from_safe_message(format!(
+                        "Error while trying to validate SCW pool ID from cluster {}",
+                        &cluster_id
+                    )),
+                ));
             }
             let ng_sanitized = self.get_node_group_info(ng.id.unwrap().as_str())?;
             nodegroup_pool.push(ng_sanitized)
@@ -327,35 +330,38 @@ impl Kapsule {
     }
 
     fn get_node_group_info(&self, pool_id: &str) -> Result<ScwNodeGroup, ScwNodeGroupErrors> {
-        let pool = match block_on(scaleway_api_rs::apis::pools_api::get_pool(
-            &self.get_configuration(),
-            self.region().as_str(),
-            pool_id,
-        )) {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(match e {
+        let pool =
+            match block_on(scaleway_api_rs::apis::pools_api::get_pool(
+                &self.get_configuration(),
+                self.region().as_str(),
+                pool_id,
+            )) {
+                Ok(x) => x,
+                Err(e) => return Err(match e {
                     Error::ResponseError(x) => {
                         let msg_with_error =
                             format!("Error code while getting node group: {}, API message: {} ", x.status, x.content);
                         match x.status {
                             StatusCode::NOT_FOUND => ScwNodeGroupErrors::NoNodePoolFound(CommandError::new(
-                                msg_with_error,
-                                Some("No node pool found".to_string()),
+                                "No node pool found".to_string(),
+                                Some(msg_with_error),
+                                None,
                             )),
                             _ => ScwNodeGroupErrors::CloudProviderApiError(CommandError::new(
-                                msg_with_error,
-                                Some("Scaleway API error while trying to get node group".to_string()),
+                                "Scaleway API error while trying to get node group".to_string(),
+                                Some(msg_with_error),
+                                None,
                             )),
                         }
                     }
-                    _ => {
-                        let msg = "This Scaleway API error is not supported in the engine, please add it to better support it".to_string();
-                        ScwNodeGroupErrors::NodeGroupValidationError(CommandError::new(msg.clone(), Some(msg)))
-                    }
-                })
-            }
-        };
+                    _ => ScwNodeGroupErrors::NodeGroupValidationError(CommandError::new(
+                        "This Scaleway API error is not supported in the engine, please add it to better support it"
+                            .to_string(),
+                        Some(e.to_string()),
+                        None,
+                    )),
+                }),
+            };
 
         // ensure there is no missing info
         if let Err(e) = self.check_missing_nodegroup_info(&pool.name, "name") {
@@ -462,6 +468,7 @@ impl Kapsule {
 
         // Kubernetes
         context.insert("test_cluster", &self.context.is_test_cluster());
+        context.insert("kubernetes_full_cluster_id", &self.long_id);
         context.insert("kubernetes_cluster_id", self.id());
         context.insert("kubernetes_cluster_name", self.cluster_name().as_str());
         context.insert("kubernetes_cluster_version", self.version());
@@ -667,7 +674,7 @@ impl Kapsule {
                             match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
                                 Ok(_) => self.logger().log(EngineEvent::Info(
                                     event_details.clone(),
-                                    EventMessage::new_from_safe(format!("successfully removed {}", &entry)),
+                                    EventMessage::new_from_safe(format!("Successfully removed {}", &entry)),
                                 )),
                                 Err(e) => {
                                     return Err(EngineError::new_terraform_cannot_remove_entry_out(
@@ -740,10 +747,9 @@ impl Kapsule {
 
         let cluster_info = self.get_scw_cluster_info()?;
         if cluster_info.is_none() {
-            let msg = "no cluster found from the Scaleway API".to_string();
             return Err(EngineError::new_no_cluster_found_error(
                 event_details,
-                CommandError::new(msg.clone(), Some(msg)),
+                CommandError::new_from_safe_message("Error, no cluster found from the Scaleway API".to_string()),
             ));
         }
 
@@ -762,27 +768,29 @@ impl Kapsule {
                     ScwNodeGroupErrors::ClusterDoesNotExists(_) => self.logger().log(EngineEvent::Warning(
                         event_details.clone(),
                         EventMessage::new_from_safe(
-                            "cluster do not exists, no node groups can be retrieved for upgrade check".to_string(),
+                            "Cluster do not exists, no node groups can be retrieved for upgrade check.".to_string(),
                         ),
                     )),
                     ScwNodeGroupErrors::MultipleClusterFound => {
-                        let msg = "multiple clusters found, can't match the correct node groups".to_string();
                         return Err(EngineError::new_multiple_cluster_found_expected_one_error(
                             event_details,
-                            CommandError::new(msg.clone(), Some(msg)),
+                            CommandError::new_from_safe_message(
+                                "Error, multiple clusters found, can't match the correct node groups.".to_string(),
+                            ),
                         ));
                     }
                     ScwNodeGroupErrors::NoNodePoolFound(_) => self.logger().log(EngineEvent::Warning(
                         event_details.clone(),
                         EventMessage::new_from_safe(
-                            "cluster exists, but no node groups found for upgrade check".to_string(),
+                            "Cluster exists, but no node groups found for upgrade check.".to_string(),
                         ),
                     )),
                     ScwNodeGroupErrors::MissingNodePoolInfo => {
-                        let msg = "Error with Scaleway API while trying to retrieve node pool info".to_string();
                         return Err(EngineError::new_missing_api_info_from_cloud_provider_error(
                             event_details,
-                            Some(CommandError::new_from_safe_message(msg)),
+                            Some(CommandError::new_from_safe_message(
+                                "Error with Scaleway API while trying to retrieve node pool info".to_string(),
+                            )),
                         ));
                     }
                     ScwNodeGroupErrors::NodeGroupValidationError(c) => {
@@ -800,7 +808,7 @@ impl Kapsule {
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe(
-                "ensuring all groups nodes are in ready state from the Scaleway API".to_string(),
+                "Ensuring all groups nodes are in ready state from the Scaleway API".to_string(),
             ),
         ));
 
@@ -893,7 +901,7 @@ impl Kapsule {
                 Err(retry::Error::Internal(msg)) => {
                     return Err(EngineError::new_k8s_node_not_ready(
                         event_details,
-                        CommandError::new(msg, Some("Waiting for too long worker nodes to be ready".to_string())),
+                        CommandError::new("Waiting for too long worker nodes to be ready".to_string(), Some(msg), None),
                     ))
                 }
             }
@@ -901,7 +909,7 @@ impl Kapsule {
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe(
-                "all node groups for this cluster are ready from cloud provider API".to_string(),
+                "All node groups for this cluster are ready from cloud provider API".to_string(),
             ),
         ));
 
@@ -997,7 +1005,7 @@ impl Kapsule {
                 event_details,
                 EventMessage::new(
                     "Error trying to get kubernetes events".to_string(),
-                    Some(err.message(ErrorMessageVerbosity::FullDetails)),
+                    Some(err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
                 ),
             )),
         };
@@ -1038,7 +1046,7 @@ impl Kapsule {
 
         self.logger().log(EngineEvent::Info(
             self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
-            EventMessage::new_from_safe("Preparing SCW cluster pause.".to_string()),
+            EventMessage::new_from_safe("Preparing cluster pause.".to_string()),
         ));
 
         let temp_dir = self.get_temp_dir(event_details.clone())?;
@@ -1122,8 +1130,7 @@ impl Kapsule {
                                     match metric.value.parse::<i32>() {
                                         Ok(job_count) if job_count > 0 => current_engine_jobs += 1,
                                         Err(e) => {
-                                            let safe_message = "Error while looking at the API metric value";
-                                            return OperationResult::Retry(EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), CommandError::new(format!("{}, error: {}", safe_message, e), Some(safe_message.to_string()))));
+                                            return OperationResult::Retry(EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), CommandError::new("Error while looking at the API metric value".to_string(), Some(e.to_string()), None)));
                                         }
                                         _ => {}
                                     }
@@ -1136,9 +1143,8 @@ impl Kapsule {
                                 }
                             }
                             Err(e) => {
-                                let safe_message = format!("Error while looking at the API metric value {}", metric_name);
                                 OperationResult::Retry(
-                                    EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), CommandError::new(e.message(ErrorMessageVerbosity::FullDetails), Some(safe_message))))
+                                    EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), e))
                             }
                         };
                     });
@@ -1171,7 +1177,7 @@ impl Kapsule {
         );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe("Pausing SCW cluster deployment.".to_string()),
+            EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
         ));
 
         match terraform_exec(temp_dir.as_str(), terraform_args) {
@@ -1206,7 +1212,7 @@ impl Kapsule {
         );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe("Preparing to delete SCW cluster.".to_string()),
+            EventMessage::new_from_safe("Preparing to delete cluster.".to_string()),
         ));
 
         let temp_dir = self.get_temp_dir(event_details.clone())?;
@@ -1329,7 +1335,10 @@ impl Kapsule {
                     );
                     self.logger().log(EngineEvent::Warning(
                         event_details.clone(),
-                        EventMessage::new(message_safe, Some(e.message(ErrorMessageVerbosity::FullDetails))),
+                        EventMessage::new(
+                            message_safe,
+                            Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                        ),
                     ));
                 }
             }
@@ -1481,7 +1490,7 @@ impl Kapsule {
             )),
             Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
                 event_details,
-                CommandError::new(msg, None),
+                CommandError::new("Error while performing Terraform destroy.".to_string(), Some(msg), None),
             )),
         }
     }
@@ -1599,7 +1608,7 @@ impl Kubernetes for Kapsule {
         );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe("Start preparing SCW cluster upgrade process".to_string()),
+            EventMessage::new_from_safe("Start preparing cluster upgrade process".to_string()),
         ));
 
         let temp_dir = self.get_temp_dir(event_details.clone())?;

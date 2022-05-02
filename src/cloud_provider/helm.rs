@@ -155,11 +155,10 @@ pub trait HelmChart: Send {
         let chart = self.get_chart_info();
         for file in chart.values_files.iter() {
             if let Err(e) = fs::metadata(file) {
-                let safe_message =
-                    format!("Can't access helm chart override file `{}` for chart `{}`", file, chart.name,);
                 return Err(CommandError::new(
-                    format!("{}, error: {:?}", safe_message, e),
-                    Some(safe_message),
+                    format!("Can't access helm chart override file `{}` for chart `{}`", file, chart.name,),
+                    Some(e.to_string()),
+                    None,
                 ));
             }
         }
@@ -304,10 +303,10 @@ fn deploy_parallel_charts(
                 }
             }
             Err(e) => {
-                let safe_message = "Thread panicked during parallel charts deployments.";
                 let error = Err(CommandError::new(
-                    format!("{}, error: {:?}", safe_message, e),
-                    Some(safe_message.to_string()),
+                    "Thread panicked during parallel charts deployments.".to_string(),
+                    Some(format!("{:?}", e)),
+                    None,
                 ));
                 errors.push(error);
             }
@@ -676,7 +675,7 @@ pub fn get_chart_for_shell_agent(
     let shell_agent = CommonChart {
         chart_info: ChartInfo {
             name: "shell-agent".to_string(),
-            path: chart_path("common/charts/qovery-shell-agent"),
+            path: chart_path("common/charts/qovery/qovery-shell-agent"),
             namespace: HelmChartNamespaces::Qovery,
             values: vec![
                 ChartSetValue {
@@ -734,6 +733,90 @@ pub fn get_chart_for_shell_agent(
     };
 
     Ok(shell_agent)
+}
+
+pub struct ClusterAgentContext<'a> {
+    pub api_url: &'a str,
+    pub api_token: &'a str,
+    pub organization_long_id: &'a Uuid,
+    pub cluster_id: &'a str,
+    pub cluster_long_id: &'a Uuid,
+    pub cluster_token: &'a str,
+    pub grpc_url: &'a str,
+}
+
+// This one is the new agent in rust
+pub fn get_chart_for_cluster_agent(
+    context: ClusterAgentContext,
+    chart_path: impl Fn(&str) -> String,
+) -> Result<CommonChart, CommandError> {
+    let shell_agent_version: QoveryShellAgent = get_qovery_app_version(
+        QoveryAppName::ClusterAgent,
+        context.api_token,
+        context.api_url,
+        context.cluster_id,
+    )?;
+    let cluster_agent = CommonChart {
+        chart_info: ChartInfo {
+            name: "cluster-agent".to_string(),
+            path: chart_path("common/charts/qovery/qovery-cluster-agent"),
+            namespace: HelmChartNamespaces::Qovery,
+            values: vec![
+                ChartSetValue {
+                    key: "image.tag".to_string(),
+                    value: shell_agent_version.version,
+                },
+                ChartSetValue {
+                    key: "replicaCount".to_string(),
+                    value: "1".to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.RUST_BACKTRACE".to_string(),
+                    value: "full".to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.RUST_LOG".to_string(),
+                    value: "DEBUG".to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.GRPC_SERVER".to_string(),
+                    value: context.grpc_url.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.CLUSTER_TOKEN".to_string(),
+                    value: context.cluster_token.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.CLUSTER_ID".to_string(),
+                    value: context.cluster_long_id.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.ORGANIZATION_ID".to_string(),
+                    value: context.organization_long_id.to_string(),
+                },
+                // resources limits
+                ChartSetValue {
+                    key: "resources.requests.cpu".to_string(),
+                    value: "200m".to_string(),
+                },
+                ChartSetValue {
+                    key: "resources.limits.cpu".to_string(),
+                    value: "1".to_string(),
+                },
+                ChartSetValue {
+                    key: "resources.requests.memory".to_string(),
+                    value: "100Mi".to_string(),
+                },
+                ChartSetValue {
+                    key: "resources.limits.memory".to_string(),
+                    value: "500Mi".to_string(),
+                },
+            ],
+            ..Default::default()
+        },
+    };
+
+    Ok(cluster_agent)
 }
 
 #[cfg(test)]

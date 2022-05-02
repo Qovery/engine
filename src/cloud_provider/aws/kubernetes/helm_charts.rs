@@ -1,12 +1,12 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
-    get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo, ChartPayload, ChartSetValue,
-    ChartValuesGenerated, CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces,
-    PrometheusOperatorConfigChart, ShellAgentContext,
+    get_chart_for_cluster_agent, get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo,
+    ChartPayload, ChartSetValue, ChartValuesGenerated, ClusterAgentContext, CommonChart, CoreDNSConfigChart, HelmChart,
+    HelmChartNamespaces, PrometheusOperatorConfigChart, ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::cmd::kubectl::{kubectl_delete_crash_looping_pods, kubectl_exec_get_daemonset, kubectl_exec_with_output};
-use crate::errors::CommandError;
+use crate::errors::{CommandError, ErrorMessageVerbosity};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -66,10 +66,10 @@ pub fn aws_helm_charts(
     let content_file = match File::open(&qovery_terraform_config_file) {
         Ok(x) => x,
         Err(e) => {
-            let message_safe = "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?";
             return Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe, e),
-                Some(message_safe.to_string()),
+                "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?".to_string(),
+                Some(e.to_string()),
+                Some(envs.to_vec()),
             ));
         }
     };
@@ -79,10 +79,10 @@ pub fn aws_helm_charts(
     let qovery_terraform_config: AwsQoveryTerraformConfig = match serde_json::from_reader(reader) {
         Ok(config) => config,
         Err(e) => {
-            let message_safe = format!("Error while parsing terraform config file {}", qovery_terraform_config_file);
             return Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe, e),
-                Some(message_safe),
+                format!("Error while parsing terraform config file {}", qovery_terraform_config_file),
+                Some(e.to_string()),
+                Some(envs.to_vec()),
             ));
         }
     };
@@ -259,6 +259,15 @@ pub fn aws_helm_charts(
                     value: "128Mi".to_string(),
                 },
             ],
+            ..Default::default()
+        },
+    };
+
+    let aws_ui_view = CommonChart {
+        chart_info: ChartInfo {
+            name: "aws-ui-view".to_string(),
+            path: chart_path("charts/aws-ui-view"),
+            namespace: HelmChartNamespaces::KubeSystem,
             ..Default::default()
         },
     };
@@ -973,6 +982,17 @@ datasources:
     //     },
     // };
 
+    let cluster_agent_context = ClusterAgentContext {
+        api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
+        api_token: &chart_config_prerequisites.infra_options.agent_version_controller_token,
+        organization_long_id: &chart_config_prerequisites.organization_long_id,
+        cluster_id: &chart_config_prerequisites.cluster_id,
+        cluster_long_id: &chart_config_prerequisites.cluster_long_id,
+        cluster_token: &chart_config_prerequisites.infra_options.qovery_cluster_secret_token,
+        grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
+    };
+    let cluster_agent = get_chart_for_cluster_agent(cluster_agent_context, chart_path)?;
+
     let shell_context = ShellAgentContext {
         api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
         api_token: &chart_config_prerequisites.infra_options.agent_version_controller_token,
@@ -994,7 +1014,7 @@ datasources:
     let mut qovery_agent = CommonChart {
         chart_info: ChartInfo {
             name: "qovery-agent".to_string(),
-            path: chart_path("common/charts/qovery-agent"),
+            path: chart_path("common/charts/qovery/qovery-agent"),
             namespace: HelmChartNamespaces::Qovery,
             values: vec![
                 ChartSetValue {
@@ -1167,6 +1187,7 @@ datasources:
         Box::new(q_storage_class),
         Box::new(coredns_config),
         Box::new(aws_vpc_cni_chart),
+        Box::new(aws_ui_view),
     ];
 
     let level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
@@ -1189,7 +1210,8 @@ datasources:
 
     let mut level_7: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
-        Box::new(qovery_agent),
+        Box::new(qovery_agent), // TODO: Migrate to the new cluster agent
+        Box::new(cluster_agent),
         Box::new(shell_agent),
         Box::new(qovery_engine),
     ];
@@ -1359,16 +1381,15 @@ impl AwsVpcCniChart {
                     _ => Ok(false),
                 },
             },
-            Err(e) => {
-                let message_safe = format!(
-                    "Error while getting daemonset info for chart {}, won't deploy CNI chart.",
-                    &self.chart_info.name
-                );
-                Err(CommandError::new(
-                    format!("{}, error: {:?}", message_safe, e),
-                    Some(message_safe),
-                ))
-            }
+            Err(e) => Err(CommandError::new(
+                format!(
+                    "Error while getting daemonset info for chart {}, won't deploy CNI chart. {}",
+                    &self.chart_info.name,
+                    e.message(ErrorMessageVerbosity::SafeOnly)
+                ),
+                e.message_raw(),
+                e.env_vars(),
+            )),
         }
     }
 

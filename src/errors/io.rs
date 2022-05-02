@@ -12,8 +12,8 @@ pub struct CommandError {
 impl From<errors::CommandError> for CommandError {
     fn from(error: errors::CommandError) -> Self {
         CommandError {
-            message: error.message_safe.unwrap_or_default(),
-            full_details: error.full_details,
+            message: error.message_safe,
+            full_details: error.full_details.unwrap_or_default(),
         }
     }
 }
@@ -235,7 +235,7 @@ pub struct EngineError {
     event_details: EventDetails,
     qovery_log_message: String,
     user_log_message: String,
-    message: Option<CommandError>,
+    underlying_error: Option<CommandError>,
     link: Option<String>,
     hint_message: Option<String>,
 }
@@ -247,7 +247,7 @@ impl From<errors::EngineError> for EngineError {
             event_details: EventDetails::from(error.event_details),
             qovery_log_message: error.qovery_log_message,
             user_log_message: error.user_log_message,
-            message: error.message.map(CommandError::from),
+            underlying_error: error.underlying_error.map(CommandError::from),
             link: error.link.map(|url| url.to_string()),
             hint_message: error.hint_message,
         }

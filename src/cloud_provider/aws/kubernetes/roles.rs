@@ -43,8 +43,9 @@ impl Role {
         match role {
             Ok(_) => Ok(true),
             Err(e) => Err(CommandError::new(
-                format!("Unable to know if {} exist on AWS account: {:?}", &self.role_name, e),
-                Some(format!("Unable to know if {} exist on AWS account.", &self.role_name,)),
+                format!("Unable to know if {} exist on AWS account.", &self.role_name,),
+                Some(e.to_string()),
+                None,
             )),
         }
     }
@@ -78,10 +79,10 @@ impl Role {
                 return match created {
                     Ok(_) => Ok(true),
                     Err(e) => {
-                        let safe_message = format!("Unable to know if `{}` exist on AWS Account", &self.role_name);
                         return Err(CommandError::new(
-                            format!("{}, error: {:?}", safe_message, e),
-                            Some(safe_message),
+                            format!("Unable to know if `{}` exist on AWS Account", &self.role_name),
+                            Some(e.to_string()),
+                            None,
                         ));
                     }
                 };

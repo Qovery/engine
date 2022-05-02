@@ -126,13 +126,11 @@ fn do_get_vpcs_from_api_output(json_content: &str) -> Result<Vec<Vpc>, CommandEr
 
     match res_vpcs {
         Ok(vpcs) => Ok(vpcs.vpcs),
-        Err(e) => {
-            let message_safe = "Error while trying to deserialize json received from Digital Ocean VPC API";
-            Err(CommandError::new(
-                format!("{}, error: {}", message_safe, e),
-                Some(message_safe.to_string()),
-            ))
-        }
+        Err(e) => Err(CommandError::new(
+            "Error while trying to deserialize json received from Digital Ocean VPC API".to_string(),
+            Some(e.to_string()),
+            None,
+        )),
     }
 }
 

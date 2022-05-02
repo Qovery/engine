@@ -32,6 +32,7 @@ environmentVariables:
   #REGION: ""
 
 volumes:
+  useNetworkDisks: true
   storageClassName: ""
   qoveryWorkspace:
     size: 20Gi
@@ -43,7 +44,7 @@ volumes:
 buildContainer:
   enable: true
   image: docker
-  tag: 20.10.11-dind
+  tag: 20.10.14-dind
 
 terminationGracePeriodSeconds: 7200
 
@@ -78,10 +79,11 @@ buildResources: {}
   # limits:
   #   cpu: 100m
   #   memory: 128Mi
+  #   ephemeral-storage: 40Gi
   # requests:
   #   cpu: 100m
   #   memory: 128Mi
-
+  #   ephemeral-storage: 40Gi
 
 nodeSelector: {}
 

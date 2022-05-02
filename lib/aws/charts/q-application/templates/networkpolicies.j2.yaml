@@ -5,6 +5,7 @@ metadata:
   name: {{ sanitized_name }}-default
   namespace: {{ namespace }}
   labels:
+    appLongId: {{ long_id }}
     ownerId: {{ owner_id }}
     appId: {{ id }}
     app: {{ sanitized_name }}
@@ -26,6 +27,7 @@ metadata:
   name: {{ sanitized_name }}-app-access
   namespace: {{ namespace }}
   labels:
+    appLongId: {{ long_id }}
     ownerId: {{ owner_id }}
     appId: {{ id }}
     app: {{ sanitized_name }}
@@ -76,6 +78,7 @@ metadata:
   name: {{ sanitized_name }}-deny-aws-metadata-server
   namespace: {{ namespace }}
   labels:
+    appLongId: {{ long_id }}
     ownerId: {{ owner_id }}
     appId: {{ id }}
     app: {{ sanitized_name }}
