@@ -6,8 +6,8 @@ locals {
 
 locals {
   tags_common = {
-    ClusterId = var.kubernetes_full_cluster_id
-    ClusterName = var.kubernetes_cluster_name,
+    ClusterId = var.kubernetes_cluster_id
+    ClusterLongId = var.kubernetes_full_cluster_id
     OrganizationId = var.organization_id,
     Region = var.region
     creationDate = time_static.on_cluster_create.rfc3339

@@ -498,7 +498,7 @@ impl EKS {
         context.insert("eks_cidr_subnet", &eks_cidr_subnet);
         context.insert("kubernetes_cluster_name", &self.name());
         context.insert("kubernetes_cluster_id", self.id());
-        context.insert("kubernetes_full_cluster_id", self.context.cluster_id());
+        context.insert("kubernetes_full_cluster_id", &self.long_id);
         context.insert("eks_region_cluster_id", region_cluster_id.as_str());
         context.insert("eks_worker_nodes", &self.nodes_groups);
         context.insert("eks_zone_a_subnet_blocks_private", &eks_zone_a_subnet_blocks_private);
@@ -1159,13 +1159,10 @@ impl EKS {
                             event_details.clone(),
                             EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
                         )),
-                        Err(e) => {
-                            let message_safe = format!("Can't delete chart `{}`: {}", &chart.name, e);
-                            self.logger().log(EngineEvent::Warning(
-                                event_details.clone(),
-                                EventMessage::new(message_safe, Some(e.to_string())),
-                            ))
-                        }
+                        Err(e) => self.logger().log(EngineEvent::Warning(
+                            event_details.clone(),
+                            EventMessage::new(format!("Can't delete chart `{}`", &chart.name), Some(e.to_string())),
+                        )),
                     }
                 }
             }
@@ -1211,23 +1208,20 @@ impl EKS {
                                 event_details.clone(),
                                 EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
                             )),
-                            Err(e) => {
-                                let message_safe = format!("Error deleting chart `{}`: {}", chart.name, e);
-                                self.logger().log(EngineEvent::Warning(
-                                    event_details.clone(),
-                                    EventMessage::new(message_safe, Some(e.to_string())),
-                                ))
-                            }
+                            Err(e) => self.logger().log(EngineEvent::Warning(
+                                event_details.clone(),
+                                EventMessage::new(
+                                    format!("Error deleting chart `{}`", chart.name),
+                                    Some(e.to_string()),
+                                ),
+                            )),
                         }
                     }
                 }
-                Err(e) => {
-                    let message_safe = "Unable to get helm list";
-                    self.logger().log(EngineEvent::Warning(
-                        event_details.clone(),
-                        EventMessage::new(message_safe.to_string(), Some(e.to_string())),
-                    ))
-                }
+                Err(e) => self.logger().log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new("Unable to get helm list".to_string(), Some(e.to_string())),
+                )),
             }
         };
 

@@ -9,6 +9,7 @@ metadata:
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     appId: {{ id }}
+    appLongId: {{ long_id }}
     app: {{ sanitized_name }}
   annotations:
     releaseTime: {% raw %}{{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}{% endraw %}
@@ -27,6 +28,7 @@ spec:
         ownerId: {{ owner_id }}
         envId: {{ environment_id }}
         appId: {{ id }}
+        appLongId: {{ long_id }}
         app: {{ sanitized_name }}
       annotations:
         checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
@@ -91,27 +93,6 @@ spec:
 {%- endfor %}
   volumeClaimTemplates:
 {%- for s in storage %}
-{% if clone %}
-  - metadata:
-      name: {{ s.id }}
-      labels:
-        ownerId: {{ owner_id }}
-        envId: {{ environment_id }}
-        appId: {{ id }}
-        app: {{ sanitized_name }}
-        diskId: {{ s.id }}
-        diskType: {{ s.storage_type }}
-    spec:
-      accessModes:
-        - ReadWriteOnce
-      storageClassName: aws-ebs-{{ s.storage_type }}-0
-      dataSource:
-        name: {{ s.id }}
-        kind: PersistentVolumeClaim
-      resources:
-        requests:
-          storage: {{ disk.size_in_gib }}Gi
-{% else %}
   - metadata:
       name: {{ s.id }}
       labels:
@@ -127,6 +108,5 @@ spec:
       resources:
         requests:
           storage: {{ s.size_in_gib }}Gi
-{%- endif %}
 {%- endfor %}
 {%- endif %}
