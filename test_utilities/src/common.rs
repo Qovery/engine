@@ -39,12 +39,14 @@ use qovery_engine::logger::Logger;
 use qovery_engine::models::digital_ocean::DoRegion;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
+use qovery_engine::utilities::to_short_id;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{span, Level};
+use uuid::Uuid;
 
 pub enum RegionActivationStatus {
     Deactivated,
@@ -255,7 +257,7 @@ pub fn environment_3_apps_3_routers_3_databases(
         action: Action::Create,
         applications: vec![
             Application {
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: app_name_1.clone(),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "5990752647af11ef21c3d46a51abbde3da1ab351".to_string(),
@@ -270,6 +272,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 }),
                 storage: vec![Storage {
                     id: generate_id(),
+                    long_id: Uuid::new_v4(),
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
                     size_in_gib: 10,
@@ -301,7 +304,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 advance_settings: Default::default(),
             },
             Application {
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: app_name_2.clone(),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "5990752647af11ef21c3d46a51abbde3da1ab351".to_string(),
@@ -316,6 +319,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 }),
                 storage: vec![Storage {
                     id: generate_id(),
+                    long_id: Uuid::new_v4(),
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
                     size_in_gib: 10,
@@ -347,7 +351,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 advance_settings: Default::default(),
             },
             Application {
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: app_name_3.clone(),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "158ea8ebc9897c50a7c56b910db33ce837ac1e61".to_string(),
@@ -362,6 +366,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 }),
                 storage: vec![Storage {
                     id: generate_id(),
+                    long_id: Uuid::new_v4(),
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
                     size_in_gib: 10,
@@ -397,7 +402,7 @@ pub fn environment_3_apps_3_routers_3_databases(
         ],
         routers: vec![
             Router {
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: "main".to_string(),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
@@ -410,7 +415,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 sticky_sessions_enabled: false,
             },
             Router {
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: "second-router".to_string(),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
@@ -423,7 +428,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 sticky_sessions_enabled: false,
             },
             Router {
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: "third-router".to_string(),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
@@ -440,7 +445,7 @@ pub fn environment_3_apps_3_routers_3_databases(
             Database {
                 kind: DatabaseKind::Postgresql,
                 action: Action::Create,
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: database_name.clone(),
                 version: "11.8.0".to_string(),
                 fqdn_id: fqdn.clone(),
@@ -462,7 +467,7 @@ pub fn environment_3_apps_3_routers_3_databases(
             Database {
                 kind: DatabaseKind::Postgresql,
                 action: Action::Create,
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: database_name_2.clone(),
                 version: "11.8.0".to_string(),
                 fqdn_id: fqdn_2.clone(),
@@ -484,7 +489,7 @@ pub fn environment_3_apps_3_routers_3_databases(
             Database {
                 kind: DatabaseKind::Mongodb,
                 action: Action::Create,
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: database_db_name_mongo.clone(),
                 version: version_mongo.to_string(),
                 fqdn_id: database_host_mongo.clone(),
@@ -512,7 +517,6 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
     let suffix = generate_id();
     let application_id = generate_id();
     let application_name = format!("{}-{}", "simple-app".to_string(), &suffix);
-    let router_id = generate_id();
     let router_name = "main".to_string();
     let application_domain = format!("{}.{}.{}", application_id, context.cluster_id().to_string(), test_domain);
     EnvironmentRequest {
@@ -523,7 +527,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
         organization_id: context.organization_id().to_string(),
         action: Action::Create,
         applications: vec![Application {
-            id: application_id,
+            long_id: Uuid::new_v4(),
             name: application_name,
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
@@ -556,7 +560,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
             advance_settings: Default::default(),
         }],
         routers: vec![Router {
-            id: router_id,
+            long_id: Uuid::new_v4(),
             name: router_name,
             action: Action::Create,
             default_domain: application_domain,
@@ -575,7 +579,6 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
 
 pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
     let suffix = generate_id();
-    let application_id = generate_id();
     let application_name = format!("{}-{}", "simple-app".to_string(), &suffix);
 
     EnvironmentRequest {
@@ -586,7 +589,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
         organization_id: context.organization_id().to_string(),
         action: Action::Create,
         applications: vec![Application {
-            id: application_id,
+            long_id: Uuid::new_v4(),
             name: application_name,
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
@@ -657,7 +660,7 @@ pub fn environnement_2_app_2_routers_1_psql(
         databases: vec![Database {
             kind: DatabaseKind::Postgresql,
             action: Action::Create,
-            id: generate_id(),
+            long_id: Uuid::new_v4(),
             name: database_name.clone(),
             version: "11.8.0".to_string(),
             fqdn_id: fqdn.clone(),
@@ -678,7 +681,7 @@ pub fn environnement_2_app_2_routers_1_psql(
         }],
         applications: vec![
             Application {
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: application_name1.to_string(),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
@@ -693,6 +696,7 @@ pub fn environnement_2_app_2_routers_1_psql(
                 }),
                 storage: vec![Storage {
                     id: generate_id(),
+                    long_id: Uuid::new_v4(),
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
                     size_in_gib: 10,
@@ -724,7 +728,7 @@ pub fn environnement_2_app_2_routers_1_psql(
                 advance_settings: Default::default(),
             },
             Application {
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: application_name2.to_string(),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
@@ -739,6 +743,7 @@ pub fn environnement_2_app_2_routers_1_psql(
                 }),
                 storage: vec![Storage {
                     id: generate_id(),
+                    long_id: Uuid::new_v4(),
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
                     size_in_gib: 10,
@@ -772,7 +777,7 @@ pub fn environnement_2_app_2_routers_1_psql(
         ],
         routers: vec![
             Router {
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: "main".to_string(),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
@@ -785,7 +790,7 @@ pub fn environnement_2_app_2_routers_1_psql(
                 sticky_sessions_enabled: false,
             },
             Router {
-                id: generate_id(),
+                long_id: Uuid::new_v4(),
                 name: "second-router".to_string(),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
@@ -831,7 +836,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
         organization_id: context.organization_id().to_string(),
         action: Action::Create,
         applications: vec![Application {
-            id: generate_id(),
+            long_id: Uuid::new_v4(),
             name: format!("{}-{}", "echo-app".to_string(), &suffix),
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
@@ -867,7 +872,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             advance_settings: Default::default(),
         }],
         routers: vec![Router {
-            id: generate_id(),
+            long_id: Uuid::new_v4(),
             name: "main".to_string(),
             action: Action::Create,
             default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
@@ -894,7 +899,7 @@ pub fn environment_only_http_server(context: &Context) -> EnvironmentRequest {
         organization_id: context.organization_id().to_string(),
         action: Action::Create,
         applications: vec![Application {
-            id: generate_id(),
+            long_id: Uuid::new_v4(),
             name: format!("{}-{}", "mini-http".to_string(), &suffix),
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
@@ -935,6 +940,7 @@ pub fn environment_only_http_server(context: &Context) -> EnvironmentRequest {
 
 pub fn environment_only_http_server_router(context: &Context, test_domain: &str) -> EnvironmentRequest {
     let suffix = generate_id();
+    let id = Uuid::new_v4();
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
@@ -943,7 +949,7 @@ pub fn environment_only_http_server_router(context: &Context, test_domain: &str)
         organization_id: context.organization_id().to_string(),
         action: Action::Create,
         applications: vec![Application {
-            id: generate_id(),
+            long_id: id,
             name: format!("{}-{}", "mini-http".to_string(), &suffix),
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
@@ -977,7 +983,7 @@ pub fn environment_only_http_server_router(context: &Context, test_domain: &str)
             advance_settings: Default::default(),
         }],
         routers: vec![Router {
-            id: generate_id(),
+            long_id: Uuid::new_v4(),
             name: "main".to_string(),
             action: Action::Create,
             default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
@@ -1045,7 +1051,7 @@ pub fn test_db(
     let _enter = span.enter();
     let context_for_delete = context.clone_not_same_execution_id();
 
-    let app_id = generate_id();
+    let app_id = Uuid::new_v4();
     let database_username = "superuser".to_string();
     let database_password = generate_password(provider_kind.clone(), database_mode.clone());
     let db_kind_str = db_kind.name().to_string();
@@ -1080,7 +1086,7 @@ pub fn test_db(
     let db = Database {
         kind: db_kind.clone(),
         action: Action::Create,
-        id: db_id.clone(),
+        long_id: Uuid::new_v4(),
         name: db_id.clone(),
         version: version.to_string(),
         fqdn_id: database_host.clone(),
@@ -1107,8 +1113,8 @@ pub fn test_db(
         .applications
         .into_iter()
         .map(|mut app| {
-            app.id = app_id.clone();
-            app.name = app_id.clone();
+            app.long_id = app_id.clone();
+            app.name = to_short_id(&app_id);
             app.branch = app_name.clone();
             app.commit_id = db_infos.app_commit.clone();
             app.ports = vec![Port {

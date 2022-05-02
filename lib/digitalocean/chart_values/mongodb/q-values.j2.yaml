@@ -210,19 +210,18 @@ annotations: {}
 
 # Additional abels to apply to the deployment or statefulsets
 labels:
-  ownerId: {{ owner_id }}
   envId: {{ environment_id }}
   databaseId: {{ id }}
-  databaseName: '{{ sanitized_name }}'
+  databaseLongId: {{ long_id }}
 
 # Annotations to be added to MongoDB pods
 podAnnotations: {}
 
 # Additional pod labels to apply
 podLabels:
-  ownerId: {{ owner_id }}
   envId: {{ environment_id }}
   databaseId: {{ id }}
+  databaseLongId: {{ long_id }}
 
 ## Use an alternate scheduler, e.g. "stork".
 ## ref: https://kubernetes.io/docs/tasks/administer-cluster/configure-multiple-schedulers/

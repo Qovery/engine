@@ -5,6 +5,7 @@ use std::path::Path;
 
 use reqwest::header;
 use reqwest::header::{HeaderMap, HeaderValue};
+use uuid::Uuid;
 
 // generate the right header for digital ocean with token
 pub fn get_header_with_bearer(token: &str) -> HeaderMap<HeaderValue> {
@@ -46,6 +47,10 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
     tag.truncate(127);
 
     tag
+}
+
+pub fn to_short_id(id: &Uuid) -> String {
+    format!("z{}", id.to_string().split_at(8).0)
 }
 
 #[cfg(test)]
