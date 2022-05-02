@@ -619,6 +619,48 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
     }
 }
 
+pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentRequest {
+    let suffix = "c3dn5so3dltod3s";
+    let application_name = format!("{}-{}", "simple-app".to_string(), &suffix);
+
+    EnvironmentRequest {
+        execution_id: context.execution_id().to_string(),
+        id: "c4dn5so3dltod3s".to_string(),
+        owner_id: "c5dn5so3dltod3s".to_string(),
+        project_id: "c6dn5so3dltod3s".to_string(),
+        organization_id: context.organization_id().to_string(),
+        action: Action::Create,
+        applications: vec![Application {
+            long_id: Uuid::from_str("9d0158db-b783-4bc2-a23b-c7d9228cbe90").unwrap(),
+            name: application_name,
+            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+            commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
+            dockerfile_path: Some("Dockerfile".to_string()),
+            buildpack_language: None,
+            root_path: String::from("/"),
+            action: Action::Create,
+            git_credentials: Some(GitCredentials {
+                login: "x-access-token".to_string(),
+                access_token: "xxx".to_string(),
+                expired_at: Utc::now(),
+            }),
+            storage: vec![],
+            environment_vars: BTreeMap::default(),
+            branch: "basic-app-deploy".to_string(),
+            ports: vec![],
+            total_cpus: "100m".to_string(),
+            total_ram_in_mib: 256,
+            min_instances: 1,
+            max_instances: 1,
+            cpu_burst: "100m".to_string(),
+            advance_settings: Default::default(),
+        }],
+        routers: vec![],
+        databases: vec![],
+        clone_from_environment_id: None,
+    }
+}
+
 pub fn environment_only_http_server_router_with_sticky_session(
     context: &Context,
     test_domain: &str,
@@ -1657,4 +1699,227 @@ where
         }
         Err(e) => Err(e),
     }
+}
+
+pub fn test_db_on_upgrade(
+    context: Context,
+    logger: Box<dyn Logger>,
+    mut environment: EnvironmentRequest,
+    secrets: FuncTestsSecrets,
+    version: &str,
+    test_name: &str,
+    db_kind: DatabaseKind,
+    provider_kind: Kind,
+    database_mode: DatabaseMode,
+    is_public: bool,
+) -> String {
+    init();
+
+    let span = span!(Level::INFO, "test", name = test_name);
+    let _enter = span.enter();
+    let context_for_delete = context.clone_not_same_execution_id();
+
+    let app_id = Uuid::from_str("8d0158db-b783-4bc2-a23b-c7d9228cbe90").unwrap();
+    let database_username = "superuser".to_string();
+    let database_password = "uxoyf358jojkemj".to_string();
+    let db_kind_str = db_kind.name().to_string();
+    let db_id = "c2dn5so3dltod3s".to_string();
+    let database_host = format!("{}-{}", db_id, db_kind_str.clone());
+    let database_fqdn = format!(
+        "{}.{}.{}",
+        database_host,
+        context.cluster_id(),
+        secrets
+            .clone()
+            .DEFAULT_TEST_DOMAIN
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+    );
+
+    let db_infos = db_infos(
+        db_kind.clone(),
+        db_id.clone(),
+        database_mode.clone(),
+        database_username.clone(),
+        database_password.clone(),
+        if is_public {
+            database_fqdn.clone()
+        } else {
+            database_host.clone()
+        },
+    );
+    let database_port = db_infos.db_port.clone();
+    let storage_size = 10;
+    let db_disk_type = db_disk_type(provider_kind.clone(), database_mode.clone());
+    let db_instance_type = db_instance_type(provider_kind.clone(), db_kind.clone(), database_mode.clone());
+    let db = Database {
+        kind: db_kind.clone(),
+        action: Action::Create,
+        long_id: Uuid::from_str("7d0158db-b783-4bc2-a23b-c7d9228cbe90").unwrap(),
+        name: db_id.clone(),
+        version: version.to_string(),
+        fqdn_id: database_host.clone(),
+        fqdn: database_fqdn.clone(),
+        port: database_port.clone(),
+        username: database_username.clone(),
+        password: database_password.clone(),
+        total_cpus: "50m".to_string(),
+        total_ram_in_mib: 256,
+        disk_size_in_gib: storage_size.clone(),
+        database_instance_type: db_instance_type.to_string(),
+        database_disk_type: db_disk_type.to_string(),
+        encrypt_disk: true,
+        activate_high_availability: false,
+        activate_backups: false,
+        publicly_accessible: is_public.clone(),
+        mode: database_mode.clone(),
+    };
+
+    environment.databases = vec![db.clone()];
+
+    let app_name = format!("{}-app-{}", db_kind_str.clone(), generate_id());
+    environment.applications = environment
+        .applications
+        .into_iter()
+        .map(|mut app| {
+            app.long_id = app_id.clone();
+            app.name = to_short_id(&app_id);
+            app.branch = app_name.clone();
+            app.commit_id = db_infos.app_commit.clone();
+            app.ports = vec![Port {
+                id: "zdf7d6aad".to_string(),
+                long_id: Default::default(),
+                port: 1234,
+                public_port: Some(1234),
+                name: None,
+                publicly_accessible: true,
+                protocol: Protocol::HTTP,
+            }];
+            app.dockerfile_path = Some(format!("Dockerfile-{}", version));
+            app.environment_vars = db_infos.app_env_vars.clone();
+            app
+        })
+        .collect::<Vec<qovery_engine::io_models::Application>>();
+
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+    let ea = environment.clone();
+    let ea_delete = environment_delete.clone();
+
+    let (localisation, kubernetes_version) = match provider_kind {
+        Kind::Aws => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
+        Kind::Do => (DO_TEST_REGION.to_string(), DO_KUBERNETES_VERSION.to_string()),
+        Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
+    };
+
+    let engine_config = match provider_kind {
+        Kind::Aws => AWS::docker_cr_engine(
+            &context,
+            logger.clone(),
+            localisation.as_str(),
+            kubernetes_version.clone(),
+            &ClusterDomain::Default,
+            None,
+        ),
+        Kind::Do => DO::docker_cr_engine(
+            &context,
+            logger.clone(),
+            localisation.as_str(),
+            kubernetes_version.clone(),
+            &ClusterDomain::Default,
+            None,
+        ),
+        Kind::Scw => Scaleway::docker_cr_engine(
+            &context,
+            logger.clone(),
+            localisation.as_str(),
+            kubernetes_version.clone(),
+            &ClusterDomain::Default,
+            None,
+        ),
+    };
+
+    let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
+    assert!(matches!(ret, TransactionResult::Ok));
+
+    match database_mode.clone() {
+        DatabaseMode::CONTAINER => {
+            match get_pvc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
+                Ok(pvc) => assert_eq!(
+                    pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                    format!("{}Gi", storage_size)
+                ),
+                Err(_) => assert!(false),
+            };
+
+            match get_svc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name == database_host && &svc.spec.svc_type == "LoadBalancer")
+                        .collect::<Vec<SVCItem>>()
+                        .len(),
+                    match is_public {
+                        true => 1,
+                        false => 0,
+                    }
+                ),
+                Err(_) => assert!(false),
+            };
+        }
+        DatabaseMode::MANAGED => {
+            match get_svc(context, provider_kind.clone(), environment.clone(), secrets.clone()) {
+                Ok(svc) => {
+                    let service = svc
+                        .items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name == database_host && svc.spec.svc_type == "ExternalName")
+                        .collect::<Vec<SVCItem>>();
+                    let annotations = &service[0].metadata.annotations;
+                    assert_eq!(service.len(), 1);
+                    match is_public {
+                        true => {
+                            assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
+                            assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_fqdn);
+                        }
+                        false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
+                    }
+                }
+                Err(_) => assert!(false),
+            };
+        }
+    }
+
+    let engine_config_for_delete = match provider_kind {
+        Kind::Aws => AWS::docker_cr_engine(
+            &context_for_delete,
+            logger.clone(),
+            localisation.as_str(),
+            kubernetes_version,
+            &ClusterDomain::Default,
+            None,
+        ),
+        Kind::Do => DO::docker_cr_engine(
+            &context_for_delete,
+            logger.clone(),
+            localisation.as_str(),
+            kubernetes_version,
+            &ClusterDomain::Default,
+            None,
+        ),
+        Kind::Scw => Scaleway::docker_cr_engine(
+            &context_for_delete,
+            logger.clone(),
+            localisation.as_str(),
+            kubernetes_version,
+            &ClusterDomain::Default,
+            None,
+        ),
+    };
+
+    // let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
+    assert!(matches!(ret, TransactionResult::Ok));
+
+    return test_name.to_string();
 }
