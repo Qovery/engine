@@ -7,7 +7,9 @@ use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::command::QoveryCommand;
 use crate::cmd::helm::HelmCommand::{LIST, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{CannotRollback, CmdError, InvalidKubeConfig, ReleaseDoesNotExist};
-use crate::cmd::helm_utils::{apply_chart_backup, prepare_chart_backup};
+use crate::cmd::helm_utils::{
+    apply_chart_backup, delete_unused_chart_backup, get_common_helm_chart_version, prepare_chart_backup,
+};
 use crate::cmd::structs::{HelmChart, HelmListItem};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EventDetails;
@@ -59,7 +61,7 @@ pub enum HelmError {
 
 #[derive(Debug)]
 pub struct Helm {
-    pub kubernetes_config: PathBuf,
+    kubernetes_config: PathBuf,
     common_envs: Vec<(String, String)>,
 }
 
@@ -495,16 +497,27 @@ impl Helm {
 
         let root_dir_path = std::env::temp_dir();
 
+        let mut need_backup = false;
         if chart.backup_resources.is_some() {
-            if let Err(e) = prepare_chart_backup(
-                &self.kubernetes_config,
-                &root_dir_path,
-                chart,
+            if let Some(installed_version) = self.get_chart_version(
+                chart.name.clone(),
+                Some(chart.get_namespace_string().as_str()),
                 &self.get_all_envs(envs),
-                chart.backup_resources.as_ref().unwrap().to_vec(),
-            ) {
-                return Err(e);
-            };
+            )? {
+                if installed_version.le(&get_common_helm_chart_version(chart)?) {
+                    if let Err(e) = prepare_chart_backup(
+                        &self.kubernetes_config,
+                        &root_dir_path,
+                        chart,
+                        &self.get_all_envs(envs),
+                        chart.backup_resources.as_ref().unwrap().to_vec(),
+                    ) {
+                        return Err(e);
+                    };
+
+                    need_backup = true;
+                }
+            }
         };
 
         let helm_ret = helm_exec_with_output(
@@ -522,7 +535,7 @@ impl Helm {
         match helm_ret {
             // Ok is ok
             Ok(_) => {
-                if chart.backup_resources.is_some() {
+                if need_backup {
                     if let Err(e) =
                         apply_chart_backup(&self.kubernetes_config, &root_dir_path, &self.get_all_envs(envs), chart)
                     {
@@ -533,6 +546,9 @@ impl Helm {
             }
             Err(err) => {
                 error!("Helm error: {:?}", err);
+                if let Err(e) = delete_unused_chart_backup(&self.kubernetes_config, &self.get_all_envs(envs), chart) {
+                    return Err(e);
+                }
 
                 // Try do define/specify a bit more the message
                 let stderr_msg: String = error_message.into_iter().collect();

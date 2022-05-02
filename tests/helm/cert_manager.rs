@@ -185,7 +185,7 @@ fn test_create_chart_backup() {
         .prepare_chart_backup(root_dir_path, &cert_manager.chart_info, &vec![], vec!["cert".to_string()])
         .unwrap();
     let secrets = kubectl_exec_get_secrets(
-        &helm.kubernetes_config,
+        kube_config.as_path(),
         cert_manager.chart_info.namespace.to_string().as_str(),
         "",
         vec![],
@@ -318,7 +318,7 @@ fn test_should_apply_chart_backup() {
     let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_2_bis], false).map_err(|_| assert!(false));
 
     let secrets = kubectl_exec_get_secrets(
-        &helm.kubernetes_config,
+        kube_config.as_path(),
         cert_manager.chart_info.namespace.to_string().as_str(),
         "",
         vec![],

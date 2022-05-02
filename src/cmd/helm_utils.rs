@@ -10,7 +10,10 @@ use crate::fs::{
     create_yaml_backup_file, create_yaml_file_from_secret, indent_file, remove_lines_starting_with,
     truncate_file_from_word,
 };
+use semver::Version;
 use serde_derive::Deserialize;
+use std::fs::OpenOptions;
+use std::io::{BufReader, Read};
 use std::path::Path;
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -23,6 +26,15 @@ pub struct Backup {
 pub struct BackupInfos {
     pub name: String,
     pub path: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ChartYAML {
+    #[serde(default)]
+    pub version: String,
+    #[serde(default)]
+    pub app_version: String,
 }
 
 pub fn prepare_chart_backup<P>(
@@ -230,4 +242,129 @@ where
     }
 
     Ok(())
+}
+
+pub fn delete_unused_chart_backup<P>(
+    kubernetes_config: P,
+    envs: &[(&str, &str)],
+    chart: &ChartInfo,
+) -> Result<(), HelmError>
+where
+    P: AsRef<Path>,
+{
+    let secrets = kubectl_exec_get_secrets(
+        &kubernetes_config,
+        chart.clone().namespace.to_string().as_str(),
+        "",
+        envs.to_vec(),
+    )
+    .map_err(|e| {
+        CmdError(
+            chart.clone().name,
+            HelmCommand::UPGRADE,
+            CommandError::new(e.message_safe(), e.message_raw(), None),
+        )
+    })?
+    .items;
+
+    for secret in secrets {
+        if secret.metadata.name.contains("-q-backup") {
+            if let Err(e) = kubectl_delete_secret(
+                &kubernetes_config,
+                envs.to_vec(),
+                Some(chart.clone().namespace.to_string().as_str()),
+                secret.metadata.name,
+            ) {
+                return Err(CmdError(
+                    chart.clone().name,
+                    HelmCommand::UPGRADE,
+                    CommandError::new(e.message_safe(), e.message_raw(), None),
+                ));
+            };
+        }
+    }
+
+    Ok(())
+}
+
+pub fn get_common_helm_chart_infos(chart: &ChartInfo) -> Result<ChartYAML, HelmError> {
+    let string_path = format!("{}/Chart.yaml", chart.path);
+    let file = OpenOptions::new().read(true).open(string_path.as_str()).map_err(|e| {
+        CmdError(
+            chart.clone().name,
+            HelmCommand::UPGRADE,
+            CommandError::new(
+                format!("Unable to get chart infos for {}.", chart.name.clone()),
+                Some(e.to_string()),
+                None,
+            ),
+        )
+    })?;
+    let mut content = String::new();
+    let _ = BufReader::new(file).read_to_string(&mut content);
+    match serde_yaml::from_str::<ChartYAML>(content.as_str()) {
+        Ok(chart_yaml) => Ok(chart_yaml),
+        Err(e) => Err(CmdError(
+            chart.clone().name,
+            HelmCommand::UPGRADE,
+            CommandError::new(
+                format!("Unable to get chart infos for {}.", chart.name.clone()),
+                Some(e.to_string()),
+                None,
+            ),
+        )),
+    }
+}
+
+pub fn get_common_helm_chart_version(chart: &ChartInfo) -> Result<Version, HelmError> {
+    let chart_yaml = match get_common_helm_chart_infos(chart) {
+        Ok(chart_yaml) => chart_yaml,
+        Err(e) => {
+            return Err(CmdError(
+                chart.clone().name,
+                HelmCommand::UPGRADE,
+                CommandError::new(
+                    format!("Unable to get chart version for {}.", chart.name.clone()),
+                    Some(e.to_string()),
+                    None,
+                ),
+            ))
+        }
+    };
+
+    if !chart_yaml.app_version.is_empty() {
+        return match Version::parse(chart_yaml.app_version.as_str()) {
+            Ok(version) => Ok(version),
+            Err(e) => Err(CmdError(
+                chart.clone().name,
+                HelmCommand::UPGRADE,
+                CommandError::new(
+                    format!("Unable to get chart version for {}.", chart.name.clone()),
+                    Some(e.to_string()),
+                    None,
+                ),
+            )),
+        };
+    }
+
+    if !chart_yaml.version.is_empty() {
+        return match Version::parse(chart_yaml.version.as_str()) {
+            Ok(version) => Ok(version),
+            Err(e) => Err(CmdError(
+                chart.clone().name,
+                HelmCommand::UPGRADE,
+                CommandError::new(
+                    format!("Unable to get chart version for {}.", chart.name.clone()),
+                    Some(e.to_string()),
+                    None,
+                ),
+            )),
+        };
+    }
+
+    Err(CmdError(
+        chart.clone().name,
+        HelmCommand::UPGRADE,
+        CommandError::new_from_safe_message(format!("Unable to get chart version for {}.", chart.name.clone())),
+    ))
 }
