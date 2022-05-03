@@ -1160,13 +1160,10 @@ impl EKS {
                             event_details.clone(),
                             EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
                         )),
-                        Err(e) => {
-                            let message_safe = format!("Can't delete chart `{}`: {}", &chart.name, e);
-                            self.logger().log(EngineEvent::Warning(
-                                event_details.clone(),
-                                EventMessage::new(message_safe, Some(e.to_string())),
-                            ))
-                        }
+                        Err(e) => self.logger().log(EngineEvent::Warning(
+                            event_details.clone(),
+                            EventMessage::new(format!("Can't delete chart `{}`", &chart.name), Some(e.to_string())),
+                        )),
                     }
                 }
             }
@@ -1212,23 +1209,20 @@ impl EKS {
                                 event_details.clone(),
                                 EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
                             )),
-                            Err(e) => {
-                                let message_safe = format!("Error deleting chart `{}`: {}", chart.name, e);
-                                self.logger().log(EngineEvent::Warning(
-                                    event_details.clone(),
-                                    EventMessage::new(message_safe, Some(e.to_string())),
-                                ))
-                            }
+                            Err(e) => self.logger().log(EngineEvent::Warning(
+                                event_details.clone(),
+                                EventMessage::new(
+                                    format!("Error deleting chart `{}`", chart.name),
+                                    Some(e.to_string()),
+                                ),
+                            )),
                         }
                     }
                 }
-                Err(e) => {
-                    let message_safe = "Unable to get helm list";
-                    self.logger().log(EngineEvent::Warning(
-                        event_details.clone(),
-                        EventMessage::new(message_safe.to_string(), Some(e.to_string())),
-                    ))
-                }
+                Err(e) => self.logger().log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new("Unable to get helm list".to_string(), Some(e.to_string())),
+                )),
             }
         };
 

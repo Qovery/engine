@@ -12,6 +12,7 @@ use rand::distributions::Alphanumeric;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use url::Url;
+use uuid::Uuid;
 
 use crate::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
 use crate::cloud_provider::environment::Environment;
@@ -29,6 +30,7 @@ use crate::models::digital_ocean::{DoAppExtraSettings, DoRouterExtraSettings, Do
 use crate::models::router::RouterError;
 use crate::models::scaleway::{ScwAppExtraSettings, ScwRouterExtraSettings, ScwStorageType};
 use crate::models::types::{CloudProvider as CP, VersionsNumber, AWS, DO, SCW};
+use crate::utilities::to_short_id;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct QoveryIdentifier {
@@ -201,7 +203,7 @@ impl Default for ApplicationAdvanceSettings {
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Application {
-    pub id: String,
+    pub long_id: Uuid,
     pub name: String,
     pub action: Action,
     pub git_url: String,
@@ -240,7 +242,7 @@ impl Application {
         match cloud_provider.kind() {
             CPKind::Aws => Ok(Box::new(models::application::Application::<AWS>::new(
                 context.clone(),
-                self.id.as_str(),
+                self.long_id,
                 self.action.to_service_action(),
                 self.name.as_str(),
                 self.ports.clone(),
@@ -259,7 +261,7 @@ impl Application {
             )?)),
             CPKind::Do => Ok(Box::new(models::application::Application::<DO>::new(
                 context.clone(),
-                self.id.as_str(),
+                self.long_id,
                 self.action.to_service_action(),
                 self.name.as_str(),
                 self.ports.clone(),
@@ -278,7 +280,7 @@ impl Application {
             )?)),
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
                 context.clone(),
-                self.id.as_str(),
+                self.long_id,
                 self.action.to_service_action(),
                 self.name.as_str(),
                 self.ports.clone(),
@@ -300,7 +302,7 @@ impl Application {
 
     fn to_image(&self, cr_info: &ContainerRegistryInfo) -> Image {
         Image {
-            application_id: self.id.clone(),
+            application_id: to_short_id(&self.long_id),
             name: (cr_info.get_image_name)(&self.name),
             tag: "".to_string(), // It needs to be compute after creation
             commit_id: self.commit_id.clone(),
@@ -439,6 +441,7 @@ pub struct GitCredentials {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Storage {
     pub id: String,
+    pub long_id: Uuid,
     pub name: String,
     pub storage_type: StorageType,
     pub size_in_gib: u16,
@@ -497,7 +500,7 @@ impl Storage {
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Router {
-    pub id: String,
+    pub long_id: Uuid,
     pub name: String,
     pub action: Action,
     pub default_domain: String,
@@ -541,7 +544,7 @@ impl Router {
             CPKind::Aws => {
                 let router = Box::new(models::router::Router::<AWS>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.name.as_str(),
                     self.action.to_service_action(),
                     self.default_domain.as_str(),
@@ -557,7 +560,7 @@ impl Router {
             CPKind::Do => {
                 let router = Box::new(models::router::Router::<DO>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.name.as_str(),
                     self.action.to_service_action(),
                     self.default_domain.as_str(),
@@ -573,7 +576,7 @@ impl Router {
             CPKind::Scw => {
                 let router = Box::new(models::router::Router::<SCW>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.name.as_str(),
                     self.action.to_service_action(),
                     self.default_domain.as_str(),
@@ -612,7 +615,7 @@ pub enum DatabaseMode {
 pub struct Database {
     pub kind: DatabaseKind,
     pub action: Action,
-    pub id: String,
+    pub long_id: Uuid,
     pub name: String,
     pub version: String,
     pub fqdn_id: String,
@@ -663,7 +666,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<AWS, Managed, PostgresSQL>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -684,7 +687,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<AWS, Container, PostgresSQL>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -706,7 +709,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<AWS, Managed, MySQL>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -727,7 +730,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<AWS, Container, MySQL>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -748,7 +751,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Redis, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<AWS, Managed, Redis>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -769,7 +772,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<AWS, Container, Redis>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -790,7 +793,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<AWS, Managed, MongoDB>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -811,7 +814,7 @@ impl Database {
             (CPKind::Aws, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<AWS, Container, MongoDB>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -833,7 +836,7 @@ impl Database {
             (CPKind::Do, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, PostgresSQL>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -854,7 +857,7 @@ impl Database {
             (CPKind::Do, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, MySQL>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -875,7 +878,7 @@ impl Database {
             (CPKind::Do, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, Redis>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -896,7 +899,7 @@ impl Database {
             (CPKind::Do, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, MongoDB>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -933,7 +936,7 @@ impl Database {
             (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<SCW, Managed, PostgresSQL>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -954,7 +957,7 @@ impl Database {
             (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, PostgresSQL>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -975,7 +978,7 @@ impl Database {
             (CPKind::Scw, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<SCW, Managed, MySQL>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -996,7 +999,7 @@ impl Database {
             (CPKind::Scw, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, MySQL>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -1017,7 +1020,7 @@ impl Database {
             (CPKind::Scw, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, Redis>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
@@ -1038,7 +1041,7 @@ impl Database {
             (CPKind::Scw, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, MongoDB>::new(
                     context.clone(),
-                    self.id.as_str(),
+                    self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
                     version,
