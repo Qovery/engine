@@ -17,10 +17,14 @@ controller:
     targetCPUUtilizationPercentage: 50
     targetMemoryUtilizationPercentage: 50
 
+  publishService:
+    enabled: true
+
   service:
     enabled: true
     annotations:
       service.beta.kubernetes.io/aws-load-balancer-type: nlb
+      external-dns.alpha.kubernetes.io/hostname: "{{ wildcard_managed_dns }}"
     externalTrafficPolicy: "Local"
     sessionAffinity: ""
     healthCheckNodePort: 0
