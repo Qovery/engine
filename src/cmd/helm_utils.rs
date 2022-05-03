@@ -14,7 +14,7 @@ use semver::Version;
 use serde_derive::Deserialize;
 use std::fs::OpenOptions;
 use std::io::{BufReader, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Backup {
@@ -37,15 +37,22 @@ pub struct ChartYAML {
     pub app_version: String,
 }
 
-pub fn prepare_chart_backup<P>(
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct BackupStatus {
+    pub is_backupable: bool,
+    pub backup_path: PathBuf,
+}
+
+pub fn prepare_chart_backup<P, T>(
     kubernetes_config: P,
-    workspace_root_dir: P,
+    workspace_root_dir: T,
     chart: &ChartInfo,
     envs: &[(&str, &str)],
     backup_resources: Vec<String>,
 ) -> Result<Vec<BackupInfos>, HelmError>
 where
     P: AsRef<Path>,
+    T: AsRef<Path>,
 {
     let mut backups: Vec<Backup> = vec![];
     for backup_resource in backup_resources {
@@ -316,7 +323,7 @@ pub fn get_common_helm_chart_infos(chart: &ChartInfo) -> Result<ChartYAML, HelmE
     }
 }
 
-pub fn get_common_helm_chart_version(chart: &ChartInfo) -> Result<Version, HelmError> {
+pub fn get_common_helm_chart_version(chart: &ChartInfo) -> Result<Option<Version>, HelmError> {
     let chart_yaml = match get_common_helm_chart_infos(chart) {
         Ok(chart_yaml) => chart_yaml,
         Err(e) => {
@@ -334,7 +341,7 @@ pub fn get_common_helm_chart_version(chart: &ChartInfo) -> Result<Version, HelmE
 
     if !chart_yaml.app_version.is_empty() {
         return match Version::parse(chart_yaml.app_version.as_str()) {
-            Ok(version) => Ok(version),
+            Ok(version) => Ok(Some(version)),
             Err(e) => Err(CmdError(
                 chart.clone().name,
                 HelmCommand::UPGRADE,
@@ -349,7 +356,7 @@ pub fn get_common_helm_chart_version(chart: &ChartInfo) -> Result<Version, HelmE
 
     if !chart_yaml.version.is_empty() {
         return match Version::parse(chart_yaml.version.as_str()) {
-            Ok(version) => Ok(version),
+            Ok(version) => Ok(Some(version)),
             Err(e) => Err(CmdError(
                 chart.clone().name,
                 HelmCommand::UPGRADE,
@@ -367,4 +374,38 @@ pub fn get_common_helm_chart_version(chart: &ChartInfo) -> Result<Version, HelmE
         HelmCommand::UPGRADE,
         CommandError::new_from_safe_message(format!("Unable to get chart version for {}.", chart.name.clone())),
     ))
+}
+
+pub fn prepare_chart_backup_on_upgrade<P>(
+    kubernetes_config: P,
+    chart: ChartInfo,
+    envs: &[(&str, &str)],
+    installed_version: Option<Version>,
+) -> Result<BackupStatus, HelmError>
+where
+    P: AsRef<Path>,
+{
+    let mut need_backup = false;
+    let root_dir_path = std::env::temp_dir();
+
+    if chart.backup_resources.is_some() {
+        if installed_version.le(&get_common_helm_chart_version(&chart)?) {
+            if let Err(e) = prepare_chart_backup(
+                kubernetes_config,
+                root_dir_path.as_path(),
+                &chart,
+                envs,
+                chart.backup_resources.as_ref().unwrap().to_vec(),
+            ) {
+                return Err(e);
+            };
+
+            need_backup = true;
+        }
+    }
+
+    Ok(BackupStatus {
+        is_backupable: need_backup,
+        backup_path: root_dir_path,
+    })
 }

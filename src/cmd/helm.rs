@@ -7,9 +7,6 @@ use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::command::QoveryCommand;
 use crate::cmd::helm::HelmCommand::{LIST, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{CannotRollback, CmdError, InvalidKubeConfig, ReleaseDoesNotExist};
-use crate::cmd::helm_utils::{
-    apply_chart_backup, delete_unused_chart_backup, get_common_helm_chart_version, prepare_chart_backup,
-};
 use crate::cmd::structs::{HelmChart, HelmListItem};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EventDetails;
@@ -495,31 +492,6 @@ impl Helm {
 
         let mut error_message: Vec<String> = vec![];
 
-        let root_dir_path = std::env::temp_dir();
-
-        let mut need_backup = false;
-        if chart.backup_resources.is_some() {
-            if let Some(installed_version) = self.get_chart_version(
-                chart.name.clone(),
-                Some(chart.get_namespace_string().as_str()),
-                &self.get_all_envs(envs),
-            )? {
-                if installed_version.le(&get_common_helm_chart_version(chart)?) {
-                    if let Err(e) = prepare_chart_backup(
-                        &self.kubernetes_config,
-                        &root_dir_path,
-                        chart,
-                        &self.get_all_envs(envs),
-                        chart.backup_resources.as_ref().unwrap().to_vec(),
-                    ) {
-                        return Err(e);
-                    };
-
-                    need_backup = true;
-                }
-            }
-        };
-
         let helm_ret = helm_exec_with_output(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(envs),
@@ -532,52 +504,38 @@ impl Helm {
             },
         );
 
-        match helm_ret {
-            // Ok is ok
-            Ok(_) => {
-                if need_backup {
-                    if let Err(e) =
-                        apply_chart_backup(&self.kubernetes_config, &root_dir_path, &self.get_all_envs(envs), chart)
-                    {
-                        return Err(e);
-                    };
-                };
-                Ok(())
-            }
-            Err(err) => {
-                error!("Helm error: {:?}", err);
-                if let Err(e) = delete_unused_chart_backup(&self.kubernetes_config, &self.get_all_envs(envs), chart) {
-                    return Err(e);
-                }
+        if let Err(err) = helm_ret {
+            error!("Helm error: {:?}", err);
 
-                // Try do define/specify a bit more the message
-                let stderr_msg: String = error_message.into_iter().collect();
-                let stderr_msg = format!(
-                    "{}: {}",
-                    stderr_msg,
-                    err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
-                );
-                let error = if stderr_msg.contains("another operation (install/upgrade/rollback) is in progress") {
-                    HelmError::ReleaseLocked(chart.name.clone())
-                } else if stderr_msg.contains("has been rolled back") {
-                    HelmError::Rollbacked(chart.name.clone(), UPGRADE)
-                } else if stderr_msg.contains("timed out waiting") {
-                    HelmError::Timeout(chart.name.clone(), UPGRADE, stderr_msg)
-                } else {
-                    CmdError(
-                        chart.name.clone(),
-                        HelmCommand::UPGRADE,
-                        CommandError::new(
-                            "Helm error".to_string(),
-                            Some(stderr_msg),
-                            Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-                        ),
-                    )
-                };
+            // Try do define/specify a bit more the message
+            let stderr_msg: String = error_message.into_iter().collect();
+            let stderr_msg = format!(
+                "{}: {}",
+                stderr_msg,
+                err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
+            );
+            let error = if stderr_msg.contains("another operation (install/upgrade/rollback) is in progress") {
+                HelmError::ReleaseLocked(chart.name.clone())
+            } else if stderr_msg.contains("has been rolled back") {
+                HelmError::Rollbacked(chart.name.clone(), UPGRADE)
+            } else if stderr_msg.contains("timed out waiting") {
+                HelmError::Timeout(chart.name.clone(), UPGRADE, stderr_msg)
+            } else {
+                CmdError(
+                    chart.name.clone(),
+                    HelmCommand::UPGRADE,
+                    CommandError::new(
+                        "Helm error".to_string(),
+                        Some(stderr_msg),
+                        Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+                    ),
+                )
+            };
 
-                Err(error)
-            }
-        }
+            return Err(error);
+        };
+
+        Ok(())
     }
 
     pub fn uninstall_chart_if_breaking_version(
