@@ -16,6 +16,18 @@ pub struct AwsEc2QoveryTerraformConfig {
     pub aws_ec2_kubernetes_port: String,
 }
 
+impl AwsEc2QoveryTerraformConfig {
+    pub fn kubernetes_port_to_u16(&self) -> Result<u16, String> {
+        match self.aws_ec2_kubernetes_port.parse::<u16>() {
+            Ok(x) => Ok(x),
+            Err(e) => Err(format!(
+                "error while trying to convert kubernetes port from string {} to int: {}",
+                self.aws_ec2_kubernetes_port, e
+            )),
+        }
+    }
+}
+
 pub struct Ec2ChartsConfigPrerequisites {
     pub organization_id: String,
     pub organization_long_id: uuid::Uuid,
@@ -44,6 +56,31 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub infra_options: Options,
 }
 
+pub fn get_aws_ec2_qovery_terraform_config(
+    qovery_terraform_config_file: &str,
+) -> Result<AwsEc2QoveryTerraformConfig, CommandError> {
+    let content_file = match File::open(&qovery_terraform_config_file) {
+        Ok(x) => x,
+        Err(e) => {
+            return Err(CommandError::new(
+                "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?".to_string(),
+                Some(e.to_string()),
+                None,
+            ));
+        }
+    };
+
+    let reader = BufReader::new(content_file);
+    match serde_json::from_reader(reader) {
+        Ok(config) => Ok(config),
+        Err(e) => Err(CommandError::new(
+            format!("Error while parsing terraform config file {}", qovery_terraform_config_file),
+            Some(e.to_string()),
+            None,
+        )),
+    }
+}
+
 pub fn ec2_aws_helm_charts(
     qovery_terraform_config_file: &str,
     chart_config_prerequisites: &Ec2ChartsConfigPrerequisites,
@@ -51,29 +88,9 @@ pub fn ec2_aws_helm_charts(
     kubernetes_config: &Path,
     envs: &[(String, String)],
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
-    let content_file = match File::open(&qovery_terraform_config_file) {
-        Ok(x) => x,
-        Err(e) => {
-            return Err(CommandError::new(
-                "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?".to_string(),
-                Some(e.to_string()),
-                Some(envs.to_vec()),
-            ));
-        }
-    };
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
-    let reader = BufReader::new(content_file);
-    let qovery_terraform_config: AwsEc2QoveryTerraformConfig = match serde_json::from_reader(reader) {
-        Ok(config) => config,
-        Err(e) => {
-            return Err(CommandError::new(
-                format!("Error while parsing terraform config file {}", qovery_terraform_config_file),
-                Some(e.to_string()),
-                Some(envs.to_vec()),
-            ));
-        }
-    };
+    let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file)?;
 
     // Qovery storage class
     let q_storage_class = CommonChart {

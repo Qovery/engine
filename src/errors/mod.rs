@@ -249,6 +249,8 @@ pub enum Tag {
     CannotCopyFilesFromDirectoryToDirectory,
     /// CannotPauseClusterTasksAreRunning: represents an error where we cannot pause the cluster because some tasks are still running in the engine.
     CannotPauseClusterTasksAreRunning,
+    /// TerraformQoveryConfigMismatch: terraform qovery config retrieve mismatch
+    TerraformQoveryConfigMismatch,
     /// TerraformCannotRemoveEntryOut: represents an error where we cannot remove an entry out of Terraform.
     TerraformCannotRemoveEntryOut,
     /// TerraformNoStateFileExists: represents an error where there is no Terraform state file.
@@ -1598,6 +1600,26 @@ impl EngineError {
             message.to_string(),
             message.to_string(),
             raw_error,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for terraform qovery config mismatch
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_terraform_qovery_config_mismatch(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message = "Error while trying to use Qovery Terraform generated config.";
+
+        EngineError::new(
+            event_details,
+            Tag::TerraformQoveryConfigMismatch,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
             None,
             None,
         )
