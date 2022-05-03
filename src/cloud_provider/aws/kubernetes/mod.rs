@@ -350,6 +350,8 @@ fn tera_context(
         &managed_dns_resolvers_terraform_format,
     );
 
+    context.insert("wildcard_managed_dns", &self.dns_provider().domain().wildcarded().to_string());
+
     match kubernetes.dns_provider().kind() {
         dns_provider::Kind::Cloudflare => {
             context.insert("external_dns_provider", kubernetes.dns_provider().provider_name());

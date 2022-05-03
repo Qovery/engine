@@ -351,14 +351,14 @@ master:
   affinity: {}
   tolerations: []
   labels:
-    ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
+    databaseLongId: {{ long_id }}
   annotations: {}
   podLabels:
-    ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
+    databaseLongId: {{ long_id }}
   podAnnotations: {}
   priorityClassName: ""
   ## Extra init containers

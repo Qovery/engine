@@ -257,6 +257,7 @@ impl DOKS {
             "managed_dns_resolvers_terraform_format",
             &managed_dns_resolvers_terraform_format,
         );
+        context.insert("wildcard_managed_dns", &self.dns_provider().domain().wildcarded().to_string());
         match self.dns_provider.kind() {
             dns_provider::Kind::Cloudflare => {
                 context.insert("external_dns_provider", self.dns_provider.provider_name());
@@ -463,7 +464,7 @@ impl DOKS {
         ));
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe("Preparing DOKS cluster deployment.".to_string()),
+            EventMessage::new_from_safe("Preparing cluster deployment.".to_string()),
         ));
 
         // upgrade cluster instead if required
@@ -533,12 +534,42 @@ impl DOKS {
 
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe("Deploying DOKS cluster.".to_string()),
+            EventMessage::new_from_safe("Deploying cluster.".to_string()),
         ));
         self.send_to_customer(
             format!("Deploying DOKS {} cluster deployment with id {}", self.name(), self.id()).as_str(),
             &listeners_helper,
         );
+
+        // temporary: remove helm/kube management from terraform
+        match terraform_init_validate_state_list(temp_dir.as_str()) {
+            Ok(x) => {
+                let items_type = vec!["helm_release", "kubernetes_namespace"];
+                for item in items_type {
+                    for entry in x.clone() {
+                        if entry.starts_with(item) {
+                            match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
+                                Ok(_) => self.logger().log(EngineEvent::Info(
+                                    event_details.clone(),
+                                    EventMessage::new_from_safe(format!("Successfully removed {}", &entry)),
+                                )),
+                                Err(e) => {
+                                    return Err(EngineError::new_terraform_cannot_remove_entry_out(
+                                        event_details,
+                                        entry.to_string(),
+                                        e,
+                                    ))
+                                }
+                            }
+                        };
+                    }
+                }
+            }
+            Err(e) => self.logger().log(EngineEvent::Error(
+                EngineError::new_terraform_state_does_not_exist(event_details.clone(), e),
+                None,
+            )),
+        };
 
         // Logs bucket
         if let Err(e) = self.spaces.create_bucket(self.logs_bucket_name().as_str()) {
@@ -772,7 +803,7 @@ impl DOKS {
         );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe("Preparing to delete DOKS cluster.".to_string()),
+            EventMessage::new_from_safe("Preparing to delete cluster.".to_string()),
         ));
 
         let temp_dir = match self.get_temp_dir(event_details.clone()) {
@@ -893,13 +924,12 @@ impl DOKS {
                     }
                 }
                 Err(e) => {
-                    let message_safe = format!(
-                        "Error while getting all namespaces for Kubernetes cluster {}",
-                        self.name_with_id(),
-                    );
                     self.logger().log(EngineEvent::Warning(
                         event_details.clone(),
-                        EventMessage::new(message_safe, Some(e.message(ErrorMessageVerbosity::FullDetails))),
+                        EventMessage::new(
+                            "Error while getting all namespaces for Kubernetes cluster".to_string(),
+                            Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                        ),
                     ));
                 }
             }
@@ -946,13 +976,10 @@ impl DOKS {
                             event_details.clone(),
                             EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
                         )),
-                        Err(e) => {
-                            let message_safe = format!("Can't delete chart `{}`", chart.name);
-                            self.logger().log(EngineEvent::Warning(
-                                event_details.clone(),
-                                EventMessage::new(message_safe, Some(e.to_string())),
-                            ))
-                        }
+                        Err(e) => self.logger().log(EngineEvent::Warning(
+                            event_details.clone(),
+                            EventMessage::new(format!("Can't delete chart `{}`", chart.name), Some(e.to_string())),
+                        )),
                     }
                 }
             }
@@ -998,23 +1025,20 @@ impl DOKS {
                                 event_details.clone(),
                                 EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
                             )),
-                            Err(e) => {
-                                let message_safe = format!("Error deleting chart `{}`", chart.name);
-                                self.logger().log(EngineEvent::Warning(
-                                    event_details.clone(),
-                                    EventMessage::new(message_safe, Some(e.to_string())),
-                                ))
-                            }
+                            Err(e) => self.logger().log(EngineEvent::Warning(
+                                event_details.clone(),
+                                EventMessage::new(
+                                    format!("Error deleting chart `{}`", chart.name),
+                                    Some(e.to_string()),
+                                ),
+                            )),
                         }
                     }
                 }
-                Err(e) => {
-                    let message_safe = "Unable to get helm list";
-                    self.logger().log(EngineEvent::Warning(
-                        event_details.clone(),
-                        EventMessage::new(message_safe.to_string(), Some(e.to_string())),
-                    ))
-                }
+                Err(e) => self.logger().log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new("Unable to get helm list".to_string(), Some(e.to_string())),
+                )),
             }
         };
 
@@ -1145,8 +1169,8 @@ impl Kubernetes for DOKS {
                             self.logger().log(EngineEvent::Debug(
                                 self.get_event_details(stage),
                                 EventMessage::new(
-                                    err.to_string(),
-                                    Some(format!("Error, couldn't open {} file", &local_kubeconfig_generated,)),
+                                    format!("Error, couldn't open {} file", &local_kubeconfig_generated),
+                                    Some(err.to_string()),
                                 ),
                             ));
                             None
@@ -1300,7 +1324,7 @@ impl Kubernetes for DOKS {
         );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe("Start preparing DOKS cluster upgrade process".to_string()),
+            EventMessage::new_from_safe("Start preparing cluster upgrade process".to_string()),
         ));
 
         let temp_dir = self.get_temp_dir(event_details.clone())?;

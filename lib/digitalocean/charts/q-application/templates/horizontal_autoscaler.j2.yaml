@@ -5,6 +5,7 @@ metadata:
   name: {{ sanitized_name }}
   namespace: {{ namespace }}
   labels:
+    appLongId: {{ long_id }}
     envId: {{ environment_id }}
     appId: {{ id }}
 spec:

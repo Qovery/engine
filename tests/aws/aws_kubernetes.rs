@@ -4,15 +4,13 @@ use std::str::FromStr;
 
 use ::function_name::named;
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
+use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::Kind;
-
-use self::test_utilities::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
-use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 
 #[cfg(feature = "test-aws-infra")]
 fn create_and_destroy_eks_cluster(
@@ -40,7 +38,7 @@ fn create_and_destroy_eks_cluster(
             test_type,
             major_boot_version,
             minor_boot_version,
-            &ClusterDomain::Default,
+            &ClusterDomain::Default { cluster_id },
             Option::from(vpc_network_mode),
             None,
         )

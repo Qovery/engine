@@ -20,18 +20,19 @@ fn create_and_destroy_kapsule_cluster(
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
 ) {
     engine_run_test(|| {
+        let cluster_id = generate_cluster_id(zone.as_str());
         cluster_test(
             test_name,
             Kind::Scw,
             KKind::ScwKapsule,
-            context(generate_id().as_str(), generate_cluster_id(zone.as_str()).as_str()),
+            context(generate_id().as_str(), cluster_id.as_str()),
             logger(),
             zone.as_str(),
             None,
             test_type,
             major_boot_version,
             minor_boot_version,
-            &ClusterDomain::Default,
+            &ClusterDomain::Default { cluster_id },
             vpc_network_mode,
             None,
         )

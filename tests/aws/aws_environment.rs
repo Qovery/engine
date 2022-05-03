@@ -9,12 +9,14 @@ use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubernetes_get_all_pdbs;
 use qovery_engine::io_models::{Action, CloneForTest, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
+use qovery_engine::utilities::to_short_id;
 use std::collections::BTreeMap;
 use std::thread;
 use std::time::Duration;
 use test_utilities::aws::aws_default_engine_config;
 use test_utilities::utilities::{context, init, kubernetes_config_path};
 use tracing::{span, Level};
+use uuid::Uuid;
 
 #[cfg(feature = "test-aws-minimal")]
 #[named]
@@ -159,7 +161,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         );
 
         let ea = environment.clone();
-        let selector = format!("appId={}", environment.applications[0].id);
+        let selector = format!("appId={}", to_short_id(&environment.applications[0].long_id));
 
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -220,7 +222,12 @@ fn deploy_a_working_environment_and_pause_it_eks() {
             None,
         );
         for pdb in pdbs.expect("Unable to get pdbs").items.expect("Unable to get pdbs") {
-            assert_eq!(pdb.metadata.name.contains(&environment.applications[0].id), false)
+            assert_eq!(
+                pdb.metadata
+                    .name
+                    .contains(&to_short_id(&environment.applications[0].long_id)),
+                false
+            )
         }
 
         // Check we can resume the env
@@ -265,7 +272,11 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         );
         let mut filtered_pdb = false;
         for pdb in pdbs.expect("Unable to get pdbs").items.expect("Unable to get pdbs") {
-            if pdb.metadata.name.contains(&environment.applications[0].id) {
+            if pdb
+                .metadata
+                .name
+                .contains(&to_short_id(&environment.applications[0].long_id))
+            {
                 filtered_pdb = true;
                 break;
             }
@@ -575,6 +586,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
             .map(|mut app| {
                 app.storage = vec![Storage {
                     id: generate_id(),
+                    long_id: Uuid::new_v4(),
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
                     size_in_gib: storage_size,
@@ -657,6 +669,7 @@ fn redeploy_same_app_with_ebs() {
             .map(|mut app| {
                 app.storage = vec![Storage {
                     id: generate_id(),
+                    long_id: Uuid::new_v4(),
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
                     size_in_gib: storage_size,
