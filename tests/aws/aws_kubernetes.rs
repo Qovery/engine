@@ -3,6 +3,7 @@ extern crate test_utilities;
 use std::str::FromStr;
 
 use ::function_name::named;
+use test_utilities::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 
@@ -23,15 +24,13 @@ fn create_and_destroy_eks_cluster(
 ) {
     engine_run_test(|| {
         let region = AwsRegion::from_str(region.as_str()).expect("Wasn't able to convert the desired region");
+        let cluster_id = generate_cluster_id(region.to_string().as_str());
         let zones = region.get_zones();
         cluster_test(
             test_name,
             Kind::Aws,
             KKind::Eks,
-            context(
-                generate_id().as_str(),
-                generate_cluster_id(region.to_string().as_str()).as_str(),
-            ),
+            context(generate_id().as_str(), cluster_id.as_str()),
             logger(),
             region.to_aws_format().as_str(),
             Some(zones),

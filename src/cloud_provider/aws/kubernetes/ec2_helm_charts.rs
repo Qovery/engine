@@ -85,12 +85,12 @@ pub fn ec2_aws_helm_charts(
     qovery_terraform_config_file: &str,
     chart_config_prerequisites: &Ec2ChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
-    kubernetes_config: &Path,
-    envs: &[(String, String)],
+    _kubernetes_config: &Path,
+    _envs: &[(String, String)],
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
-    let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file)?;
+    let _qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file)?;
 
     // Qovery storage class
     let q_storage_class = CommonChart {

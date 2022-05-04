@@ -272,7 +272,7 @@ pub fn check_tcp_port_is_open(address: &TcpCheckSource, port: u16) -> Result<(),
     let timeout = core::time::Duration::from_secs(1);
 
     let ip = match address {
-        TcpCheckSource::SocketAddr(x) => x.clone(),
+        TcpCheckSource::SocketAddr(x) => *x,
         TcpCheckSource::DnsName(x) => {
             let address = format!("{}:{}", x, port);
             match address.to_socket_addrs() {
