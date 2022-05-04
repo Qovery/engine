@@ -205,6 +205,7 @@ pub fn aws_helm_charts(
     let aws_node_term_handler = CommonChart {
         chart_info: ChartInfo {
             name: "aws-node-term-handler".to_string(),
+            last_breaking_version_requiring_restart: Some(Version::new(0, 16, 1)),
             path: chart_path("charts/aws-node-termination-handler"),
             values: vec![
                 ChartSetValue {
