@@ -12,9 +12,12 @@ rules:
     verbs: ["list", "watch", "get"]
   - apiGroups: [""]
     resources:
-      - pods
       - namespaces
     verbs: ["list", "watch", "get"]
+  - apiGroups: [""]
+    resources:
+      - pods
+    verbs: ["list", "watch", "get", "patch"]
   - apiGroups: [""]
     resources:
       - nodes
