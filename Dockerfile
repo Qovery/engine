@@ -20,12 +20,12 @@ RUN ./docker/load.sh download $BIN_DEST_FOLDER
 RUN ./docker/load.sh install $BIN_DEST_FOLDER
 RUN ./docker/load.sh download_terraform_plugins
 
-RUN sccache_release=$(curl --silent "https://api.github.com/repos/Qovery/sccache-bin/releases/latest" | jq .tag_name) && \
+RUN sccache_release=$(curl --silent "https://api.github.com/repos/Qovery/sccache-bin/releases/latest" | jq -r .tag_name) && \
     curl -sLo /usr/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${sccache_release}/sccache && \
     chmod 755 /usr/bin/sccache
 
 # build engine
-RUN sccache --version && sccache -s && cargo build --release && sccache -s
+RUN sccache --version && sccache --show-stats && cargo build --release && sccache --show-stats
 
 # Final image
 FROM debian:bullseye-slim as run
