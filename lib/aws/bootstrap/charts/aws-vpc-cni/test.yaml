@@ -1,0 +1,170 @@
+# Test values for aws-vpc-cni.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# This default name override is to maintain backwards compatability with
+# existing naming
+nameOverride: aws-node
+
+init:
+  image:
+    tag: v1.10.2
+    region: us-west-2
+    account: "602401143452"   
+    pullPolicy: Always
+    domain: "amazonaws.com"  
+    # Set to use custom image
+    # override: "repo/org/image:tag"
+  env:
+    DISABLE_TCP_EARLY_DEMUX: "false"
+    ENABLE_IPv6: "false"
+  securityContext:
+    privileged: true
+
+image:
+  region: us-west-2
+  tag: v1.10.2
+  account: "602401143452"   
+  domain: "amazonaws.com"  
+  pullPolicy: Always
+  # Set to use custom image
+  # override: "repo/org/image:tag"
+
+# The CNI supports a number of environment variable settings
+# See https://github.com/aws/amazon-vpc-cni-k8s#cni-configuration-variables
+env:
+  ADDITIONAL_ENI_TAGS: "{}"
+  AWS_VPC_CNI_NODE_PORT_SUPPORT: "true"
+  AWS_VPC_ENI_MTU: "9001"
+  AWS_VPC_K8S_CNI_CONFIGURE_RPFILTER: "false"
+  AWS_VPC_K8S_CNI_CUSTOM_NETWORK_CFG: "false"
+  AWS_VPC_K8S_CNI_EXTERNALSNAT: "false"
+  AWS_VPC_K8S_CNI_LOG_FILE: "/host/var/log/aws-routed-eni/ipamd.log"
+  AWS_VPC_K8S_CNI_LOGLEVEL: DEBUG
+  AWS_VPC_K8S_CNI_RANDOMIZESNAT: "prng"
+  AWS_VPC_K8S_CNI_VETHPREFIX: eni
+  AWS_VPC_K8S_PLUGIN_LOG_FILE: "/var/log/aws-routed-eni/plugin.log"
+  AWS_VPC_K8S_PLUGIN_LOG_LEVEL: DEBUG
+  DISABLE_INTROSPECTION: "false"
+  DISABLE_METRICS: "false"
+  ENABLE_POD_ENI: "false"
+  ENABLE_PREFIX_DELEGATION: "false"
+  WARM_ENI_TARGET: "1"
+  WARM_PREFIX_TARGET: "1"
+  DISABLE_NETWORK_RESOURCE_PROVISIONING: "false"
+  ENABLE_IPv4: "true"
+  ENABLE_IPv6: "false"
+
+# this flag enables you to use the match label that was present in the original daemonset deployed by EKS
+# You can then annotate and label the original aws-node resources and 'adopt' them into a helm release
+originalMatchLabels: false
+
+cniConfig:
+  enabled: false
+  fileContents: ""
+
+imagePullSecrets: []
+
+fullnameOverride: "aws-node"
+
+priorityClassName: system-node-critical
+
+podSecurityContext: {}
+
+podAnnotations: {}
+
+podLabels: {}
+
+securityContext:
+  capabilities:
+    add:
+    - "NET_ADMIN"
+
+crd:
+  create: true
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name:
+  annotations: {}
+    # eks.amazonaws.com/role-arn: arn:aws:iam::AWS_ACCOUNT_ID:role/IAM_ROLE_NAME
+
+livenessProbe:
+  exec:
+    command:
+      - /app/grpc-health-probe
+      - '-addr=:50051'
+      - '-connect-timeout=5s'
+      - '-rpc-timeout=5s'
+  initialDelaySeconds: 60
+
+livenessProbeTimeoutSeconds: 10
+
+readinessProbe:
+  exec:
+    command:
+      - /app/grpc-health-probe
+      - '-addr=:50051'
+      - '-connect-timeout=5s'
+      - '-rpc-timeout=5s'
+  initialDelaySeconds: 1
+
+readinessProbeTimeoutSeconds: 10
+
+resources:
+  requests:
+    cpu: 10m
+
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: "10%"
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: "kubernetes.io/os"
+              operator: In
+              values:
+                - linux
+            - key: "kubernetes.io/arch"
+              operator: In
+              values:
+                - amd64
+                - arm64
+            - key: "eks.amazonaws.com/compute-type"
+              operator: NotIn
+              values:
+                - fargate
+
+eniConfig:
+  # Specifies whether ENIConfigs should be created
+  create: false
+  region: us-west-2
+  subnets:
+    # Key identifies the AZ
+    # Value contains the subnet ID and security group IDs within that AZ
+    # a:
+    #   id: subnet-123
+    #   securityGroups:
+    #   - sg-123
+    # b:
+    #   id: subnet-456
+    #   securityGroups:
+    #   - sg-456
+    # c:
+    #   id: subnet-789
+    #   securityGroups:
+    #   - sg-789
+
+cri:
+  hostPath: # "/var/run/containerd/containerd.sock"

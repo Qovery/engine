@@ -205,6 +205,7 @@ pub fn eks_aws_helm_charts(
     let aws_node_term_handler = CommonChart {
         chart_info: ChartInfo {
             name: "aws-node-term-handler".to_string(),
+            last_breaking_version_requiring_restart: Some(Version::new(0, 16, 1)),
             path: chart_path("charts/aws-node-termination-handler"),
             values: vec![
                 ChartSetValue {
@@ -249,6 +250,16 @@ pub fn eks_aws_helm_charts(
         chart_info: ChartInfo {
             name: "calico".to_string(),
             path: chart_path("charts/aws-calico"),
+            values: vec![
+                ChartSetValue {
+                    key: "calico.node.resources.limits.memory".to_string(),
+                    value: "128Mi".to_string(),
+                },
+                ChartSetValue {
+                    key: "calico.node.resources.requests.memory".to_string(),
+                    value: "128Mi".to_string(),
+                },
+            ],
             ..Default::default()
         },
     };
@@ -784,6 +795,7 @@ datasources:
             name: "cert-manager-configs".to_string(),
             path: chart_path("common/charts/cert-manager-configs"),
             namespace: HelmChartNamespaces::CertManager,
+            backup_resources: Some(vec!["cert".to_string(), "issuer".to_string(), "clusterissuer".to_string()]),
             values: vec![
                 ChartSetValue {
                     key: "externalDnsProvider".to_string(),

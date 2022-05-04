@@ -10,12 +10,21 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: "{{ include "aws-calico.fullname" . }}-typha"
+      {{- if .Values.calico.typha.podLabels }}
+{{ toYaml .Values.calico.typha.podLabels | indent 6 }}
+      {{- end }}
   template:
     metadata:
       labels:
         app.kubernetes.io/name: "{{ include "aws-calico.fullname" . }}-typha"
+        {{- if .Values.calico.typha.podLabels }}
+{{ toYaml .Values.calico.typha.podLabels | indent 8 }}
+        {{- end }}
       annotations:
         cluster-autoscaler.kubernetes.io/safe-to-evict: 'true'
+        {{- with .Values.calico.typha.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       priorityClassName: system-cluster-critical
       nodeSelector:
@@ -24,9 +33,9 @@ spec:
         # Mark the pod as a critical add-on for rescheduling.
         - key: CriticalAddonsOnly
           operator: Exists
-      {{- if .Values.calico.typha.tolerations }}
-{{ toYaml .Values.calico.typha.tolerations | indent 10 }}
-      {{- end }}
+        {{- if .Values.calico.typha.tolerations }}
+        {{- toYaml .Values.calico.typha.tolerations | nindent 8 }}
+        {{- end }}
       hostNetwork: true
       serviceAccountName: "{{ include "aws-calico.serviceAccountName" . }}-node"
       # fsGroup allows using projected serviceaccount tokens as described here kubernetes/kubernetes#82573
@@ -97,11 +106,20 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: "{{ include "aws-calico.fullname" . }}-typha-autoscaler"
+      {{- if .Values.calico.typha_autoscaler.podLabels }}
+{{ toYaml .Values.calico.typha_autoscaler.podLabels | indent 6 }}
+      {{- end }}
   replicas: 1
   template:
     metadata:
       labels:
         app.kubernetes.io/name: "{{ include "aws-calico.fullname" . }}-typha-autoscaler"
+        {{- if .Values.calico.typha_autoscaler.podLabels }}
+{{ toYaml .Values.calico.typha_autoscaler.podLabels | indent 8 }}
+        {{- end }}
+      {{- with .Values.calico.typha_autoscaler.podAnnotations }}
+      annotations: {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
       priorityClassName: system-cluster-critical
       nodeSelector:
@@ -110,9 +128,9 @@ spec:
         # Mark the pod as a critical add-on for rescheduling.
         - key: CriticalAddonsOnly
           operator: Exists
-      {{- if .Values.calico.typha_autoscaler.tolerations }}
-{{ toYaml .Values.calico.typha_autoscaler.tolerations | indent 10 }}
-      {{- end }}
+        {{- if .Values.calico.typha_autoscaler.tolerations }}
+        {{- toYaml .Values.calico.typha_autoscaler.tolerations | nindent 8 }}
+        {{- end }}
       containers:
         - image: "{{ .Values.autoscaler.image }}:{{ .Values.autoscaler.tag }}"
           name: autoscaler

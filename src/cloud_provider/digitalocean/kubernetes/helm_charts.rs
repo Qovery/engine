@@ -611,6 +611,7 @@ datasources:
             name: "cert-manager-configs".to_string(),
             path: chart_path("common/charts/cert-manager-configs"),
             namespace: HelmChartNamespaces::CertManager,
+            backup_resources: Some(vec!["cert".to_string(), "issuer".to_string(), "clusterissuer".to_string()]),
             values: vec![
                 ChartSetValue {
                     key: "externalDnsProvider".to_string(),
