@@ -249,6 +249,16 @@ pub fn aws_helm_charts(
         chart_info: ChartInfo {
             name: "calico".to_string(),
             path: chart_path("charts/aws-calico"),
+            values: vec![
+                ChartSetValue {
+                    key: "calico.node.resources.limits.memory".to_string(),
+                    value: "128Mi".to_string(),
+                },
+                ChartSetValue {
+                    key: "calico.node.resources.requests.memory".to_string(),
+                    value: "128Mi".to_string(),
+                },
+            ],
             ..Default::default()
         },
     };
