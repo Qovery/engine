@@ -1,6 +1,6 @@
 charts:
   - name: cert-manager
-    version: v1.1.1
+    version: v1.2.0
     repo_name: jetstack
   - name: external-dns
     repo_name: bitnami
