@@ -14,7 +14,7 @@ use self::test_utilities::utilities::{
 use qovery_engine::io_models::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
-use test_utilities::common::{test_db, Infrastructure};
+use test_utilities::common::{test_db, test_db_on_upgrade, Infrastructure};
 
 /**
 **
@@ -664,6 +664,39 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
     })
 }
 
+#[allow(dead_code)]
+fn test_mysql_configuration_on_upgrade(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
+    let secrets = FuncTestsSecrets::new();
+    let context = context(
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
+        secrets
+            .AWS_TEST_CLUSTER_ID
+            .as_ref()
+            .expect("AWS_TEST_CLUSTER_ID is not set")
+            .as_str(),
+    );
+    let environment = test_utilities::common::database_test_environment_on_upgrade(&context);
+
+    engine_run_test(|| {
+        test_db_on_upgrade(
+            context,
+            logger(),
+            environment,
+            secrets,
+            version,
+            test_name,
+            DatabaseKind::Mysql,
+            Kind::Aws,
+            database_mode,
+            is_public,
+        )
+    })
+}
+
 // MySQL self-hosted environment
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
@@ -685,6 +718,14 @@ fn public_mysql_v5_7_deploy_a_working_dev_environment() {
 #[test]
 fn private_mysql_v8_deploy_a_working_dev_environment() {
     test_mysql_configuration("8.0", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+#[ignore]
+fn private_mysql_v8_deploy_a_working_dev_environment_on_upgrade() {
+    test_mysql_configuration_on_upgrade("8.0", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]

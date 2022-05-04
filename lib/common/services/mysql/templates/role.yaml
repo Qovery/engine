@@ -1,6 +1,6 @@
-{{- if eq (include "mysql.createSecret" .) "true" }}
-apiVersion: v1
-kind: Secret
+{{- if and .Values.serviceAccount.create  .Values.rbac.create }}
+apiVersion: {{ include "common.capabilities.rbac.apiVersion" . }}
+kind: Role
 metadata:
   name: {{ include "common.names.fullname" . }}
   namespace: {{ .Release.Namespace }}
@@ -11,11 +11,11 @@ metadata:
   {{- if .Values.commonAnnotations }}
   annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
   {{- end }}
-type: Opaque
-data:
-  mysql-root-password: {{ include "mysql.root.password" . | b64enc | quote }}
-  mysql-password: {{ include "mysql.password" . | b64enc | quote }}
-  {{- if eq .Values.architecture "replication" }}
-  mysql-replication-password: {{ include "mysql.replication.password" . | b64enc | quote }}
-  {{- end }}
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - endpoints
+    verbs:
+      - get
 {{- end }}
