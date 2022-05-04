@@ -1,21 +1,18 @@
-{{- if eq (include "mysql.createSecret" .) "true" }}
+{{- if (include "mysql.secondary.createConfigmap" .) }}
 apiVersion: v1
-kind: Secret
+kind: ConfigMap
 metadata:
-  name: {{ include "common.names.fullname" . }}
+  name: {{ include "mysql.secondary.fullname" . }}
   namespace: {{ .Release.Namespace }}
   labels: {{- include "common.labels.standard" . | nindent 4 }}
+    app.kubernetes.io/component: secondary
     {{- if .Values.commonLabels }}
     {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
     {{- end }}
   {{- if .Values.commonAnnotations }}
   annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
   {{- end }}
-type: Opaque
 data:
-  mysql-root-password: {{ include "mysql.root.password" . | b64enc | quote }}
-  mysql-password: {{ include "mysql.password" . | b64enc | quote }}
-  {{- if eq .Values.architecture "replication" }}
-  mysql-replication-password: {{ include "mysql.replication.password" . | b64enc | quote }}
-  {{- end }}
-{{- end }}
+  my.cnf: |-
+    {{ .Values.secondary.configuration | nindent 4 }}
+{{- end -}}
