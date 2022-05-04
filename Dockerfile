@@ -11,7 +11,7 @@ ENV RUSTC_WRAPPER=/usr/bin/sccache
 ENV SCCACHE_REDIS=$SCCACHE_REDIS
 
 WORKDIR /root
-RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev git
+RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq
 ADD . .
 
 # run release build
@@ -20,7 +20,7 @@ RUN ./docker/load.sh download $BIN_DEST_FOLDER
 RUN ./docker/load.sh install $BIN_DEST_FOLDER
 RUN ./docker/load.sh download_terraform_plugins
 
-RUN sccache_release=$(curl --silent "https://github.com/Qovery/sccache-bin/releases/latest" | sed -r 's/^.+tag\/(.+)">.+/\1/') && \
+RUN sccache_release=$(curl --silent "https://api.github.com/repos/Qovery/sccache-bin/releases/latest" | jq .tag_name) && \
     curl -sLo /usr/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${sccache_release}/sccache && \
     chmod 755 /usr/bin/sccache
 
