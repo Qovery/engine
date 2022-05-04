@@ -21,15 +21,15 @@ charts:
   - name: aws-node-termination-handler
     repo_name: aws
     dest: aws-bootstrap
-    version: 0.8.0
+    version: 0.16.1
   - name: aws-vpc-cni
     repo_name: aws
     dest: aws-bootstrap
-    version: 1.1.3
+    version: 1.1.13
   - name: aws-calico
     repo_name: aws
     dest: aws-bootstrap
-    version: 0.3.1
+    version: 0.3.10
   - name: cluster-autoscaler
     repo_name: cluster-autoscaler
     version: 9.10.4
@@ -55,9 +55,8 @@ charts:
     # Chart is frozen due to custom modification see https://github.com/Qovery/engine/pull/293
   - name: mysql
     repo_name: bitnami
-    version: 6.14.2
+    version: 8.9.6
     dest: services
-    no_sync: true
   - name: postgresql
     repo_name: bitnami
     version: 8.9.8
