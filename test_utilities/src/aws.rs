@@ -61,7 +61,9 @@ pub fn aws_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> 
         logger,
         AWS_TEST_REGION.to_string().as_str(),
         AWS_KUBERNETES_VERSION.to_string(),
-        &ClusterDomain::Default,
+        &ClusterDomain::Default {
+            cluster_id: context.cluster_id().to_string(),
+        },
         None,
     )
 }
