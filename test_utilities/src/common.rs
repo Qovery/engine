@@ -301,7 +301,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 min_instances: 2,
                 max_instances: 2,
                 cpu_burst: "100m".to_string(),
-                advance_settings: Default::default(),
+                advanced_settings: Default::default(),
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -348,7 +348,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 min_instances: 2,
                 max_instances: 2,
                 cpu_burst: "100m".to_string(),
-                advance_settings: Default::default(),
+                advanced_settings: Default::default(),
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -397,7 +397,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 min_instances: 2,
                 max_instances: 2,
                 cpu_burst: "100m".to_string(),
-                advance_settings: Default::default(),
+                advanced_settings: Default::default(),
             },
         ],
         routers: vec![
@@ -557,7 +557,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
             min_instances: 2,
             max_instances: 2,
             cpu_burst: "100m".to_string(),
-            advance_settings: Default::default(),
+            advanced_settings: Default::default(),
         }],
         routers: vec![Router {
             long_id: Uuid::new_v4(),
@@ -611,7 +611,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             min_instances: 1,
             max_instances: 1,
             cpu_burst: "100m".to_string(),
-            advance_settings: Default::default(),
+            advanced_settings: Default::default(),
         }],
         routers: vec![],
         databases: vec![],
@@ -725,7 +725,7 @@ pub fn environnement_2_app_2_routers_1_psql(
                 min_instances: 2,
                 max_instances: 2,
                 cpu_burst: "100m".to_string(),
-                advance_settings: Default::default(),
+                advanced_settings: Default::default(),
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -772,7 +772,7 @@ pub fn environnement_2_app_2_routers_1_psql(
                 min_instances: 2,
                 max_instances: 2,
                 cpu_burst: "100m".to_string(),
-                advance_settings: Default::default(),
+                advanced_settings: Default::default(),
             },
         ],
         routers: vec![
@@ -869,7 +869,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             min_instances: 2,
             max_instances: 2,
             cpu_burst: "100m".to_string(),
-            advance_settings: Default::default(),
+            advanced_settings: Default::default(),
         }],
         routers: vec![Router {
             long_id: Uuid::new_v4(),
@@ -930,7 +930,7 @@ pub fn environment_only_http_server(context: &Context) -> EnvironmentRequest {
             min_instances: 2,
             max_instances: 2,
             cpu_burst: "100m".to_string(),
-            advance_settings: Default::default(),
+            advanced_settings: Default::default(),
         }],
         routers: vec![],
         databases: vec![],
@@ -980,7 +980,7 @@ pub fn environment_only_http_server_router(context: &Context, test_domain: &str)
             min_instances: 2,
             max_instances: 2,
             cpu_burst: "100m".to_string(),
-            advance_settings: Default::default(),
+            advanced_settings: Default::default(),
         }],
         routers: vec![Router {
             long_id: Uuid::new_v4(),
