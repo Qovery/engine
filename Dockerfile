@@ -1,6 +1,6 @@
 ARG BIN_DEST_FOLDER="/binaries"
 
-FROM rust:1.59.0-slim-bullseye as build
+FROM rust:1.60.0-slim-bullseye as build
 
 ARG BIN_DEST_FOLDER
 ARG SCCACHE_REDIS
@@ -11,7 +11,7 @@ ENV RUSTC_WRAPPER=/usr/bin/sccache
 ENV SCCACHE_REDIS=$SCCACHE_REDIS
 
 WORKDIR /root
-RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq
+RUN apt-get update && apt-get -y install make libfindbin-libs-perl curl unzip pkg-config libssl-dev git jq gcc
 ADD . .
 
 # run release build
