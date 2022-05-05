@@ -657,7 +657,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             min_instances: 1,
             max_instances: 1,
             cpu_burst: "100m".to_string(),
-            advance_settings: Default::default(),
+            advanced_settings: Default::default(),
         }],
         routers: vec![],
         databases: vec![],
@@ -1891,24 +1891,33 @@ pub fn test_db_on_upgrade(
             &context,
             logger.clone(),
             localisation.as_str(),
+            KubernetesKind::Eks,
             kubernetes_version.clone(),
-            &ClusterDomain::Default,
+            &ClusterDomain::Default {
+                cluster_id: context.cluster_id().to_string(),
+            },
             None,
         ),
         Kind::Do => DO::docker_cr_engine(
             &context,
             logger.clone(),
             localisation.as_str(),
+            KubernetesKind::Doks,
             kubernetes_version.clone(),
-            &ClusterDomain::Default,
+            &ClusterDomain::Default {
+                cluster_id: context.cluster_id().to_string(),
+            },
             None,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
             logger.clone(),
             localisation.as_str(),
+            KubernetesKind::ScwKapsule,
             kubernetes_version.clone(),
-            &ClusterDomain::Default,
+            &ClusterDomain::Default {
+                cluster_id: context.cluster_id().to_string(),
+            },
             None,
         ),
     };
@@ -1971,29 +1980,38 @@ pub fn test_db_on_upgrade(
             &context_for_delete,
             logger.clone(),
             localisation.as_str(),
+            KubernetesKind::Eks,
             kubernetes_version,
-            &ClusterDomain::Default,
+            &ClusterDomain::Default {
+                cluster_id: context_for_delete.cluster_id().to_string(),
+            },
             None,
         ),
         Kind::Do => DO::docker_cr_engine(
             &context_for_delete,
             logger.clone(),
             localisation.as_str(),
+            KubernetesKind::Doks,
             kubernetes_version,
-            &ClusterDomain::Default,
+            &ClusterDomain::Default {
+                cluster_id: context_for_delete.cluster_id().to_string(),
+            },
             None,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context_for_delete,
             logger.clone(),
             localisation.as_str(),
+            KubernetesKind::ScwKapsule,
             kubernetes_version,
-            &ClusterDomain::Default,
+            &ClusterDomain::Default {
+                cluster_id: context_for_delete.cluster_id().to_string(),
+            },
             None,
         ),
     };
 
-    // let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
+    let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
     assert!(matches!(ret, TransactionResult::Ok));
 
     return test_name.to_string();
