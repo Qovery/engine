@@ -189,14 +189,18 @@ pub struct Port {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
-pub struct ApplicationAdvanceSettings {
+pub struct ApplicationAdvancedSettings {
+    #[serde(alias = "deployment.delay_start_time_sec")]
     pub deployment_delay_start_time_sec: u32,
+    #[serde(alias = "build.timeout_max_sec")]
+    pub build_timeout_max_sec: u32,
 }
 
-impl Default for ApplicationAdvanceSettings {
+impl Default for ApplicationAdvancedSettings {
     fn default() -> Self {
-        ApplicationAdvanceSettings {
+        ApplicationAdvancedSettings {
             deployment_delay_start_time_sec: 30,
+            build_timeout_max_sec: 30 * 60, // 30min
         }
     }
 }
@@ -225,7 +229,7 @@ pub struct Application {
     /// Use BTreeMap to get Hash trait which is not available on HashMap
     pub environment_vars: BTreeMap<String, String>,
     #[serde(default)]
-    pub advance_settings: ApplicationAdvanceSettings,
+    pub advanced_settings: ApplicationAdvancedSettings,
 }
 
 impl Application {
@@ -254,7 +258,7 @@ impl Application {
                 build,
                 self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
                 environment_variables,
-                self.advance_settings.clone(),
+                self.advanced_settings.clone(),
                 AwsAppExtraSettings {},
                 listeners,
                 logger.clone(),
@@ -273,7 +277,7 @@ impl Application {
                 build,
                 self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
                 environment_variables,
-                self.advance_settings.clone(),
+                self.advanced_settings.clone(),
                 DoAppExtraSettings {},
                 listeners,
                 logger.clone(),
@@ -292,7 +296,7 @@ impl Application {
                 build,
                 self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
                 environment_variables,
-                self.advance_settings.clone(),
+                self.advanced_settings.clone(),
                 ScwAppExtraSettings {},
                 listeners,
                 logger.clone(),

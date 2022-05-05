@@ -12,7 +12,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
-use crate::io_models::{ApplicationAdvanceSettings, Context, Listen, Listener, Listeners, Port, QoveryIdentifier};
+use crate::io_models::{ApplicationAdvancedSettings, Context, Listen, Listener, Listeners, Port, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::utilities::to_short_id;
@@ -45,7 +45,7 @@ pub struct Application<T: CloudProvider> {
     pub(super) environment_variables: Vec<EnvironmentVariable>,
     pub(super) listeners: Listeners,
     pub(super) logger: Box<dyn Logger>,
-    pub(super) advance_settings: ApplicationAdvanceSettings,
+    pub(super) advanced_settings: ApplicationAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
 }
 
@@ -65,7 +65,7 @@ impl<T: CloudProvider> Application<T> {
         build: Build,
         storage: Vec<Storage<T::StorageTypes>>,
         environment_variables: Vec<EnvironmentVariable>,
-        advance_settings: ApplicationAdvanceSettings,
+        advance_settings: ApplicationAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         listeners: Listeners,
         logger: Box<dyn Logger>,
@@ -90,7 +90,7 @@ impl<T: CloudProvider> Application<T> {
             environment_variables,
             listeners,
             logger,
-            advance_settings,
+            advanced_settings: advance_settings,
             _extra_settings: extra_settings,
         })
     }
@@ -128,7 +128,7 @@ impl<T: CloudProvider> Application<T> {
         context.insert("image_name_with_tag", &self.build.image.full_image_name_with_tag());
         context.insert(
             "start_timeout_in_seconds",
-            &self.advance_settings.deployment_delay_start_time_sec,
+            &self.advanced_settings.deployment_delay_start_time_sec,
         );
 
         let environment_variables = self
