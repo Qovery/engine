@@ -43,7 +43,7 @@ jobs:
           sccache --version
           sccache --show-stats
           echo "########## START BUILD ##########"
-          cargo build --all-features
+          cargo build --all-features --tests
           sccache --show-stats
           echo "########## START UNIT TESTS ##########"
           cargo test
