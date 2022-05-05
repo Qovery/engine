@@ -202,7 +202,7 @@ function build() { ## Build engine app with engine lib
   cargo test $build_options --manifest-path app/Cargo.toml
 
   echo "=> Run build"
-  cargo build $build_options --all-features --color=always
+  cargo build $build_options --all-features --tests --color=always
   sccache -s
 }
 
@@ -404,7 +404,7 @@ function single_test() { ## Run a single test. Arg, test name: aws::aws_environm
   prepare_engine
   prepare_tests
 
-  cargo build --color=always --all --all-targets
+  cargo build --color=always --all --all-targets --tests
   sccache -s
   cd $ENGINE_DIR
   cargo test --package qovery-engine --test lib $test_name -- --ignored --exact
