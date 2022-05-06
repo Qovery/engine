@@ -220,9 +220,9 @@ pub fn environment_3_apps_3_routers_3_databases(
     database_disk_type: &str,
     provider_kind: Kind,
 ) -> EnvironmentRequest {
-    let app_name_1 = format!("{}-{}", "simple-app-1".to_string(), generate_id());
-    let app_name_2 = format!("{}-{}", "simple-app-2".to_string(), generate_id());
-    let app_name_3 = format!("{}-{}", "simple-app-3".to_string(), generate_id());
+    let app_name_1 = format!("{}-{}", "simple-app-1", generate_id());
+    let app_name_2 = format!("{}-{}", "simple-app-2", generate_id());
+    let app_name_3 = format!("{}-{}", "simple-app-3", generate_id());
 
     // mongoDB management part
     let database_host_mongo = get_svc_name(DatabaseKind::Mongodb, provider_kind.clone()).to_string();
@@ -248,7 +248,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     let database_name = "postgres".to_string();
 
     // pSQL 2 management part
-    let fqdn_2 = format!("{}2", get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()));
+    let fqdn_2 = format!("{}2", get_svc_name(DatabaseKind::Postgresql, provider_kind));
     let database_username_2 = "superuser2".to_string();
     let database_name_2 = "postgres2".to_string();
 
@@ -380,9 +380,9 @@ pub fn environment_3_apps_3_routers_3_databases(
                 environment_vars: btreemap! {
                     "IS_DOCUMENTDB".to_string() => base64::encode("false"),
                     "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(database_host_mongo.clone()),
-                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri_mongo.clone()),
+                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri_mongo),
                     "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => base64::encode(database_port_mongo.to_string()),
-                    "MONGODB_DBNAME".to_string() => base64::encode(&database_db_name_mongo.clone()),
+                    "MONGODB_DBNAME".to_string() => base64::encode(&database_db_name_mongo),
                     "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() => base64::encode(database_username_mongo.clone()),
                     "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => base64::encode(database_password_mongo.clone()),
                 },
@@ -409,12 +409,12 @@ pub fn environment_3_apps_3_routers_3_databases(
                 long_id: Uuid::new_v4(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/app1".to_string(),
-                    application_name: app_name_1.clone(),
+                    application_name: app_name_1,
                 }],
                 sticky_sessions_enabled: false,
             },
@@ -422,12 +422,12 @@ pub fn environment_3_apps_3_routers_3_databases(
                 long_id: Uuid::new_v4(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/app2".to_string(),
-                    application_name: app_name_2.clone(),
+                    application_name: app_name_2,
                 }],
                 sticky_sessions_enabled: false,
             },
@@ -435,12 +435,12 @@ pub fn environment_3_apps_3_routers_3_databases(
                 long_id: Uuid::new_v4(),
                 name: "third-router".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/app3".to_string(),
-                    application_name: app_name_3.clone(),
+                    application_name: app_name_3,
                 }],
                 sticky_sessions_enabled: false,
             },
@@ -450,12 +450,12 @@ pub fn environment_3_apps_3_routers_3_databases(
                 kind: DatabaseKind::Postgresql,
                 action: Action::Create,
                 long_id: Uuid::new_v4(),
-                name: database_name.clone(),
+                name: database_name,
                 version: "11.8.0".to_string(),
                 fqdn_id: fqdn.clone(),
-                fqdn: fqdn.clone(),
-                port: database_port.clone(),
-                username: database_username.clone(),
+                fqdn,
+                port: database_port,
+                username: database_username,
                 password: database_password.clone(),
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 512,
@@ -472,13 +472,13 @@ pub fn environment_3_apps_3_routers_3_databases(
                 kind: DatabaseKind::Postgresql,
                 action: Action::Create,
                 long_id: Uuid::new_v4(),
-                name: database_name_2.clone(),
+                name: database_name_2,
                 version: "11.8.0".to_string(),
                 fqdn_id: fqdn_2.clone(),
-                fqdn: fqdn_2.clone(),
-                port: database_port.clone(),
-                username: database_username_2.clone(),
-                password: database_password.clone(),
+                fqdn: fqdn_2,
+                port: database_port,
+                username: database_username_2,
+                password: database_password,
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 512,
                 disk_size_in_gib: 10,
@@ -494,13 +494,13 @@ pub fn environment_3_apps_3_routers_3_databases(
                 kind: DatabaseKind::Mongodb,
                 action: Action::Create,
                 long_id: Uuid::new_v4(),
-                name: database_db_name_mongo.clone(),
+                name: database_db_name_mongo,
                 version: version_mongo.to_string(),
                 fqdn_id: database_host_mongo.clone(),
-                fqdn: database_host_mongo.clone(),
-                port: database_port_mongo.clone(),
-                username: database_username_mongo.clone(),
-                password: database_password_mongo.clone(),
+                fqdn: database_host_mongo,
+                port: database_port_mongo,
+                username: database_username_mongo,
+                password: database_password_mongo,
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 512,
                 disk_size_in_gib: 10,
@@ -520,9 +520,9 @@ pub fn environment_3_apps_3_routers_3_databases(
 pub fn working_minimal_environment(context: &Context, test_domain: &str) -> EnvironmentRequest {
     let suffix = generate_id();
     let application_id = generate_id();
-    let application_name = format!("{}-{}", "simple-app".to_string(), &suffix);
+    let application_name = format!("{}-{}", "simple-app", &suffix);
     let router_name = "main".to_string();
-    let application_domain = format!("{}.{}.{}", application_id, context.cluster_id().to_string(), test_domain);
+    let application_domain = format!("{}.{}.{}", application_id, context.cluster_id(), test_domain);
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         id: generate_id(),
@@ -572,7 +572,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
-                application_name: format!("{}-{}", "simple-app".to_string(), &suffix),
+                application_name: format!("{}-{}", "simple-app", &suffix),
             }],
             sticky_sessions_enabled: false,
         }],
@@ -583,7 +583,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
 
 pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
     let suffix = generate_id();
-    let application_name = format!("{}-{}", "simple-app".to_string(), &suffix);
+    let application_name = format!("{}-{}", "simple-app", &suffix);
 
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
@@ -625,7 +625,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
 
 pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentRequest {
     let suffix = "c3dn5so3dltod3s";
-    let application_name = format!("{}-{}", "simple-app".to_string(), &suffix);
+    let application_name = format!("{}-{}", "simple-app", &suffix);
 
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
@@ -669,7 +669,7 @@ pub fn environment_only_http_server_router_with_sticky_session(
     context: &Context,
     test_domain: &str,
 ) -> EnvironmentRequest {
-    let mut env = environment_only_http_server_router(context, test_domain.clone());
+    let mut env = environment_only_http_server_router(context, test_domain);
 
     for mut router in &mut env.routers {
         router.sticky_sessions_enabled = true;
@@ -689,7 +689,7 @@ pub fn environnement_2_app_2_routers_1_psql(
 
     let database_port = 5432;
     let database_username = "superuser".to_string();
-    let database_password = generate_password(provider_kind.clone(), DatabaseMode::CONTAINER);
+    let database_password = generate_password(provider_kind, DatabaseMode::CONTAINER);
     let database_name = "postgres".to_string();
 
     let suffix = generate_id();
@@ -711,7 +711,7 @@ pub fn environnement_2_app_2_routers_1_psql(
             version: "11.8.0".to_string(),
             fqdn_id: fqdn.clone(),
             fqdn: fqdn.clone(),
-            port: database_port.clone(),
+            port: database_port,
             username: database_username.clone(),
             password: database_password.clone(),
             total_cpus: "100m".to_string(),
@@ -797,11 +797,11 @@ pub fn environnement_2_app_2_routers_1_psql(
                     snapshot_retention_in_days: 0,
                 }],
                 environment_vars: btreemap! {
-                     "PG_DBNAME".to_string() => base64::encode(database_name.clone()),
-                     "PG_HOST".to_string() => base64::encode(fqdn.clone()),
+                     "PG_DBNAME".to_string() => base64::encode(database_name),
+                     "PG_HOST".to_string() => base64::encode(fqdn),
                      "PG_PORT".to_string() => base64::encode(database_port.to_string()),
-                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
-                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                     "PG_USERNAME".to_string() => base64::encode(database_username),
+                     "PG_PASSWORD".to_string() => base64::encode(database_password),
                 },
                 branch: "master".to_string(),
                 ports: vec![Port {
@@ -826,12 +826,12 @@ pub fn environnement_2_app_2_routers_1_psql(
                 long_id: Uuid::new_v4(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/".to_string(),
-                    application_name: application_name1.to_string(),
+                    application_name: application_name1,
                 }],
                 sticky_sessions_enabled: false,
             },
@@ -839,12 +839,12 @@ pub fn environnement_2_app_2_routers_1_psql(
                 long_id: Uuid::new_v4(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/coco".to_string(),
-                    application_name: application_name2.to_string(),
+                    application_name: application_name2,
                 }],
                 sticky_sessions_enabled: false,
             },
@@ -883,7 +883,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
         action: Action::Create,
         applications: vec![Application {
             long_id: Uuid::new_v4(),
-            name: format!("{}-{}", "echo-app".to_string(), &suffix),
+            name: format!("{}-{}", "echo-app", &suffix),
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "2205adea1db295547b99f7b17229afd7e879b6ff".to_string(),
@@ -921,12 +921,12 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             long_id: Uuid::new_v4(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
+            default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
-                application_name: format!("{}-{}", "echo-app".to_string(), &suffix),
+                application_name: format!("{}-{}", "echo-app", &suffix),
             }],
             sticky_sessions_enabled: false,
         }],
@@ -946,7 +946,7 @@ pub fn environment_only_http_server(context: &Context) -> EnvironmentRequest {
         action: Action::Create,
         applications: vec![Application {
             long_id: Uuid::new_v4(),
-            name: format!("{}-{}", "mini-http".to_string(), &suffix),
+            name: format!("{}-{}", "mini-http", &suffix),
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
@@ -996,7 +996,7 @@ pub fn environment_only_http_server_router(context: &Context, test_domain: &str)
         action: Action::Create,
         applications: vec![Application {
             long_id: id,
-            name: format!("{}-{}", "mini-http".to_string(), &suffix),
+            name: format!("{}-{}", "mini-http", &suffix),
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
@@ -1037,7 +1037,7 @@ pub fn environment_only_http_server_router(context: &Context, test_domain: &str)
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
-                application_name: format!("{}-{}", "mini-http".to_string(), &suffix),
+                application_name: format!("{}-{}", "mini-http", &suffix),
             }],
             sticky_sessions_enabled: false,
         }],
@@ -1102,7 +1102,7 @@ pub fn test_db(
     let database_password = generate_password(provider_kind.clone(), database_mode.clone());
     let db_kind_str = db_kind.name().to_string();
     let db_id = generate_id();
-    let database_host = format!("{}-{}", db_id, db_kind_str.clone());
+    let database_host = format!("{}-{}", db_id, db_kind_str);
     let database_fqdn = format!(
         "{}.{}.{}",
         database_host,
@@ -1125,41 +1125,41 @@ pub fn test_db(
             database_host.clone()
         },
     );
-    let database_port = db_infos.db_port.clone();
+    let database_port = db_infos.db_port;
     let storage_size = 10;
     let db_disk_type = db_disk_type(provider_kind.clone(), database_mode.clone());
     let db_instance_type = db_instance_type(provider_kind.clone(), db_kind.clone(), database_mode.clone());
     let db = Database {
-        kind: db_kind.clone(),
+        kind: db_kind,
         action: Action::Create,
         long_id: Uuid::new_v4(),
-        name: db_id.clone(),
+        name: db_id,
         version: version.to_string(),
         fqdn_id: database_host.clone(),
         fqdn: database_fqdn.clone(),
-        port: database_port.clone(),
-        username: database_username.clone(),
-        password: database_password.clone(),
+        port: database_port,
+        username: database_username,
+        password: database_password,
         total_cpus: "50m".to_string(),
         total_ram_in_mib: 256,
-        disk_size_in_gib: storage_size.clone(),
-        database_instance_type: db_instance_type.to_string(),
-        database_disk_type: db_disk_type.to_string(),
+        disk_size_in_gib: storage_size,
+        database_instance_type: db_instance_type,
+        database_disk_type: db_disk_type,
         encrypt_disk: true,
         activate_high_availability: false,
         activate_backups: false,
-        publicly_accessible: is_public.clone(),
+        publicly_accessible: is_public,
         mode: database_mode.clone(),
     };
 
-    environment.databases = vec![db.clone()];
+    environment.databases = vec![db];
 
-    let app_name = format!("{}-app-{}", db_kind_str.clone(), generate_id());
+    let app_name = format!("{}-app-{}", db_kind_str, generate_id());
     environment.applications = environment
         .applications
         .into_iter()
         .map(|mut app| {
-            app.long_id = app_id.clone();
+            app.long_id = app_id;
             app.name = to_short_id(&app_id);
             app.branch = app_name.clone();
             app.commit_id = db_infos.app_commit.clone();
@@ -1228,34 +1228,33 @@ pub fn test_db(
     let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
     assert!(matches!(ret, TransactionResult::Ok));
 
-    match database_mode.clone() {
+    match database_mode {
         DatabaseMode::CONTAINER => {
             match get_pvc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                     format!("{}Gi", storage_size)
                 ),
-                Err(_) => assert!(false),
+                Err(_) => panic!(),
             };
 
-            match get_svc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
+            match get_svc(context.clone(), provider_kind.clone(), environment, secrets) {
                 Ok(svc) => assert_eq!(
                     svc.items
                         .expect("No items in svc")
                         .into_iter()
                         .filter(|svc| svc.metadata.name == database_host && &svc.spec.svc_type == "LoadBalancer")
-                        .collect::<Vec<SVCItem>>()
-                        .len(),
+                        .count(),
                     match is_public {
                         true => 1,
                         false => 0,
                     }
                 ),
-                Err(_) => assert!(false),
+                Err(_) => panic!(),
             };
         }
         DatabaseMode::MANAGED => {
-            match get_svc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
+            match get_svc(context.clone(), provider_kind.clone(), environment, secrets) {
                 Ok(svc) => {
                     let service = svc
                         .items
@@ -1273,7 +1272,7 @@ pub fn test_db(
                         false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
                     }
                 }
-                Err(_) => assert!(false),
+                Err(_) => panic!(),
             };
         }
     }
@@ -1287,9 +1286,7 @@ pub fn test_db(
             localisation.as_str(),
             KubernetesKind::Eks,
             kubernetes_version,
-            &ClusterDomain::Default {
-                cluster_id: cluster_id.to_string(),
-            },
+            &ClusterDomain::Default { cluster_id },
             None,
         ),
         Kind::Do => DO::docker_cr_engine(
@@ -1298,9 +1295,7 @@ pub fn test_db(
             localisation.as_str(),
             KubernetesKind::Doks,
             kubernetes_version,
-            &ClusterDomain::Default {
-                cluster_id: cluster_id.to_string(),
-            },
+            &ClusterDomain::Default { cluster_id },
             None,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
@@ -1309,9 +1304,7 @@ pub fn test_db(
             localisation.as_str(),
             KubernetesKind::ScwKapsule,
             kubernetes_version,
-            &ClusterDomain::Default {
-                cluster_id: cluster_id.to_string(),
-            },
+            &ClusterDomain::Default { cluster_id },
             None,
         ),
     };
@@ -1319,10 +1312,10 @@ pub fn test_db(
     let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
     assert!(matches!(ret, TransactionResult::Ok));
 
-    return test_name.to_string();
+    test_name.to_string()
 }
 
-pub fn get_environment_test_kubernetes<'a>(
+pub fn get_environment_test_kubernetes(
     context: &Context,
     cloud_provider: Arc<Box<dyn CloudProvider>>,
     kubernetes_kind: KubernetesKind,
@@ -1338,8 +1331,8 @@ pub fn get_environment_test_kubernetes<'a>(
         KubernetesKind::Eks => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
             let mut options = AWS::kubernetes_cluster_options(secrets, None);
-            if vpc_network_mode.is_some() {
-                options.vpc_qovery_network_mode = vpc_network_mode.expect("No vpc network mode");
+            if let Some(vpc_network_mode) = vpc_network_mode {
+                options.vpc_qovery_network_mode = vpc_network_mode;
             }
 
             Box::new(
@@ -1363,8 +1356,8 @@ pub fn get_environment_test_kubernetes<'a>(
         KubernetesKind::Ec2 => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
             let mut options = AWS::kubernetes_cluster_options(secrets, None);
-            if vpc_network_mode.is_some() {
-                options.vpc_qovery_network_mode = vpc_network_mode.expect("No vpc network mode");
+            if let Some(vpc_network_mode) = vpc_network_mode {
+                options.vpc_qovery_network_mode = vpc_network_mode;
             }
 
             Box::new(
@@ -1397,7 +1390,7 @@ pub fn get_environment_test_kubernetes<'a>(
                     cloud_provider,
                     dns_provider,
                     DO::kubernetes_nodes(),
-                    DO::kubernetes_cluster_options(secrets.clone(), Option::from(context.cluster_id().to_string())),
+                    DO::kubernetes_cluster_options(secrets, Option::from(context.cluster_id().to_string())),
                     logger,
                 )
                 .unwrap(),
@@ -1424,7 +1417,7 @@ pub fn get_environment_test_kubernetes<'a>(
         }
     };
 
-    return kubernetes;
+    kubernetes
 }
 
 pub fn get_cluster_test_kubernetes<'a>(
@@ -1445,8 +1438,8 @@ pub fn get_cluster_test_kubernetes<'a>(
         KubernetesKind::Eks => {
             let mut options = AWS::kubernetes_cluster_options(secrets, None);
             let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
-            if vpc_network_mode.is_some() {
-                options.vpc_qovery_network_mode = vpc_network_mode.expect("No vpc network mode");
+            if let Some(vpc_network_mode) = vpc_network_mode {
+                options.vpc_qovery_network_mode = vpc_network_mode;
             }
             let aws_zones = aws_zones.unwrap().into_iter().map(|zone| zone.to_string()).collect();
 
@@ -1457,7 +1450,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     uuid::Uuid::new_v4(),
                     cluster_name.as_str(),
                     boot_version.as_str(),
-                    aws_region.clone(),
+                    aws_region,
                     aws_zones,
                     cloud_provider,
                     dns_provider,
@@ -1471,8 +1464,8 @@ pub fn get_cluster_test_kubernetes<'a>(
         KubernetesKind::Ec2 => {
             let mut options = AWS::kubernetes_cluster_options(secrets, None);
             let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
-            if vpc_network_mode.is_some() {
-                options.vpc_qovery_network_mode = vpc_network_mode.expect("No vpc network mode");
+            if let Some(vpc_network_mode) = vpc_network_mode {
+                options.vpc_qovery_network_mode = vpc_network_mode;
             }
             let aws_zones = aws_zones.unwrap().into_iter().map(|zone| zone.to_string()).collect();
 
@@ -1483,7 +1476,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     uuid::Uuid::new_v4(),
                     cluster_name.as_str(),
                     boot_version.as_str(),
-                    aws_region.clone(),
+                    aws_region,
                     aws_zones,
                     cloud_provider,
                     dns_provider,
@@ -1496,11 +1489,11 @@ pub fn get_cluster_test_kubernetes<'a>(
         KubernetesKind::Doks => Box::new(
             DOKS::new(
                 context.clone(),
-                cluster_id.clone(),
+                cluster_id,
                 uuid::Uuid::new_v4(),
                 cluster_name.clone(),
                 boot_version,
-                DoRegion::from_str(localisation.clone()).expect("Unknown region set for DOKS"),
+                DoRegion::from_str(localisation).expect("Unknown region set for DOKS"),
                 cloud_provider,
                 dns_provider,
                 DO::kubernetes_nodes(),
@@ -1512,11 +1505,11 @@ pub fn get_cluster_test_kubernetes<'a>(
         KubernetesKind::ScwKapsule => Box::new(
             Kapsule::new(
                 context.clone(),
-                cluster_id.clone(),
+                cluster_id,
                 uuid::Uuid::new_v4(),
-                cluster_name.clone(),
+                cluster_name,
                 boot_version,
-                ScwZone::from_str(localisation.clone()).expect("Unknown zone set for Kapsule"),
+                ScwZone::from_str(localisation).expect("Unknown zone set for Kapsule"),
                 cloud_provider,
                 dns_provider,
                 Scaleway::kubernetes_nodes(),
@@ -1527,7 +1520,7 @@ pub fn get_cluster_test_kubernetes<'a>(
         ),
     };
 
-    return kubernetes;
+    kubernetes
 }
 
 pub fn cluster_test(
@@ -1584,8 +1577,8 @@ pub fn cluster_test(
     let mut delete_tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
     let mut aws_zones_string: Vec<String> = Vec::with_capacity(3);
-    if aws_zones.is_some() {
-        for zone in aws_zones.clone().unwrap() {
+    if let Some(aws_zones) = aws_zones {
+        for zone in aws_zones {
             aws_zones_string.push(zone.to_string())
         }
     };
@@ -1659,7 +1652,7 @@ pub fn cluster_test(
             }
         }
         ClusterTestType::WithUpgrade => {
-            let upgrade_to_version = format!("{}.{}", major_boot_version, minor_boot_version.clone() + 1);
+            let upgrade_to_version = format!("{}.{}", major_boot_version, minor_boot_version + 1);
             let engine = match provider_kind {
                 Kind::Aws => AWS::docker_cr_engine(
                     &context,
@@ -1668,7 +1661,7 @@ pub fn cluster_test(
                     KubernetesKind::Eks,
                     upgrade_to_version,
                     cluster_domain,
-                    vpc_network_mode.clone(),
+                    vpc_network_mode,
                 ),
                 Kind::Do => DO::docker_cr_engine(
                     &context,
@@ -1677,7 +1670,7 @@ pub fn cluster_test(
                     KubernetesKind::Doks,
                     upgrade_to_version,
                     cluster_domain,
-                    vpc_network_mode.clone(),
+                    vpc_network_mode,
                 ),
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
@@ -1686,7 +1679,7 @@ pub fn cluster_test(
                     KubernetesKind::ScwKapsule,
                     upgrade_to_version,
                     cluster_domain,
-                    vpc_network_mode.clone(),
+                    vpc_network_mode,
                 ),
             };
             let mut upgrade_tx =
@@ -1799,7 +1792,7 @@ pub fn test_db_on_upgrade(
     let database_password = "uxoyf358jojkemj".to_string();
     let db_kind_str = db_kind.name().to_string();
     let db_id = "c2dn5so3dltod3s".to_string();
-    let database_host = format!("{}-{}", db_id, db_kind_str.clone());
+    let database_host = format!("{}-{}", db_id, db_kind_str);
     let database_fqdn = format!(
         "{}.{}.{}",
         database_host,
@@ -1822,41 +1815,41 @@ pub fn test_db_on_upgrade(
             database_host.clone()
         },
     );
-    let database_port = db_infos.db_port.clone();
+    let database_port = db_infos.db_port;
     let storage_size = 10;
     let db_disk_type = db_disk_type(provider_kind.clone(), database_mode.clone());
     let db_instance_type = db_instance_type(provider_kind.clone(), db_kind.clone(), database_mode.clone());
     let db = Database {
-        kind: db_kind.clone(),
+        kind: db_kind,
         action: Action::Create,
         long_id: Uuid::from_str("7d0158db-b783-4bc2-a23b-c7d9228cbe90").unwrap(),
-        name: db_id.clone(),
+        name: db_id,
         version: version.to_string(),
         fqdn_id: database_host.clone(),
         fqdn: database_fqdn.clone(),
-        port: database_port.clone(),
-        username: database_username.clone(),
-        password: database_password.clone(),
+        port: database_port,
+        username: database_username,
+        password: database_password,
         total_cpus: "50m".to_string(),
         total_ram_in_mib: 256,
-        disk_size_in_gib: storage_size.clone(),
-        database_instance_type: db_instance_type.to_string(),
-        database_disk_type: db_disk_type.to_string(),
+        disk_size_in_gib: storage_size,
+        database_instance_type: db_instance_type,
+        database_disk_type: db_disk_type,
         encrypt_disk: true,
         activate_high_availability: false,
         activate_backups: false,
-        publicly_accessible: is_public.clone(),
+        publicly_accessible: is_public,
         mode: database_mode.clone(),
     };
 
-    environment.databases = vec![db.clone()];
+    environment.databases = vec![db];
 
-    let app_name = format!("{}-app-{}", db_kind_str.clone(), generate_id());
+    let app_name = format!("{}-app-{}", db_kind_str, generate_id());
     environment.applications = environment
         .applications
         .into_iter()
         .map(|mut app| {
-            app.long_id = app_id.clone();
+            app.long_id = app_id;
             app.name = to_short_id(&app_id);
             app.branch = app_name.clone();
             app.commit_id = db_infos.app_commit.clone();
@@ -1925,34 +1918,33 @@ pub fn test_db_on_upgrade(
     let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
     assert!(matches!(ret, TransactionResult::Ok));
 
-    match database_mode.clone() {
+    match database_mode {
         DatabaseMode::CONTAINER => {
             match get_pvc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                     format!("{}Gi", storage_size)
                 ),
-                Err(_) => assert!(false),
+                Err(_) => panic!(),
             };
 
-            match get_svc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
+            match get_svc(context, provider_kind.clone(), environment, secrets) {
                 Ok(svc) => assert_eq!(
                     svc.items
                         .expect("No items in svc")
                         .into_iter()
                         .filter(|svc| svc.metadata.name == database_host && &svc.spec.svc_type == "LoadBalancer")
-                        .collect::<Vec<SVCItem>>()
-                        .len(),
+                        .count(),
                     match is_public {
                         true => 1,
                         false => 0,
                     }
                 ),
-                Err(_) => assert!(false),
+                Err(_) => panic!(),
             };
         }
         DatabaseMode::MANAGED => {
-            match get_svc(context, provider_kind.clone(), environment.clone(), secrets.clone()) {
+            match get_svc(context, provider_kind.clone(), environment, secrets) {
                 Ok(svc) => {
                     let service = svc
                         .items
@@ -1970,7 +1962,7 @@ pub fn test_db_on_upgrade(
                         false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
                     }
                 }
-                Err(_) => assert!(false),
+                Err(_) => panic!(),
             };
         }
     }
@@ -2014,5 +2006,5 @@ pub fn test_db_on_upgrade(
     let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
     assert!(matches!(ret, TransactionResult::Ok));
 
-    return test_name.to_string();
+    test_name.to_string()
 }
