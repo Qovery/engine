@@ -408,7 +408,8 @@ pub fn generate_id() -> String {
     let uuid;
 
     loop {
-        let rand_string: String = thread_rng().sample_iter(Alphanumeric).take(15).collect();
+        let rand_string: Vec<u8> = thread_rng().sample_iter(Alphanumeric).take(15).collect();
+        let rand_string = String::from_utf8(rand_string).unwrap();
         if rand_string.chars().next().unwrap().is_alphabetic() {
             uuid = rand_string.to_lowercase();
             break;

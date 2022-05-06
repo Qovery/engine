@@ -78,14 +78,14 @@ impl LocalDocker {
         let mut disk_free_space_percent: u64 = 100;
 
         let sys_info = sysinfo::System::new_with_specifics(RefreshKind::new().with_disks().with_disks_list());
-        let should_reclaim_space = sys_info.get_disks().iter().any(|disk| {
+        let should_reclaim_space = sys_info.disks().iter().any(|disk| {
             // Check disk own the mount point we are interested in
-            if !mount_points_to_check.contains(&disk.get_mount_point()) {
+            if !mount_points_to_check.contains(&disk.mount_point()) {
                 return false;
             }
 
             // Check if we have hit our threshold regarding remaining disk space
-            disk_free_space_percent = disk.get_available_space() * 100 / disk.get_total_space();
+            disk_free_space_percent = disk.available_space() * 100 / disk.total_space();
             if disk_free_space_percent <= DISK_FREE_SPACE_PERCENTAGE_BEFORE_PURGE {
                 return true;
             }
