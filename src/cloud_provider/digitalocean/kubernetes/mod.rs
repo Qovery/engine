@@ -27,6 +27,7 @@ use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::{kubernetes, CloudProvider};
+use crate::cmd;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{
     do_kubectl_exec_get_loadbalancer_id, kubectl_exec_get_all_namespaces, kubectl_exec_get_events,
@@ -50,7 +51,6 @@ use crate::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
 use crate::string::terraform_list_format;
-use crate::{cmd, dns_provider};
 use ::function_name::named;
 use retry::delay::Fibonacci;
 use retry::Error::Operation;
@@ -259,13 +259,9 @@ impl DOKS {
             &managed_dns_resolvers_terraform_format,
         );
         context.insert("wildcard_managed_dns", &self.dns_provider().domain().wildcarded().to_string());
-        match self.dns_provider.kind() {
-            dns_provider::Kind::Cloudflare => {
-                context.insert("external_dns_provider", self.dns_provider.provider_name());
-                context.insert("cloudflare_api_token", self.dns_provider.token());
-                context.insert("cloudflare_email", self.dns_provider.account());
-            }
-        };
+
+        // add specific DNS fields
+        self.dns_provider().insert_into_teracontext(&mut context);
 
         context.insert("dns_email_report", &self.options.tls_email_report);
 
@@ -642,8 +638,7 @@ impl DOKS {
             external_dns_provider: self.dns_provider.provider_name().to_string(),
             dns_email_report: self.options.tls_email_report.clone(),
             acme_url: self.lets_encrypt_url(),
-            cloudflare_email: self.dns_provider.account().to_string(),
-            cloudflare_api_token: self.dns_provider.token().to_string(),
+            dns_provider_config: self.dns_provider().provider_configuration(),
             disable_pleco: self.context.disable_pleco(),
         };
 

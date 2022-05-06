@@ -27,7 +27,6 @@ use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
-use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
@@ -361,13 +360,8 @@ fn tera_context(
         &kubernetes.dns_provider().domain().wildcarded().to_string(),
     );
 
-    match kubernetes.dns_provider().kind() {
-        dns_provider::Kind::Cloudflare => {
-            context.insert("external_dns_provider", kubernetes.dns_provider().provider_name());
-            context.insert("cloudflare_api_token", kubernetes.dns_provider().token());
-            context.insert("cloudflare_email", kubernetes.dns_provider().account());
-        }
-    };
+    // add specific DNS fields
+    kubernetes.dns_provider().insert_into_teracontext(&mut context);
 
     context.insert("dns_email_report", &options.tls_email_report);
 
@@ -697,8 +691,7 @@ fn create(
                 external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
                 dns_email_report: options.tls_email_report.clone(),
                 acme_url: lets_encrypt_url(kubernetes.context()),
-                cloudflare_email: kubernetes.dns_provider().account().to_string(),
-                cloudflare_api_token: kubernetes.dns_provider().token().to_string(),
+                dns_provider_config: kubernetes.dns_provider().provider_configuration(),
                 disable_pleco: kubernetes.context().disable_pleco(),
             };
             eks_aws_helm_charts(
@@ -735,8 +728,7 @@ fn create(
                 external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
                 dns_email_report: options.tls_email_report.clone(),
                 acme_url: lets_encrypt_url(kubernetes.context()),
-                cloudflare_email: kubernetes.dns_provider().account().to_string(),
-                cloudflare_api_token: kubernetes.dns_provider().token().to_string(),
+                dns_provider_config: kubernetes.dns_provider().provider_configuration(),
                 disable_pleco: kubernetes.context().disable_pleco(),
             };
             ec2_aws_helm_charts(
