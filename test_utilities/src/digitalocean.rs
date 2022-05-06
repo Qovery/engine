@@ -150,6 +150,7 @@ impl Cluster<DO, DoksOptions> for DO {
             qovery_api_url: secrets.QOVERY_API_URL.unwrap(),
             qovery_grpc_url: secrets.QOVERY_GRPC_URL.unwrap(),
             qovery_cluster_secret_token: secrets.QOVERY_CLUSTER_SECRET_TOKEN.unwrap(),
+            jwt_token: "".to_string(),
             qovery_engine_location: EngineLocation::ClientSide,
             engine_version_controller_token: secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),
             agent_version_controller_token: secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),

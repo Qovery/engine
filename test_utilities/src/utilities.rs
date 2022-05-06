@@ -157,6 +157,7 @@ pub struct FuncTestsSecrets {
     pub TERRAFORM_AWS_REGION: Option<String>,
     pub QOVERY_GRPC_URL: Option<String>,
     pub QOVERY_CLUSTER_SECRET_TOKEN: Option<String>,
+    pub QOVERY_CLUSTER_JWT_TOKEN: Option<String>,
 }
 
 struct VaultConfig {
@@ -241,6 +242,7 @@ impl FuncTestsSecrets {
             TERRAFORM_AWS_REGION: None,
             QOVERY_GRPC_URL: None,
             QOVERY_CLUSTER_SECRET_TOKEN: None,
+            QOVERY_CLUSTER_JWT_TOKEN: None,
         };
 
         let vault_config = match Self::get_vault_config() {
@@ -361,6 +363,7 @@ impl FuncTestsSecrets {
                 "QOVERY_CLUSTER_SECRET_TOKEN",
                 secrets.QOVERY_CLUSTER_SECRET_TOKEN,
             ),
+            QOVERY_CLUSTER_JWT_TOKEN: Self::select_secret("QOVERY_CLUSTER_JWT_TOKEN", secrets.QOVERY_CLUSTER_JWT_TOKEN),
         }
     }
 }
