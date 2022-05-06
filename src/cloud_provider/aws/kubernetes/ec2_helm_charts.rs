@@ -1,9 +1,10 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
-    get_chart_for_cluster_agent, get_chart_for_shell_agent, ChartInfo, ChartSetValue, ClusterAgentContext, CommonChart,
-    CoreDNSConfigChart, HelmChart, HelmChartNamespaces, ShellAgentContext,
+    get_chart_for_cert_manager, get_chart_for_cluster_agent, get_chart_for_shell_agent, ChartInfo, ChartSetValue,
+    ClusterAgentContext, CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName};
+use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -49,8 +50,7 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub external_dns_provider: String,
     pub dns_email_report: String,
     pub acme_url: String,
-    pub cloudflare_email: String,
-    pub cloudflare_api_token: String,
+    pub dns_provider_config: DnsProviderConfiguration,
     pub disable_pleco: bool,
     // qovery options form json input
     pub infra_options: Options,
@@ -244,42 +244,13 @@ pub fn ec2_aws_helm_charts(
         },
     };
 
-    let mut cert_manager_config = CommonChart {
-        chart_info: ChartInfo {
-            name: "cert-manager-configs".to_string(),
-            path: chart_path("common/charts/cert-manager-configs"),
-            namespace: HelmChartNamespaces::CertManager,
-            values: vec![
-                ChartSetValue {
-                    key: "externalDnsProvider".to_string(),
-                    value: chart_config_prerequisites.external_dns_provider.clone(),
-                },
-                ChartSetValue {
-                    key: "acme.letsEncrypt.emailReport".to_string(),
-                    value: chart_config_prerequisites.dns_email_report.clone(),
-                },
-                ChartSetValue {
-                    key: "acme.letsEncrypt.acmeUrl".to_string(),
-                    value: chart_config_prerequisites.acme_url.clone(),
-                },
-                ChartSetValue {
-                    key: "managedDns".to_string(),
-                    value: chart_config_prerequisites.managed_dns_helm_format.clone(),
-                },
-            ],
-            ..Default::default()
-        },
-    };
-    if chart_config_prerequisites.external_dns_provider == "cloudflare" {
-        cert_manager_config.chart_info.values.push(ChartSetValue {
-            key: "provider.cloudflare.apiToken".to_string(),
-            value: chart_config_prerequisites.cloudflare_api_token.clone(),
-        });
-        cert_manager_config.chart_info.values.push(ChartSetValue {
-            key: "provider.cloudflare.email".to_string(),
-            value: chart_config_prerequisites.cloudflare_email.clone(),
-        })
-    }
+    let cert_manager_config = get_chart_for_cert_manager(
+        &chart_config_prerequisites.dns_provider_config,
+        chart_path("common/charts/cert-manager-configs"),
+        chart_config_prerequisites.dns_email_report.clone(),
+        chart_config_prerequisites.acme_url.clone(),
+        chart_config_prerequisites.managed_dns_helm_format.clone(),
+    );
 
     let nginx_ingress = CommonChart {
         chart_info: ChartInfo {

@@ -5,6 +5,12 @@ cloudflare:
   apiToken: "{{ cloudflare_api_token }}"
   email: "{{ cloudflare_email }}"
   proxied: {{ cloudflare_proxied|default(value="false") }}
+{% elif external_dns_provider == "pdns" %}
+# Qovery DNS
+pdns:
+  apiUrl: "{{ qoverydns_api_url }}"
+  apiPort: "{{ qoverydns_api_port }}"
+  apiKey: "{{ qoverydns_api_key }}"
 {% endif %}
 
 domainFilters: {{ managed_dns_domains_root_helm_format }}

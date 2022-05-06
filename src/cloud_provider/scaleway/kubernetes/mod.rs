@@ -14,6 +14,7 @@ use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, 
 use crate::cloud_provider::scaleway::kubernetes::node::{ScwInstancesType, ScwNodeGroup};
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::{kubernetes, CloudProvider};
+use crate::cmd;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
@@ -31,7 +32,6 @@ use crate::object_storage::scaleway_object_storage::{BucketDeleteStrategy, Scale
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
 use crate::string::terraform_list_format;
-use crate::{cmd, dns_provider};
 use ::function_name::named;
 use reqwest::StatusCode;
 use retry::delay::{Fibonacci, Fixed};
@@ -457,13 +457,9 @@ impl Kapsule {
             &managed_dns_resolvers_terraform_format,
         );
         context.insert("wildcard_managed_dns", &self.dns_provider().domain().wildcarded().to_string());
-        match self.dns_provider.kind() {
-            dns_provider::Kind::Cloudflare => {
-                context.insert("external_dns_provider", self.dns_provider.provider_name());
-                context.insert("cloudflare_api_token", self.dns_provider.token());
-                context.insert("cloudflare_email", self.dns_provider.account());
-            }
-        };
+
+        // add specific DNS fields
+        self.dns_provider().insert_into_teracontext(&mut context);
 
         context.insert("dns_email_report", &self.options.tls_email_report);
 
@@ -960,8 +956,7 @@ impl Kapsule {
             self.dns_provider.provider_name().to_string(),
             self.options.tls_email_report.clone(),
             self.lets_encrypt_url(),
-            self.dns_provider.account().to_string(),
-            self.dns_provider.token().to_string(),
+            self.dns_provider().provider_configuration(),
             self.context.disable_pleco(),
             self.options.clone(),
         );

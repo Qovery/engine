@@ -10,6 +10,7 @@ use crate::cmd::kubectl::{
     kubectl_exec_rollout_restart_deployment, kubectl_exec_with_output,
 };
 use crate::cmd::structs::HelmHistoryRow;
+use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::{CommandError, ErrorMessageVerbosity};
 use crate::utilities::calculate_hash;
 use semver::Version;
@@ -711,6 +712,8 @@ pub fn get_engine_helm_action_from_location(location: &EngineLocation) -> HelmAc
     }
 }
 
+// Shell Agent
+
 pub struct ShellAgentContext<'a> {
     pub api_url: &'a str,
     pub api_token: &'a str,
@@ -794,6 +797,8 @@ pub fn get_chart_for_shell_agent(
     Ok(shell_agent)
 }
 
+// Cluster Agent
+
 pub struct ClusterAgentContext<'a> {
     pub api_url: &'a str,
     pub api_token: &'a str,
@@ -876,6 +881,60 @@ pub fn get_chart_for_cluster_agent(
     };
 
     Ok(cluster_agent)
+}
+
+// Cert manager
+pub fn get_chart_for_cert_manager(
+    dns_provider_config: &DnsProviderConfiguration,
+    chart_path: String,
+    lets_encrypt_email_report: String,
+    lets_encrypt_acme_url: String,
+    managed_dns_helm_format: String,
+) -> CommonChart {
+    let mut cert_manager_config = CommonChart {
+        chart_info: ChartInfo {
+            name: "cert-manager-configs".to_string(),
+            path: chart_path,
+            namespace: HelmChartNamespaces::CertManager,
+            backup_resources: Some(vec!["cert".to_string(), "issuer".to_string(), "clusterissuer".to_string()]),
+            values: vec![
+                ChartSetValue {
+                    key: "externalDnsProvider".to_string(),
+                    value: dns_provider_config.get_cert_manager_config_name(),
+                },
+                ChartSetValue {
+                    key: "acme.letsEncrypt.emailReport".to_string(),
+                    value: lets_encrypt_email_report,
+                },
+                ChartSetValue {
+                    key: "acme.letsEncrypt.acmeUrl".to_string(),
+                    value: lets_encrypt_acme_url,
+                },
+                ChartSetValue {
+                    key: "managedDns".to_string(),
+                    value: managed_dns_helm_format,
+                },
+            ],
+            ..Default::default()
+        },
+    };
+
+    // add specific provider config
+    match dns_provider_config {
+        DnsProviderConfiguration::Cloudflare(x) => {
+            cert_manager_config.chart_info.values.push(ChartSetValue {
+                key: "provider.cloudflare.apiToken".to_string(),
+                value: x.cloudflare_api_token.clone(),
+            });
+            cert_manager_config.chart_info.values.push(ChartSetValue {
+                key: "provider.cloudflare.email".to_string(),
+                value: x.cloudflare_email.clone(),
+            })
+        }
+        DnsProviderConfiguration::QoveryDns(x) => {}
+    };
+
+    cert_manager_config
 }
 
 #[cfg(test)]
