@@ -22,8 +22,7 @@ use qovery_engine::models::digital_ocean::DoRegion;
 
 pub const DO_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const DO_KUBERNETES_MINOR_VERSION: u8 = 20;
-pub const DO_KUBERNETES_VERSION: &'static str =
-    formatcp!("{}.{}", DO_KUBERNETES_MAJOR_VERSION, DO_KUBERNETES_MINOR_VERSION);
+pub const DO_KUBERNETES_VERSION: &str = formatcp!("{}.{}", DO_KUBERNETES_MAJOR_VERSION, DO_KUBERNETES_MINOR_VERSION);
 pub const DOCR_ID: &str = "registry-the-one-and-unique";
 pub const DO_TEST_REGION: DoRegion = DoRegion::Amsterdam3;
 pub const DO_MANAGED_DATABASE_INSTANCE_TYPE: &str = "";
@@ -45,7 +44,7 @@ pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
 
 pub fn do_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
     DO::docker_cr_engine(
-        &context,
+        context,
         logger,
         DO_TEST_REGION.to_string().as_str(),
         KubernetesKind::Doks,
@@ -104,7 +103,7 @@ impl Cluster<DO, DoksOptions> for DO {
             .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set");
         Box::new(DO::new(
             context.clone(),
-            cluster_id.clone().as_str(),
+            cluster_id.as_str(),
             secrets
                 .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
                 .expect("DIGITAL_OCEAN_KUBE_TEST_ORGANIZATION_ID is not set")

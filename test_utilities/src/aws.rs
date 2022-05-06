@@ -26,8 +26,7 @@ pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
 pub const AWS_TEST_REGION: AwsRegion = AwsRegion::EuWest3;
 pub const AWS_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const AWS_KUBERNETES_MINOR_VERSION: u8 = 19;
-pub const AWS_KUBERNETES_VERSION: &'static str =
-    formatcp!("{}.{}", AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION);
+pub const AWS_KUBERNETES_VERSION: &str = formatcp!("{}.{}", AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION);
 pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t3.micro";
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 7200;
@@ -59,7 +58,7 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
 
 pub fn aws_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
     AWS::docker_cr_engine(
-        &context,
+        context,
         logger,
         AWS_TEST_REGION.to_string().as_str(),
         KubernetesKind::Eks,
@@ -216,19 +215,19 @@ impl Cluster<AWS, Options> for AWS {
                 .EKS_ACCESS_CIDR_BLOCKS
                 .as_ref()
                 .unwrap()
-                .replace("\"", "")
-                .replace("[", "")
-                .replace("]", "")
-                .split(",")
+                .replace('\"', "")
+                .replace('[', "")
+                .replace(']', "")
+                .split(',')
                 .map(|c| c.to_string())
                 .collect(),
             ec2_access_cidr_blocks: secrets
                 .EKS_ACCESS_CIDR_BLOCKS // FIXME ? use an EC2_ACCESS_CIDR_BLOCKS?
                 .unwrap()
-                .replace("\"", "")
-                .replace("[", "")
-                .replace("]", "")
-                .split(",")
+                .replace('\"', "")
+                .replace('[', "")
+                .replace(']', "")
+                .split(',')
                 .map(|c| c.to_string())
                 .collect(),
             rds_cidr_subnet: "23".to_string(),

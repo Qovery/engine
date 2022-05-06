@@ -436,16 +436,26 @@ where
         service.selector(),
     );
 
-    helm.upgrade(&chart, &[])
-        .map_err(|e| helm::to_engine_error(&event_details, e))?;
-
-    delete_pending_service(
+    let is_pending = is_pending_service(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
         service.selector().unwrap_or_default().as_str(),
         kubernetes.cloud_provider().credentials_environment_variables(),
         event_details.clone(),
     )?;
+
+    helm.upgrade(&chart, &[])
+        .map_err(|e| helm::to_engine_error(&event_details, e))?;
+
+    if is_pending {
+        delete_pending_service(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            service.selector().unwrap_or_default().as_str(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
+            event_details.clone(),
+        )?;
+    }
 
     crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
         kubernetes_config_file_path.as_str(),
@@ -1371,7 +1381,7 @@ fn delete_pending_service<P>(
 where
     P: AsRef<Path>,
 {
-    match kubectl_exec_get_pods(kubernetes_config, Some(namespace), Some(selector), envs.clone()) {
+    match kubectl_exec_get_pods(&kubernetes_config, Some(namespace), Some(selector), envs.clone()) {
         Ok(pods) => {
             for pod in pods.items {
                 if pod.status.phase == KubernetesPodStatusPhase::Pending {
@@ -1387,6 +1397,29 @@ where
             }
 
             Ok(())
+        }
+        Err(e) => Err(EngineError::new_k8s_service_issue(event_details, e)),
+    }
+}
+
+fn is_pending_service<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    selector: &str,
+    envs: Vec<(&str, &str)>,
+    event_details: EventDetails,
+) -> Result<bool, EngineError>
+where
+    P: AsRef<Path>,
+{
+    match kubectl_exec_get_pods(&kubernetes_config, Some(namespace), Some(selector), envs.clone()) {
+        Ok(pods) => {
+            for pod in pods.items {
+                if pod.status.phase == KubernetesPodStatusPhase::Pending {
+                    Ok(true)
+                }
+            }
+            Ok(false)
         }
         Err(e) => Err(EngineError::new_k8s_service_issue(event_details, e)),
     }
