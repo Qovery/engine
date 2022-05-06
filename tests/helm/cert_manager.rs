@@ -1,21 +1,21 @@
-use base64::decode;
+
 use qovery_engine::cloud_provider::helm::{
-    deploy_charts_levels, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
+    ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
 };
 use qovery_engine::cmd::helm::Helm;
-use qovery_engine::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_secrets, kubectl_get_resource_yaml};
-use qovery_engine::cmd::structs::SecretItem;
-use qovery_engine::fs::list_yaml_backup_files;
+
+
+
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
-use std::fs;
-use std::fs::OpenOptions;
-use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
-use std::str::from_utf8;
-use std::thread::sleep;
-use std::time::Duration;
-use tempdir::TempDir;
+
+
+
+use std::path::{PathBuf};
+
+
+
+
 use test_utilities::utilities::FuncTestsSecrets;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -143,7 +143,7 @@ fn cert_manager_conf() -> (Helm, PathBuf, CommonChart, CommonChart) {
                 },
                 ChartSetValue {
                     key: "provider.cloudflare.apiToken".to_string(),
-                    value: vault_secrets.CLOUDFLARE_TOKEN.unwrap().to_string(),
+                    value: vault_secrets.CLOUDFLARE_TOKEN.unwrap(),
                 },
                 ChartSetValue {
                     key: "provider.cloudflare.email".to_string(),
@@ -151,7 +151,7 @@ fn cert_manager_conf() -> (Helm, PathBuf, CommonChart, CommonChart) {
                 },
                 ChartSetValue {
                     key: "acme.letsEncrypt.emailReport".to_string(),
-                    value: vault_secrets.CLOUDFLARE_ID.unwrap().to_string(),
+                    value: vault_secrets.CLOUDFLARE_ID.unwrap(),
                 },
                 ChartSetValue {
                     key: "acme.letsEncrypt.acmeUrl".to_string(),
