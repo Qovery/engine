@@ -1,4 +1,4 @@
-FROM rust:1.59.0-bullseye
+FROM rust:1.60.0-bullseye
 
 ARG BIN_DEST_FOLDER="/binaries"
 ARG SCCACHE_REDIS
