@@ -17,23 +17,23 @@ test-full = ["test-functional"]
 
 [dependencies]
 qovery-engine = { path = "../cloned-engine" }
-crossbeam-channel = "0.5.0"
-nats = "0.8.6"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-uuid = { version = "0.8", features = ["v4", "serde"] }
+crossbeam-channel = "0.5.4"
+nats = "0.19.1"
+serde = { version = "1.0.137", features = ["derive"] }
+serde_json = "1.0.81"
+uuid = { version = "1.0.0", features = ["v4", "serde"] }
 chrono = "0.4.19"
-ctrlc = { version = "3.1.4", features = ["termination"] } # sig term handler wrapper
-retry = "1.0.0"
-dirs = "3.0.1"
-openssl-sys = "0.9"
-openssl = { version = "0.10", features = ["vendored"] }
+ctrlc = { version = "3.2.2", features = ["termination"] } # sig term handler wrapper
+retry = "1.3.1"
+dirs = "4.0.0"
+openssl-sys = "0.9.73"
+openssl = { version = "0.10.40", features = ["vendored"] }
 evmap = "10.0.2"
 url = "2.2.2"
 
 # Webserver (For Prometheus, Healthcheck, ...)
-tokio = { version = "1.1.0", features = ["net", "rt-multi-thread"] }
-warp = "0.3.0"
+tokio = { version = "1.18.1", features = ["net", "rt-multi-thread"] }
+warp = "0.3.2"
 lazy_static = "1.4.0"
 prometheus = { git = "https://github.com/tikv/rust-prometheus", rev = "ac86a264223c8d918a43e739ca3c48bb4aaedb90", features = ["process"] }
 
@@ -45,6 +45,6 @@ tracing-subscriber = { version = "0.2.18", features = ["env-filter"] }
 dotenv = "0.15.0"
 
 [dev-dependencies]
-reqwest = { version = "0.10.8", features = ["blocking"] }
+reqwest = { version = "0.11.10", features = ["blocking"] }
 
 
