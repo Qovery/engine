@@ -28,8 +28,7 @@ use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecret
 pub const SCW_TEST_ZONE: ScwZone = ScwZone::Paris2;
 pub const SCW_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const SCW_KUBERNETES_MINOR_VERSION: u8 = 19;
-pub const SCW_KUBERNETES_VERSION: &'static str =
-    formatcp!("{}.{}", SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION);
+pub const SCW_KUBERNETES_VERSION: &str = formatcp!("{}.{}", SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION);
 pub const SCW_MANAGED_DATABASE_INSTANCE_TYPE: &str = "db-dev-s";
 pub const SCW_MANAGED_DATABASE_DISK_TYPE: &str = "bssd";
 pub const SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE: &str = "";
@@ -55,8 +54,8 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
 
     ScalewayCR::new(
         context.clone(),
-        format!("default-registry-qovery-test-{}", random_id.clone()).as_str(),
-        format!("default-registry-qovery-test-{}", random_id.clone()).as_str(),
+        format!("default-registry-qovery-test-{}", random_id).as_str(),
+        format!("default-registry-qovery-test-{}", random_id).as_str(),
         scw_secret_key.as_str(),
         scw_default_project_id.as_str(),
         SCW_TEST_ZONE,
@@ -67,7 +66,7 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
 
 pub fn scw_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
     Scaleway::docker_cr_engine(
-        &context,
+        context,
         logger,
         SCW_TEST_ZONE.to_string().as_str(),
         KubernetesKind::ScwKapsule,
@@ -102,7 +101,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         let cluster = get_environment_test_kubernetes(
             context,
             cloud_provider.clone(),
-            kubernetes_kind.clone(),
+            kubernetes_kind,
             kubernetes_version.as_str(),
             dns_provider.clone(),
             logger.clone(),
@@ -214,7 +213,7 @@ pub fn scw_object_storage(context: Context, region: ScwZone) -> ScalewayOS {
 
     ScalewayOS::new(
         context,
-        format!("qovery-test-object-storage-{}", random_id.clone()),
+        format!("qovery-test-object-storage-{}", random_id),
         format!("Qovery Test Object-Storage {}", random_id),
         secrets
             .SCALEWAY_ACCESS_KEY
@@ -254,7 +253,7 @@ pub fn clean_environments(
         for build in env
             .applications
             .iter()
-            .map(|a| a.to_build(&registry_url))
+            .map(|a| a.to_build(registry_url))
             .collect::<Vec<Build>>()
         {
             let _ = container_registry_client.delete_image(&build.image);
