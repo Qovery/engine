@@ -56,7 +56,7 @@ release-image-mr:
   script:
     - ./helper.sh new_release
   tags:
-    - bm-7cpu-4gmem-0g
+    - bm-7cpu-12gmem-0g
   when: manual
   only:
   - merge_requests
@@ -244,7 +244,7 @@ build-and-lint:
     - ./helper.sh build
   when: always
   tags:
-    - bm-7cpu-4gmem-0g
+    - bm-7cpu-12gmem-0g
   only:
     refs:
       - dev
@@ -256,7 +256,7 @@ dev-release-image:
   script:
     - ./helper.sh new_release
   tags:
-    - bm-7cpu-4gmem-0g
+    - bm-7cpu-12gmem-0g
   when: manual
   only:
     refs:
