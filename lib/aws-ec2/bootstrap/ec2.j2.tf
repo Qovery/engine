@@ -16,13 +16,18 @@ data "aws_ami" "debian" {
   owners = [var.ec2_image_info.owners]
 }
 
+resource "aws_key_pair" "qovery_ssh_key" {
+  key_name   = "qovery-key"
+  public_key = "{{ qovery_ssh_key }}"
+}
+
 resource "aws_instance" "ec2_instance" {
   ami           = data.aws_ami.debian.id
   instance_type = var.ec2_instance.instance_type
 
   # disk
   root_block_device {
-    volume_size = "30" # GiB
+    volume_size = var.ec2_instance.disk_size_in_gb # GiB
     volume_type = "gp2"
     encrypted = true
   }
@@ -34,13 +39,16 @@ resource "aws_instance" "ec2_instance" {
   vpc_security_group_ids = [aws_security_group.ec2_instance.id]
   subnet_id = aws_subnet.ec2_zone_a[0].id
 
-  user_data = local.bootstrap
-  user_data_replace_on_change = true
+  # ssh
+  key_name = aws_key_pair.qovery_ssh_key.key_name
 
-#  lifecycle {
-#    // user data changes, forces to restart the EC2 instance
-#    ignore_changes = [user_data]
-#  }
+  # k3s install
+  user_data = local.bootstrap
+  user_data_replace_on_change = false
+  lifecycle {
+    // avoid user data changes, forces to restart the EC2 instance
+    ignore_changes = [user_data]
+  }
 
   tags = merge(
       local.tags_common,

@@ -175,6 +175,8 @@ pub enum Tag {
     CannotGetWorkspaceDirectory,
     /// UnsupportedInstanceType: represents an unsupported instance type for the given cloud provider.
     UnsupportedInstanceType,
+    /// NotAllowedInstanceType: represents not allowed instance type for a specific kind of cluster
+    NotAllowedInstanceType,
     /// UnsupportedClusterKind: represents an unsupported cluster kind by Qovery.
     UnsupportedClusterKind,
     /// UnsupportedRegion: represents an unsupported region for the given cloud provider.
@@ -598,6 +600,30 @@ impl EngineError {
             Some(
                 "This can happen if the cloud provider is encountering issues. You should try again later".to_string(),
             ),
+        )
+    }
+
+    /// Creates new error for not allowed instance type.
+    ///
+    /// Qovery doesn't allow the requested instance type.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `requested_instance_type`: Raw requested instance type string.
+    pub fn new_not_allowed_instance_type(event_details: EventDetails, requested_instance_type: &str) -> EngineError {
+        let message = format!(
+            "`{}` instance type is not allowed for this kind of cluster",
+            requested_instance_type
+        );
+        EngineError::new(
+            event_details,
+            Tag::NotAllowedInstanceType,
+            message.to_string(),
+            message,
+            None,
+            None, // TODO(documentation): Create a page entry to details this error
+            Some("Selected instance type is not allowed, please check Qovery's documentation.".to_string()),
         )
     }
 

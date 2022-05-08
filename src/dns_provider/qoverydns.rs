@@ -65,7 +65,7 @@ impl DnsProvider for QoveryDns {
     }
 
     fn insert_into_teracontext<'a>(&self, context: &'a mut TeraContext) -> &'a mut TeraContext {
-        context.insert("external_dns_provider", &self.name);
+        context.insert("external_dns_provider", &self.provider_name());
         context.insert("qoverydns_api_url", &self.api_url);
         context.insert("qoverydns_api_port", &self.api_port);
         context.insert("qoverydns_api_key", &self.api_key);

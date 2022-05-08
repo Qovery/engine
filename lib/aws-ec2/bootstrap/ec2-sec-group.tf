@@ -27,10 +27,19 @@ resource "aws_security_group" "ec2_instance" {
 
   // kubernetes
   ingress {
-    description = "Kubernetes connectivity"
+    description = "Kubernetes access"
     from_port   = random_integer.kubernetes_external_port.result
     protocol    = "tcp"
     to_port     = random_integer.kubernetes_external_port.result
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  // SSH
+  ingress {
+    description = "SSH access"
+    from_port   = 22
+    protocol    = "tcp"
+    to_port     = 22
     cidr_blocks = ["0.0.0.0/0"]
   }
 

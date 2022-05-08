@@ -8,8 +8,11 @@ use std::str::FromStr;
 pub enum AwsInstancesType {
     T2Large,    // 2 cores 8Gb RAM
     T2Xlarge,   // 4 cores 16Gb RAM
+    T3Small,    // 2 cores 2Gb RAM
+    T3Medium,   // 2 cores 4Gb RAM
     T3Large,    // 2 cores 8Gb RAM
     T3Xlarge,   // 4 cores 16Gb RAM
+    T3aSmall,   // 2 cores 2Gb RAM
     T3aMedium,  // 2 cores 4Gb RAM
     T3aLarge,   // 2 cores 8Gb RAM
     T3a2xlarge, // 8 cores 32Gb RAM
@@ -25,6 +28,9 @@ impl InstanceType for AwsInstancesType {
             AwsInstancesType::T3aMedium => "t3a.medium",
             AwsInstancesType::T3aLarge => "t3a.large",
             AwsInstancesType::T3a2xlarge => "t3a.2xlarge",
+            AwsInstancesType::T3Small => "t3.small",
+            AwsInstancesType::T3Medium => "t3.medium",
+            AwsInstancesType::T3aSmall => "t3a.small",
         }
         .to_string()
     }
@@ -40,6 +46,9 @@ impl AwsInstancesType {
             AwsInstancesType::T3aMedium => "t3a.medium",
             AwsInstancesType::T3aLarge => "t3a.large",
             AwsInstancesType::T3a2xlarge => "t3a.2xlarge",
+            AwsInstancesType::T3Small => "t3.small",
+            AwsInstancesType::T3Medium => "t3.medium",
+            AwsInstancesType::T3aSmall => "t3a.small",
         }
     }
 }
@@ -54,6 +63,9 @@ impl fmt::Display for AwsInstancesType {
             AwsInstancesType::T3aMedium => write!(f, "t3a.medium"),
             AwsInstancesType::T3aLarge => write!(f, "t3a.large"),
             AwsInstancesType::T3a2xlarge => write!(f, "t3a.2xlarge"),
+            AwsInstancesType::T3Small => write!(f, "t3.small"),
+            AwsInstancesType::T3Medium => write!(f, "t3.medium"),
+            AwsInstancesType::T3aSmall => write!(f, "t3a.small"),
         }
     }
 }
@@ -70,6 +82,9 @@ impl FromStr for AwsInstancesType {
             "t3a.medium" => Ok(AwsInstancesType::T3aMedium),
             "t3a.large" => Ok(AwsInstancesType::T3aLarge),
             "t3a.2xlarge" => Ok(AwsInstancesType::T3a2xlarge),
+            "t3.small" => Ok(AwsInstancesType::T3Small),
+            "t3.medium" => Ok(AwsInstancesType::T3Medium),
+            "t3a.small" => Ok(AwsInstancesType::T3aSmall),
             _ => Err(CommandError::new_from_safe_message(format!(
                 "`{}` instance type is not supported",
                 s

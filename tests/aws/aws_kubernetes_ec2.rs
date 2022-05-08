@@ -43,11 +43,6 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
     })
 }
 
-/*
-    TESTS NOTES:
-    It is useful to keep 2 clusters deployment tests to run in // to validate there is no name collision (overlaping)
-*/
-
 #[cfg(feature = "test-aws-infra-ec2")]
 #[named]
 #[test]

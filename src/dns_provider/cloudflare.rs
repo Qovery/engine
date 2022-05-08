@@ -61,7 +61,7 @@ impl DnsProvider for Cloudflare {
     }
 
     fn insert_into_teracontext<'a>(&self, context: &'a mut TeraContext) -> &'a mut TeraContext {
-        context.insert("external_dns_provider", &self.name);
+        context.insert("external_dns_provider", &self.provider_name());
         context.insert("cloudflare_email", &self.cloudflare_email);
         context.insert("cloudflare_api_token", &self.cloudflare_api_token);
         context
