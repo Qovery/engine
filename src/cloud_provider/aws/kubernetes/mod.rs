@@ -622,6 +622,9 @@ fn create(
 
     // wait for AWS EC2 K3S port is open to avoid later deployment issues (and kubeconfig not available on S3)
     if let Kind::Ec2 = kubernetes.kind() {
+        kubernetes.delete_local_kubeconfig();
+        kubernetes.get_kubeconfig_file()?;
+
         let qovery_teraform_config =
             get_aws_ec2_qovery_terraform_config(format!("{}/qovery-tf-config.json", &temp_dir).as_str())
                 .map_err(|e| EngineError::new_terraform_qovery_config_mismatch(event_details.clone(), e))?;

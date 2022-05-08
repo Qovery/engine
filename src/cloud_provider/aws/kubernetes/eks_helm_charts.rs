@@ -1,6 +1,6 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
-    get_chart_for_cert_manager, get_chart_for_cluster_agent, get_chart_for_shell_agent,
+    get_chart_for_cert_manager_config, get_chart_for_cluster_agent, get_chart_for_shell_agent,
     get_engine_helm_action_from_location, ChartInfo, ChartPayload, ChartSetValue, ChartValuesGenerated,
     ClusterAgentContext, CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces,
     PrometheusOperatorConfigChart, ShellAgentContext,
@@ -791,7 +791,7 @@ datasources:
         },
     };
 
-    let cert_manager_config = get_chart_for_cert_manager(
+    let cert_manager_config = get_chart_for_cert_manager_config(
         &chart_config_prerequisites.dns_provider_config,
         chart_path("common/charts/cert-manager-configs"),
         chart_config_prerequisites.dns_email_report.clone(),
@@ -964,7 +964,7 @@ datasources:
         cluster_jwt_token: &chart_config_prerequisites.infra_options.jwt_token,
         grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
     };
-    let cluster_agent = get_chart_for_cluster_agent(cluster_agent_context, chart_path)?;
+    let cluster_agent = get_chart_for_cluster_agent(cluster_agent_context, chart_path, None)?;
 
     let shell_context = ShellAgentContext {
         api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
@@ -975,7 +975,7 @@ datasources:
         cluster_jwt_token: &chart_config_prerequisites.infra_options.jwt_token,
         grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
     };
-    let shell_agent = get_chart_for_shell_agent(shell_context, chart_path)?;
+    let shell_agent = get_chart_for_shell_agent(shell_context, chart_path, None)?;
 
     let qovery_agent_version: QoveryAgent = get_qovery_app_version(
         QoveryAppName::Agent,

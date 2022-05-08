@@ -70,7 +70,8 @@ variable "ec2_image_info" {
 variable "ec2_instance" {
   description = "EC2 instance configuration"
   default = {
-    "instance_type" = "t3.micro"
+    "instance_type" = "{{ eks_worker_nodes[0].instance_type }}"
+    "disk_size_in_gb" = "{{ eks_worker_nodes[0].disk_size_in_gib }}"
   }
   type = map(string)
 }
@@ -80,7 +81,7 @@ variable "k3s_config" {
   default = {
     "version" = "v1.20.15+k3s1"
     "channel" = "stable"
-    "exec" = "--disable=traefik"
+    "exec" = "--disable=traefik --disable=metrics-server"
   }
   type = map(string)
 }
