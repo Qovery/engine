@@ -76,6 +76,7 @@ pub struct DoksOptions {
     pub qovery_api_url: String,
     pub qovery_grpc_url: String,
     pub qovery_cluster_secret_token: String,
+    pub jwt_token: String,
     pub qovery_engine_location: EngineLocation,
     pub engine_version_controller_token: String,
     pub agent_version_controller_token: String,

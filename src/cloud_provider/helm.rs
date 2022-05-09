@@ -758,7 +758,7 @@ pub fn get_chart_for_shell_agent(
                     value: context.grpc_url.to_string(),
                 },
                 ChartSetValue {
-                    key: "environmentVariables.CLUSTER_TOKEN".to_string(),
+                    key: "environmentVariables.CLUSTER_JWT_TOKEN".to_string(),
                     value: context.cluster_token.to_string(),
                 },
                 ChartSetValue {
@@ -800,7 +800,7 @@ pub struct ClusterAgentContext<'a> {
     pub organization_long_id: &'a Uuid,
     pub cluster_id: &'a str,
     pub cluster_long_id: &'a Uuid,
-    pub cluster_token: &'a str,
+    pub cluster_jwt_token: &'a str,
     pub grpc_url: &'a str,
 }
 
@@ -842,8 +842,8 @@ pub fn get_chart_for_cluster_agent(
                     value: context.grpc_url.to_string(),
                 },
                 ChartSetValue {
-                    key: "environmentVariables.CLUSTER_TOKEN".to_string(),
-                    value: context.cluster_token.to_string(),
+                    key: "environmentVariables.CLUSTER_JWT_TOKEN".to_string(),
+                    value: context.cluster_jwt_token.to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.CLUSTER_ID".to_string(),
