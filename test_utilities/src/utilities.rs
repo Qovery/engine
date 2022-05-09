@@ -68,7 +68,7 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
     let docker = Docker::new(docker_host.clone()).expect("Can't init docker");
 
     let metadata = Metadata {
-        dry_run_deploy: Option::from({ env::var_os("dry_run_deploy").is_some() }),
+        dry_run_deploy: Option::from(env::var_os("dry_run_deploy").is_some()),
         resource_expiration_in_seconds: {
             // set a custom ttl as environment variable for manual tests
             match env::var_os("ttl") {
@@ -79,7 +79,7 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
                 None => Some(7200),
             }
         },
-        forced_upgrade: Option::from({ env::var_os("forced_upgrade").is_some() }),
+        forced_upgrade: Option::from(env::var_os("forced_upgrade").is_some()),
         disable_pleco: Some(true),
     };
 
@@ -411,7 +411,8 @@ pub fn generate_id() -> String {
     let uuid;
 
     loop {
-        let rand_string: String = thread_rng().sample_iter(Alphanumeric).take(15).collect();
+        let rand_string: Vec<u8> = thread_rng().sample_iter(Alphanumeric).take(15).collect();
+        let rand_string = String::from_utf8(rand_string).unwrap();
         if rand_string.chars().next().unwrap().is_alphabetic() {
             uuid = rand_string.to_lowercase();
             break;
