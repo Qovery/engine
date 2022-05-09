@@ -442,7 +442,8 @@ where
         service.selector().unwrap_or_default().as_str(),
         kubernetes.cloud_provider().credentials_environment_variables(),
         event_details.clone(),
-    )?;
+    )
+    .unwrap_or(false);
 
     helm.upgrade(&chart, &[])
         .map_err(|e| helm::to_engine_error(&event_details, e))?;
@@ -720,16 +721,27 @@ where
             service.selector(),
         );
 
-        helm.upgrade(&chart, &[])
-            .map_err(|e| helm::to_engine_error(&event_details, e))?;
-
-        delete_pending_service(
+        let is_pending = is_pending_service(
             kubernetes_config_file_path.as_str(),
             environment.namespace(),
             service.selector().unwrap_or_default().as_str(),
             kubernetes.cloud_provider().credentials_environment_variables(),
             event_details.clone(),
-        )?;
+        )
+        .unwrap_or(false);
+
+        helm.upgrade(&chart, &[])
+            .map_err(|e| helm::to_engine_error(&event_details, e))?;
+
+        if is_pending {
+            delete_pending_service(
+                kubernetes_config_file_path.as_str(),
+                environment.namespace(),
+                service.selector().unwrap_or_default().as_str(),
+                kubernetes.cloud_provider().credentials_environment_variables(),
+                event_details.clone(),
+            )?;
+        }
 
         // check app status
         let is_pod_ready = crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
@@ -1416,7 +1428,7 @@ where
         Ok(pods) => {
             for pod in pods.items {
                 if pod.status.phase == KubernetesPodStatusPhase::Pending {
-                    Ok(true)
+                    return Ok(true);
                 }
             }
             Ok(false)
