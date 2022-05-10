@@ -13,7 +13,7 @@ global:
 ## ref: https://hub.docker.com/r/bitnami/redis/tags/
 ##
 image:
-  registry: quay.io
+  registry: docker.io
   repository: bitnami/redis
   ## Bitnami Redis image tag
   ## ref: https://github.com/bitnami/bitnami-docker-redis#supported-tags-and-respective-dockerfile-links
@@ -132,9 +132,11 @@ sentinel:
     ##
     annotations: {}
     labels:
-      ownerId: {{ owner_id }}
       envId: {{ environment_id }}
       databaseId: {{ id }}
+      databaseLongId: {{ long_id }}
+      envLongId: {{ environment_long_id }}
+      projectLongId: {{ project_long_id }}
     loadBalancerIP:
 
 ## Specifies the Kubernetes Cluster's Domain Name.
@@ -291,10 +293,11 @@ master:
   ## Redis Master additional pod labels and annotations
   ## ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
   podLabels:
-    ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     databaseId: {{ id }}
-    databaseName: {{ sanitized_name }}
+    databaseLongId: {{ long_id }}
+    envLongId: {{ environment_long_id }}
+    projectLongId: {{ project_long_id }}
   podAnnotations: {}
 
   ## Redis Master resource requests and limits
@@ -388,9 +391,11 @@ master:
       external-dns.alpha.kubernetes.io/ttl: "300"
     {% endif %}
     labels:
-      ownerId: {{ owner_id }}
       envId: {{ environment_id }}
       databaseId: {{ id }}
+      databaseLongId: {{ long_id }}
+      envLongId: {{ environment_long_id }}
+      projectLongId: {{ project_long_id }}
     loadBalancerIP:
     # loadBalancerSourceRanges: ["10.0.0.0/8"]
 
@@ -425,9 +430,11 @@ master:
   ## https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#updating-statefulsets
   statefulset:
     labels:
-      ownerId: {{ owner_id }}
       envId: {{ environment_id }}
       databaseId: {{ id }}
+      databaseLongId: {{ long_id }}
+      envLongId: {{ environment_long_id }}
+      projectLongId: {{ project_long_id }}
     updateStrategy: RollingUpdate
     ## Partition update strategy
     ## https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#partitions

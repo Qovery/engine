@@ -135,6 +135,8 @@ sentinel:
       envId: {{ environment_id }}
       databaseId: {{ id }}
       databaseLongId: {{ long_id }}
+      envLongId: {{ environment_long_id }}
+      projectLongId: {{ project_long_id }}
     loadBalancerIP:
 
 ## Specifies the Kubernetes Cluster's Domain Name.
@@ -294,6 +296,8 @@ master:
     envId: {{ environment_id }}
     databaseId: {{ id }}
     databaseLongId: {{ long_id }}
+    envLongId: {{ environment_long_id }}
+    projectLongId: {{ project_long_id }}
   podAnnotations: {}
 
   ## Redis Master resource requests and limits
@@ -390,6 +394,8 @@ master:
       envId: {{ environment_id }}
       databaseId: {{ id }}
       databaseLongId: {{ long_id }}
+      envLongId: {{ environment_long_id }}
+      projectLongId: {{ project_long_id }}
     loadBalancerIP:
     # loadBalancerSourceRanges: ["10.0.0.0/8"]
 
@@ -427,6 +433,8 @@ master:
       envId: {{ environment_id }}
       databaseId: {{ id }}
       databaseLongId: {{ long_id }}
+      envLongId: {{ environment_long_id }}
+      projectLongId: {{ project_long_id }}
     updateStrategy: RollingUpdate
     ## Partition update strategy
     ## https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#partitions

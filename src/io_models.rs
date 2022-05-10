@@ -82,10 +82,9 @@ impl Display for QoveryIdentifier {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct EnvironmentRequest {
     pub execution_id: String,
-    pub id: String,
-    pub owner_id: String,
-    pub project_id: String,
-    pub organization_id: String,
+    pub long_id: Uuid,
+    pub project_long_id: Uuid,
+    pub organization_long_id: Uuid,
     pub action: Action,
     pub applications: Vec<Application>,
     pub routers: Vec<Router>,
@@ -134,10 +133,9 @@ impl EnvironmentRequest {
         }
 
         Ok(Environment::new(
-            self.id.as_str(),
-            self.project_id.as_str(),
-            self.owner_id.as_str(),
-            self.organization_id.as_str(),
+            self.long_id,
+            self.project_long_id,
+            self.organization_long_id,
             self.action.to_service_action(),
             applications,
             routers,

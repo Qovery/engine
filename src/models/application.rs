@@ -101,8 +101,11 @@ impl<T: CloudProvider> Application<T> {
         context.insert("long_id", &self.long_id);
         context.insert("owner_id", environment.owner_id.as_str());
         context.insert("project_id", environment.project_id.as_str());
+        context.insert("project_long_id", &environment.project_long_id);
         context.insert("organization_id", environment.organization_id.as_str());
+        context.insert("organization_long_id", &environment.organization_long_id);
         context.insert("environment_id", environment.id.as_str());
+        context.insert("environment_long_id", &environment.long_id);
         context.insert("region", kubernetes.region().as_str());
         context.insert("zone", kubernetes.zone());
         context.insert("name", self.name());

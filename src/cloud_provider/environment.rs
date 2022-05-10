@@ -1,12 +1,17 @@
 use crate::cloud_provider::service::{Action, DatabaseService, RouterService, StatefulService, StatelessService};
 use crate::models::application::ApplicationService;
+use crate::utilities::to_short_id;
+use uuid::Uuid;
 
 pub struct Environment {
     namespace: String,
     pub id: String,
+    pub long_id: Uuid,
     pub project_id: String,
+    pub project_long_id: Uuid,
     pub owner_id: String,
     pub organization_id: String,
+    pub organization_long_id: Uuid,
     pub action: Action,
     pub applications: Vec<Box<dyn ApplicationService>>,
     pub routers: Vec<Box<dyn RouterService>>,
@@ -15,21 +20,25 @@ pub struct Environment {
 
 impl Environment {
     pub fn new(
-        id: &str,
-        project_id: &str,
-        owner_id: &str,
-        organization_id: &str,
+        long_id: Uuid,
+        project_long_id: Uuid,
+        organization_long_id: Uuid,
         action: Action,
         applications: Vec<Box<dyn ApplicationService>>,
         routers: Vec<Box<dyn RouterService>>,
         databases: Vec<Box<dyn DatabaseService>>,
     ) -> Self {
+        let project_id = to_short_id(&project_long_id);
+        let env_id = to_short_id(&long_id);
         Environment {
-            namespace: format!("{}-{}", project_id, id),
-            id: id.to_string(),
-            project_id: project_id.to_string(),
-            owner_id: owner_id.to_string(),
-            organization_id: organization_id.to_string(),
+            namespace: format!("{}-{}", project_id, env_id),
+            id: env_id,
+            long_id,
+            project_id,
+            project_long_id,
+            owner_id: "FAKE".to_string(),
+            organization_id: to_short_id(&organization_long_id),
+            organization_long_id,
             action,
             applications,
             routers,
