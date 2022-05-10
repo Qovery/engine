@@ -9,15 +9,12 @@ use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, GeneralStep, Stage, ToTransmitter, Transmitter};
-use crate::models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
+use crate::io_models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
 
-pub mod application;
-pub mod databases;
 pub mod do_api_common;
 pub mod kubernetes;
 pub mod models;
 pub mod network;
-pub mod router;
 
 pub struct DO {
     context: Context,

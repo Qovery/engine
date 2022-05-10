@@ -2,11 +2,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use crate::cmd::command::CommandError;
-use crate::cmd::docker::DockerError;
+use crate::cmd::docker::{BuildResult, DockerError};
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter};
+use crate::io_models::{Context, Listen, QoveryIdentifier};
 use crate::logger::Logger;
-use crate::models::{Context, Listen, QoveryIdentifier};
 use crate::utilities::compute_image_tag;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::hash::Hash;
@@ -52,7 +52,7 @@ pub trait BuildPlatform: ToTransmitter + Listen {
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
     }
-    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<(), BuildError>;
+    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<BuildResult, BuildError>;
     fn logger(&self) -> Box<dyn Logger>;
     fn get_event_details(&self) -> EventDetails {
         let context = self.context();

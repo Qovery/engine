@@ -54,6 +54,7 @@ The following table lists the configurable parameters for this chart and their d
 | `nodeSelector`          | Node labels for pod assignment                          | `{}`                                |
 | `podSecurityContext`    | Pod Security Context                                    | `{}`                                |
 | `podAnnotations`        | annotations to add to each pod                          | `{}`                                |
+| `podLabels`             | Labels to add to each pod                               | `{}`                                |
 | `priorityClassName`     | Name of the priorityClass                               | `system-node-critical`              |
 | `resources`             | Resources for the pods                                  | `requests.cpu: 10m`                 |
 | `securityContext`       | Container Security context                              | `capabilities: add: - "NET_ADMIN"`  |
@@ -65,6 +66,7 @@ The following table lists the configurable parameters for this chart and their d
 | `crd.create`            | Specifies whether to create the VPC-CNI CRD             | `true`                              |
 | `tolerations`           | Optional deployment tolerations                         | `[]`                                |
 | `updateStrategy`        | Optional update strategy                                | `type: RollingUpdate`               |
+| `cri.hostPath`          | Optional use alternative container runtime              | `nil`                               |
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install` or provide a YAML file containing the values for the above parameters:
 

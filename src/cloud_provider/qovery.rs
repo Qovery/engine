@@ -34,6 +34,7 @@ pub enum QoveryAppName {
     Agent,
     Engine,
     ShellAgent,
+    ClusterAgent,
 }
 
 pub fn get_qovery_app_version<T: DeserializeOwned>(
@@ -50,6 +51,7 @@ pub fn get_qovery_app_version<T: DeserializeOwned>(
         QoveryAppName::Agent => "agent",
         QoveryAppName::Engine => "engine",
         QoveryAppName::ShellAgent => "shellAgent",
+        QoveryAppName::ClusterAgent => "clusterAgent",
     };
 
     let url = format!(
@@ -62,14 +64,8 @@ pub fn get_qovery_app_version<T: DeserializeOwned>(
     match reqwest::blocking::Client::new().get(&url).headers(headers).send() {
         Ok(x) => match x.json::<T>() {
             Ok(qa) => Ok(qa),
-            Err(e) => Err(CommandError::new(
-                format!("{}, error: {:?}", message_safe, e),
-                Some(message_safe),
-            )),
+            Err(e) => Err(CommandError::new(message_safe, Some(e.to_string()), None)),
         },
-        Err(e) => Err(CommandError::new(
-            format!("{}, error: {:?}", message_safe, e),
-            Some(message_safe),
-        )),
+        Err(e) => Err(CommandError::new(message_safe, Some(e.to_string()), None)),
     }
 }

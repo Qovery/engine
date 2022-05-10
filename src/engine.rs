@@ -10,7 +10,7 @@ use crate::container_registry::ContainerRegistry;
 use crate::dns_provider::errors::DnsProviderError;
 use crate::dns_provider::DnsProvider;
 use crate::errors::EngineError;
-use crate::models::Context;
+use crate::io_models::Context;
 
 #[derive(Error, Debug, PartialEq)]
 pub enum EngineConfigError {

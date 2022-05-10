@@ -9,14 +9,11 @@ use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::errors::EngineError;
 use crate::events::{EventDetails, GeneralStep, Stage, ToTransmitter, Transmitter};
-use crate::models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
+use crate::io_models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
 use crate::runtime::block_on;
 
-pub mod application;
-pub mod databases;
 pub mod kubernetes;
 pub mod regions;
-pub mod router;
 
 pub struct AWS {
     context: Context,

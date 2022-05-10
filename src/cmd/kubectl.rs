@@ -1,3 +1,6 @@
+use std::fmt::Debug;
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 
 use retry::delay::Fibonacci;
@@ -14,7 +17,7 @@ use crate::cmd::structs::{
 };
 use crate::constants::KUBECONFIG;
 use crate::error::{SimpleError, SimpleErrorKind};
-use crate::errors::CommandError;
+use crate::errors::{CommandError, ErrorMessageVerbosity};
 
 pub enum ScalingKind {
     Deployment,
@@ -839,7 +842,7 @@ where
     match result {
         Ok(_) => Ok(()),
         Err(e) => {
-            let lower_case_message = e.message().to_lowercase();
+            let lower_case_message = e.message(ErrorMessageVerbosity::FullDetails).to_lowercase();
             if lower_case_message.contains("no resources found") || lower_case_message.ends_with(" deleted") {
                 return Ok(());
             }
@@ -1158,7 +1161,7 @@ where
         &mut |_| {},
     ) {
         Ok(_) => Ok(pod_to_be_deleted),
-        Err(e) => Err(CommandError::new(e.message(), None)),
+        Err(e) => Err(e),
     }
 }
 
@@ -1166,6 +1169,52 @@ fn kubectl_exec<P, T>(args: Vec<&str>, kubernetes_config: P, envs: Vec<(&str, &s
 where
     P: AsRef<Path>,
     T: DeserializeOwned,
+{
+    let mut extended_envs = Vec::with_capacity(envs.len() + 1);
+    extended_envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
+    extended_envs.extend(envs);
+
+    let mut output_vec: Vec<String> = Vec::with_capacity(50);
+    let mut err_vec = Vec::new();
+    let _ = kubectl_exec_with_output(
+        args.clone(),
+        extended_envs.clone(),
+        &mut |line| output_vec.push(line),
+        &mut |line| {
+            err_vec.push(line.to_string());
+            error!("{}", line)
+        },
+    )?;
+
+    let output_string: String = output_vec.join("");
+
+    let result = match serde_json::from_str::<T>(output_string.as_str()) {
+        Ok(x) => x,
+        Err(err) => {
+            return Err(CommandError::new(
+                "JSON parsing error on kubectl command.".to_string(),
+                Some(err.to_string()),
+                Some(
+                    extended_envs
+                        .iter()
+                        .map(|(k, v)| (k.to_string(), v.to_string()))
+                        .collect::<Vec<(String, String)>>(),
+                ),
+            ));
+        }
+    };
+
+    Ok(result)
+}
+
+fn kubectl_exec_raw_output<P>(
+    args: Vec<&str>,
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    keep_format: bool,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
 {
     let mut _envs = Vec::with_capacity(envs.len() + 1);
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
@@ -1176,33 +1225,10 @@ where
         error!("{}", line)
     })?;
 
-    let output_string: String = output_vec.join("");
-
-    let result = match serde_json::from_str::<T>(output_string.as_str()) {
-        Ok(x) => x,
-        Err(err) => {
-            let args_string = args.join(" ");
-            let mut env_vars_in_vec = Vec::new();
-            let _ = _envs.into_iter().map(|x| {
-                env_vars_in_vec.push(x.0.to_string());
-                env_vars_in_vec.push(x.1.to_string());
-            });
-            let environment_variables = env_vars_in_vec.join(" ");
-            return Err(CommandError::new(
-                format!(
-                    "JSON parsing error on {:?} on command: {} kubectl {}, output: {}. {:?}",
-                    std::any::type_name::<T>(),
-                    environment_variables,
-                    args_string,
-                    output_string,
-                    err
-                ),
-                Some("JSON parsing error on kubectl command.".to_string()),
-            ));
-        }
-    };
-
-    Ok(result)
+    match keep_format {
+        true => Ok(output_vec.join("\n")),
+        false => Ok(output_vec.join("")),
+    }
 }
 
 pub fn kubernetes_get_all_pdbs<P>(
@@ -1245,4 +1271,99 @@ where
     }
 
     kubectl_exec::<P, HPA>(cmd_args, kubernetes_config, envs)
+}
+
+pub fn kubectl_get_resource_yaml<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    resource: &str,
+    namespace: Option<&str>,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let mut cmd_args = vec!["get", resource, "-oyaml"];
+    match namespace {
+        Some(n) => {
+            cmd_args.push("-n");
+            cmd_args.push(n);
+        }
+        None => cmd_args.push("--all-namespaces"),
+    }
+
+    kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, true)
+}
+
+pub fn kubectl_apply_with_path<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    file_path: &str,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    kubectl_exec_raw_output::<P>(vec!["apply", "-f", file_path], kubernetes_config, envs, false)
+}
+
+pub fn kubectl_create_secret<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: Option<&str>,
+    secret_name: String,
+    key: String,
+    value: String,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let secret_arg = format!("--from-literal={}=\"{}\"", key, value);
+    let mut cmd_args = vec!["create", "secret", "generic", secret_name.as_str(), secret_arg.as_str()];
+    match namespace {
+        Some(n) => {
+            cmd_args.push("-n");
+            cmd_args.push(n);
+        }
+        None => cmd_args.push("--all-namespaces"),
+    }
+
+    kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, false)
+}
+
+pub fn kubectl_delete_secret<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: Option<&str>,
+    secret_name: String,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let mut cmd_args = vec!["delete", "secret", secret_name.as_str()];
+    match namespace {
+        Some(n) => {
+            cmd_args.push("-n");
+            cmd_args.push(n);
+        }
+        None => cmd_args.push("--all-namespaces"),
+    }
+
+    kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, false)
+}
+
+pub fn kubectl_create_secret_from_file<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    namespace: Option<&str>,
+    backup_name: String,
+    key: String,
+    file_path: String,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let mut file = File::open(file_path.as_str()).unwrap();
+    let mut content = String::new();
+    let _ = file.read_to_string(&mut content);
+
+    kubectl_create_secret(kubernetes_config, envs, namespace, backup_name, key, content)
 }

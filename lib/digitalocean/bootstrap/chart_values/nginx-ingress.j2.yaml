@@ -23,4 +23,5 @@ controller:
       service.beta.kubernetes.io/do-loadbalancer-size-slug: "lb-small"
       service.beta.kubernetes.io/do-loadbalancer-enable-proxy-protocol: "true"
       service.beta.kubernetes.io/do-loadbalancer-hostname: {{ do_loadbalancer_hostname }}
+      external-dns.alpha.kubernetes.io/hostname: "{{ wildcard_managed_dns }}"
     externalTrafficPolicy: "Local"

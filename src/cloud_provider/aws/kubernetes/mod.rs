@@ -1,9 +1,6 @@
 use core::fmt;
-use std::borrow::Borrow;
 use std::env;
 use std::path::Path;
-use std::str::FromStr;
-use std::sync::Arc;
 
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
@@ -11,44 +8,37 @@ use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
-use crate::cloud_provider::aws::kubernetes::helm_charts::{aws_helm_charts, ChartsConfigPrerequisites};
-use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
+use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
+    ec2_aws_helm_charts, get_aws_ec2_qovery_terraform_config, Ec2ChartsConfigPrerequisites,
+};
+use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
-use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
-    is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
-    KubernetesNodesType, KubernetesUpgradeStatus, ProviderOptions,
+    is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, ProviderOptions,
 };
 use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
-use crate::cloud_provider::utilities::print_action;
-use crate::cloud_provider::{kubernetes, CloudProvider};
+use crate::cloud_provider::utilities::{wait_until_port_is_open, TcpCheckSource};
+use crate::cloud_provider::CloudProvider;
 use crate::cmd;
 use crate::cmd::helm::{to_engine_error, Helm};
-use crate::cmd::kubectl::{
-    kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events,
-    kubectl_exec_scale_replicas, ScalingKind,
-};
+use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider;
 use crate::dns_provider::DnsProvider;
-use crate::errors::{CommandError, EngineError};
-use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
-use crate::logger::Logger;
-use crate::models::{
-    Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, QoveryIdentifier, ToHelmString,
-    ToTerraformString,
-};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+use crate::io_models::{Context, Features, ListenersHelper, QoveryIdentifier, ToHelmString, ToTerraformString};
 use crate::object_storage::s3::S3;
-use crate::object_storage::ObjectStorage;
 use crate::string::terraform_list_format;
-use ::function_name::named;
 
-pub mod helm_charts;
+pub mod ec2;
+mod ec2_helm_charts;
+pub mod eks;
+pub mod eks_helm_charts;
 pub mod node;
 pub mod roles;
 
@@ -75,6 +65,12 @@ impl fmt::Display for VpcQoveryNetworkMode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Options {
     // AWS related
+    #[serde(default)] // TODO: remove default
+    pub ec2_zone_a_subnet_blocks: Vec<String>,
+    #[serde(default)] // TODO: remove default
+    pub ec2_zone_b_subnet_blocks: Vec<String>,
+    #[serde(default)] // TODO: remove default
+    pub ec2_zone_c_subnet_blocks: Vec<String>,
     pub eks_zone_a_subnet_blocks: Vec<String>,
     pub eks_zone_b_subnet_blocks: Vec<String>,
     pub eks_zone_c_subnet_blocks: Vec<String>,
@@ -93,8 +89,12 @@ pub struct Options {
     pub vpc_qovery_network_mode: VpcQoveryNetworkMode,
     pub vpc_cidr_block: String,
     pub eks_cidr_subnet: String,
+    #[serde(default)] // TODO: remove default
+    pub ec2_cidr_subnet: String,
     pub vpc_custom_routing_table: Vec<VpcCustomRoutingTable>,
     pub eks_access_cidr_blocks: Vec<String>,
+    #[serde(default)] // TODO: remove default
+    pub ec2_access_cidr_blocks: Vec<String>,
     pub rds_cidr_subnet: String,
     pub documentdb_cidr_subnet: String,
     pub elasticache_cidr_subnet: String,
@@ -103,6 +103,7 @@ pub struct Options {
     pub qovery_api_url: String,
     pub qovery_grpc_url: String,
     pub qovery_cluster_secret_token: String,
+    pub jwt_token: String,
     pub qovery_engine_location: EngineLocation,
     pub engine_version_controller_token: String,
     pub agent_version_controller_token: String,
@@ -119,1670 +120,1212 @@ pub struct Options {
 
 impl ProviderOptions for Options {}
 
-pub struct EKS {
-    context: Context,
-    id: String,
-    long_id: uuid::Uuid,
-    name: String,
-    version: String,
-    region: AwsRegion,
-    zones: Vec<AwsZones>,
-    cloud_provider: Arc<Box<dyn CloudProvider>>,
-    dns_provider: Arc<Box<dyn DnsProvider>>,
-    s3: S3,
-    nodes_groups: Vec<NodeGroups>,
-    template_directory: String,
-    options: Options,
-    listeners: Listeners,
-    logger: Box<dyn Logger>,
+fn event_details<S: Into<String>>(
+    cloud_provider: &dyn CloudProvider,
+    kubernetes_id: S,
+    kubernetes_name: S,
+    kubernetes_region: &AwsRegion,
+    context: &Context,
+) -> EventDetails {
+    EventDetails::new(
+        Some(cloud_provider.kind()),
+        QoveryIdentifier::new_from_long_id(context.organization_id().to_string()),
+        QoveryIdentifier::new_from_long_id(context.cluster_id().to_string()),
+        QoveryIdentifier::new_from_long_id(context.execution_id().to_string()),
+        Some(kubernetes_region.to_string()),
+        Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
+        Transmitter::Kubernetes(kubernetes_id.into(), kubernetes_name.into()),
+    )
 }
 
-impl EKS {
-    pub fn new(
-        context: Context,
-        id: &str,
-        long_id: uuid::Uuid,
-        name: &str,
-        version: &str,
-        region: AwsRegion,
-        zones: Vec<String>,
-        cloud_provider: Arc<Box<dyn CloudProvider>>,
-        dns_provider: Arc<Box<dyn DnsProvider>>,
-        options: Options,
-        nodes_groups: Vec<NodeGroups>,
-        logger: Box<dyn Logger>,
-    ) -> Result<Self, EngineError> {
-        let event_details = EventDetails::new(
-            Some(cloud_provider.kind()),
-            QoveryIdentifier::new_from_long_id(context.organization_id().to_string()),
-            QoveryIdentifier::new_from_long_id(context.cluster_id().to_string()),
-            QoveryIdentifier::new_from_long_id(context.execution_id().to_string()),
-            Some(region.to_string()),
-            Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
-            Transmitter::Kubernetes(id.to_string(), name.to_string()),
-        );
+fn aws_zones(
+    zones: Vec<String>,
+    region: &AwsRegion,
+    event_details: &EventDetails,
+) -> Result<Vec<AwsZones>, EngineError> {
+    let mut aws_zones = vec![];
 
-        let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
+    for zone in zones {
+        match AwsZones::from_string(zone.to_string()) {
+            Ok(x) => aws_zones.push(x),
+            Err(e) => {
+                return Err(EngineError::new_unsupported_zone(
+                    event_details.clone(),
+                    region.to_string(),
+                    zone,
+                    CommandError::new_from_safe_message(e.to_string()),
+                ));
+            }
+        };
+    }
 
-        let mut aws_zones: Vec<AwsZones> = Vec::with_capacity(3);
-        for zone in zones {
-            match AwsZones::from_string(zone.to_string()) {
-                Ok(x) => aws_zones.push(x),
-                Err(e) => {
-                    return Err(EngineError::new_unsupported_zone(
-                        event_details,
-                        region.to_string(),
-                        zone,
-                        CommandError::new_from_safe_message(e.to_string()),
-                    ))
-                }
-            };
+    Ok(aws_zones)
+}
+
+fn s3(context: &Context, region: &AwsRegion, cloud_provider: &dyn CloudProvider) -> S3 {
+    S3::new(
+        context.clone(),
+        "s3-temp-id".to_string(),
+        "default-s3".to_string(),
+        cloud_provider.access_key_id(),
+        cloud_provider.secret_access_key(),
+        region.clone(),
+        true,
+        context.resource_expiration_in_seconds(),
+    )
+}
+
+/// divide by 2 the total number of subnet to get the exact same number as private and public
+fn check_odd_subnets(
+    event_details: EventDetails,
+    zone_name: &str,
+    subnet_block: &[String],
+) -> Result<usize, EngineError> {
+    if subnet_block.len() % 2 == 1 {
+        return Err(EngineError::new_subnets_count_is_not_even(
+            event_details,
+            zone_name.to_string(),
+            subnet_block.len(),
+        ));
+    }
+
+    Ok((subnet_block.len() / 2) as usize)
+}
+
+fn lets_encrypt_url(context: &Context) -> String {
+    match context.is_test_cluster() {
+        true => "https://acme-staging-v02.api.letsencrypt.org/directory",
+        false => "https://acme-v02.api.letsencrypt.org/directory",
+    }
+    .to_string()
+}
+
+fn managed_dns_resolvers_terraform_format(dns_provider: &dyn DnsProvider) -> String {
+    let managed_dns_resolvers = dns_provider
+        .resolvers()
+        .iter()
+        .map(|x| format!("{}", x.clone()))
+        .collect::<Vec<_>>();
+
+    terraform_list_format(managed_dns_resolvers)
+}
+
+fn tera_context(
+    kubernetes: &dyn Kubernetes,
+    zones: &[AwsZones],
+    node_groups: &[NodeGroups],
+    options: &Options,
+) -> Result<TeraContext, EngineError> {
+    let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
+    let mut context = TeraContext::new();
+
+    let format_ips =
+        |ips: &Vec<String>| -> Vec<String> { ips.iter().map(|ip| format!("\"{}\"", ip)).collect::<Vec<_>>() };
+
+    let aws_zones = zones
+        .iter()
+        .map(|zone| zone.to_terraform_format_string())
+        .collect::<Vec<_>>();
+
+    let mut eks_zone_a_subnet_blocks_private = format_ips(&options.eks_zone_a_subnet_blocks);
+    let mut eks_zone_b_subnet_blocks_private = format_ips(&options.eks_zone_b_subnet_blocks);
+    let mut eks_zone_c_subnet_blocks_private = format_ips(&options.eks_zone_c_subnet_blocks);
+
+    match options.vpc_qovery_network_mode {
+        VpcQoveryNetworkMode::WithNatGateways => {
+            let max_subnet_zone_a = check_odd_subnets(event_details.clone(), "a", &eks_zone_a_subnet_blocks_private)?;
+            let max_subnet_zone_b = check_odd_subnets(event_details.clone(), "b", &eks_zone_b_subnet_blocks_private)?;
+            let max_subnet_zone_c = check_odd_subnets(event_details.clone(), "c", &eks_zone_c_subnet_blocks_private)?;
+
+            let eks_zone_a_subnet_blocks_public: Vec<String> =
+                eks_zone_a_subnet_blocks_private.drain(max_subnet_zone_a..).collect();
+            let eks_zone_b_subnet_blocks_public: Vec<String> =
+                eks_zone_b_subnet_blocks_private.drain(max_subnet_zone_b..).collect();
+            let eks_zone_c_subnet_blocks_public: Vec<String> =
+                eks_zone_c_subnet_blocks_private.drain(max_subnet_zone_c..).collect();
+
+            context.insert("eks_zone_a_subnet_blocks_public", &eks_zone_a_subnet_blocks_public);
+            context.insert("eks_zone_b_subnet_blocks_public", &eks_zone_b_subnet_blocks_public);
+            context.insert("eks_zone_c_subnet_blocks_public", &eks_zone_c_subnet_blocks_public);
         }
+        VpcQoveryNetworkMode::WithoutNatGateways => {}
+    };
 
-        for node_group in &nodes_groups {
-            if let Err(e) = AwsInstancesType::from_str(node_group.instance_type.as_str()) {
-                let err =
-                    EngineError::new_unsupported_instance_type(event_details, node_group.instance_type.as_str(), e);
+    let mut ec2_zone_a_subnet_blocks_private = format_ips(&options.ec2_zone_a_subnet_blocks);
+    let mut ec2_zone_b_subnet_blocks_private = format_ips(&options.ec2_zone_b_subnet_blocks);
+    let mut ec2_zone_c_subnet_blocks_private = format_ips(&options.ec2_zone_c_subnet_blocks);
 
-                logger.log(EngineEvent::Error(err.clone(), None));
+    match options.vpc_qovery_network_mode {
+        VpcQoveryNetworkMode::WithNatGateways => {
+            let max_subnet_zone_a = check_odd_subnets(event_details.clone(), "a", &ec2_zone_a_subnet_blocks_private)?;
+            let max_subnet_zone_b = check_odd_subnets(event_details.clone(), "b", &ec2_zone_b_subnet_blocks_private)?;
+            let max_subnet_zone_c = check_odd_subnets(event_details.clone(), "c", &ec2_zone_c_subnet_blocks_private)?;
 
-                return Err(err);
+            let ec2_zone_a_subnet_blocks_public: Vec<String> =
+                ec2_zone_a_subnet_blocks_private.drain(max_subnet_zone_a..).collect();
+            let ec2_zone_b_subnet_blocks_public: Vec<String> =
+                ec2_zone_b_subnet_blocks_private.drain(max_subnet_zone_b..).collect();
+            let ec2_zone_c_subnet_blocks_public: Vec<String> =
+                ec2_zone_c_subnet_blocks_private.drain(max_subnet_zone_c..).collect();
+
+            context.insert("ec2_zone_a_subnet_blocks_public", &ec2_zone_a_subnet_blocks_public);
+            context.insert("ec2_zone_b_subnet_blocks_public", &ec2_zone_b_subnet_blocks_public);
+            context.insert("ec2_zone_c_subnet_blocks_public", &ec2_zone_c_subnet_blocks_public);
+        }
+        VpcQoveryNetworkMode::WithoutNatGateways => {}
+    };
+
+    context.insert("vpc_qovery_network_mode", &options.vpc_qovery_network_mode.to_string());
+
+    let rds_zone_a_subnet_blocks = format_ips(&options.rds_zone_a_subnet_blocks);
+    let rds_zone_b_subnet_blocks = format_ips(&options.rds_zone_b_subnet_blocks);
+    let rds_zone_c_subnet_blocks = format_ips(&options.rds_zone_c_subnet_blocks);
+
+    let documentdb_zone_a_subnet_blocks = format_ips(&options.documentdb_zone_a_subnet_blocks);
+    let documentdb_zone_b_subnet_blocks = format_ips(&options.documentdb_zone_b_subnet_blocks);
+    let documentdb_zone_c_subnet_blocks = format_ips(&options.documentdb_zone_c_subnet_blocks);
+
+    let elasticache_zone_a_subnet_blocks = format_ips(&options.elasticache_zone_a_subnet_blocks);
+    let elasticache_zone_b_subnet_blocks = format_ips(&options.elasticache_zone_b_subnet_blocks);
+    let elasticache_zone_c_subnet_blocks = format_ips(&options.elasticache_zone_c_subnet_blocks);
+
+    let elasticsearch_zone_a_subnet_blocks = format_ips(&options.elasticsearch_zone_a_subnet_blocks);
+    let elasticsearch_zone_b_subnet_blocks = format_ips(&options.elasticsearch_zone_b_subnet_blocks);
+    let elasticsearch_zone_c_subnet_blocks = format_ips(&options.elasticsearch_zone_c_subnet_blocks);
+
+    let region_cluster_id = format!("{}-{}", kubernetes.region(), kubernetes.id());
+    let vpc_cidr_block = options.vpc_cidr_block.clone();
+    let eks_cloudwatch_log_group = format!("/aws/eks/{}/cluster", kubernetes.id());
+    let eks_cidr_subnet = options.eks_cidr_subnet.clone();
+    let ec2_cidr_subnet = options.ec2_cidr_subnet.clone();
+
+    let eks_access_cidr_blocks = format_ips(&options.eks_access_cidr_blocks);
+    let ec2_access_cidr_blocks = format_ips(&options.ec2_access_cidr_blocks);
+
+    let qovery_api_url = options.qovery_api_url.clone();
+    let rds_cidr_subnet = options.rds_cidr_subnet.clone();
+    let documentdb_cidr_subnet = options.documentdb_cidr_subnet.clone();
+    let elasticache_cidr_subnet = options.elasticache_cidr_subnet.clone();
+    let elasticsearch_cidr_subnet = options.elasticsearch_cidr_subnet.clone();
+
+    // Qovery
+    context.insert("organization_id", kubernetes.cloud_provider().organization_id());
+    context.insert("qovery_api_url", &qovery_api_url);
+
+    context.insert("engine_version_controller_token", &options.engine_version_controller_token);
+    context.insert("agent_version_controller_token", &options.agent_version_controller_token);
+
+    context.insert("test_cluster", &kubernetes.context().is_test_cluster());
+
+    if let Some(resource_expiration_in_seconds) = kubernetes.context().resource_expiration_in_seconds() {
+        context.insert("resource_expiration_in_seconds", &resource_expiration_in_seconds);
+    }
+
+    context.insert("force_upgrade", &kubernetes.context().requires_forced_upgrade());
+
+    // Qovery features
+    context.insert(
+        "log_history_enabled",
+        &kubernetes.context().is_feature_enabled(&Features::LogsHistory),
+    );
+    context.insert(
+        "metrics_history_enabled",
+        &kubernetes.context().is_feature_enabled(&Features::MetricsHistory),
+    );
+
+    // DNS configuration
+    let managed_dns_list = vec![kubernetes.dns_provider().name()];
+    let managed_dns_domains_helm_format = vec![kubernetes.dns_provider().domain().to_string()];
+    let managed_dns_domains_root_helm_format = vec![kubernetes.dns_provider().domain().root_domain().to_string()];
+    let managed_dns_domains_terraform_format =
+        terraform_list_format(vec![kubernetes.dns_provider().domain().to_string()]);
+    let managed_dns_domains_root_terraform_format =
+        terraform_list_format(vec![kubernetes.dns_provider().domain().root_domain().to_string()]);
+    let managed_dns_resolvers_terraform_format = managed_dns_resolvers_terraform_format(kubernetes.dns_provider());
+
+    context.insert("managed_dns", &managed_dns_list);
+    context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
+    context.insert("managed_dns_domains_root_helm_format", &managed_dns_domains_root_helm_format);
+    context.insert("managed_dns_domains_terraform_format", &managed_dns_domains_terraform_format);
+    context.insert(
+        "managed_dns_domains_root_terraform_format",
+        &managed_dns_domains_root_terraform_format,
+    );
+    context.insert(
+        "managed_dns_resolvers_terraform_format",
+        &managed_dns_resolvers_terraform_format,
+    );
+
+    context.insert(
+        "wildcard_managed_dns",
+        &kubernetes.dns_provider().domain().wildcarded().to_string(),
+    );
+
+    match kubernetes.dns_provider().kind() {
+        dns_provider::Kind::Cloudflare => {
+            context.insert("external_dns_provider", kubernetes.dns_provider().provider_name());
+            context.insert("cloudflare_api_token", kubernetes.dns_provider().token());
+            context.insert("cloudflare_email", kubernetes.dns_provider().account());
+        }
+    };
+
+    context.insert("dns_email_report", &options.tls_email_report);
+
+    // TLS
+    context.insert("acme_server_url", &lets_encrypt_url(kubernetes.context()));
+
+    // Vault
+    context.insert("vault_auth_method", "none");
+
+    if env::var_os("VAULT_ADDR").is_some() {
+        // select the correct used method
+        match env::var_os("VAULT_ROLE_ID") {
+            Some(role_id) => {
+                context.insert("vault_auth_method", "app_role");
+                context.insert("vault_role_id", role_id.to_str().unwrap());
+
+                match env::var_os("VAULT_SECRET_ID") {
+                    Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
+                    None => kubernetes.logger().log(EngineEvent::Error(
+                        EngineError::new_missing_required_env_variable(event_details, "VAULT_SECRET_ID".to_string()),
+                        None,
+                    )),
+                }
+            }
+            None => {
+                if env::var_os("VAULT_TOKEN").is_some() {
+                    context.insert("vault_auth_method", "token")
+                }
             }
         }
+    };
 
-        // TODO export this
-        let s3 = S3::new(
-            context.clone(),
-            "s3-temp-id".to_string(),
-            "default-s3".to_string(),
-            cloud_provider.access_key_id(),
-            cloud_provider.secret_access_key(),
-            region.clone(),
-            true,
-            context.resource_expiration_in_seconds(),
-        );
+    // Other Kubernetes
+    context.insert("kubernetes_cluster_name", &kubernetes.cluster_name());
+    context.insert("enable_cluster_autoscaler", &true);
 
-        // copy listeners from CloudProvider
-        let listeners = cloud_provider.listeners().clone();
-        Ok(EKS {
-            context,
-            id: id.to_string(),
-            long_id,
-            name: name.to_string(),
-            version: version.to_string(),
-            region,
-            zones: aws_zones,
-            cloud_provider,
-            dns_provider,
-            s3,
-            options,
-            nodes_groups,
-            template_directory,
-            logger,
-            listeners,
-        })
-    }
+    // AWS
+    context.insert("aws_access_key", &kubernetes.cloud_provider().access_key_id());
+    context.insert("aws_secret_key", &kubernetes.cloud_provider().secret_access_key());
 
-    fn get_engine_location(&self) -> EngineLocation {
-        self.options.qovery_engine_location.clone()
-    }
+    // AWS S3 tfstate storage
+    context.insert(
+        "aws_access_key_tfstates_account",
+        kubernetes
+            .cloud_provider()
+            .terraform_state_credentials()
+            .access_key_id
+            .as_str(),
+    );
 
-    fn kubeconfig_bucket_name(&self) -> String {
-        format!("qovery-kubeconfigs-{}", self.id())
-    }
+    context.insert(
+        "aws_secret_key_tfstates_account",
+        kubernetes
+            .cloud_provider()
+            .terraform_state_credentials()
+            .secret_access_key
+            .as_str(),
+    );
+    context.insert(
+        "aws_region_tfstates_account",
+        kubernetes
+            .cloud_provider()
+            .terraform_state_credentials()
+            .region
+            .as_str(),
+    );
 
-    fn managed_dns_resolvers_terraform_format(&self) -> String {
-        let managed_dns_resolvers: Vec<String> = self
-            .dns_provider
-            .resolvers()
-            .iter()
-            .map(|x| format!("{}", x.clone()))
-            .collect();
+    context.insert("aws_region", &kubernetes.region());
+    context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
+    context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
+    context.insert("vpc_cidr_block", &vpc_cidr_block);
+    context.insert("vpc_custom_routing_table", &options.vpc_custom_routing_table);
+    context.insert("s3_kubeconfig_bucket", &format!("qovery-kubeconfigs-{}", kubernetes.id()));
 
-        terraform_list_format(managed_dns_resolvers)
-    }
+    // AWS - EKS
+    context.insert("aws_availability_zones", &aws_zones);
+    context.insert("eks_cidr_subnet", &eks_cidr_subnet);
+    context.insert("ec2_cidr_subnet", &ec2_cidr_subnet);
+    context.insert("kubernetes_cluster_name", kubernetes.name());
+    context.insert("kubernetes_cluster_id", kubernetes.id());
+    context.insert("kubernetes_full_cluster_id", kubernetes.context().cluster_id());
+    context.insert("eks_region_cluster_id", region_cluster_id.as_str());
+    context.insert("eks_worker_nodes", &node_groups);
+    context.insert("ec2_zone_a_subnet_blocks_private", &ec2_zone_a_subnet_blocks_private);
+    context.insert("ec2_zone_b_subnet_blocks_private", &ec2_zone_b_subnet_blocks_private);
+    context.insert("ec2_zone_c_subnet_blocks_private", &ec2_zone_c_subnet_blocks_private);
+    context.insert("eks_zone_a_subnet_blocks_private", &eks_zone_a_subnet_blocks_private);
+    context.insert("eks_zone_b_subnet_blocks_private", &eks_zone_b_subnet_blocks_private);
+    context.insert("eks_zone_c_subnet_blocks_private", &eks_zone_c_subnet_blocks_private);
+    context.insert("eks_masters_version", &kubernetes.version());
+    context.insert("eks_workers_version", &kubernetes.version());
+    context.insert("ec2_masters_version", &kubernetes.version());
+    context.insert("ec2_workers_version", &kubernetes.version());
+    context.insert("eks_cloudwatch_log_group", &eks_cloudwatch_log_group);
+    context.insert("eks_access_cidr_blocks", &eks_access_cidr_blocks);
+    context.insert("ec2_access_cidr_blocks", &ec2_access_cidr_blocks);
 
-    fn lets_encrypt_url(&self) -> String {
-        match &self.context.is_test_cluster() {
-            true => "https://acme-staging-v02.api.letsencrypt.org/directory",
-            false => "https://acme-v02.api.letsencrypt.org/directory",
-        }
-        .to_string()
-    }
+    // AWS - RDS
+    context.insert("rds_cidr_subnet", &rds_cidr_subnet);
+    context.insert("rds_zone_a_subnet_blocks", &rds_zone_a_subnet_blocks);
+    context.insert("rds_zone_b_subnet_blocks", &rds_zone_b_subnet_blocks);
+    context.insert("rds_zone_c_subnet_blocks", &rds_zone_c_subnet_blocks);
 
-    /// divide by 2 the total number of subnet to get the exact same number as private and public
-    fn check_odd_subnets(
-        &self,
-        event_details: EventDetails,
-        zone_name: &str,
-        subnet_block: &[String],
-    ) -> Result<usize, EngineError> {
-        if subnet_block.len() % 2 == 1 {
-            return Err(EngineError::new_subnets_count_is_not_even(
-                event_details,
-                zone_name.to_string(),
-                subnet_block.len(),
-            ));
-        }
+    // AWS - DocumentDB
+    context.insert("documentdb_cidr_subnet", &documentdb_cidr_subnet);
+    context.insert("documentdb_zone_a_subnet_blocks", &documentdb_zone_a_subnet_blocks);
+    context.insert("documentdb_zone_b_subnet_blocks", &documentdb_zone_b_subnet_blocks);
+    context.insert("documentdb_zone_c_subnet_blocks", &documentdb_zone_c_subnet_blocks);
 
-        Ok((subnet_block.len() / 2) as usize)
-    }
+    // AWS - Elasticache
+    context.insert("elasticache_cidr_subnet", &elasticache_cidr_subnet);
+    context.insert("elasticache_zone_a_subnet_blocks", &elasticache_zone_a_subnet_blocks);
+    context.insert("elasticache_zone_b_subnet_blocks", &elasticache_zone_b_subnet_blocks);
+    context.insert("elasticache_zone_c_subnet_blocks", &elasticache_zone_c_subnet_blocks);
 
-    fn set_cluster_autoscaler_replicas(
-        &self,
-        event_details: EventDetails,
-        replicas_count: u32,
-    ) -> Result<(), EngineError> {
-        self.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe(format!("Scaling cluster autoscaler to `{}`.", replicas_count)),
-        ));
-        let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
-        let selector = "cluster-autoscaler-aws-cluster-autoscaler";
-        let namespace = "kube-system";
-        let _ = kubectl_exec_scale_replicas(
-            kubeconfig_path,
-            self.cloud_provider().credentials_environment_variables(),
-            namespace,
-            ScalingKind::Deployment,
-            selector,
-            replicas_count,
+    // AWS - Elasticsearch
+    context.insert("elasticsearch_cidr_subnet", &elasticsearch_cidr_subnet);
+    context.insert("elasticsearch_zone_a_subnet_blocks", &elasticsearch_zone_a_subnet_blocks);
+    context.insert("elasticsearch_zone_b_subnet_blocks", &elasticsearch_zone_b_subnet_blocks);
+    context.insert("elasticsearch_zone_c_subnet_blocks", &elasticsearch_zone_c_subnet_blocks);
+
+    // grafana credentials
+    context.insert("grafana_admin_user", options.grafana_admin_user.as_str());
+    context.insert("grafana_admin_password", options.grafana_admin_password.as_str());
+
+    // qovery
+    context.insert("qovery_api_url", options.qovery_api_url.as_str());
+    context.insert("qovery_nats_url", options.qovery_nats_url.as_str());
+    context.insert("qovery_nats_user", options.qovery_nats_user.as_str());
+    context.insert("qovery_nats_password", options.qovery_nats_password.as_str());
+    context.insert("qovery_ssh_key", options.qovery_ssh_key.as_str());
+    context.insert("discord_api_key", options.discord_api_key.as_str());
+
+    Ok(context)
+}
+
+fn create(
+    kubernetes: &dyn Kubernetes,
+    kubernetes_long_id: uuid::Uuid,
+    template_directory: &str,
+    aws_zones: &[AwsZones],
+    node_groups: &[NodeGroups],
+    options: &Options,
+) -> Result<(), EngineError> {
+    let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
+    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
+
+    kubernetes.logger().log(EngineEvent::Info(
+        event_details.clone(),
+        EventMessage::new_from_safe("Preparing EKS cluster deployment.".to_string()),
+    ));
+
+    kubernetes.send_to_customer(
+        format!(
+            "Preparing {} {} cluster deployment with id {}",
+            kubernetes.kind(),
+            kubernetes.name(),
+            kubernetes.id()
         )
-        .map_err(|e| {
-            EngineError::new_k8s_scale_replicas(
+        .as_str(),
+        &listeners_helper,
+    );
+
+    // upgrade cluster instead if required
+    match kubernetes.get_kubeconfig_file() {
+        Ok((path, _)) => match is_kubernetes_upgrade_required(
+            path,
+            kubernetes.version(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
+            event_details.clone(),
+            kubernetes.logger(),
+        ) {
+            Ok(x) => {
+                if x.required_upgrade_on.is_some() {
+                    return kubernetes.upgrade_with_status(x);
+                }
+
+                kubernetes.logger().log(EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
+                ))
+            }
+            Err(e) => {
+                kubernetes.logger().log(EngineEvent::Error(e, Some(EventMessage::new_from_safe(
+                    "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
+                ))));
+            }
+        },
+        Err(_) => kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
+    };
+
+    // create AWS IAM roles
+    let already_created_roles = get_default_roles_to_create();
+    for role in already_created_roles {
+        match role.create_service_linked_role(
+            kubernetes.cloud_provider().access_key_id().as_str(),
+            kubernetes.cloud_provider().secret_access_key().as_str(),
+        ) {
+            Ok(_) => kubernetes.logger().log(EngineEvent::Info(
                 event_details.clone(),
-                selector.to_string(),
-                namespace.to_string(),
-                replicas_count,
-                e,
+                EventMessage::new_from_safe(format!("Role {} is already present, no need to create", role.role_name)),
+            )),
+            Err(e) => kubernetes.logger().log(EngineEvent::Error(
+                EngineError::new_cannot_get_or_create_iam_role(event_details.clone(), role.role_name, e),
+                None,
+            )),
+        }
+    }
+
+    let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
+
+    // generate terraform files and copy them into temp dir
+    let context = tera_context(kubernetes, aws_zones, node_groups, options)?;
+
+    if let Err(e) =
+        crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
+    {
+        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            event_details,
+            template_directory.to_string(),
+            temp_dir,
+            e,
+        ));
+    }
+
+    // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
+    // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
+    let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir());
+    let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+    if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str()) {
+        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            event_details,
+            bootstrap_charts_dir,
+            common_charts_temp_dir,
+            e,
+        ));
+    }
+
+    kubernetes.logger().log(EngineEvent::Info(
+        event_details.clone(),
+        EventMessage::new_from_safe(format!("Deploying {} cluster.", kubernetes.kind())),
+    ));
+
+    kubernetes.send_to_customer(
+        format!(
+            "Deploying {} {} cluster deployment with id {}",
+            kubernetes.kind(),
+            kubernetes.name(),
+            kubernetes.id()
+        )
+        .as_str(),
+        &listeners_helper,
+    );
+
+    // terraform deployment dedicated to cloud resources
+    if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), kubernetes.context().is_dry_run_deploy()) {
+        return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
+    }
+
+    // wait for AWS EC2 K3S port is open to avoid later deployment issues (and kubeconfig not available on S3)
+    if let Kind::Ec2 = kubernetes.kind() {
+        let qovery_teraform_config =
+            get_aws_ec2_qovery_terraform_config(format!("{}/qovery-tf-config.json", &temp_dir).as_str())
+                .map_err(|e| EngineError::new_terraform_qovery_config_mismatch(event_details.clone(), e))?;
+
+        let port = qovery_teraform_config.kubernetes_port_to_u16().map_err(|e| {
+            EngineError::new_terraform_qovery_config_mismatch(
+                event_details.clone(),
+                CommandError::new_from_safe_message(e),
             )
         })?;
 
-        Ok(())
-    }
-
-    fn tera_context(&self) -> Result<TeraContext, EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
-        let mut context = TeraContext::new();
-
-        let format_ips =
-            |ips: &Vec<String>| -> Vec<String> { ips.iter().map(|ip| format!("\"{}\"", ip)).collect::<Vec<_>>() };
-        let format_zones = |zones: &Vec<AwsZones>| -> Vec<String> {
-            zones
-                .iter()
-                .map(|zone| zone.to_terraform_format_string())
-                .collect::<Vec<_>>()
-        };
-
-        let aws_zones = format_zones(&self.zones);
-
-        let mut eks_zone_a_subnet_blocks_private = format_ips(&self.options.eks_zone_a_subnet_blocks);
-        let mut eks_zone_b_subnet_blocks_private = format_ips(&self.options.eks_zone_b_subnet_blocks);
-        let mut eks_zone_c_subnet_blocks_private = format_ips(&self.options.eks_zone_c_subnet_blocks);
-
-        match self.options.vpc_qovery_network_mode {
-            VpcQoveryNetworkMode::WithNatGateways => {
-                let max_subnet_zone_a =
-                    self.check_odd_subnets(event_details.clone(), "a", &eks_zone_a_subnet_blocks_private)?;
-                let max_subnet_zone_b =
-                    self.check_odd_subnets(event_details.clone(), "b", &eks_zone_b_subnet_blocks_private)?;
-                let max_subnet_zone_c =
-                    self.check_odd_subnets(event_details.clone(), "c", &eks_zone_c_subnet_blocks_private)?;
-
-                let eks_zone_a_subnet_blocks_public: Vec<String> =
-                    eks_zone_a_subnet_blocks_private.drain(max_subnet_zone_a..).collect();
-                let eks_zone_b_subnet_blocks_public: Vec<String> =
-                    eks_zone_b_subnet_blocks_private.drain(max_subnet_zone_b..).collect();
-                let eks_zone_c_subnet_blocks_public: Vec<String> =
-                    eks_zone_c_subnet_blocks_private.drain(max_subnet_zone_c..).collect();
-
-                context.insert("eks_zone_a_subnet_blocks_public", &eks_zone_a_subnet_blocks_public);
-                context.insert("eks_zone_b_subnet_blocks_public", &eks_zone_b_subnet_blocks_public);
-                context.insert("eks_zone_c_subnet_blocks_public", &eks_zone_c_subnet_blocks_public);
-            }
-            VpcQoveryNetworkMode::WithoutNatGateways => {}
-        };
-        context.insert("vpc_qovery_network_mode", &self.options.vpc_qovery_network_mode.to_string());
-
-        let rds_zone_a_subnet_blocks = format_ips(&self.options.rds_zone_a_subnet_blocks);
-        let rds_zone_b_subnet_blocks = format_ips(&self.options.rds_zone_b_subnet_blocks);
-        let rds_zone_c_subnet_blocks = format_ips(&self.options.rds_zone_c_subnet_blocks);
-
-        let documentdb_zone_a_subnet_blocks = format_ips(&self.options.documentdb_zone_a_subnet_blocks);
-        let documentdb_zone_b_subnet_blocks = format_ips(&self.options.documentdb_zone_b_subnet_blocks);
-        let documentdb_zone_c_subnet_blocks = format_ips(&self.options.documentdb_zone_c_subnet_blocks);
-
-        let elasticache_zone_a_subnet_blocks = format_ips(&self.options.elasticache_zone_a_subnet_blocks);
-        let elasticache_zone_b_subnet_blocks = format_ips(&self.options.elasticache_zone_b_subnet_blocks);
-        let elasticache_zone_c_subnet_blocks = format_ips(&self.options.elasticache_zone_c_subnet_blocks);
-
-        let elasticsearch_zone_a_subnet_blocks = format_ips(&self.options.elasticsearch_zone_a_subnet_blocks);
-        let elasticsearch_zone_b_subnet_blocks = format_ips(&self.options.elasticsearch_zone_b_subnet_blocks);
-        let elasticsearch_zone_c_subnet_blocks = format_ips(&self.options.elasticsearch_zone_c_subnet_blocks);
-
-        let region_cluster_id = format!("{}-{}", self.region(), self.id());
-        let vpc_cidr_block = self.options.vpc_cidr_block.clone();
-        let eks_cloudwatch_log_group = format!("/aws/eks/{}/cluster", self.id());
-        let eks_cidr_subnet = self.options.eks_cidr_subnet.clone();
-
-        let eks_access_cidr_blocks = format_ips(&self.options.eks_access_cidr_blocks);
-
-        let qovery_api_url = self.options.qovery_api_url.clone();
-        let rds_cidr_subnet = self.options.rds_cidr_subnet.clone();
-        let documentdb_cidr_subnet = self.options.documentdb_cidr_subnet.clone();
-        let elasticache_cidr_subnet = self.options.elasticache_cidr_subnet.clone();
-        let elasticsearch_cidr_subnet = self.options.elasticsearch_cidr_subnet.clone();
-
-        // Qovery
-        context.insert("organization_id", self.cloud_provider.organization_id());
-        context.insert("qovery_api_url", &qovery_api_url);
-
-        context.insert("engine_version_controller_token", &self.options.engine_version_controller_token);
-        context.insert("agent_version_controller_token", &self.options.agent_version_controller_token);
-
-        context.insert("test_cluster", &self.context.is_test_cluster());
-        if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
-        }
-        context.insert("force_upgrade", &self.context.requires_forced_upgrade());
-
-        // Qovery features
-        context.insert("log_history_enabled", &self.context.is_feature_enabled(&Features::LogsHistory));
-        context.insert(
-            "metrics_history_enabled",
-            &self.context.is_feature_enabled(&Features::MetricsHistory),
-        );
-
-        // DNS configuration
-        let managed_dns_list = vec![self.dns_provider.name()];
-        let managed_dns_domains_helm_format = vec![self.dns_provider.domain().to_string()];
-        let managed_dns_domains_root_helm_format = vec![self.dns_provider.domain().root_domain().to_string()];
-        let managed_dns_domains_terraform_format = terraform_list_format(vec![self.dns_provider.domain().to_string()]);
-        let managed_dns_domains_root_terraform_format =
-            terraform_list_format(vec![self.dns_provider.domain().root_domain().to_string()]);
-        let managed_dns_resolvers_terraform_format = self.managed_dns_resolvers_terraform_format();
-
-        context.insert("managed_dns", &managed_dns_list);
-        context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
-        context.insert("managed_dns_domains_root_helm_format", &managed_dns_domains_root_helm_format);
-        context.insert("managed_dns_domains_terraform_format", &managed_dns_domains_terraform_format);
-        context.insert(
-            "managed_dns_domains_root_terraform_format",
-            &managed_dns_domains_root_terraform_format,
-        );
-        context.insert(
-            "managed_dns_resolvers_terraform_format",
-            &managed_dns_resolvers_terraform_format,
-        );
-
-        match self.dns_provider.kind() {
-            dns_provider::Kind::Cloudflare => {
-                context.insert("external_dns_provider", self.dns_provider.provider_name());
-                context.insert("cloudflare_api_token", self.dns_provider.token());
-                context.insert("cloudflare_email", self.dns_provider.account());
-            }
-        };
-
-        context.insert("dns_email_report", &self.options.tls_email_report);
-
-        // TLS
-        context.insert("acme_server_url", &self.lets_encrypt_url());
-
-        // Vault
-        context.insert("vault_auth_method", "none");
-
-        if env::var_os("VAULT_ADDR").is_some() {
-            // select the correct used method
-            match env::var_os("VAULT_ROLE_ID") {
-                Some(role_id) => {
-                    context.insert("vault_auth_method", "app_role");
-                    context.insert("vault_role_id", role_id.to_str().unwrap());
-
-                    match env::var_os("VAULT_SECRET_ID") {
-                        Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
-                        None => self.logger().log(EngineEvent::Error(
-                            EngineError::new_missing_required_env_variable(
-                                event_details,
-                                "VAULT_SECRET_ID".to_string(),
-                            ),
-                            None,
-                        )),
-                    }
-                }
-                None => {
-                    if env::var_os("VAULT_TOKEN").is_some() {
-                        context.insert("vault_auth_method", "token")
-                    }
-                }
-            }
-        };
-
-        // Other Kubernetes
-        context.insert("kubernetes_cluster_name", &self.cluster_name());
-        context.insert("enable_cluster_autoscaler", &true);
-
-        // AWS
-        context.insert("aws_access_key", &self.cloud_provider.access_key_id());
-        context.insert("aws_secret_key", &self.cloud_provider.secret_access_key());
-
-        // AWS S3 tfstate storage
-        context.insert(
-            "aws_access_key_tfstates_account",
-            self.cloud_provider()
-                .terraform_state_credentials()
-                .access_key_id
-                .as_str(),
-        );
-
-        context.insert(
-            "aws_secret_key_tfstates_account",
-            self.cloud_provider()
-                .terraform_state_credentials()
-                .secret_access_key
-                .as_str(),
-        );
-        context.insert(
-            "aws_region_tfstates_account",
-            self.cloud_provider().terraform_state_credentials().region.as_str(),
-        );
-
-        context.insert("aws_region", &self.region());
-        context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
-        context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
-        context.insert("vpc_cidr_block", &vpc_cidr_block);
-        context.insert("vpc_custom_routing_table", &self.options.vpc_custom_routing_table);
-        context.insert("s3_kubeconfig_bucket", &self.kubeconfig_bucket_name());
-
-        // AWS - EKS
-        context.insert("aws_availability_zones", &aws_zones);
-        context.insert("eks_cidr_subnet", &eks_cidr_subnet);
-        context.insert("kubernetes_cluster_name", &self.name());
-        context.insert("kubernetes_cluster_id", self.id());
-        context.insert("eks_region_cluster_id", region_cluster_id.as_str());
-        context.insert("eks_worker_nodes", &self.nodes_groups);
-        context.insert("eks_zone_a_subnet_blocks_private", &eks_zone_a_subnet_blocks_private);
-        context.insert("eks_zone_b_subnet_blocks_private", &eks_zone_b_subnet_blocks_private);
-        context.insert("eks_zone_c_subnet_blocks_private", &eks_zone_c_subnet_blocks_private);
-        context.insert("eks_masters_version", &self.version());
-        context.insert("eks_workers_version", &self.version());
-        context.insert("eks_cloudwatch_log_group", &eks_cloudwatch_log_group);
-        context.insert("eks_access_cidr_blocks", &eks_access_cidr_blocks);
-
-        // AWS - RDS
-        context.insert("rds_cidr_subnet", &rds_cidr_subnet);
-        context.insert("rds_zone_a_subnet_blocks", &rds_zone_a_subnet_blocks);
-        context.insert("rds_zone_b_subnet_blocks", &rds_zone_b_subnet_blocks);
-        context.insert("rds_zone_c_subnet_blocks", &rds_zone_c_subnet_blocks);
-
-        // AWS - DocumentDB
-        context.insert("documentdb_cidr_subnet", &documentdb_cidr_subnet);
-        context.insert("documentdb_zone_a_subnet_blocks", &documentdb_zone_a_subnet_blocks);
-        context.insert("documentdb_zone_b_subnet_blocks", &documentdb_zone_b_subnet_blocks);
-        context.insert("documentdb_zone_c_subnet_blocks", &documentdb_zone_c_subnet_blocks);
-
-        // AWS - Elasticache
-        context.insert("elasticache_cidr_subnet", &elasticache_cidr_subnet);
-        context.insert("elasticache_zone_a_subnet_blocks", &elasticache_zone_a_subnet_blocks);
-        context.insert("elasticache_zone_b_subnet_blocks", &elasticache_zone_b_subnet_blocks);
-        context.insert("elasticache_zone_c_subnet_blocks", &elasticache_zone_c_subnet_blocks);
-
-        // AWS - Elasticsearch
-        context.insert("elasticsearch_cidr_subnet", &elasticsearch_cidr_subnet);
-        context.insert("elasticsearch_zone_a_subnet_blocks", &elasticsearch_zone_a_subnet_blocks);
-        context.insert("elasticsearch_zone_b_subnet_blocks", &elasticsearch_zone_b_subnet_blocks);
-        context.insert("elasticsearch_zone_c_subnet_blocks", &elasticsearch_zone_c_subnet_blocks);
-
-        // grafana credentials
-        context.insert("grafana_admin_user", self.options.grafana_admin_user.as_str());
-        context.insert("grafana_admin_password", self.options.grafana_admin_password.as_str());
-
-        // qovery
-        context.insert("qovery_api_url", self.options.qovery_api_url.as_str());
-        context.insert("qovery_nats_url", self.options.qovery_nats_url.as_str());
-        context.insert("qovery_nats_user", self.options.qovery_nats_user.as_str());
-        context.insert("qovery_nats_password", self.options.qovery_nats_password.as_str());
-        context.insert("qovery_ssh_key", self.options.qovery_ssh_key.as_str());
-        context.insert("discord_api_key", self.options.discord_api_key.as_str());
-
-        Ok(context)
-    }
-
-    fn create(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-
-        self.logger().log(EngineEvent::Info(
+        wait_until_port_is_open(
+            &TcpCheckSource::DnsName(qovery_teraform_config.aws_ec2_public_hostname.as_str()),
+            port,
+            300,
+            kubernetes.logger(),
             event_details.clone(),
-            EventMessage::new_from_safe("Preparing EKS cluster deployment.".to_string()),
-        ));
-        self.send_to_customer(
-            format!("Preparing EKS {} cluster deployment with id {}", self.name(), self.id()).as_str(),
-            &listeners_helper,
-        );
-
-        // upgrade cluster instead if required
-        match self.get_kubeconfig_file() {
-            Ok((path, _)) => match is_kubernetes_upgrade_required(
-                path,
-                &self.version,
-                self.cloud_provider.credentials_environment_variables(),
+        )
+        .map_err(|e| {
+            EngineError::new_terraform_qovery_config_mismatch(
                 event_details.clone(),
-                self.logger(),
-            ) {
-                Ok(x) => {
-                    if x.required_upgrade_on.is_some() {
-                        return self.upgrade_with_status(x);
-                    }
+                CommandError::new("Wasn't able to connect to Kubernetes API, can't continue. Did you manually performed changes AWS side?".to_string(), Some(format!("{:?}", e)), None),
+            )
+        })?;
+    };
 
-                    self.logger().log(EngineEvent::Info(
-                        event_details.clone(),
-                        EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
-                    ))
-                }
-                Err(e) => {
-                    self.logger().log(EngineEvent::Error(e, Some(EventMessage::new_from_safe(
-                        "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
-                    ))));
-                }
-            },
-            Err(_) => self.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
+    // kubernetes helm deployments on the cluster
+    let kubeconfig_path = kubernetes.get_kubeconfig_file_path()?;
+    let kubeconfig_path = Path::new(&kubeconfig_path);
 
-        };
+    let credentials_environment_variables: Vec<(String, String)> = kubernetes
+        .cloud_provider()
+        .credentials_environment_variables()
+        .into_iter()
+        .map(|x| (x.0.to_string(), x.1.to_string()))
+        .collect();
 
-        // create AWS IAM roles
-        let already_created_roles = get_default_roles_to_create();
-        for role in already_created_roles {
-            match role.create_service_linked_role(
-                self.cloud_provider.access_key_id().as_str(),
-                self.cloud_provider.secret_access_key().as_str(),
-            ) {
-                Ok(_) => self.logger().log(EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(format!(
-                        "Role {} is already present, no need to create",
-                        role.role_name
-                    )),
-                )),
-                Err(e) => self.logger().log(EngineEvent::Error(
-                    EngineError::new_cannot_get_or_create_iam_role(event_details.clone(), role.role_name, e),
-                    None,
-                )),
-            }
+    kubernetes.logger().log(EngineEvent::Info(
+        event_details.clone(),
+        EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
+    ));
+
+    let helm_charts_to_deploy = match kubernetes.kind() {
+        Kind::Eks => {
+            let charts_prerequisites = EksChartsConfigPrerequisites {
+                organization_id: kubernetes.cloud_provider().organization_id().to_string(),
+                organization_long_id: kubernetes.cloud_provider().organization_long_id(),
+                infra_options: options.clone(),
+                cluster_id: kubernetes.id().to_string(),
+                cluster_long_id: kubernetes_long_id,
+                region: kubernetes.region(),
+                cluster_name: kubernetes.cluster_name(),
+                cloud_provider: "aws".to_string(),
+                test_cluster: kubernetes.context().is_test_cluster(),
+                aws_access_key_id: kubernetes.cloud_provider().access_key_id(),
+                aws_secret_access_key: kubernetes.cloud_provider().secret_access_key(),
+                vpc_qovery_network_mode: options.vpc_qovery_network_mode.clone(),
+                qovery_engine_location: options.qovery_engine_location.clone(),
+                ff_log_history_enabled: kubernetes.context().is_feature_enabled(&Features::LogsHistory),
+                ff_metrics_history_enabled: kubernetes.context().is_feature_enabled(&Features::MetricsHistory),
+                managed_dns_name: kubernetes.dns_provider().domain().to_string(),
+                managed_dns_helm_format: kubernetes.dns_provider().domain().to_helm_format_string(),
+                managed_dns_resolvers_terraform_format: managed_dns_resolvers_terraform_format(
+                    kubernetes.dns_provider(),
+                ),
+                external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
+                dns_email_report: options.tls_email_report.clone(),
+                acme_url: lets_encrypt_url(kubernetes.context()),
+                cloudflare_email: kubernetes.dns_provider().account().to_string(),
+                cloudflare_api_token: kubernetes.dns_provider().token().to_string(),
+                disable_pleco: kubernetes.context().disable_pleco(),
+            };
+            eks_aws_helm_charts(
+                format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
+                &charts_prerequisites,
+                Some(&temp_dir),
+                kubeconfig_path,
+                &credentials_environment_variables,
+            )
+            .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?
         }
-
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
-
-        // generate terraform files and copy them into temp dir
-        let context = self.tera_context()?;
-
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+        Kind::Ec2 => {
+            let charts_prerequisites = Ec2ChartsConfigPrerequisites {
+                organization_id: kubernetes.cloud_provider().organization_id().to_string(),
+                organization_long_id: kubernetes.cloud_provider().organization_long_id(),
+                infra_options: options.clone(),
+                cluster_id: kubernetes.id().to_string(),
+                cluster_long_id: kubernetes_long_id,
+                region: kubernetes.region(),
+                cluster_name: kubernetes.cluster_name(),
+                cloud_provider: "aws".to_string(),
+                test_cluster: kubernetes.context().is_test_cluster(),
+                aws_access_key_id: kubernetes.cloud_provider().access_key_id(),
+                aws_secret_access_key: kubernetes.cloud_provider().secret_access_key(),
+                vpc_qovery_network_mode: options.vpc_qovery_network_mode.clone(),
+                qovery_engine_location: options.qovery_engine_location.clone(),
+                ff_log_history_enabled: kubernetes.context().is_feature_enabled(&Features::LogsHistory),
+                ff_metrics_history_enabled: kubernetes.context().is_feature_enabled(&Features::MetricsHistory),
+                managed_dns_name: kubernetes.dns_provider().domain().to_string(),
+                managed_dns_helm_format: kubernetes.dns_provider().domain().to_helm_format_string(),
+                managed_dns_resolvers_terraform_format: managed_dns_resolvers_terraform_format(
+                    kubernetes.dns_provider(),
+                ),
+                external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
+                dns_email_report: options.tls_email_report.clone(),
+                acme_url: lets_encrypt_url(kubernetes.context()),
+                cloudflare_email: kubernetes.dns_provider().account().to_string(),
+                cloudflare_api_token: kubernetes.dns_provider().token().to_string(),
+                disable_pleco: kubernetes.context().disable_pleco(),
+            };
+            ec2_aws_helm_charts(
+                format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
+                &charts_prerequisites,
+                Some(&temp_dir),
+                kubeconfig_path,
+                &credentials_environment_variables,
+            )
+            .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?
+        }
+        _ => {
+            let safe_message = format!("unsupported requested cluster type: {}", kubernetes.kind());
+            return Err(EngineError::new_unsupported_cluster_kind(
                 event_details,
-                self.template_directory.to_string(),
-                temp_dir,
-                e,
+                &safe_message,
+                CommandError::new(safe_message.to_string(), None, None),
             ));
         }
+    };
 
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
-        let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
-        {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                bootstrap_charts_dir,
-                common_charts_temp_dir,
-                e,
-            ));
-        }
+    deploy_charts_levels(
+        kubeconfig_path,
+        &credentials_environment_variables,
+        helm_charts_to_deploy,
+        kubernetes.context().is_dry_run_deploy(),
+    )
+    .map_err(|e| EngineError::new_helm_charts_deploy_error(event_details.clone(), e))
+}
 
-        self.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Deploying EKS cluster.".to_string()),
-        ));
-        self.send_to_customer(
-            format!("Deploying EKS {} cluster deployment with id {}", self.name(), self.id()).as_str(),
-            &listeners_helper,
-        );
+fn create_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
+    let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
+    let (kubeconfig_path, _) = kubernetes.get_kubeconfig_file()?;
+    let environment_variables = kubernetes.cloud_provider().credentials_environment_variables();
 
-        // temporary: remove helm/kube management from terraform
-        match terraform_init_validate_state_list(temp_dir.as_str()) {
-            Ok(x) => {
-                let items_type = vec!["helm_release", "kubernetes_namespace"];
-                for item in items_type {
-                    for entry in x.clone() {
-                        if entry.starts_with(item) {
-                            match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
-                                Ok(_) => self.logger().log(EngineEvent::Info(
-                                    event_details.clone(),
-                                    EventMessage::new_from_safe(format!("successfully removed {}", &entry)),
-                                )),
-                                Err(e) => {
-                                    return Err(EngineError::new_terraform_cannot_remove_entry_out(
-                                        event_details,
-                                        entry.to_string(),
-                                        e,
-                                    ))
-                                }
-                            }
-                        };
-                    }
-                }
-            }
-            Err(e) => self.logger().log(EngineEvent::Error(
-                EngineError::new_terraform_state_does_not_exist(event_details.clone(), e),
-                None,
-            )),
-        };
+    kubernetes.logger().log(EngineEvent::Warning(
+        kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create)),
+        EventMessage::new_from_safe(format!("{}.create_error() called.", kubernetes.kind())),
+    ));
 
-        // terraform deployment dedicated to cloud resources
-        if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
-            return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
-        }
+    match kubectl_exec_get_events(kubeconfig_path, None, environment_variables) {
+        Ok(ok_line) => kubernetes
+            .logger()
+            .log(EngineEvent::Info(event_details, EventMessage::new(ok_line, None))),
+        Err(err) => kubernetes.logger().log(EngineEvent::Warning(
+            event_details,
+            EventMessage::new(
+                "Error trying to get kubernetes events".to_string(),
+                Some(err.message(ErrorMessageVerbosity::FullDetails)),
+            ),
+        )),
+    };
 
-        // kubernetes helm deployments on the cluster
-        // todo: instead of downloading kubeconfig file, use the one that has just been generated by terraform
-        let kubeconfig_path = &self.get_kubeconfig_file_path()?;
-        let kubeconfig_path = Path::new(kubeconfig_path);
+    Ok(())
+}
 
-        let credentials_environment_variables: Vec<(String, String)> = self
-            .cloud_provider
-            .credentials_environment_variables()
-            .into_iter()
-            .map(|x| (x.0.to_string(), x.1.to_string()))
-            .collect();
+fn upgrade_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
+    kubernetes.logger().log(EngineEvent::Warning(
+        kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade)),
+        EventMessage::new_from_safe(format!("{}.upgrade_error() called.", kubernetes.kind())),
+    ));
 
-        let charts_prerequisites = ChartsConfigPrerequisites {
-            organization_id: self.cloud_provider.organization_id().to_string(),
-            organization_long_id: self.cloud_provider.organization_long_id(),
-            infra_options: self.options.clone(),
-            cluster_id: self.id.clone(),
-            cluster_long_id: self.long_id,
-            region: self.region(),
-            cluster_name: self.cluster_name(),
-            cloud_provider: "aws".to_string(),
-            test_cluster: self.context.is_test_cluster(),
-            aws_access_key_id: self.cloud_provider.access_key_id(),
-            aws_secret_access_key: self.cloud_provider.secret_access_key(),
-            vpc_qovery_network_mode: self.options.vpc_qovery_network_mode.clone(),
-            qovery_engine_location: self.get_engine_location(),
-            ff_log_history_enabled: self.context.is_feature_enabled(&Features::LogsHistory),
-            ff_metrics_history_enabled: self.context.is_feature_enabled(&Features::MetricsHistory),
-            managed_dns_name: self.dns_provider.domain().to_string(),
-            managed_dns_helm_format: self.dns_provider.domain().to_helm_format_string(),
-            managed_dns_resolvers_terraform_format: self.managed_dns_resolvers_terraform_format(),
-            external_dns_provider: self.dns_provider.provider_name().to_string(),
-            dns_email_report: self.options.tls_email_report.clone(),
-            acme_url: self.lets_encrypt_url(),
-            cloudflare_email: self.dns_provider.account().to_string(),
-            cloudflare_api_token: self.dns_provider.token().to_string(),
-            disable_pleco: self.context.disable_pleco(),
-        };
+    Ok(())
+}
 
-        self.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
-        ));
-        let helm_charts_to_deploy = aws_helm_charts(
-            format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
-            &charts_prerequisites,
-            Some(&temp_dir),
-            kubeconfig_path,
-            &credentials_environment_variables,
+fn downgrade() -> Result<(), EngineError> {
+    Ok(())
+}
+
+fn downgrade_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
+    kubernetes.logger().log(EngineEvent::Warning(
+        kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade)),
+        EventMessage::new_from_safe(format!("{}.downgrade_error() called.", kubernetes.kind())),
+    ));
+
+    Ok(())
+}
+
+fn pause(
+    kubernetes: &dyn Kubernetes,
+    template_directory: &str,
+    aws_zones: &[AwsZones],
+    node_groups: &[NodeGroups],
+    options: &Options,
+) -> Result<(), EngineError> {
+    let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
+    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
+
+    kubernetes.send_to_customer(
+        format!(
+            "Preparing {} {} cluster pause with id {}",
+            kubernetes.kind(),
+            kubernetes.name(),
+            kubernetes.id()
         )
-        .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
+        .as_str(),
+        &listeners_helper,
+    );
 
-        deploy_charts_levels(
-            kubeconfig_path,
-            &credentials_environment_variables,
-            helm_charts_to_deploy,
-            self.context.is_dry_run_deploy(),
-        )
-        .map_err(|e| EngineError::new_helm_charts_deploy_error(event_details.clone(), e))
-    }
+    kubernetes.logger().log(EngineEvent::Info(
+        kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
+        EventMessage::new_from_safe("Preparing cluster pause.".to_string()),
+    ));
 
-    fn create_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
-        let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
-        let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
+    let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
 
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create)),
-            EventMessage::new_from_safe("EKS.create_error() called.".to_string()),
+    // generate terraform files and copy them into temp dir
+    let mut context = tera_context(kubernetes, aws_zones, node_groups, options)?;
+
+    // pause: remove all worker nodes to reduce the bill but keep master to keep all the deployment config, certificates etc...
+    let worker_nodes: Vec<NodeGroupsFormat> = Vec::new();
+    context.insert("eks_worker_nodes", &worker_nodes);
+
+    if let Err(e) =
+        crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
+    {
+        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            event_details,
+            template_directory.to_string(),
+            temp_dir,
+            e,
         ));
-
-        match kubectl_exec_get_events(kubeconfig_path, None, environment_variables) {
-            Ok(ok_line) => self
-                .logger()
-                .log(EngineEvent::Info(event_details, EventMessage::new(ok_line, None))),
-            Err(err) => self.logger().log(EngineEvent::Warning(
-                event_details,
-                EventMessage::new("Error trying to get kubernetes events".to_string(), Some(err.message())),
-            )),
-        };
-
-        Ok(())
     }
 
-    fn upgrade_error(&self) -> Result<(), EngineError> {
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade)),
-            EventMessage::new_from_safe("EKS.upgrade_error() called.".to_string()),
+    // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap-{type}/common/charts directory.
+    // this is due to the required dependencies of lib/aws/bootstrap-{type}/*.tf files
+    let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir());
+    let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+    if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str()) {
+        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            event_details,
+            bootstrap_charts_dir,
+            common_charts_temp_dir,
+            e,
         ));
-
-        Ok(())
     }
 
-    fn downgrade(&self) -> Result<(), EngineError> {
-        Ok(())
-    }
-
-    fn downgrade_error(&self) -> Result<(), EngineError> {
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade)),
-            EventMessage::new_from_safe("EKS.downgrade_error() called.".to_string()),
-        ));
-
-        Ok(())
-    }
-
-    fn pause(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-
-        self.send_to_customer(
-            format!("Preparing EKS {} cluster pause with id {}", self.name(), self.id()).as_str(),
-            &listeners_helper,
-        );
-
-        self.logger().log(EngineEvent::Info(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
-            EventMessage::new_from_safe("Preparing EKS cluster pause.".to_string()),
-        ));
-
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
-
-        // generate terraform files and copy them into temp dir
-        let mut context = self.tera_context()?;
-
-        // pause: remove all worker nodes to reduce the bill but keep master to keep all the deployment config, certificates etc...
-        let worker_nodes: Vec<NodeGroupsFormat> = Vec::new();
-        context.insert("eks_worker_nodes", &worker_nodes);
-
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                self.template_directory.to_string(),
-                temp_dir,
-                e,
-            ));
-        }
-
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
-        let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
-        {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                bootstrap_charts_dir,
-                common_charts_temp_dir,
-                e,
-            ));
-        }
-
-        // pause: only select terraform workers elements to pause to avoid applying on the whole config
-        // this to avoid failures because of helm deployments on removing workers nodes
-        let tf_workers_resources = match terraform_init_validate_state_list(temp_dir.as_str()) {
-            Ok(x) => {
-                let mut tf_workers_resources_name = Vec::new();
-                for name in x {
-                    if name.starts_with("aws_eks_node_group.") {
-                        tf_workers_resources_name.push(name);
-                    }
+    // pause: only select terraform workers elements to pause to avoid applying on the whole config
+    // this to avoid failures because of helm deployments on removing workers nodes
+    let tf_workers_resources = match terraform_init_validate_state_list(temp_dir.as_str()) {
+        Ok(x) => {
+            let mut tf_workers_resources_name = Vec::new();
+            for name in x {
+                if name.starts_with("aws_eks_node_group.") {
+                    tf_workers_resources_name.push(name);
                 }
-                tf_workers_resources_name
             }
-            Err(e) => {
-                let error = EngineError::new_terraform_state_does_not_exist(event_details, e);
-                self.logger().log(EngineEvent::Error(error.clone(), None));
-                return Err(error);
-            }
-        };
-
-        if tf_workers_resources.is_empty() {
-            return Err(EngineError::new_cluster_has_no_worker_nodes(event_details, None));
+            tf_workers_resources_name
         }
+        Err(e) => {
+            let error = EngineError::new_terraform_state_does_not_exist(event_details, e);
+            kubernetes.logger().log(EngineEvent::Error(error.clone(), None));
+            return Err(error);
+        }
+    };
 
-        let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
+    if tf_workers_resources.is_empty() {
+        return Err(EngineError::new_cluster_has_no_worker_nodes(event_details, None));
+    }
 
-        // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
-        if self.get_engine_location() == EngineLocation::ClientSide {
-            match self.context.is_feature_enabled(&Features::MetricsHistory) {
-                true => {
-                    let metric_name = "taskmanager_nb_running_tasks";
-                    let wait_engine_job_finish = retry::retry(Fixed::from_millis(60000).take(60), || {
-                        return match kubectl_exec_api_custom_metrics(
-                            &kubernetes_config_file_path,
-                            self.cloud_provider().credentials_environment_variables(),
-                            "qovery",
-                            None,
-                            metric_name,
-                        ) {
-                            Ok(metrics) => {
-                                let mut current_engine_jobs = 0;
+    let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
 
-                                for metric in metrics.items {
-                                    match metric.value.parse::<i32>() {
-                                        Ok(job_count) if job_count > 0 => current_engine_jobs += 1,
-                                        Err(e) => {
-                                            let safe_message = "Error while looking at the API metric value"; 
-                                            return OperationResult::Retry(EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), CommandError::new(format!("{}, error: {}", safe_message, e), Some(safe_message.to_string()))));
-                                        }
-                                        _ => {}
+    // pause: wait 1h for the engine to have 0 running jobs before pausing and avoid getting unreleased lock (from helm or terraform for example)
+    if options.qovery_engine_location == EngineLocation::ClientSide {
+        match kubernetes.context().is_feature_enabled(&Features::MetricsHistory) {
+            true => {
+                let metric_name = "taskmanager_nb_running_tasks";
+                let wait_engine_job_finish = retry::retry(Fixed::from_millis(60000).take(60), || {
+                    return match kubectl_exec_api_custom_metrics(
+                        &kubernetes_config_file_path,
+                        kubernetes.cloud_provider().credentials_environment_variables(),
+                        "qovery",
+                        None,
+                        metric_name,
+                    ) {
+                        Ok(metrics) => {
+                            let mut current_engine_jobs = 0;
+
+                            for metric in metrics.items {
+                                match metric.value.parse::<i32>() {
+                                    Ok(job_count) if job_count > 0 => current_engine_jobs += 1,
+                                    Err(e) => {
+                                        return OperationResult::Retry(EngineError::new_cannot_get_k8s_api_custom_metrics(
+                                            event_details.clone(),
+                                            CommandError::new("Error while looking at the API metric value".to_string(), Some(e.to_string()), None)));
                                     }
-                                }
-
-                                if current_engine_jobs == 0 {
-                                    OperationResult::Ok(())
-                                } else {
-                                    OperationResult::Retry(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details.clone(), None))
+                                    _ => {}
                                 }
                             }
-                            Err(e) => {
-                                OperationResult::Retry(
-                                    EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), e))
-                            }
-                        };
-                    });
 
-                    match wait_engine_job_finish {
-                        Ok(_) => {
-                            self.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("No current running jobs on the Engine, infrastructure pause is allowed to start".to_string())));
+                            if current_engine_jobs == 0 {
+                                OperationResult::Ok(())
+                            } else {
+                                OperationResult::Retry(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details.clone(), None))
+                            }
                         }
-                        Err(Operation { error, .. }) => {
-                            return Err(error)
+                        Err(e) => {
+                            OperationResult::Retry(
+                                EngineError::new_cannot_get_k8s_api_custom_metrics(event_details.clone(), e))
                         }
-                        Err(retry::Error::Internal(msg)) => {
-                            return Err(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details, Some(CommandError::new_from_safe_message(msg))))
-                        }
+                    };
+                });
+
+                match wait_engine_job_finish {
+                    Ok(_) => {
+                        kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("No current running jobs on the Engine, infrastructure pause is allowed to start".to_string())));
+                    }
+                    Err(Operation { error, .. }) => {
+                        return Err(error);
+                    }
+                    Err(retry::Error::Internal(msg)) => {
+                        return Err(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details, Some(CommandError::new_from_safe_message(msg))));
                     }
                 }
-                false => self.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Engines are running Client side, but metric history flag is disabled. You will encounter issues during cluster lifecycles if you do not enable metric history".to_string()))),
             }
-        }
-
-        let mut terraform_args_string = vec!["apply".to_string(), "-auto-approve".to_string()];
-        for x in tf_workers_resources {
-            terraform_args_string.push(format!("-target={}", x));
-        }
-        let terraform_args = terraform_args_string.iter().map(|x| &**x).collect();
-
-        self.send_to_customer(
-            format!("Pausing EKS {} cluster deployment with id {}", self.name(), self.id()).as_str(),
-            &listeners_helper,
-        );
-        self.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Pausing EKS cluster deployment.".to_string()),
-        ));
-
-        match terraform_exec(temp_dir.as_str(), terraform_args) {
-            Ok(_) => {
-                let message = format!("Kubernetes cluster {} successfully paused", self.name());
-                self.send_to_customer(&message, &listeners_helper);
-                self.logger()
-                    .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(message)));
-                Ok(())
-            }
-            Err(e) => Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e)),
+            false => kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Engines are running Client side, but metric history flag is disabled. You will encounter issues during cluster lifecycles if you do not enable metric history".to_string()))),
         }
     }
 
-    fn pause_error(&self) -> Result<(), EngineError> {
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
-            EventMessage::new_from_safe("EKS.pause_error() called.".to_string()),
-        ));
+    let mut terraform_args_string = vec!["apply".to_string(), "-auto-approve".to_string()];
+    for x in tf_workers_resources {
+        terraform_args_string.push(format!("-target={}", x));
+    }
+    let terraform_args = terraform_args_string.iter().map(|x| &**x).collect();
 
-        Ok(())
+    kubernetes.send_to_customer(
+        format!(
+            "Pausing {} {} cluster deployment with id {}",
+            kubernetes.kind(),
+            kubernetes.name(),
+            kubernetes.id()
+        )
+        .as_str(),
+        &listeners_helper,
+    );
+
+    kubernetes.logger().log(EngineEvent::Info(
+        event_details.clone(),
+        EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
+    ));
+
+    match terraform_exec(temp_dir.as_str(), terraform_args) {
+        Ok(_) => {
+            let message = format!("Kubernetes cluster {} successfully paused", kubernetes.name());
+            kubernetes.send_to_customer(&message, &listeners_helper);
+            kubernetes
+                .logger()
+                .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(message)));
+
+            Ok(())
+        }
+        Err(e) => Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e)),
+    }
+}
+
+fn pause_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
+    kubernetes.logger().log(EngineEvent::Warning(
+        kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
+        EventMessage::new_from_safe(format!("{}.pause_error() called.", kubernetes.kind())),
+    ));
+
+    Ok(())
+}
+
+fn delete(
+    kubernetes: &dyn Kubernetes,
+    template_directory: &str,
+    aws_zones: &[AwsZones],
+    node_groups: &[NodeGroups],
+    options: &Options,
+) -> Result<(), EngineError> {
+    let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
+    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
+    let mut skip_kubernetes_step = false;
+
+    kubernetes.send_to_customer(
+        format!(
+            "Preparing to delete {} cluster {} with id {}",
+            kubernetes.kind(),
+            kubernetes.name(),
+            kubernetes.id()
+        )
+        .as_str(),
+        &listeners_helper,
+    );
+    kubernetes.logger().log(EngineEvent::Info(
+        event_details.clone(),
+        EventMessage::new_from_safe(format!("Preparing to delete {} cluster.", kubernetes.kind())),
+    ));
+
+    let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
+
+    // generate terraform files and copy them into temp dir
+    let context = tera_context(kubernetes, aws_zones, node_groups, options)?;
+
+    if let Err(e) =
+        crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
+    {
+        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            event_details,
+            template_directory.to_string(),
+            temp_dir,
+            e,
+        ));
     }
 
-    fn delete(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-        let mut skip_kubernetes_step = false;
+    // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
+    // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
+    let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", kubernetes.context().lib_root_dir());
+    let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
+    if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str()) {
+        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            event_details,
+            bootstrap_charts_dir,
+            common_charts_temp_dir,
+            e,
+        ));
+    }
 
-        self.send_to_customer(
-            format!("Preparing to delete EKS cluster {} with id {}", self.name(), self.id()).as_str(),
-            &listeners_helper,
+    let kubernetes_config_file_path = match kubernetes.get_kubeconfig_file_path() {
+        Ok(x) => x,
+        Err(e) => {
+            let safe_message = "Skipping Kubernetes uninstall because it can't be reached.";
+            kubernetes.logger().log(EngineEvent::Warning(
+                event_details.clone(),
+                EventMessage::new(safe_message.to_string(), Some(e.message(ErrorMessageVerbosity::FullDetails))),
+            ));
+
+            skip_kubernetes_step = true;
+            "".to_string()
+        }
+    };
+
+    // should apply before destroy to be sure destroy will compute on all resources
+    // don't exit on failure, it can happen if we resume a destroy process
+    let message = format!(
+        "Ensuring everything is up to date before deleting cluster {}/{}",
+        kubernetes.name(),
+        kubernetes.id()
+    );
+
+    kubernetes.send_to_customer(&message, &listeners_helper);
+    kubernetes
+        .logger()
+        .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
+
+    kubernetes.logger().log(EngineEvent::Info(
+        event_details.clone(),
+        EventMessage::new_from_safe("Running Terraform apply before running a delete.".to_string()),
+    ));
+
+    if let Err(e) = cmd::terraform::terraform_init_validate_plan_apply(temp_dir.as_str(), false) {
+        // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
+        kubernetes.logger().log(EngineEvent::Error(
+            EngineError::new_terraform_error_while_executing_pipeline(event_details.clone(), e),
+            None,
+        ));
+    };
+
+    if !skip_kubernetes_step {
+        // should make the diff between all namespaces and qovery managed namespaces
+        let message = format!(
+            "Deleting all non-Qovery deployed applications and dependencies for cluster {}/{}",
+            kubernetes.name(),
+            kubernetes.id()
         );
-        self.logger().log(EngineEvent::Info(
+
+        kubernetes.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe("Preparing to delete EKS cluster.".to_string()),
+            EventMessage::new_from_safe(message.to_string()),
         ));
 
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
+        kubernetes.send_to_customer(&message, &listeners_helper);
 
-        // generate terraform files and copy them into temp dir
-        let context = self.tera_context()?;
+        let all_namespaces = kubectl_exec_get_all_namespaces(
+            &kubernetes_config_file_path,
+            kubernetes.cloud_provider().credentials_environment_variables(),
+        );
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context,
-        ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                self.template_directory.to_string(),
-                temp_dir,
-                e,
-            ));
-        }
+        match all_namespaces {
+            Ok(namespace_vec) => {
+                let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
+                let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
 
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
-        let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
-        {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                bootstrap_charts_dir,
-                common_charts_temp_dir,
-                e,
-            ));
-        }
-
-        let kubernetes_config_file_path = match self.get_kubeconfig_file_path() {
-            Ok(x) => x,
-            Err(e) => {
-                let safe_message = "Skipping Kubernetes uninstall because it can't be reached.";
-                self.logger().log(EngineEvent::Warning(
+                kubernetes.logger().log(EngineEvent::Info(
                     event_details.clone(),
-                    EventMessage::new(safe_message.to_string(), Some(e.message())),
+                    EventMessage::new_from_safe("Deleting non Qovery namespaces".to_string()),
                 ));
 
-                skip_kubernetes_step = true;
-                "".to_string()
-            }
-        };
-
-        // should apply before destroy to be sure destroy will compute on all resources
-        // don't exit on failure, it can happen if we resume a destroy process
-        let message = format!(
-            "Ensuring everything is up to date before deleting cluster {}/{}",
-            self.name(),
-            self.id()
-        );
-        self.send_to_customer(&message, &listeners_helper);
-        self.logger()
-            .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
-
-        self.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Running Terraform apply before running a delete.".to_string()),
-        ));
-        if let Err(e) = cmd::terraform::terraform_init_validate_plan_apply(temp_dir.as_str(), false) {
-            // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
-            self.logger().log(EngineEvent::Error(
-                EngineError::new_terraform_error_while_executing_pipeline(event_details.clone(), e),
-                None,
-            ));
-        };
-
-        if !skip_kubernetes_step {
-            // should make the diff between all namespaces and qovery managed namespaces
-            let message = format!(
-                "Deleting all non-Qovery deployed applications and dependencies for cluster {}/{}",
-                self.name(),
-                self.id()
-            );
-            self.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe(message.to_string()),
-            ));
-            self.send_to_customer(&message, &listeners_helper);
-
-            let all_namespaces = kubectl_exec_get_all_namespaces(
-                &kubernetes_config_file_path,
-                self.cloud_provider().credentials_environment_variables(),
-            );
-
-            match all_namespaces {
-                Ok(namespace_vec) => {
-                    let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
-                    let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
-
-                    self.logger().log(EngineEvent::Info(
-                        event_details.clone(),
-                        EventMessage::new_from_safe("Deleting non Qovery namespaces".to_string()),
-                    ));
-
-                    for namespace_to_delete in namespaces_to_delete.iter() {
-                        match cmd::kubectl::kubectl_exec_delete_namespace(
-                            &kubernetes_config_file_path,
-                            namespace_to_delete,
-                            self.cloud_provider().credentials_environment_variables(),
-                        ) {
-                            Ok(_) => self.logger().log(EngineEvent::Info(
-                                event_details.clone(),
-                                EventMessage::new_from_safe(format!(
-                                    "Namespace `{}` deleted successfully.",
-                                    namespace_to_delete
-                                )),
+                for namespace_to_delete in namespaces_to_delete.iter() {
+                    match cmd::kubectl::kubectl_exec_delete_namespace(
+                        &kubernetes_config_file_path,
+                        namespace_to_delete,
+                        kubernetes.cloud_provider().credentials_environment_variables(),
+                    ) {
+                        Ok(_) => kubernetes.logger().log(EngineEvent::Info(
+                            event_details.clone(),
+                            EventMessage::new_from_safe(format!(
+                                "Namespace `{}` deleted successfully.",
+                                namespace_to_delete
                             )),
-                            Err(e) => {
-                                if !(e.message().contains("not found")) {
-                                    self.logger().log(EngineEvent::Warning(
-                                        event_details.clone(),
-                                        EventMessage::new_from_safe(format!(
-                                            "Can't delete the namespace `{}`",
-                                            namespace_to_delete
-                                        )),
-                                    ));
-                                }
+                        )),
+                        Err(e) => {
+                            if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
+                                kubernetes.logger().log(EngineEvent::Warning(
+                                    event_details.clone(),
+                                    EventMessage::new_from_safe(format!(
+                                        "Can't delete the namespace `{}`",
+                                        namespace_to_delete
+                                    )),
+                                ));
                             }
                         }
                     }
                 }
-                Err(e) => {
-                    let message_safe = format!(
-                        "Error while getting all namespaces for Kubernetes cluster {}",
-                        self.name_with_id(),
-                    );
-                    self.logger().log(EngineEvent::Warning(
-                        event_details.clone(),
-                        EventMessage::new(message_safe, Some(e.message())),
-                    ));
-                }
             }
+            Err(e) => {
+                let message_safe = format!(
+                    "Error while getting all namespaces for Kubernetes cluster {}",
+                    kubernetes.name_with_id(),
+                );
+                kubernetes.logger().log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new(message_safe, Some(e.message(ErrorMessageVerbosity::FullDetails))),
+                ));
+            }
+        }
 
-            let message = format!(
-                "Deleting all Qovery deployed elements and associated dependencies for cluster {}/{}",
-                self.name(),
-                self.id()
-            );
-            self.send_to_customer(&message, &listeners_helper);
-            self.logger()
-                .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
+        let message = format!(
+            "Deleting all Qovery deployed elements and associated dependencies for cluster {}/{}",
+            kubernetes.name(),
+            kubernetes.id()
+        );
 
-            // delete custom metrics api to avoid stale namespaces on deletion
-            let helm = Helm::new(
-                &kubernetes_config_file_path,
-                &self.cloud_provider.credentials_environment_variables(),
-            )
+        kubernetes.send_to_customer(&message, &listeners_helper);
+
+        kubernetes
+            .logger()
+            .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
+
+        // delete custom metrics api to avoid stale namespaces on deletion
+        let helm = Helm::new(
+            &kubernetes_config_file_path,
+            &kubernetes.cloud_provider().credentials_environment_variables(),
+        )
+        .map_err(|e| to_engine_error(&event_details, e))?;
+        let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
+        helm.uninstall(&chart, &[])
             .map_err(|e| to_engine_error(&event_details, e))?;
-            let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
-            helm.uninstall(&chart, &[])
+
+        // required to avoid namespace stuck on deletion
+        uninstall_cert_manager(
+            &kubernetes_config_file_path,
+            kubernetes.cloud_provider().credentials_environment_variables(),
+            event_details.clone(),
+            kubernetes.logger(),
+        )?;
+
+        kubernetes.logger().log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe("Deleting Qovery managed helm charts".to_string()),
+        ));
+
+        let qovery_namespaces = get_qovery_managed_namespaces();
+        for qovery_namespace in qovery_namespaces.iter() {
+            let charts_to_delete = helm
+                .list_release(Some(qovery_namespace), &[])
                 .map_err(|e| to_engine_error(&event_details, e))?;
 
-            // required to avoid namespace stuck on deletion
-            uninstall_cert_manager(
+            for chart in charts_to_delete {
+                let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
+                match helm.uninstall(&chart_info, &[]) {
+                    Ok(_) => kubernetes.logger().log(EngineEvent::Info(
+                        event_details.clone(),
+                        EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
+                    )),
+                    Err(e) => kubernetes.logger().log(EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new(format!("Can't delete chart `{}`", &chart.name), Some(e.to_string())),
+                    )),
+                }
+            }
+        }
+
+        kubernetes.logger().log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe("Deleting Qovery managed namespaces".to_string()),
+        ));
+
+        for qovery_namespace in qovery_namespaces.iter() {
+            let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
                 &kubernetes_config_file_path,
-                self.cloud_provider().credentials_environment_variables(),
-                event_details.clone(),
-                self.logger(),
-            )?;
+                qovery_namespace,
+                kubernetes.cloud_provider().credentials_environment_variables(),
+            );
+            match deletion {
+                Ok(_) => kubernetes.logger().log(EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(format!("Namespace {} is fully deleted", qovery_namespace)),
+                )),
+                Err(e) => {
+                    if !(e.message(ErrorMessageVerbosity::FullDetails).contains("not found")) {
+                        kubernetes.logger().log(EngineEvent::Warning(
+                            event_details.clone(),
+                            EventMessage::new_from_safe(format!("Can't delete namespace {}.", qovery_namespace)),
+                        ))
+                    }
+                }
+            }
+        }
 
-            self.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe("Deleting Qovery managed helm charts".to_string()),
-            ));
+        kubernetes.logger().log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe("Delete all remaining deployed helm applications".to_string()),
+        ));
 
-            let qovery_namespaces = get_qovery_managed_namespaces();
-            for qovery_namespace in qovery_namespaces.iter() {
-                let charts_to_delete = helm
-                    .list_release(Some(qovery_namespace), &[])
-                    .map_err(|e| to_engine_error(&event_details, e))?;
-
-                for chart in charts_to_delete {
+        match helm.list_release(None, &[]) {
+            Ok(helm_charts) => {
+                for chart in helm_charts {
                     let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
                     match helm.uninstall(&chart_info, &[]) {
-                        Ok(_) => self.logger().log(EngineEvent::Info(
+                        Ok(_) => kubernetes.logger().log(EngineEvent::Info(
                             event_details.clone(),
                             EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
                         )),
-                        Err(e) => {
-                            let message_safe = format!("Can't delete chart `{}`: {}", &chart.name, e);
-                            self.logger().log(EngineEvent::Warning(
-                                event_details.clone(),
-                                EventMessage::new(message_safe, Some(e.to_string())),
-                            ))
-                        }
-                    }
-                }
-            }
-
-            self.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe("Deleting Qovery managed namespaces".to_string()),
-            ));
-
-            for qovery_namespace in qovery_namespaces.iter() {
-                let deletion = cmd::kubectl::kubectl_exec_delete_namespace(
-                    &kubernetes_config_file_path,
-                    qovery_namespace,
-                    self.cloud_provider().credentials_environment_variables(),
-                );
-                match deletion {
-                    Ok(_) => self.logger().log(EngineEvent::Info(
-                        event_details.clone(),
-                        EventMessage::new_from_safe(format!("Namespace {} is fully deleted", qovery_namespace)),
-                    )),
-                    Err(e) => {
-                        if !(e.message().contains("not found")) {
-                            self.logger().log(EngineEvent::Warning(
-                                event_details.clone(),
-                                EventMessage::new_from_safe(format!("Can't delete namespace {}.", qovery_namespace)),
-                            ))
-                        }
-                    }
-                }
-            }
-
-            self.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe("Delete all remaining deployed helm applications".to_string()),
-            ));
-
-            match helm.list_release(None, &[]) {
-                Ok(helm_charts) => {
-                    for chart in helm_charts {
-                        let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                        match helm.uninstall(&chart_info, &[]) {
-                            Ok(_) => self.logger().log(EngineEvent::Info(
-                                event_details.clone(),
-                                EventMessage::new_from_safe(format!("Chart `{}` deleted", chart.name)),
-                            )),
-                            Err(e) => {
-                                let message_safe = format!("Error deleting chart `{}`: {}", chart.name, e);
-                                self.logger().log(EngineEvent::Warning(
-                                    event_details.clone(),
-                                    EventMessage::new(message_safe, Some(e.to_string())),
-                                ))
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    let message_safe = "Unable to get helm list";
-                    self.logger().log(EngineEvent::Warning(
-                        event_details.clone(),
-                        EventMessage::new(message_safe.to_string(), Some(e.to_string())),
-                    ))
-                }
-            }
-        };
-
-        let message = format!("Deleting Kubernetes cluster {}/{}", self.name(), self.id());
-        self.send_to_customer(&message, &listeners_helper);
-        self.logger()
-            .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
-
-        self.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Running Terraform destroy".to_string()),
-        ));
-
-        match retry::retry(Fibonacci::from_millis(60000).take(3), || {
-            match cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
-                Ok(_) => OperationResult::Ok(()),
-                Err(e) => OperationResult::Retry(e),
-            }
-        }) {
-            Ok(_) => {
-                self.send_to_customer(
-                    format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id()).as_str(),
-                    &listeners_helper,
-                );
-                self.logger().log(EngineEvent::Info(
-                    event_details,
-                    EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),
-                ));
-                Ok(())
-            }
-            Err(Operation { error, .. }) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-                event_details,
-                error,
-            )),
-            Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-                event_details,
-                CommandError::new(msg, None),
-            )),
-        }
-    }
-
-    fn delete_error(&self) -> Result<(), EngineError> {
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete)),
-            EventMessage::new_from_safe("EKS.delete_error() called.".to_string()),
-        ));
-
-        Ok(())
-    }
-
-    fn cloud_provider_name(&self) -> &str {
-        "aws"
-    }
-
-    fn struct_name(&self) -> &str {
-        "kubernetes"
-    }
-}
-
-impl Kubernetes for EKS {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
-    fn kind(&self) -> Kind {
-        Kind::Eks
-    }
-
-    fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn version(&self) -> &str {
-        self.version.as_str()
-    }
-
-    fn region(&self) -> String {
-        self.region.to_aws_format()
-    }
-
-    fn zone(&self) -> &str {
-        ""
-    }
-
-    fn aws_zones(&self) -> Option<Vec<AwsZones>> {
-        Some(self.zones.clone())
-    }
-
-    fn cloud_provider(&self) -> &dyn CloudProvider {
-        (*self.cloud_provider).borrow()
-    }
-
-    fn dns_provider(&self) -> &dyn DnsProvider {
-        (*self.dns_provider).borrow()
-    }
-
-    fn logger(&self) -> &dyn Logger {
-        self.logger.borrow()
-    }
-
-    fn config_file_store(&self) -> &dyn ObjectStorage {
-        &self.s3
-    }
-
-    fn is_valid(&self) -> Result<(), EngineError> {
-        Ok(())
-    }
-
-    #[named]
-    fn on_create(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.create())
-    }
-
-    #[named]
-    fn on_create_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.create_error())
-    }
-
-    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-
-        self.send_to_customer(
-            format!(
-                "Start preparing EKS upgrade process {} cluster with id {}",
-                self.name(),
-                self.id()
-            )
-            .as_str(),
-            &listeners_helper,
-        );
-        self.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Start preparing EKS cluster upgrade process".to_string()),
-        ));
-
-        let temp_dir = self.get_temp_dir(event_details.clone())?;
-
-        // generate terraform files and copy them into temp dir
-        let mut context = self.tera_context()?;
-
-        //
-        // Upgrade master nodes
-        //
-        match &kubernetes_upgrade_status.required_upgrade_on {
-            Some(KubernetesNodesType::Masters) => {
-                self.send_to_customer(
-                    format!("Start upgrading process for master nodes on {}/{}", self.name(), self.id()).as_str(),
-                    &listeners_helper,
-                );
-                self.logger().log(EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe("Start upgrading process for master nodes.".to_string()),
-                ));
-
-                // AWS requires the upgrade to be done in 2 steps (masters, then workers)
-                // use the current kubernetes masters' version for workers, in order to avoid migration in one step
-                context.insert(
-                    "kubernetes_master_version",
-                    format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
-                );
-                // use the current master version for workers, they will be updated later
-                context.insert(
-                    "eks_workers_version",
-                    format!("{}", &kubernetes_upgrade_status.deployed_masters_version).as_str(),
-                );
-
-                if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-                    self.template_directory.as_str(),
-                    temp_dir.as_str(),
-                    context.clone(),
-                ) {
-                    return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                        event_details,
-                        self.template_directory.to_string(),
-                        temp_dir,
-                        e,
-                    ));
-                }
-
-                let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-                let common_bootstrap_charts = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
-                if let Err(e) = crate::template::copy_non_template_files(
-                    common_bootstrap_charts.as_str(),
-                    common_charts_temp_dir.as_str(),
-                ) {
-                    return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                        event_details,
-                        common_bootstrap_charts,
-                        common_charts_temp_dir,
-                        e,
-                    ));
-                }
-
-                self.send_to_customer(
-                    format!("Upgrading Kubernetes {} master nodes", self.name()).as_str(),
-                    &listeners_helper,
-                );
-                self.logger().log(EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe("Upgrading Kubernetes master nodes.".to_string()),
-                ));
-
-                match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
-                    Ok(_) => {
-                        self.send_to_customer(
-                            format!("Kubernetes {} master nodes have been successfully upgraded", self.name()).as_str(),
-                            &listeners_helper,
-                        );
-                        self.logger().log(EngineEvent::Info(
+                        Err(e) => kubernetes.logger().log(EngineEvent::Warning(
                             event_details.clone(),
-                            EventMessage::new_from_safe(
-                                "Kubernetes master nodes have been successfully upgraded.".to_string(),
-                            ),
-                        ));
-                    }
-                    Err(e) => {
-                        return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
+                            EventMessage::new(format!("Error deleting chart `{}`", chart.name), Some(e.to_string())),
+                        )),
                     }
                 }
             }
-            Some(KubernetesNodesType::Workers) => {
-                self.logger().log(EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(
-                        "No need to perform Kubernetes master upgrade, they are already up to date.".to_string(),
-                    ),
-                ));
-            }
-            None => {
-                self.logger().log(EngineEvent::Info(
-                    event_details,
-                    EventMessage::new_from_safe(
-                        "No Kubernetes upgrade required, masters and workers are already up to date.".to_string(),
-                    ),
-                ));
-                return Ok(());
-            }
+            Err(e) => kubernetes.logger().log(EngineEvent::Warning(
+                event_details.clone(),
+                EventMessage::new("Unable to get helm list".to_string(), Some(e.to_string())),
+            )),
         }
+    };
 
-        if let Err(e) = self.delete_crashlooping_pods(
-            None,
-            None,
-            Some(3),
-            self.cloud_provider().credentials_environment_variables(),
-            Stage::Infrastructure(InfrastructureStep::Upgrade),
-        ) {
-            self.logger().log(EngineEvent::Error(e.clone(), None));
-            return Err(e);
-        }
+    let message = format!("Deleting Kubernetes cluster {}/{}", kubernetes.name(), kubernetes.id());
+    kubernetes.send_to_customer(&message, &listeners_helper);
+    kubernetes
+        .logger()
+        .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
-        //
-        // Upgrade worker nodes
-        //
-        self.send_to_customer(
-            format!("Preparing workers nodes for upgrade for Kubernetes cluster {}", self.name()).as_str(),
-            &listeners_helper,
-        );
-        self.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Preparing workers nodes for upgrade for Kubernetes cluster.".to_string()),
-        ));
+    kubernetes.logger().log(EngineEvent::Info(
+        event_details.clone(),
+        EventMessage::new_from_safe("Running Terraform destroy".to_string()),
+    ));
 
-        // disable cluster autoscaler to avoid interfering with AWS upgrade procedure
-        context.insert("enable_cluster_autoscaler", &false);
-        context.insert(
-            "eks_workers_version",
-            format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
-        );
-
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            self.template_directory.as_str(),
-            temp_dir.as_str(),
-            context.clone(),
-        ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+    match retry::retry(
+        Fibonacci::from_millis(60000).take(3),
+        || match cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
+            Ok(_) => OperationResult::Ok(()),
+            Err(e) => OperationResult::Retry(e),
+        },
+    ) {
+        Ok(_) => {
+            kubernetes.send_to_customer(
+                format!(
+                    "Kubernetes cluster {}/{} successfully deleted",
+                    kubernetes.name(),
+                    kubernetes.id()
+                )
+                .as_str(),
+                &listeners_helper,
+            );
+            kubernetes.logger().log(EngineEvent::Info(
                 event_details,
-                self.template_directory.to_string(),
-                temp_dir,
-                e,
+                EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),
             ));
+            Ok(())
         }
-
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/aws/bootstrap/*.tf files
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        let common_bootstrap_charts = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
-        if let Err(e) =
-            crate::template::copy_non_template_files(common_bootstrap_charts.as_str(), common_charts_temp_dir.as_str())
-        {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                common_bootstrap_charts,
-                common_charts_temp_dir,
-                e,
-            ));
-        }
-
-        self.send_to_customer(
-            format!("Upgrading Kubernetes {} worker nodes", self.name()).as_str(),
-            &listeners_helper,
-        );
-        self.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe("Upgrading Kubernetes worker nodes.".to_string()),
-        ));
-
-        // Disable cluster autoscaler deployment
-        let _ = self.set_cluster_autoscaler_replicas(event_details.clone(), 0)?;
-
-        match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
-            Ok(_) => {
-                self.send_to_customer(
-                    format!("Kubernetes {} workers nodes have been successfully upgraded", self.name()).as_str(),
-                    &listeners_helper,
-                );
-                self.logger().log(EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(
-                        "Kubernetes workers nodes have been successfully upgraded.".to_string(),
-                    ),
-                ));
-            }
-            Err(e) => {
-                // enable cluster autoscaler deployment
-                let _ = self.set_cluster_autoscaler_replicas(event_details.clone(), 1)?;
-
-                return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
-            }
-        }
-
-        // enable cluster autoscaler deployment
-        self.set_cluster_autoscaler_replicas(event_details, 1)
-    }
-
-    #[named]
-    fn on_upgrade(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
+        Err(Operation { error, .. }) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
             event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.upgrade())
-    }
-
-    #[named]
-    fn on_upgrade_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
+            error,
+        )),
+        Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
             event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.upgrade_error())
-    }
-
-    #[named]
-    fn on_downgrade(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.downgrade())
-    }
-
-    #[named]
-    fn on_downgrade_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.downgrade_error())
-    }
-
-    #[named]
-    fn on_pause(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Pause, || self.pause())
-    }
-
-    #[named]
-    fn on_pause_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Pause, || self.pause_error())
-    }
-
-    #[named]
-    fn on_delete(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Delete, || self.delete())
-    }
-
-    #[named]
-    fn on_delete_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Delete, || self.delete_error())
-    }
-
-    #[named]
-    fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-        kubernetes::deploy_environment(self, environment, event_details, self.logger())
-    }
-
-    #[named]
-    fn deploy_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-        kubernetes::deploy_environment_error(self, environment, event_details, self.logger())
-    }
-
-    #[named]
-    fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-        kubernetes::pause_environment(self, environment, event_details, self.logger())
-    }
-
-    #[named]
-    fn pause_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        Ok(())
-    }
-
-    #[named]
-    fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-        kubernetes::delete_environment(self, environment, event_details, self.logger())
-    }
-
-    #[named]
-    fn delete_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        Ok(())
+            CommandError::new("Error while trying to perform Terraform destroy".to_string(), Some(msg), None),
+        )),
     }
 }
 
-impl Listen for EKS {
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
+fn delete_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
+    kubernetes.logger().log(EngineEvent::Warning(
+        kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete)),
+        EventMessage::new_from_safe(format!("{}.delete_error() called.", kubernetes.kind())),
+    ));
 
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
+    Ok(())
 }

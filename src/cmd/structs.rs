@@ -42,6 +42,7 @@ pub struct SecretItem {
     pub api_version: String,
     pub kind: String,
     pub metadata: SecretMetadata,
+    pub data: HashMap<String, String>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
@@ -896,7 +897,7 @@ mod tests {
                 "value": false
               }
             ],
-            "image": "quay.io/bitnami/postgresql:10.16.0",
+            "image": "docker.io/bitnami/postgresql:10.16.0",
             "imagePullPolicy": "IfNotPresent",
             "livenessProbe": {
               "exec": {
@@ -1129,7 +1130,7 @@ mod tests {
                 "value": false
               }
             ],
-            "image": "quay.io/bitnami/postgresql:10.16.0",
+            "image": "docker.io/bitnami/postgresql:10.16.0",
             "imagePullPolicy": "IfNotPresent",
             "livenessProbe": {
               "exec": {

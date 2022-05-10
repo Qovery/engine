@@ -2,17 +2,20 @@ use crate::cloud_provider::helm::HelmAction::Deploy;
 use crate::cloud_provider::helm::HelmChartNamespaces::KubeSystem;
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAppName, QoveryShellAgent};
 use crate::cmd::helm::{to_command_error, Helm};
+use crate::cmd::helm_utils::{
+    apply_chart_backup, delete_unused_chart_backup, prepare_chart_backup_on_upgrade, BackupStatus,
+};
 use crate::cmd::kubectl::{
     kubectl_delete_crash_looping_pods, kubectl_exec_delete_crd, kubectl_exec_get_configmap, kubectl_exec_get_events,
     kubectl_exec_rollout_restart_deployment, kubectl_exec_with_output,
 };
 use crate::cmd::structs::HelmHistoryRow;
-use crate::errors::CommandError;
+use crate::errors::{CommandError, ErrorMessageVerbosity};
 use crate::utilities::calculate_hash;
 use semver::Version;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::{fs, thread};
 use thread::spawn;
 use tracing::{span, Level};
@@ -82,6 +85,7 @@ pub struct ChartInfo {
     pub yaml_files_content: Vec<ChartValuesGenerated>,
     pub parse_stderr_for_error: bool,
     pub k8s_selector: Option<String>,
+    pub backup_resources: Option<Vec<String>>,
 }
 
 impl ChartInfo {
@@ -146,6 +150,7 @@ impl Default for ChartInfo {
             yaml_files_content: vec![],
             parse_stderr_for_error: true,
             k8s_selector: None,
+            backup_resources: None,
         }
     }
 }
@@ -155,11 +160,10 @@ pub trait HelmChart: Send {
         let chart = self.get_chart_info();
         for file in chart.values_files.iter() {
             if let Err(e) = fs::metadata(file) {
-                let safe_message =
-                    format!("Can't access helm chart override file `{}` for chart `{}`", file, chart.name,);
                 return Err(CommandError::new(
-                    format!("{}, error: {:?}", safe_message, e),
-                    Some(safe_message),
+                    format!("Can't access helm chart override file `{}` for chart `{}`", file, chart.name,),
+                    Some(e.to_string()),
+                    None,
                 ));
             }
         }
@@ -205,7 +209,7 @@ pub trait HelmChart: Send {
         let payload = match self.exec(kubernetes_config, envs, payload.clone()) {
             Ok(payload) => payload,
             Err(e) => {
-                error!("Error while deploying chart: {}", e.message());
+                error!("Error while deploying chart: {}", e.message(ErrorMessageVerbosity::FullDetails));
                 self.on_deploy_failure(kubernetes_config, envs, payload)?;
                 return Err(e);
             }
@@ -233,7 +237,61 @@ pub trait HelmChart: Send {
                     );
                 }
 
-                helm.upgrade(chart_info, &[]).map_err(to_command_error)?;
+                let installed_version = match helm.get_chart_version(
+                    chart_info.name.clone(),
+                    Some(chart_info.get_namespace_string().as_str()),
+                    environment_variables.as_slice(),
+                ) {
+                    Ok(version) => version,
+                    Err(e) => {
+                        warn!("error while trying to get installed version: {:?}", e);
+                        None
+                    }
+                };
+
+                let upgrade_status = match prepare_chart_backup_on_upgrade(
+                    kubernetes_config,
+                    chart_info.clone(),
+                    environment_variables.as_slice(),
+                    installed_version,
+                ) {
+                    Ok(status) => status,
+                    Err(e) => {
+                        warn!("error while trying to prepare backup: {:?}", e);
+                        BackupStatus {
+                            is_backupable: false,
+                            backup_path: PathBuf::new(),
+                        }
+                    }
+                };
+
+                match helm.upgrade(chart_info, &[]).map_err(to_command_error) {
+                    Ok(_) => {
+                        if upgrade_status.is_backupable {
+                            if let Err(e) = apply_chart_backup(
+                                kubernetes_config,
+                                upgrade_status.backup_path.as_path(),
+                                environment_variables.as_slice(),
+                                chart_info,
+                            ) {
+                                warn!("error while trying to apply backup: {:?}", e);
+                            };
+                        }
+                    }
+                    Err(e) => {
+                        if upgrade_status.is_backupable {
+                            if let Err(e) = delete_unused_chart_backup(
+                                kubernetes_config,
+                                environment_variables.as_slice(),
+                                chart_info,
+                            ) {
+                                warn!("error while trying to delete backup: {:?}", e);
+                            }
+                        }
+
+                        return Err(e);
+                    }
+                }
             }
             HelmAction::Destroy => {
                 let chart_info = self.get_chart_info();
@@ -304,10 +362,10 @@ fn deploy_parallel_charts(
                 }
             }
             Err(e) => {
-                let safe_message = "Thread panicked during parallel charts deployments.";
                 let error = Err(CommandError::new(
-                    format!("{}, error: {:?}", safe_message, e),
-                    Some(safe_message.to_string()),
+                    "Thread panicked during parallel charts deployments.".to_string(),
+                    Some(format!("{:?}", e)),
+                    None,
                 ));
                 errors.push(error);
             }
@@ -359,7 +417,7 @@ pub fn deploy_charts_levels(
 // Common charts
 //
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct CommonChart {
     pub chart_info: ChartInfo,
 }
@@ -502,7 +560,10 @@ impl HelmChart for CoreDNSConfigChart {
             Err(e) => return Err(e),
         };
         if let Err(e) = self.exec(kubernetes_config, envs, None) {
-            error!("Error while deploying chart: {:?}", e.message());
+            error!(
+                "Error while deploying chart: {:?}",
+                e.message(ErrorMessageVerbosity::FullDetails)
+            );
             self.on_deploy_failure(kubernetes_config, envs, None)?;
             return Err(e);
         };
@@ -673,7 +734,7 @@ pub fn get_chart_for_shell_agent(
     let shell_agent = CommonChart {
         chart_info: ChartInfo {
             name: "shell-agent".to_string(),
-            path: chart_path("common/charts/qovery-shell-agent"),
+            path: chart_path("common/charts/qovery/qovery-shell-agent"),
             namespace: HelmChartNamespaces::Qovery,
             values: vec![
                 ChartSetValue {
@@ -697,7 +758,7 @@ pub fn get_chart_for_shell_agent(
                     value: context.grpc_url.to_string(),
                 },
                 ChartSetValue {
-                    key: "environmentVariables.CLUSTER_TOKEN".to_string(),
+                    key: "environmentVariables.CLUSTER_JWT_TOKEN".to_string(),
                     value: context.cluster_token.to_string(),
                 },
                 ChartSetValue {
@@ -731,6 +792,90 @@ pub fn get_chart_for_shell_agent(
     };
 
     Ok(shell_agent)
+}
+
+pub struct ClusterAgentContext<'a> {
+    pub api_url: &'a str,
+    pub api_token: &'a str,
+    pub organization_long_id: &'a Uuid,
+    pub cluster_id: &'a str,
+    pub cluster_long_id: &'a Uuid,
+    pub cluster_jwt_token: &'a str,
+    pub grpc_url: &'a str,
+}
+
+// This one is the new agent in rust
+pub fn get_chart_for_cluster_agent(
+    context: ClusterAgentContext,
+    chart_path: impl Fn(&str) -> String,
+) -> Result<CommonChart, CommandError> {
+    let shell_agent_version: QoveryShellAgent = get_qovery_app_version(
+        QoveryAppName::ClusterAgent,
+        context.api_token,
+        context.api_url,
+        context.cluster_id,
+    )?;
+    let cluster_agent = CommonChart {
+        chart_info: ChartInfo {
+            name: "cluster-agent".to_string(),
+            path: chart_path("common/charts/qovery/qovery-cluster-agent"),
+            namespace: HelmChartNamespaces::Qovery,
+            values: vec![
+                ChartSetValue {
+                    key: "image.tag".to_string(),
+                    value: shell_agent_version.version,
+                },
+                ChartSetValue {
+                    key: "replicaCount".to_string(),
+                    value: "1".to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.RUST_BACKTRACE".to_string(),
+                    value: "full".to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.RUST_LOG".to_string(),
+                    value: "DEBUG".to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.GRPC_SERVER".to_string(),
+                    value: context.grpc_url.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.CLUSTER_JWT_TOKEN".to_string(),
+                    value: context.cluster_jwt_token.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.CLUSTER_ID".to_string(),
+                    value: context.cluster_long_id.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.ORGANIZATION_ID".to_string(),
+                    value: context.organization_long_id.to_string(),
+                },
+                // resources limits
+                ChartSetValue {
+                    key: "resources.requests.cpu".to_string(),
+                    value: "200m".to_string(),
+                },
+                ChartSetValue {
+                    key: "resources.limits.cpu".to_string(),
+                    value: "1".to_string(),
+                },
+                ChartSetValue {
+                    key: "resources.requests.memory".to_string(),
+                    value: "100Mi".to_string(),
+                },
+                ChartSetValue {
+                    key: "resources.limits.memory".to_string(),
+                    value: "500Mi".to_string(),
+                },
+            ],
+            ..Default::default()
+        },
+    };
+
+    Ok(cluster_agent)
 }
 
 #[cfg(test)]

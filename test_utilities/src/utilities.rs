@@ -11,7 +11,6 @@ use gethostname;
 use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
-use std::str::FromStr;
 
 use passwords::PasswordGenerator;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::doks_api::get_do_kubeconfig_by_cluster_name;
@@ -21,6 +20,7 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
 use std::fs;
+use std::str::FromStr;
 use tracing::{info, warn};
 
 use crate::scaleway::{
@@ -29,14 +29,13 @@ use crate::scaleway::{
 };
 use hashicorp_vault;
 use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::cloud_provider::scaleway::application::ScwZone;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd;
 use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DIGITAL_OCEAN_SPACES_ACCESS_ID, DIGITAL_OCEAN_SPACES_SECRET_ID,
     DIGITAL_OCEAN_TOKEN, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
-use qovery_engine::models::{Context, Database, DatabaseKind, DatabaseMode, EnvironmentRequest, Features, Metadata};
+use qovery_engine::io_models::{Context, Database, DatabaseKind, DatabaseMode, EnvironmentRequest, Features, Metadata};
 use retry::Error::Operation;
 use serde::{Deserialize, Serialize};
 
@@ -50,9 +49,11 @@ use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::errors::CommandError;
+use qovery_engine::io_models::DatabaseMode::MANAGED;
 use qovery_engine::logger::{Logger, StdIoLogger};
-use qovery_engine::models::DatabaseMode::MANAGED;
+use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::runtime::block_on;
+use qovery_engine::utilities::to_short_id;
 use time::Instant;
 use url::Url;
 
@@ -60,18 +61,14 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
     let organization_id = organization_id.to_string();
     let cluster_id = cluster_id.to_string();
     let execution_id = execution_id();
-    let home_dir = std::env::var("WORKSPACE_ROOT_DIR").unwrap_or(home_dir().unwrap().to_str().unwrap().to_string());
+    let home_dir =
+        std::env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_str().unwrap().to_string());
     let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
     let docker_host = std::env::var("DOCKER_HOST").map(|x| Url::parse(&x).unwrap()).ok();
     let docker = Docker::new(docker_host.clone()).expect("Can't init docker");
 
     let metadata = Metadata {
-        dry_run_deploy: Option::from({
-            match env::var_os("dry_run_deploy") {
-                Some(_) => true,
-                None => false,
-            }
-        }),
+        dry_run_deploy: Option::from(env::var_os("dry_run_deploy").is_some()),
         resource_expiration_in_seconds: {
             // set a custom ttl as environment variable for manual tests
             match env::var_os("ttl") {
@@ -82,12 +79,7 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
                 None => Some(7200),
             }
         },
-        forced_upgrade: Option::from({
-            match env::var_os("forced_upgrade") {
-                Some(_) => true,
-                None => false,
-            }
-        }),
+        forced_upgrade: Option::from(env::var_os("forced_upgrade").is_some()),
         disable_pleco: Some(true),
     };
 
@@ -107,7 +99,7 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
     )
 }
 
-pub fn logger<'a>() -> Box<dyn Logger> {
+pub fn logger() -> Box<dyn Logger> {
     Box::new(StdIoLogger::new())
 }
 
@@ -156,11 +148,18 @@ pub struct FuncTestsSecrets {
     pub TERRAFORM_AWS_REGION: Option<String>,
     pub QOVERY_GRPC_URL: Option<String>,
     pub QOVERY_CLUSTER_SECRET_TOKEN: Option<String>,
+    pub QOVERY_CLUSTER_JWT_TOKEN: Option<String>,
 }
 
 struct VaultConfig {
     address: String,
     token: String,
+}
+
+impl Default for FuncTestsSecrets {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FuncTestsSecrets {
@@ -174,7 +173,7 @@ impl FuncTestsSecrets {
             None => {
                 return Err(Error::new(
                     ErrorKind::NotFound,
-                    format!("VAULT_ADDR environment variable is missing"),
+                    "VAULT_ADDR environment variable is missing".to_string(),
                 ))
             }
         };
@@ -184,7 +183,7 @@ impl FuncTestsSecrets {
             None => {
                 return Err(Error::new(
                     ErrorKind::NotFound,
-                    format!("VAULT_TOKEN environment variable is missing"),
+                    "VAULT_TOKEN environment variable is missing".to_string(),
                 ))
             }
         };
@@ -240,6 +239,7 @@ impl FuncTestsSecrets {
             TERRAFORM_AWS_REGION: None,
             QOVERY_GRPC_URL: None,
             QOVERY_CLUSTER_SECRET_TOKEN: None,
+            QOVERY_CLUSTER_JWT_TOKEN: None,
         };
 
         let vault_config = match Self::get_vault_config() {
@@ -360,6 +360,7 @@ impl FuncTestsSecrets {
                 "QOVERY_CLUSTER_SECRET_TOKEN",
                 secrets.QOVERY_CLUSTER_SECRET_TOKEN,
             ),
+            QOVERY_CLUSTER_JWT_TOKEN: Self::select_secret("QOVERY_CLUSTER_JWT_TOKEN", secrets.QOVERY_CLUSTER_JWT_TOKEN),
         }
     }
 }
@@ -394,7 +395,7 @@ pub fn teardown(start_time: Instant, test_name: String) {
     info!("{} seconds for test {}", elapsed.as_seconds_f64(), test_name);
 }
 
-pub fn engine_run_test<T>(test: T) -> ()
+pub fn engine_run_test<T>(test: T)
 where
     T: FnOnce() -> String,
 {
@@ -410,7 +411,8 @@ pub fn generate_id() -> String {
     let uuid;
 
     loop {
-        let rand_string: String = thread_rng().sample_iter(Alphanumeric).take(15).collect();
+        let rand_string: Vec<u8> = thread_rng().sample_iter(Alphanumeric).take(15).collect();
+        let rand_string = String::from_utf8(rand_string).unwrap();
         if rand_string.chars().next().unwrap().is_alphabetic() {
             uuid = rand_string.to_lowercase();
             break;
@@ -441,10 +443,7 @@ pub fn generate_password(provider_kind: Kind, db_mode: DatabaseMode) -> String {
         .exclude_similar_characters(true)
         .strict(true);
 
-    let mut password = pg
-        .generate_one()
-        .expect("error while trying to generate a password")
-        .to_string();
+    let mut password = pg.generate_one().expect("error while trying to generate a password");
 
     if allow_using_symbols {
         for forbidden_char in forbidden_chars {
@@ -463,7 +462,7 @@ pub fn check_all_connections(env: &EnvironmentRequest) -> Vec<bool> {
 
         checking.push(curl_path(path_to_test.as_str()));
     }
-    return checking;
+    checking
 }
 
 fn curl_path(path: &str) -> bool {
@@ -471,11 +470,11 @@ fn curl_path(path: &str) -> bool {
     easy.url(path).unwrap();
     let res = easy.perform();
     match res {
-        Ok(_) => return true,
+        Ok(_) => true,
 
         Err(e) => {
             println!("TEST Error : while trying to call {}", e);
-            return false;
+            false
         }
     }
 }
@@ -496,7 +495,7 @@ pub fn kubernetes_config_path(
         kubernetes_config_bucket_name,
         kubernetes_config_object_key,
         kubernetes_config_file_path.clone(),
-        secrets.clone(),
+        secrets,
     )?;
 
     Ok(kubernetes_config_file_path)
@@ -514,9 +513,8 @@ where
     P: AsRef<Path>,
 {
     // return the file if it already exists and should use cache
-    let _ = match fs::File::open(file_path.as_ref()) {
-        Ok(f) => return Ok(f),
-        Err(_) => {}
+    let _ = if let Ok(f) = fs::File::open(file_path.as_ref()) {
+        return Ok(f);
     };
 
     let file_content_result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
@@ -536,17 +534,14 @@ where
                 let cluster_name = format!("qovery-{}", context.cluster_id());
                 let kubeconfig = match get_do_kubeconfig_by_cluster_name(
                     secrets.clone().DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
-                    cluster_name.clone().as_str(),
+                    cluster_name.as_str(),
                 ) {
                     Ok(kubeconfig) => kubeconfig,
-                    Err(e) => return OperationResult::Retry(CommandError::new(e.message(), Some(e.message()))),
+                    Err(e) => return OperationResult::Retry(e),
                 };
 
                 match kubeconfig {
-                    None => Err(CommandError::new(
-                        "No kubeconfig found".to_string(),
-                        Some("No kubeconfig found".to_string()),
-                    )),
+                    None => Err(CommandError::new_from_safe_message("No kubeconfig found".to_string())),
                     Some(file_content) => {
                         let _ = "test";
                         Ok(file_content)
@@ -561,7 +556,7 @@ where
 
                 let configuration = scaleway_api_rs::apis::configuration::Configuration {
                     api_key: Some(scaleway_api_rs::apis::configuration::ApiKey {
-                        key: secret_access_key.to_string(),
+                        key: secret_access_key,
                         prefix: None,
                     }),
                     ..scaleway_api_rs::apis::configuration::Configuration::default()
@@ -581,10 +576,10 @@ where
                 ));
 
                 if let Err(e) = clusters_res {
-                    let message_safe = "Error while trying to get clusters";
                     return OperationResult::Retry(CommandError::new(
-                        format!("{}, error: {}", message_safe.to_string(), e.to_string()),
-                        Some(message_safe.to_string()),
+                        "Error while trying to get clusters".to_string(),
+                        Some(e.to_string()),
+                        None,
                     ));
                 }
 
@@ -626,8 +621,9 @@ where
                                     Err(e) => {
                                         let message_safe = "Error while trying to get clusters";
                                         return OperationResult::Retry(CommandError::new(
-                                            format!("{}, error: {}", message_safe.to_string(), e.to_string()),
-                                            Some(message_safe.to_string()),
+                                            message_safe.to_string(),
+                                            Some(e.to_string()),
+                                            None,
                                         ));
                                     }
                                 };
@@ -659,13 +655,7 @@ where
         .write(true)
         .truncate(true)
         .open(file_path.as_ref())
-        .map_err(|e| {
-            let message_safe = format!("Error opening kubeconfig file.");
-            CommandError::new(
-                format!("{}, error: {}", message_safe.to_string(), e.to_string()),
-                Some(message_safe.to_string()),
-            )
-        })?;
+        .map_err(|e| CommandError::new("Error opening kubeconfig file.".to_string(), Some(e.to_string()), None))?;
     let _ = kubernetes_config_file
         .write_all(file_content.as_bytes())
         .map_err(|_| CommandError::new_from_safe_message("Error while trying to write into file.".to_string()))?;
@@ -736,8 +726,8 @@ fn aws_s3_get_object(
 
     let mut cmd = QoveryCommand::new(
         "aws",
-        &vec!["s3", "cp", &s3_url, &local_path],
-        &vec![
+        &["s3", "cp", &s3_url, &local_path],
+        &[
             (AWS_ACCESS_KEY_ID, access_key_id),
             (AWS_SECRET_ACCESS_KEY, secret_access_key),
         ],
@@ -758,7 +748,7 @@ pub fn is_pod_restarted_env(
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
 ) -> (bool, String) {
-    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
+    let namespace_name = format!("{}-{}", &environment_check.project_id, &environment_check.id,);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
@@ -766,19 +756,19 @@ pub fn is_pod_restarted_env(
         Ok(path) => {
             let restarted_database = cmd::kubectl::kubectl_exec_get_number_of_restart(
                 path.as_str(),
-                namespace_name.clone().as_str(),
+                namespace_name.as_str(),
                 pod_to_check,
-                get_cloud_provider_credentials(provider_kind.clone(), &secrets.clone()),
+                get_cloud_provider_credentials(provider_kind, &secrets),
             );
             match restarted_database {
                 Ok(count) => match count.trim().eq("0") {
-                    true => return (true, "0".to_string()),
-                    false => return (true, count.to_string()),
+                    true => (true, "0".to_string()),
+                    false => (true, count.to_string()),
                 },
-                _ => return (false, "".to_string()),
+                _ => (false, "".to_string()),
             }
         }
-        Err(_e) => return (false, "".to_string()),
+        Err(_e) => (false, "".to_string()),
     }
 }
 
@@ -789,24 +779,24 @@ pub fn get_pods(
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
 ) -> Result<KubernetesList<KubernetesPod>, CommandError> {
-    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
+    let namespace_name = format!("{}-{}", &environment_check.project_id, &environment_check.id,);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
     cmd::kubectl::kubectl_exec_get_pods(
         kubernetes_config.unwrap().as_str(),
-        Some(namespace_name.clone().as_str()),
+        Some(namespace_name.as_str()),
         Some(pod_to_check),
-        get_cloud_provider_credentials(provider_kind.clone(), &secrets.clone()),
+        get_cloud_provider_credentials(provider_kind, &secrets),
     )
 }
 
 pub fn execution_id() -> String {
     Utc::now()
         .to_rfc3339()
-        .replace(":", "-")
-        .replace(".", "-")
-        .replace("+", "-")
+        .replace(':', "-")
+        .replace('.', "-")
+        .replace('+', "-")
 }
 
 // avoid test collisions
@@ -838,11 +828,11 @@ pub fn generate_cluster_id(region: &str) -> String {
                 shrink_size = current_name.chars().count()
             }
 
-            let mut final_name = format!("{}", &current_name[..shrink_size]);
+            let mut final_name = (&current_name[..shrink_size]).to_string();
             // do not end with a non alphanumeric char
             while !final_name.chars().last().unwrap().is_alphanumeric() {
                 shrink_size -= 1;
-                final_name = format!("{}", &current_name[..shrink_size]);
+                final_name = (&current_name[..shrink_size]).to_string();
             }
             // note ensure you use only lowercase  (uppercase are not allowed in lot of AWS resources)
             format!("{}-{}", final_name.to_lowercase(), region.to_lowercase())
@@ -857,7 +847,7 @@ pub fn get_pvc(
     environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<PVC, CommandError> {
-    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
+    let namespace_name = format!("{}-{}", &environment_check.project_id, &environment_check.id,);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
@@ -865,8 +855,8 @@ pub fn get_pvc(
         Ok(path) => {
             match kubectl_get_pvc(
                 path.as_str(),
-                namespace_name.clone().as_str(),
-                get_cloud_provider_credentials(provider_kind.clone(), &secrets.clone()),
+                namespace_name.as_str(),
+                get_cloud_provider_credentials(provider_kind, &secrets),
             ) {
                 Ok(pvc) => Ok(pvc),
                 Err(e) => Err(e),
@@ -882,7 +872,7 @@ pub fn get_svc(
     environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<SVC, CommandError> {
-    let namespace_name = format!("{}-{}", &environment_check.project_id.clone(), &environment_check.id.clone(),);
+    let namespace_name = format!("{}-{}", &environment_check.project_id, &environment_check.id,);
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
@@ -890,8 +880,8 @@ pub fn get_svc(
         Ok(path) => {
             match kubectl_get_svc(
                 path.as_str(),
-                namespace_name.clone().as_str(),
-                get_cloud_provider_credentials(provider_kind.clone(), &secrets.clone()),
+                namespace_name.as_str(),
+                get_cloud_provider_credentials(provider_kind, &secrets),
             ) {
                 Ok(pvc) => Ok(pvc),
                 Err(e) => Err(e),
@@ -905,7 +895,7 @@ pub fn db_fqnd(db: Database) -> String {
     match db.publicly_accessible {
         true => db.fqdn,
         false => match db.mode == MANAGED {
-            true => format!("{}-dns", db.id),
+            true => format!("{}-dns", to_short_id(&db.long_id)),
             false => match db.kind {
                 DatabaseKind::Postgresql => "postgresqlpostgres",
                 DatabaseKind::Mysql => "mysqlmysqldatabase",
@@ -938,24 +928,20 @@ pub fn db_infos(
             let database_db_name = db_id;
             let database_uri = format!(
                 "mongodb://{}:{}@{}:{}/{}",
-                database_username,
-                database_password,
-                db_fqdn.clone(),
-                database_port,
-                database_db_name.clone()
+                database_username, database_password, db_fqdn, database_port, database_db_name
             );
             DBInfos {
-                db_port: database_port.clone(),
+                db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "3fdc7e784c1d98b80446be7ff25e35370306d9a8".to_string(),
+                app_commit: "da5dd2b58b78576921373fcb4d4bddc796a804a8".to_string(),
                 app_env_vars: btreemap! {
                     "IS_DOCUMENTDB".to_string() => base64::encode((database_mode == MANAGED).to_string()),
-                    "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(db_fqdn.clone()),
-                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri.clone()),
+                    "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(db_fqdn),
+                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri),
                     "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => base64::encode(database_port.to_string()),
-                    "MONGODB_DBNAME".to_string() => base64::encode(database_db_name.clone()),
-                    "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() => base64::encode(database_username.clone()),
-                    "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                    "MONGODB_DBNAME".to_string() => base64::encode(database_db_name),
+                    "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() => base64::encode(database_username),
+                    "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => base64::encode(database_password),
                 },
             }
         }
@@ -963,15 +949,15 @@ pub fn db_infos(
             let database_port = 3306;
             let database_db_name = db_id;
             DBInfos {
-                db_port: database_port.clone(),
+                db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "fc8a87b39cdee84bb789893fb823e3e62a1999c0".to_string(),
+                app_commit: "42f6553b6be617f954f903e01236e225bbb9f468".to_string(),
                 app_env_vars: btreemap! {
-                    "MYSQL_HOST".to_string() => base64::encode(db_fqdn.clone()),
+                    "MYSQL_HOST".to_string() => base64::encode(db_fqdn),
                     "MYSQL_PORT".to_string() => base64::encode(database_port.to_string()),
-                    "MYSQL_DBNAME".to_string()   => base64::encode(database_db_name.clone()),
-                    "MYSQL_USERNAME".to_string() => base64::encode(database_username.clone()),
-                    "MYSQL_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                    "MYSQL_DBNAME".to_string()   => base64::encode(database_db_name),
+                    "MYSQL_USERNAME".to_string() => base64::encode(database_username),
+                    "MYSQL_PASSWORD".to_string() => base64::encode(database_password),
                 },
             }
         }
@@ -983,15 +969,15 @@ pub fn db_infos(
                 db_id
             };
             DBInfos {
-                db_port: database_port.clone(),
+                db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "c3eda167df49fa9757f281d6f3655ba46287c61d".to_string(),
+                app_commit: "61c7a9b55a085229583b6a394dd168a4159dfd09".to_string(),
                 app_env_vars: btreemap! {
-                     "PG_DBNAME".to_string() => base64::encode(database_db_name.clone()),
-                     "PG_HOST".to_string() => base64::encode(db_fqdn.clone()),
+                     "PG_DBNAME".to_string() => base64::encode(database_db_name),
+                     "PG_HOST".to_string() => base64::encode(db_fqdn),
                      "PG_PORT".to_string() => base64::encode(database_port.to_string()),
-                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
-                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                     "PG_USERNAME".to_string() => base64::encode(database_username),
+                     "PG_PASSWORD".to_string() => base64::encode(database_password),
                 },
             }
         }
@@ -999,15 +985,15 @@ pub fn db_infos(
             let database_port = 6379;
             let database_db_name = db_id;
             DBInfos {
-                db_port: database_port.clone(),
-                db_name: database_db_name.to_string(),
-                app_commit: "80ad41fbe9549f8de8dbe2ca4dd5d23e8ffc92de".to_string(),
+                db_port: database_port,
+                db_name: database_db_name,
+                app_commit: "e4b1162741ce162b834b68498e43bf60f0f58cbe".to_string(),
                 app_env_vars: btreemap! {
                 "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED).to_string()),
-                "REDIS_HOST".to_string()      => base64::encode(db_fqdn.clone()),
+                "REDIS_HOST".to_string()      => base64::encode(db_fqdn),
                 "REDIS_PORT".to_string()      => base64::encode(database_port.to_string()),
-                "REDIS_USERNAME".to_string()  => base64::encode(database_username.clone()),
-                "REDIS_PASSWORD".to_string()  => base64::encode(database_password.clone()),
+                "REDIS_USERNAME".to_string()  => base64::encode(database_username),
+                "REDIS_PASSWORD".to_string()  => base64::encode(database_password),
                 },
             }
         }

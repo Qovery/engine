@@ -1,15 +1,17 @@
 use ::function_name::named;
 use tracing::{span, warn, Level};
+use uuid::Uuid;
 
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
-use qovery_engine::models::{Action, CloneForTest, Database, DatabaseKind, DatabaseMode, Port, Protocol};
+use qovery_engine::io_models::{Action, CloneForTest, Database, DatabaseKind, DatabaseMode, Port, Protocol};
 use qovery_engine::transaction::TransactionResult;
 use test_utilities::utilities::{
     context, engine_run_test, generate_id, generate_password, get_pods, get_svc_name, init, is_pod_restarted_env,
     logger, FuncTestsSecrets,
 };
 
-use qovery_engine::models::DatabaseMode::{CONTAINER, MANAGED};
+use qovery_engine::io_models::DatabaseMode::{CONTAINER, MANAGED};
+use qovery_engine::utilities::to_short_id;
 use test_utilities::common::test_db;
 use test_utilities::common::{database_test_environment, Infrastructure};
 use test_utilities::scaleway::{
@@ -284,7 +286,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
             action: Action::Create,
-            id: generate_id(),
+            long_id: Uuid::new_v4(),
             name: database_db_name.clone(),
             version: "11.8.0".to_string(),
             fqdn_id: database_host.clone(),
@@ -337,7 +339,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 };
                 app
             })
-            .collect::<Vec<qovery_engine::models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::Application>>();
         environment.routers[0].routes[0].application_name = app_name;
 
         let environment_to_redeploy = environment.clone();
@@ -360,7 +362,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
-        let database_name = format!("postgresql-{}-0", &environment_check.databases[0].name);
+        let database_name = format!("postgresql-{}-0", to_short_id(&environment_check.databases[0].long_id));
         match is_pod_restarted_env(
             context.clone(),
             ProviderKind::Scw,

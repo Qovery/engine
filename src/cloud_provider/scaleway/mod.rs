@@ -4,12 +4,9 @@ use uuid::Uuid;
 use crate::cloud_provider::{CloudProvider, EngineError, Kind, TerraformStateCredentials};
 use crate::constants::{SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY};
 use crate::events::{EventDetails, Stage, ToTransmitter, Transmitter};
-use crate::models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
+use crate::io_models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
 
-pub mod application;
-pub mod databases;
 pub mod kubernetes;
-pub mod router;
 
 pub struct Scaleway {
     context: Context,

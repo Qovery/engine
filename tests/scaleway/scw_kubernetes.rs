@@ -4,8 +4,10 @@ use self::test_utilities::scaleway::{SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETE
 use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
-use qovery_engine::cloud_provider::scaleway::application::ScwZone;
+use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
+
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::models::scaleway::ScwZone;
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 
 #[cfg(feature = "test-scw-infra")]
@@ -18,17 +20,19 @@ fn create_and_destroy_kapsule_cluster(
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
 ) {
     engine_run_test(|| {
+        let cluster_id = generate_cluster_id(zone.as_str());
         cluster_test(
             test_name,
             Kind::Scw,
-            context(generate_id().as_str(), generate_cluster_id(zone.as_str()).as_str()),
+            KKind::ScwKapsule,
+            context(generate_id().as_str(), cluster_id.as_str()),
             logger(),
             zone.as_str(),
             None,
             test_type,
             major_boot_version,
             minor_boot_version,
-            &ClusterDomain::Default,
+            &ClusterDomain::Default { cluster_id },
             vpc_network_mode,
             None,
         )

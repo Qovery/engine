@@ -19,7 +19,7 @@ impl InstanceType for AwsInstancesType {
     fn to_cloud_provider_format(&self) -> String {
         match self {
             AwsInstancesType::T2Large => "t2.large",
-            AwsInstancesType::T2Xlarge => "t2x.large",
+            AwsInstancesType::T2Xlarge => "t2.xlarge",
             AwsInstancesType::T3Large => "t3.large",
             AwsInstancesType::T3Xlarge => "t3.xlarge",
             AwsInstancesType::T3aMedium => "t3a.medium",
@@ -34,7 +34,7 @@ impl AwsInstancesType {
     pub fn as_str(&self) -> &str {
         match self {
             AwsInstancesType::T2Large => "t2.large",
-            AwsInstancesType::T2Xlarge => "t2x.large",
+            AwsInstancesType::T2Xlarge => "t2.xlarge",
             AwsInstancesType::T3Large => "t3.large",
             AwsInstancesType::T3Xlarge => "t3.xlarge",
             AwsInstancesType::T3aMedium => "t3a.medium",
@@ -48,7 +48,7 @@ impl fmt::Display for AwsInstancesType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             AwsInstancesType::T2Large => write!(f, "t2.large"),
-            AwsInstancesType::T2Xlarge => write!(f, "t2x.large"),
+            AwsInstancesType::T2Xlarge => write!(f, "t2.xlarge"),
             AwsInstancesType::T3Large => write!(f, "t3.large"),
             AwsInstancesType::T3Xlarge => write!(f, "t3.xlarge"),
             AwsInstancesType::T3aMedium => write!(f, "t3a.medium"),
@@ -64,16 +64,16 @@ impl FromStr for AwsInstancesType {
     fn from_str(s: &str) -> Result<AwsInstancesType, CommandError> {
         match s {
             "t2.large" => Ok(AwsInstancesType::T2Large),
-            "t2x.large" => Ok(AwsInstancesType::T2Xlarge),
+            "t2.xlarge" => Ok(AwsInstancesType::T2Xlarge),
             "t3.large" => Ok(AwsInstancesType::T3Large),
             "t3.xlarge" => Ok(AwsInstancesType::T3Xlarge),
             "t3a.medium" => Ok(AwsInstancesType::T3aMedium),
             "t3a.large" => Ok(AwsInstancesType::T3aLarge),
             "t3a.2xlarge" => Ok(AwsInstancesType::T3a2xlarge),
-            _ => {
-                let message = format!("`{}` instance type is not supported", s);
-                Err(CommandError::new(message.clone(), Some(message)))
-            }
+            _ => Err(CommandError::new_from_safe_message(format!(
+                "`{}` instance type is not supported",
+                s
+            ))),
         }
     }
 }

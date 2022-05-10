@@ -1,64 +1,100 @@
 pub mod io;
 
+extern crate derivative;
 extern crate url;
 
 use crate::build_platform::BuildError;
-use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cmd;
 use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
 use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
-use crate::models::QoveryIdentifier;
+use crate::io_models::QoveryIdentifier;
+use crate::models::types::VersionsNumber;
 use crate::object_storage::errors::ObjectStorageError;
+use derivative::Derivative;
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 use url::Url;
 
+/// ErrorMessageVerbosity: represents command error message's verbosity from minimal to full verbosity.
+pub enum ErrorMessageVerbosity {
+    SafeOnly,
+    FullDetailsWithoutEnvVars,
+    FullDetails,
+}
+
 /// CommandError: command error, mostly returned by third party tools.
-#[derive(Clone, Debug, Error, PartialEq)]
+#[derive(Derivative, Clone, Error, PartialEq)]
+#[derivative(Debug)]
 pub struct CommandError {
-    /// message: full error message, can contains unsafe text such as passwords and tokens.
-    message_raw: String,
+    /// full_details: full error message, can contains unsafe text such as passwords and tokens.
+    full_details: Option<String>,
     /// message_safe: error message omitting displaying any protected data such as passwords and tokens.
-    message_safe: Option<String>,
+    message_safe: String,
+    /// env_vars: environments variables including touchy data such as secret keys.
+    /// env_vars field is ignored from any wild Debug printing because of it touchy data it carries.
+    #[derivative(Debug = "ignore")]
+    env_vars: Option<Vec<(String, String)>>,
 }
 
 impl CommandError {
     /// Returns CommandError message_raw. May contains unsafe text such as passwords and tokens.
-    pub fn message_raw(&self) -> String {
-        self.message_raw.to_string()
+    pub fn message_raw(&self) -> Option<String> {
+        self.full_details.clone()
     }
 
     /// Returns CommandError message_safe omitting all unsafe text such as passwords and tokens.
-    pub fn message_safe(&self) -> Option<String> {
-        self.message_safe.clone()
+    pub fn message_safe(&self) -> String {
+        self.message_safe.to_string()
     }
 
-    /// Returns error all message (safe + unsafe).
-    pub fn message(&self) -> String {
-        // TODO(benjaminch): To be revamped, not sure how we should deal with safe and unsafe messages.
-        if let Some(msg) = &self.message_safe {
-            // TODO(benjaminch): Handle raw / safe as for event message
-            if self.message_raw != *msg {
-                return format!("{} {}", msg, self.message_raw);
-            }
-        }
+    /// Returns CommandError env_vars.
+    pub fn env_vars(&self) -> Option<Vec<(String, String)>> {
+        self.env_vars.clone()
+    }
 
-        self.message_raw.to_string()
+    /// Returns error message based on verbosity.
+    pub fn message(&self, message_verbosity: ErrorMessageVerbosity) -> String {
+        match message_verbosity {
+            ErrorMessageVerbosity::SafeOnly => self.message_safe.to_string(),
+            ErrorMessageVerbosity::FullDetailsWithoutEnvVars => match &self.full_details {
+                None => self.message(ErrorMessageVerbosity::SafeOnly),
+                Some(full_details) => format!("{} / Full details: {}", self.message_safe, full_details),
+            },
+            ErrorMessageVerbosity::FullDetails => match &self.full_details {
+                None => self.message(ErrorMessageVerbosity::SafeOnly),
+                Some(full_details) => match &self.env_vars {
+                    None => format!("{} / Full details: {}", self.message_safe, full_details),
+                    Some(env_vars) => {
+                        format!(
+                            "{} / Full details: {} / Env vars: {}",
+                            self.message_safe,
+                            full_details,
+                            env_vars
+                                .iter()
+                                .map(|(k, v)| format!("{}={}", k, v))
+                                .collect::<Vec<String>>()
+                                .join(" "),
+                        )
+                    }
+                },
+            },
+        }
     }
 
     /// Creates a new CommandError from safe message. To be used when message is safe.
     pub fn new_from_safe_message(message: String) -> Self {
-        CommandError::new(message.clone(), Some(message))
+        CommandError::new(message, None, None)
     }
 
-    /// Creates a new CommandError having both a safe and an unsafe message.
-    pub fn new(message_raw: String, message_safe: Option<String>) -> Self {
+    /// Creates a new CommandError having both a safe, an unsafe message and env vars.
+    pub fn new(message_safe: String, message_raw: Option<String>, env_vars: Option<Vec<(String, String)>>) -> Self {
         CommandError {
-            message_raw,
+            full_details: message_raw,
             message_safe,
+            env_vars,
         }
     }
 
@@ -68,8 +104,9 @@ impl CommandError {
         safe_message: Option<String>,
     ) -> Self {
         CommandError {
-            message_raw: legacy_command_error.to_string(),
-            message_safe: safe_message,
+            full_details: Some(legacy_command_error.to_string()),
+            message_safe: safe_message.unwrap_or_else(|| "No message".to_string()),
+            env_vars: None,
         }
     }
 
@@ -82,16 +119,7 @@ impl CommandError {
         stdout: Option<String>,
         stderr: Option<String>,
     ) -> Self {
-        let mut unsafe_message = format!(
-            "{}\ncommand: {} {}\nenv: {}",
-            message,
-            bin,
-            cmd_args.join(" "),
-            envs.iter()
-                .map(|(k, v)| format!("{}={}", k, v))
-                .collect::<Vec<String>>()
-                .join(" ")
-        );
+        let mut unsafe_message = format!("{}\ncommand: {} {}", message, bin, cmd_args.join(" "),);
 
         if let Some(txt) = stdout {
             unsafe_message = format!("{}\nSTDOUT {}", unsafe_message, txt);
@@ -100,13 +128,23 @@ impl CommandError {
             unsafe_message = format!("{}\nSTDERR {}", unsafe_message, txt);
         }
 
-        CommandError::new(unsafe_message, Some(message))
+        CommandError::new(message, Some(unsafe_message), Some(envs))
+    }
+}
+
+impl Default for CommandError {
+    fn default() -> Self {
+        Self {
+            full_details: None,
+            message_safe: "Unknown command error".to_string(),
+            env_vars: None,
+        }
     }
 }
 
 impl Display for CommandError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.message().as_str())
+        f.write_str(self.message(ErrorMessageVerbosity::SafeOnly).as_str()) // By default, expose safe message only
     }
 }
 
@@ -137,6 +175,8 @@ pub enum Tag {
     CannotGetWorkspaceDirectory,
     /// UnsupportedInstanceType: represents an unsupported instance type for the given cloud provider.
     UnsupportedInstanceType,
+    /// UnsupportedClusterKind: represents an unsupported cluster kind by Qovery.
+    UnsupportedClusterKind,
     /// UnsupportedRegion: represents an unsupported region for the given cloud provider.
     UnsupportedRegion,
     /// UnsupportedZone: represents an unsupported zone in region for the given cloud provider.
@@ -209,6 +249,8 @@ pub enum Tag {
     CannotCopyFilesFromDirectoryToDirectory,
     /// CannotPauseClusterTasksAreRunning: represents an error where we cannot pause the cluster because some tasks are still running in the engine.
     CannotPauseClusterTasksAreRunning,
+    /// TerraformQoveryConfigMismatch: terraform qovery config retrieve mismatch
+    TerraformQoveryConfigMismatch,
     /// TerraformCannotRemoveEntryOut: represents an error where we cannot remove an entry out of Terraform.
     TerraformCannotRemoveEntryOut,
     /// TerraformNoStateFileExists: represents an error where there is no Terraform state file.
@@ -326,8 +368,8 @@ pub struct EngineError {
     qovery_log_message: String,
     /// user_log_message: message targeted toward Qovery users, might avoid any useless info for users such as Qovery specific identifiers and so on.
     user_log_message: String,
-    /// raw_message: raw error message such as command input / output.
-    message: Option<CommandError>,
+    /// underlying_error: raw error message such as command input / output.
+    underlying_error: Option<CommandError>,
     /// link: link to error documentation (qovery blog, forum, etc.)
     link: Option<Url>,
     /// hint_message: an hint message aiming to give an hint to the user. For example: "Happens when application port has been changed but application hasn't been restarted.".
@@ -356,11 +398,16 @@ impl EngineError {
     }
 
     /// Returns proper error message.
-    pub fn message(&self) -> String {
-        match &self.message {
-            Some(msg) => msg.message(),
+    pub fn message(&self, message_verbosity: ErrorMessageVerbosity) -> String {
+        match &self.underlying_error {
+            Some(msg) => msg.message(message_verbosity),
             None => self.qovery_log_message.to_string(),
         }
+    }
+
+    /// Returns Engine's underlying error.
+    pub fn underlying_error(&self) -> Option<CommandError> {
+        self.underlying_error.clone()
     }
 
     /// Returns error's link.
@@ -399,7 +446,7 @@ impl EngineError {
             tag,
             qovery_log_message,
             user_log_message,
-            message,
+            underlying_error: message,
             link,
             hint_message,
         }
@@ -427,13 +474,13 @@ impl EngineError {
                     EngineErrorScope::ObjectStorage(id, name) => Transmitter::ObjectStorage(id, name),
                     EngineErrorScope::Environment(id, name) => Transmitter::Environment(id, name),
                     EngineErrorScope::Database(id, db_type, name) => Transmitter::Database(id, db_type, name),
-                    EngineErrorScope::Application(id, name) => Transmitter::Application(id, name),
+                    EngineErrorScope::Application(id, name, commit) => Transmitter::Application(id, name, commit),
                     EngineErrorScope::Router(id, name) => Transmitter::Router(id, name),
                 },
             ),
             qovery_log_message: message.to_string(),
             user_log_message: message,
-            message: None,
+            underlying_error: None,
             link: None,
             hint_message: None,
         }
@@ -445,7 +492,9 @@ impl EngineError {
             EngineErrorCause::Internal,
             EngineErrorScope::from(self.event_details.transmitter()),
             self.event_details.execution_id().to_string(),
-            Some(self.message()),
+            // Note: Since legacy EngineError is read directly as is in the Core, not all details are exposed
+            // since it can lead to expose secrets, hence not exposing env vars which may contains secrets.
+            Some(self.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
         )
     }
 
@@ -575,6 +624,32 @@ impl EngineError {
             Some(error_message),
             None, // TODO(documentation): Create a page entry to details this error
             Some("Selected instance type is not supported, please check provider's documentation.".to_string()),
+        )
+    }
+
+    /// Creates new error for unsupported cluster kind.
+    ///
+    /// Qovery doesn't support this kind of clusters.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `requested_kind`: Raw requested instance type string.
+    /// * `error_message`: Raw error message.
+    pub fn new_unsupported_cluster_kind(
+        event_details: EventDetails,
+        new_unsupported_cluster_kind: &str,
+        error_message: CommandError,
+    ) -> EngineError {
+        let message = format!("`{}` cluster kind is not supported", new_unsupported_cluster_kind);
+        EngineError::new(
+            event_details,
+            Tag::UnsupportedClusterKind,
+            message.to_string(),
+            message,
+            Some(error_message),
+            None, // TODO(documentation): Create a page entry to details this error
+            Some("Selected cluster kind is not supported, please check Qovery's documentation.".to_string()),
         )
     }
 
@@ -1525,6 +1600,26 @@ impl EngineError {
             message.to_string(),
             message.to_string(),
             raw_error,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for terraform qovery config mismatch
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_terraform_qovery_config_mismatch(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message = "Error while trying to use Qovery Terraform generated config.";
+
+        EngineError::new(
+            event_details,
+            Tag::TerraformQoveryConfigMismatch,
+            message.to_string(),
+            message.to_string(),
+            Some(raw_error),
             None,
             None,
         )
@@ -2822,6 +2917,169 @@ impl EngineError {
 
 impl Display for EngineError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(format!("{:?}", self).as_str())
+        // Note: just in case, env vars are not leaked since it can hold sensitive data such as secrets.
+        f.write_str(self.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars).as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::Kind;
+    use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+    use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+    use crate::io_models::QoveryIdentifier;
+    use crate::models::scaleway::ScwRegion;
+
+    #[test]
+    fn test_command_error_test_hidding_env_vars_in_message_safe_only() {
+        // setup:
+        let command_err = CommandError::new(
+            "my safe message".to_string(),
+            Some("my raw message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+
+        // execute:
+        let res = command_err.message(ErrorMessageVerbosity::SafeOnly);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn test_command_error_test_hidding_env_vars_in_message_full_without_env_vars() {
+        // setup:
+        let command_err = CommandError::new(
+            "my safe message".to_string(),
+            Some("my raw message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+
+        // execute:
+        let res = command_err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn test_engine_error_test_hidding_env_vars_in_message_safe_only() {
+        // setup:
+        let command_err = CommandError::new(
+            "my safe message".to_string(),
+            Some("my raw message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+        let cluster_id = QoveryIdentifier::new_random();
+        let engine_err = EngineError::new_unknown(
+            EventDetails::new(
+                Some(Kind::Scw),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                Some(ScwRegion::Paris.as_str().to_string()),
+                Stage::Infrastructure(InfrastructureStep::Create),
+                Transmitter::Kubernetes(cluster_id.to_string(), cluster_id.to_string()),
+            ),
+            "qovery_log_message".to_string(),
+            "user_log_message".to_string(),
+            Some(command_err),
+            None,
+            None,
+        );
+
+        // execute:
+        let res = engine_err.message(ErrorMessageVerbosity::SafeOnly);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn test_engine_error_test_hidding_env_vars_in_message_full_without_env_vars() {
+        // setup:
+        let command_err = CommandError::new(
+            "my safe message".to_string(),
+            Some("my raw message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+        let cluster_id = QoveryIdentifier::new_random();
+        let engine_err = EngineError::new_unknown(
+            EventDetails::new(
+                Some(Kind::Scw),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                Some(ScwRegion::Paris.as_str().to_string()),
+                Stage::Infrastructure(InfrastructureStep::Create),
+                Transmitter::Kubernetes(cluster_id.to_string(), cluster_id.to_string()),
+            ),
+            "qovery_log_message".to_string(),
+            "user_log_message".to_string(),
+            Some(command_err),
+            None,
+            None,
+        );
+
+        // execute:
+        let res = engine_err.message(ErrorMessageVerbosity::SafeOnly);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn test_command_error_test_hidding_env_vars_in_debug() {
+        // setup:
+        let command_err = CommandError::new(
+            "my safe message".to_string(),
+            Some("my raw message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+
+        // execute:
+        let res = format!("{:?}", command_err);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn test_engine_error_test_hidding_env_vars_in_debug() {
+        // setup:
+        let command_err = CommandError::new(
+            "my safe message".to_string(),
+            Some("my raw message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+        let cluster_id = QoveryIdentifier::new_random();
+        let engine_err = EngineError::new_unknown(
+            EventDetails::new(
+                Some(Kind::Scw),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                Some(ScwRegion::Paris.as_str().to_string()),
+                Stage::Infrastructure(InfrastructureStep::Create),
+                Transmitter::Kubernetes(cluster_id.to_string(), cluster_id.to_string()),
+            ),
+            "qovery_log_message".to_string(),
+            "user_log_message".to_string(),
+            Some(command_err),
+            None,
+            None,
+        );
+
+        // execute:
+        let res = format!("{:?}", engine_err);
+
+        // verify:
+        assert!(!res.contains("my_secret"));
+        assert!(!res.contains("my_secret_value"));
     }
 }

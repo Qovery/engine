@@ -6,14 +6,14 @@ use serde_derive::{Deserialize, Serialize};
 #[serde(rename_all = "lowercase")]
 pub struct CommandError {
     message: String,
-    message_unsafe: String,
+    full_details: String,
 }
 
 impl From<errors::CommandError> for CommandError {
     fn from(error: errors::CommandError) -> Self {
         CommandError {
-            message: error.message_safe.unwrap_or_default(),
-            message_unsafe: error.message_raw,
+            message: error.message_safe,
+            full_details: error.full_details.unwrap_or_default(),
         }
     }
 }
@@ -73,6 +73,7 @@ pub enum Tag {
     HelmHistoryError,
     CannotGetAnyAvailableVPC,
     UnsupportedVersion,
+    UnsupportedClusterKind,
     CannotGetSupportedVersions,
     CannotGetCluster,
     ContainerRegistryError,
@@ -83,6 +84,7 @@ pub enum Tag {
     CloudProviderApiMissingInfo,
     K8sValidateRequiredCPUandBurstableError,
     TerraformContextUnsupportedParameterValue,
+    TerraformQoveryConfigMismatch,
     ClientServiceFailedToStart,
     ClientServiceFailedToDeployBeforeStart,
     DatabaseFailedToStartAfterSeveralRetries,
@@ -224,6 +226,8 @@ impl From<errors::Tag> for Tag {
             }
             errors::Tag::BuilderError => Tag::BuilderError,
             errors::Tag::ContainerRegistryError => Tag::ContainerRegistryError,
+            errors::Tag::UnsupportedClusterKind => Tag::UnsupportedClusterKind,
+            errors::Tag::TerraformQoveryConfigMismatch => Tag::TerraformQoveryConfigMismatch,
         }
     }
 }
@@ -235,7 +239,7 @@ pub struct EngineError {
     event_details: EventDetails,
     qovery_log_message: String,
     user_log_message: String,
-    message: Option<CommandError>,
+    underlying_error: Option<CommandError>,
     link: Option<String>,
     hint_message: Option<String>,
 }
@@ -247,7 +251,7 @@ impl From<errors::EngineError> for EngineError {
             event_details: EventDetails::from(error.event_details),
             qovery_log_message: error.qovery_log_message,
             user_log_message: error.user_log_message,
-            message: error.message.map(CommandError::from),
+            underlying_error: error.underlying_error.map(CommandError::from),
             link: error.link.map(|url| url.to_string()),
             hint_message: error.hint_message,
         }

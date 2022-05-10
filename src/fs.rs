@@ -1,11 +1,16 @@
 use std::collections::HashSet;
 use std::fs;
-use std::fs::{create_dir_all, File};
-use std::io::{Error, ErrorKind};
+use std::fs::{create_dir_all, File, OpenOptions};
+use std::io::{BufRead, BufReader, Error, ErrorKind, Write};
 use std::path::Path;
 
+use crate::cmd::structs::SecretItem;
+use crate::errors::CommandError;
+use base64::decode;
 use flate2::write::GzEncoder;
 use flate2::Compression;
+use itertools::Itertools;
+use serde::__private::from_utf8_lossy;
 use std::ffi::OsStr;
 use walkdir::WalkDir;
 
@@ -151,6 +156,232 @@ pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> R
     }
 }
 
+pub fn create_yaml_backup_file<P>(
+    working_root_dir: P,
+    chart_name: String,
+    resource_name: Option<String>,
+    content: String,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let dir = working_root_dir.as_ref().join("backups");
+
+    if let Err(e) = create_dir_all(&dir) {
+        return Err(CommandError::new(
+            "Unable to create root dir path.".to_string(),
+            Some(e.to_string()),
+            None,
+        ));
+    }
+
+    let root_path = dir
+        .to_str()
+        .map(|e| e.to_string())
+        .ok_or_else(|| CommandError::new_from_safe_message("Unable to get backups root dir path.".to_string()));
+
+    let string_path = match resource_name.is_some() {
+        true => format!(
+            "{}/{}-{}-q-backup.yaml",
+            root_path?,
+            chart_name,
+            resource_name.as_ref().unwrap()
+        ),
+        false => format!("{}/{}.yaml", root_path?, chart_name),
+    };
+    let str_path = string_path.as_str();
+    let path = Path::new(str_path);
+
+    let mut file = match File::create(&path) {
+        Err(e) => {
+            return Err(CommandError::new(
+                format!("Unable to create YAML backup file for chart {}.", chart_name),
+                Some(e.to_string()),
+                None,
+            ))
+        }
+        Ok(file) => file,
+    };
+
+    match file.write(content.as_bytes()) {
+        Err(e) => Err(CommandError::new(
+            format!("Unable to edit YAML backup file for chart {}.", chart_name),
+            Some(e.to_string()),
+            None,
+        )),
+        Ok(_) => Ok(path.to_str().map(|e| e.to_string()).ok_or_else(|| {
+            CommandError::new_from_safe_message(format!(
+                "Unable to get YAML backup file path for chart {}.",
+                chart_name
+            ))
+        })?),
+    }
+}
+
+pub fn remove_lines_starting_with(path: String, starters: Vec<&str>) -> Result<String, CommandError> {
+    let file = OpenOptions::new().read(true).open(path.as_str()).map_err(|e| {
+        CommandError::new(format!("Unable to open YAML backup file {}.", path), Some(e.to_string()), None)
+    })?;
+
+    let mut content = BufReader::new(file.try_clone().unwrap())
+        .lines()
+        .map(|line| line.unwrap())
+        .collect::<Vec<String>>();
+
+    for starter in starters {
+        content = content
+            .into_iter()
+            .filter(|line| !line.contains(starter))
+            .collect::<Vec<String>>()
+    }
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(path.as_str())
+        .map_err(|e| {
+            CommandError::new(format!("Unable to edit YAML backup file {}.", path), Some(e.to_string()), None)
+        })?;
+
+    match file.write(content.join("\n").as_bytes()) {
+        Err(e) => Err(CommandError::new(
+            format!("Unable to edit YAML backup file {}.", path),
+            Some(e.to_string()),
+            None,
+        )),
+        Ok(_) => Ok(path),
+    }
+}
+
+pub fn truncate_file_from_word(path: String, truncate_from: &str) -> Result<String, CommandError> {
+    let file = OpenOptions::new().read(true).open(path.as_str()).map_err(|e| {
+        CommandError::new(format!("Unable to open YAML backup file {}.", path), Some(e.to_string()), None)
+    })?;
+
+    let content_vec = BufReader::new(file.try_clone().unwrap())
+        .lines()
+        .map(|line| line.unwrap())
+        .collect::<Vec<String>>();
+
+    let truncate_from_index = match content_vec.iter().rposition(|line| line.contains(truncate_from)) {
+        None => content_vec.len(),
+        Some(index) => index,
+    };
+
+    let content = Vec::from(&content_vec[..truncate_from_index]).join("\n");
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(path.as_str())
+        .map_err(|e| {
+            CommandError::new(format!("Unable to edit YAML backup file {}.", path), Some(e.to_string()), None)
+        })?;
+
+    match file.write(content.as_bytes()) {
+        Err(e) => Err(CommandError::new(
+            format!("Unable to edit YAML backup file {}.", path),
+            Some(e.to_string()),
+            None,
+        )),
+        Ok(_) => Ok(path),
+    }
+}
+
+pub fn indent_file(path: String) -> Result<String, CommandError> {
+    let file = OpenOptions::new().read(true).open(path.as_str()).map_err(|e| {
+        CommandError::new(format!("Unable to open YAML backup file {}.", path), Some(e.to_string()), None)
+    })?;
+
+    let file_content = BufReader::new(file.try_clone().unwrap())
+        .lines()
+        .map(|line| line.unwrap())
+        .collect::<Vec<String>>();
+
+    let content = file_content.iter().map(|line| line[2..].to_string()).join("\n");
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(path.as_str())
+        .map_err(|e| {
+            CommandError::new(format!("Unable to edit YAML backup file {}.", path), Some(e.to_string()), None)
+        })?;
+
+    match file.write(content.as_bytes()) {
+        Err(e) => Err(CommandError::new(
+            format!("Unable to edit YAML backup file {}.", path),
+            Some(e.to_string()),
+            None,
+        )),
+        Ok(_) => Ok(path),
+    }
+}
+
+pub fn list_yaml_backup_files<P>(working_root_dir: P) -> Result<Vec<String>, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let files = WalkDir::new(working_root_dir)
+        .follow_links(true)
+        .into_iter()
+        .filter_map(|e| e.ok());
+    let mut backup_paths: Vec<String> = vec![];
+    for file in files {
+        if file
+            .file_name()
+            .to_str()
+            .ok_or_else(|| {
+                CommandError::new_from_safe_message(format!("Unable to get YAML backup file name {:?}.", file))
+            })?
+            .to_string()
+            .contains("-q-backup.yaml")
+        {
+            backup_paths.push(
+                file.path()
+                    .to_str()
+                    .ok_or_else(|| {
+                        CommandError::new_from_safe_message(format!("Unable to get YAML backup file name {:?}.", file))
+                    })?
+                    .to_string(),
+            )
+        }
+    }
+
+    if backup_paths.is_empty() {
+        return Err(CommandError::new_from_safe_message(
+            "Unable to get YAML backup files".to_string(),
+        ));
+    }
+
+    Ok(backup_paths)
+}
+
+pub fn create_yaml_file_from_secret<P>(working_root_dir: P, secret: SecretItem) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let message = format!("Unable to decode secret {}", secret.metadata.name);
+    let secret_data = secret.data.values().next();
+    let secret_content = match secret_data.is_some() {
+        true => secret_data.unwrap().to_string(),
+        false => return Err(CommandError::new_from_safe_message(message)),
+    };
+
+    let content = match decode(secret_content) {
+        Ok(bytes) => from_utf8_lossy(&bytes[1..bytes.len() - 1]).to_string(),
+        Err(e) => return Err(CommandError::new(message, Some(e.to_string()), None)),
+    };
+    match create_yaml_backup_file(working_root_dir.as_ref(), secret.metadata.name.clone(), None, content) {
+        Ok(path) => Ok(path),
+        Err(e) => Err(CommandError::new(
+            format!("Unable to create backup file from secret {}", secret.metadata.name),
+            Some(e.to_string()),
+            None,
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate tempdir;
@@ -159,7 +390,6 @@ mod tests {
     use flate2::read::GzDecoder;
     use std::collections::HashSet;
     use std::fs::File;
-    use std::io::prelude::*;
     use std::io::BufReader;
     use tempdir::TempDir;
 
@@ -250,6 +480,104 @@ mod tests {
 
         // clean:
         tmp_files.into_iter().for_each(drop);
+        tmp_dir.close().expect("error closing temporary directory");
+    }
+
+    #[test]
+    fn test_backup_cleaning() {
+        let content = r#"
+          apiVersion: cert-manager.io/v1
+          kind: Certificate
+          metadata:
+            annotations:
+              meta.helm.sh/release-name: cert-manager-configs
+              meta.helm.sh/release-namespace: cert-manager
+            creationTimestamp: "2021-11-04T10:26:27Z"
+            generation: 2
+            labels:
+              app.kubernetes.io/managed-by: Helm
+            name: qovery
+            namespace: qovery
+            resourceVersion: "28347460"
+            uid: 509aad5f-db2d-44c3-b03b-beaf144118e2
+          spec:
+            dnsNames:
+            - 'qovery'
+            issuerRef:
+              kind: ClusterIssuer
+              name: qovery
+            secretName: qovery
+          status:
+            conditions:
+            - lastTransitionTime: "2021-11-30T15:33:03Z"
+              message: Certificate is up to date and has not expired
+              reason: Ready
+              status: "True"
+              type: Ready
+            notAfter: "2022-04-29T13:34:51Z"
+            notBefore: "2022-01-29T13:34:52Z"
+            renewalTime: "2022-03-30T13:34:51Z"
+            revision: 3
+        "#;
+
+        let tmp_dir = TempDir::new("workspace_directory").expect("error creating temporary dir");
+        let mut file_path = create_yaml_backup_file(
+            tmp_dir.path().to_str().unwrap(),
+            "test".to_string(),
+            Some("test".to_string()),
+            content.to_string(),
+        )
+        .expect("No such file");
+        file_path = remove_lines_starting_with(file_path, vec!["resourceVersion", "uid"]).unwrap();
+
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(file_path)
+            .expect("file doesn't exist");
+
+        let result = BufReader::new(file.try_clone().unwrap())
+            .lines()
+            .map(|line| line.unwrap())
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        let new_content = r#"
+          apiVersion: cert-manager.io/v1
+          kind: Certificate
+          metadata:
+            annotations:
+              meta.helm.sh/release-name: cert-manager-configs
+              meta.helm.sh/release-namespace: cert-manager
+            creationTimestamp: "2021-11-04T10:26:27Z"
+            generation: 2
+            labels:
+              app.kubernetes.io/managed-by: Helm
+            name: qovery
+            namespace: qovery
+          spec:
+            dnsNames:
+            - 'qovery'
+            issuerRef:
+              kind: ClusterIssuer
+              name: qovery
+            secretName: qovery
+          status:
+            conditions:
+            - lastTransitionTime: "2021-11-30T15:33:03Z"
+              message: Certificate is up to date and has not expired
+              reason: Ready
+              status: "True"
+              type: Ready
+            notAfter: "2022-04-29T13:34:51Z"
+            notBefore: "2022-01-29T13:34:52Z"
+            renewalTime: "2022-03-30T13:34:51Z"
+            revision: 3
+        "#
+        .to_string();
+
+        assert_eq!(result, new_content);
+        drop(file);
         tmp_dir.close().expect("error closing temporary directory");
     }
 }

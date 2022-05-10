@@ -18,24 +18,25 @@ use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::models::{CpuLimits, NodeGroups};
 use crate::cloud_provider::service::CheckAction;
-use crate::cloud_provider::utilities::VersionsNumber;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::cmd::kubectl::{
     kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_delete_pod,
-    kubectl_exec_get_node, kubectl_exec_version, kubectl_get_crash_looping_pods, kubernetes_get_all_pdbs,
+    kubectl_exec_get_node, kubectl_exec_is_namespace_present, kubectl_exec_version, kubectl_get_crash_looping_pods,
+    kubernetes_get_all_pdbs,
 };
 use crate::cmd::structs::KubernetesNodeCondition;
 use crate::dns_provider::DnsProvider;
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter};
 use crate::fs::workspace_directory;
-use crate::logger::Logger;
-use crate::models::ProgressLevel::Info;
-use crate::models::{
+use crate::io_models::ProgressLevel::Info;
+use crate::io_models::{
     Action, Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier, StringPath,
 };
+use crate::logger::Logger;
+use crate::models::types::VersionsNumber;
 use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
 
@@ -122,22 +123,31 @@ pub trait Kubernetes: Listen {
 
                 (StringPath::from(&local_kubeconfig_generated), kubeconfig_file)
             }
-            None => {
+            None => match retry::retry(Fibonacci::from_millis(5000).take(5), || {
                 match self
                     .config_file_store()
                     .get(bucket_name.as_str(), object_key.as_str(), true)
                 {
-                    Ok((path, file)) => (path, file),
+                    Ok((path, file)) => retry::OperationResult::Ok((path, file)),
                     Err(err) => {
                         let error = EngineError::new_cannot_retrieve_cluster_config_file(
-                            self.get_event_details(stage),
+                            self.get_event_details(stage.clone()),
                             err.into(),
                         );
                         self.logger().log(EngineEvent::Error(error.clone(), None));
-                        return Err(error);
+                        retry::OperationResult::Retry(error)
                     }
                 }
-            }
+            }) {
+                Ok((path, file)) => (path, file),
+                Err(Operation { error, .. }) => return Err(error),
+                Err(retry::Error::Internal(msg)) => {
+                    return Err(EngineError::new_cannot_retrieve_cluster_config_file(
+                        self.get_event_details(stage),
+                        CommandError::new("Error while trying to get kubeconfig file.".to_string(), Some(msg), None),
+                    ))
+                }
+            },
         };
 
         let metadata = match file.metadata() {
@@ -181,13 +191,7 @@ pub trait Kubernetes: Listen {
         ) {
             Ok(k) => k,
             Err(err) => {
-                let error = EngineError::new_cannot_get_cluster_nodes(
-                    self.get_event_details(stage),
-                    CommandError::new_from_safe_message(format!(
-                        "Error while trying to get cluster nodes, error: {}",
-                        err.message()
-                    )),
-                );
+                let error = EngineError::new_cannot_get_cluster_nodes(self.get_event_details(stage), err);
 
                 self.logger().log(EngineEvent::Error(error.clone(), None));
 
@@ -267,7 +271,7 @@ pub trait Kubernetes: Listen {
     {
         let kubeconfig = match self.get_kubeconfig_file() {
             Ok((path, _)) => path,
-            Err(e) => return Err(CommandError::new(e.message(), None)),
+            Err(e) => return Err(e.underlying_error().unwrap_or_default()),
         };
 
         send_progress_on_long_task(self, Action::Create, || {
@@ -308,7 +312,10 @@ pub trait Kubernetes: Listen {
             format!("bootstrap/{}", self.id()),
         )
         .map_err(|err| {
-            EngineError::new_cannot_get_workspace_directory(event_details, CommandError::new(err.to_string(), None))
+            EngineError::new_cannot_get_workspace_directory(
+                event_details,
+                CommandError::new("Error creating workspace directory.".to_string(), Some(err.to_string()), None),
+            )
         })
     }
 
@@ -366,6 +373,7 @@ pub trait KubernetesNode {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     Eks,
+    Ec2,
     Doks,
     ScwKapsule,
 }
@@ -374,6 +382,7 @@ impl Display for Kind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Kind::Eks => "EKS",
+            Kind::Ec2 => "EC2",
             Kind::Doks => "DOKS",
             Kind::ScwKapsule => "ScwKapsule",
         })
@@ -403,6 +412,10 @@ pub fn deploy_environment(
 
     let stateful_deployment_target = match kubernetes.kind() {
         Kind::Eks => DeploymentTarget {
+            kubernetes,
+            environment,
+        },
+        Kind::Ec2 => DeploymentTarget {
             kubernetes,
             environment,
         },
@@ -671,6 +684,19 @@ pub fn delete_environment(
 ) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
+    let kubeconfig = kubernetes.get_kubeconfig_file_path()?;
+
+    // check if environment is not already deleted
+    // speed up delete env because of terraform requiring apply + destroy
+    if !kubectl_exec_is_namespace_present(
+        kubeconfig.clone(),
+        environment.namespace(),
+        kubernetes.cloud_provider().credentials_environment_variables(),
+    ) {
+        info!("no need to delete environment {}, already absent", environment.namespace());
+        return Ok(());
+    };
+
     let stateful_deployment_target = DeploymentTarget {
         kubernetes,
         environment,
@@ -752,7 +778,7 @@ pub fn delete_environment(
 
     // do not catch potential error - to confirm
     let _ = kubectl::kubectl_exec_delete_namespace(
-        kubernetes.get_kubeconfig_file_path()?,
+        kubeconfig,
         environment.namespace(),
         kubernetes.cloud_provider().credentials_environment_variables(),
     );
@@ -786,12 +812,8 @@ where
             logger.log(EngineEvent::Warning(
                 event_details.clone(),
                 EventMessage::new(
-                    format!(
-                        "Encountering issues while trying to get objects kind {}: {:?}",
-                        object,
-                        e.message()
-                    ),
-                    None,
+                    format!("Encountering issues while trying to get objects kind {}", object,),
+                    Some(e.message(ErrorMessageVerbosity::FullDetails)),
                 ),
             ));
             continue;
@@ -812,22 +834,24 @@ where
             },
         ) {
             Ok(_) => {}
-            Err(Operation { error, .. }) => {
-                return Err(EngineError::new_cannot_uninstall_helm_chart(
-                    event_details,
+            Err(Operation { error, .. }) => logger.log(EngineEvent::Error(
+                EngineError::new_cannot_uninstall_helm_chart(
+                    event_details.clone(),
                     "Cert-Manager".to_string(),
                     object.to_string(),
                     error,
-                ))
-            }
-            Err(retry::Error::Internal(msg)) => {
-                return Err(EngineError::new_cannot_uninstall_helm_chart(
-                    event_details,
+                ),
+                None,
+            )),
+            Err(retry::Error::Internal(msg)) => logger.log(EngineEvent::Error(
+                EngineError::new_cannot_uninstall_helm_chart(
+                    event_details.clone(),
                     "Cert-Manager".to_string(),
                     object.to_string(),
                     CommandError::new_from_safe_message(msg),
-                ))
-            }
+                ),
+                None,
+            )),
         }
     }
 
@@ -1403,11 +1427,9 @@ pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, CommandError> 
                 Ok(n * 0.001) // return in milli cpu the value
             }
             Err(e) => Err(CommandError::new(
-                e.to_string(),
-                Some(format!(
-                    "Error while trying to parse `{}` to float 32.",
-                    value_number_string.as_str()
-                )),
+                format!("Error while trying to parse `{}` to float 32.", value_number_string.as_str()),
+                Some(e.to_string()),
+                None,
             )),
         };
     }
@@ -1415,8 +1437,9 @@ pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, CommandError> 
     match value.parse::<f32>() {
         Ok(n) => Ok(n),
         Err(e) => Err(CommandError::new(
-            e.to_string(),
-            Some(format!("Error while trying to parse `{}` to float 32.", value.as_str())),
+            format!("Error while trying to parse `{}` to float 32.", value.as_str()),
+            Some(e.to_string()),
+            None,
         )),
     }
 }
@@ -1424,18 +1447,18 @@ pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, CommandError> 
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::Kind::Aws;
-    use std::str::FromStr;
 
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, convert_k8s_cpu_value_to_f32,
         validate_k8s_required_cpu_and_burstable, KubernetesNodesType,
     };
     use crate::cloud_provider::models::CpuLimits;
-    use crate::cloud_provider::utilities::VersionsNumber;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+    use crate::io_models::{ListenersHelper, QoveryIdentifier};
     use crate::logger::StdIoLogger;
-    use crate::models::{ListenersHelper, QoveryIdentifier};
+    use crate::models::types::VersionsNumber;
+    use std::str::FromStr;
 
     #[test]
     pub fn check_kubernetes_upgrade_method() {
@@ -1782,7 +1805,7 @@ mod tests {
                     "systemUUID": "EC2E8B4C-92F9-213B-09B5-C0CD11A7EEB7"
                 }
             }
-        } 
+        }
     ],
     "kind": "List",
     "metadata": {

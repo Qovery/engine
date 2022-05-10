@@ -1,34 +1,34 @@
+use std::sync::Arc;
+
 use const_format::formatcp;
+use tracing::error;
+
 use qovery_engine::build_platform::Build;
-use qovery_engine::cloud_provider::scaleway::application::ScwZone;
+use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
+use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
+use qovery_engine::cloud_provider::models::NodeGroups;
+use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
-use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
-use qovery_engine::engine::EngineConfig;
-use qovery_engine::models::{Context, EnvironmentRequest, NoOpProgressListener};
-use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
-use std::sync::Arc;
-
-use crate::cloudflare::dns_provider_cloudflare;
-use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
-
-use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
-use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
-use qovery_engine::cloud_provider::models::NodeGroups;
-use qovery_engine::cloud_provider::qovery::EngineLocation;
-use qovery_engine::cloud_provider::Kind::Scw;
 use qovery_engine::container_registry::errors::ContainerRegistryError;
+use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::dns_provider::DnsProvider;
+use qovery_engine::engine::EngineConfig;
+use qovery_engine::io_models::{Context, EnvironmentRequest, NoOpProgressListener};
 use qovery_engine::logger::Logger;
-use tracing::error;
+use qovery_engine::models::scaleway::ScwZone;
+use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
+
+use crate::cloudflare::dns_provider_cloudflare;
+use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
+use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
 pub const SCW_TEST_ZONE: ScwZone = ScwZone::Paris2;
 pub const SCW_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const SCW_KUBERNETES_MINOR_VERSION: u8 = 19;
-pub const SCW_KUBERNETES_VERSION: &'static str =
-    formatcp!("{}.{}", SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION);
+pub const SCW_KUBERNETES_VERSION: &str = formatcp!("{}.{}", SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION);
 pub const SCW_MANAGED_DATABASE_INSTANCE_TYPE: &str = "db-dev-s";
 pub const SCW_MANAGED_DATABASE_DISK_TYPE: &str = "bssd";
 pub const SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE: &str = "";
@@ -54,8 +54,8 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
 
     ScalewayCR::new(
         context.clone(),
-        format!("default-registry-qovery-test-{}", random_id.clone()).as_str(),
-        format!("default-registry-qovery-test-{}", random_id.clone()).as_str(),
+        format!("default-registry-qovery-test-{}", random_id).as_str(),
+        format!("default-registry-qovery-test-{}", random_id).as_str(),
         scw_secret_key.as_str(),
         scw_default_project_id.as_str(),
         SCW_TEST_ZONE,
@@ -66,11 +66,14 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
 
 pub fn scw_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
     Scaleway::docker_cr_engine(
-        &context,
+        context,
         logger,
         SCW_TEST_ZONE.to_string().as_str(),
+        KubernetesKind::ScwKapsule,
         SCW_KUBERNETES_VERSION.to_string(),
-        &ClusterDomain::Default,
+        &ClusterDomain::Default {
+            cluster_id: context.cluster_id().to_string(),
+        },
         None,
     )
 }
@@ -80,6 +83,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         context: &Context,
         logger: Box<dyn Logger>,
         localisation: &str,
+        kubernetes_kind: KubernetesKind,
         kubernetes_version: String,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
@@ -95,13 +99,13 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_cloudflare(context, cluster_domain));
 
         let cluster = get_environment_test_kubernetes(
-            Scw,
             context,
             cloud_provider.clone(),
+            kubernetes_kind,
+            kubernetes_version.as_str(),
             dns_provider.clone(),
             logger.clone(),
             localisation,
-            kubernetes_version.as_str(),
             vpc_network_mode,
         );
 
@@ -167,6 +171,9 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             secrets
                 .QOVERY_CLUSTER_SECRET_TOKEN
                 .expect("QOVERY_CLUSTER_SECRET_TOKEN is not set in secrets"),
+            secrets
+                .QOVERY_CLUSTER_JWT_TOKEN
+                .expect("QOVERY_CLUSTER_JWT_TOKEN is not set in secrets"),
             secrets.QOVERY_NATS_URL.expect("QOVERY_NATS_URL is not set in secrets"),
             secrets
                 .QOVERY_NATS_USERNAME
@@ -206,7 +213,7 @@ pub fn scw_object_storage(context: Context, region: ScwZone) -> ScalewayOS {
 
     ScalewayOS::new(
         context,
-        format!("qovery-test-object-storage-{}", random_id.clone()),
+        format!("qovery-test-object-storage-{}", random_id),
         format!("Qovery Test Object-Storage {}", random_id),
         secrets
             .SCALEWAY_ACCESS_KEY
@@ -246,7 +253,7 @@ pub fn clean_environments(
         for build in env
             .applications
             .iter()
-            .map(|a| a.to_build(&registry_url))
+            .map(|a| a.to_build(registry_url))
             .collect::<Vec<Build>>()
         {
             let _ = container_registry_client.delete_image(&build.image);

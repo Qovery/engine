@@ -7,14 +7,16 @@ use self::test_utilities::utilities::{
 };
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::models::{Action, CloneForTest, Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::{Action, CloneForTest, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
+use qovery_engine::utilities::to_short_id;
 use std::collections::BTreeMap;
 use std::thread;
 use std::time::Duration;
 use test_utilities::common::Infrastructure;
 use test_utilities::scaleway::scw_default_engine_config;
 use tracing::{span, warn, Level};
+use uuid::Uuid;
 
 // Note: All those tests relies on a test cluster running on Scaleway infrastructure.
 // This cluster should be live in order to have those tests passing properly.
@@ -230,7 +232,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         );
 
         let env_action = environment.clone();
-        let selector = format!("appId={}", environment.applications[0].id);
+        let selector = format!("appId={}", to_short_id(&environment.applications[0].long_id));
 
         let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
@@ -341,7 +343,7 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
                 app.dockerfile_path = None;
                 app
             })
-            .collect::<Vec<qovery_engine::models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::Application>>();
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
@@ -466,6 +468,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
             .map(|mut app| {
                 app.storage = vec![Storage {
                     id: generate_id(),
+                    long_id: Uuid::new_v4(),
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
                     size_in_gib: storage_size,
@@ -474,7 +477,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
                 }];
                 app
             })
-            .collect::<Vec<qovery_engine::models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::Application>>();
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -541,7 +544,7 @@ fn deploy_a_working_environment_and_pause_it() {
         );
 
         let ea = environment.clone();
-        let selector = format!("appId={}", environment.applications[0].id);
+        let selector = format!("appId={}", to_short_id(&environment.applications[0].long_id));
 
         let result = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
@@ -634,6 +637,7 @@ fn scaleway_kapsule_redeploy_same_app() {
             .map(|mut app| {
                 app.storage = vec![Storage {
                     id: generate_id(),
+                    long_id: Uuid::new_v4(),
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
                     size_in_gib: storage_size,
@@ -642,7 +646,7 @@ fn scaleway_kapsule_redeploy_same_app() {
                 }];
                 app
             })
-            .collect::<Vec<qovery_engine::models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::Application>>();
 
         let environment_redeploy = environment.clone();
         let environment_check1 = environment.clone();
@@ -751,7 +755,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
                 app.environment_vars = BTreeMap::default();
                 app
             })
-            .collect::<Vec<qovery_engine::models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::Application>>();
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
@@ -835,7 +839,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
                 app.environment_vars = BTreeMap::default();
                 app
             })
-            .collect::<Vec<qovery_engine::models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::Application>>();
 
         // not working 2
         let context_for_not_working_2 = context.clone_not_same_execution_id();

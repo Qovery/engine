@@ -3,7 +3,7 @@ use std::net::Ipv4Addr;
 use crate::dns_provider::errors::DnsProviderError;
 use serde::{Deserialize, Serialize};
 
-use crate::models::{Context, Domain};
+use crate::io_models::{Context, Domain};
 
 pub mod cloudflare;
 pub mod errors;

@@ -13,7 +13,7 @@
 ##
 image:
   debug: false
-  registry: quay.io
+  registry: docker.io
   repository: bitnami/mysql
   tag: "{{ version }}"
 
@@ -44,10 +44,9 @@ fullnameOverride: {{ sanitized_name }}
 clusterDomain: cluster.local
 
 commonLabels:
-  ownerId: {{ owner_id }}
   envId: {{ environment_id }}
   databaseId: {{ id }}
-  databaseName: {{ sanitized_name }}
+  databaseLongId: {{ long_id }}
 
 ## Init containers parameters:
 ## volumePermissions: Change the owner and group of the persistent volume mountpoint to runAsUser:fsGroup values from the securityContext section.

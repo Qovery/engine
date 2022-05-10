@@ -17,30 +17,34 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.60.0
+          components: rustfmt, clippy
+
       - uses: hashicorp/setup-terraform@v1
         with:
           terraform_version: 0.14.10
+      - uses: sergeysova/jq-action@v2
+        id: sccache_release
+        with:
+          cmd: 'curl --silent "https://api.github.com/repos/Qovery/sccache-bin/releases/latest" | jq .tag_name'
+          multiline: false
       - name: build-linter-utests
         run: |
           echo "########## LINTER ##########"
           cargo fmt --all -- --check --color=always  || (echo "Use cargo fmt to format your code"; exit 1)
-          rustup component add clippy
-          cargo clippy --locked --all --all-features --lib -- -D warnings || (echo "Solve your clippy warnings to continue"; exit 1)
-          
+          cargo clippy --all --all-features --lib -- -D warnings || (echo "Solve your clippy warnings to continue"; exit 1)
           export PATH=$GITHUB_WORKSPACE/bin:$PATH
           export RUSTC_WRAPPER=$GITHUB_WORKSPACE/bin/sccache
           export SCCACHE_REDIS=${{ secrets.SCCACHE_REDIS }}
           export TF_PLUGIN_CACHE_DIR=$HOME/.terraform.d/plugin-cache
           mkdir -p $GITHUB_WORKSPACE/bin $HOME/.terraform.d/plugin-cache
-          sccache_release=$(curl --silent "https://github.com/Qovery/sccache-bin/releases/latest" | sed -r 's/^.+tag\/(.+)">.+/\1/')
-          curl -sLo $GITHUB_WORKSPACE/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${sccache_release}/sccache
+          curl -sLo $GITHUB_WORKSPACE/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${{ steps.sccache_release.outputs.value }}/sccache
           chmod 755 $GITHUB_WORKSPACE/bin/sccache
           echo "########## SHARED CACHE STATUS ##########"
           sccache --version
           sccache --show-stats
           echo "########## START BUILD ##########"
-          cargo build --all-features
+          cargo build --all-features --tests
           sccache --show-stats
           echo "########## START UNIT TESTS ##########"
           cargo test

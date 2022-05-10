@@ -5,15 +5,15 @@ use const_format::formatcp;
 use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
+use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
-use qovery_engine::cloud_provider::Kind::Aws;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::EngineConfig;
+use qovery_engine::io_models::{Context, NoOpProgressListener};
 use qovery_engine::logger::Logger;
-use qovery_engine::models::{Context, NoOpProgressListener};
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::error;
@@ -26,11 +26,12 @@ pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
 pub const AWS_TEST_REGION: AwsRegion = AwsRegion::EuWest3;
 pub const AWS_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const AWS_KUBERNETES_MINOR_VERSION: u8 = 19;
-pub const AWS_KUBERNETES_VERSION: &'static str =
-    formatcp!("{}.{}", AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION);
+pub const AWS_KUBERNETES_VERSION: &str = formatcp!("{}.{}", AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION);
 pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t3.micro";
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 7200;
+pub const K3S_KUBERNETES_MAJOR_VERSION: u8 = 1;
+pub const K3S_KUBERNETES_MINOR_VERSION: u8 = 20;
 
 pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR {
     let secrets = FuncTestsSecrets::new();
@@ -57,19 +58,24 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
 
 pub fn aws_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
     AWS::docker_cr_engine(
-        &context,
+        context,
         logger,
         AWS_TEST_REGION.to_string().as_str(),
+        KubernetesKind::Eks,
         AWS_KUBERNETES_VERSION.to_string(),
-        &ClusterDomain::Default,
+        &ClusterDomain::Default {
+            cluster_id: context.cluster_id().to_string(),
+        },
         None,
     )
 }
+
 impl Cluster<AWS, Options> for AWS {
     fn docker_cr_engine(
         context: &Context,
         logger: Box<dyn Logger>,
         localisation: &str,
+        kubernetes_kind: KubernetesKind,
         kubernetes_version: String,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
@@ -84,14 +90,14 @@ impl Cluster<AWS, Options> for AWS {
         let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(AWS::cloud_provider(context));
         let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_cloudflare(context, cluster_domain));
 
-        let k = get_environment_test_kubernetes(
-            Aws,
+        let kubernetes = get_environment_test_kubernetes(
             context,
             cloud_provider.clone(),
+            kubernetes_kind,
+            kubernetes_version.as_str(),
             dns_provider.clone(),
             logger.clone(),
             localisation,
-            kubernetes_version.as_str(),
             vpc_network_mode,
         );
 
@@ -101,7 +107,7 @@ impl Cluster<AWS, Options> for AWS {
             container_registry,
             cloud_provider,
             dns_provider,
-            k,
+            kubernetes,
         )
     }
 
@@ -149,6 +155,9 @@ impl Cluster<AWS, Options> for AWS {
 
     fn kubernetes_cluster_options(secrets: FuncTestsSecrets, _cluster_name: Option<String>) -> Options {
         Options {
+            ec2_zone_a_subnet_blocks: vec!["10.0.0.0/20".to_string(), "10.0.16.0/20".to_string()],
+            ec2_zone_b_subnet_blocks: vec!["10.0.32.0/20".to_string(), "10.0.48.0/20".to_string()],
+            ec2_zone_c_subnet_blocks: vec!["10.0.64.0/20".to_string(), "10.0.80.0/20".to_string()],
             eks_zone_a_subnet_blocks: vec!["10.0.0.0/20".to_string(), "10.0.16.0/20".to_string()],
             eks_zone_b_subnet_blocks: vec!["10.0.32.0/20".to_string(), "10.0.48.0/20".to_string()],
             eks_zone_c_subnet_blocks: vec!["10.0.64.0/20".to_string(), "10.0.80.0/20".to_string()],
@@ -200,14 +209,25 @@ impl Cluster<AWS, Options> for AWS {
             vpc_qovery_network_mode: VpcQoveryNetworkMode::WithoutNatGateways,
             vpc_cidr_block: "10.0.0.0/16".to_string(),
             eks_cidr_subnet: "20".to_string(),
+            ec2_cidr_subnet: "20".to_string(),
             vpc_custom_routing_table: vec![],
             eks_access_cidr_blocks: secrets
                 .EKS_ACCESS_CIDR_BLOCKS
+                .as_ref()
                 .unwrap()
-                .replace("\"", "")
-                .replace("[", "")
-                .replace("]", "")
-                .split(",")
+                .replace('\"', "")
+                .replace('[', "")
+                .replace(']', "")
+                .split(',')
+                .map(|c| c.to_string())
+                .collect(),
+            ec2_access_cidr_blocks: secrets
+                .EKS_ACCESS_CIDR_BLOCKS // FIXME ? use an EC2_ACCESS_CIDR_BLOCKS?
+                .unwrap()
+                .replace('\"', "")
+                .replace('[', "")
+                .replace(']', "")
+                .split(',')
                 .map(|c| c.to_string())
                 .collect(),
             rds_cidr_subnet: "23".to_string(),
@@ -228,6 +248,7 @@ impl Cluster<AWS, Options> for AWS {
             tls_email_report: secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
             qovery_grpc_url: secrets.QOVERY_GRPC_URL.unwrap(),
             qovery_cluster_secret_token: secrets.QOVERY_CLUSTER_SECRET_TOKEN.unwrap(),
+            jwt_token: secrets.QOVERY_CLUSTER_JWT_TOKEN.unwrap(),
         }
     }
 }
