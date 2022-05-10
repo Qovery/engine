@@ -22,6 +22,7 @@ use crate::task_manager::models::{Action, Archive, EngineRequest};
 use crate::task_manager::scheduler::{ActionContext, State, Status, Task};
 use qovery_engine::object_storage::ObjectStorage;
 use qovery_engine::transaction::StepName::Waiting;
+use qovery_engine::utilities::to_short_id;
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
@@ -249,12 +250,11 @@ impl EnvironmentTask {
             .target_environment
             .as_ref()
             .expect("missing `target_environment` to create ActionContext")
-            .id
-            .to_string();
+            .long_id;
 
         ActionContext::new(
             ProgressScope::Environment {
-                id: target_environment_id,
+                id: to_short_id(&target_environment_id),
             },
             level,
             self.id().to_string(),
@@ -433,7 +433,7 @@ impl Task for EnvironmentTask {
                                 .request
                                 .target_environment
                                 .as_ref()
-                                .map(|env| env.id.clone())
+                                .map(|env| to_short_id(&env.long_id))
                                 .unwrap_or_default(),
                         },
                         ProgressLevel::Info,
