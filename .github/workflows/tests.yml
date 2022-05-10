@@ -30,22 +30,19 @@ jobs:
           multiline: false
       - name: build-linter-utests
         run: |
-          export SCCACHE_REDIS=${{ secrets.SCCACHE_REDIS }}
-          echo "qsdqsd${SCCACHE_REDIS}"
-          echo $SCCACHE_REDIS > toto.yaml
-          cat toto.yaml
-          echo "########## LINTER ##########"
-          cargo fmt --all -- --check --color=always  || (echo "Use cargo fmt to format your code"; exit 1)
-          cargo clippy --all --all-features --lib -- -D warnings || (echo "Solve your clippy warnings to continue"; exit 1)
           export PATH=$GITHUB_WORKSPACE/bin:$PATH
           export RUSTC_WRAPPER=$GITHUB_WORKSPACE/bin/sccache
           export TF_PLUGIN_CACHE_DIR=$HOME/.terraform.d/plugin-cache
+          export SCCACHE_REDIS=${{ secrets.SCCACHE_REDIS }}
           mkdir -p $GITHUB_WORKSPACE/bin $HOME/.terraform.d/plugin-cache
           curl -sLo $GITHUB_WORKSPACE/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${{ steps.sccache_release.outputs.value }}/sccache
           chmod 755 $GITHUB_WORKSPACE/bin/sccache
           echo "########## SHARED CACHE STATUS ##########"
           sccache --version
           sccache --show-stats
+          echo "########## LINTER ##########"
+          cargo fmt --all -- --check --color=always  || (echo "Use cargo fmt to format your code"; exit 1)
+          cargo clippy --all --all-features --lib -- -D warnings || (echo "Solve your clippy warnings to continue"; exit 1)
           echo "########## START BUILD ##########"
           cargo build --all-features --tests
           sccache --show-stats
