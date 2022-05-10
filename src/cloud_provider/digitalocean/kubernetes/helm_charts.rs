@@ -801,7 +801,7 @@ datasources:
         organization_long_id: &chart_config_prerequisites.organization_long_id,
         cluster_id: &chart_config_prerequisites.cluster_id,
         cluster_long_id: &chart_config_prerequisites.cluster_long_id,
-        cluster_jwt_token: &chart_config_prerequisites.infra_options.qovery_cluster_secret_token,
+        cluster_jwt_token: &chart_config_prerequisites.infra_options.jwt_token,
         grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
     };
     let cluster_agent = get_chart_for_cluster_agent(cluster_agent_context, chart_path)?;
@@ -812,7 +812,7 @@ datasources:
         organization_long_id: &chart_config_prerequisites.organization_long_id,
         cluster_id: &chart_config_prerequisites.cluster_id,
         cluster_long_id: &chart_config_prerequisites.cluster_long_id,
-        cluster_token: &chart_config_prerequisites.infra_options.qovery_cluster_secret_token,
+        cluster_token: &chart_config_prerequisites.infra_options.jwt_token,
         grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
     };
     let shell_agent = get_chart_for_shell_agent(shell_context, chart_path)?;
