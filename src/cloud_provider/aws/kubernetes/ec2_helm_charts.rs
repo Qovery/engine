@@ -279,7 +279,7 @@ pub fn ec2_aws_helm_charts(
         },
         ChartSetValue {
             key: "resources.limits.memory".to_string(),
-            value: "50Mi".to_string(),
+            value: "100Mi".to_string(),
         },
     ];
     let cluster_agent = get_chart_for_cluster_agent(cluster_agent_context, chart_path, Some(cluster_agent_resources))?;
@@ -300,7 +300,7 @@ pub fn ec2_aws_helm_charts(
         },
         ChartSetValue {
             key: "resources.limits.memory".to_string(),
-            value: "50Mi".to_string(),
+            value: "100Mi".to_string(),
         },
     ];
     let shell_agent = get_chart_for_shell_agent(shell_context, chart_path, Some(shell_agent_resources))?;

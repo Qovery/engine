@@ -1266,6 +1266,13 @@ impl NodeGroups {
             disk_size_in_gib,
         })
     }
+
+    pub fn to_ec2_instance(&self) -> InstanceEc2 {
+        InstanceEc2 {
+            instance_type: self.instance_type.clone(),
+            disk_size_in_gib: self.disk_size_in_gib,
+        }
+    }
 }
 
 impl InstanceEc2 {
