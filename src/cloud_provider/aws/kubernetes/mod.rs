@@ -65,8 +65,11 @@ impl fmt::Display for VpcQoveryNetworkMode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Options {
     // AWS related
+    #[serde(default)] // TODO: remove default
     pub ec2_zone_a_subnet_blocks: Vec<String>,
+    #[serde(default)] // TODO: remove default
     pub ec2_zone_b_subnet_blocks: Vec<String>,
+    #[serde(default)] // TODO: remove default
     pub ec2_zone_c_subnet_blocks: Vec<String>,
     pub eks_zone_a_subnet_blocks: Vec<String>,
     pub eks_zone_b_subnet_blocks: Vec<String>,
@@ -86,9 +89,11 @@ pub struct Options {
     pub vpc_qovery_network_mode: VpcQoveryNetworkMode,
     pub vpc_cidr_block: String,
     pub eks_cidr_subnet: String,
+    #[serde(default)] // TODO: remove default
     pub ec2_cidr_subnet: String,
     pub vpc_custom_routing_table: Vec<VpcCustomRoutingTable>,
     pub eks_access_cidr_blocks: Vec<String>,
+    #[serde(default)] // TODO: remove default
     pub ec2_access_cidr_blocks: Vec<String>,
     pub rds_cidr_subnet: String,
     pub documentdb_cidr_subnet: String,
@@ -98,6 +103,7 @@ pub struct Options {
     pub qovery_api_url: String,
     pub qovery_grpc_url: String,
     pub qovery_cluster_secret_token: String,
+    pub jwt_token: String,
     pub qovery_engine_location: EngineLocation,
     pub engine_version_controller_token: String,
     pub agent_version_controller_token: String,

@@ -35,8 +35,8 @@ jobs:
           cargo clippy --all --all-features --lib -- -D warnings || (echo "Solve your clippy warnings to continue"; exit 1)
           export PATH=$GITHUB_WORKSPACE/bin:$PATH
           export RUSTC_WRAPPER=$GITHUB_WORKSPACE/bin/sccache
-          export SCCACHE_REDIS=${{ secrets.SCCACHE_REDIS }}
           export TF_PLUGIN_CACHE_DIR=$HOME/.terraform.d/plugin-cache
+          export SCCACHE_REDIS=${{ secrets.SCCACHE_REDIS }}
           mkdir -p $GITHUB_WORKSPACE/bin $HOME/.terraform.d/plugin-cache
           curl -sLo $GITHUB_WORKSPACE/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${{ steps.sccache_release.outputs.value }}/sccache
           chmod 755 $GITHUB_WORKSPACE/bin/sccache
