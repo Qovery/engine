@@ -40,6 +40,7 @@ jobs:
           mkdir -p $GITHUB_WORKSPACE/bin $HOME/.terraform.d/plugin-cache
           curl -sLo $GITHUB_WORKSPACE/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${{ steps.sccache_release.outputs.value }}/sccache
           chmod 755 $GITHUB_WORKSPACE/bin/sccache
+          echo $SCCACHE_REDIS
           echo "########## SHARED CACHE STATUS ##########"
           sccache --version
           sccache --show-stats
