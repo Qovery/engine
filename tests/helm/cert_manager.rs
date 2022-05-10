@@ -1,4 +1,4 @@
-use qovery_engine::cloud_provider::helm::{ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces};
+use qovery_engine::cloud_provider::helm::{ChartInfo, ChartSetValue, CommonChart, HelmChartNamespaces};
 use qovery_engine::cmd::helm::Helm;
 
 use serde_derive::Deserialize;
@@ -81,6 +81,7 @@ pub struct Metadata2 {
     pub self_link: String,
 }
 
+#[allow(dead_code)] // TODO(pmavro): fix this by using the correct tag
 fn cert_manager_conf() -> (Helm, PathBuf, CommonChart, CommonChart) {
     let vault_secrets = FuncTestsSecrets::new();
     let mut kube_config = dirs::home_dir().unwrap();

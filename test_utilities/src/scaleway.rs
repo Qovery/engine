@@ -21,8 +21,8 @@ use qovery_engine::logger::Logger;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 
-use crate::cloudflare::dns_provider_cloudflare;
 use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
+use crate::dns::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
 pub const SCW_TEST_ZONE: ScwZone = ScwZone::Paris2;

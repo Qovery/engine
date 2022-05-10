@@ -957,7 +957,7 @@ pub fn get_chart_for_cert_manager_config(
                 value: x.cloudflare_email.clone(),
             })
         }
-        DnsProviderConfiguration::QoveryDns(x) => {}
+        DnsProviderConfiguration::QoveryDns(_) => {}
     };
 
     cert_manager_config

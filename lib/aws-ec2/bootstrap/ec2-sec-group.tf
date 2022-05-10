@@ -1,7 +1,8 @@
 # randomize inbound kubernetes port number for more security
 resource "random_integer" "kubernetes_external_port" {
   min = 1024
-  max = 65534
+  # not more to avoid k3s and Kubernetes port overlap
+  max = 9999
 }
 
 resource "aws_security_group" "ec2_instance" {

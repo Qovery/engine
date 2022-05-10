@@ -10,7 +10,6 @@ use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::ecr::ECR;
-use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::EngineConfig;
 use qovery_engine::io_models::{Context, NoOpProgressListener};
 use qovery_engine::logger::Logger;
@@ -18,8 +17,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tracing::error;
 
-use crate::cloudflare::dns_provider_cloudflare;
 use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
+use crate::dns::{dns_provider_cloudflare, dns_provider_qoverydns};
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
@@ -88,7 +87,10 @@ impl Cluster<AWS, Options> for AWS {
 
         // use AWS
         let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(AWS::cloud_provider(context));
-        let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_cloudflare(context, cluster_domain));
+        let dns_provider = match kubernetes_kind.clone() {
+            KubernetesKind::Ec2 => Arc::new(dns_provider_qoverydns(context, cluster_domain)),
+            _ => Arc::new(dns_provider_cloudflare(context, cluster_domain)),
+        };
 
         let kubernetes = get_environment_test_kubernetes(
             context,
