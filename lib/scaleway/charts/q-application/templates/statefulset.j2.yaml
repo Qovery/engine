@@ -7,6 +7,8 @@ metadata:
   namespace: {{ namespace }}
   labels:
     appLongId: {{ long_id }}
+    envLongId: {{ environment_long_id }}
+    projectLongId: {{ project_long_id }}
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
     appId: {{ id }}
@@ -26,6 +28,8 @@ spec:
     metadata:
       labels:
         appLongId: {{ long_id }}
+        envLongId: {{ environment_long_id }}
+        projectLongId: {{ project_long_id }}
         ownerId: {{ owner_id }}
         envId: {{ environment_id }}
         appId: {{ id }}

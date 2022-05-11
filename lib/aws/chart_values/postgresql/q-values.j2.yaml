@@ -352,11 +352,15 @@ master:
     envId: {{ environment_id }}
     databaseId: {{ id }}
     databaseLongId: {{ long_id }}
+    envLongId: {{ environment_long_id }}
+    projectLongId: {{ project_long_id }}
   annotations: {}
   podLabels:
     envId: {{ environment_id }}
     databaseId: {{ id }}
     databaseLongId: {{ long_id }}
+    envLongId: {{ environment_long_id }}
+    projectLongId: {{ project_long_id }}
   podAnnotations: {}
   priorityClassName: ""
   ## Extra init containers
