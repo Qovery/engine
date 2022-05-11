@@ -15,8 +15,10 @@ use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
+use qovery_engine::dns_provider::qoverydns::QoveryDns;
+use qovery_engine::dns_provider::Kind;
 use qovery_engine::engine::EngineConfig;
-use qovery_engine::error::EngineError;
+use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use qovery_engine::io_models::{Context, Domain, EnvironmentRequest, Features, Listener, Metadata};
 use qovery_engine::logger::Logger;
 use qovery_engine::models::digital_ocean::DoRegion;
@@ -301,23 +303,39 @@ impl Kubernetes {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e.to_legacy_engine_error()),
             },
-            qovery_engine::cloud_provider::kubernetes::Kind::Ec2 => match EC2::new(
-                context.clone(),
-                self.id.as_str(),
-                self.long_id,
-                self.name.as_str(),
-                self.version.as_str(),
-                AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
-                cloud_provider.zones().clone(),
-                cloud_provider,
-                dns_provider,
-                serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(self.options.clone())
+            qovery_engine::cloud_provider::kubernetes::Kind::Ec2 => {
+                let ec2_instance = match self.nodes_groups.len() != 1 {
+                    true => {
+                        return Err(EngineError::new(
+                            EngineErrorCause::Internal,
+                            EngineErrorScope::Engine,
+                            context.execution_id(),
+                            Some(format!("Expected 1 node, found {}", &self.nodes_groups.len())),
+                        ))
+                    }
+                    false => self.nodes_groups[0].to_ec2_instance(),
+                };
+                match EC2::new(
+                    context.clone(),
+                    self.id.as_str(),
+                    self.long_id,
+                    self.name.as_str(),
+                    self.version.as_str(),
+                    AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
+                    cloud_provider.zones().clone(),
+                    cloud_provider,
+                    dns_provider,
+                    serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(
+                        self.options.clone(),
+                    )
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
-                logger,
-            ) {
-                Ok(res) => Ok(Box::new(res)),
-                Err(e) => Err(e.to_legacy_engine_error()),
-            },
+                    ec2_instance,
+                    logger,
+                ) {
+                    Ok(res) => Ok(Box::new(res)),
+                    Err(e) => Err(e.to_legacy_engine_error()),
+                }
+            }
         }
     }
 }
@@ -408,6 +426,21 @@ impl DnsProvider {
                     Domain::new(self.domain.clone()),
                     token.as_str(),
                     email.as_str(),
+                )))
+            }
+            Kind::QoveryDns => {
+                let api_url = self.options.get("qoverydns_api_url")?;
+                let api_port = self.options.get("qoverydns_api_port")?;
+                let api_key = self.options.get("qoverydns_api_key")?;
+
+                Some(Box::new(QoveryDns::new(
+                    context,
+                    self.id.as_str(),
+                    api_url,
+                    api_port,
+                    api_key,
+                    self.name.as_str(),
+                    Domain::new(self.domain.clone()),
                 )))
             }
         }
