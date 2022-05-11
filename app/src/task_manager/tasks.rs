@@ -11,7 +11,7 @@ use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cmd::docker::Docker;
 use url::Url;
 
-use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
+use qovery_engine::error::{EngineError, EngineErrorCause};
 use qovery_engine::errors::ErrorMessageVerbosity;
 use qovery_engine::io_models::{Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope};
 use qovery_engine::logger::Logger;
@@ -631,38 +631,39 @@ fn handle_transaction_result(
 
 fn format_engine_error_output(
     engine_error: EngineError,
-    rollback_error: Option<RollbackError>,
-    verbosity: ErrorMessageVerbosity,
+    _rollback_error: Option<RollbackError>,
+    _verbosity: ErrorMessageVerbosity,
 ) -> String {
-    let scope = match engine_error.scope {
-        EngineErrorScope::Engine => String::from("Engine"),
-        EngineErrorScope::BuildPlatform(id, name) => format!("Build platform '{}' with id '{}'", name, id),
-        EngineErrorScope::ContainerRegistry(id, name) => format!("Container registry '{}' with id '{}'", name, id),
-        EngineErrorScope::CloudProvider(id, name) => format!("Cloud provider '{}' with id '{}'", name, id),
-        EngineErrorScope::Kubernetes(id, name) => format!("Kubernetes '{}' with id '{}'", name, id),
-        EngineErrorScope::DnsProvider(id, name) => format!("DNS provider '{}' with id '{}'", name, id),
-        EngineErrorScope::Environment(id, name) => format!("Environment '{}' with id '{}'", name, id),
-        EngineErrorScope::Database(id, type_, name) => format!("{} Database '{}' with id '{}'", type_, name, id),
-        EngineErrorScope::Application(id, name, version) => {
-            format!("Application '{}' with id '{}' and version '{}'", name, id, version)
-        }
-        EngineErrorScope::Router(id, name) => format!("Router '{}' with id '{}'", name, id),
-        EngineErrorScope::ObjectStorage(id, name) => format!("Object Storage '{}' with id '{}'", name, id),
-    };
+    // Pmavro: I let it commented if one day we need it again
+    // let scope = match engine_error.scope {
+    //     EngineErrorScope::Engine => String::from("Engine"),
+    //     EngineErrorScope::BuildPlatform(id, name) => format!("Build platform '{}' with id '{}'", name, id),
+    //     EngineErrorScope::ContainerRegistry(id, name) => format!("Container registry '{}' with id '{}'", name, id),
+    //     EngineErrorScope::CloudProvider(id, name) => format!("Cloud provider '{}' with id '{}'", name, id),
+    //     EngineErrorScope::Kubernetes(id, name) => format!("Kubernetes '{}' with id '{}'", name, id),
+    //     EngineErrorScope::DnsProvider(id, name) => format!("DNS provider '{}' with id '{}'", name, id),
+    //     EngineErrorScope::Environment(id, name) => format!("Environment '{}' with id '{}'", name, id),
+    //     EngineErrorScope::Database(id, type_, name) => format!("{} Database '{}' with id '{}'", type_, name, id),
+    //     EngineErrorScope::Application(id, name, version) => {
+    //         format!("Application '{}' with id '{}' and version '{}'", name, id, version)
+    //     }
+    //     EngineErrorScope::Router(id, name) => format!("Router '{}' with id '{}'", name, id),
+    //     EngineErrorScope::ObjectStorage(id, name) => format!("Object Storage '{}' with id '{}'", name, id),
+    // };
 
-    let rollback_engine_error_message = match rollback_error {
-        Some(RollbackError::CommitError(rollback_engine_error)) => Some(format!(
-            "{} (event_details: {:?})",
-            rollback_engine_error.message(verbosity),
-            rollback_engine_error.event_details(),
-        )),
-        _ => None,
-    };
+    // let rollback_engine_error_message = match rollback_error {
+    //     Some(RollbackError::CommitError(rollback_engine_error)) => Some(format!(
+    //         "{} (event_details: {:?})",
+    //         rollback_engine_error.message(verbosity),
+    //         rollback_engine_error.event_details(),
+    //     )),
+    //     _ => None,
+    // };
 
-    let rollback_message = match rollback_engine_error_message {
-        Some(error_message) => format!("Rollback error: {}", error_message),
-        None => String::new(),
-    };
+    // let rollback_message = match rollback_engine_error_message {
+    //     Some(error_message) => format!("Rollback error: {}", error_message),
+    //     None => String::new(),
+    // };
 
     match engine_error.cause {
         // IMPORTANT NOTE:
@@ -670,47 +671,20 @@ fn format_engine_error_output(
         // this message is hard coded into the core, so we should not update it until the error mechanism is in place
         EngineErrorCause::Internal => format!(
             r#"
--------------------------------------------------------------------------------
-    ~~~ Deployment error ~~~
-
-    You can find useful information:
-    1. Above in the deployment logs
-    2. Directly in your application logs
-
-    ✉ Error message: {}
-    💬 Need help: If you need assistance, you can reach the support team from the Qovery console with the integrated chat.
-
-    * Execution ID: {}
-    * Scope: {}
-    * Rollback message: {}
-        "#,
-            engine_error.message.unwrap_or_else(|| "<no error message>".into()),
-            engine_error.execution_id,
-            scope,
-            rollback_message,
+--------------------------------------
+SCROLL UP - THE ERROR MESSAGE IS ABOVE
+--------------------------------------
+"#
         ),
         EngineErrorCause::User(hint) => format!(
             r#"
--------------------------------------------------------------------------------
-    ~~~ Deployment error ~~~
+--------------------------------------
+SCROLL UP - THE ERROR MESSAGE IS ABOVE
 
-    You can find useful information:
-    1. Above in the deployment logs
-    2. Directly in your application logs
-    
-    ✉ Error message: {}
-    ℹ️ Hint: {}
-    💬 Need help: If you need assistance, you can reach the support team from the Qovery console with the integrated chat.
-
-    * Execution ID: {}
-    * Scope: {}
-    * Rollback message: {}
+ℹ️ Hint: {}
+--------------------------------------
         "#,
-            engine_error.message.unwrap_or_else(|| "<no error message>".into()),
             hint,
-            engine_error.execution_id,
-            scope,
-            rollback_message,
         ),
         EngineErrorCause::Canceled => {
             todo!()
