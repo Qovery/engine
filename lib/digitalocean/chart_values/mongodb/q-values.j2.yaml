@@ -213,6 +213,8 @@ labels:
   envId: {{ environment_id }}
   databaseId: {{ id }}
   databaseLongId: {{ long_id }}
+  envLongId: {{ environment_long_id }}
+  projectLongId: {{ project_long_id }}
 
 # Annotations to be added to MongoDB pods
 podAnnotations: {}
@@ -222,6 +224,8 @@ podLabels:
   envId: {{ environment_id }}
   databaseId: {{ id }}
   databaseLongId: {{ long_id }}
+  envLongId: {{ environment_long_id }}
+  projectLongId: {{ project_long_id }}
 
 ## Use an alternate scheduler, e.g. "stork".
 ## ref: https://kubernetes.io/docs/tasks/administer-cluster/configure-multiple-schedulers/

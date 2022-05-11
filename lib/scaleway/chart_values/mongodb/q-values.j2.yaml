@@ -148,6 +148,8 @@ labels:
   envId: {{ environment_id }}
   databaseId: {{ id }}
   databaseLongId: {{ long_id }}
+  envLongId: {{ environment_long_id }}
+  projectLongId: {{ project_long_id }}
 
 
 # Additional pod labels to apply
@@ -155,6 +157,8 @@ podLabels:
   envId: {{ environment_id }}
   databaseId: {{ id }}
   databaseLongId: {{ long_id }}
+  envLongId: {{ environment_long_id }}
+  projectLongId: {{ project_long_id }}
 
 ## updateStrategy for MongoDB Primary, Secondary and Arbitrer statefulsets
 ## ref: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies

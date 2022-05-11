@@ -62,7 +62,6 @@ pub struct KapsuleOptions {
     // Qovery
     pub qovery_api_url: String,
     pub qovery_grpc_url: String,
-    pub qovery_cluster_secret_token: String,
     pub jwt_token: String,
     pub qovery_nats_url: String,
     pub qovery_nats_user: String,
@@ -89,7 +88,6 @@ impl KapsuleOptions {
     pub fn new(
         qovery_api_url: String,
         qovery_grpc_url: String,
-        qovery_cluster_secret_token: String,
         qoverry_cluster_jwt_token: String,
         qovery_nats_url: String,
         qovery_nats_user: String,
@@ -108,7 +106,6 @@ impl KapsuleOptions {
         KapsuleOptions {
             qovery_api_url,
             qovery_grpc_url,
-            qovery_cluster_secret_token,
             jwt_token: qoverry_cluster_jwt_token,
             qovery_nats_url,
             qovery_nats_user,

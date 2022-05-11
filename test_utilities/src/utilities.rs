@@ -760,7 +760,11 @@ pub fn is_pod_restarted_env(
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
 ) -> (bool, String) {
-    let namespace_name = format!("{}-{}", &environment_check.project_id, &environment_check.id,);
+    let namespace_name = format!(
+        "{}-{}",
+        to_short_id(&environment_check.project_long_id),
+        to_short_id(&environment_check.long_id),
+    );
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
@@ -791,7 +795,11 @@ pub fn get_pods(
     pod_to_check: &str,
     secrets: FuncTestsSecrets,
 ) -> Result<KubernetesList<KubernetesPod>, CommandError> {
-    let namespace_name = format!("{}-{}", &environment_check.project_id, &environment_check.id,);
+    let namespace_name = format!(
+        "{}-{}",
+        to_short_id(&environment_check.project_long_id),
+        to_short_id(&environment_check.long_id),
+    );
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
@@ -859,7 +867,11 @@ pub fn get_pvc(
     environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<PVC, CommandError> {
-    let namespace_name = format!("{}-{}", &environment_check.project_id, &environment_check.id,);
+    let namespace_name = format!(
+        "{}-{}",
+        to_short_id(&environment_check.project_long_id),
+        to_short_id(&environment_check.long_id),
+    );
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 
@@ -884,7 +896,11 @@ pub fn get_svc(
     environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
 ) -> Result<SVC, CommandError> {
-    let namespace_name = format!("{}-{}", &environment_check.project_id, &environment_check.id,);
+    let namespace_name = format!(
+        "{}-{}",
+        to_short_id(&environment_check.project_long_id),
+        to_short_id(&environment_check.long_id),
+    );
 
     let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
 

@@ -255,10 +255,9 @@ pub fn environment_3_apps_3_routers_3_databases(
 
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: context.organization_id().to_string(),
+        long_id: Uuid::new_v4(),
+        project_long_id: Uuid::new_v4(),
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![
             Application {
@@ -519,21 +518,19 @@ pub fn environment_3_apps_3_routers_3_databases(
 }
 
 pub fn working_minimal_environment(context: &Context, test_domain: &str) -> EnvironmentRequest {
-    let suffix = generate_id();
-    let application_id = generate_id();
-    let application_name = format!("{}-{}", "simple-app", &suffix);
+    let application_id = Uuid::new_v4();
+    let application_name = to_short_id(&application_id);
     let router_name = "main".to_string();
-    let application_domain = format!("{}.{}.{}", application_id, context.cluster_id(), test_domain);
+    let application_domain = format!("{}.{}.{}", application_name, context.cluster_id(), test_domain);
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: context.organization_id().to_string(),
+        long_id: application_id,
+        project_long_id: Uuid::new_v4(),
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![Application {
-            long_id: Uuid::new_v4(),
-            name: application_name,
+            long_id: application_id,
+            name: application_name.to_string(),
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
@@ -573,7 +570,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
-                application_name: format!("{}-{}", "simple-app", &suffix),
+                application_name: application_name.to_string(),
             }],
             sticky_sessions_enabled: false,
         }],
@@ -588,10 +585,9 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
 
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: context.organization_id().to_string(),
+        long_id: Uuid::new_v4(),
+        project_long_id: Uuid::new_v4(),
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![Application {
             long_id: Uuid::new_v4(),
@@ -625,15 +621,14 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
 }
 
 pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentRequest {
-    let suffix = "c3dn5so3dltod3s";
-    let application_name = format!("{}-{}", "simple-app", &suffix);
+    let suffix = Uuid::new_v4();
+    let application_name = format!("{}-{}", "simple-app", to_short_id(&suffix));
 
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: "c4dn5so3dltod3s".to_string(),
-        owner_id: "c5dn5so3dltod3s".to_string(),
-        project_id: "c6dn5so3dltod3s".to_string(),
-        organization_id: context.organization_id().to_string(),
+        long_id: suffix,
+        project_long_id: suffix,
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![Application {
             long_id: Uuid::from_str("9d0158db-b783-4bc2-a23b-c7d9228cbe90").unwrap(),
@@ -699,10 +694,9 @@ pub fn environnement_2_app_2_routers_1_psql(
 
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: context.organization_id().to_string(),
+        long_id: Uuid::new_v4(),
+        project_long_id: Uuid::new_v4(),
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         databases: vec![Database {
             kind: DatabaseKind::Postgresql,
@@ -877,10 +871,9 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
     let suffix = generate_id();
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: context.organization_id().to_string(),
+        long_id: Uuid::new_v4(),
+        project_long_id: Uuid::new_v4(),
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![Application {
             long_id: Uuid::new_v4(),
@@ -940,10 +933,9 @@ pub fn environment_only_http_server(context: &Context) -> EnvironmentRequest {
     let suffix = generate_id();
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: context.organization_id().to_string(),
+        long_id: Uuid::new_v4(),
+        project_long_id: Uuid::new_v4(),
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![Application {
             long_id: Uuid::new_v4(),
@@ -990,10 +982,9 @@ pub fn environment_only_http_server_router(context: &Context, test_domain: &str)
     let id = Uuid::new_v4();
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: context.organization_id().to_string(),
+        long_id: Uuid::new_v4(),
+        project_long_id: Uuid::new_v4(),
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![Application {
             long_id: id,

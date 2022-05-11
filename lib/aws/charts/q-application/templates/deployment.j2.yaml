@@ -9,6 +9,8 @@ metadata:
     appLongId: {{ long_id }}
     ownerId: {{ owner_id }}
     envId: {{ environment_id }}
+    envLongId: {{ environment_long_id }}
+    projectLongId: {{ project_long_id }}
     appId: {{ id }}
     app: {{ sanitized_name }}
   annotations:
@@ -35,6 +37,8 @@ spec:
         envId: {{ environment_id }}
         appId: {{ id }}
         app: {{ sanitized_name }}
+        envLongId: {{ environment_long_id }}
+        projectLongId: {{ project_long_id }}
       annotations:
         checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
         appCommitId: {{ version }}

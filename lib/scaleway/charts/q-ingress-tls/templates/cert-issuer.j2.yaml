@@ -7,6 +7,8 @@ metadata:
   namespace: {{ namespace }}
   labels:
     routerLongId: {{ long_id }}
+    envLongId: {{ environment_long_id }}
+    projectLongId: {{ project_long_id }}
 spec:
   acme:
     server: {{ spec_acme_server }}

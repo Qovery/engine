@@ -331,11 +331,8 @@ pub fn ec2_aws_helm_charts(
                     value: chart_config_prerequisites.infra_options.qovery_grpc_url.to_string(),
                 },
                 ChartSetValue {
-                    key: "environmentVariables.CLUSTER_TOKEN".to_string(),
-                    value: chart_config_prerequisites
-                        .infra_options
-                        .qovery_cluster_secret_token
-                        .to_string(),
+                    key: "environmentVariables.CLUSTER_JWT_TOKEN".to_string(),
+                    value: chart_config_prerequisites.infra_options.jwt_token.to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.CLUSTER_ID".to_string(),
