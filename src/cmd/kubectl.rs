@@ -11,9 +11,10 @@ use crate::cloud_provider::digitalocean::models::svc::DoLoadBalancer;
 use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::command::QoveryCommand;
 use crate::cmd::structs::{
-    Configmap, Daemonset, Item, KubernetesEvent, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
-    KubernetesPod, KubernetesPodStatusPhase, KubernetesPodStatusReason, KubernetesService, KubernetesVersion,
-    LabelsContent, Namespace, Secrets, HPA, PDB, PVC, SVC,
+    Configmap, Daemonset, Item, KubernetesEvent, KubernetesIngress, KubernetesIngressStatusLoadBalancerIngress,
+    KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase,
+    KubernetesPodStatusReason, KubernetesService, KubernetesVersion, LabelsContent, Namespace, Secrets, HPA, PDB, PVC,
+    SVC,
 };
 use crate::constants::KUBECONFIG;
 use crate::error::{SimpleError, SimpleErrorKind};
@@ -191,6 +192,28 @@ where
     }
 
     Ok(Some(result.status.load_balancer.ingress.first().unwrap().hostname.clone()))
+}
+
+pub fn kubectl_exec_get_external_ingress<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    name: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Option<KubernetesIngressStatusLoadBalancerIngress>, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let result = kubectl_exec::<P, KubernetesIngress>(
+        vec!["get", "-n", namespace, "ing", name, "-o", "json"],
+        kubernetes_config,
+        envs,
+    )?;
+
+    if result.status.load_balancer.ingress.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(result.status.load_balancer.ingress.first().unwrap().clone()))
 }
 
 pub fn kubectl_exec_is_pod_ready_with_retry<P>(
