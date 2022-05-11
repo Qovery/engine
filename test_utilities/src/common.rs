@@ -221,9 +221,9 @@ pub fn environment_3_apps_3_routers_3_databases(
     database_disk_type: &str,
     provider_kind: Kind,
 ) -> EnvironmentRequest {
-    let app_name_1 = format!("{}-{}", "simple-app-1", generate_id());
-    let app_name_2 = format!("{}-{}", "simple-app-2", generate_id());
-    let app_name_3 = format!("{}-{}", "simple-app-3", generate_id());
+    let app_name_1 = format!("{}-{}", "simple-app-1".to_string(), generate_id());
+    let app_name_2 = format!("{}-{}", "simple-app-2".to_string(), generate_id());
+    let app_name_3 = format!("{}-{}", "simple-app-3".to_string(), generate_id());
 
     // mongoDB management part
     let database_host_mongo = get_svc_name(DatabaseKind::Mongodb, provider_kind.clone()).to_string();
@@ -249,7 +249,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     let database_name = "postgres".to_string();
 
     // pSQL 2 management part
-    let fqdn_2 = format!("{}2", get_svc_name(DatabaseKind::Postgresql, provider_kind));
+    let fqdn_2 = format!("{}2", get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()));
     let database_username_2 = "superuser2".to_string();
     let database_name_2 = "postgres2".to_string();
 
@@ -381,9 +381,9 @@ pub fn environment_3_apps_3_routers_3_databases(
                 environment_vars: btreemap! {
                     "IS_DOCUMENTDB".to_string() => base64::encode("false"),
                     "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(database_host_mongo.clone()),
-                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri_mongo),
+                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri_mongo.clone()),
                     "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => base64::encode(database_port_mongo.to_string()),
-                    "MONGODB_DBNAME".to_string() => base64::encode(&database_db_name_mongo),
+                    "MONGODB_DBNAME".to_string() => base64::encode(&database_db_name_mongo.clone()),
                     "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() => base64::encode(database_username_mongo.clone()),
                     "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => base64::encode(database_password_mongo.clone()),
                 },
@@ -410,12 +410,12 @@ pub fn environment_3_apps_3_routers_3_databases(
                 long_id: Uuid::new_v4(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/app1".to_string(),
-                    application_name: app_name_1,
+                    application_name: app_name_1.clone(),
                 }],
                 sticky_sessions_enabled: false,
             },
@@ -423,7 +423,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 long_id: Uuid::new_v4(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -1103,7 +1103,7 @@ pub fn test_db(
     let database_password = generate_password(provider_kind.clone(), database_mode.clone());
     let db_kind_str = db_kind.name().to_string();
     let db_id = generate_id();
-    let database_host = format!("{}-{}", db_id, db_kind_str);
+    let database_host = format!("{}-{}", db_id, db_kind_str.clone());
     let database_fqdn = format!(
         "{}.{}.{}",
         database_host,
