@@ -13,10 +13,11 @@ use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
+use tokio::fs;
 
 use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::models::{CpuLimits, NodeGroups};
+use crate::cloud_provider::models::{CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::CheckAction;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
@@ -179,6 +180,15 @@ pub trait Kubernetes: Listen {
     fn get_kubeconfig_file_path(&self) -> Result<String, EngineError> {
         let (path, _) = self.get_kubeconfig_file()?;
         Ok(path)
+    }
+
+    fn delete_local_kubeconfig(&self) {
+        // just ignoring if not already present
+        let file = match self.get_kubeconfig_file_path() {
+            Ok(x) => x,
+            Err(_) => return,
+        };
+        let _ = fs::remove_file(file);
     }
 
     fn resources(&self, _environment: &Environment) -> Result<Resources, EngineError> {
@@ -1255,6 +1265,22 @@ impl NodeGroups {
             instance_type,
             disk_size_in_gib,
         })
+    }
+
+    pub fn to_ec2_instance(&self) -> InstanceEc2 {
+        InstanceEc2 {
+            instance_type: self.instance_type.clone(),
+            disk_size_in_gib: self.disk_size_in_gib,
+        }
+    }
+}
+
+impl InstanceEc2 {
+    pub fn new(instance_type: String, disk_size_in_gib: i32) -> InstanceEc2 {
+        InstanceEc2 {
+            instance_type,
+            disk_size_in_gib,
+        }
     }
 }
 

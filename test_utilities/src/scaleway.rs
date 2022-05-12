@@ -21,8 +21,8 @@ use qovery_engine::logger::Logger;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 
-use crate::cloudflare::dns_provider_cloudflare;
 use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
+use crate::dns::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
 pub const SCW_TEST_ZONE: ScwZone = ScwZone::Paris2;
@@ -168,9 +168,6 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         KapsuleOptions::new(
             secrets.QOVERY_API_URL.expect("QOVERY_API_URL is not set in secrets"),
             secrets.QOVERY_GRPC_URL.expect("QOVERY_GRPC_URL is not set in secrets"),
-            secrets
-                .QOVERY_CLUSTER_SECRET_TOKEN
-                .expect("QOVERY_CLUSTER_SECRET_TOKEN is not set in secrets"),
             secrets
                 .QOVERY_CLUSTER_JWT_TOKEN
                 .expect("QOVERY_CLUSTER_JWT_TOKEN is not set in secrets"),

@@ -12,6 +12,7 @@ use qovery_engine::io_models::{
 };
 
 use crate::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
+use crate::aws_ec2::ec2_kubernetes_instance;
 use crate::digitalocean::{DO_KUBERNETES_VERSION, DO_TEST_REGION};
 use crate::scaleway::{SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
 use crate::utilities::{
@@ -49,6 +50,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{span, Level};
+use url::Url;
 use uuid::Uuid;
 
 pub enum RegionActivationStatus {
@@ -220,9 +222,9 @@ pub fn environment_3_apps_3_routers_3_databases(
     database_disk_type: &str,
     provider_kind: Kind,
 ) -> EnvironmentRequest {
-    let app_name_1 = format!("{}-{}", "simple-app-1", generate_id());
-    let app_name_2 = format!("{}-{}", "simple-app-2", generate_id());
-    let app_name_3 = format!("{}-{}", "simple-app-3", generate_id());
+    let app_name_1 = format!("{}-{}", "simple-app-1".to_string(), generate_id());
+    let app_name_2 = format!("{}-{}", "simple-app-2".to_string(), generate_id());
+    let app_name_3 = format!("{}-{}", "simple-app-3".to_string(), generate_id());
 
     // mongoDB management part
     let database_host_mongo = get_svc_name(DatabaseKind::Mongodb, provider_kind.clone()).to_string();
@@ -248,16 +250,15 @@ pub fn environment_3_apps_3_routers_3_databases(
     let database_name = "postgres".to_string();
 
     // pSQL 2 management part
-    let fqdn_2 = format!("{}2", get_svc_name(DatabaseKind::Postgresql, provider_kind));
+    let fqdn_2 = format!("{}2", get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()));
     let database_username_2 = "superuser2".to_string();
     let database_name_2 = "postgres2".to_string();
 
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: context.organization_id().to_string(),
+        long_id: Uuid::new_v4(),
+        project_long_id: Uuid::new_v4(),
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![
             Application {
@@ -380,9 +381,9 @@ pub fn environment_3_apps_3_routers_3_databases(
                 environment_vars: btreemap! {
                     "IS_DOCUMENTDB".to_string() => base64::encode("false"),
                     "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(database_host_mongo.clone()),
-                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri_mongo),
+                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri_mongo.clone()),
                     "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => base64::encode(database_port_mongo.to_string()),
-                    "MONGODB_DBNAME".to_string() => base64::encode(&database_db_name_mongo),
+                    "MONGODB_DBNAME".to_string() => base64::encode(&database_db_name_mongo.clone()),
                     "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() => base64::encode(database_username_mongo.clone()),
                     "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => base64::encode(database_password_mongo.clone()),
                 },
@@ -409,12 +410,12 @@ pub fn environment_3_apps_3_routers_3_databases(
                 long_id: Uuid::new_v4(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/app1".to_string(),
-                    application_name: app_name_1,
+                    application_name: app_name_1.clone(),
                 }],
                 sticky_sessions_enabled: false,
             },
@@ -422,7 +423,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 long_id: Uuid::new_v4(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id().to_string(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -518,21 +519,19 @@ pub fn environment_3_apps_3_routers_3_databases(
 }
 
 pub fn working_minimal_environment(context: &Context, test_domain: &str) -> EnvironmentRequest {
-    let suffix = generate_id();
-    let application_id = generate_id();
-    let application_name = format!("{}-{}", "simple-app", &suffix);
+    let application_id = Uuid::new_v4();
+    let application_name = to_short_id(&application_id);
     let router_name = "main".to_string();
-    let application_domain = format!("{}.{}.{}", application_id, context.cluster_id(), test_domain);
+    let application_domain = format!("{}.{}.{}", application_name, context.cluster_id(), test_domain);
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: context.organization_id().to_string(),
+        long_id: application_id,
+        project_long_id: Uuid::new_v4(),
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![Application {
-            long_id: Uuid::new_v4(),
-            name: application_name,
+            long_id: application_id,
+            name: application_name.to_string(),
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
@@ -572,7 +571,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
-                application_name: format!("{}-{}", "simple-app", &suffix),
+                application_name: application_name.to_string(),
             }],
             sticky_sessions_enabled: false,
         }],
@@ -587,10 +586,9 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
 
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: context.organization_id().to_string(),
+        long_id: Uuid::new_v4(),
+        project_long_id: Uuid::new_v4(),
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![Application {
             long_id: Uuid::new_v4(),
@@ -624,15 +622,14 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
 }
 
 pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentRequest {
-    let suffix = "c3dn5so3dltod3s";
-    let application_name = format!("{}-{}", "simple-app", &suffix);
+    let suffix = Uuid::new_v4();
+    let application_name = format!("{}-{}", "simple-app", to_short_id(&suffix));
 
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: "c4dn5so3dltod3s".to_string(),
-        owner_id: "c5dn5so3dltod3s".to_string(),
-        project_id: "c6dn5so3dltod3s".to_string(),
-        organization_id: context.organization_id().to_string(),
+        long_id: suffix,
+        project_long_id: suffix,
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![Application {
             long_id: Uuid::from_str("9d0158db-b783-4bc2-a23b-c7d9228cbe90").unwrap(),
@@ -698,10 +695,9 @@ pub fn environnement_2_app_2_routers_1_psql(
 
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: context.organization_id().to_string(),
+        long_id: Uuid::new_v4(),
+        project_long_id: Uuid::new_v4(),
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         databases: vec![Database {
             kind: DatabaseKind::Postgresql,
@@ -876,10 +872,9 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
     let suffix = generate_id();
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: context.organization_id().to_string(),
+        long_id: Uuid::new_v4(),
+        project_long_id: Uuid::new_v4(),
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![Application {
             long_id: Uuid::new_v4(),
@@ -939,10 +934,9 @@ pub fn environment_only_http_server(context: &Context) -> EnvironmentRequest {
     let suffix = generate_id();
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: context.organization_id().to_string(),
+        long_id: Uuid::new_v4(),
+        project_long_id: Uuid::new_v4(),
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![Application {
             long_id: Uuid::new_v4(),
@@ -989,10 +983,9 @@ pub fn environment_only_http_server_router(context: &Context, test_domain: &str)
     let id = Uuid::new_v4();
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        id: generate_id(),
-        owner_id: generate_id(),
-        project_id: generate_id(),
-        organization_id: context.organization_id().to_string(),
+        long_id: Uuid::new_v4(),
+        project_long_id: Uuid::new_v4(),
+        organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![Application {
             long_id: id,
@@ -1046,35 +1039,29 @@ pub fn environment_only_http_server_router(context: &Context, test_domain: &str)
     }
 }
 
-/// Test if stick session are activated on given routers via cookie.
-pub fn routers_sessions_are_sticky(routers: Vec<Router>) -> bool {
+/// Test if stick sessions are activated on given routers via cookie.
+pub fn session_is_sticky(url: Url, host: String, max_age: u32) -> bool {
     let mut is_ok = true;
     let http_client = reqwest::blocking::Client::builder()
         .danger_accept_invalid_certs(true) // this test ignores certificate validity (not its purpose)
         .build()
         .expect("Cannot build reqwest client");
 
-    for router in routers.iter() {
-        for route in router.routes.iter() {
-            let http_request_result = http_client
-                .get(format!("https://{}{}", router.default_domain, route.path))
-                .send();
+    let http_request_result = http_client.get(url.to_string()).header("Host", host.as_str()).send();
 
-            if http_request_result.is_err() {
-                return false;
-            }
-
-            let http_response = http_request_result.expect("cannot retrieve HTTP request result");
-
-            is_ok &= match http_response.headers().get("Set-Cookie") {
-                None => false,
-                Some(value) => match value.to_str() {
-                    Err(_) => false,
-                    Ok(s) => s.contains("INGRESSCOOKIE_QOVERY=") && s.contains("Max-Age=85400"),
-                },
-            };
-        }
+    if http_request_result.is_err() {
+        return false;
     }
+
+    let http_response = http_request_result.expect("cannot retrieve HTTP request result");
+
+    is_ok &= match http_response.headers().get("Set-Cookie") {
+        None => false,
+        Some(value) => match value.to_str() {
+            Err(_) => false,
+            Ok(s) => s.contains("INGRESSCOOKIE_QOVERY=") && s.contains(format!("Max-Age={}", max_age).as_str()),
+        },
+    };
 
     is_ok
 }
@@ -1102,7 +1089,7 @@ pub fn test_db(
     let database_password = generate_password(provider_kind.clone(), database_mode.clone());
     let db_kind_str = db_kind.name().to_string();
     let db_id = generate_id();
-    let database_host = format!("{}-{}", db_id, db_kind_str);
+    let database_host = format!("{}-{}", db_id, db_kind_str.clone());
     let database_fqdn = format!(
         "{}.{}.{}",
         database_host,
@@ -1372,6 +1359,7 @@ pub fn get_environment_test_kubernetes(
                     cloud_provider,
                     dns_provider,
                     options,
+                    ec2_kubernetes_instance(),
                     logger,
                 )
                 .unwrap(),
@@ -1481,6 +1469,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     cloud_provider,
                     dns_provider,
                     options,
+                    ec2_kubernetes_instance(),
                     logger,
                 )
                 .unwrap(),

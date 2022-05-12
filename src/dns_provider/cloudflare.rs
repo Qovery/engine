@@ -1,8 +1,14 @@
 use std::net::Ipv4Addr;
+use tera::Context as TeraContext;
 
 use crate::dns_provider::errors::DnsProviderError;
-use crate::dns_provider::{DnsProvider, Kind};
+use crate::dns_provider::{DnsProvider, DnsProviderConfiguration, Kind};
 use crate::io_models::{Context, Domain};
+
+pub struct CloudflareDnsConfig {
+    pub cloudflare_email: String,
+    pub cloudflare_api_token: String,
+}
 
 pub struct Cloudflare {
     context: Context,
@@ -54,12 +60,18 @@ impl DnsProvider for Cloudflare {
         &self.name
     }
 
-    fn account(&self) -> &str {
-        &self.cloudflare_email
+    fn insert_into_teracontext<'a>(&self, context: &'a mut TeraContext) -> &'a mut TeraContext {
+        context.insert("external_dns_provider", &self.provider_name());
+        context.insert("cloudflare_email", &self.cloudflare_email);
+        context.insert("cloudflare_api_token", &self.cloudflare_api_token);
+        context
     }
 
-    fn token(&self) -> &str {
-        &self.cloudflare_api_token
+    fn provider_configuration(&self) -> DnsProviderConfiguration {
+        DnsProviderConfiguration::Cloudflare(CloudflareDnsConfig {
+            cloudflare_email: self.cloudflare_email.clone(),
+            cloudflare_api_token: self.cloudflare_api_token.clone(),
+        })
     }
 
     fn domain(&self) -> &Domain {

@@ -55,8 +55,9 @@ charts:
     # Chart is frozen due to custom modification see https://github.com/Qovery/engine/pull/293
   - name: mysql
     repo_name: bitnami
-    version: 8.9.6
+    version: 6.14.2
     dest: services
+    no_sync: true
   - name: postgresql
     repo_name: bitnami
     version: 8.9.8

@@ -8,6 +8,8 @@ metadata:
   labels:
     routerId: {{ id }}
     routerLongId: {{ long_id }}
+    envLongId: {{ environment_long_id }}
+    projectLongId: {{ project_long_id }}
     envId: {{ environment_id }}
     fqdn: "{{ router_default_domain }}"
   annotations:

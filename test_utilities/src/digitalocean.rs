@@ -11,8 +11,8 @@ use qovery_engine::engine::EngineConfig;
 use qovery_engine::io_models::{Context, EnvironmentRequest, NoOpProgressListener};
 use std::sync::Arc;
 
-use crate::cloudflare::dns_provider_cloudflare;
 use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
+use crate::dns::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::dns_provider::DnsProvider;
@@ -148,8 +148,7 @@ impl Cluster<DO, DoksOptions> for DO {
             vpc_name: cluster_name.unwrap(),
             qovery_api_url: secrets.QOVERY_API_URL.unwrap(),
             qovery_grpc_url: secrets.QOVERY_GRPC_URL.unwrap(),
-            qovery_cluster_secret_token: secrets.QOVERY_CLUSTER_SECRET_TOKEN.unwrap(),
-            jwt_token: "".to_string(),
+            jwt_token: secrets.QOVERY_CLUSTER_JWT_TOKEN.unwrap(),
             qovery_engine_location: EngineLocation::ClientSide,
             engine_version_controller_token: secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),
             agent_version_controller_token: secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),

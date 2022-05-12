@@ -11,6 +11,8 @@ metadata:
     envId: {{ environment_id }}
     appId: {{ id }}
     app: {{ sanitized_name }}
+    envLongId: {{ environment_long_id }}
+    projectLongId: {{ project_long_id }}
   annotations:
     releaseTime: {% raw %}{{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}{% endraw %}
 spec:
@@ -31,6 +33,8 @@ spec:
     metadata:
       labels:
         appLongId: {{ long_id }}
+        envLongId: {{ environment_long_id }}
+        projectLongId: {{ project_long_id }}
         ownerId: {{ owner_id }}
         envId: {{ environment_id }}
         appId: {{ id }}
