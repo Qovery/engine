@@ -80,3 +80,8 @@ pub struct NodeGroupsFormat {
     pub instance_type: String,
     pub disk_size_in_gib: String,
 }
+
+pub struct InstanceEc2 {
+    pub instance_type: String,
+    pub disk_size_in_gib: i32,
+}

@@ -74,6 +74,7 @@ pub enum Tag {
     CannotGetAnyAvailableVPC,
     UnsupportedVersion,
     UnsupportedClusterKind,
+    NotAllowedInstanceType,
     CannotGetSupportedVersions,
     CannotGetCluster,
     ContainerRegistryError,
@@ -227,6 +228,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::BuilderError => Tag::BuilderError,
             errors::Tag::ContainerRegistryError => Tag::ContainerRegistryError,
             errors::Tag::UnsupportedClusterKind => Tag::UnsupportedClusterKind,
+            errors::Tag::NotAllowedInstanceType => Tag::NotAllowedInstanceType,
             errors::Tag::TerraformQoveryConfigMismatch => Tag::TerraformQoveryConfigMismatch,
         }
     }

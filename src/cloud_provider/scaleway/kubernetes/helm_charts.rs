@@ -1,10 +1,11 @@
 use crate::cloud_provider::helm::{
-    get_chart_for_cluster_agent, get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo,
-    ChartSetValue, ChartValuesGenerated, ClusterAgentContext, CommonChart, CoreDNSConfigChart, HelmChart,
-    HelmChartNamespaces, PrometheusOperatorConfigChart, ShellAgentContext,
+    get_chart_for_cert_manager_config, get_chart_for_cluster_agent, get_chart_for_shell_agent,
+    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, ChartValuesGenerated, ClusterAgentContext,
+    CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces, PrometheusOperatorConfigChart, ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
+use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 use crate::models::scaleway::{ScwRegion, ScwZone};
 use semver::Version;
@@ -40,8 +41,7 @@ pub struct ChartsConfigPrerequisites {
     pub external_dns_provider: String,
     pub dns_email_report: String,
     pub acme_url: String,
-    pub cloudflare_email: String,
-    pub cloudflare_api_token: String,
+    pub dns_provider_config: DnsProviderConfiguration,
     pub disable_pleco: bool,
     // qovery options form json input
     pub infra_options: KapsuleOptions,
@@ -69,8 +69,7 @@ impl ChartsConfigPrerequisites {
         external_dns_provider: String,
         dns_email_report: String,
         acme_url: String,
-        cloudflare_email: String,
-        cloudflare_api_token: String,
+        dns_provider_config: DnsProviderConfiguration,
         disable_pleco: bool,
         infra_options: KapsuleOptions,
     ) -> Self {
@@ -96,8 +95,7 @@ impl ChartsConfigPrerequisites {
             external_dns_provider,
             dns_email_report,
             acme_url,
-            cloudflare_email,
-            cloudflare_api_token,
+            dns_provider_config,
             disable_pleco,
             infra_options,
         }
@@ -555,43 +553,13 @@ datasources:
         },
     };
 
-    let mut cert_manager_config = CommonChart {
-        chart_info: ChartInfo {
-            name: "cert-manager-configs".to_string(),
-            path: chart_path("common/charts/cert-manager-configs"),
-            namespace: HelmChartNamespaces::CertManager,
-            backup_resources: Some(vec!["cert".to_string(), "issuer".to_string(), "clusterissuer".to_string()]),
-            values: vec![
-                ChartSetValue {
-                    key: "externalDnsProvider".to_string(),
-                    value: chart_config_prerequisites.external_dns_provider.clone(),
-                },
-                ChartSetValue {
-                    key: "acme.letsEncrypt.emailReport".to_string(),
-                    value: chart_config_prerequisites.dns_email_report.clone(),
-                },
-                ChartSetValue {
-                    key: "acme.letsEncrypt.acmeUrl".to_string(),
-                    value: chart_config_prerequisites.acme_url.clone(),
-                },
-                ChartSetValue {
-                    key: "managedDns".to_string(),
-                    value: chart_config_prerequisites.managed_dns_helm_format.clone(),
-                },
-            ],
-            ..Default::default()
-        },
-    };
-    if chart_config_prerequisites.external_dns_provider == "cloudflare" {
-        cert_manager_config.chart_info.values.push(ChartSetValue {
-            key: "provider.cloudflare.apiToken".to_string(),
-            value: chart_config_prerequisites.cloudflare_api_token.clone(),
-        });
-        cert_manager_config.chart_info.values.push(ChartSetValue {
-            key: "provider.cloudflare.email".to_string(),
-            value: chart_config_prerequisites.cloudflare_email.clone(),
-        })
-    }
+    let cert_manager_config = get_chart_for_cert_manager_config(
+        &chart_config_prerequisites.dns_provider_config,
+        chart_path("common/charts/cert-manager-configs"),
+        chart_config_prerequisites.dns_email_report.clone(),
+        chart_config_prerequisites.acme_url.clone(),
+        chart_config_prerequisites.managed_dns_helm_format.clone(),
+    );
 
     let nginx_ingress = CommonChart {
         chart_info: ChartInfo {
@@ -677,7 +645,7 @@ datasources:
         cluster_jwt_token: &chart_config_prerequisites.infra_options.jwt_token,
         grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
     };
-    let cluster_agent = get_chart_for_cluster_agent(cluster_agent_context, chart_path)?;
+    let cluster_agent = get_chart_for_cluster_agent(cluster_agent_context, chart_path, None)?;
 
     let shell_context = ShellAgentContext {
         api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
@@ -688,7 +656,7 @@ datasources:
         cluster_jwt_token: &chart_config_prerequisites.infra_options.jwt_token,
         grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
     };
-    let shell_agent = get_chart_for_shell_agent(shell_context, chart_path)?;
+    let shell_agent = get_chart_for_shell_agent(shell_context, chart_path, None)?;
 
     let qovery_agent_version: QoveryAgent = get_qovery_app_version(
         QoveryAppName::Agent,

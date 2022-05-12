@@ -1,6 +1,6 @@
 extern crate test_utilities;
 
-use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
+use self::test_utilities::utilities::{context, engine_run_test, generate_id, logger};
 use ::function_name::named;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 
@@ -24,7 +24,7 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
     engine_run_test(|| {
         let region = AwsRegion::from_str(region.as_str()).expect("Wasn't able to convert the desired region");
         let zones = region.get_zones();
-        let cluster_id = generate_cluster_id(region.to_string().as_str());
+        let cluster_id = "ztest-abe3e22b0".to_string(); // don't change it to test qovery dns provider properly
         cluster_test(
             test_name,
             Kind::Aws,
@@ -42,11 +42,6 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
         )
     })
 }
-
-/*
-    TESTS NOTES:
-    It is useful to keep 2 clusters deployment tests to run in // to validate there is no name collision (overlaping)
-*/
 
 #[cfg(feature = "test-aws-infra-ec2")]
 #[named]

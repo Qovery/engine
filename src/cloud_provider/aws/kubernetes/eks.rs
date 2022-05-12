@@ -64,16 +64,11 @@ impl EKS {
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
 
-        for node_group in &nodes_groups {
-            if let Err(e) = AwsInstancesType::from_str(node_group.instance_type.as_str()) {
-                let err =
-                    EngineError::new_unsupported_instance_type(event_details, node_group.instance_type.as_str(), e);
-
-                logger.log(EngineEvent::Error(err.clone(), None));
-
-                return Err(err);
-            }
-        }
+        // ensure config is ok
+        if let Err(e) = EKS::validate_node_groups(nodes_groups.clone(), &event_details) {
+            logger.log(EngineEvent::Error(e.clone(), None));
+            return Err(e);
+        };
 
         let s3 = kubernetes::s3(&context, &region, &**cloud_provider);
 
@@ -96,6 +91,49 @@ impl EKS {
             logger,
             listeners,
         })
+    }
+
+    pub fn validate_node_groups(
+        nodes_groups: Vec<NodeGroups>,
+        event_details: &EventDetails,
+    ) -> Result<(), EngineError> {
+        for node_group in &nodes_groups {
+            match AwsInstancesType::from_str(node_group.instance_type.as_str()) {
+                Ok(x) => {
+                    if !EKS::is_instance_allowed(x) {
+                        let err = EngineError::new_not_allowed_instance_type(
+                            event_details.clone(),
+                            node_group.instance_type.as_str(),
+                        );
+                        return Err(err);
+                    }
+                }
+                Err(e) => {
+                    let err = EngineError::new_unsupported_instance_type(
+                        event_details.clone(),
+                        node_group.instance_type.as_str(),
+                        e,
+                    );
+                    return Err(err);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn is_instance_allowed(instance_type: AwsInstancesType) -> bool {
+        match instance_type {
+            AwsInstancesType::T2Large => true,
+            AwsInstancesType::T2Xlarge => true,
+            AwsInstancesType::T3Small => false,
+            AwsInstancesType::T3Medium => false,
+            AwsInstancesType::T3Large => true,
+            AwsInstancesType::T3Xlarge => true,
+            AwsInstancesType::T3aSmall => false,
+            AwsInstancesType::T3aMedium => false,
+            AwsInstancesType::T3aLarge => true,
+            AwsInstancesType::T3a2xlarge => true,
+        }
     }
 
     fn set_cluster_autoscaler_replicas(
@@ -667,5 +705,50 @@ impl Listen for EKS {
 
     fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::aws::kubernetes::eks::EKS;
+    use crate::cloud_provider::models::NodeGroups;
+    use crate::errors::Tag;
+    use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+    use crate::io_models::QoveryIdentifier;
+
+    #[test]
+    fn test_allowed_eks_nodes() {
+        let event_details = EventDetails::new(
+            None,
+            QoveryIdentifier::new_random(),
+            QoveryIdentifier::new_random(),
+            QoveryIdentifier::new_random(),
+            None,
+            Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
+            Transmitter::Kubernetes("".to_string(), "".to_string()),
+        );
+        assert!(EKS::validate_node_groups(
+            vec![NodeGroups::new("".to_string(), 3, 5, "t3a.large".to_string(), 20).unwrap()],
+            &event_details,
+        )
+        .is_ok());
+        assert_eq!(
+            EKS::validate_node_groups(
+                vec![NodeGroups::new("".to_string(), 3, 5, "t3.small".to_string(), 20).unwrap()],
+                &event_details
+            )
+            .unwrap_err()
+            .tag(),
+            &Tag::NotAllowedInstanceType
+        );
+        assert_eq!(
+            EKS::validate_node_groups(
+                vec![NodeGroups::new("".to_string(), 3, 5, "t1000.terminator".to_string(), 20).unwrap()],
+                &event_details
+            )
+            .unwrap_err()
+            .tag(),
+            &Tag::UnsupportedInstanceType
+        );
     }
 }

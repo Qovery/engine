@@ -10,6 +10,7 @@ use crate::cmd::kubectl::{
     kubectl_exec_rollout_restart_deployment, kubectl_exec_with_output,
 };
 use crate::cmd::structs::HelmHistoryRow;
+use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::{CommandError, ErrorMessageVerbosity};
 use crate::utilities::calculate_hash;
 use semver::Version;
@@ -711,6 +712,8 @@ pub fn get_engine_helm_action_from_location(location: &EngineLocation) -> HelmAc
     }
 }
 
+// Shell Agent
+
 pub struct ShellAgentContext<'a> {
     pub api_url: &'a str,
     pub api_token: &'a str,
@@ -724,6 +727,7 @@ pub struct ShellAgentContext<'a> {
 pub fn get_chart_for_shell_agent(
     context: ShellAgentContext,
     chart_path: impl Fn(&str) -> String,
+    custom_resources: Option<Vec<ChartSetValue>>,
 ) -> Result<CommonChart, CommandError> {
     let shell_agent_version: QoveryShellAgent = get_qovery_app_version(
         QoveryAppName::ShellAgent,
@@ -731,7 +735,7 @@ pub fn get_chart_for_shell_agent(
         context.api_url,
         context.cluster_id,
     )?;
-    let shell_agent = CommonChart {
+    let mut shell_agent = CommonChart {
         chart_info: ChartInfo {
             name: "shell-agent".to_string(),
             path: chart_path("common/charts/qovery/qovery-shell-agent"),
@@ -769,7 +773,15 @@ pub fn get_chart_for_shell_agent(
                     key: "environmentVariables.ORGANIZATION_ID".to_string(),
                     value: context.organization_long_id.to_string(),
                 },
-                // resources limits
+            ],
+            ..Default::default()
+        },
+    };
+
+    // resources limits
+    match custom_resources {
+        None => {
+            let mut default_resources = vec![
                 ChartSetValue {
                     key: "resources.limits.cpu".to_string(),
                     value: "1".to_string(),
@@ -786,13 +798,19 @@ pub fn get_chart_for_shell_agent(
                     key: "resources.requests.memory".to_string(),
                     value: "100Mi".to_string(),
                 },
-            ],
-            ..Default::default()
-        },
-    };
+            ];
+            shell_agent.chart_info.values.append(&mut default_resources)
+        }
+        Some(custom_resources) => {
+            let mut custom_resources_tmp = custom_resources;
+            shell_agent.chart_info.values.append(&mut custom_resources_tmp)
+        }
+    }
 
     Ok(shell_agent)
 }
+
+// Cluster Agent
 
 pub struct ClusterAgentContext<'a> {
     pub api_url: &'a str,
@@ -808,6 +826,7 @@ pub struct ClusterAgentContext<'a> {
 pub fn get_chart_for_cluster_agent(
     context: ClusterAgentContext,
     chart_path: impl Fn(&str) -> String,
+    custom_resources: Option<Vec<ChartSetValue>>,
 ) -> Result<CommonChart, CommandError> {
     let shell_agent_version: QoveryShellAgent = get_qovery_app_version(
         QoveryAppName::ClusterAgent,
@@ -815,7 +834,7 @@ pub fn get_chart_for_cluster_agent(
         context.api_url,
         context.cluster_id,
     )?;
-    let cluster_agent = CommonChart {
+    let mut cluster_agent = CommonChart {
         chart_info: ChartInfo {
             name: "cluster-agent".to_string(),
             path: chart_path("common/charts/qovery/qovery-cluster-agent"),
@@ -853,7 +872,15 @@ pub fn get_chart_for_cluster_agent(
                     key: "environmentVariables.ORGANIZATION_ID".to_string(),
                     value: context.organization_long_id.to_string(),
                 },
-                // resources limits
+            ],
+            ..Default::default()
+        },
+    };
+
+    // resources limits
+    match custom_resources {
+        None => {
+            let mut default_resources = vec![
                 ChartSetValue {
                     key: "resources.requests.cpu".to_string(),
                     value: "200m".to_string(),
@@ -870,12 +897,70 @@ pub fn get_chart_for_cluster_agent(
                     key: "resources.limits.memory".to_string(),
                     value: "500Mi".to_string(),
                 },
+            ];
+            cluster_agent.chart_info.values.append(&mut default_resources)
+        }
+        Some(custom_resources) => {
+            let mut custom_resources_tmp = custom_resources;
+            cluster_agent.chart_info.values.append(&mut custom_resources_tmp)
+        }
+    }
+
+    Ok(cluster_agent)
+}
+
+// Cert manager
+pub fn get_chart_for_cert_manager_config(
+    dns_provider_config: &DnsProviderConfiguration,
+    chart_path: String,
+    lets_encrypt_email_report: String,
+    lets_encrypt_acme_url: String,
+    managed_dns_helm_format: String,
+) -> CommonChart {
+    let mut cert_manager_config = CommonChart {
+        chart_info: ChartInfo {
+            name: "cert-manager-configs".to_string(),
+            path: chart_path,
+            namespace: HelmChartNamespaces::CertManager,
+            backup_resources: Some(vec!["cert".to_string(), "issuer".to_string(), "clusterissuer".to_string()]),
+            values: vec![
+                ChartSetValue {
+                    key: "externalDnsProvider".to_string(),
+                    value: dns_provider_config.get_cert_manager_config_name(),
+                },
+                ChartSetValue {
+                    key: "acme.letsEncrypt.emailReport".to_string(),
+                    value: lets_encrypt_email_report,
+                },
+                ChartSetValue {
+                    key: "acme.letsEncrypt.acmeUrl".to_string(),
+                    value: lets_encrypt_acme_url,
+                },
+                ChartSetValue {
+                    key: "managedDns".to_string(),
+                    value: managed_dns_helm_format,
+                },
             ],
             ..Default::default()
         },
     };
 
-    Ok(cluster_agent)
+    // add specific provider config
+    match dns_provider_config {
+        DnsProviderConfiguration::Cloudflare(x) => {
+            cert_manager_config.chart_info.values.push(ChartSetValue {
+                key: "provider.cloudflare.apiToken".to_string(),
+                value: x.cloudflare_api_token.clone(),
+            });
+            cert_manager_config.chart_info.values.push(ChartSetValue {
+                key: "provider.cloudflare.email".to_string(),
+                value: x.cloudflare_email.clone(),
+            })
+        }
+        DnsProviderConfiguration::QoveryDns(_) => {}
+    };
+
+    cert_manager_config
 }
 
 #[cfg(test)]

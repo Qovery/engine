@@ -1,9 +1,11 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
-    get_chart_for_cluster_agent, get_chart_for_shell_agent, ChartInfo, ChartSetValue, ClusterAgentContext, CommonChart,
-    CoreDNSConfigChart, HelmChart, HelmChartNamespaces, ShellAgentContext,
+    get_chart_for_cert_manager_config, get_chart_for_cluster_agent, get_chart_for_shell_agent, ChartInfo,
+    ChartSetValue, ClusterAgentContext, CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces,
+    ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName};
+use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
@@ -49,8 +51,7 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub external_dns_provider: String,
     pub dns_email_report: String,
     pub acme_url: String,
-    pub cloudflare_email: String,
-    pub cloudflare_api_token: String,
+    pub dns_provider_config: DnsProviderConfiguration,
     pub disable_pleco: bool,
     // qovery options form json input
     pub infra_options: Options,
@@ -101,15 +102,6 @@ pub fn ec2_aws_helm_charts(
         },
     };
 
-    // Calico for AWS
-    let aws_calico = CommonChart {
-        chart_info: ChartInfo {
-            name: "calico".to_string(),
-            path: chart_path("charts/aws-calico"),
-            ..Default::default()
-        },
-    };
-
     let coredns_config = CoreDNSConfigChart {
         chart_info: ChartInfo {
             name: "coredns".to_string(),
@@ -138,20 +130,31 @@ pub fn ec2_aws_helm_charts(
             values: vec![
                 // resources limits
                 ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "50m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "50m".to_string(),
-                },
-                ChartSetValue {
                     key: "resources.limits.memory".to_string(),
-                    value: "50Mi".to_string(),
+                    value: "30Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.memory".to_string(),
-                    value: "50Mi".to_string(),
+                    value: "30Mi".to_string(),
+                },
+            ],
+            ..Default::default()
+        },
+    };
+
+    let metrics_server = CommonChart {
+        chart_info: ChartInfo {
+            name: "metrics-server".to_string(),
+            path: chart_path("common/charts/metrics-server"),
+            values_files: vec![chart_path("chart_values/metrics-server.yaml")],
+            values: vec![
+                ChartSetValue {
+                    key: "resources.limits.memory".to_string(),
+                    value: "30Mi".to_string(),
+                },
+                ChartSetValue {
+                    key: "resources.requests.memory".to_string(),
+                    value: "30Mi".to_string(),
                 },
             ],
             ..Default::default()
@@ -190,96 +193,43 @@ pub fn ec2_aws_helm_charts(
                 },
                 // resources limits
                 ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
                     key: "resources.limits.memory".to_string(),
-                    value: "1Gi".to_string(),
+                    value: "50Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.memory".to_string(),
-                    value: "1Gi".to_string(),
+                    value: "50Mi".to_string(),
                 },
                 // Webhooks resources limits
                 ChartSetValue {
-                    key: "webhook.resources.limits.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
-                    key: "webhook.resources.requests.cpu".to_string(),
-                    value: "50m".to_string(),
-                },
-                ChartSetValue {
                     key: "webhook.resources.limits.memory".to_string(),
-                    value: "128Mi".to_string(),
+                    value: "64Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "webhook.resources.requests.memory".to_string(),
-                    value: "128Mi".to_string(),
+                    value: "64Mi".to_string(),
                 },
                 // Cainjector resources limits
                 ChartSetValue {
-                    key: "cainjector.resources.limits.cpu".to_string(),
-                    value: "500m".to_string(),
-                },
-                ChartSetValue {
-                    key: "cainjector.resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
                     key: "cainjector.resources.limits.memory".to_string(),
-                    value: "1Gi".to_string(),
+                    value: "64Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "cainjector.resources.requests.memory".to_string(),
-                    value: "1Gi".to_string(),
+                    value: "64Mi".to_string(),
                 },
             ],
             ..Default::default()
         },
     };
 
-    let mut cert_manager_config = CommonChart {
-        chart_info: ChartInfo {
-            name: "cert-manager-configs".to_string(),
-            path: chart_path("common/charts/cert-manager-configs"),
-            namespace: HelmChartNamespaces::CertManager,
-            values: vec![
-                ChartSetValue {
-                    key: "externalDnsProvider".to_string(),
-                    value: chart_config_prerequisites.external_dns_provider.clone(),
-                },
-                ChartSetValue {
-                    key: "acme.letsEncrypt.emailReport".to_string(),
-                    value: chart_config_prerequisites.dns_email_report.clone(),
-                },
-                ChartSetValue {
-                    key: "acme.letsEncrypt.acmeUrl".to_string(),
-                    value: chart_config_prerequisites.acme_url.clone(),
-                },
-                ChartSetValue {
-                    key: "managedDns".to_string(),
-                    value: chart_config_prerequisites.managed_dns_helm_format.clone(),
-                },
-            ],
-            ..Default::default()
-        },
-    };
-    if chart_config_prerequisites.external_dns_provider == "cloudflare" {
-        cert_manager_config.chart_info.values.push(ChartSetValue {
-            key: "provider.cloudflare.apiToken".to_string(),
-            value: chart_config_prerequisites.cloudflare_api_token.clone(),
-        });
-        cert_manager_config.chart_info.values.push(ChartSetValue {
-            key: "provider.cloudflare.email".to_string(),
-            value: chart_config_prerequisites.cloudflare_email.clone(),
-        })
-    }
+    let cert_manager_config = get_chart_for_cert_manager_config(
+        &chart_config_prerequisites.dns_provider_config,
+        chart_path("common/charts/cert-manager-configs"),
+        chart_config_prerequisites.dns_email_report.clone(),
+        chart_config_prerequisites.acme_url.clone(),
+        chart_config_prerequisites.managed_dns_helm_format.clone(),
+    );
 
     let nginx_ingress = CommonChart {
         chart_info: ChartInfo {
@@ -292,30 +242,14 @@ pub fn ec2_aws_helm_charts(
             values: vec![
                 // Controller resources limits
                 ChartSetValue {
-                    key: "controller.resources.limits.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
-                    key: "controller.resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
                     key: "controller.resources.limits.memory".to_string(),
-                    value: "768Mi".to_string(),
+                    value: "192Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "controller.resources.requests.memory".to_string(),
-                    value: "768Mi".to_string(),
+                    value: "192Mi".to_string(),
                 },
                 // Default backend resources limits
-                ChartSetValue {
-                    key: "defaultBackend.resources.limits.cpu".to_string(),
-                    value: "20m".to_string(),
-                },
-                ChartSetValue {
-                    key: "defaultBackend.resources.requests.cpu".to_string(),
-                    value: "10m".to_string(),
-                },
                 ChartSetValue {
                     key: "defaultBackend.resources.limits.memory".to_string(),
                     value: "32Mi".to_string(),
@@ -338,7 +272,17 @@ pub fn ec2_aws_helm_charts(
         cluster_jwt_token: &chart_config_prerequisites.infra_options.jwt_token,
         grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
     };
-    let cluster_agent = get_chart_for_cluster_agent(cluster_agent_context, chart_path)?;
+    let cluster_agent_resources = vec![
+        ChartSetValue {
+            key: "resources.requests.memory".to_string(),
+            value: "50Mi".to_string(),
+        },
+        ChartSetValue {
+            key: "resources.limits.memory".to_string(),
+            value: "100Mi".to_string(),
+        },
+    ];
+    let cluster_agent = get_chart_for_cluster_agent(cluster_agent_context, chart_path, Some(cluster_agent_resources))?;
 
     let shell_context = ShellAgentContext {
         api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
@@ -349,7 +293,17 @@ pub fn ec2_aws_helm_charts(
         cluster_jwt_token: &chart_config_prerequisites.infra_options.jwt_token,
         grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
     };
-    let shell_agent = get_chart_for_shell_agent(shell_context, chart_path)?;
+    let shell_agent_resources = vec![
+        ChartSetValue {
+            key: "resources.requests.memory".to_string(),
+            value: "50Mi".to_string(),
+        },
+        ChartSetValue {
+            key: "resources.limits.memory".to_string(),
+            value: "100Mi".to_string(),
+        },
+    ];
+    let shell_agent = get_chart_for_shell_agent(shell_context, chart_path, Some(shell_agent_resources))?;
 
     let qovery_agent_version: QoveryAgent = get_qovery_app_version(
         QoveryAppName::Agent,
@@ -394,20 +348,12 @@ pub fn ec2_aws_helm_charts(
                 },
                 // resources limits
                 ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "1".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
                     key: "resources.limits.memory".to_string(),
-                    value: "500Mi".to_string(),
+                    value: "50Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.memory".to_string(),
-                    value: "500Mi".to_string(),
+                    value: "50Mi".to_string(),
                 },
             ],
             ..Default::default()
@@ -428,9 +374,9 @@ pub fn ec2_aws_helm_charts(
 
     let level_3: Vec<Box<dyn HelmChart>> = vec![];
 
-    let level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(aws_calico)];
+    let level_4: Vec<Box<dyn HelmChart>> = vec![];
 
-    let level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(external_dns)];
+    let level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(external_dns), Box::new(metrics_server)];
 
     let level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
 

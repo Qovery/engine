@@ -12,6 +12,7 @@ use qovery_engine::io_models::{
 };
 
 use crate::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
+use crate::aws_ec2::ec2_kubernetes_instance;
 use crate::digitalocean::{DO_KUBERNETES_VERSION, DO_TEST_REGION};
 use crate::scaleway::{SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
 use crate::utilities::{
@@ -1358,6 +1359,7 @@ pub fn get_environment_test_kubernetes(
                     cloud_provider,
                     dns_provider,
                     options,
+                    ec2_kubernetes_instance(),
                     logger,
                 )
                 .unwrap(),
@@ -1467,6 +1469,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     cloud_provider,
                     dns_provider,
                     options,
+                    ec2_kubernetes_instance(),
                     logger,
                 )
                 .unwrap(),

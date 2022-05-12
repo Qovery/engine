@@ -1,20 +1,23 @@
 use crate::cloud_provider;
 use crate::cloud_provider::aws::kubernetes;
+use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{send_progress_on_long_task, Kind, Kubernetes, KubernetesUpgradeStatus};
+use crate::cloud_provider::models::{InstanceEc2, NodeGroups};
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
 use crate::dns_provider::DnsProvider;
 use crate::errors::EngineError;
-use crate::events::{EnvironmentStep, InfrastructureStep, Stage};
+use crate::events::{EngineEvent, EnvironmentStep, InfrastructureStep, Stage};
 use crate::io_models::{Action, Context, Listen, Listener, Listeners};
 use crate::logger::Logger;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use function_name::named;
 use std::borrow::Borrow;
+use std::str::FromStr;
 use std::sync::Arc;
 
 /// EC2 kubernetes provider allowing to deploy a cluster on single EC2 node.
@@ -31,6 +34,7 @@ pub struct EC2 {
     s3: S3,
     template_directory: String,
     options: Options,
+    instance: InstanceEc2,
     listeners: Listeners,
     logger: Box<dyn Logger>,
 }
@@ -47,6 +51,7 @@ impl EC2 {
         cloud_provider: Arc<Box<dyn CloudProvider>>,
         dns_provider: Arc<Box<dyn DnsProvider>>,
         options: Options,
+        instance: InstanceEc2,
         logger: Box<dyn Logger>,
     ) -> Result<Self, EngineError> {
         let event_details = kubernetes::event_details(&**cloud_provider, id, name, &region, &context);
@@ -54,6 +59,12 @@ impl EC2 {
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
         let s3 = kubernetes::s3(&context, &region, &**cloud_provider);
+        if let Err(e) = AwsInstancesType::from_str(instance.instance_type.as_str()) {
+            let err = EngineError::new_unsupported_instance_type(event_details, instance.instance_type.as_str(), e);
+            logger.log(EngineEvent::Error(err.clone(), None));
+
+            return Err(err);
+        }
 
         // copy listeners from CloudProvider
         let listeners = cloud_provider.listeners().clone();
@@ -69,6 +80,7 @@ impl EC2 {
             dns_provider,
             s3,
             options,
+            instance,
             template_directory,
             logger,
             listeners,
@@ -81,6 +93,17 @@ impl EC2 {
 
     fn struct_name(&self) -> &str {
         "kubernetes"
+    }
+
+    fn node_group_from_instance_type(&self) -> NodeGroups {
+        NodeGroups::new(
+            "instance".to_string(),
+            1,
+            1,
+            self.instance.instance_type.clone(),
+            self.instance.disk_size_in_gib,
+        )
+        .expect("wrong instance type for EC2") // using expect here as it has already been validated during instantiation
     }
 }
 
@@ -154,7 +177,7 @@ impl Kubernetes for EC2 {
                 self.long_id,
                 self.template_directory.as_str(),
                 &self.zones,
-                &[],
+                &[self.node_group_from_instance_type()],
                 &self.options,
             )
         })
