@@ -661,36 +661,6 @@ impl Kapsule {
             &listeners_helper,
         );
 
-        // temporary: remove helm/kube management from terraform
-        match terraform_init_validate_state_list(temp_dir.as_str()) {
-            Ok(x) => {
-                let items_type = vec!["helm_release", "kubernetes_namespace"];
-                for item in items_type {
-                    for entry in x.clone() {
-                        if entry.starts_with(item) {
-                            match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
-                                Ok(_) => self.logger().log(EngineEvent::Info(
-                                    event_details.clone(),
-                                    EventMessage::new_from_safe(format!("Successfully removed {}", &entry)),
-                                )),
-                                Err(e) => {
-                                    return Err(EngineError::new_terraform_cannot_remove_entry_out(
-                                        event_details,
-                                        entry.to_string(),
-                                        e,
-                                    ))
-                                }
-                            }
-                        };
-                    }
-                }
-            }
-            Err(e) => self.logger().log(EngineEvent::Error(
-                EngineError::new_terraform_state_does_not_exist(event_details.clone(), e),
-                None,
-            )),
-        };
-
         // TODO(benjaminch): move this elsewhere
         // Create object-storage buckets
         self.logger().log(EngineEvent::Info(
@@ -726,7 +696,7 @@ impl Kapsule {
         // push config file to object storage
         let kubeconfig_path = &self.get_kubeconfig_file_path()?;
         let kubeconfig_path = Path::new(kubeconfig_path);
-        let kubeconfig_name = format!("{}.yaml", self.id());
+        let kubeconfig_name = self.get_kubeconfig_filename();
         if let Err(e) = self.object_storage.put(
             self.kubeconfig_bucket_name().as_str(),
             kubeconfig_name.as_str(),

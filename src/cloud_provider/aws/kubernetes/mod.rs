@@ -621,34 +621,46 @@ fn create(
     }
 
     // wait for AWS EC2 K3S port is open to avoid later deployment issues (and kubeconfig not available on S3)
-    if let Kind::Ec2 = kubernetes.kind() {
-        kubernetes.delete_local_kubeconfig();
-        kubernetes.get_kubeconfig_file()?;
+    match kubernetes.kind() {
+        Kind::Eks => {
+            let kubeconfig_path = format!(
+                "{}/{}/{}",
+                kubernetes.context().lib_root_dir(),
+                kubernetes.get_bucket_name(),
+                kubernetes.get_kubeconfig_filename()
+            );
+            kubernetes.put_kubeconfig_file_to_object_storage(kubeconfig_path.as_str())?
+        }
+        Kind::Ec2 => {
+            kubernetes.delete_local_kubeconfig();
+            kubernetes.get_kubeconfig_file()?;
 
-        let qovery_teraform_config =
-            get_aws_ec2_qovery_terraform_config(format!("{}/qovery-tf-config.json", &temp_dir).as_str())
-                .map_err(|e| EngineError::new_terraform_qovery_config_mismatch(event_details.clone(), e))?;
+            let qovery_terraform_config =
+                get_aws_ec2_qovery_terraform_config(format!("{}/qovery-tf-config.json", &temp_dir).as_str())
+                    .map_err(|e| EngineError::new_terraform_qovery_config_mismatch(event_details.clone(), e))?;
 
-        let port = qovery_teraform_config.kubernetes_port_to_u16().map_err(|e| {
-            EngineError::new_terraform_qovery_config_mismatch(
+            let port = qovery_terraform_config.kubernetes_port_to_u16().map_err(|e| {
+                EngineError::new_terraform_qovery_config_mismatch(
+                    event_details.clone(),
+                    CommandError::new_from_safe_message(e),
+                )
+            })?;
+
+            wait_until_port_is_open(
+                &TcpCheckSource::DnsName(qovery_terraform_config.aws_ec2_public_hostname.as_str()),
+                port,
+                300,
+                kubernetes.logger(),
                 event_details.clone(),
-                CommandError::new_from_safe_message(e),
             )
-        })?;
-
-        wait_until_port_is_open(
-            &TcpCheckSource::DnsName(qovery_teraform_config.aws_ec2_public_hostname.as_str()),
-            port,
-            300,
-            kubernetes.logger(),
-            event_details.clone(),
-        )
-        .map_err(|e| {
-            EngineError::new_terraform_qovery_config_mismatch(
-                event_details.clone(),
-                CommandError::new("Wasn't able to connect to Kubernetes API, can't continue. Did you manually performed changes AWS side?".to_string(), Some(format!("{:?}", e)), None),
-            )
-        })?;
+                .map_err(|e| {
+                    EngineError::new_terraform_qovery_config_mismatch(
+                        event_details.clone(),
+                        CommandError::new("Wasn't able to connect to Kubernetes API, can't continue. Did you manually performed changes AWS side?".to_string(), Some(format!("{:?}", e)), None),
+                    )
+                })?
+        }
+        _ => {}
     };
 
     // kubernetes helm deployments on the cluster
@@ -1022,6 +1034,11 @@ fn delete(
     ));
 
     let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
+
+    // delete kubeconfig on s3 to avoid obsolete kubeconfig (not for EC2 because S3 kubeconfig upload is not done the same way)
+    if kubernetes.kind() != Kind::Ec2 {
+        let _ = kubernetes.ensure_kubeconfig_is_not_in_object_storage();
+    };
 
     // generate terraform files and copy them into temp dir
     let context = tera_context(kubernetes, aws_zones, node_groups, options)?;

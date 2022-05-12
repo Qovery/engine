@@ -8,9 +8,10 @@ use crate::cloud_provider::aws::regions::AwsRegion;
 use rusoto_core::credential::StaticProvider;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_s3::{
-    CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectsRequest,
-    GetObjectRequest, HeadBucketRequest, ListObjectsRequest, ObjectIdentifier, PutBucketTaggingRequest,
-    PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, Tag, Tagging, S3 as RusotoS3,
+    CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectRequest,
+    DeleteObjectsRequest, GetObjectRequest, HeadBucketRequest, ListObjectsRequest, ObjectIdentifier,
+    PutBucketTaggingRequest, PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, Tag, Tagging,
+    S3 as RusotoS3,
 };
 use tokio::io;
 
@@ -338,6 +339,32 @@ impl ObjectStorage for S3 {
         })) {
             Ok(_) => Ok(()),
             Err(e) => Err(ObjectStorageError::CannotUploadFile {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
+        }
+    }
+
+    fn ensure_file_is_absent(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError> {
+        if let Err(_) = S3::is_bucket_name_valid(bucket_name) {
+            // bucket is missing it's ok as file can't be present
+            return Ok(());
+        };
+
+        // check if file already exists
+        if let Err(_) = self.get(bucket_name, object_key, false) {
+            return Ok(());
+        };
+
+        let s3_client = self.get_s3_client();
+
+        match block_on(s3_client.delete_object(DeleteObjectRequest {
+            bucket: bucket_name.to_string(),
+            key: object_key.to_string(),
+            ..Default::default()
+        })) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(ObjectStorageError::CannotDeleteFile {
                 bucket_name: bucket_name.to_string(),
                 raw_error_message: e.to_string(),
             }),

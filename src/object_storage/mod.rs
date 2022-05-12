@@ -27,6 +27,7 @@ pub trait ObjectStorage {
         use_cache: bool,
     ) -> Result<(StringPath, File), ObjectStorageError>;
     fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), ObjectStorageError>;
+    fn ensure_file_is_absent(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError>;
 }
 
 #[derive(Serialize, Deserialize, Clone)]

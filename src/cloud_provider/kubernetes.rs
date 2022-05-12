@@ -84,9 +84,46 @@ pub trait Kubernetes: Listen {
         format!("{}.yaml", self.id())
     }
 
+    fn get_bucket_name(&self) -> String {
+        format!("qovery-kubeconfigs-{}", self.id())
+    }
+
+    fn put_kubeconfig_file_to_object_storage(&self, file_path: &str) -> Result<(), EngineError> {
+        if let Err(e) = self.config_file_store().put(
+            self.get_bucket_name().as_str(),
+            self.get_kubeconfig_filename().as_str(),
+            file_path,
+        ) {
+            let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+            return Err(EngineError::new_object_storage_cannot_put_file_into_bucket_error(
+                event_details,
+                self.get_bucket_name(),
+                self.get_kubeconfig_filename(),
+                e,
+            ));
+        };
+        Ok(())
+    }
+
+    fn ensure_kubeconfig_is_not_in_object_storage(&self) -> Result<(), EngineError> {
+        if let Err(e) = self
+            .config_file_store()
+            .ensure_file_is_absent(self.get_bucket_name().as_str(), self.get_kubeconfig_filename().as_str())
+        {
+            let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+            return Err(EngineError::new_object_storage_cannot_delete_file_into_bucket_error(
+                event_details,
+                self.get_bucket_name(),
+                self.get_kubeconfig_filename(),
+                e,
+            ));
+        };
+        Ok(())
+    }
+
     fn get_kubeconfig_file(&self) -> Result<(String, File), EngineError> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-        let bucket_name = format!("qovery-kubeconfigs-{}", self.id());
+        let bucket_name = self.get_bucket_name();
         let object_key = self.get_kubeconfig_filename();
         let stage = Stage::General(GeneralStep::RetrieveClusterConfig);
 
@@ -379,7 +416,7 @@ pub trait KubernetesNode {
     fn as_any(&self) -> &dyn Any;
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     Eks,

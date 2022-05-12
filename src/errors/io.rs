@@ -80,6 +80,7 @@ pub enum Tag {
     ContainerRegistryError,
     ObjectStorageCannotCreateBucket,
     ObjectStorageCannotPutFileIntoBucket,
+    ObjectStorageCannotDeleteFileIntoBucket,
     NoClusterFound,
     OnlyOneClusterExpected,
     CloudProviderApiMissingInfo,
@@ -230,6 +231,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::UnsupportedClusterKind => Tag::UnsupportedClusterKind,
             errors::Tag::NotAllowedInstanceType => Tag::NotAllowedInstanceType,
             errors::Tag::TerraformQoveryConfigMismatch => Tag::TerraformQoveryConfigMismatch,
+            errors::Tag::ObjectStorageCannotDeleteFileIntoBucket => Tag::ObjectStorageCannotDeleteFileIntoBucket,
         }
     }
 }
