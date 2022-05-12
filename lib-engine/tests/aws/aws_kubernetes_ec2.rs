@@ -11,6 +11,7 @@ use qovery_engine::cloud_provider::Kind;
 use std::str::FromStr;
 use test_utilities::aws::{K3S_KUBERNETES_MAJOR_VERSION, K3S_KUBERNETES_MINOR_VERSION};
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
+use test_utilities::utilities::FuncTestsSecrets;
 
 #[cfg(feature = "test-aws-infra-ec2")]
 fn create_and_destroy_aws_ec2_k3s_cluster(
@@ -24,7 +25,8 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
     engine_run_test(|| {
         let region = AwsRegion::from_str(region.as_str()).expect("Wasn't able to convert the desired region");
         let zones = region.get_zones();
-        let cluster_id = "ztest-abe3e22b0".to_string(); // don't change it to test qovery dns provider properly
+        let secrets = FuncTestsSecrets::new();
+        let cluster_id = secrets.AWS_EC2_DEFAULT_CLUSTER_ID.unwrap(); // don't change it to test qovery dns provider properly
         cluster_test(
             test_name,
             Kind::Aws,
