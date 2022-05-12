@@ -1,22 +1,23 @@
 extern crate test_utilities;
 
-use self::test_utilities::common::routers_sessions_are_sticky;
+use self::test_utilities::common::session_is_sticky;
 use self::test_utilities::digitalocean::{clean_environments, DO_TEST_REGION};
 use self::test_utilities::utilities::{
-    engine_run_test, generate_id, get_pods, get_pvc, init, is_pod_restarted_env, logger, FuncTestsSecrets,
+    engine_run_test, generate_id, get_pods, get_pvc, init, is_pod_restarted_env, kubernetes_config_path, logger,
+    FuncTestsSecrets,
 };
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::io_models::{Action, CloneForTest, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
+use retry::delay::Fibonacci;
 use std::collections::BTreeMap;
-use std::thread;
-use std::time::Duration;
 use test_utilities::common::Infrastructure;
 use test_utilities::digitalocean::do_default_engine_config;
 use test_utilities::utilities::context;
 use tracing::{span, warn, Level};
+use url::Url;
 use uuid::Uuid;
 
 // Note: All those tests relies on a test cluster running on DigitalOcean infrastructure.
@@ -892,10 +893,56 @@ fn digitalocean_doks_deploy_a_working_environment_with_sticky_session() {
         let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
 
-        // let time for nginx to reload the config
-        thread::sleep(Duration::from_secs(10));
         // checking cookie is properly set on the app
-        assert!(routers_sessions_are_sticky(environment.routers.clone()));
+        let kubeconfig = kubernetes_config_path(engine_config.context().clone(), Kind::Do, "/tmp", secrets.clone())
+            .expect("cannot get kubeconfig");
+        let router = environment
+            .routers
+            .first()
+            .unwrap()
+            .to_router_domain(engine_config.context(), engine_config.cloud_provider(), logger.clone())
+            .unwrap();
+        let environment_domain = environment
+            .to_environment_domain(
+                engine_config.context(),
+                engine_config.cloud_provider(),
+                engine_config.container_registry().registry_info(),
+                logger.clone(),
+            )
+            .unwrap();
+
+        // let some time for ingress to get its IP or hostname
+        // Sticky session is checked on ingress IP or hostname so we are not subjects to long DNS propagation making test less flacky.
+        let ingress = retry::retry(Fibonacci::from_millis(15000).take(8), || {
+            match qovery_engine::cmd::kubectl::kubectl_exec_get_external_ingress(
+                &kubeconfig,
+                environment_domain.namespace(),
+                router.sanitized_name().as_str(),
+                engine_config.cloud_provider().credentials_environment_variables(),
+            ) {
+                Ok(res) => match res {
+                    Some(res) => retry::OperationResult::Ok(res),
+                    None => retry::OperationResult::Retry("ingress not found"),
+                },
+                Err(_) => retry::OperationResult::Retry("cannot get ingress"),
+            }
+        })
+        .expect("cannot get ingress");
+        let ingress_host = ingress
+            .ip
+            .as_ref()
+            .unwrap_or_else(|| ingress.hostname.as_ref().expect("ingress has no IP nor hostname"));
+
+        for router in environment.routers.iter() {
+            for route in router.routes.iter() {
+                assert!(session_is_sticky(
+                    Url::parse(format!("http://{}{}", ingress_host.to_string(), route.path).as_str())
+                        .expect("cannot parse URL"),
+                    router.default_domain.clone(),
+                    85400,
+                ));
+            }
+        }
 
         let result =
             environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);

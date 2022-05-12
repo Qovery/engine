@@ -15,6 +15,12 @@ pub struct KubernetesService {
     pub status: KubernetesServiceStatus,
 }
 
+#[derive(Deserialize, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesIngress {
+    pub status: KubernetesIngressStatus,
+}
+
 pub struct LabelsContent {
     pub name: String,
     pub value: String,
@@ -145,6 +151,25 @@ pub struct KubernetesServiceStatusLoadBalancer {
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesServiceStatusLoadBalancerIngress {
     pub hostname: String,
+}
+
+#[derive(Deserialize, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesIngressStatus {
+    pub load_balancer: KubernetesIngressStatusLoadBalancer,
+}
+
+#[derive(Deserialize, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesIngressStatusLoadBalancer {
+    pub ingress: Vec<KubernetesIngressStatusLoadBalancerIngress>,
+}
+
+#[derive(Deserialize, Clone, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesIngressStatusLoadBalancerIngress {
+    pub ip: Option<String>,
+    pub hostname: Option<String>,
 }
 
 #[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
