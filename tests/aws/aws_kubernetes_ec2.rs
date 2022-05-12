@@ -46,6 +46,7 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
 #[cfg(feature = "test-aws-infra-ec2")]
 #[named]
 #[test]
+#[ignore] // TODO(benjaminch): to be reactivated once EC2 is ready
 fn create_and_destroy_aws_ec2_k3s_cluster_eu_west_3() {
     let region = "eu-west-3".to_string();
     create_and_destroy_aws_ec2_k3s_cluster(
