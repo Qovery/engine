@@ -700,7 +700,7 @@ impl Kapsule {
         // push config file to object storage
         let kubeconfig_path = &self.get_kubeconfig_file_path()?;
         let kubeconfig_path = Path::new(kubeconfig_path);
-        let kubeconfig_name = format!("{}.yaml", self.id());
+        let kubeconfig_name = self.get_kubeconfig_filename();
         if let Err(e) = self.object_storage.put(
             self.kubeconfig_bucket_name().as_str(),
             kubeconfig_name.as_str(),
