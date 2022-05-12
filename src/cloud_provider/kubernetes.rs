@@ -88,6 +88,39 @@ pub trait Kubernetes: Listen {
         format!("{}.yaml", self.id())
     }
 
+    fn put_kubeconfig_file_to_object_storage(&self, file_path: &str) -> Result<(), EngineError> {
+        if let Err(e) = self.config_file_store().put(
+            self.get_bucket_name().as_str(),
+            self.get_kubeconfig_filename().as_str(),
+            file_path,
+        ) {
+            let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+            return Err(EngineError::new_object_storage_cannot_put_file_into_bucket_error(
+                event_details,
+                self.get_bucket_name(),
+                self.get_kubeconfig_filename(),
+                e,
+            ));
+        };
+        Ok(())
+    }
+
+    fn ensure_kubeconfig_is_not_in_object_storage(&self) -> Result<(), EngineError> {
+        if let Err(e) = self
+            .config_file_store()
+            .ensure_file_is_absent(self.get_bucket_name().as_str(), self.get_kubeconfig_filename().as_str())
+        {
+            let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+            return Err(EngineError::new_object_storage_cannot_delete_file_into_bucket_error(
+                event_details,
+                self.get_bucket_name(),
+                self.get_kubeconfig_filename(),
+                e,
+            ));
+        };
+        Ok(())
+    }
+
     fn get_bucket_name(&self) -> String {
         format!("qovery-kubeconfigs-{}", self.id())
     }
@@ -152,11 +185,11 @@ pub trait Kubernetes: Listen {
                             self.get_event_details(stage.clone()),
                             err.into(),
                         );
-                        self.logger().log(EngineEvent::Info(
-                            self.get_event_details(stage.clone()),
-                            EventMessage::new_from_safe("Retrying to get kubeconfig file.".to_string()),
+                        self.logger().log(EngineEvent::Warning(
+                            event_details.clone(),
+                            EventMessage::new_from_safe(error.to_string()),
                         ));
-                        OperationResult::Retry(error)
+                        retry::OperationResult::Retry(error)
                     }
                 }
             }) {

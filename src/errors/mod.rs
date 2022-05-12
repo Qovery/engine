@@ -252,6 +252,14 @@ impl From<ObjectStorageError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
+            ObjectStorageError::CannotDeleteFile {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot delete file in bucket: `{}`", bucket_name),
+                Some(raw_error_message),
+                None,
+            ),
         }
     }
 }
@@ -596,6 +604,8 @@ pub enum Tag {
     ObjectStorageCannotCreateBucket,
     /// ObjectStorageCannotPutFileIntoBucket: represents an error while trying to put a file into an object storage bucket.
     ObjectStorageCannotPutFileIntoBucket,
+    /// ObjectStorageCannotDeleteFileIntoBucket: represents an error while trying to delete a file into an object storage bucket.
+    ObjectStorageCannotDeleteFileIntoBucket,
     /// ClientServiceFailedToStart: represent an error while trying to start a client's service.
     ClientServiceFailedToStart,
     /// ClientServiceFailedToDeployBeforeStart: represents an error while trying to deploy a client's service before start.
@@ -3214,6 +3224,37 @@ impl EngineError {
             Tag::ObjectStorageCannotPutFileIntoBucket,
             message,
             Some(raw_error.into()),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new object storage cannot delete file into bucket.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `bucket_name`: Object storage bucket name.
+    /// * `file_name`: File name to be added into the bucket.
+    /// * `raw_error`: Raw error message.
+    pub fn new_object_storage_cannot_delete_file_into_bucket_error(
+        event_details: EventDetails,
+        bucket_name: String,
+        file_name: String,
+        raw_error: ObjectStorageError,
+    ) -> EngineError {
+        let message = format!(
+            "Error, cannot delete file `{}` into object storage bucket `{}`.",
+            file_name, bucket_name,
+        );
+
+        let error = CommandError::new(message.clone(), Some(format!("{:?}", raw_error)), None);
+
+        EngineError::new(
+            event_details,
+            Tag::ObjectStorageCannotDeleteFileIntoBucket,
+            message,
+            Some(error),
             None,
             None,
         )

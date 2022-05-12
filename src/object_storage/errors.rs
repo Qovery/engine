@@ -58,4 +58,9 @@ pub enum ObjectStorageError {
         bucket_name: String,
         raw_error_message: String,
     },
+    #[error("Cannot delete file error for `{bucket_name:?}`: {raw_error_message:?}.")]
+    CannotDeleteFile {
+        bucket_name: String,
+        raw_error_message: String,
+    },
 }

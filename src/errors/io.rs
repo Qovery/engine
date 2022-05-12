@@ -83,6 +83,7 @@ pub enum Tag {
     ContainerRegistryError,
     ObjectStorageCannotCreateBucket,
     ObjectStorageCannotPutFileIntoBucket,
+    ObjectStorageCannotDeleteFileIntoBucket,
     NoClusterFound,
     OnlyOneClusterExpected,
     CloudProviderApiMissingInfo,
@@ -267,6 +268,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::JsonDeserializationError => Tag::JsonDeserializationError,
             errors::Tag::ClusterSecretsManipulationError => Tag::ClusterSecretsManipulationError,
             errors::Tag::VaultSecretCouldNotBeDeleted => Tag::VaultSecretCouldNotBeDeleted,
+            errors::Tag::ObjectStorageCannotDeleteFileIntoBucket => Tag::ObjectStorageCannotDeleteFileIntoBucket,
             errors::Tag::CannotGetNodeGroupList => Tag::CannotGetNodeGroupList,
             errors::Tag::CannotGetNodeGroupInfo => Tag::CannotGetNodeGroupInfo,
             errors::Tag::NumberOfRequestedMaxNodesIsBelowThanCurrentUsage => {
