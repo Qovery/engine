@@ -14,6 +14,17 @@ use serde::__private::from_utf8_lossy;
 use std::ffi::OsStr;
 use walkdir::WalkDir;
 
+pub fn delete_file_if_exists(file: &str) -> Result<(), Error> {
+    if !Path::new(&file).exists() {
+        return Ok(());
+    }
+
+    if let Err(e) = std::fs::remove_file(&file) {
+        return Err(e);
+    };
+    Ok(())
+}
+
 pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), Error> {
     let files = WalkDir::new(from).follow_links(true).into_iter().filter_map(|e| e.ok());
 
