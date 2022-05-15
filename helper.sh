@@ -400,7 +400,7 @@ if [ $ARGS_NUM -eq 0 ] ; then
 fi
 
 # Check if running manually
-elif [ ! -z $GITLAB_USER_ID ] ; then
+if [ ! -z $GITLAB_USER_ID ] ; then
   commit_id=$CI_COMMIT_SHA
   RUNNING_ON_CI=1
 else

@@ -46,9 +46,8 @@ release-image:
     - bm-7cpu-12gmem-0g
   when: manual
   interruptible: true
-  except:
-    refs:
-      - main
+  only:
+    - merge_requests
 
 release-image-prod:
   stage: build-and-lint
