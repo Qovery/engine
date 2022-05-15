@@ -1,0 +1,41 @@
+{{- if .Values.agents.podSecurity.podSecurityPolicy.create}}
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: {{ template "datadog.fullname" . }}
+  labels:
+{{ include "datadog.labels" . | indent 4 }}
+  annotations:
+    {{- if .Values.agents.podSecurity.apparmor.enabled }}
+    apparmor.security.beta.kubernetes.io/allowedProfileNames: {{ join "," .Values.agents.podSecurity.apparmorProfiles | quote }}
+    apparmor.security.beta.kubernetes.io/defaultProfileName: "runtime/default"
+    {{- end }}
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: {{ join "," .Values.agents.podSecurity.seccompProfiles | quote }}
+    seccomp.security.alpha.kubernetes.io/defaultProfileName: "runtime/default"
+spec:
+  privileged: {{ .Values.agents.podSecurity.privileged }}
+  hostNetwork: {{ .Values.agents.useHostNetwork }}
+  {{- if or .Values.datadog.dogstatsd.useHostPort (eq  (include "trace-agent-use-tcp-port" .) "true") }}
+  hostPorts:
+  - min: 8125
+    max: 8126
+  {{- end }}
+  hostPID: {{ or (eq  (include "should-enable-compliance" .) "true") .Values.datadog.dogstatsd.useHostPID }}
+  allowedCapabilities: 
+{{ toYaml .Values.agents.podSecurity.capabilities | indent 4 }}
+  volumes:
+{{ toYaml .Values.agents.podSecurity.volumes | indent 4 }}
+  fsGroup:
+    rule: RunAsAny
+  runAsUser:
+    rule: RunAsAny
+  seLinux:
+{{- if .Values.agents.podSecurity.securityContext }}
+    rule: MustRunAs
+{{ toYaml .Values.agents.podSecurity.securityContext | indent 4 }}
+{{- else if .Values.agents.podSecurity.seLinuxContext }}
+{{ toYaml .Values.agents.podSecurity.seLinuxContext | indent 4 }}
+{{- end }}
+  supplementalGroups:
+    rule: RunAsAny
+{{- end }}

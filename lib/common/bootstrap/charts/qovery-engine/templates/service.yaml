@@ -1,0 +1,16 @@
+{{- if .Values.metrics.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: qovery-engine
+  labels:
+    {{- include "qovery-engine.labels" . | nindent 4 }}
+spec:
+  ports:
+    - name: {{ .Values.metrics.portName }}
+      port: {{ .Values.metrics.port }}
+      targetPort: {{ .Values.metrics.port }}
+      protocol: TCP
+  selector:
+    app.kubernetes.io/instance: qovery-engine
+{{- end }}

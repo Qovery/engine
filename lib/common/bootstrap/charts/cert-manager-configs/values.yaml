@@ -1,0 +1,20 @@
+# Supported providers: cloudflare
+externalDnsProvider: ""
+
+# List of wildcard DNS to support
+managedDns: []
+
+# Namespace where it should be deployed
+namespace: "cert-manager"
+
+# Required provider info for ACME DNS challenge
+provider:
+  cloudflare:
+    apiToken: ""
+    email: ""
+
+# Let's encrypt info
+acme:
+  letsEncrypt:
+    emailReport: ""
+    acmeUrl: ""

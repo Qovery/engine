@@ -1,0 +1,39 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ include "webhook.fullname" . }}
+  labels:
+    app: {{ include "webhook.name" . }}
+    app.kubernetes.io/name: {{ include "webhook.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: "webhook"
+    helm.sh/chart: {{ include "webhook.chart" . }}
+  annotations:
+    cert-manager.io/inject-ca-from-secret: "{{ .Release.Namespace }}/{{ template "webhook.fullname" . }}-ca"
+  {{- if .Values.webhook.mutatingWebhookConfigurationAnnotations }}
+{{ toYaml .Values.webhook.mutatingWebhookConfigurationAnnotations | indent 4 }}
+  {{- end }}
+webhooks:
+  - name: webhook.cert-manager.io
+    rules:
+      - apiGroups:
+          - "cert-manager.io"
+          - "acme.cert-manager.io"
+        apiVersions:
+          - "*"
+        operations:
+          - CREATE
+          - UPDATE
+        resources:
+          - "*/*"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    timeoutSeconds: {{ .Values.webhook.timeoutSeconds }}
+    failurePolicy: Fail
+    # Only include 'sideEffects' field in Kubernetes 1.12+
+    sideEffects: None
+    clientConfig:
+      service:
+        name: {{ template "webhook.fullname" . }}
+        namespace: {{ .Release.Namespace | quote }}
+        path: /mutate

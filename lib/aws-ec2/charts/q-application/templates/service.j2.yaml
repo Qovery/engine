@@ -1,0 +1,26 @@
+{%- if (ports is defined) and ports %}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ sanitized_name }}
+  namespace: {{ namespace }}
+  labels:
+    ownerId: {{ owner_id }}
+    appId: {{ id }}
+    app: {{ sanitized_name }}
+    envId: {{ environment_id }}
+spec:
+  type: ClusterIP
+  ports:
+    {%- for port in ports %}
+    - protocol: TCP
+      name: "p{{ port.port }}"
+      port: {{ port.port }}
+      targetPort: {{ port.port }}
+    {%- endfor %}
+  selector:
+    ownerId: {{ owner_id }}
+    appId: {{ id }}
+    app: {{ sanitized_name }}
+    envId: {{ environment_id }}
+{%- endif %}

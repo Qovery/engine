@@ -1,0 +1,169 @@
+{{- if and (or $.Values.datadog.networkPolicy.create $.Values.agents.networkPolicy.create) (eq $.Values.datadog.networkPolicy.flavor "cilium") -}}
+apiVersion: "cilium.io/v2"
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ template "datadog.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "datadog.labels" . | indent 4 }}
+specs:
+  - description: "Egress ECS agent port 51678"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}
+        {{- if .Values.agents.podLabels }}
+        {{ toYaml .Values.agents.podLabels | indent 8 }}
+        {{- end }}
+    egress:
+      - toEntities:
+          - host
+        toPorts:
+          - ports:
+              - port: "51678"
+                protocol: TCP
+      - toCIDR:
+          - 169.254.0.0/16
+        toPorts:
+          - ports:
+              - port: "51678"
+                protocol: TCP
+  - description: "Egress to ntp"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}
+        {{- if .Values.agents.podLabels }}
+        {{ toYaml .Values.agents.podLabels | indent 8 }}
+        {{- end }}
+    egress:
+      - toFQDNs:
+          - matchPattern: "*.datadog.pool.ntp.org"
+        toPorts:
+          - ports:
+              - port: "123"
+                protocol: UDP
+  - description: "Egress to metadata server"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}
+        {{- if .Values.agents.podLabels }}
+        {{ toYaml .Values.agents.podLabels | indent 8 }}
+        {{- end }}
+    egress:
+      - toCIDR:
+          - 169.254.169.254/32
+        toPorts:
+          - ports:
+              - port: "80"
+                protocol: TCP
+  - description: "Egress to DNS"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}
+        {{- if .Values.agents.podLabels }}
+        {{ toYaml .Values.agents.podLabels | indent 8 }}
+        {{- end }}
+    egress:
+      - {{ toYaml .Values.datadog.networkPolicy.cilium.dnsSelector | nindent 8 }}
+        toPorts:
+          - ports:
+              - port: "53"
+                protocol: ANY
+            rules:
+              dns:
+                - matchPattern: "*"
+  - description: "Egress to Datadog intake"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}
+        {{- if .Values.agents.podLabels }}
+        {{ toYaml .Values.agents.podLabels | indent 8 }}
+        {{- end }}
+    egress:
+      - toFQDNs:
+          {{- if $.Values.datadog.dd_url}}
+          - matchName: {{ trimPrefix "https://" $.Values.datadog.dd_url }}
+          {{- end}}
+          {{- if $.Values.datadog.site}}
+          - matchPattern: "*-app.agent.{{ $.Values.datadog.site }}"
+          - matchName: "agent-intake.logs.{{ $.Values.datadog.site }}"
+          - matchName: "process.{{ $.Values.datadog.site }}"
+          - matchName: "orchestrator.{{ $.Values.datadog.site }}"
+          {{- else}}
+          - matchPattern: "*-app.agent.datadoghq.com"
+          - matchName: "agent-intake.logs.datadoghq.com"
+          - matchName: "process.datadoghq.com"
+          - matchName: "orchestrator.datadoghq.com"
+          {{- end}}
+        toPorts:
+          - ports:
+              - port: "443"
+                protocol: TCP
+              - port: "10516"
+                protocol: TCP
+  - description: "Egress to Kubelet"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}
+        {{- if .Values.agents.podLabels }}
+        {{ toYaml .Values.agents.podLabels | indent 8 }}
+        {{- end }}
+    egress:
+      - toEntities:
+          - host
+        toPorts:
+          - ports:
+              - port: "10250"
+                protocol: TCP
+{{- if $.Values.datadog.dogstatsd.port }}
+  - description: "Ingress for dogstatsd"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}
+        {{- if .Values.agents.podLabels }}
+        {{ toYaml .Values.agents.podLabels | indent 8 }}
+        {{- end }}
+    ingress:
+      - fromEndpoints:
+          - {}
+        toPorts:
+          - ports:
+              - port: "{{ $.Values.datadog.dogstatsd.port }}"
+                protocol: UDP
+{{- end }}
+{{- if eq  (include "trace-agent-use-tcp-port" .) "true" }}
+  - description: "Ingress for APM trace"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}
+        {{- if .Values.agents.podLabels }}
+        {{ toYaml .Values.agents.podLabels | indent 8 }}
+        {{- end }}
+    ingress:
+      - fromEndpoints:
+          - {}
+        toPorts:
+          - ports:
+              - port: "{{ $.Values.datadog.apm.port }}"
+                protocol: TCP
+{{- end }}
+# The agents are susceptible to connect to any pod
+# that would be annotated with auto-discovery annotations.
+#
+# When a user wants to add a check on one of its pod, he needs to
+# * annotate its pod
+# * add an ingress policy from the agent on its own pod
+# In order to not ask end-users to inject NetworkPolicy on the agent in
+# the agent namespace, the agent must be allowed to probe any pod.
+  - description: "Egress to anything for checks"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}
+        {{- if .Values.agents.podLabels }}
+        {{ toYaml .Values.agents.podLabels | indent 8 }}
+        {{- end }}
+    egress:
+      - toEndpoints:
+          - matchExpressions:
+              - key: k8s:io.kubernetes.pod.namespace
+                operator: Exists
+{{- end }}

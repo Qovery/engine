@@ -1,0 +1,53 @@
+{{- if and (or $.Values.datadog.networkPolicy.create $.Values.clusterAgent.networkPolicy.create) (eq $.Values.datadog.networkPolicy.flavor "kubernetes") -}}
+apiVersion: "networking.k8s.io/v1"
+kind: NetworkPolicy
+metadata:
+  name: {{ template "datadog.fullname" . }}-cluster-agent
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "datadog.labels" . | indent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ template "datadog.fullname" . }}-cluster-agent
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+  - # Ingress from the node agents (for the metadata provider and prometheus check)
+    ports:
+      - port: 5005
+      - port: 5000
+    from:
+      - podSelector:
+          matchLabels:
+            app: {{ template "datadog.fullname" . }}
+{{- if $.Values.clusterChecksRunner.enabled }}
+  - # Ingress from cluster checks runner
+    ports:
+      - port: 5005
+    from:
+      - podSelector:
+          matchLabels:
+            app: {{ template "datadog.fullname" . }}-clusterchecks
+{{- end }}
+{{- if .Values.clusterAgent.admissionController.enabled }}
+  - ports:
+      - port: 8000
+{{- end }}
+{{- if .Values.clusterAgent.metricsProvider.enabled }}
+  - # Ingress from API server for external metrics
+    ports:
+      - port: {{ template "clusterAgent.metricsProvider.port" . }}
+{{- end }}
+  egress:
+    - # Egress to
+      # * Datadog intake
+      # * Kube API server
+      # * DNS
+      ports:
+        - port: 443
+        - port: 6443
+        - port: 53
+          protocol: UDP
+{{- end}}

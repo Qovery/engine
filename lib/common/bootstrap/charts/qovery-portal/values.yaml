@@ -1,0 +1,72 @@
+replicaCount: 1
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+hostName: "qovery-{{ kubernetes_cluster_id }}.{{ managed_dns_domains_helm_format }}"
+externalDnsTarget: ""
+clusterIssuer: ""
+ingressClass: ""
+
+oauthConfig:
+  redirectUrl: "https://qovery-{{ kubernetes_cluster_id }}.{{ managed_dns_domains_helm_format }}/oauth2/callback"
+  oidcIssuerUrl: ""
+  clientId: ""
+  clientSecret: ""
+  cookieName: ""
+  cookieSecret: ""
+  emailDomains: ""
+  port: "4180"
+  upstreams:
+    - "http://qovery-{{ kubernetes_cluster_id }}.{{ managed_dns_domains_helm_format }}/"
+
+links:
+  - name: "Grafana"
+    path: "grafana"
+    url: "grafana.prometheus.svc.cluster.local"
+    port: "80"
+  - name: "Prometheus"
+    path: "prometheus"
+    url: "prometheus-operator-prometheus.prometheus.svc.cluster.local"
+    port: "9090"
+
+portal:
+  title: "qovery-{{ kubernetes_cluster_name }}"
+  port: "80"
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+# fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+# readOnlyRootFilesystem: true
+# runAsNonRoot: true
+# runAsUser: 1000
+
+resources:
+  limits:
+    cpu: 1
+    memory: 64Mi
+  requests:
+    cpu: 100m
+    memory: 64Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

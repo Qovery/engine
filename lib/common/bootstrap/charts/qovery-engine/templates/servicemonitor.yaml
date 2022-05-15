@@ -1,0 +1,19 @@
+{{- if .Values.metrics.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: qovery-engine
+  labels:
+    {{- include "qovery-engine.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+{{- include "qovery-engine.labels" . | nindent 6 }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace | quote }}
+  endpoints:
+  - port: {{ .Values.metrics.portName }}
+    interval: 30s
+    scrapeTimeout: 5s
+{{- end }}

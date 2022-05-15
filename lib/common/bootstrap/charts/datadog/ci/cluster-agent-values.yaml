@@ -1,0 +1,25 @@
+datadog:
+  clusterName: kubernetes-cluster.example.comkubernetes-cluster.example.com.kube.rnetes-80chars
+  apiKey: "00000000000000000000000000000000"
+  appKey: "0000000000000000000000000000000000000000"
+  kubeStateMetricsEnabled: false
+  clusterChecks:
+    enabled: true
+
+clusterAgent:
+  enabled: true
+  wpaController: true
+
+clusterChecksRunner:
+  enabled: true
+  replicas: 1
+
+  volumes:
+    - name: tmp
+      hostPath:
+        path: /tmp
+
+  volumeMounts:
+    - name: tmp
+      mountPath: /etc/tmp
+      readOnly: true

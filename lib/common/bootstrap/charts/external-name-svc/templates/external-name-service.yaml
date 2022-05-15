@@ -1,0 +1,9 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: {{ .Values.serviceName }}
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.source }}
+spec:
+  type: ExternalName
+  externalName: {{ .Values.destination }}

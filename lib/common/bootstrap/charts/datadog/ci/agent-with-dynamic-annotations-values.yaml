@@ -1,0 +1,8 @@
+agents:
+  enabled: true
+  podAnnotations:
+    pod-annotation: "{{.Values.agents.enabled}}"
+  rbac:
+    enabled: true
+    serviceAccountAnnotations:
+      "eks.amazonaws.com/role-arn": "arn:aws:iam::123456789012:role/datadog"

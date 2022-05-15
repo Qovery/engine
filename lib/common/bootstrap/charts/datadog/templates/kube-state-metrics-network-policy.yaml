@@ -1,0 +1,29 @@
+{{- if and $.Values.datadog.kubeStateMetricsEnabled (or $.Values.datadog.networkPolicy.create $.Values.datadog.kubeStateMetricsNetworkPolicy.create) (eq $.Values.datadog.networkPolicy.flavor "kubernetes") -}}
+apiVersion: "networking.k8s.io/v1"
+kind: NetworkPolicy
+metadata:
+  name: {{ template "datadog.fullname" . }}-kube-state-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "datadog.labels" . | indent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kube-state-metrics
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - # Egress to Kube API server
+      ports:
+        - port: 443
+        - port: 6443
+  ingress:
+    - # Ingress from the node agents and the cluster check runners
+      ports:
+        - port: 8080
+      from:
+          - podSelector:
+              matchExpressions:
+                - {key: app, operator: In, values: [ {{ template "datadog.fullname" . }}, {{ template "datadog.fullname" . }}-clusterchecks ]}
+{{- end }}

@@ -1,0 +1,40 @@
+{{- if and (or $.Values.datadog.networkPolicy.create $.Values.clusterChecksRunner.networkPolicy.create) (eq $.Values.datadog.networkPolicy.flavor "kubernetes") -}}
+apiVersion: "networking.k8s.io/v1"
+kind: NetworkPolicy
+metadata:
+  name: {{ template "datadog.fullname" . }}-clusterchecks
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "datadog.labels" . | indent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ template "datadog.fullname" . }}-clusterchecks
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - # Egress to
+      # * Datadog intake
+      # * Kube API server
+      ports:
+        - port: 443
+{{- if eq (include "cluster-agent-enabled" .) "true" }}
+    - # Egress to cluster agent
+      ports:
+        - port: 5005
+      to:
+        - podSelector:
+            matchLabels:
+              app: {{ template "datadog.fullname" . }}-cluster-agent
+{{- end }}
+# The cluster check runners are susceptible to connect to any service
+# that would be annotated with auto-discovery annotations.
+#
+# When a user wants to add a check on one of its service, he needs to
+# * annotate its service
+# * add an ingress policy from the CLC on its own pod
+# In order to not ask end-users to inject NetworkPolicy on the agent in
+# the agent namespace, the agent must be allowed to probe any service.
+    - {} # Egress to anything for service checks
+{{- end }}

@@ -1,0 +1,92 @@
+# Default values for qovery-engine.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+image:
+  repository: qoveryrd/engine
+  pullPolicy: IfNotPresent
+  tag: ""
+
+metrics:
+  enabled: false
+  portName: "metrics"
+  port: 8080
+
+imagePullSecrets: []
+
+autoscaler:
+  enabled: false
+  min_replicas: 1
+  max_replicas: 10
+
+labels:
+  app: qovery-engine
+
+environmentVariables:
+  RUST_LOG: DEBUG,rusoto_core::request=info,trust_dns_resolver=info,trust_dns_proto=info,reqwest::connect=info,hyper=info,rustls=info
+  #LIB_ROOT_DIR: ""
+  #DOCKER_HOST: ""
+  #QOVERY_NATS_URL: ""
+  #ORGANIZATION: ""
+  #CLOUD_PROVIDER: ""
+  #REGION: ""
+
+volumes:
+  useNetworkDisks: true
+  storageClassName: ""
+  qoveryWorkspace:
+    size: 20Gi
+    path: /home/qovery/.qovery-workspace
+  dockerGraphStorage:
+    size: 50Gi
+    path: /var/lib/docker
+
+buildContainer:
+  enable: true
+  image: docker
+  tag: 20.10.14-dind
+
+terminationGracePeriodSeconds: 7200
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext:
+  privileged: true
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+engineResources: {}
+
+buildResources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  #   ephemeral-storage: 40Gi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+  #   ephemeral-storage: 40Gi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
