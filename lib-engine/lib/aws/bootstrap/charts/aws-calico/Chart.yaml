@@ -1,0 +1,6 @@
+apiVersion: v1
+appVersion: 3.19.1
+description: A Helm chart for installing Calico on AWS
+icon: https://www.projectcalico.org/wp-content/uploads/2019/09/Calico_Logo_Large_Calico.png
+name: aws-calico
+version: 0.3.10

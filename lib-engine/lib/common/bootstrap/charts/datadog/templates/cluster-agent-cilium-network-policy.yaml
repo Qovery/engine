@@ -1,0 +1,149 @@
+{{- if and (or $.Values.datadog.networkPolicy.create $.Values.clusterAgent.networkPolicy.create) (eq $.Values.datadog.networkPolicy.flavor "cilium") -}}
+apiVersion: "cilium.io/v2"
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ template "datadog.fullname" . }}-cluster-agent
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "datadog.labels" . | indent 4 }}
+specs:
+  - description: "Egress to metadata server"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}-cluster-agent
+        {{- if .Values.clusterAgent.podLabels }}
+        {{ toYaml .Values.clusterAgent.podLabels | indent 8 }}
+        {{- end }}
+    egress:
+      - toCIDR:
+          - 169.254.169.254/32
+        toPorts:
+          - ports:
+              - port: "80"
+                protocol: TCP
+  - description: "Egress to DNS"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}-cluster-agent
+        {{- if .Values.clusterAgent.podLabels }}
+        {{ toYaml .Values.clusterAgent.podLabels | indent 8 }}
+        {{- end }}
+    egress:
+      - {{ toYaml .Values.datadog.networkPolicy.cilium.dnsSelector | nindent 8 }}
+        toPorts:
+          - ports:
+              - port: "53"
+                protocol: ANY
+            rules:
+              dns:
+                - matchPattern: "*"
+  - description: "Egress to Datadog intake"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}-cluster-agent
+        {{- if .Values.clusterAgent.podLabels }}
+        {{ toYaml .Values.clusterAgent.podLabels | indent 8 }}
+        {{- end }}
+    egress:
+      - toFQDNs:
+          {{- if $.Values.datadog.dd_url}}
+          - matchName: {{ trimPrefix "https://" $.Values.datadog.dd_url }}
+          {{- end}}
+          {{- if $.Values.datadog.site}}
+          - matchPattern: "*-app.agent.{{  $.Values.datadog.site }}"
+          - matchName: "orchestrator.{{  $.Values.datadog.site }}"
+          {{- else}}
+          - matchPattern: "*-app.agent.datadoghq.com"
+          - matchName: "orchestrator.datadoghq.com"
+          {{- end}}
+        toPorts:
+          - ports:
+            - port: "443"
+              protocol: TCP
+  - description: "Egress to Kube API server"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}-cluster-agent
+        {{- if .Values.clusterAgent.podLabels }}
+        {{ toYaml .Values.clusterAgent.podLabels | indent 8 }}
+        {{- end }}
+    egress:
+      # toServices works only for endpoints outside of the cluster
+      # This section handles the case where the control plane is outside
+      # of the cluster.
+      - toServices:
+          - k8sService:
+              namespace: default
+              serviceName: kubernetes
+      # When the control plane is on the same cluster, we must allow connections
+      # to the node entity.
+      - toEntities:
+          - host
+          - remote-node
+        toPorts:
+          - ports:
+              - port: "443"
+                protocol: TCP
+{{- if $.Values.agents.enabled }}
+  - description: Ingress from agent
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}-cluster-agent
+        {{- if .Values.clusterAgent.podLabels }}
+        {{ toYaml .Values.clusterAgent.podLabels | indent 8 }}
+        {{- end }}
+    ingress:
+    -
+      {{- if $.Values.agents.useHostNetwork }}
+      fromEntities:
+      - host
+      - remote-node
+      {{- else }}
+      fromEndpoints:
+        - matchLabels:
+            app: {{ template "datadog.fullname" . }}
+            {{- if .Values.agents.podLabels }}
+            {{ toYaml .Values.agents.podLabels | indent 10 }}
+            {{- end }}
+      {{- end }}
+      toPorts:
+      - ports:
+        - port: "5000"
+          protocol: TCP
+        - port: "5005"
+          protocol: TCP
+{{- end }}
+{{- if $.Values.clusterChecksRunner.enabled }}
+  - description: "Ingress from cluster workers"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}-cluster-agent
+        {{- if .Values.clusterAgent.podLabels }}
+        {{ toYaml .Values.clusterAgent.podLabels | indent 8 }}
+        {{- end }}
+    ingress:
+      - fromEndpoints:
+          - matchLabels:
+              app: {{ template "datadog.fullname" . }}-clusterchecks
+        toPorts:
+          - ports:
+            - port: "5005"
+              protocol: TCP
+{{- end }}
+{{- if .Values.clusterAgent.metricsProvider.enabled }}
+  - description: "Ingress from API server for external metrics"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}-cluster-agent
+        {{- if .Values.clusterAgent.podLabels }}
+        {{ toYaml .Values.clusterAgent.podLabels | indent 8 }}
+        {{- end }}
+    ingress:
+      - fromEntities:
+          - world
+        toPorts:
+          - ports:
+              - port: {{ include "clusterAgent.metricsProvider.port" . | quote }}
+                protocol: TCP
+{{- end }}
+{{- end }}

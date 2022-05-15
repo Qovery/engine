@@ -16,7 +16,7 @@ test-full = ["test-functional"]
 
 
 [dependencies]
-qovery-engine = { path = "../cloned-engine" }
+qovery-engine = { path = "../lib-engine" }
 crossbeam-channel = "0.5.4"
 nats = "0.19.1"
 serde = { version = "1.0.137", features = ["derive"] }

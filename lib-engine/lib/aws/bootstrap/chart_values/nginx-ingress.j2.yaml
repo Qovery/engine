@@ -1,0 +1,30 @@
+controller:
+  useComponentLabel: true
+  config:
+    proxy-body-size: 100m
+    server-tokens: "false"
+  ingressClass: nginx-qovery
+  extraArgs:
+    default-ssl-certificate: "cert-manager/letsencrypt-acme-qovery-cert"
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 11
+    targetCPUUtilizationPercentage: 50
+    targetMemoryUtilizationPercentage: 50
+
+  publishService:
+    enabled: true
+
+  service:
+    enabled: true
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: nlb
+      external-dns.alpha.kubernetes.io/hostname: "{{ wildcard_managed_dns }}"
+    externalTrafficPolicy: "Local"
+    sessionAffinity: ""
+    healthCheckNodePort: 0

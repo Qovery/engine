@@ -1,0 +1,17 @@
+provider: {{ external_dns_provider }}
+
+{% if external_dns_provider == "cloudflare" %}
+cloudflare:
+  apiToken: "{{ cloudflare_api_token }}"
+  email: "{{ cloudflare_email }}"
+  proxied: {{ cloudflare_proxied|default(value="false") }}
+{% endif %}
+
+domainFilters: {{ managed_dns_domains_root_helm_format }}
+triggerLoopOnEvent: true
+policy: sync
+txtOwnerId: "{{ doks_cluster_id }}"
+txtPrefix: "qvy-{{ doks_cluster_id }}-"
+replicas: 1
+
+

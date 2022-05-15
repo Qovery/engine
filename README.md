@@ -34,7 +34,7 @@ TODO
 ```shell
 # somewhere on your computer
 # git clone git@github.com:Qovery/engine.git
-ln -s path_to_qovery/engine cloned-engine
+ln -s path_to_qovery/engine lib-engine
 cp docker/bin_versions .
 
 # Modify version if necessary to match your bin_versions file

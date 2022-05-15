@@ -1,0 +1,16 @@
+{{- define "system-probe-init" -}}
+- name: seccomp-setup
+  image: "{{ include "image-path" (dict "root" .Values "image" .Values.agents.image) }}"
+  command:
+  - cp
+  - /etc/config/system-probe-seccomp.json
+  - /host/var/lib/kubelet/seccomp/system-probe
+  volumeMounts:
+  - name: datadog-agent-security
+    mountPath: /etc/config
+  - name: seccomp-root
+    mountPath: /host/var/lib/kubelet/seccomp
+    mountPropagation: {{ .Values.datadog.hostVolumeMountPropagation }}
+  resources:
+{{ toYaml .Values.agents.containers.initContainers.resources | indent 4 }}
+{{- end -}}

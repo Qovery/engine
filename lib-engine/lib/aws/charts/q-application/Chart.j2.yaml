@@ -1,0 +1,7 @@
+apiVersion: v2
+name: qovery
+description: A Qovery Helm chart for Kubernetes deployments
+type: application
+version: 0.2.0
+appVersion: {{ helm_app_version }}
+icon: https://uploads-ssl.webflow.com/5de176bfd41c9b0a91bbb0a4/5de17c383719a1490cdb4b82_qovery%20logo-svg%202.png

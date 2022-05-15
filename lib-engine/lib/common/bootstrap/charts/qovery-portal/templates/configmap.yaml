@@ -1,0 +1,59 @@
+{{- $kubefullname := include "kubernetes.fullname" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kubernetes.fullname" . }}
+  labels:
+    {{- include "kubernetes.labels" . | nindent 4 }}
+data:
+  config: |-
+    http_address = "0.0.0.0:{{ .Values.oauthConfig.port }}"
+    redirect_url = {{ .Values.oauthConfig.redirectUrl | quote }}
+    provider= "oidc"
+    oidc_issuer_url= {{ .Values.oauthConfig.oidcIssuerUrl | quote }}
+    client_id = {{ .Values.oauthConfig.clientId | quote }}
+    client_secret = {{ .Values.oauthConfig.clientSecret | quote }}
+    cookie_name= {{ .Values.oauthConfig.cookieName | quote }}
+    cookie_secret = {{ .Values.oauthConfig.cookieSecret | quote }}
+    email_domains = {{ .Values.oauthConfig.emailDomains | quote }}
+    upstreams = [{{ .Values.oauthConfig.upstreams | quote }}]
+    custom_sign_in_logo = "-"
+
+  default.conf: |-
+    server {
+      listen {{ .Values.portal.port }};
+      root /usr/share/nginx/html;
+      index index.html;
+
+      {{- range .Values.links }}
+      location /{{- .path }}/ {
+          proxy_pass  http://{{- .url -}}:{{- .port -}}/;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header Host $host;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection "Upgrade";
+      }
+      {{- end }}
+    }
+
+  index.html: |-
+    <!doctype html>
+
+    <html lang="en">
+    <head>
+      <meta charset="utf-8">
+      <title> Qovery Portal </title>
+    </head>
+
+    <body>
+      <div>
+        <h2>{{ .Values.portal.title }}</h2>
+        <ul>
+          {{- range .Values.links }}
+          <li><a href="https://{{- $.Values.hostName -}}/{{- .path -}}/"> {{ .name }} </a></li>
+          {{- end }}
+        </ul>
+      </div>
+    </body>
+    </html>

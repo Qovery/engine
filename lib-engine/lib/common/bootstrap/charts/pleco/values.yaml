@@ -1,0 +1,114 @@
+replicaCount: 1
+
+image:
+  repository: qoveryrd/pleco
+  pullPolicy: IfNotPresent
+  plecoImageTag: "0.11.1"
+
+cloudProvider: ""
+
+environmentVariables:
+  LOG_LEVEL: "info"
+  PLECO_IDENTIFIER: "tbd"
+  # KUBECONFIG: ""
+  # AWS
+  # AWS_ACCESS_KEY_ID: ""
+  # AWS_SECRET_ACCESS_KEY: ""
+  # Scaleway
+  #  SCW_ACCESS_KEY: ""
+  #  SCW_SECRET_KEY: ""
+  #  SCW_VOLUME_TIMEOUT: ""
+  # Digital Ocean
+  #  DO_API_TOKEN: ""
+  #  DO_SPACES_KEY: ""
+  #  DO_SPACES_SECRET: ""
+  #  DO_VOLUME_TIMEOUT: ""
+
+
+enabledFeatures:
+  disableDryRun: false
+  checkInterval: 120
+  # Choose between in/out/off
+  kubernetes: "in"
+  s3: false
+
+awsFeatures:
+  awsRegions: []
+  # - eu-west-3
+  # - us-east-2
+  rds: false
+  documentdb: false
+  elasticache: false
+  eks: false
+  elb: false
+  ebs: false
+  vpc: false
+  kms: false
+  cloudwatchLogs: false
+  iam: false
+  sshKeys: false
+  ecr: false
+
+scwFeatures:
+  scwZones: []
+  #  - fr-par-1
+  #  - nl-ams-1
+  cr: false
+  cluster: false
+  lb: false
+  db: false
+  volume: false
+  sg: false
+
+doFeatures:
+  doRegions: [ ]
+  #  - nyc3
+  cluster: flase
+  lb: false
+  db: false
+  volume: false
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+rbac:
+  create: true
+  clusterRole: true
+  apiVersion: v1
+
+podAnnotations: {}
+
+podSecurityContext: {}
+# fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+# readOnlyRootFilesystem: true
+# runAsNonRoot: true
+# runAsUser: 1000
+
+resources:
+  limits:
+    cpu: 150m
+    memory: 256Mi
+  requests:
+    cpu: 150m
+    memory: 256Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

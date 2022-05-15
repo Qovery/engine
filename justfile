@@ -36,7 +36,7 @@ test_local_stack $DOCKER_HOST="": (spawn_kube_cluster DOCKER_HOST)
   echo "==========================TEST WITH LOCAL STACK==========================="
   trap "just destroy_kube_cluster $DOCKER_HOST" EXIT
   if [ -z $DOCKER_HOST ]; then unset $DOCKER_HOST; fi
-  cargo test --manifest-path cloned-engine/Cargo.toml --features test-all-local
+  cargo test --manifest-path lib-engine/Cargo.toml --features test-all-local
 
 test $DOCKER_HOST="": (test_local_stack DOCKER_HOST) 
 

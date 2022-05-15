@@ -1,0 +1,18 @@
+apiVersion: v1
+appVersion: "1"
+description: Datadog Kubernetes CRDs chart
+home: https://www.datadoghq.com
+icon: https://datadog-live.imgix.net/img/dd_logo_70x75.png
+keywords:
+- monitoring
+- alerting
+- metric
+maintainers:
+- email: support@datadoghq.com
+  name: Datadog
+name: datadog-crds
+sources:
+- https://app.datadoghq.com/account/settings#agent/kubernetes
+- https://github.com/DataDog/datadog-operator
+- https://docs.datadoghq.com/agent/cluster_agent/external_metrics
+version: 0.3.2

@@ -1,0 +1,11 @@
+{{- if .Values.master.config }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "mysql.master.fullname" . }}
+  labels: {{- include "mysql.labels" . | nindent 4 }}
+    component: master
+data:
+  my.cnf: |-
+{{ .Values.master.config | indent 4 }}
+{{- end -}}

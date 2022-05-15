@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "cloned-engine", # Should be cloned from git@github.com:Qovery/engine.git
+    "lib-engine", # Should be cloned from git@github.com:Qovery/engine.git
     "app",
 ]
 

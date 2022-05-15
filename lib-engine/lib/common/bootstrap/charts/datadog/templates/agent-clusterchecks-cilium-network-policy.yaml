@@ -1,0 +1,84 @@
+{{- if and (or $.Values.datadog.networkPolicy.create $.Values.clusterChecksRunner.networkPolicy.create) (eq $.Values.datadog.networkPolicy.flavor "cilium") -}}
+apiVersion: "cilium.io/v2"
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ template "datadog.fullname" . }}-clusterchecks
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "datadog.labels" . | indent 4 }}
+specs:
+  - description: "Egress to metadata server"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}-clusterchecks
+    egress:
+      - toCIDR:
+          - 169.254.169.254/32
+        toPorts:
+          - ports:
+              - port: "80"
+                protocol: TCP
+  - description: "Egress to DNS"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}-clusterchecks
+    egress:
+      - {{ toYaml .Values.datadog.networkPolicy.cilium.dnsSelector | nindent 8 }}
+        toPorts:
+          - ports:
+              - port: "53"
+                protocol: ANY
+            rules:
+              dns:
+                - matchPattern: "*"
+  - description: "Egress to Datadog intake"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}-clusterchecks
+    egress:
+      - toFQDNs:
+          {{- if $.Values.datadog.dd_url}}
+          - matchName: {{ trimPrefix "https://" $.Values.datadog.dd_url }}
+          {{- end}}
+          {{- if $.Values.datadog.site}}
+          - matchPattern: "*-app.agent.{{ $.Values.datadog.site }}"
+          {{- else}}
+          - matchPattern: "*-app.agent.datadoghq.com"
+          {{- end}}
+        toPorts:
+          - ports:
+              - port: "443"
+                protocol: TCP
+  - description: "Egress to cluster agent"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}-clusterchecks
+    egress:
+      - toEndpoints:
+        - matchLabels:
+            app: {{ template "datadog.fullname" . }}-cluster-agent
+            {{- if .Values.clusterAgent.podLabels }}
+            {{ toYaml .Values.clusterAgent.podLabels | indent 12 }}
+            {{- end }}
+        toPorts:
+          - ports:
+              - port: "5005"
+                protocol: TCP
+# The cluster check runners are susceptible to connect to any service
+# that would be annotated with auto-discovery annotations.
+#
+# When a user wants to add a check on one of its service, he needs to
+# * annotate its service
+# * add an ingress policy from the CLC on its own pod
+# In order to not ask end-users to inject NetworkPolicy on the agent in
+# the agent namespace, the agent must be allowed to probe any service.
+  - description: "Egress to anything for service checks"
+    endpointSelector:
+      matchLabels:
+        app: {{ template "datadog.fullname" . }}-clusterchecks
+    egress:
+      - toEndpoints:
+          - matchExpressions:
+              - key: k8s:io.kubernetes.pod.namespace
+                operator: Exists
+{{- end }}

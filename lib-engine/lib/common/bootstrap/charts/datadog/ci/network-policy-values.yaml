@@ -1,0 +1,17 @@
+datadog:
+  apiKey: "00000000000000000000000000000000"
+  appKey: "0000000000000000000000000000000000000000"
+agents:
+  enabled: true
+  networkPolicy:
+    create: true
+clusterAgent:
+  enabled: true
+  metricsProvider:
+    enabled: true
+  networkPolicy:
+    create: true
+clusterChecksRunner:
+  enabled: true
+  networkPolicy:
+    create: true

@@ -1,0 +1,283 @@
+image:
+  ## Bitnami MongoDB registry
+  ##
+  registry: docker.io
+  ## Bitnami MongoDB image name
+  ##
+  repository: bitnami/mongodb
+  ## Bitnami MongoDB image tag
+  ## ref: https://hub.docker.com/r/bitnami/mongodb/tags/
+  ##
+  tag: "{{ version }}"
+  ## Specify a imagePullPolicy
+  ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
+  ##
+  pullPolicy: IfNotPresent
+  ## Optionally specify an array of imagePullSecrets.
+  ## Secrets must be manually created in the namespace.
+  ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+  ##
+  # pullSecrets:
+  #   - myRegistryKeySecretName
+
+  ## Set to true if you would like to see extra information on logs
+  ## It turns on Bitnami debugging in minideb-extras-base
+  ## ref:  https://github.com/bitnami/minideb-extras-base
+  debug: true
+
+## String to partially override mongodb.fullname template (will maintain the release name)
+##
+# nameOverride:
+nameOverride: '{{ sanitized_name }}'
+
+## String to fully override mongodb.fullname template
+##
+# fullnameOverride:
+fullnameOverride: '{{ sanitized_name }}'
+
+## Init containers parameters:
+## volumePermissions: Change the owner and group of the persistent volume mountpoint to runAsUser:fsGroup values from the securityContext section.
+##
+volumePermissions:
+  enabled: false
+  image:
+    registry: docker.io
+    repository: bitnami/minideb
+    tag: buster
+    pullPolicy: IfNotPresent
+    ## Optionally specify an array of imagePullSecrets.
+    ## Secrets must be manually created in the namespace.
+    ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+    ##
+    # pullSecrets:
+    #   - myRegistryKeySecretName
+  resources:
+    limits: {}
+    requests:
+      cpu: "{{ total_cpus }}"
+      memory: "{{ total_ram_in_mib }}Mi"
+
+## MongoDB admin password
+## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#setting-the-root-password-on-first-run
+##
+mongodbRootPassword: '{{ database_password }}'
+
+## MongoDB custom user and database
+## ref: https://github.com/bitnami/bitnami-docker-mongodb/blob/master/README.md#creating-a-user-and-database-on-first-run
+##
+mongodbUsername: '{{ database_login }}'
+mongodbPassword: '{{ database_password }}'
+mongodbDatabase: '{{ database_db_name }}'
+
+## Kubernetes service type
+service:
+  ## Specify an explicit service name.
+  # name: svc-mongo
+  ## Provide any additional annotations which may be required.
+  ## The value is evaluated as a template, so, for example, the value can depend on .Release or .Chart
+  {% if publicly_accessible %}
+  annotations:
+    service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
+    service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
+    service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
+    service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
+    service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
+    service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
+    external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
+    external-dns.alpha.kubernetes.io/ttl: "300"
+  {% endif %}
+  type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
+  # clusterIP: None
+  port: {{ private_port }}
+  qovery_name: {{ service_name }}
+
+  ## Specify the nodePort value for the LoadBalancer and NodePort service types.
+  ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
+  ##
+  # nodePort:
+  ## Specify the externalIP value ClusterIP service type.
+  ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#external-ips
+  # externalIPs: []
+  ## Specify the loadBalancerIP value for LoadBalancer service types.
+  ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#loadbalancer
+  ##
+  # loadBalancerIP:
+  ## Specify the loadBalancerSourceRanges value for LoadBalancer service types.
+  ## ref: https://kubernetes.io/docs/tasks/access-application-cluster/configure-cloud-provider-firewall/#restrict-access-for-loadbalancer-service
+  ##
+  # loadBalancerSourceRanges: []
+
+## Use StatefulSet instead of Deployment when deploying standalone
+useStatefulSet: true
+
+## Setting up replication
+## ref: https://github.com/bitnami/bitnami-docker-mongodb#setting-up-a-replication
+#
+replicaSet:
+  ## Whether to create a MongoDB replica set for high availability or not
+  enabled: false
+  useHostnames: true
+
+  ## Name of the replica set
+  ##
+  name: rs0
+
+  ## Key used for replica set authentication
+  ##
+  # key: key
+
+  ## Number of replicas per each node type
+  ##
+  replicas:
+    secondary: 1
+    arbiter: 1
+
+  ## Pod Disruption Budget
+  ## ref: https://kubernetes.io/docs/concepts/workloads/pods/disruptions/
+  pdb:
+    enabled: true
+    minAvailable:
+      secondary: 1
+      arbiter: 1
+      # maxUnavailable:
+      # secondary: 1
+      # arbiter: 1
+
+# Additional abels to apply to the deployment or statefulsets
+labels:
+  envId: {{ environment_id }}
+  databaseId: {{ id }}
+  databaseLongId: {{ long_id }}
+  envLongId: {{ environment_long_id }}
+  projectLongId: {{ project_long_id }}
+
+
+# Additional pod labels to apply
+podLabels:
+  envId: {{ environment_id }}
+  databaseId: {{ id }}
+  databaseLongId: {{ long_id }}
+  envLongId: {{ environment_long_id }}
+  projectLongId: {{ project_long_id }}
+
+## updateStrategy for MongoDB Primary, Secondary and Arbitrer statefulsets
+## ref: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies
+updateStrategy:
+  type: RollingUpdate
+
+## Enable persistence using Persistent Volume Claims
+## ref: http://kubernetes.io/docs/user-guide/persistent-volumes/
+##
+persistence:
+  enabled: true
+  ## A manually managed Persistent Volume and Claim
+  ## Requires persistence.enabled: true
+  ## If defined, PVC must be created manually before volume will be bound
+  ##
+  # existingClaim:
+
+  ## The path the volume will be mounted at, useful when using different
+  ## MongoDB images.
+  ##
+  mountPath: /bitnami/mongodb
+
+  ## The subdirectory of the volume to mount to, useful in dev environments
+  ## and one PV for multiple services.
+  ##
+  subPath: ""
+
+  ## mongodb data Persistent Volume Storage Class
+  ## If defined, storageClassName: <storageClass>
+  ## If set to "-", storageClassName: "", which disables dynamic provisioning
+  ## If undefined (the default) or set to null, no storageClassName spec is
+  ##   set, choosing the default provisioner.  (gp2 on AWS, standard on
+  ##   GKE, AWS & OpenStack)
+  ##
+  # storageClass: "-"
+  # storageClassSecondary: "-"
+  storageClass: {{ database_disk_type }}
+  accessModes:
+    - ReadWriteOnce
+  size: {{ database_disk_size_in_gib }}Gi
+  annotations:
+    ownerId: {{ owner_id }}
+    envId: {{ environment_id }}
+    databaseId: {{ id }}
+    databaseName: '{{ sanitized_name }}'
+    # volume.beta.kubernetes.io/storage-class=scw-sbv-ssd-0:
+
+## Prometheus Exporter / Metrics
+##
+metrics:
+  enabled: false
+
+  image:
+    registry: docker.io
+    repository: bitnami/mongodb-exporter
+    tag: 0.11.0-debian-10-r45
+    pullPolicy: IfNotPresent
+    ## Optionally specify an array of imagePullSecrets.
+    ## Secrets must be manually created in the namespace.
+    ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+    ##
+    # pullSecrets:
+    #   - myRegistryKeySecretName
+
+  ## String with extra arguments to the metrics exporter
+  ## ref: https://github.com/percona/mongodb_exporter/blob/master/mongodb_exporter.go
+  extraArgs: ""
+
+  ## Metrics exporter resource requests and limits
+  ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
+  ##
+  # resources: {}
+
+  ## Metrics exporter liveness and readiness probes
+  ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes)
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 15
+    periodSeconds: 5
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 1
+    failureThreshold: 3
+    successThreshold: 1
+
+  ## Metrics exporter pod Annotation
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9216"
+
+  ## Prometheus Service Monitor
+  ## ref: https://github.com/coreos/prometheus-operator
+  ##      https://github.com/coreos/prometheus-operator/blob/master/Documentation/api.md
+  serviceMonitor:
+    ## If the operator is installed in your cluster, set to true to create a Service Monitor Entry
+    enabled: false
+
+    ## Specify a namespace if needed
+    # namespace: monitoring
+
+    ## Used to pass Labels that are used by the Prometheus installed in your cluster to select Service Monitors to work with
+    ## ref: https://github.com/coreos/prometheus-operator/blob/master/Documentation/api.md#prometheusspec
+    additionalLabels: {}
+
+    ## Specify Metric Relabellings to add to the scrape endpoint
+    ## ref: https://github.com/coreos/prometheus-operator/blob/master/Documentation/api.md#endpoint
+    # relabellings:
+
+    alerting:
+      ## Define individual alerting rules as required
+      ## ref: https://github.com/coreos/prometheus-operator/blob/master/Documentation/api.md#rulegroup
+      ##      https://prometheus.io/docs/prometheus/latest/configuration/alerting_rules/
+      rules: {}
+
+      ## Used to pass Labels that are used by the Prometheus installed in your cluster to select Prometheus Rules to work with
+      ## ref: https://github.com/coreos/prometheus-operator/blob/master/Documentation/api.md#prometheusspec
+      additionalLabels: {}

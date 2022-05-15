@@ -1,0 +1,6 @@
+apiVersion: v2
+appVersion: 0.1.3
+description: Rotate Kubernetes Digital Ocean token and store it on space
+name: do-k8s-token-rotate
+type: application
+version: 0.1.3

@@ -1,0 +1,32 @@
+cloudProvider: "scaleway"
+
+environmentVariables:
+  LOG_LEVEL: "debug"
+  SCW_VOLUME_TIMEOUT: "24"
+
+enabledFeatures:
+  disableDryRun: true
+  checkInterval: 120
+  kubernetes: "in"
+  s3: true
+
+scwFeatures:
+  scwZones:
+    - fr-par-1
+    - fr-par-2
+    - nl-ams-1
+    - pl-waw-1
+  cr: true
+  cluster: true
+  lb: true
+  db: true
+  volume: true
+  sg: true
+
+resources:
+  limits:
+    cpu: 150m
+    memory:256Mi
+  requests:
+    cpu: 150m
+    memory: 256Mi

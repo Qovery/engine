@@ -50,7 +50,7 @@ RUN apt-get update && apt-get -y install curl gnupg lsb-release &&\
     chown -Rf 1000:1000 $HOME_DIR/.terraform.d
 
 WORKDIR $HOME_DIR
-ADD cloned-engine/lib $HOME_DIR/lib
+ADD lib-engine/lib $HOME_DIR/lib
 COPY --from=build /root/target/release/app .
 COPY --from=build /root/docker/load.sh $HOME_DIR
 COPY --from=build /root/docker/engine/run.sh $HOME_DIR

@@ -1,0 +1,39 @@
+{{- $kubefullname := include "kubernetes.fullname" . }}
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: {{ include "kubernetes.fullname" . }}
+  labels:
+    {{- include "kubernetes.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/tls-acme: "true"
+    cert-manager.io/cluster-issuer: {{ .Values.clusterIssuer }}
+    kubernetes.io/ingress.class: {{ .Values.ingressClass | quote }}
+    ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,x-csrftoken"
+    nginx.ingress.kubernetes.io/auth-response-headers: Authorization
+    nginx.ingress.kubernetes.io/auth-url: https://{{- .Values.hostName -}}/oauth2/auth
+    nginx.ingress.kubernetes.io/auth-signin: https://{{- .Values.hostName -}}/oauth2/start?rd=$escaped_request_uri
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      auth_request_set $name_upstream_1 $upstream_cookie_{{- .Values.oauthConfig.cookieName -}};
+
+      access_by_lua_block {
+        if ngx.var.name_upstream_1 ~= "" then
+          ngx.header["Set-Cookie"] = "{{- .Values.oauthConfig.cookieName -}}=" ..  ngx.var.name_upstream_1 .. ngx.var.auth_cookie:match("(; .*)")
+        end
+      }
+spec:
+  tls:
+    - hosts:
+        - {{ .Values.hostName | quote }}
+  # We dont use secret name as we want to rely on default tls certificate from ingress controller
+  # which has our wildcard certificate https://cert-manager.io/next-docs/faq/kubed/
+  rules:
+    - host: {{ .Values.hostName | quote }}
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: {{ include "kubernetes.fullname" . }}
+              servicePort: {{ .Values.portal.port }}

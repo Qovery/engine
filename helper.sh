@@ -16,7 +16,7 @@ ARGS_NUM=$#
 PROC="$$"
 QOVERY_API="api.qovery.com"
 TMP_LIB_DIR="/tmp/qovery-libs/"
-ENGINE_DIR=cloned-engine
+ENGINE_DIR=lib-engine
 
 #export AWS_DEFAULT_REGION="eu-west-3"
 #export AWS_ACCESS_KEY_ID="$AWS_PROD_DEPLOY_ACCESS_KEY"
@@ -155,7 +155,7 @@ function prepare_engine() { ## Ensure github engine repo is present and propose 
       echo "Found $ENGINE_DIR directory, going to use it"
     elif [ ! -d $ENGINE_DIR ] ; then
       if [ $RUNNING_ON_CI -eq 0 ] ; then
-        echo "'cloned-engine' folder is missing. To get it, you can:"
+        echo "'lib-engine' folder is missing. To get it, you can:"
         echo "1. Clone the engine from the engine repo: git clone https://github.com/Qovery/engine.git $ENGINE_DIR"
         echo "2. Make a symlink from your current engine version (WARN, file updates can occur)"
         echo ""
@@ -214,7 +214,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   # copy providers files to download required binaries
   rm -Rf docker/engine/providers/*
   set -e
-  for i in $(find cloned-engine/lib -name "tf-providers*") ; do
+  for i in $(find lib-engine/lib -name "tf-providers*") ; do
     provider=$(echo $i | sed -r 's/.+\/(.+)(\/.+){2}.tf/\1/')
     mkdir -p docker/engine/providers/$provider
     cp $i docker/engine/providers/$provider/
@@ -382,7 +382,7 @@ function downgrade_on_dev() {
 
 ## Tests
 
-function prepare_tests() { ## Update all CHANGE-ME fields from cloned-engine
+function prepare_tests() { ## Update all CHANGE-ME fields from lib-engine
   set -e
 
   print_title "Generating Vault Token"
