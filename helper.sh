@@ -90,97 +90,9 @@ function get_gitlab_engine_commit_id() {
   git rev-parse HEAD
 }
 
-function get_github_engine_commit_id() {
-  # Ensure we're in the correct folder
-  if [ $(git config --get remote.origin.url | $grep "Qovery/engine.git" | $grep -c github) -ne 1 ] ; then
-    (fatal "You're not in the correct directory and should be in the github repo: $(pwd)")
-  fi
-  git rev-parse HEAD
-}
-
-function is_in_organization() {
-  # Ensure the user is part of the organization
-  branch_author=$(curl -H "Accept: application/vnd.github.groot-preview+json" https://api.github.com/repos/Qovery/engine/branches/"$GITHUB_HEAD_REF" | jq ".commit.author.login")
-  orga_user=$(curl -H "Accept: application/vnd.github.v3+json" https://api.github.com/orgs/Qovery/members | jq .[].login | grep "$branch_author")
-
-  if [ "$branch_author" == "$orga_user" ]
-  then
-    isIn=1
-  else
-    isIn=0
-  fi
-
-  return "$isIn"
-}
-
 function generate_image_tag() {
   gitlab_commit_id=$(get_gitlab_engine_commit_id)
-
-  current_dir=$(pwd)
-  cd $ENGINE_DIR
-  github_commit_id=$(get_github_engine_commit_id)
-  cd $current_dir
-
-  echo "${github_commit_id:0:7}-${gitlab_commit_id:0:7}"
-}
-
-function prepare_engine() { ## Ensure github engine repo is present and propose solutions if not
-    if [ $RUNNING_ON_CI -eq 1 ] ; then
-      # If commit id is given, then use it for the lib
-      if [ ! -z $GITHUB_COMMIT_ID ] ; then
-        ENGINE_BRANCH=$GITHUB_COMMIT_ID
-      elif [ ! -z $CI_COMMIT_REF_NAME ] ; then
-        ENGINE_BRANCH=$CI_COMMIT_REF_NAME
-      else
-        print_title "Can't get commit ID"
-        exit 1
-      fi
-      # For the app, checkout on the same branch name gitlab <-> github if the same name exists
-      if [ ! -z "$GITHUB_ENGINE_BRANCH_NAME" ] ; then
-        echo "Requested to checkout the $GITHUB_ENGINE_BRANCH_NAME instead of dev branch"
-        git remote update
-        git fetch
-        git checkout origin/$GITHUB_ENGINE_BRANCH_NAME
-      else
-        echo "Requested to checkout the dev branch"
-      fi
-    else
-      ENGINE_BRANCH=$(git branch --show-current)
-    fi
-    print_title "USING QOVERY APP COMMIT"
-    git log -1
-
-    if [ -e $ENGINE_DIR ] ; then
-      print_title "USING QOVERY LIB COMMIT"
-      echo "Found $ENGINE_DIR directory, going to use it"
-    elif [ ! -d $ENGINE_DIR ] ; then
-      if [ $RUNNING_ON_CI -eq 0 ] ; then
-        echo "'lib-engine' folder is missing. To get it, you can:"
-        echo "1. Clone the engine from the engine repo: git clone https://github.com/Qovery/engine.git $ENGINE_DIR"
-        echo "2. Make a symlink from your current engine version (WARN, file updates can occur)"
-        echo ""
-        echo "Hit any key to continue or CTRL+C to stop"
-        read
-      else
-        git clone https://github.com/Qovery/engine.git $ENGINE_DIR
-        cd $ENGINE_DIR
-        git checkout $ENGINE_BRANCH
-        git pull
-        print_title "USING QOVERY LIB COMMIT"
-        git log -1
-        cd -
-      fi
-    fi
-
-    if [ ! -e $ENGINE_DIR ] ; then
-      echo "Engine directory $ENGINE_DIR wasn't found"
-      exit 1
-    fi
-
-    cd $ENGINE_DIR
-    echo "Latest commit on branch $ENGINE_BRANCH:"
-    git log -1
-    cd -
+  echo "${gitlab_commit_id:0:7}"
 }
 
 ## Build and image functions
@@ -193,8 +105,6 @@ function build() { ## Build engine app with engine lib
   fi
 
   echo "Building with cargo options: $build_options"
-  prepare_engine
-  tag=$(generate_image_tag)
   use_sccache
   set -e
 
@@ -242,7 +152,6 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
 }
 
 function build_ci_image() { ## Build CI image locally. Args: <tag_version>
-  prepare_engine
   tag=$(generate_image_tag)
 
   cp docker/load.sh docker/ci/load.sh
@@ -258,7 +167,6 @@ function build_ci_image() { ## Build CI image locally. Args: <tag_version>
 }
 
 function push_image() { ## Push Engine local image with current commit ID as tag
-  prepare_engine
   tag=$(generate_image_tag)
   set -e
 
@@ -267,7 +175,6 @@ function push_image() { ## Push Engine local image with current commit ID as tag
 }
 
 function push_ci_image() { ## Push CI local image with current commit ID as tag
-  prepare_engine
   tag=$(generate_image_tag)
   set -e
 
@@ -278,7 +185,6 @@ function push_ci_image() { ## Push CI local image with current commit ID as tag
 ## Releases
 
 function new_release() { ## Release a new engine version with commit ID as tag prepare_engine
-  prepare_engine
   tag=$(generate_image_tag)
 
   check_untracked_files
@@ -289,7 +195,6 @@ function new_release() { ## Release a new engine version with commit ID as tag p
 }
 
 function set_release_ga() { ## Release a new engine version and mark it as globally available
-  prepare_engine
   tag=$(generate_image_tag)
   curl -s -X PUT -H 'Content-Type: application/json' -H "X-Qovery-Signature: $CI_ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_API}/api/v1/engine-version?type=ga&version=${tag}" || exit 1
 }
@@ -300,7 +205,6 @@ function get_release_ga() { ## Get globally available release version
 }
 
 function deploy_engines_infra() { ## Release GA to prod
-  prepare_engine
   tag=$(generate_image_tag)
   AWS_ACCESS_KEY_ID="$AWS_PROD_DEPLOY_ACCESS_KEY" \
   AWS_SECRET_ACCESS_KEY="$AWS_PROD_DEPLOY_SECRET_KEY" \
@@ -332,7 +236,6 @@ engineResources.requests.memory="750Mi"
 }
 
 function deploy_engines_envs() { ## Release GA to prod
-  prepare_engine
   tag=$(generate_image_tag)
   KUBECONFIG="$CI_KUBECONFIG_ENGINES_SCALEWAY"
   helm upgrade --kubeconfig="$KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace qovery-env qovery-engine \
@@ -364,7 +267,6 @@ buildResources.limits.ephemeral-storage="30Gi"
 }
 
 function upgrade_on_dev() {
-  prepare_engine
   tag=$(generate_image_tag)
   kubectl --kubeconfig=$DO_DEV_KUBECONFIG -n qovery patch statefulset qovery-engine -p "{'spec':{'template':{'spec':{'containers[0]':{'image':'qoveryrd/engine:${tag}'}}}}}"
   kubectl --kubeconfig=$DO_DEV_KUBECONFIG rollout status --watch --timeout=600s -n qovery statefulset/qovery-engine
@@ -375,7 +277,6 @@ function downgrade_on_dev() {
     return
   fi
 
-  prepare_engine
   kubectl --kubeconfig=$DO_DEV_KUBECONFIG -n qovery patch statefulset qovery-engine -p "{'spec':{'template':{'spec':{'containers[0]':{'image':'qoveryrd/engine:$1'}}}}}"
   kubectl --kubeconfig=$DO_DEV_KUBECONFIG rollout status --watch --timeout=600s -n qovery statefulset/qovery-engine
 }
@@ -399,10 +300,7 @@ function prepare_tests() { ## Update all CHANGE-ME fields from lib-engine
 
 function single_test() { ## Run a single test. Arg, test name: aws::aws_environment::deploy_a_working_environment_with_domain
   test_name=$1
-  export RUST_LOG=info
-  export_env
-  prepare_engine
-  prepare_tests
+  export RUST_LOG=info  prepare_tests
 
   cargo build --color=always --all --all-targets --tests
   sccache -s
@@ -416,24 +314,11 @@ function use_sccache() {
   sccache -s
 }
 
-function export_env() { ## Export environment variables from .env file
-  use_sccache
-  while IFS= read line ; do
-    key=$(echo $line | $awk -F'=' '{ print $1}')
-    value=$(echo $line | $sed -r "s,^\w+='(.+)'$,\1,g")
-    if [ "$key" != "QOVERY_SSH_USER" ] ; then
-      export $key=$value
-    fi
-  done <".env"
-}
-
 function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH branch name, threads
   filter_tests=$1
   nb_treads=$3
   print_title "RUNNING TESTS - $filter_tests"
   export RUST_LOG=debug
-  export_env
-  prepare_engine
   prepare_tests
 
   if [ $filter_tests = "unit-tests" ] ; then
@@ -474,8 +359,6 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
 function lint() {
   nb_treads=$2
   export RUST_LOG=info
-  export_env
-  prepare_engine
 
   set -e
 
@@ -516,15 +399,6 @@ if [ $ARGS_NUM -eq 0 ] ; then
   print_help
 fi
 
-
-# Check if github called it with parameters
-if [ ! -z $GITHUB_COMMIT_ID ] ; then
-  commit_id=$GITHUB_COMMIT_ID
-  RUNNING_ON_CI=1
-  if [ "$(is_in_organization)" == "0" ] ; then
-    echo "You're not a member of Qovery github organization."
-    exit 1
-  fi
 # Check if running manually
 elif [ ! -z $GITLAB_USER_ID ] ; then
   commit_id=$CI_COMMIT_SHA
@@ -632,9 +506,6 @@ single_test)
   ;;
 prepare_tests)
   prepare_tests
-  ;;
-prepare_engine)
-  prepare_engine
   ;;
 lint)
   lint

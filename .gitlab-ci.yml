@@ -17,27 +17,14 @@ stages:
   - build-and-lint
   - minimal-tests
   - tests
-  - release
   - deploy
   - deploy-all-clusters
 
-#
-# Merge request only
-#
+##################
+# BUILD AND LINT #
+##################
 
-gitguardian-mr:
-  stage: build-and-lint
-  image: gitguardian/ggshield:latest
-  retry: 0
-  when: always
-  script: ggshield scan ci
-  tags:
-    - vm-250mcpu-1gmem-0g
-  only:
-    - merge_requests
-  interruptible: true
-
-build-and-lint-mr:
+build-and-lint-code:
   stage: build-and-lint
   retry: 0
   script:
@@ -50,34 +37,63 @@ build-and-lint-mr:
     - merge_requests
   interruptible: true
 
-release-image-mr:
+release-image:
+  stage: build-and-lint
+  retry: 0
+  script:
+    - ./helper.sh new_release
+  tags:
+    - bm-7cpu-12gmem-0g
+  when: manual
+  interruptible: true
+  except:
+    refs:
+      - main
+
+release-image-prod:
   stage: build-and-lint
   retry: 1
   script:
     - ./helper.sh new_release
   tags:
     - bm-7cpu-12gmem-0g
-  when: manual
-  only:
-  - merge_requests
+  when: always
   interruptible: true
+  only:
+    refs:
+      - main
 
-unit-tests-mr:
-  stage: tests
+gitguardian:
+  stage: build-and-lint
+  image: gitguardian/ggshield:latest
+  retry: 0
+  when: always
+  only:
+    - merge_requests
+    - main
+  script: ggshield scan ci
+  interruptible: true
+  tags:
+    - vm-250mcpu-1gmem-0g
+
+#################
+# MINIMAL TESTS #
+#################
+
+unit-tests:
+  stage: minimal-tests
   retry: 0
   script:
     - ./helper.sh unit_tests
-  only:
-    - merge_requests
   when: always
   tags:
     - vm-2cpu-4gmem-0g
-  except:
+  only:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
   dependencies:
-    - build-and-lint-mr
+    - build-and-lint-code
   artifacts:
     when: always
     reports:
@@ -87,7 +103,6 @@ unit-tests-mr:
       - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 1 week
   interruptible: true
-
 
 all-minimal-tests:
   stage: minimal-tests
@@ -99,70 +114,12 @@ all-minimal-tests:
     - ./helper.sh all_minimal_tests
   only:
     refs:
-      - dev
+      - merge_requests
   when: always
   tags:
     - vm-2cpu-4gmem-0g
-  except:
-    variables:
-      - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
   dependencies:
-    - test-local
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 1 week
-  interruptible: true
-
-all-self-hosted-mr:
-  stage: tests
-  retry: 0
-  timeout: 3 hours
-  script:
-    - ./helper.sh all_self_hosted
-  only:
-  - merge_requests
-  when: always
-  tags:
-    - vm-2cpu-4gmem-0g
-  except:
-    variables:
-      - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
-  dependencies:
-    - build-and-lint-mr
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 1 week
-  interruptible: true
-
-all-managed-services-mr:
-  stage: tests
-  retry: 0
-  timeout: 3 hours
-  script:
-    - ./helper.sh all_managed_services
-  only:
-    - merge_requests
-  when: manual
-  tags:
-    - vm-2cpu-4gmem-0g
-  except:
-    variables:
-      - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
-  dependencies:
-    - build-and-lint-mr
+    - build-and-lint-code
   artifacts:
     when: always
     reports:
@@ -179,35 +136,37 @@ test-local:
     - docker/wait_docker_available.sh
   script:
     - export RUSTC_WRAPPER=/usr/bin/sccache
-    - ./helper.sh prepare_engine
     - just test_local_stack $DOCKER_HOST
   only:
     refs:
-      - dev
+      - merge_requests
   dependencies:
-    - build-and-lint-mr
+    - build-and-lint-code
   when: always
-
   tags:
     - vm-2cpu-4gmem-0g
 
-test-all-mr:
+#########
+# TESTS #
+#########
+
+aws-infra:
   stage: tests
   retry: 0
-  timeout: 5 hours
+  timeout: 3 hours
   script:
-    - ./helper.sh test_all
-  only:
-    - merge_requests
-  dependencies:
-    - build-and-lint-mr
-  when: manual
+    - ./helper.sh aws_infra
+  when: always
   tags:
-    - bm-qovery-2cpu-12gb
-  except:
+    - vm-2cpu-4gmem-0g
+  dependencies:
+    - build-and-lint-code
+  only:
+    refs:
+      - merge_requests
     variables:
-      - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE =~ /^Draft:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
   artifacts:
     when: always
     reports:
@@ -215,68 +174,80 @@ test-all-mr:
     paths:
       - $CI_PROJECT_DIR/gitlab-log-utilities
       - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 1 week
+    expire_in: 2 week
   interruptible: true
 
+#aws-infra-ec2:
+#  stage: tests
+#  retry: 0
+#  timeout: 3 hours
+#  script:
+#    - ./helper.sh aws_infra_ec2
+#  when: always
+#  dependencies:
+#    - build-and-lint-code
+#  tags:
+#    - vm-2cpu-4gmem-0g
+#  only:
+#    refs:
+#      - merge_requests
+#    variables:
+#      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+#      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+#  artifacts:
+#    when: always
+#    reports:
+#      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
+#    paths:
+#      - $CI_PROJECT_DIR/gitlab-log-utilities
+#      - $CI_PROJECT_DIR/.qovery-workspace
+#    expire_in: 2 week
+#  interruptible: true
 
-#
-# Dev branch
-#
-
-gitguardian-dev:
-  stage: build-and-lint
-  image: gitguardian/ggshield:latest
-  retry: 0
-  when: always
-  script: ggshield scan ci
-  tags:
-    - vm-250mcpu-1gmem-0g
-  only:
-    refs:
-      - dev
-  interruptible: true
-
-build-and-lint:
-  stage: build-and-lint
-  retry: 0
-  script:
-    - ./helper.sh lint
-    - ./helper.sh build
-  when: always
-  tags:
-    - bm-7cpu-12gmem-0g
-  only:
-    refs:
-      - dev
-  interruptible: true
-
-dev-release-image:
-  stage: build-and-lint
-  retry: 1
-  script:
-    - ./helper.sh new_release
-  tags:
-    - bm-7cpu-12gmem-0g
-  when: manual
-  only:
-    refs:
-      - dev
-
-unit-tests:
+aws-managed-services:
   stage: tests
   retry: 0
+  timeout: 3 hours
   script:
-    - ./helper.sh unit_tests
-  dependencies:
-    - build-and-lint
-  when: always
+    - ./helper.sh aws_managed_services
   tags:
     - vm-2cpu-4gmem-0g
+  when: always
+  dependencies:
+    - build-and-lint-code
   only:
     refs:
-      - dev
+      - merge_requests
     variables:
-      - $TESTS_TO_RUN =~ /test-units/
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
+aws-self-hosted:
+  stage: tests
+  retry: 0
+  timeout: 3 hours
+  script:
+    - ./helper.sh aws_self_hosted
+  tags:
+    - vm-2cpu-12gmem-0g
+  when: always
+  dependencies:
+    - build-and-lint-code
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
   artifacts:
     when: always
     reports:
@@ -294,7 +265,7 @@ aws-whole-enchilada:
   script:
     - ./helper.sh aws_whole_enchilada
   dependencies:
-    - build-and-lint
+    - build-and-lint-code
   when: always
   tags:
     - vm-2cpu-4gmem-0g
@@ -315,110 +286,6 @@ aws-whole-enchilada:
     expire_in: 2 week
   interruptible: true
 
-aws-infra:
-  stage: tests
-  retry: 0
-  timeout: 3 hours
-  script:
-    - ./helper.sh aws_infra
-  when: always
-  tags:
-    - vm-2cpu-4gmem-0g
-  only:
-    refs:
-      - dev
-    variables:
-      - $TESTS_TO_RUN =~ /test-aws-infra/
-      - $TESTS_TO_RUN =~ /test-aws-all/
-      - $TESTS_TO_RUN =~ /test-all/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
-
-aws-infra-ec2:
-  stage: tests
-  retry: 0
-  timeout: 3 hours
-  script:
-    - ./helper.sh aws_infra_ec2
-  when: always
-  tags:
-    - vm-2cpu-4gmem-0g
-  only:
-    refs:
-      - dev
-    variables:
-      - $TESTS_TO_RUN =~ /test-aws-infra-ec2/
-      - $TESTS_TO_RUN =~ /test-aws-all/
-      - $TESTS_TO_RUN =~ /test-all/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
-
-aws-managed-services:
-  stage: tests
-  retry: 0
-  timeout: 3 hours
-  script:
-    - ./helper.sh aws_managed_services
-  tags:
-    - vm-2cpu-4gmem-0g
-  when: always
-  only:
-    refs:
-      - dev
-    variables:
-      - $TESTS_TO_RUN =~ /test-aws-managed-services/
-      - $TESTS_TO_RUN =~ /test-aws-all/
-      - $TESTS_TO_RUN =~ /test-all/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
-
-aws-self-hosted:
-  stage: tests
-  retry: 0
-  timeout: 3 hours
-  script:
-    - ./helper.sh aws_self_hosted
-  tags:
-    - vm-2cpu-12gmem-0g
-  when: always
-  only:
-    refs:
-      - dev
-    variables:
-      - $TESTS_TO_RUN =~ /test-aws-self-hosted/
-      - $TESTS_TO_RUN =~ /test-aws-all/
-      - $TESTS_TO_RUN =~ /test-all/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
-
 do-whole-enchilada:
   stage: tests
   retry: 0
@@ -426,15 +293,16 @@ do-whole-enchilada:
   script:
     - ./helper.sh do_whole_enchilada
   when: always
+  dependencies:
+    - build-and-lint-code
   tags:
     - vm-2cpu-4gmem-0g
   only:
     refs:
-      - dev
+      - merge_requests
     variables:
-      - $TESTS_TO_RUN =~ /test-do-whole-enchilada/
-      - $TESTS_TO_RUN =~ /test-do-all/
-      - $TESTS_TO_RUN =~ /test-all/
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
   artifacts:
     when: always
     reports:
@@ -452,15 +320,16 @@ do-infra:
   script:
     - ./helper.sh do_infra
   when: always
+  dependencies:
+    - build-and-lint-code
   tags:
     - vm-2cpu-4gmem-0g
   only:
     refs:
-      - dev
+      - merge_requests
     variables:
-      - $TESTS_TO_RUN =~ /test-do-infra/
-      - $TESTS_TO_RUN =~ /test-do-all/
-      - $TESTS_TO_RUN =~ /test-all/
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
   artifacts:
     when: always
     reports:
@@ -480,13 +349,14 @@ do-managed-services:
   tags:
     - vm-2cpu-4gmem-0g
   when: always
+  dependencies:
+    - build-and-lint-code
   only:
     refs:
-      - dev
+      - merge_requests
     variables:
-      - $TESTS_TO_RUN =~ /test-do-managed-services/
-      - $TESTS_TO_RUN =~ /test-do-all/
-      - $TESTS_TO_RUN =~ /test-all/
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
   artifacts:
     when: always
     reports:
@@ -506,13 +376,14 @@ do-self-hosted:
   tags:
     - vm-2cpu-12gmem-0g
   when: always
+  dependencies:
+    - build-and-lint-code
   only:
     refs:
-      - dev
+      - merge_requests
     variables:
-      - $TESTS_TO_RUN =~ /test-do-self-hosted/
-      - $TESTS_TO_RUN =~ /test-do-all/
-      - $TESTS_TO_RUN =~ /test-all/
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
   artifacts:
     when: always
     reports:
@@ -523,31 +394,6 @@ do-self-hosted:
     expire_in: 2 week
   interruptible: true
 
-scw-whole-enchilada:
-    stage: tests
-    retry: 0
-    script:
-      - ./helper.sh scw_whole_enchilada
-    when: always
-    tags:
-      - vm-2cpu-4gmem-0g
-    only:
-      refs:
-        - dev
-      variables:
-        - $TESTS_TO_RUN =~ /test-scw-whole-enchilada/
-        - $TESTS_TO_RUN =~ /test-scw-all/
-        - $TESTS_TO_RUN =~ /test-all/
-    artifacts:
-      when: always
-      reports:
-        junit: $CI_PROJECT_DIR/cloned-engine/results.xml
-      paths:
-        - $CI_PROJECT_DIR/gitlab-log-utilities
-        - $CI_PROJECT_DIR/.qovery-workspace
-      expire_in: 2 week
-    interruptible: true
-
 scw-infra:
   stage: tests
   retry: 0
@@ -555,15 +401,16 @@ scw-infra:
   script:
     - ./helper.sh scw_infra
   when: always
+  dependencies:
+    - build-and-lint-code
   tags:
     - vm-2cpu-4gmem-0g
   only:
     refs:
-      - dev
+      - merge_requests
     variables:
-      - $TESTS_TO_RUN =~ /test-scw-infra/
-      - $TESTS_TO_RUN =~ /test-scw-all/
-      - $TESTS_TO_RUN =~ /test-all/
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
   artifacts:
     when: always
     reports:
@@ -583,13 +430,14 @@ scw-managed-services:
   tags:
     - vm-2cpu-4gmem-0g
   when: always
+  dependencies:
+    - build-and-lint-code
   only:
     refs:
-      - dev
+      - merge_requests
     variables:
-      - $TESTS_TO_RUN =~ /test-scw-managed-services/
-      - $TESTS_TO_RUN =~ /test-scw-all/
-      - $TESTS_TO_RUN =~ /test-all/
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
   artifacts:
     when: always
     reports:
@@ -609,13 +457,14 @@ scw-self-hosted:
   tags:
     - vm-2cpu-4gmem-0g
   when: always
+  dependencies:
+    - build-and-lint-code
   only:
     refs:
-      - dev
+      - merge_requests
     variables:
-      - $TESTS_TO_RUN =~ /test-scw-self-hosted/
-      - $TESTS_TO_RUN =~ /test-scw-all/
-      - $TESTS_TO_RUN =~ /test-all/
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
   artifacts:
     when: always
     reports:
@@ -626,36 +475,41 @@ scw-self-hosted:
     expire_in: 2 week
   interruptible: true
 
-
-# Main branch
-#
-
-gitguardian:
-  stage: release
-  image: gitguardian/ggshield:latest
+scw-whole-enchilada:
+  stage: tests
   retry: 0
-  when: always
-  script: ggshield scan ci
-  tags:
-    - vm-250mcpu-1gmem-0g
-  only:
-    refs:
-      - main
-
-release-image:
-  stage: release
-  retry: 1
   script:
-    - ./helper.sh new_release
+    - ./helper.sh scw_whole_enchilada
+  when: always
+  dependencies:
+    - build-and-lint-code
   tags:
-    - bm-7cpu-12gmem-0g
+    - vm-2cpu-4gmem-0g
   only:
     refs:
-      - main
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/cloned-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
 
-1-set-ga:
+##########
+# DEPLOY #
+##########
+
+1-set-globally-available:
   stage: deploy
   retry: 2
+  dependencies:
+    - release-image-prod
   script:
     - ./helper.sh set_release_ga
   tags:
@@ -665,9 +519,11 @@ release-image:
       - main
   when: manual
 
-2-qovery-infra-engine-deploy:
+2-deploy-qovery-infra-engines:
   stage: deploy
   retry: 0
+  dependencies:
+    - release-image-prod
   script:
     - ./helper.sh deploy_engines_infra
   tags:
@@ -677,9 +533,11 @@ release-image:
       - main
   when: manual
 
-3-client-infra-deploy:
+3-deploy-client-infra-clusters:
   stage: deploy
   retry: 0
+  dependencies:
+    - release-image-prod
   script:
     - ./helper.sh deploy_all_clusters
   tags:
@@ -689,9 +547,11 @@ release-image:
       - main
   when: manual
 
-4-qovery-env-engines:
+4-deploy-qovery-env-engines:
   stage: deploy
   retry: 0
+  dependencies:
+    - release-image-prod
   script:
     - ./helper.sh deploy_engines_envs
   tags:
