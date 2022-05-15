@@ -359,6 +359,7 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
 function lint() {
   nb_treads=$2
   export RUST_LOG=info
+  use_sccache
 
   set -e
 
