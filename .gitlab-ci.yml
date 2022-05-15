@@ -84,7 +84,6 @@ unit-tests:
   retry: 0
   script:
     - ./helper.sh unit_tests
-  when: always
   tags:
     - vm-2cpu-4gmem-0g
   only:
@@ -114,7 +113,6 @@ all-minimal-tests:
   only:
     refs:
       - merge_requests
-  when: always
   tags:
     - vm-2cpu-4gmem-0g
   dependencies:
@@ -155,7 +153,6 @@ aws-infra:
   timeout: 3 hours
   script:
     - ./helper.sh aws_infra
-  when: always
   tags:
     - vm-2cpu-4gmem-0g
   dependencies:
@@ -182,7 +179,6 @@ aws-infra:
 #  timeout: 3 hours
 #  script:
 #    - ./helper.sh aws_infra_ec2
-#  when: always
 #  dependencies:
 #    - build-and-lint-code
 #  tags:
@@ -211,7 +207,6 @@ aws-managed-services:
     - ./helper.sh aws_managed_services
   tags:
     - vm-2cpu-4gmem-0g
-  when: always
   dependencies:
     - build-and-lint-code
   only:
@@ -238,7 +233,6 @@ aws-self-hosted:
     - ./helper.sh aws_self_hosted
   tags:
     - vm-2cpu-12gmem-0g
-  when: always
   dependencies:
     - build-and-lint-code
   only:
@@ -265,7 +259,6 @@ aws-whole-enchilada:
     - ./helper.sh aws_whole_enchilada
   dependencies:
     - build-and-lint-code
-  when: always
   tags:
     - vm-2cpu-4gmem-0g
   only:
@@ -291,7 +284,6 @@ do-whole-enchilada:
   timeout: 3 hours
   script:
     - ./helper.sh do_whole_enchilada
-  when: always
   dependencies:
     - build-and-lint-code
   tags:
@@ -318,7 +310,6 @@ do-infra:
   timeout: 3 hours
   script:
     - ./helper.sh do_infra
-  when: always
   dependencies:
     - build-and-lint-code
   tags:
@@ -347,7 +338,6 @@ do-managed-services:
     - ./helper.sh do_managed_services
   tags:
     - vm-2cpu-4gmem-0g
-  when: always
   dependencies:
     - build-and-lint-code
   only:
@@ -374,7 +364,6 @@ do-self-hosted:
     - ./helper.sh do_self_hosted
   tags:
     - vm-2cpu-12gmem-0g
-  when: always
   dependencies:
     - build-and-lint-code
   only:
@@ -399,7 +388,6 @@ scw-infra:
   timeout: 3 hours
   script:
     - ./helper.sh scw_infra
-  when: always
   dependencies:
     - build-and-lint-code
   tags:
@@ -428,7 +416,6 @@ scw-managed-services:
     - ./helper.sh scw_managed_services
   tags:
     - vm-2cpu-4gmem-0g
-  when: always
   dependencies:
     - build-and-lint-code
   only:
@@ -455,7 +442,6 @@ scw-self-hosted:
     - ./helper.sh scw_self_hosted
   tags:
     - vm-2cpu-4gmem-0g
-  when: always
   dependencies:
     - build-and-lint-code
   only:
@@ -479,7 +465,6 @@ scw-whole-enchilada:
   retry: 0
   script:
     - ./helper.sh scw_whole_enchilada
-  when: always
   dependencies:
     - build-and-lint-code
   tags:
