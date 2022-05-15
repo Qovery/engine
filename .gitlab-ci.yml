@@ -139,7 +139,6 @@ test-local:
       - merge_requests
   dependencies:
     - build-and-lint-code
-  when: always
   tags:
     - vm-2cpu-4gmem-0g
 
