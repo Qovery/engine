@@ -15,6 +15,7 @@ use crate::models::types::VersionsNumber;
 use crate::object_storage::errors::ObjectStorageError;
 use derivative::Derivative;
 use std::fmt::{Display, Formatter};
+use std::io::Error;
 use thiserror::Error;
 use url::Url;
 
@@ -357,6 +358,12 @@ pub enum Tag {
     ObjectStorageCannotTagBucket,
     /// ObjectStorageCannotActivateBucketVersioning: represents an error while trying to activate bucket versioning for bucket.
     ObjectStorageCannotActivateBucketVersioning,
+    /// KubeconfigFileDoNotPermitToConnectToK8sCluster: represent a kubeconfig mismatch, not permitting to connect to k8s cluster
+    KubeconfigFileDoNotPermitToConnectToK8sCluster,
+    /// KubeconfigSecurityCheckError: represent an error because of a security concern/doubt on the kubeconfig file
+    KubeconfigSecurityCheckError,
+    /// DeleteLocalKubeconfigFileError: represent an error when trying to delete Kubeconfig
+    DeleteLocalKubeconfigFileError,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1027,6 +1034,86 @@ impl EngineError {
             event_details,
             Tag::CannotDetermineK8sKubeProxyVersion,
             message.to_string(),
+            message,
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error delete local kubeconfig file error
+    ///
+    /// This is useful for EC2 when a kubeconfig stored in S3 do not match the current kubernetes
+    /// certificates and/or endpoint
+    ///
+    /// Arguments:
+    /// * `event_details`: Error linked event details.
+    /// * `kubeconfig_path`: Kubeconfig path
+    pub fn new_delete_local_kubeconfig_file_error(
+        event_details: EventDetails,
+        kubeconfig_path: &str,
+        err: Error,
+    ) -> EngineError {
+        let safe_message = "Wasn't able to delete local kubeconfig file";
+        let message = format!("{} {}: {}", &safe_message, kubeconfig_path, err);
+
+        EngineError::new(
+            event_details,
+            Tag::DeleteLocalKubeconfigFileError,
+            message.to_string(),
+            safe_message.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error to catch wrong kubeconfig file content
+    ///
+    /// This is useful for EC2 when a kubeconfig stored in S3 do not match the current kubernetes
+    /// certificates and/or endpoint
+    ///
+    /// Arguments:
+    /// * `event_details`: Error linked event details.
+    pub fn new_kubeconfig_file_do_not_match_the_current_cluster(event_details: EventDetails) -> EngineError {
+        let message = format!(
+            "The kubeconfig stored in the S3 bucket is not valid and do not permit to connect to your current cluster"
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::KubeconfigFileDoNotPermitToConnectToK8sCluster,
+            message.to_string(),
+            message,
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error to catch kubeconfig security issues
+    ///
+    /// Ensure kubeconfig is not corrupted
+    ///
+    /// Arguments:
+    /// * `event_details`: Error linked event details.
+    /// * `current_size`: Current size of the kubeconfig file
+    /// * `max_size`: Maximum authorized size of the kubeconfig file
+    pub fn new_kubeconfig_size_security_check_error(
+        event_details: EventDetails,
+        current_size: u64,
+        max_size: u64,
+    ) -> EngineError {
+        let message = format!(
+            "The kubeconfig stored in the S3 bucket did not pass our security check. Kubeconfig file size ({}k), exceed authorized kubeconfig size (< {}k)",
+            current_size,
+            max_size
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::KubeconfigSecurityCheckError,
+            message.clone(),
             message,
             None,
             None,
