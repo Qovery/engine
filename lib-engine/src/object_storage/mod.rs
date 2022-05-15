@@ -18,6 +18,17 @@ pub trait ObjectStorage {
         format!("{} ({})", self.name(), self.id())
     }
     fn is_valid(&self) -> Result<(), ObjectStorageError>;
+    fn workspace_dir_relative_path(&self) -> String {
+        "object-storage/s3".to_string()
+    }
+    fn workspace_dir_full_path(&self) -> String {
+        format!(
+            "{}/.qovery-workspace/{}/{}",
+            self.context().workspace_root_dir(),
+            self.context().execution_id(),
+            self.workspace_dir_relative_path()
+        )
+    }
     fn create_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError>;
     fn delete_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError>;
     fn get(

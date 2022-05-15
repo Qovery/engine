@@ -118,6 +118,9 @@ pub enum Tag {
     ObjectStorageCannotEmptyBucket,
     ObjectStorageCannotTagBucket,
     ObjectStorageCannotActivateBucketVersioning,
+    KubeconfigFileDoNotPermitToConnectToK8sCluster,
+    KubeconfigSecurityCheckError,
+    DeleteLocalKubeconfigFileError,
 }
 
 impl From<errors::Tag> for Tag {
@@ -230,6 +233,11 @@ impl From<errors::Tag> for Tag {
             errors::Tag::UnsupportedClusterKind => Tag::UnsupportedClusterKind,
             errors::Tag::NotAllowedInstanceType => Tag::NotAllowedInstanceType,
             errors::Tag::TerraformQoveryConfigMismatch => Tag::TerraformQoveryConfigMismatch,
+            errors::Tag::KubeconfigFileDoNotPermitToConnectToK8sCluster => {
+                Tag::KubeconfigFileDoNotPermitToConnectToK8sCluster
+            }
+            errors::Tag::KubeconfigSecurityCheckError => Tag::KubeconfigSecurityCheckError,
+            errors::Tag::DeleteLocalKubeconfigFileError => Tag::DeleteLocalKubeconfigFileError,
         }
     }
 }

@@ -251,7 +251,7 @@ impl ObjectStorage for S3 {
         let workspace_directory = crate::fs::workspace_directory(
             self.context().workspace_root_dir(),
             self.context().execution_id(),
-            format!("object-storage/s3/{}", self.name()),
+            self.workspace_dir_relative_path(),
         )
         .map_err(|err| ObjectStorageError::CannotGetWorkspace {
             bucket_name: bucket_name.to_string(),

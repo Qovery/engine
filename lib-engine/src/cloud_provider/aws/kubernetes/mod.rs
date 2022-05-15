@@ -1,10 +1,11 @@
 use core::fmt;
 use std::env;
+use std::io::Read;
 use std::path::Path;
 
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
-use retry::OperationResult;
+use retry::{Error, OperationResult};
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
@@ -622,7 +623,7 @@ fn create(
 
     // wait for AWS EC2 K3S port is open to avoid later deployment issues (and kubeconfig not available on S3)
     if let Kind::Ec2 = kubernetes.kind() {
-        kubernetes.delete_local_kubeconfig();
+        kubernetes.delete_local_kubeconfig_object_storage_folder()?;
         kubernetes.get_kubeconfig_file()?;
 
         let qovery_teraform_config =
@@ -649,6 +650,58 @@ fn create(
                 CommandError::new("Wasn't able to connect to Kubernetes API, can't continue. Did you manually performed changes AWS side?".to_string(), Some(format!("{:?}", e)), None),
             )
         })?;
+
+        // during an instance replacement, the EC2 host dns will change and will require the kubeconfig to be updated
+        // we need to ensure the kubeconfig is the correct one by checking the current instance dns in the kubeconfig
+        // retry for 5 min
+        let result = retry::retry(Fixed::from_millis(5 * 1000).take(60), || {
+            // force s3 kubeconfig retrieve
+            if let Err(e) = kubernetes.delete_local_kubeconfig_object_storage_folder() {
+                return OperationResult::Err(e);
+            };
+            let mut kubeconfig_path = match kubernetes.get_kubeconfig_file() {
+                Ok((_, kubeconfig_filename)) => kubeconfig_filename,
+                Err(e) => return OperationResult::Err(e),
+            };
+
+            // ensure the kubeconfig content address match with the current instance dns
+            let mut buffer = String::new();
+            let _ = kubeconfig_path.read_to_string(&mut buffer);
+            match buffer.contains(&qovery_teraform_config.aws_ec2_public_hostname) {
+                true => {
+                    kubernetes.logger().log(EngineEvent::Info(
+                        event_details.clone(),
+                        EventMessage::new_from_safe(format!(
+                            "kubeconfig stored on s3 do correspond with the actual host {}",
+                            &qovery_teraform_config.aws_ec2_public_hostname
+                        )),
+                    ));
+                    OperationResult::Ok(())
+                }
+                false => {
+                    kubernetes.logger().log(EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new_from_safe(format!(
+                            "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
+                            &qovery_teraform_config.aws_ec2_public_hostname
+                        )),
+                    ));
+                    OperationResult::Retry(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
+                        event_details.clone(),
+                    ))
+                }
+            }
+        });
+
+        match result {
+            Ok(_) => {}
+            Err(Operation { error, .. }) => return Err(error),
+            Err(Error::Internal(_)) => {
+                return Err(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
+                    event_details.clone(),
+                ))
+            }
+        }
     };
 
     // kubernetes helm deployments on the cluster
