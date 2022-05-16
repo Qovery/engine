@@ -46,7 +46,7 @@ RUN apt-get update && apt-get -y install curl gnupg lsb-release &&\
     apt-get clean &&\
     groupadd -g 1000 qovery && \
     useradd --home-dir $HOME_DIR --gid 1000 --uid 1000 -m -s /bin/bash qovery && \
-    mkdir $HOME_DIR/.terraform.d/ && \
+    mkdir -p $TF_PLUGIN_CACHE_DIR && \
     chown -Rf 1000:1000 $HOME_DIR/.terraform.d
 
 WORKDIR $HOME_DIR
