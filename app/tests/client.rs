@@ -1,6 +1,3 @@
-use std::fs::File;
-use std::io::{Error, Read};
-
 #[cfg(feature = "test-functional")]
 fn send_nats_request(json_file_path: &str, subject: &str) -> Result<(), Error> {
     let nc = nats::Options::new()

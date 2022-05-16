@@ -370,8 +370,7 @@ function lint() {
   print_title "CARGO BUILD NO WARNING"
   RUSTFLAGS="--deny warnings" cargo check || (echo "Solve your warnings to succeed"; exit 1)
 
-  # FIXME fix warning in the engine and enable clippy
-  # cargo clippy
+  cargo clippy
 }
 
 function await_docker() {
