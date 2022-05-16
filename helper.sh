@@ -310,6 +310,7 @@ function single_test() { ## Run a single test. Arg, test name: aws::aws_environm
 
 function use_sccache() {
   export RUSTC_WRAPPER=/usr/bin/sccache
+  export SCCACHE_REDIS=$CI_SCCACHE_REDIS
   sccache --version
   sccache -s
 }
