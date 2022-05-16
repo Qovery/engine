@@ -340,6 +340,10 @@ pub fn do_helm_charts(
                     key: "prometheus.prometheusSpec.externalUrl".to_string(),
                     value: prometheus_internal_url.clone(),
                 },
+                ChartSetValue {
+                    key: "prometheusOperator.tls.enabled".to_string(),
+                    value: "false".to_string(),
+                },
                 // Limits prometheus-node-exporter
                 ChartSetValue {
                     key: "prometheus-node-exporter.resources.limits.cpu".to_string(),
@@ -540,9 +544,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "prometheus.servicemonitor.enabled".to_string(),
-                    // Due to cycle, prometheus need tls certificate from cert manager, and enabling this will require
-                    // prometheus to be already installed
-                    value: "false".to_string(),
+                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
                 },
                 ChartSetValue {
                     key: "prometheus.servicemonitor.prometheusInstance".to_string(),
@@ -1003,17 +1005,17 @@ datasources:
     };
 
     // chart deployment order matters!!!
-    let level_1: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(coredns_config)];
+    let mut level_1: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(coredns_config)];
 
-    let mut level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(container_registry_secret), Box::new(cert_manager)];
+    let mut level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(container_registry_secret)];
 
-    let mut level_3: Vec<Box<dyn HelmChart>> = vec![];
+    let level_3: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
-    let mut level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(metrics_server), Box::new(external_dns)];
+    let level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(metrics_server), Box::new(external_dns)];
 
     let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
 
-    let mut level_6: Vec<Box<dyn HelmChart>> = vec![
+    let level_6: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
         Box::new(qovery_agent),
         Box::new(cluster_agent),
@@ -1025,17 +1027,17 @@ datasources:
 
     // observability
     if chart_config_prerequisites.ff_metrics_history_enabled {
-        level_2.push(Box::new(kube_prometheus_stack));
-        level_4.push(Box::new(prometheus_adapter));
-        level_4.push(Box::new(kube_state_metrics));
+        level_1.push(Box::new(kube_prometheus_stack));
+        level_2.push(Box::new(prometheus_adapter));
+        level_2.push(Box::new(kube_state_metrics));
     }
     if chart_config_prerequisites.ff_log_history_enabled {
-        level_3.push(Box::new(promtail));
-        level_4.push(Box::new(loki));
+        level_1.push(Box::new(promtail));
+        level_2.push(Box::new(loki));
     }
 
     if chart_config_prerequisites.ff_metrics_history_enabled || chart_config_prerequisites.ff_log_history_enabled {
-        level_6.push(Box::new(grafana))
+        level_2.push(Box::new(grafana))
     };
 
     // pleco
