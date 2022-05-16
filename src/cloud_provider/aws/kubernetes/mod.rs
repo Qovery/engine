@@ -1,6 +1,7 @@
 use core::fmt;
 use std::env;
 use std::path::Path;
+use std::str::FromStr;
 
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
@@ -24,7 +25,9 @@ use crate::cloud_provider::utilities::{wait_until_port_is_open, TcpCheckSource};
 use crate::cloud_provider::CloudProvider;
 use crate::cmd;
 use crate::cmd::helm::{to_engine_error, Helm};
-use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
+use crate::cmd::kubectl::{
+    kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events, kubectl_exec_get_node,
+};
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
@@ -32,7 +35,11 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::{Context, Features, ListenersHelper, QoveryIdentifier, ToHelmString, ToTerraformString};
 use crate::object_storage::s3::S3;
+use crate::runtime::block_on;
 use crate::string::terraform_list_format;
+use rusoto_core::credential::StaticProvider;
+use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
+use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest, NodegroupScalingConfig};
 
 pub mod ec2;
 mod ec2_helm_charts;
@@ -380,7 +387,10 @@ fn tera_context(
                 match env::var_os("VAULT_SECRET_ID") {
                     Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
                     None => kubernetes.logger().log(EngineEvent::Error(
-                        EngineError::new_missing_required_env_variable(event_details, "VAULT_SECRET_ID".to_string()),
+                        EngineError::new_missing_required_env_variable(
+                            event_details.clone(),
+                            "VAULT_SECRET_ID".to_string(),
+                        ),
                         None,
                     )),
                 }
@@ -428,6 +438,12 @@ fn tera_context(
             .as_str(),
     );
 
+    let (update_desired_node, desired_nodes) = match should_update_desired_nodes(event_details, kubernetes, node_groups)
+    {
+        Err(e) => return Err(e),
+        Ok(value) => value,
+    };
+
     context.insert("aws_region", &kubernetes.region());
     context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
     context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
@@ -444,6 +460,8 @@ fn tera_context(
     context.insert("kubernetes_full_cluster_id", kubernetes.context().cluster_id());
     context.insert("eks_region_cluster_id", region_cluster_id.as_str());
     context.insert("eks_worker_nodes", &node_groups);
+    context.insert("eks_worker_desired_nodes", &desired_nodes);
+    context.insert("eks_worker_update_desired_nodes", &update_desired_node);
     context.insert("ec2_zone_a_subnet_blocks_private", &ec2_zone_a_subnet_blocks_private);
     context.insert("ec2_zone_b_subnet_blocks_private", &ec2_zone_b_subnet_blocks_private);
     context.insert("ec2_zone_c_subnet_blocks_private", &ec2_zone_c_subnet_blocks_private);
@@ -495,6 +513,132 @@ fn tera_context(
     context.insert("discord_api_key", options.discord_api_key.as_str());
 
     Ok(context)
+}
+
+/// Returns a tuple of (update_desired_node: bool, desired_nodes_count: i32).
+fn should_update_desired_nodes(
+    event_details: EventDetails,
+    kubernetes: &dyn Kubernetes,
+    node_groups: &[NodeGroups],
+) -> Result<(bool, i32), EngineError> {
+    let cloud_provider = kubernetes.cloud_provider();
+    let future_node_group = match node_groups.is_empty() {
+        false => node_groups.first().expect("unable to get node_group"),
+        true => {
+            return Err(EngineError::new_cluster_has_no_worker_nodes(
+                event_details,
+                Some(CommandError::new_from_safe_message(
+                    "Could not find node_group in terra context".to_string(),
+                )),
+            ));
+        }
+    };
+
+    let scaling_config = match get_node_scaling_config(event_details.clone(), kubernetes) {
+        Ok(value) => match value {
+            Some(v) => v,
+            None => return Ok((false, future_node_group.min_nodes)),
+        },
+        Err(error) => return Err(error),
+    };
+
+    let should_update_desired_nodes = scaling_config.min_size.unwrap_or_default()
+        != i64::from(future_node_group.min_nodes)
+        || scaling_config.max_size.unwrap_or_default() != i64::from(future_node_group.max_nodes);
+
+    let kubeconfig = match kubernetes.get_kubeconfig_file() {
+        Ok((path, _)) => path,
+        Err(_) => return Ok((false, scaling_config.desired_size.unwrap() as i32)),
+    };
+    let get_node_result = retry::retry(Fixed::from_millis(10000).take(5), || {
+        match kubectl_exec_get_node(kubeconfig.clone(), cloud_provider.credentials_environment_variables().clone()) {
+            Err(e) => OperationResult::Retry(e),
+            Ok(nodes) => OperationResult::Ok(nodes.items.len() as i32),
+        }
+    });
+
+    let actual_nodes_count = match get_node_result {
+        Ok(value) => value,
+        Err(Operation { error, .. }) => {
+            return Err(EngineError::new_cluster_has_no_worker_nodes(event_details, Some(error)));
+        }
+        Err(retry::Error::Internal(e)) => {
+            return Err(EngineError::new_cluster_has_no_worker_nodes(
+                event_details,
+                Some(CommandError::new_from_safe_message(e)),
+            ));
+        }
+    };
+
+    match future_node_group.get_desired_nodes(event_details, actual_nodes_count) {
+        Ok(desired_nodes) => Ok((should_update_desired_nodes, desired_nodes)),
+        Err(error) => Err(error),
+    }
+}
+
+/// Returns a rusoto eks client using the current configuration.
+fn get_rusoto_eks_client(event_details: EventDetails, kubernetes: &dyn Kubernetes) -> Result<EksClient, EngineError> {
+    let cloud_provider = kubernetes.cloud_provider();
+    let region = match RusotoRegion::from_str(&kubernetes.region()) {
+        Ok(value) => value,
+        Err(error) => {
+            return Err(EngineError::new_unsupported_region(
+                event_details,
+                "".to_string(),
+                CommandError::new_from_safe_message(error.to_string()),
+            ));
+        }
+    };
+
+    let credentials =
+        StaticProvider::new(cloud_provider.access_key_id(), cloud_provider.secret_access_key(), None, None);
+
+    let client = Client::new_with(credentials, HttpClient::new().expect("unable to create new Http client"));
+    Ok(EksClient::new_with_client(client, region))
+}
+
+/// Returns the scaling config of a node_group by node_group_name.
+fn get_node_scaling_config(
+    event_details: EventDetails,
+    kubernetes: &dyn Kubernetes,
+) -> Result<Option<NodegroupScalingConfig>, EngineError> {
+    let eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
+        Ok(value) => value,
+        Err(error) => return Err(error),
+    };
+
+    let node_groups = match block_on(eks_client.list_nodegroups(ListNodegroupsRequest {
+        cluster_name: kubernetes.cluster_name(),
+        ..Default::default()
+    })) {
+        Ok(res) => res.nodegroups.unwrap_or_default(),
+        Err(_) => return Ok(Option::None),
+    };
+
+    if node_groups.is_empty() {
+        return Err(EngineError::new_cluster_has_no_worker_nodes(
+            event_details,
+            Some(CommandError::new_from_safe_message(format!(
+                "Could not find node_groups for cluster {}",
+                kubernetes.cluster_name(),
+            ))),
+        ));
+    }
+
+    let actual_nodes_group = match block_on(eks_client.describe_nodegroup(DescribeNodegroupRequest {
+        cluster_name: kubernetes.cluster_name(),
+        nodegroup_name: node_groups.first().unwrap().to_string(),
+    })) {
+        Ok(res) => res.nodegroup.unwrap_or_default(),
+        Err(error) => {
+            return Err(EngineError::new_cluster_has_no_worker_nodes(
+                event_details,
+                Some(CommandError::new_from_safe_message(error.to_string())),
+            ));
+        }
+    };
+
+    Ok(actual_nodes_group.scaling_config)
 }
 
 fn create(

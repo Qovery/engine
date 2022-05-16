@@ -53,6 +53,9 @@ use tracing::{span, Level};
 use url::Url;
 use uuid::Uuid;
 
+pub const KUBERNETES_MIN_NODES: i32 = 5;
+pub const KUBERNETES_MAX_NODES: i32 = 10;
+
 pub enum RegionActivationStatus {
     Deactivated,
     Activated,
@@ -72,9 +75,11 @@ pub trait Cluster<T, U> {
         kubernetes_version: String,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
+        min_nodes: i32,
+        max_nodes: i32,
     ) -> EngineConfig;
     fn cloud_provider(context: &Context) -> Box<T>;
-    fn kubernetes_nodes() -> Vec<NodeGroups>;
+    fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups>;
     fn kubernetes_cluster_options(secrets: FuncTestsSecrets, cluster_id: Option<String>) -> U;
 }
 
@@ -213,6 +218,7 @@ pub enum ClusterTestType {
     Classic,
     WithPause,
     WithUpgrade,
+    WithNodesResize,
 }
 
 pub fn environment_3_apps_3_routers_3_databases(
@@ -1187,6 +1193,8 @@ pub fn test_db(
                 cluster_id: context.cluster_id().to_string(),
             },
             None,
+            KUBERNETES_MIN_NODES,
+            KUBERNETES_MAX_NODES,
         ),
         Kind::Do => DO::docker_cr_engine(
             &context,
@@ -1198,6 +1206,8 @@ pub fn test_db(
                 cluster_id: context.cluster_id().to_string(),
             },
             None,
+            KUBERNETES_MIN_NODES,
+            KUBERNETES_MAX_NODES,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
@@ -1209,6 +1219,8 @@ pub fn test_db(
                 cluster_id: context.cluster_id().to_string(),
             },
             None,
+            KUBERNETES_MIN_NODES,
+            KUBERNETES_MAX_NODES,
         ),
     };
 
@@ -1275,6 +1287,8 @@ pub fn test_db(
             kubernetes_version,
             &ClusterDomain::Default { cluster_id },
             None,
+            KUBERNETES_MIN_NODES,
+            KUBERNETES_MAX_NODES,
         ),
         Kind::Do => DO::docker_cr_engine(
             &context_for_delete,
@@ -1284,6 +1298,8 @@ pub fn test_db(
             kubernetes_version,
             &ClusterDomain::Default { cluster_id },
             None,
+            KUBERNETES_MIN_NODES,
+            KUBERNETES_MAX_NODES,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context_for_delete,
@@ -1293,6 +1309,8 @@ pub fn test_db(
             kubernetes_version,
             &ClusterDomain::Default { cluster_id },
             None,
+            KUBERNETES_MIN_NODES,
+            KUBERNETES_MAX_NODES,
         ),
     };
 
@@ -1311,6 +1329,8 @@ pub fn get_environment_test_kubernetes(
     logger: Box<dyn Logger>,
     localisation: &str,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
+    min_nodes: i32,
+    max_nodes: i32,
 ) -> Box<dyn Kubernetes> {
     let secrets = FuncTestsSecrets::new();
 
@@ -1334,7 +1354,7 @@ pub fn get_environment_test_kubernetes(
                     cloud_provider,
                     dns_provider,
                     options,
-                    AWS::kubernetes_nodes(),
+                    AWS::kubernetes_nodes(min_nodes, max_nodes),
                     logger,
                 )
                 .unwrap(),
@@ -1377,7 +1397,7 @@ pub fn get_environment_test_kubernetes(
                     region,
                     cloud_provider,
                     dns_provider,
-                    DO::kubernetes_nodes(),
+                    DO::kubernetes_nodes(min_nodes, max_nodes),
                     DO::kubernetes_cluster_options(secrets, Option::from(context.cluster_id().to_string())),
                     logger,
                 )
@@ -1396,7 +1416,7 @@ pub fn get_environment_test_kubernetes(
                     zone,
                     cloud_provider,
                     dns_provider,
-                    Scaleway::kubernetes_nodes(),
+                    Scaleway::kubernetes_nodes(min_nodes, max_nodes),
                     Scaleway::kubernetes_cluster_options(secrets, None),
                     logger,
                 )
@@ -1421,6 +1441,8 @@ pub fn get_cluster_test_kubernetes<'a>(
     dns_provider: Arc<Box<dyn DnsProvider>>,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
     logger: Box<dyn Logger>,
+    min_nodes: i32,
+    max_nodes: i32,
 ) -> Box<dyn Kubernetes + 'a> {
     let kubernetes: Box<dyn Kubernetes> = match kubernetes_provider {
         KubernetesKind::Eks => {
@@ -1443,7 +1465,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     cloud_provider,
                     dns_provider,
                     options,
-                    AWS::kubernetes_nodes(),
+                    AWS::kubernetes_nodes(min_nodes, max_nodes),
                     logger,
                 )
                 .unwrap(),
@@ -1485,7 +1507,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                 DoRegion::from_str(localisation).expect("Unknown region set for DOKS"),
                 cloud_provider,
                 dns_provider,
-                DO::kubernetes_nodes(),
+                DO::kubernetes_nodes(min_nodes, max_nodes),
                 DO::kubernetes_cluster_options(secrets, Option::from(cluster_name)),
                 logger,
             )
@@ -1501,7 +1523,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                 ScwZone::from_str(localisation).expect("Unknown zone set for Kapsule"),
                 cloud_provider,
                 dns_provider,
-                Scaleway::kubernetes_nodes(),
+                Scaleway::kubernetes_nodes(min_nodes, max_nodes),
                 Scaleway::kubernetes_cluster_options(secrets, None),
                 logger,
             )
@@ -1542,6 +1564,8 @@ pub fn cluster_test(
             boot_version,
             cluster_domain,
             vpc_network_mode.clone(),
+            KUBERNETES_MIN_NODES,
+            KUBERNETES_MAX_NODES,
         ),
         Kind::Do => DO::docker_cr_engine(
             &context,
@@ -1551,6 +1575,8 @@ pub fn cluster_test(
             boot_version,
             cluster_domain,
             vpc_network_mode.clone(),
+            KUBERNETES_MIN_NODES,
+            KUBERNETES_MAX_NODES,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
@@ -1560,6 +1586,8 @@ pub fn cluster_test(
             boot_version,
             cluster_domain,
             vpc_network_mode.clone(),
+            KUBERNETES_MIN_NODES,
+            KUBERNETES_MAX_NODES,
         ),
     };
     let mut deploy_tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
@@ -1611,6 +1639,7 @@ pub fn cluster_test(
     }
 
     match test_type {
+        // TODO new test type
         ClusterTestType::Classic => {}
         ClusterTestType::WithPause => {
             let mut pause_tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
@@ -1651,6 +1680,8 @@ pub fn cluster_test(
                     upgrade_to_version,
                     cluster_domain,
                     vpc_network_mode,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
                 ),
                 Kind::Do => DO::docker_cr_engine(
                     &context,
@@ -1660,6 +1691,8 @@ pub fn cluster_test(
                     upgrade_to_version,
                     cluster_domain,
                     vpc_network_mode,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
                 ),
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
@@ -1669,6 +1702,8 @@ pub fn cluster_test(
                     upgrade_to_version,
                     cluster_domain,
                     vpc_network_mode,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
                 ),
             };
             let mut upgrade_tx =
@@ -1698,6 +1733,67 @@ pub fn cluster_test(
             }
             assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
 
+            return test_name.to_string();
+        }
+        ClusterTestType::WithNodesResize => {
+            let min_nodes = 11;
+            let max_nodes = 15;
+            let kubernetes_version = format!("{}.{}", major_boot_version, minor_boot_version.clone());
+            let engine = match provider_kind {
+                Kind::Aws => AWS::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    localisation,
+                    kubernetes_version,
+                    cluster_domain,
+                    vpc_network_mode.clone(),
+                    min_nodes,
+                    max_nodes,
+                ),
+                Kind::Do => DO::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    localisation,
+                    kubernetes_version,
+                    cluster_domain,
+                    vpc_network_mode.clone(),
+                    min_nodes,
+                    max_nodes,
+                ),
+                Kind::Scw => Scaleway::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    localisation,
+                    kubernetes_version,
+                    cluster_domain,
+                    vpc_network_mode.clone(),
+                    min_nodes,
+                    max_nodes,
+                ),
+            };
+            let mut upgrade_tx =
+                Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+            let mut delete_tx =
+                Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+            // Upgrade
+            if let Err(err) = upgrade_tx.create_kubernetes() {
+                panic!("{:?}", err)
+            }
+            assert!(matches!(upgrade_tx.commit(), TransactionResult::Ok));
+            if let Err(err) = metrics_server_test(
+                engine
+                    .kubernetes()
+                    .get_kubeconfig_file_path()
+                    .expect("Unable to get config file path"),
+                engine.kubernetes().cloud_provider().credentials_environment_variables(),
+            ) {
+                panic!("{:?}", err)
+            }
+            // Delete
+            if let Err(err) = delete_tx.delete_kubernetes() {
+                panic!("{:?}", err)
+            }
+            assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
             return test_name.to_string();
         }
     }
