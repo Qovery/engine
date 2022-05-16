@@ -33,7 +33,7 @@ pub const SCW_MANAGED_DATABASE_INSTANCE_TYPE: &str = "db-dev-s";
 pub const SCW_MANAGED_DATABASE_DISK_TYPE: &str = "bssd";
 pub const SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE: &str = "";
 pub const SCW_SELF_HOSTED_DATABASE_DISK_TYPE: &str = "scw-sbv-ssd-0";
-pub const SCW_RESOURCE_TTL_IN_SECONDS: u32 = 7200;
+pub const SCW_RESOURCE_TTL_IN_SECONDS: u32 = 10800;
 
 pub fn container_registry_scw(context: &Context) -> ScalewayCR {
     let secrets = FuncTestsSecrets::new();

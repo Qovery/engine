@@ -76,7 +76,7 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
                     let ttl_converted: u32 = ttl.into_string().unwrap().parse().unwrap();
                     Some(ttl_converted)
                 }
-                None => Some(7200),
+                None => Some(10800),
             }
         },
         forced_upgrade: Option::from(env::var_os("forced_upgrade").is_some()),
