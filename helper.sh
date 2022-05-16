@@ -370,6 +370,8 @@ function lint() {
   print_title "CARGO BUILD NO WARNING"
   RUSTFLAGS="--deny warnings" cargo check || (echo "Solve your warnings to succeed"; exit 1)
 
+  export RUSTC_WRAPPER=""
+  export RUSTC_WORKSPACE_WRAPPER="sccache"
   cargo clippy
 }
 
