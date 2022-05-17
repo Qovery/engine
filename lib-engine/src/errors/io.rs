@@ -121,6 +121,12 @@ pub enum Tag {
     KubeconfigFileDoNotPermitToConnectToK8sCluster,
     KubeconfigSecurityCheckError,
     DeleteLocalKubeconfigFileError,
+    VaultConnectionError,
+    VaultSecretCouldNotBeRetrieved,
+    VaultSecretCouldNotBeCreatedOrUpdated,
+    VaultSecretCouldNotBeDeleted,
+    JsonDeserializationError,
+    ClusterSecretsManipulationError,
 }
 
 impl From<errors::Tag> for Tag {
@@ -238,6 +244,12 @@ impl From<errors::Tag> for Tag {
             }
             errors::Tag::KubeconfigSecurityCheckError => Tag::KubeconfigSecurityCheckError,
             errors::Tag::DeleteLocalKubeconfigFileError => Tag::DeleteLocalKubeconfigFileError,
+            errors::Tag::VaultConnectionError => Tag::VaultConnectionError,
+            errors::Tag::VaultSecretCouldNotBeRetrieved => Tag::VaultSecretCouldNotBeRetrieved,
+            errors::Tag::VaultSecretCouldNotBeCreatedOrUpdated => Tag::VaultSecretCouldNotBeCreatedOrUpdated,
+            errors::Tag::JsonDeserializationError => Tag::JsonDeserializationError,
+            errors::Tag::ClusterSecretsManipulationError => Tag::ClusterSecretsManipulationError,
+            errors::Tag::VaultSecretCouldNotBeDeleted => Tag::VaultSecretCouldNotBeDeleted,
         }
     }
 }

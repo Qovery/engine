@@ -352,6 +352,8 @@ pub enum Transmitter {
     Application(TransmitterId, TransmitterName, TransmitterVersion),
     /// Router: router engine part.
     Router(TransmitterId, TransmitterName),
+    /// SecretManager: secret manager part
+    SecretManager(TransmitterName),
 }
 
 impl Display for Transmitter {
@@ -371,6 +373,7 @@ impl Display for Transmitter {
                 Transmitter::Application(id, name, version) =>
                     format!("application({}, {}, commit: {})", id, name, version),
                 Transmitter::Router(id, name) => format!("router({}, {})", id, name),
+                Transmitter::SecretManager(name) => format!("secret_manager({})", name),
             }
         )
     }
@@ -434,6 +437,12 @@ impl EventDetails {
     pub fn clone_changing_stage(event_details: EventDetails, stage: Stage) -> Self {
         let mut event_details = event_details;
         event_details.stage = stage;
+        event_details
+    }
+
+    pub fn clone_changing_transmitter(event_details: EventDetails, transmitter: Transmitter) -> Self {
+        let mut event_details = event_details;
+        event_details.transmitter = transmitter;
         event_details
     }
 

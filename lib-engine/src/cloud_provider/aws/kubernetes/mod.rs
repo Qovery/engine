@@ -1,7 +1,7 @@
 use core::fmt;
-use std::env;
 use std::io::Read;
 use std::path::Path;
+use std::{env, fs};
 
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
@@ -33,6 +33,9 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::{Context, Features, ListenersHelper, QoveryIdentifier, ToHelmString, ToTerraformString};
 use crate::object_storage::s3::S3;
+use crate::secret_manager::io::ClusterSecretsIo;
+use crate::secret_manager::vault;
+use crate::secret_manager::vault::{ClusterSecrets, QVaultClient};
 use crate::string::terraform_list_format;
 
 pub mod ec2;
@@ -621,24 +624,58 @@ fn create(
         return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
     }
 
+    let mut cluster_secrets = vault::ClusterSecrets::new_from_cluster_secrets_io(
+        ClusterSecretsIo::new(
+            kubernetes.cloud_provider().access_key_id(),
+            kubernetes.region(),
+            kubernetes.cloud_provider().access_key_id(),
+            None,
+            None,
+            kubernetes.kind(),
+            kubernetes.cluster_name(),
+            kubernetes_long_id.to_string(),
+            options.grafana_admin_user.clone(),
+            options.grafana_admin_password.clone(),
+            kubernetes.cloud_provider().organization_id().to_string(),
+            kubernetes.context().is_test_cluster().to_string(),
+        ),
+        event_details.clone(),
+    )?;
+
     // wait for AWS EC2 K3S port is open to avoid later deployment issues (and kubeconfig not available on S3)
     if let Kind::Ec2 = kubernetes.kind() {
-        kubernetes.delete_local_kubeconfig_object_storage_folder()?;
-        kubernetes.get_kubeconfig_file()?;
+        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
 
-        let qovery_teraform_config =
-            get_aws_ec2_qovery_terraform_config(format!("{}/qovery-tf-config.json", &temp_dir).as_str())
-                .map_err(|e| EngineError::new_terraform_qovery_config_mismatch(event_details.clone(), e))?;
+        // read config generated after terraform infra bootstrap/update
+        let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
+            .map_err(|e| EngineError::new_terraform_qovery_config_mismatch(event_details.clone(), e))?;
 
-        let port = qovery_teraform_config.kubernetes_port_to_u16().map_err(|e| {
-            EngineError::new_terraform_qovery_config_mismatch(
-                event_details.clone(),
-                CommandError::new_from_safe_message(e),
-            )
-        })?;
+        // send cluster info to vault if info mismatch
+        // create vault connection (Vault connectivity should not be on the critical deployment path,
+        // if it temporarily fails, just ignore it, data will be pushed on the next sync)
+        let vault_conn = match QVaultClient::new(event_details.clone()) {
+            Ok(x) => Some(x),
+            Err(_) => None,
+        };
+        if let Some(vault) = vault_conn {
+            cluster_secrets.k8s_cluster_endpoint = Some(qovery_terraform_config.aws_ec2_public_hostname.clone());
+            // update info without taking care of the kubeconfig because we don't have it yet
+            let _ = cluster_secrets.create_or_update_secret(&vault, true, event_details.clone());
+        };
 
+        let port = match qovery_terraform_config.kubernetes_port_to_u16() {
+            Ok(p) => p,
+            Err(e) => {
+                return Err(EngineError::new_terraform_qovery_config_mismatch(
+                    event_details,
+                    CommandError::new_from_safe_message(e),
+                ))
+            }
+        };
+
+        // wait for k3s port to be open
         wait_until_port_is_open(
-            &TcpCheckSource::DnsName(qovery_teraform_config.aws_ec2_public_hostname.as_str()),
+            &TcpCheckSource::DnsName(qovery_terraform_config.aws_ec2_public_hostname.as_str()),
             port,
             300,
             kubernetes.logger(),
@@ -667,13 +704,13 @@ fn create(
             // ensure the kubeconfig content address match with the current instance dns
             let mut buffer = String::new();
             let _ = kubeconfig_path.read_to_string(&mut buffer);
-            match buffer.contains(&qovery_teraform_config.aws_ec2_public_hostname) {
+            match buffer.contains(&qovery_terraform_config.aws_ec2_public_hostname) {
                 true => {
                     kubernetes.logger().log(EngineEvent::Info(
                         event_details.clone(),
                         EventMessage::new_from_safe(format!(
                             "kubeconfig stored on s3 do correspond with the actual host {}",
-                            &qovery_teraform_config.aws_ec2_public_hostname
+                            &qovery_terraform_config.aws_ec2_public_hostname
                         )),
                     ));
                     OperationResult::Ok(())
@@ -683,7 +720,7 @@ fn create(
                         event_details.clone(),
                         EventMessage::new_from_safe(format!(
                             "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
-                            &qovery_teraform_config.aws_ec2_public_hostname
+                            &qovery_terraform_config.aws_ec2_public_hostname
                         )),
                     ));
                     OperationResult::Retry(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
@@ -712,6 +749,24 @@ fn create(
         .into_iter()
         .map(|x| (x.0.to_string(), x.1.to_string()))
         .collect();
+
+    // send cluster info with kubeconfig
+    // create vault connection (Vault connectivity should not be on the critical deployment path,
+    // if it temporarily fails, just ignore it, data will be pushed on the next sync)
+    let vault_conn = match QVaultClient::new(event_details.clone()) {
+        Ok(x) => Some(x),
+        Err(_) => None,
+    };
+    if let Some(vault) = vault_conn {
+        // encode base64 kubeconfig
+        let kubeconfig_content =
+            fs::read_to_string(kubeconfig_path).expect("kubeconfig was not found while it should be present");
+        let kubeconfig_b64 = base64::encode(kubeconfig_content);
+        cluster_secrets.kubeconfig_b64 = Some(kubeconfig_b64);
+
+        // update info without taking care of the kubeconfig because we don't have it yet
+        let _ = cluster_secrets.create_or_update_secret(&vault, false, event_details.clone());
+    };
 
     kubernetes.logger().log(EngineEvent::Info(
         event_details.clone(),
@@ -1350,20 +1405,35 @@ fn delete(
                 &listeners_helper,
             );
             kubernetes.logger().log(EngineEvent::Info(
-                event_details,
+                event_details.clone(),
                 EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),
             ));
             Ok(())
         }
-        Err(Operation { error, .. }) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-            event_details,
-            error,
-        )),
-        Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-            event_details,
-            CommandError::new("Error while trying to perform Terraform destroy".to_string(), Some(msg), None),
-        )),
-    }
+        Err(Operation { error, .. }) => {
+            return Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
+                event_details,
+                error,
+            ))
+        }
+        Err(retry::Error::Internal(msg)) => {
+            return Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
+                event_details,
+                CommandError::new("Error while trying to perform Terraform destroy".to_string(), Some(msg), None),
+            ))
+        }
+    }?;
+
+    // delete info on vault
+    let vault_conn = QVaultClient::new(event_details);
+    if let Ok(vault_conn) = vault_conn {
+        let mount = ClusterSecrets::get_vault_mount_name(kubernetes.context().is_test_cluster());
+
+        // ignore on failure
+        let _ = vault_conn.delete_secret(mount.as_str(), kubernetes.id());
+    };
+
+    Ok(())
 }
 
 fn delete_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {

@@ -51,11 +51,16 @@ sysinfo = "0.23.11"
 
 # Jinja2
 tera = "1.15.0"
+
 # Json
 serde = "1.0.137"
 serde_json = "1.0.81"
 serde_derive = "1.0.137"
 serde_yaml = "0.8.24"
+
+# Secrets manager
+vaultrs = "0.6.0"
+vaultrs-login = "0.1.6"
 
 # AWS deps
 tokio = { version = "1.18.1", features = ["full"] }

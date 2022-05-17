@@ -211,6 +211,9 @@ pub enum Transmitter {
         id: TransmitterId,
         name: TransmitterName,
     },
+    SecretManager {
+        name: TransmitterName,
+    },
 }
 
 impl From<events::Transmitter> for Transmitter {
@@ -226,6 +229,7 @@ impl From<events::Transmitter> for Transmitter {
             events::Transmitter::Database(id, db_type, name) => Transmitter::Database { id, db_type, name },
             events::Transmitter::Application(id, name, commit) => Transmitter::Application { id, name, commit },
             events::Transmitter::Router(id, name) => Transmitter::Router { id, name },
+            events::Transmitter::SecretManager(name) => Transmitter::SecretManager { name },
         }
     }
 }
