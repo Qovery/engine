@@ -84,7 +84,7 @@ function check_untracked_files() {
 
 function get_gitlab_engine_commit_id() {
   # Ensure we're in the correct folder
-  if [ "$(git config --get remote.origin.url | $grep -c "gitlab.com:qovery/engine/qovery-engine.git")" != "1" ] && [ -z $CI_REPOSITORY_URL ] ; then
+  if [ "$(git config --get remote.origin.url | $grep -c "gitlab.com:qovery/engine/engine.git")" != "1" ] && [ -z $CI_REPOSITORY_URL ] ; then
     (fatal "You're not in the correct directory and should be in the gitlab repo: $(pwd)")
   fi
   git rev-parse HEAD
@@ -144,7 +144,13 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   set -e
 
   export DOCKER_BUILDKIT=1
-  docker build --network "host" --build-arg SCCACHE_REDIS=$CI_SCCACHE_REDIS -t qoveryrd/engine:${tag} .
+  export SCCACHE_ARGS=""
+  if [ ! -z $CI_SCCACHE_REDIS ] ; then
+    SCCACHE_ARGS=$CI_SCCACHE_REDIS
+  else
+    echo "-> SCCACHE will not use Redis because CI_SCCACHE_REDIS isn't set!!!"
+  fi
+  docker build --network "host" $SCCACHE_ARGS -t qoveryrd/engine:${tag} .
 
   rm -f docker/engine/load.sh
   rm -f bin_versions

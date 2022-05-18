@@ -15,6 +15,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use std::borrow::Borrow;
+use std::thread::sleep;
 use std::time::Duration;
 use std::{env, thread};
 use std::{fs, io, process};
@@ -238,6 +239,7 @@ pub fn main() -> io::Result<()> {
         Ok(()) => info!("Binaries versions are checked"),
         Err(e) => {
             error!("Error while initializing the Engine {}", e);
+
             process::exit(1);
         }
     }
@@ -377,9 +379,11 @@ pub fn using_json_path_parameter(
     task_manager.add_task(task);
     let _ = task_manager.run(logger);
 
-    loop {
-        std::thread::park();
+    while task_manager.remaining_tasks_to_run() > 0 {
+        sleep(Duration::from_secs(30))
     }
+
+    Ok(())
 }
 
 // the engine can be autonomous using the nats server to receive actions
