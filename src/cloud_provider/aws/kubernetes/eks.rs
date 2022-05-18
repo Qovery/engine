@@ -126,11 +126,11 @@ impl EKS {
             AwsInstancesType::T2Large => true,
             AwsInstancesType::T2Xlarge => true,
             AwsInstancesType::T3Small => false,
-            AwsInstancesType::T3Medium => false,
+            AwsInstancesType::T3Medium => true,
             AwsInstancesType::T3Large => true,
             AwsInstancesType::T3Xlarge => true,
             AwsInstancesType::T3aSmall => false,
-            AwsInstancesType::T3aMedium => false,
+            AwsInstancesType::T3aMedium => true,
             AwsInstancesType::T3aLarge => true,
             AwsInstancesType::T3aXlarge => true,
             AwsInstancesType::T3a2xlarge => true,
@@ -733,6 +733,21 @@ mod tests {
             Transmitter::Kubernetes("".to_string(), "".to_string()),
         );
         assert!(EKS::validate_node_groups(
+            vec![NodeGroups::new("".to_string(), 3, 5, "t3.medium".to_string(), 20).unwrap()],
+            &event_details,
+        )
+        .is_ok());
+        assert!(EKS::validate_node_groups(
+            vec![NodeGroups::new("".to_string(), 3, 5, "t3a.medium".to_string(), 20).unwrap()],
+            &event_details,
+        )
+        .is_ok());
+        assert!(EKS::validate_node_groups(
+            vec![NodeGroups::new("".to_string(), 3, 5, "t3.large".to_string(), 20).unwrap()],
+            &event_details,
+        )
+        .is_ok());
+        assert!(EKS::validate_node_groups(
             vec![NodeGroups::new("".to_string(), 3, 5, "t3a.large".to_string(), 20).unwrap()],
             &event_details,
         )
@@ -740,6 +755,15 @@ mod tests {
         assert_eq!(
             EKS::validate_node_groups(
                 vec![NodeGroups::new("".to_string(), 3, 5, "t3.small".to_string(), 20).unwrap()],
+                &event_details
+            )
+            .unwrap_err()
+            .tag(),
+            &Tag::NotAllowedInstanceType
+        );
+        assert_eq!(
+            EKS::validate_node_groups(
+                vec![NodeGroups::new("".to_string(), 3, 5, "t3a.small".to_string(), 20).unwrap()],
                 &event_details
             )
             .unwrap_err()
