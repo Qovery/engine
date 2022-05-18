@@ -132,7 +132,12 @@ impl EKS {
             AwsInstancesType::T3aSmall => false,
             AwsInstancesType::T3aMedium => false,
             AwsInstancesType::T3aLarge => true,
+            AwsInstancesType::T3aXlarge => true,
             AwsInstancesType::T3a2xlarge => true,
+            AwsInstancesType::M5large => true,
+            AwsInstancesType::M5Xlarge => true,
+            AwsInstancesType::M52Xlarge => true,
+            AwsInstancesType::M54Xlarge => true,
         }
     }
 
