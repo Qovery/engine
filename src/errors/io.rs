@@ -247,7 +247,6 @@ impl From<errors::Tag> for Tag {
 pub struct EngineError {
     tag: Tag,
     event_details: EventDetails,
-    qovery_log_message: String,
     user_log_message: String,
     underlying_error: Option<CommandError>,
     link: Option<String>,
@@ -259,7 +258,6 @@ impl From<errors::EngineError> for EngineError {
         EngineError {
             tag: Tag::from(error.tag),
             event_details: EventDetails::from(error.event_details),
-            qovery_log_message: error.qovery_log_message,
             user_log_message: error.user_log_message,
             underlying_error: error.underlying_error.map(CommandError::from),
             link: error.link.map(|url| url.to_string()),

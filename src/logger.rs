@@ -98,7 +98,6 @@ mod tests {
         let app_id = QoveryIdentifier::new_from_long_id(Uuid::new_v4().to_string());
         let app_name = format!("simple-app-{}", app_id);
         let app_version = Uuid::new_v4();
-        let qovery_message = "Qovery message";
         let user_message = "User message";
         let safe_message = "Safe message";
         let raw_message = "Raw message";
@@ -118,7 +117,6 @@ mod tests {
                             Stage::Infrastructure(InfrastructureStep::Create),
                             Transmitter::Kubernetes(cluster_id.to_string(), cluster_name.to_string()),
                         ),
-                        qovery_message.to_string(),
                         user_message.to_string(),
                         Some(errors::CommandError::new(
                             safe_message.to_string(),
