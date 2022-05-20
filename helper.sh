@@ -132,15 +132,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   done
 
   set +e
-  if [ ! -z $DOCKER_HOST ] ; then
-    return_code=1
-    while [ $return_code -ne 0 ] ; do
-      echo "waiting docker port 2375 to be available..."
-      sleep 2
-      nc -zv localhost 2375 2>/dev/null
-      return_code=$?
-    done
-  fi
+  await_docker
   set -e
 
   export DOCKER_BUILDKIT=1
@@ -306,7 +298,7 @@ function prepare_tests() { ## Update all CHANGE-ME fields from lib-engine
 
 function single_test() { ## Run a single test. Arg, test name: aws::aws_environment::deploy_a_working_environment_with_domain
   test_name=$1
-  export RUST_LOG=info  prepare_tests
+  export RUST_LOG=info prepare_tests
 
   cargo build --color=always --all --all-targets --tests
   sccache -s
@@ -321,12 +313,35 @@ function use_sccache() {
   sccache -s
 }
 
+function test_local_stack() {
+    prepare_tests
+    use_sccache
+    if [ -z $DOCKER_HOST ]; then unset $DOCKER_HOST; fi
+    docker run -d --rm -p 5000:5000 --name engine-registry registry:2
+
+    kube_cluster_name="kube-test-cluster"
+
+    k3d cluster create -a 0 \
+        --image rancher/k3s:v1.21.10-k3s1 \
+        --no-lb \
+        --k3s-arg "--disable=traefik" \
+        --wait $kube_cluster_name || k3d cluster start --wait $kube_cluster_name
+
+    kubectl -n kube-system wait pod --for=condition=Ready --selector app=local-path-provisioner || sleep 30
+    kubectl -n kube-system wait pod --for=condition=Ready --selector app=local-path-provisioner
+
+    echo "==========================TEST WITH LOCAL STACK==========================="
+    if [ -z $DOCKER_HOST ]; then unset $DOCKER_HOST; fi
+    cargo test --manifest-path lib-engine/Cargo.toml --features test-all-local
+}
+
 function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH branch name, threads
   filter_tests=$1
   nb_treads=$3
   print_title "RUNNING TESTS - $filter_tests"
   export RUST_LOG=debug
   prepare_tests
+  use_sccache
 
   if [ $filter_tests = "unit-tests" ] ; then
    features_to_test_option="" # will execute only default features (unit tests)
@@ -335,8 +350,6 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   fi
 
   STARTTIME=$(date +%s)
-
-  sccache -s
   cd $ENGINE_DIR
 
   mkdir -p $GITLAB_LOG_OUTPUT_DIR
@@ -516,13 +529,15 @@ prepare_tests)
 lint)
   lint
   ;;
+test_local_stack)
+  test_local_stack "$2"
+;;
 upgrade_on_dev)
   upgrade_on_dev
   ;;
 downgrade_on_dev)
   downgrade_on_dev "$2"
   ;;
-
 deploy_all_clusters)
   deploy_all_clusters
   ;;

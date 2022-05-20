@@ -32,7 +32,7 @@ build-and-lint-code:
     - ./helper.sh build
   when: always
   tags:
-    - bm-2cpu-8gmem-0g
+    - bm-7cpu-8gmem-0g
   only:
     - merge_requests
   interruptible: true
@@ -85,7 +85,7 @@ unit-tests:
   script:
     - ./helper.sh unit_tests
   tags:
-    - vm-2cpu-4gmem-0g
+    - bm-2cpu-4gmem-0g
   only:
     variables:
       - $CI_MERGE_REQUEST_TITLE =~ /^WIP:/
@@ -114,7 +114,7 @@ all-minimal-tests:
     refs:
       - merge_requests
   tags:
-    - vm-2cpu-4gmem-0g
+    - bm-2cpu-4gmem-0g
   dependencies:
     - build-and-lint-code
   artifacts:
@@ -132,16 +132,14 @@ infra-without-cloud-providers:
   before_script:
     - docker/wait_docker_available.sh
   script:
-    - export SCCACHE_REDIS=$CI_SCCACHE_REDIS
-    - export RUSTC_WRAPPER=/usr/bin/sccache
-    - just test_local_stack $DOCKER_HOST
+    - ./helper.sh test_local_stack $DOCKER_HOST
   only:
     refs:
       - merge_requests
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-2cpu-4gmem-0g
+    - bm-2cpu-4gmem-0g
 
 #########
 # TESTS #
