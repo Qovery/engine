@@ -23,7 +23,6 @@ impl Logger for NatsLogger {
     fn log(&self, event: EngineEvent) {
         let event_details = event.get_details();
         let event_io = EngineEventIo::from(event.clone());
-        let error_message_qovery = "error trying to send message to NATS".to_string();
         let error_message_user = "error trying to report to Qovery backend".to_string();
 
         match serde_json::to_string(&event_io) {
@@ -34,7 +33,6 @@ impl Logger for NatsLogger {
                     self.std_logger.log(EngineEvent::Error(
                         EngineError::new_unknown(
                             event_details.clone(),
-                            error_message_qovery,
                             error_message_user,
                             Some(CommandError::new(
                                 "cannot publish event object to NATS subject".to_string(),
@@ -52,7 +50,6 @@ impl Logger for NatsLogger {
                 self.std_logger.log(EngineEvent::Error(
                     EngineError::new_unknown(
                         event_details.clone(),
-                        error_message_qovery,
                         error_message_user,
                         Some(CommandError::new(
                             "cannot serialize event object to JSON".to_string(),

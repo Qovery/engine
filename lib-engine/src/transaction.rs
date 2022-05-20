@@ -195,7 +195,9 @@ impl<'a> Transaction<'a> {
             let image_name = app.get_build().image.full_image_name_with_tag();
             let msg = match &build_result {
                 Ok(_) => format!("✅ Container image {} is built and ready to use", &image_name),
-                Err(BuildError::Aborted(_)) => format!("🚫 Container image {} build has been canceled", &image_name),
+                Err(BuildError::Aborted { .. }) => {
+                    format!("🚫 Container image {} build has been canceled", &image_name)
+                }
                 Err(err) => format!("❌ Container image {} failed to be build: {}", &image_name, err),
             };
 

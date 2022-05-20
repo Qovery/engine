@@ -8,20 +8,20 @@ use url::Url;
 
 #[derive(thiserror::Error, Debug)]
 pub enum DockerError {
-    #[error("Docker Invalid configuration: {0}")]
-    InvalidConfig(String),
+    #[error("Docker Invalid configuration: {raw_error_message:?}")]
+    InvalidConfig { raw_error_message: String },
 
-    #[error("Docker terminated with an unknown error: {0}")]
-    ExecutionError(#[from] std::io::Error),
+    #[error("Docker terminated with an unknown error: {raw_error:?}")]
+    ExecutionError { raw_error: std::io::Error },
 
-    #[error("Docker terminated with a non success exit status code: {0}")]
-    ExitStatusError(ExitStatus),
+    #[error("Docker terminated with a non success exit status code: {exit_status:?}")]
+    ExitStatusError { exit_status: ExitStatus },
 
-    #[error("Docker aborted due to user cancel request: {0}")]
-    Aborted(String),
+    #[error("Docker aborted due to user cancel request: {raw_error_message:?}")]
+    Aborted { raw_error_message: String },
 
-    #[error("Docker command terminated due to timeout: {0}")]
-    Timeout(String),
+    #[error("Docker command terminated due to timeout: {raw_error_message:?}")]
+    Timeout { raw_error_message: String },
 }
 
 lazy_static! {
@@ -214,9 +214,9 @@ impl Docker {
             &CommandKiller::never(),
         );
         if buildx_cmd_exist.is_err() {
-            return Err(DockerError::InvalidConfig(
-                "Docker buildx plugin for buildkit is not correctly installed".to_string(),
-            ));
+            return Err(DockerError::InvalidConfig {
+                raw_error_message: "Docker buildx plugin for buildkit is not correctly installed".to_string(),
+            });
         }
 
         // In order to be able to use --cache-from --cache-to for buildkit,
@@ -308,7 +308,7 @@ impl Docker {
 
         match ret {
             Ok(_) => Ok(true),
-            Err(DockerError::ExitStatusError(_)) => Ok(false),
+            Err(DockerError::ExitStatusError { .. }) => Ok(false),
             Err(err) => Err(err),
         }
     }
@@ -361,17 +361,15 @@ impl Docker {
 
         // Do some checks
         if !dockerfile.is_file() {
-            return Err(DockerError::InvalidConfig(format!(
-                "provided dockerfile `{:?}` is not a valid file",
-                dockerfile
-            )));
+            return Err(DockerError::InvalidConfig {
+                raw_error_message: format!("provided dockerfile `{:?}` is not a valid file", dockerfile),
+            });
         }
 
         if !context.is_dir() {
-            return Err(DockerError::InvalidConfig(format!(
-                "provided docker build context `{:?}` is not a valid directory",
-                context
-            )));
+            return Err(DockerError::InvalidConfig {
+                raw_error_message: format!("provided docker build context `{:?}` is not a valid directory", context),
+            });
         }
 
         if self.use_buildkit {
@@ -610,10 +608,10 @@ where
 
     match ret {
         Ok(_) => Ok(()),
-        Err(CommandError::TimeoutError(msg)) => Err(DockerError::Timeout(msg)),
-        Err(CommandError::Killed(msg)) => Err(DockerError::Aborted(msg)),
-        Err(CommandError::ExitStatusError(err)) => Err(DockerError::ExitStatusError(err)),
-        Err(CommandError::ExecutionError(err)) => Err(DockerError::ExecutionError(err)),
+        Err(CommandError::TimeoutError(msg)) => Err(DockerError::Timeout { raw_error_message: msg }),
+        Err(CommandError::Killed(msg)) => Err(DockerError::Aborted { raw_error_message: msg }),
+        Err(CommandError::ExitStatusError(err)) => Err(DockerError::ExitStatusError { exit_status: err }),
+        Err(CommandError::ExecutionError(err)) => Err(DockerError::ExecutionError { raw_error: err }),
     }
 }
 
