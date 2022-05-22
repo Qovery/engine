@@ -26,6 +26,7 @@ use uuid::Uuid;
 #[cfg(feature = "test-do-minimal")]
 #[named]
 #[test]
+#[ignore]
 fn digitalocean_test_build_phase() {
     let test_name = function_name!();
     engine_run_test(|| {
@@ -74,6 +75,7 @@ fn digitalocean_test_build_phase() {
 #[cfg(feature = "test-do-minimal")]
 #[named]
 #[test]
+#[ignore]
 fn digitalocean_doks_deploy_a_working_environment_with_no_router() {
     let test_name = function_name!();
     engine_run_test(|| {

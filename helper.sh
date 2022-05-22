@@ -293,7 +293,11 @@ function prepare_tests() { ## Update all CHANGE-ME fields from lib-engine
       exit 1
     fi
   fi
-  export VAULT_TOKEN=$(vault write -format=json auth/approle/login role_id=$CI_VAULT_ROLE_ID secret_id=$CI_VAULT_SECRET_ID | jq -r ".auth.client_token")
+
+  # if VAULT_TOKEN env var is already present, skip
+  if [ -z $VAULT_TOKEN ] ; then
+    export VAULT_TOKEN=$(vault write -format=json auth/approle/login role_id=$CI_VAULT_ROLE_ID secret_id=$CI_VAULT_SECRET_ID | jq -r ".auth.client_token")
+  fi
 }
 
 function single_test() { ## Run a single test. Arg, test name: aws::aws_environment::deploy_a_working_environment_with_domain
