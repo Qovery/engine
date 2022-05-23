@@ -337,6 +337,7 @@ function test_local_stack() {
         --k3s-arg "--disable=traefik" \
         --wait $kube_cluster_name || k3d cluster start --wait $kube_cluster_name
 
+    sleep 30
     kubectl -n kube-system wait pod --for=condition=Ready --selector app=local-path-provisioner || sleep 30
     kubectl -n kube-system wait pod --for=condition=Ready --selector app=local-path-provisioner
 
