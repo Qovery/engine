@@ -250,7 +250,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     let database_name = "postgres".to_string();
 
     // pSQL 2 management part
-    let fqdn_2 = format!("{}2", get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()));
+    let fqdn_2 = format!("{}2", get_svc_name(DatabaseKind::Postgresql, provider_kind));
     let database_username_2 = "superuser2".to_string();
     let database_name_2 = "postgres2".to_string();
 
@@ -381,7 +381,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 environment_vars: btreemap! {
                     "IS_DOCUMENTDB".to_string() => base64::encode("false"),
                     "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(database_host_mongo.clone()),
-                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri_mongo.clone()),
+                    "QOVERY_DATABASE_MY_DDB_CONNECTION_URI".to_string() => base64::encode(database_uri_mongo),
                     "QOVERY_DATABASE_TESTING_DATABASE_PORT".to_string() => base64::encode(database_port_mongo.to_string()),
                     "MONGODB_DBNAME".to_string() => base64::encode(&database_db_name_mongo.clone()),
                     "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() => base64::encode(database_username_mongo.clone()),
