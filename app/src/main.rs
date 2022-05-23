@@ -1,4 +1,4 @@
-#![allow(deprecated)]
+#![allow(clippy::too_many_arguments, deprecated)]
 
 #[macro_use]
 extern crate lazy_static;
@@ -262,11 +262,7 @@ pub fn main() -> io::Result<()> {
         None => info!("docker host is not set"),
     };
 
-    let mode = if organization.is_ok() && cloud_provider.is_ok() && region.is_ok() {
-        let org = organization.unwrap();
-        let cp = cloud_provider.unwrap();
-        let r = region.unwrap();
-
+    let mode = if let (Ok(org), Ok(cp), Ok(r)) = (organization, cloud_provider, region) {
         info!("starting in cloud mode");
         info!("organization: {}", org.as_str());
         info!("cloud provider: {}", cp.as_str());

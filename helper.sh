@@ -373,12 +373,9 @@ function lint() {
   print_title "CARGO FMT"
   cargo fmt --all -- --check --color=always  || (echo "Use cargo fmt to format your code"; exit 1)
 
-  print_title "CARGO BUILD NO WARNING"
-  RUSTFLAGS="--deny warnings" cargo check || (echo "Solve your warnings to succeed"; exit 1)
-
   export RUSTC_WRAPPER=""
   export RUSTC_WORKSPACE_WRAPPER="sccache"
-  cargo clippy
+  cargo clippy  --all --all-features --exclude test-utilities --locked -- -D warnings || (echo "Solve your clippy errors to succeed"; exit 1)
 }
 
 function await_docker() {

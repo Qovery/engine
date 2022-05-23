@@ -87,7 +87,7 @@ impl Cluster<AWS, Options> for AWS {
 
         // use AWS
         let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(AWS::cloud_provider(context));
-        let dns_provider = match kubernetes_kind.clone() {
+        let dns_provider = match kubernetes_kind {
             KubernetesKind::Ec2 => Arc::new(dns_provider_qoverydns(context, cluster_domain)),
             _ => Arc::new(dns_provider_cloudflare(context, cluster_domain)),
         };

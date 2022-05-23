@@ -270,7 +270,7 @@ impl From<ContainerRegistryError> for CommandError {
                 raw_error_message,
             } => CommandError::new(
                 format!("Container registry error, cannot create registry: `{}`", registry_name),
-                Some(raw_error_message.to_string()),
+                Some(raw_error_message),
                 None,
             ),
             ContainerRegistryError::CannotDeleteRegistry {
@@ -278,7 +278,7 @@ impl From<ContainerRegistryError> for CommandError {
                 raw_error_message,
             } => CommandError::new(
                 format!("Container registry error, cannot delete registry: `{}`", registry_name),
-                Some(raw_error_message.to_string()),
+                Some(raw_error_message),
                 None,
             ),
             ContainerRegistryError::CannotDeleteImage {
@@ -291,7 +291,7 @@ impl From<ContainerRegistryError> for CommandError {
                     "Container registry error, cannot delete image `{}` from repository: `{}` in registry: `{}`",
                     image_name, repository_name, registry_name
                 ),
-                Some(raw_error_message.to_string()),
+                Some(raw_error_message),
                 None,
             ),
             ContainerRegistryError::ImageDoesntExistInRegistry {
@@ -314,7 +314,7 @@ impl From<ContainerRegistryError> for CommandError {
                 raw_error_message,
             } => CommandError::new(
                 format!("Container registry error, registry: `{}` doesn't exist", registry_name),
-                Some(raw_error_message.to_string()),
+                Some(raw_error_message),
                 None,
             ),
             ContainerRegistryError::CannotLinkRegistryToCluster {
@@ -326,7 +326,7 @@ impl From<ContainerRegistryError> for CommandError {
                     "Container registry error, cannot link cluster with id `{}` to registry: `{}`",
                     cluster_id, registry_name
                 ),
-                Some(raw_error_message.to_string()),
+                Some(raw_error_message),
                 None,
             ),
             ContainerRegistryError::CannotCreateRepository {
@@ -338,7 +338,7 @@ impl From<ContainerRegistryError> for CommandError {
                     "Container registry error, cannot create repository `{}` in registry: `{}`",
                     repository_name, registry_name
                 ),
-                Some(raw_error_message.to_string()),
+                Some(raw_error_message),
                 None,
             ),
             ContainerRegistryError::CannotDeleteRepository {
@@ -350,7 +350,7 @@ impl From<ContainerRegistryError> for CommandError {
                     "Container registry error, cannot delete repository `{}` in registry: `{}`",
                     repository_name, registry_name
                 ),
-                Some(raw_error_message.to_string()),
+                Some(raw_error_message),
                 None,
             ),
             ContainerRegistryError::CannotSetRepositoryLifecyclePolicy {
@@ -362,7 +362,7 @@ impl From<ContainerRegistryError> for CommandError {
                     "Container registry error, cannot set lifetime policy for repository `{}` in registry: `{}`",
                     repository_name, registry_name
                 ),
-                Some(raw_error_message.to_string()),
+                Some(raw_error_message),
                 None,
             ),
         }

@@ -669,13 +669,12 @@ fn format_engine_error_output(
         // IMPORTANT NOTE:
         // Today "If you need assistance, you can reach the support team from the Qovery console with the integrated chat"
         // this message is hard coded into the core, so we should not update it until the error mechanism is in place
-        EngineErrorCause::Internal => format!(
-            r#"
+        EngineErrorCause::Internal => r#"
 --------------------------------------
 SCROLL UP - THE ERROR MESSAGE IS ABOVE
 --------------------------------------
 "#
-        ),
+        .to_string(),
         EngineErrorCause::User(hint) => format!(
             r#"
 --------------------------------------

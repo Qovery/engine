@@ -697,9 +697,7 @@ fn create(
             Ok(_) => {}
             Err(Operation { error, .. }) => return Err(error),
             Err(Error::Internal(_)) => {
-                return Err(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
-                    event_details.clone(),
-                ))
+                return Err(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(event_details))
             }
         }
     };
