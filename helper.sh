@@ -317,13 +317,19 @@ function use_sccache() {
   sccache -s
 }
 
+function destroy_kube_cluster() {
+    if [ -z $DOCKER_HOST ]; then unset $DOCKER_HOST; fi
+    docker kill engine-registry
+    k3d cluster delete $1
+}
+
 function test_local_stack() {
     prepare_tests
     use_sccache
     if [ -z $DOCKER_HOST ]; then unset $DOCKER_HOST; fi
     docker run -d --rm -p 5000:5000 --name engine-registry registry:2
 
-    kube_cluster_name="kube-test-cluster"
+    kube_cluster_name="kube-test-cluster-$(date +%S%N)"
 
     k3d cluster create -a 0 \
         --image rancher/k3s:v1.21.10-k3s1 \
@@ -335,6 +341,7 @@ function test_local_stack() {
     kubectl -n kube-system wait pod --for=condition=Ready --selector app=local-path-provisioner
 
     echo "==========================TEST WITH LOCAL STACK==========================="
+    trap "destroy_kube_cluster $kube_cluster_name" EXIT
     if [ -z $DOCKER_HOST ]; then unset $DOCKER_HOST; fi
     cargo test --manifest-path lib-engine/Cargo.toml --features test-all-local
 }
