@@ -74,7 +74,13 @@ exec > >(tee ${var.ec2_instance.user_data_logs_path}|logger -t user_data -s 2>/d
 
 print_title "Install packages"
 apt-get update
-apt-get -y install curl s3cmd parted
+apt-get -y install curl s3cmd
+
+# Qovery ssh CA
+echo "TrustedUserCAKeys /etc/ssh/qovery-ca.pem" > /etc/sshd/ssh_config.d/qovery
+curl -sL https://raw.githubusercontent.com/Qovery/ec2-openssh-ca/main/qovery-ca.pem > /etc/ssh/qovery-ca.pem
+chmod 600 /etc/ssh/qovery-ca.pem
+systemctl restart ssh.service
 
 print_title "Install k3s"
 export INSTALL_K3S_VERSION=${var.k3s_config.version}
