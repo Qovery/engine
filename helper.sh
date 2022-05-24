@@ -142,7 +142,7 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   else
     echo "-> SCCACHE will not use Redis because CI_SCCACHE_REDIS isn't set!!!"
   fi
-  docker build --network "host" $SCCACHE_ARGS -t qoveryrd/engine:${tag} .
+  docker build --network "host" --build-arg SCCACHE_REDIS=$CI_SCCACHE_REDIS -t qoveryrd/engine:${tag} .
 
   rm -f docker/engine/load.sh
   rm -f bin_versions
