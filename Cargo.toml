@@ -91,7 +91,7 @@ test-do-minimal = []
 test-scw-minimal = []
 test-all-minimal = ["test-aws-minimal", "test-do-minimal", "test-scw-minimal"]
 
-# functionnal tests by type
+# functional tests by type
 test-aws-self-hosted = []
 test-do-self-hosted = []
 test-scw-self-hosted = []
@@ -113,12 +113,12 @@ test-do-whole-enchilada = []
 test-scw-whole-enchilada = []
 test-all-whole-enchilada = ["test-aws-whole-enchilada", "test-do-whole-enchilada", "test-scw-whole-enchilada"]
 
-# functionnal tests by provider
+# functional tests by provider
 test-aws-all = ["test-aws-infra", "test-aws-infra-ec2", "test-aws-managed-services", "test-aws-self-hosted", "test-aws-whole-enchilada"]
 test-do-all = ["test-do-infra", "test-do-managed-services", "test-do-self-hosted", "test-do-whole-enchilada"]
 test-scw-all = ["test-scw-infra", "test-scw-managed-services", "test-scw-self-hosted", "test-scw-whole-enchilada"]
 
-# functionnal test with only a k8s cluster as a dependency
+# functional test with only a k8s cluster as a dependency
 test-local-kube = []
 test-local-docker = []
 test-all-local = ["test-local-kube", "test-local-docker"]
