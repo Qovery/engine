@@ -7,10 +7,11 @@ ENV BIN_DIR=$BIN_DEST_FOLDER
 
 RUN apt-get update && apt-get install -y curl libssh-dev pkg-config unzip make netcat-openbsd jq vim lldb \
     apt-transport-https ca-certificates curl gnupg lsb-release &&\
-    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg &&\
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null &&\
-    apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg && \
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io 
 
+RUN curl -L -o /bin/sops https://github.com/mozilla/sops/releases/download/v3.7.3/sops-v3.7.3.linux.amd64 && chmod +x /bin/sops
 RUN curl -L -o /bin/kubectl https://dl.k8s.io/release/v1.21.0/bin/linux/amd64/kubectl && chmod +x /bin/kubectl
 RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | TAG="0.10.7" bash -s -- --to /bin
 RUN curl -s https://raw.githubusercontent.com/rancher/k3d/main/install.sh | TAG="v5.2.2" bash
