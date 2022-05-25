@@ -109,11 +109,17 @@ impl From<events::GeneralStep> for GeneralStep {
 pub enum InfrastructureStep {
     LoadConfiguration,
     Create,
+    Created,
     Pause,
+    Paused,
     Resume,
+    Resumed,
     Downgrade,
+    Downgraded,
     Upgrade,
+    Upgraded,
     Delete,
+    Deleted,
 }
 
 impl From<events::InfrastructureStep> for InfrastructureStep {
@@ -126,6 +132,12 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
             events::InfrastructureStep::Delete => InfrastructureStep::Delete,
             events::InfrastructureStep::Resume => InfrastructureStep::Resume,
             events::InfrastructureStep::Downgrade => InfrastructureStep::Downgrade,
+            events::InfrastructureStep::Created => InfrastructureStep::Created,
+            events::InfrastructureStep::Paused => InfrastructureStep::Paused,
+            events::InfrastructureStep::Resumed => InfrastructureStep::Resumed,
+            events::InfrastructureStep::Upgraded => InfrastructureStep::Upgraded,
+            events::InfrastructureStep::Downgraded => InfrastructureStep::Downgraded,
+            events::InfrastructureStep::Deleted => InfrastructureStep::Deleted,
         }
     }
 }
@@ -134,14 +146,22 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
 #[serde(rename_all = "lowercase")]
 pub enum EnvironmentStep {
     Build,
+    Built,
     Deploy,
+    Deployed,
     Pause,
+    Paused,
     Resume,
+    Resumed,
     Update,
+    Updated,
     Delete,
+    Deleted,
     LoadConfiguration,
     ScaleUp,
+    ScaledUp,
     ScaleDown,
+    ScaledDown,
 }
 
 impl From<events::EnvironmentStep> for EnvironmentStep {
@@ -156,6 +176,14 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
             events::EnvironmentStep::LoadConfiguration => EnvironmentStep::LoadConfiguration,
             events::EnvironmentStep::ScaleUp => EnvironmentStep::ScaleUp,
             events::EnvironmentStep::ScaleDown => EnvironmentStep::ScaleDown,
+            events::EnvironmentStep::Built => EnvironmentStep::Built,
+            events::EnvironmentStep::Deployed => EnvironmentStep::Deployed,
+            events::EnvironmentStep::Paused => EnvironmentStep::Paused,
+            events::EnvironmentStep::Resumed => EnvironmentStep::Resumed,
+            events::EnvironmentStep::Updated => EnvironmentStep::Updated,
+            events::EnvironmentStep::Deleted => EnvironmentStep::Deleted,
+            events::EnvironmentStep::ScaledUp => EnvironmentStep::ScaledUp,
+            events::EnvironmentStep::ScaledDown => EnvironmentStep::ScaledDown,
         }
     }
 }
