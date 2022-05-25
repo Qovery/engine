@@ -344,6 +344,10 @@ pub fn do_helm_charts(
                     key: "prometheusOperator.tls.enabled".to_string(),
                     value: "false".to_string(),
                 },
+                ChartSetValue {
+                    key: "prometheusOperator.admissionWebhooks.enabled".to_string(),
+                    value: "false".to_string(),
+                },
                 // Limits prometheus-node-exporter
                 ChartSetValue {
                     key: "prometheus-node-exporter.resources.limits.cpu".to_string(),
@@ -623,6 +627,10 @@ datasources:
             timeout_in_seconds: 800,
             values_files: vec![chart_path("chart_values/nginx-ingress.yaml")],
             values: vec![
+                ChartSetValue {
+                    key: "controller.admissionWebhooks.enabled".to_string(),
+                    value: "false".to_string(),
+                },
                 // Controller resources limits
                 ChartSetValue {
                     key: "controller.resources.limits.cpu".to_string(),

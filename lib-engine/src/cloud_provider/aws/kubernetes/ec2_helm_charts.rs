@@ -239,6 +239,10 @@ pub fn ec2_aws_helm_charts(
             timeout_in_seconds: 300,
             values_files: vec![chart_path("chart_values/nginx-ingress.yaml")],
             values: vec![
+                ChartSetValue {
+                    key: "controller.admissionWebhooks.enabled".to_string(),
+                    value: "false".to_string(),
+                },
                 // Controller resources limits
                 ChartSetValue {
                     key: "controller.resources.limits.memory".to_string(),
