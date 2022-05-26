@@ -222,13 +222,13 @@ pub fn ec2_aws_helm_charts(
         },
     };
 
-    let cert_manager_config = get_chart_for_cert_manager_config(
-        &chart_config_prerequisites.dns_provider_config,
-        chart_path("common/charts/cert-manager-configs"),
-        chart_config_prerequisites.dns_email_report.clone(),
-        chart_config_prerequisites.acme_url.clone(),
-        chart_config_prerequisites.managed_dns_helm_format.clone(),
-    );
+    // let cert_manager_config = get_chart_for_cert_manager_config(
+    //     &chart_config_prerequisites.dns_provider_config,
+    //     chart_path("common/charts/cert-manager-configs"),
+    //     chart_config_prerequisites.dns_email_report.clone(),
+    //     chart_config_prerequisites.acme_url.clone(),
+    //     chart_config_prerequisites.managed_dns_helm_format.clone(),
+    // );
 
     let nginx_ingress = CommonChart {
         chart_info: ChartInfo {
@@ -380,7 +380,7 @@ pub fn ec2_aws_helm_charts(
     let level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
 
     let level_7: Vec<Box<dyn HelmChart>> = vec![
-        Box::new(cert_manager_config),
+        //Box::new(cert_manager_config),
         Box::new(qovery_agent), // TODO: Migrate to the new cluster agent
         Box::new(cluster_agent),
         Box::new(shell_agent),
