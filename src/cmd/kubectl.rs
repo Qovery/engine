@@ -13,8 +13,8 @@ use crate::cmd::command::QoveryCommand;
 use crate::cmd::structs::{
     Configmap, Daemonset, Item, KubernetesEvent, KubernetesIngress, KubernetesIngressStatusLoadBalancerIngress,
     KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase,
-    KubernetesPodStatusReason, KubernetesService, KubernetesVersion, LabelsContent, Namespace, Secrets, HPA, PDB, PVC,
-    SVC,
+    KubernetesPodStatusReason, KubernetesService, KubernetesVersion, LabelsContent, MetricsServer, Namespace, Secrets,
+    HPA, PDB, PVC, SVC,
 };
 use crate::constants::KUBECONFIG;
 use crate::error::{SimpleError, SimpleErrorKind};
@@ -1273,6 +1273,18 @@ where
     }
 
     kubectl_exec::<P, PDB>(cmd_args, kubernetes_config, envs)
+}
+
+pub fn kubernetes_is_metrics_server_working<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+) -> Result<MetricsServer, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let cmd_args = vec!["get", "--raw", "/apis/metrics.k8s.io"];
+
+    kubectl_exec::<P, MetricsServer>(cmd_args, kubernetes_config, envs)
 }
 
 pub fn kubernetes_get_all_hpas<P>(

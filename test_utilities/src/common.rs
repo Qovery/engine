@@ -20,6 +20,7 @@ use crate::utilities::{
     FuncTestsSecrets,
 };
 use base64;
+use core::time::Duration;
 use qovery_engine::cloud_provider::aws::kubernetes::ec2::EC2;
 use qovery_engine::cloud_provider::aws::kubernetes::eks::EKS;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
@@ -34,7 +35,7 @@ use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
-use qovery_engine::cmd::kubectl::kubernetes_get_all_hpas;
+use qovery_engine::cmd::kubectl::kubernetes_is_metrics_server_working;
 use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::engine::EngineConfig;
 use qovery_engine::errors::CommandError;
@@ -44,6 +45,8 @@ use qovery_engine::models::digital_ocean::DoRegion;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
+use retry::delay::Fixed;
+use retry::OperationResult;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::rc::Rc;
@@ -1736,25 +1739,26 @@ pub fn metrics_server_test<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> 
 where
     P: AsRef<Path>,
 {
-    let result = kubernetes_get_all_hpas(kubernetes_config, envs, None);
+    let result = retry::retry(Fixed::from(Duration::from_secs(5)).take(40), || {
+        let result = kubernetes_is_metrics_server_working(&kubernetes_config, envs.clone());
 
-    match result {
-        Ok(hpas) => {
-            for hpa in hpas.items.expect("No hpa item").into_iter() {
-                if !hpa
-                    .metadata
-                    .annotations
-                    .expect("No hpa annotation.")
-                    .conditions
-                    .expect("No hpa condition.")
-                    .contains("ValidMetricFound")
-                {
-                    return Err(CommandError::new_from_safe_message("Metrics server doesn't work".to_string()));
-                }
-            }
-            Ok(())
+        match result {
+            Ok(_) => OperationResult::Ok(()),
+            Err(err) => OperationResult::Retry(format!("command error: {}", err)),
         }
-        Err(e) => Err(e),
+    });
+
+    let error_message_safe = "Metrics Server is not ready after 2 min retries";
+    match result {
+        Err(err) => match err {
+            retry::Error::Operation {
+                error: e,
+                total_delay: _,
+                tries: _,
+            } => Err(CommandError::new(error_message_safe.to_string(), Some(e), None)),
+            retry::Error::Internal(e) => Err(CommandError::new(error_message_safe.to_string(), Some(e), None)),
+        },
+        Ok(_) => Ok(()),
     }
 }
 
