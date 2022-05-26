@@ -171,31 +171,31 @@ aws-infra:
     expire_in: 2 week
   interruptible: true
 
-#aws-infra-ec2:
-#  stage: tests
-#  retry: 0
-#  timeout: 3 hours
-#  script:
-#    - ./helper.sh aws_infra_ec2
-#  dependencies:
-#    - build-and-lint-code
-#  tags:
-#    - vm-2cpu-4gmem-0g
-#  only:
-#    refs:
-#      - merge_requests
-#    variables:
-#      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-#      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-#  artifacts:
-#    when: always
-#    reports:
-#      junit: $CI_PROJECT_DIR/lib-engine/results.xml
-#    paths:
-#      - $CI_PROJECT_DIR/gitlab-log-utilities
-#      - $CI_PROJECT_DIR/.qovery-workspace
-#    expire_in: 2 week
-#  interruptible: true
+aws-infra-ec2:
+  stage: tests
+  retry: 0
+  timeout: 3 hours
+  script:
+    - ./helper.sh aws_infra_ec2
+  dependencies:
+    - build-and-lint-code
+  tags:
+    - vm-2cpu-4gmem-0g
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/lib-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
 
 aws-managed-services:
   stage: tests
