@@ -300,7 +300,13 @@ impl Kubernetes for EC2 {
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || {
-            kubernetes::delete(self, self.template_directory.as_str(), &self.zones, &[], &self.options)
+            kubernetes::delete(
+                self,
+                self.template_directory.as_str(),
+                &self.zones,
+                &[self.node_group_from_instance_type()],
+                &self.options,
+            )
         })
     }
 
