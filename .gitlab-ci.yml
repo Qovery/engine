@@ -148,7 +148,7 @@ infra-without-cloud-providers:
 aws-infra:
   stage: tests
   retry: 0
-  timeout: 3 hours
+  timeout: 4 hours
   script:
     - ./helper.sh aws_infra
   tags:
@@ -174,7 +174,7 @@ aws-infra:
 aws-infra-ec2:
   stage: tests
   retry: 0
-  timeout: 3 hours
+  timeout: 4 hours
   script:
     - ./helper.sh aws_infra_ec2
   dependencies:
@@ -252,7 +252,7 @@ aws-self-hosted:
 aws-whole-enchilada:
   stage: tests
   retry: 0
-  timeout: 3 hours
+  timeout: 4 hours
   script:
     - ./helper.sh aws_whole_enchilada
   dependencies:
@@ -278,7 +278,7 @@ aws-whole-enchilada:
 do-whole-enchilada:
   stage: tests
   retry: 0
-  timeout: 3 hours
+  timeout: 4 hours
   script:
     - ./helper.sh do_whole_enchilada
   dependencies:
@@ -304,7 +304,7 @@ do-whole-enchilada:
 do-infra:
   stage: tests
   retry: 0
-  timeout: 3 hours
+  timeout: 4 hours
   script:
     - ./helper.sh do_infra
   dependencies:
@@ -382,7 +382,7 @@ do-self-hosted:
 scw-infra:
   stage: tests
   retry: 0
-  timeout: 3 hours
+  timeout: 4 hours
   script:
     - ./helper.sh scw_infra
   dependencies:
@@ -460,6 +460,7 @@ scw-self-hosted:
 scw-whole-enchilada:
   stage: tests
   retry: 0
+  timeout: 4 hours
   script:
     - ./helper.sh scw_whole_enchilada
   dependencies:
