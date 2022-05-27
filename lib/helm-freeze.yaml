@@ -49,7 +49,7 @@ charts:
     version: 3.4.2
   - name: loki
     repo_name: grafana
-    version: 2.6.0
+    version: 2.11.1
   - name: promtail
     repo_name: grafana
     version: 0.24.0
