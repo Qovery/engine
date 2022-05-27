@@ -32,4 +32,7 @@ spec:
     {{- if .Values.serviceMonitor.scrapeTimeout }}
     scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
     {{- end }}
+    {{- if .Values.serviceMonitor.path }}
+    path: {{ .Values.serviceMonitor.path }}
+    {{- end }}
 {{- end }}

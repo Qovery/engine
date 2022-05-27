@@ -1,4 +1,4 @@
-{{- if gt (len .Values.alerting_groups) 0 }}
+{{- if or (.Values.useExistingAlertingGroup.enabled) (gt (len .Values.alerting_groups) 0) }}
 ---
 apiVersion: v1
 kind: ConfigMap
