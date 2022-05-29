@@ -15,8 +15,8 @@ use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
+use qovery_engine::dns_provider::io::Kind;
 use qovery_engine::dns_provider::qoverydns::QoveryDns;
-use qovery_engine::dns_provider::Kind;
 use qovery_engine::engine::EngineConfig;
 use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use qovery_engine::io_models::{Context, Domain, EnvironmentRequest, Features, Listener, Metadata};
@@ -402,7 +402,7 @@ impl ContainerRegistry {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DnsProvider {
-    pub kind: qovery_engine::dns_provider::Kind,
+    pub kind: qovery_engine::dns_provider::io::Kind,
     pub id: String,
     pub name: String,
     pub domain: String,
@@ -415,7 +415,7 @@ impl DnsProvider {
         context: Context,
     ) -> Option<Box<dyn qovery_engine::dns_provider::DnsProvider>> {
         match self.kind {
-            qovery_engine::dns_provider::Kind::Cloudflare => {
+            qovery_engine::dns_provider::io::Kind::Cloudflare => {
                 let token = self.options.get("cloudflare_api_token")?;
                 let email = self.options.get("cloudflare_email")?;
 

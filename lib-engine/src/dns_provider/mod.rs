@@ -3,15 +3,20 @@ use std::net::Ipv4Addr;
 use crate::dns_provider::cloudflare::CloudflareDnsConfig;
 use crate::dns_provider::errors::DnsProviderError;
 use crate::dns_provider::qoverydns::QoveryDnsConfig;
-use io::Kind;
 use tera::Context as TeraContext;
 
 use crate::io_models::{Context, Domain};
 
 pub mod cloudflare;
 pub mod errors;
-mod io;
+pub mod io;
 pub mod qoverydns;
+
+#[derive(Clone, Debug)]
+pub enum Kind {
+    Cloudflare,
+    QoveryDns,
+}
 
 pub enum DnsProviderConfiguration {
     Cloudflare(CloudflareDnsConfig),
