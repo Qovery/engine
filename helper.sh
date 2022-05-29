@@ -420,6 +420,11 @@ function deploy_all_clusters() {
   curl -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $token" --data-raw '{ "metadata" : { "dry_run_deploy": false } }' https://api-admin.qovery.com/cluster/deploy
 }
 
+function install_hook() { ## install git hook
+  echo "$(pwd)/helper.sh lint" > .git/hooks/pre-commit
+  chmod 755 $(pwd)/.git/hooks/pre-commit
+}
+
 # need to debug?
 if [ ! -z $DEBUG_REQUIRED ] ; then
   echo "DEBUG MODE ENABLED FOR 1H"
@@ -540,6 +545,9 @@ prepare_tests)
   ;;
 lint)
   lint
+  ;;
+install_hook)
+  install_hook
   ;;
 test_local_stack)
   test_local_stack "$2"

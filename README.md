@@ -1,8 +1,7 @@
 # Qovery Engine
 
-The Qovery Engine is an abstraction layer to deploy stateless and stateful applications on any Cloud providers.delete
+The Qovery Engine is an abstraction layer to deploy stateless and stateful applications on any Cloud providers.
 It also bootstraps Kubernetes clusters and mandatory elements (network) for clients.
-
 
 ## Packages
 ### qovery-engine
@@ -17,9 +16,6 @@ Qovery binary application
 ### qovery-engine-task-manager
 Task manager is made to handle coming tasks from NATS and run them with the engine.
 
-### qovery-engine-shared
-TODO
-
 ## Prerequisites
 ### Binaries
 * docker
@@ -30,13 +26,14 @@ TODO
 
 ## Get Started
 
+## Setup git hook
+In order to get your next MR validated, linter, fmt etc...there is a pre commit hook we suggest to install:
+```shell
+./helper.sh install_hook
+```
+
 ### Run locally
 ```shell
-# somewhere on your computer
-# git clone git@github.com:Qovery/engine.git
-ln -s path_to_qovery/engine lib-engine
-cp docker/bin_versions .
-
 # Modify version if necessary to match your bin_versions file
 curl https://releases.hashicorp.com/terraform/[TERRAFORM_REQUIRED_VERSION]/terraform_[TERRAFORM_REQUIRED_VERSION]_linux_amd64.zip -o /tmp/terraform.zip
 sudo unzip /tmp/terraform.zip -d /usr/local/bin/
