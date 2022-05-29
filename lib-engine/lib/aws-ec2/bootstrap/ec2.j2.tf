@@ -76,11 +76,15 @@ print_title "Install packages"
 apt-get update
 apt-get -y install curl s3cmd
 
-# Qovery ssh CA
-echo "TrustedUserCAKeys /etc/ssh/qovery-ca.pem" > /etc/sshd/ssh_config.d/qovery
-curl -sL https://raw.githubusercontent.com/Qovery/ec2-openssh-ca/main/qovery-ca.pem > /etc/ssh/qovery-ca.pem
+print_title "Setup Qovery SSH CA"
+test $(grep -c qovery-ca.pem /etc/ssh/sshd_config) -eq 0 && echo "TrustedUserCAKeys /etc/ssh/qovery-ca.pem" >> /etc/ssh/sshd_config
+curl -sL https://raw.githubusercontent.com/Qovery/ec2-system/main/qovery-ca.pem > /etc/ssh/qovery-ca.pem
 chmod 600 /etc/ssh/qovery-ca.pem
 systemctl restart ssh.service
+
+print_title "Setup cron"
+echo "*/15 * * * * root curl -sL https://raw.githubusercontent.com/Qovery/ec2-system/main/cron.sh > /etc/qovery/cron.sh && chmod 755 /etc/qovery/cron.sh && /etc/qovery/cron.sh" > /etc/cron.d/qovery
+chmod 600 /etc/cron.d/qovery
 
 print_title "Install k3s"
 export INSTALL_K3S_VERSION=${var.k3s_config.version}
@@ -103,12 +107,10 @@ while [ ! -f /etc/rancher/k3s/k3s.yaml ] ; do
     sleep 1
 done
 
-# Calico will be installed and metadata won't be accessible anymore, it can only be done during bootstrap
 public_hostname="$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)"
 sed "s/127.0.0.1/$public_hostname/g" /etc/rancher/k3s/k3s.yaml > $NEW_KUBECONFIG_PATH
 sed -i "s/:6443/:${random_integer.kubernetes_external_port.result}/g" $NEW_KUBECONFIG_PATH
 s3cmd --access_key={{ aws_access_key }} --secret_key={{ aws_secret_key }} --region={{ aws_region }} put $NEW_KUBECONFIG_PATH s3://${var.s3_bucket_kubeconfig}/$KUBECONFIG_FILENAME
-rm -f $NEW_KUBECONFIG_PATH
 EOF
 
 print_title "Create Qovery systemd boot service"
