@@ -412,6 +412,7 @@ pub fn scw_helm_charts(
         chart_info: ChartInfo {
             name: "kube-state-metrics".to_string(),
             namespace: HelmChartNamespaces::Prometheus,
+            last_breaking_version_requiring_restart: Some(Version::new(4, 6, 0)),
             path: chart_path("common/charts/kube-state-metrics"),
             values: vec![
                 ChartSetValue {
@@ -428,11 +429,11 @@ pub fn scw_helm_charts(
                 },
                 ChartSetValue {
                     key: "resources.limits.memory".to_string(),
-                    value: "256Mi".to_string(),
+                    value: "384Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.memory".to_string(),
-                    value: "256Mi".to_string(),
+                    value: "384Mi".to_string(),
                 },
             ],
             ..Default::default()

@@ -4,13 +4,7 @@ metadata:
   name: {{ template "kube-state-metrics.fullname" . }}
   namespace: {{ template "kube-state-metrics.namespace" . }}
   labels:
-    app.kubernetes.io/name: {{ template "kube-state-metrics.name" . }}
-    helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
-    app.kubernetes.io/instance: "{{ .Release.Name }}"
-    app.kubernetes.io/managed-by: "{{ .Release.Service }}"
-{{- if .Values.customLabels }}
-{{ toYaml .Values.customLabels | indent 4 }}
-{{- end }}
+    {{- include "kube-state-metrics.labels" . | indent 4 }}
   annotations:
     {{- if .Values.prometheusScrape }}
     prometheus.io/scrape: '{{ .Values.prometheusScrape }}'
@@ -37,6 +31,8 @@ spec:
 {{- if .Values.service.loadBalancerIP }}
   loadBalancerIP: "{{ .Values.service.loadBalancerIP }}"
 {{- end }}
+{{- if .Values.service.clusterIP }}
+  clusterIP: "{{ .Values.service.clusterIP }}"
+{{- end }}
   selector:
-    app.kubernetes.io/name: {{ template "kube-state-metrics.name" . }}
-    app.kubernetes.io/instance: {{ .Release.Name }}
+    {{- include "kube-state-metrics.selectorLabels" . | indent 4 }}
