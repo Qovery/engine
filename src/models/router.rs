@@ -10,7 +10,7 @@ use crate::cmd::helm;
 use crate::cmd::helm::to_engine_error;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage, ToTransmitter, Transmitter};
-use crate::io_models::{Context, Listen, Listener, Listeners};
+use crate::io_models::{ApplicationAdvancedSettings, Context, Listen, Listener, Listeners};
 use crate::logger::Logger;
 use crate::models::types::CloudProvider;
 use crate::models::types::ToTeraContext;
@@ -185,6 +185,42 @@ impl<T: CloudProvider> Router<T> {
         // Nginx
         context.insert("sticky_sessions_enabled", &self.sticky_sessions_enabled);
 
+        // ingress advanced settings
+        // 1 app == 1 ingress, we filter only on the app to retrieve advanced settings
+        let _ = self
+            .routes
+            .iter()
+            .map(|r| {
+                if let Some(application) = applications
+                    .iter()
+                    .find(|app| app.name() == r.application_name.as_str())
+                {
+                    if application.application_advanced_settings().is_some() {
+                        let advanced_settings = application
+                            .application_advanced_settings()
+                            .expect("expected application advanced settings");
+                        context.insert(
+                            "ingress_proxy_body_size_mb",
+                            &advanced_settings.deployment_ingress_proxy_body_size_mb,
+                        );
+                        context.insert("ingress_cors_enable", &advanced_settings.deployment_ingress_cors_enable);
+                        context.insert(
+                            "ingress_cors_allow_origin",
+                            &advanced_settings.deployment_ingress_cors_allow_origin,
+                        );
+                        context.insert(
+                            "ingress_cors_allow_methods",
+                            &advanced_settings.deployment_ingress_cors_allow_methods,
+                        );
+                        context.insert(
+                            "ingress_cors_allow_headers",
+                            &advanced_settings.deployment_ingress_cors_allow_headers,
+                        );
+                    }
+                }
+            })
+            .collect::<Vec<()>>();
+
         Ok(context)
     }
 }
@@ -257,6 +293,10 @@ where
 
     fn sanitized_name(&self) -> String {
         sanitize_name("router", self.id())
+    }
+
+    fn application_advanced_settings(&self) -> Option<ApplicationAdvancedSettings> {
+        None
     }
 
     fn version(&self) -> String {
