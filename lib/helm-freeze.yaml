@@ -43,7 +43,7 @@ charts:
     version: 2.6.8
   - name: metrics-server
     repo_name: bitnami
-    version: 5.10.13
+    version: 6.0.4
   - name: kube-state-metrics
     repo_name: prometheus-community
     version: 3.4.2
