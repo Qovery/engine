@@ -11,7 +11,7 @@ use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, g
 #[cfg(feature = "test-aws-whole-enchilada")]
 #[named]
 #[test]
-fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
+fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
     let secrets = FuncTestsSecrets::new();
 
     let region = secrets.AWS_DEFAULT_REGION.as_ref().expect("AWS region was not found");

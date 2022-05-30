@@ -8,7 +8,7 @@
 // #[cfg(feature = "test-do-whole-enchilada")]
 // #[named]
 // #[test]
-// fn create_upgrade_and_destroy_doks_cluster_with_env_in_ams_3() {
+// fn create_and_destroy_doks_cluster_with_env_in_ams_3() {
 //     let logger = logger();
 //     let region = DoRegion::Amsterdam3;
 //
