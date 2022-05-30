@@ -187,11 +187,22 @@ pub struct Port {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(default)]
 pub struct ApplicationAdvancedSettings {
     #[serde(alias = "deployment.delay_start_time_sec")]
     pub deployment_delay_start_time_sec: u32,
     #[serde(alias = "build.timeout_max_sec")]
     pub build_timeout_max_sec: u32,
+    #[serde(alias = "deployment.ingress_proxy_body_size_mb")]
+    pub deployment_ingress_proxy_body_size_mb: u32,
+    #[serde(alias = "deployment.ingress_cors_enable")]
+    pub deployment_ingress_cors_enable: bool,
+    #[serde(alias = "deployment.ingress_cors_allow_origin")]
+    pub deployment_ingress_cors_allow_origin: String,
+    #[serde(alias = "deployment.ingress_cors_methods")]
+    pub deployment_ingress_cors_allow_methods: String,
+    #[serde(alias = "deployment.ingress_cors_allowed_headers")]
+    pub deployment_ingress_cors_allow_headers: String,
 }
 
 impl Default for ApplicationAdvancedSettings {
@@ -199,6 +210,11 @@ impl Default for ApplicationAdvancedSettings {
         ApplicationAdvancedSettings {
             deployment_delay_start_time_sec: 30,
             build_timeout_max_sec: 30 * 60, // 30min
+            deployment_ingress_proxy_body_size_mb: 100,
+            deployment_ingress_cors_enable: false,
+            deployment_ingress_cors_allow_origin: "*".to_string(),
+            deployment_ingress_cors_allow_methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS".to_string(),
+            deployment_ingress_cors_allow_headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization".to_string()
         }
     }
 }

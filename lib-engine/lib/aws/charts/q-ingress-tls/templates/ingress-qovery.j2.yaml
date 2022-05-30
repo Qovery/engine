@@ -23,8 +23,13 @@ metadata:
     {%- endif %}
     kubernetes.io/ingress.class: "nginx-qovery"
     ingress.kubernetes.io/ssl-redirect: "true"
-    #nginx.ingress.kubernetes.io/enable-cors: "true"
-    #nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,x-csrftoken"
+    nginx.ingress.kubernetes.io/proxy-body-size: "{{ ingress_proxy_body_size_mb }}m"
+    {%- if ingress_cors_enable == "true" %}
+    nginx.ingress.kubernetes.io/enable-cors: "{{ ingress_cors_enable }}"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "{{ ingress_cors_allow_origin }}"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "{{ ingress_cors_allow_methods }}"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "{{ ingress_cors_allow_headers }}"
+    {%- endif %}
     {%- if sticky_sessions_enabled == true %}
     # https://kubernetes.github.io/ingress-nginx/examples/affinity/cookie/
     nginx.ingress.kubernetes.io/affinity: "cookie"

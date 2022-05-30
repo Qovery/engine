@@ -26,12 +26,13 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
 use crate::io_models::ProgressLevel::Info;
 use crate::io_models::{
-    Context, DatabaseMode, Listen, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-    QoveryIdentifier,
+    ApplicationAdvancedSettings, Context, DatabaseMode, Listen, Listeners, ListenersHelper, ProgressInfo,
+    ProgressLevel, ProgressScope, QoveryIdentifier,
 };
 use crate::logger::Logger;
 use crate::models::types::VersionsNumber;
 
+// todo: delete this useless trait
 pub trait Service: ToTransmitter {
     fn context(&self) -> &Context;
     fn service_type(&self) -> ServiceType;
@@ -71,6 +72,7 @@ pub trait Service: ToTransmitter {
             self.to_transmitter(),
         )
     }
+    fn application_advanced_settings(&self) -> Option<ApplicationAdvancedSettings>;
     fn version(&self) -> String;
     fn action(&self) -> &Action;
     fn private_port(&self) -> Option<u16>;

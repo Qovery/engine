@@ -5,7 +5,7 @@ docker/ci/load.sh
 *.iml
 .idea
 json
-json.json
+/*.json
 .qovery-workspace
 app/.qovery-workspace
 .terraform/
