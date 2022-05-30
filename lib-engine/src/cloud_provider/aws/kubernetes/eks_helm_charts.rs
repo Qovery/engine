@@ -246,25 +246,6 @@ pub fn eks_aws_helm_charts(
         },
     };
 
-    // Calico for AWS
-    let aws_calico = CommonChart {
-        chart_info: ChartInfo {
-            name: "calico".to_string(),
-            path: chart_path("charts/aws-calico"),
-            values: vec![
-                ChartSetValue {
-                    key: "calico.node.resources.limits.memory".to_string(),
-                    value: "128Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "calico.node.resources.requests.memory".to_string(),
-                    value: "128Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-    };
-
     let aws_ui_view = CommonChart {
         chart_info: ChartInfo {
             name: "aws-ui-view".to_string(),
@@ -1175,7 +1156,7 @@ datasources:
 
     let level_3: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
-    let level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(cluster_autoscaler), Box::new(aws_calico)];
+    let level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(cluster_autoscaler)];
 
     let level_5: Vec<Box<dyn HelmChart>> = vec![
         Box::new(metrics_server),
