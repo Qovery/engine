@@ -353,7 +353,7 @@ Though enough for the majority of installations, the default PodSecurityPolicy _
 | azureResourceGroup | string | `""` | Azure resource group that the cluster is located. Required if `cloudProvider=azure` |
 | azureSubscriptionID | string | `""` | Azure subscription where the resources are located. Required if `cloudProvider=azure` |
 | azureTenantID | string | `""` | Azure tenant where the resources are located. Required if `cloudProvider=azure` |
-| azureUseManagedIdentityExtension | bool | `false` | Whether to use Azure's managed identity extension for credentials. If using MSI, ensure subscription ID and resource group are set. |
+| azureUseManagedIdentityExtension | bool | `false` | Whether to use Azure's managed identity extension for credentials. If using MSI, ensure subscription ID, resource group, and azure AKS cluster name are set. |
 | azureVMType | string | `"AKS"` | Azure VM type. |
 | cloudConfigPath | string | `"/etc/gce.conf"` | Configuration file for cloud provider. |
 | cloudProvider | string | `"aws"` | The cloud provider where the autoscaler runs. Currently only `gce`, `aws`, `azure` and `magnum` are supported. `aws` supported for AWS. `gce` for GCE. `azure` for Azure AKS. `magnum` for OpenStack Magnum. |
@@ -373,7 +373,7 @@ Though enough for the majority of installations, the default PodSecurityPolicy _
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | image.pullSecrets | list | `[]` | Image pull secrets |
 | image.repository | string | `"k8s.gcr.io/autoscaling/cluster-autoscaler"` | Image repository |
-| image.tag | string | `"v1.21.0"` | Image tag |
+| image.tag | string | `"v1.21.1"` | Image tag |
 | kubeTargetVersionOverride | string | `""` | Allow overriding the `.Capabilities.KubeVersion.GitVersion` check. Useful for `helm template` commands. |
 | magnumCABundlePath | string | `"/etc/kubernetes/ca-bundle.crt"` | Path to the host's CA bundle, from `ca-file` in the cloud-config file. |
 | magnumClusterName | string | `""` | Cluster name or ID in Magnum. Required if `cloudProvider=magnum` and not setting `autoDiscovery.clusterName`. |
@@ -382,7 +382,7 @@ Though enough for the majority of installations, the default PodSecurityPolicy _
 | podAnnotations | object | `{}` | Annotations to add to each pod. |
 | podDisruptionBudget | object | `{"maxUnavailable":1}` | Pod disruption budget. |
 | podLabels | object | `{}` | Labels to add to each pod. |
-| priorityClassName | string | `""` | priorityClassName |
+| priorityClassName | string | `"system-cluster-critical"` | priorityClassName |
 | priorityConfigMapAnnotations | object | `{}` | Annotations to add to `cluster-autoscaler-priority-expander` ConfigMap. |
 | prometheusRule.additionalLabels | object | `{}` | Additional labels to be set in metadata. |
 | prometheusRule.enabled | bool | `false` | If true, creates a Prometheus Operator PrometheusRule. |
@@ -412,4 +412,5 @@ Though enough for the majority of installations, the default PodSecurityPolicy _
 | serviceMonitor.path | string | `"/metrics"` | The path to scrape for metrics; autoscaler exposes `/metrics` (this is standard) |
 | serviceMonitor.selector | object | `{"release":"prometheus-operator"}` | Default to kube-prometheus install (CoreOS recommended), but should be set according to Prometheus install. |
 | tolerations | list | `[]` | List of node taints to tolerate (requires Kubernetes >= 1.6). |
+| topologySpreadConstraints | list | `[]` | You can use topology spread constraints to control how Pods are spread across your cluster among failure-domains such as regions, zones, nodes, and other user-defined topology domains. (requires Kubernetes >= 1.19). |
 | updateStrategy | object | `{}` | [Deployment update strategy](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy) |
