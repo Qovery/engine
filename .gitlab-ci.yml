@@ -172,12 +172,12 @@ aws-infra:
     expire_in: 2 week
   interruptible: true
 
-aws-infra-ec2:
+aws-ec2-infra:
   stage: tests
   retry: 0
   timeout: 4 hours
   script:
-    - ./helper.sh aws_infra_ec2
+    - ./helper.sh aws_ec2_infra
   dependencies:
     - build-and-lint-code
   tags:
@@ -224,12 +224,64 @@ aws-managed-services:
     expire_in: 2 week
   interruptible: true
 
+aws-ec2-managed-services:
+  stage: tests
+  retry: 0
+  timeout: 3 hours
+  script:
+    - ./helper.sh aws_ec2_managed_services
+  tags:
+    - vm-2cpu-4gmem-0g
+  dependencies:
+    - build-and-lint-code
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/lib-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
 aws-self-hosted:
   stage: tests
   retry: 0
   timeout: 3 hours
   script:
     - ./helper.sh aws_self_hosted
+  tags:
+    - vm-2cpu-12gmem-0g
+  dependencies:
+    - build-and-lint-code
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/lib-engine/results.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
+  interruptible: true
+
+aws-ec2-self-hosted:
+  stage: tests
+  retry: 0
+  timeout: 3 hours
+  script:
+    - ./helper.sh aws_ec2_self_hosted
   tags:
     - vm-2cpu-12gmem-0g
   dependencies:
@@ -275,6 +327,32 @@ aws-whole-enchilada:
       - $CI_PROJECT_DIR/.qovery-workspace
     expire_in: 2 week
   interruptible: true
+
+#aws-ec2-whole-enchilada:
+#  stage: tests
+#  retry: 0
+#  timeout: 4 hours
+#  script:
+#    - ./helper.sh aws_ec2_whole_enchilada
+#  dependencies:
+#    - build-and-lint-code
+#  tags:
+#    - vm-2cpu-4gmem-0g
+#  only:
+#    refs:
+#      - merge_requests
+#    variables:
+#      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+#      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+#  artifacts:
+#    when: always
+#    reports:
+#      junit: $CI_PROJECT_DIR/lib-engine/results.xml
+#    paths:
+#      - $CI_PROJECT_DIR/gitlab-log-utilities
+#      - $CI_PROJECT_DIR/.qovery-workspace
+#    expire_in: 2 week
+#  interruptible: true
 
 do-whole-enchilada:
   stage: tests

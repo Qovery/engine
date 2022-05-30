@@ -1051,7 +1051,7 @@ pub fn test_db(
     version: &str,
     test_name: &str,
     db_kind: DatabaseKind,
-    provider_kind: Kind,
+    kubernetes_kind: KubernetesKind,
     database_mode: DatabaseMode,
     is_public: bool,
 ) -> String {
@@ -1061,6 +1061,7 @@ pub fn test_db(
     let _enter = span.enter();
     let context_for_delete = context.clone_not_same_execution_id();
 
+    let provider_kind = kubernetes_kind.get_cloud_provider_kind();
     let app_id = Uuid::new_v4();
     let database_username = "superuser".to_string();
     let database_password = generate_password(provider_kind.clone(), database_mode.clone());
@@ -1153,8 +1154,8 @@ pub fn test_db(
         Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
     };
 
-    let engine_config = match provider_kind {
-        Kind::Aws => AWS::docker_cr_engine(
+    let engine_config = match kubernetes_kind {
+        KubernetesKind::Eks => AWS::docker_cr_engine(
             &context,
             logger.clone(),
             localisation.as_str(),
@@ -1167,7 +1168,20 @@ pub fn test_db(
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
         ),
-        Kind::Do => DO::docker_cr_engine(
+        KubernetesKind::Ec2 => AWS::docker_cr_engine(
+            &context,
+            logger.clone(),
+            localisation.as_str(),
+            KubernetesKind::Ec2,
+            kubernetes_version.clone(),
+            &ClusterDomain::Default {
+                cluster_id: context.cluster_id().to_string(),
+            },
+            None,
+            1,
+            1,
+        ),
+        KubernetesKind::Doks => DO::docker_cr_engine(
             &context,
             logger.clone(),
             localisation.as_str(),
@@ -1180,7 +1194,7 @@ pub fn test_db(
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
         ),
-        Kind::Scw => Scaleway::docker_cr_engine(
+        KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
             &context,
             logger.clone(),
             localisation.as_str(),
