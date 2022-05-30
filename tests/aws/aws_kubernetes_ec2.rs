@@ -11,9 +11,9 @@ use qovery_engine::cloud_provider::Kind;
 use std::str::FromStr;
 use test_utilities::aws::{K3S_KUBERNETES_MAJOR_VERSION, K3S_KUBERNETES_MINOR_VERSION};
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
-use test_utilities::utilities::{generate_cluster_id, FuncTestsSecrets};
+use test_utilities::utilities::generate_cluster_id;
 
-#[cfg(feature = "test-aws-infra-ec2")]
+#[cfg(feature = "test-aws-ec2-infra")]
 fn create_and_destroy_aws_ec2_k3s_cluster(
     region: String,
     test_type: ClusterTestType,
@@ -44,7 +44,7 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
     })
 }
 
-#[cfg(feature = "test-aws-infra-ec2")]
+#[cfg(feature = "test-aws-ec2-infra")]
 #[named]
 #[test]
 fn create_and_destroy_aws_ec2_k3s_cluster_eu_west_3() {

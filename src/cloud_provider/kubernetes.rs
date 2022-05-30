@@ -18,6 +18,7 @@ use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::models::{CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::CheckAction;
+use crate::cloud_provider::Kind as CloudProviderKind;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::cmd::kubectl::{
@@ -420,6 +421,17 @@ pub enum Kind {
     Ec2,
     Doks,
     ScwKapsule,
+}
+
+impl Kind {
+    pub fn get_cloud_provider_kind(&self) -> CloudProviderKind {
+        match self {
+            Kind::Eks => CloudProviderKind::Aws,
+            Kind::Ec2 => CloudProviderKind::Aws,
+            Kind::Doks => CloudProviderKind::Do,
+            Kind::ScwKapsule => CloudProviderKind::Scw,
+        }
+    }
 }
 
 impl Display for Kind {
