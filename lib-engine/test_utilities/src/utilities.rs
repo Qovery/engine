@@ -295,7 +295,7 @@ impl FuncTestsSecrets {
             AWS_TEST_ORGANIZATION_ID: Self::select_secret("AWS_TEST_ORGANIZATION_ID", secrets.AWS_TEST_ORGANIZATION_ID),
             AWS_TEST_CLUSTER_ID: Self::select_secret("AWS_TEST_CLUSTER_ID", secrets.AWS_TEST_CLUSTER_ID),
             AWS_EC2_DEFAULT_CLUSTER_ID: Self::select_secret(
-                "AWS_EC2_DEAFULT_CLUSTER_ID",
+                "AWS_EC2_DEFAULT_CLUSTER_ID",
                 secrets.AWS_EC2_DEFAULT_CLUSTER_ID,
             ),
             BIN_VERSION_FILE: Self::select_secret("BIN_VERSION_FILE", secrets.BIN_VERSION_FILE),
