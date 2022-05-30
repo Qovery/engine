@@ -89,7 +89,7 @@ azureClusterName: ""
 # Required if `cloudProvider=azure`
 azureNodeResourceGroup: ""
 
-# azureUseManagedIdentityExtension -- Whether to use Azure's managed identity extension for credentials. If using MSI, ensure subscription ID and resource group are set.
+# azureUseManagedIdentityExtension -- Whether to use Azure's managed identity extension for credentials. If using MSI, ensure subscription ID, resource group, and azure AKS cluster name are set.
 azureUseManagedIdentityExtension: false
 
 # magnumClusterName -- Cluster name or ID in Magnum.
@@ -141,6 +141,7 @@ extraArgs:
   # write-status-configmap: true
   # status-config-map-name: cluster-autoscaler-status
   # leader-elect: true
+  # leader-elect-resource-lock: endpoints
   # skip-nodes-with-local-storage: true
   # expander: random
   # scale-down-enabled: true
@@ -203,7 +204,7 @@ image:
   # image.repository -- Image repository
   repository: k8s.gcr.io/autoscaling/cluster-autoscaler
   # image.tag -- Image tag
-  tag: v1.21.0
+  tag: v1.21.1
   # image.pullPolicy -- Image pull policy
   pullPolicy: IfNotPresent
   ## Optionally specify an array of imagePullSecrets.
@@ -238,7 +239,7 @@ podLabels: {}
 additionalLabels: {}
 
 # priorityClassName -- priorityClassName
-priorityClassName: ""
+priorityClassName: "system-cluster-critical"
 
 rbac:
   # rbac.create -- If `true`, create and use RBAC resources.
@@ -326,6 +327,15 @@ prometheusRule:
 
 # tolerations -- List of node taints to tolerate (requires Kubernetes >= 1.6).
 tolerations: []
+
+# topologySpreadConstraints -- You can use topology spread constraints to control how Pods are spread across your cluster among failure-domains such as regions, zones, nodes, and other user-defined topology domains. (requires Kubernetes >= 1.19).
+topologySpreadConstraints: []
+  # - maxSkew: 1
+  #   topologyKey: topology.kubernetes.io/zone
+  #   whenUnsatisfiable: DoNotSchedule
+  #   labelSelector:
+  #     matchLabels:
+  #       app.kubernetes.io/instance: cluster-autoscaler
 
 # updateStrategy -- [Deployment update strategy](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy)
 updateStrategy: {}
