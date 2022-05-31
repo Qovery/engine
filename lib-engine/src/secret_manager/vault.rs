@@ -149,8 +149,11 @@ impl QVaultClient {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ClusterSecrets {
-    pub aws_access_key: String,
+    #[serde(rename = "AWS_ACCESS_KEY_ID")]
+    pub aws_access_key_id: String,
+    #[serde(rename = "AWS_DEFAULT_REGION")]
     pub aws_default_region: String,
+    #[serde(rename = "AWS_SECRET_ACCESS_KEY")]
     pub aws_secret_access_key: String,
     pub kubeconfig_b64: Option<String>,
     pub k8s_cluster_endpoint: Option<String>,
@@ -166,7 +169,7 @@ pub struct ClusterSecrets {
 
 impl ClusterSecrets {
     pub fn new(
-        aws_access_key: String,
+        aws_access_key_id: String,
         aws_default_region: String,
         aws_secret_access_key: String,
         kubeconfig_b64: Option<String>,
@@ -182,7 +185,7 @@ impl ClusterSecrets {
         let vault_mount_name = Self::get_vault_mount_name(test_cluster);
 
         Ok(ClusterSecrets {
-            aws_access_key,
+            aws_access_key_id,
             aws_default_region,
             aws_secret_access_key,
             kubeconfig_b64,
