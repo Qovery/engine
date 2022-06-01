@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cmd::command::CommandError;
 use crate::cmd::docker::{BuildResult, DockerError};
 use crate::errors::EngineError;
@@ -149,6 +150,12 @@ pub struct Image {
 impl Image {
     pub fn registry_host(&self) -> &str {
         self.registry_url.host_str().unwrap()
+    }
+    pub fn registry_secret_name(&self, kubernetes_kind: KubernetesKind) -> &str {
+        match kubernetes_kind {
+            KubernetesKind::Ec2 => "awsecr-cred", // required for registry-creds
+            _ => self.registry_host(),
+        }
     }
     pub fn repository_name(&self) -> &str {
         &self.repository_name

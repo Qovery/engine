@@ -146,7 +146,7 @@ impl<T: CloudProvider> Application<T> {
         context.insert("environment_variables", &environment_variables);
         context.insert("ports", &self.ports);
         context.insert("is_registry_secret", &true);
-        context.insert("registry_secret", self.build().image.registry_host());
+        context.insert("registry_secret", self.build().image.registry_secret_name(kubernetes.kind()));
 
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
