@@ -250,6 +250,7 @@ impl Cluster<AWS, Options> for AWS {
             tls_email_report: secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
             qovery_grpc_url: secrets.QOVERY_GRPC_URL.unwrap(),
             jwt_token: secrets.QOVERY_CLUSTER_JWT_TOKEN.unwrap(),
+            user_ssh_keys: vec![],
         }
     }
 }

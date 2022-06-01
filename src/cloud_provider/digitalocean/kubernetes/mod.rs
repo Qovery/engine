@@ -86,6 +86,8 @@ pub struct DoksOptions {
     pub qovery_nats_user: String,
     pub qovery_nats_password: String,
     pub qovery_ssh_key: String,
+    #[serde(default)]
+    pub user_ssh_keys: Vec<String>,
     // Others
     pub tls_email_report: String,
 }

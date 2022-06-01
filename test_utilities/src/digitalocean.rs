@@ -159,6 +159,7 @@ impl Cluster<DO, DoksOptions> for DO {
             qovery_nats_user: secrets.QOVERY_NATS_USERNAME.unwrap(),
             qovery_nats_password: secrets.QOVERY_NATS_PASSWORD.unwrap(),
             qovery_ssh_key: secrets.QOVERY_SSH_USER.unwrap(),
+            user_ssh_keys: vec![],
             tls_email_report: secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
         }
     }
