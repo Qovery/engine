@@ -20,7 +20,6 @@ use crate::utilities::{
     FuncTestsSecrets,
 };
 use base64;
-use core::time::Duration;
 use qovery_engine::cloud_provider::aws::kubernetes::ec2::EC2;
 use qovery_engine::cloud_provider::aws::kubernetes::eks::EKS;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
@@ -35,20 +34,15 @@ use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
-use qovery_engine::cmd::kubectl::kubernetes_is_metrics_server_working;
 use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::engine::EngineConfig;
-use qovery_engine::errors::CommandError;
 use qovery_engine::io_models::DatabaseMode::CONTAINER;
 use qovery_engine::logger::Logger;
 use qovery_engine::models::digital_ocean::DoRegion;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
-use retry::delay::Fixed;
-use retry::OperationResult;
 use std::collections::BTreeMap;
-use std::path::Path;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -1613,16 +1607,6 @@ pub fn cluster_test(
         assert!(matches!(deploy_env_tx.commit(), TransactionResult::Ok));
     }
 
-    if let Err(err) = metrics_server_test(
-        engine
-            .kubernetes()
-            .get_kubeconfig_file_path()
-            .expect("Unable to get config file path"),
-        engine.kubernetes().cloud_provider().credentials_environment_variables(),
-    ) {
-        panic!("{:?}", err)
-    }
-
     match test_type {
         // TODO new test type
         ClusterTestType::Classic => {}
@@ -1643,16 +1627,6 @@ pub fn cluster_test(
             }
 
             assert!(matches!(resume_tx.commit(), TransactionResult::Ok));
-
-            if let Err(err) = metrics_server_test(
-                engine
-                    .kubernetes()
-                    .get_kubeconfig_file_path()
-                    .expect("Unable to get config file path"),
-                engine.kubernetes().cloud_provider().credentials_environment_variables(),
-            ) {
-                panic!("{:?}", err)
-            }
         }
         ClusterTestType::WithUpgrade => {
             let upgrade_to_version = format!("{}.{}", major_boot_version, minor_boot_version + 1);
@@ -1701,16 +1675,6 @@ pub fn cluster_test(
                 panic!("{:?}", err)
             }
             assert!(matches!(upgrade_tx.commit(), TransactionResult::Ok));
-
-            if let Err(err) = metrics_server_test(
-                engine
-                    .kubernetes()
-                    .get_kubeconfig_file_path()
-                    .expect("Unable to get config file path"),
-                engine.kubernetes().cloud_provider().credentials_environment_variables(),
-            ) {
-                panic!("{:?}", err)
-            }
 
             // Delete
             if let Err(err) = delete_tx.delete_kubernetes() {
@@ -1814,33 +1778,6 @@ pub fn cluster_test(
     assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
 
     test_name.to_string()
-}
-
-pub fn metrics_server_test<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<(), CommandError>
-where
-    P: AsRef<Path>,
-{
-    let result = retry::retry(Fixed::from(Duration::from_secs(5)).take(40), || {
-        let result = kubernetes_is_metrics_server_working(&kubernetes_config, envs.clone());
-
-        match result {
-            Ok(_) => OperationResult::Ok(()),
-            Err(err) => OperationResult::Retry(format!("command error: {}", err)),
-        }
-    });
-
-    let error_message_safe = "Metrics Server is not ready after 2 min retries";
-    match result {
-        Err(err) => match err {
-            retry::Error::Operation {
-                error: e,
-                total_delay: _,
-                tries: _,
-            } => Err(CommandError::new(error_message_safe.to_string(), Some(e), None)),
-            retry::Error::Internal(e) => Err(CommandError::new(error_message_safe.to_string(), Some(e), None)),
-        },
-        Ok(_) => Ok(()),
-    }
 }
 
 pub fn test_db_on_upgrade(

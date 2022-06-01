@@ -88,6 +88,7 @@ pub struct ChartInfo {
     pub parse_stderr_for_error: bool,
     pub k8s_selector: Option<String>,
     pub backup_resources: Option<Vec<String>>,
+    pub verify: Option<Result<(), CommandError>>,
 }
 
 impl ChartInfo {
@@ -154,6 +155,7 @@ impl Default for ChartInfo {
             parse_stderr_for_error: true,
             k8s_selector: None,
             backup_resources: None,
+            verify: None,
         }
     }
 }
@@ -436,6 +438,20 @@ impl CommonChart {}
 impl HelmChart for CommonChart {
     fn get_chart_info(&self) -> &ChartInfo {
         &self.chart_info
+    }
+    fn post_exec(
+        &self,
+        _kubernetes_config: &Path,
+        _envs: &[(String, String)],
+        payload: Option<ChartPayload>,
+    ) -> Result<Option<ChartPayload>, CommandError> {
+        match &self.get_chart_info().verify {
+            None => Ok(payload),
+            Some(check) => match check {
+                Ok(_) => Ok(payload),
+                Err(e) => Err(e.clone()),
+            },
+        }
     }
 }
 
