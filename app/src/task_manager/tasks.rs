@@ -1,9 +1,9 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::fs;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
+use std::{env, fs};
 
 use chrono::{DateTime, Utc};
 use crossbeam_channel::Sender;
@@ -162,22 +162,25 @@ impl Task for InfrastructureTask {
 
         handle_transaction_result(tx.commit(), self, &self.request, self.action_context(ProgressLevel::Info));
 
-        match qovery_engine::fs::create_workspace_archive(
-            engine.context().workspace_root_dir(),
-            engine.context().execution_id(),
-        ) {
-            Ok(file) => match upload_s3_file(
-                &self.info_context(),
-                self.request.archive.as_ref(),
-                file.as_str(),
-                AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
+        // only store if not running on a workstation
+        if env::var("DEPLOY_FROM_FILE_KIND").is_err() {
+            match qovery_engine::fs::create_workspace_archive(
+                engine.context().workspace_root_dir(),
+                engine.context().execution_id(),
             ) {
-                Ok(_) => {
-                    let _ = fs::remove_file(file).map_err(|err| error!("Cannot delete file {}", err));
-                }
-                Err(e) => error!("Error while uploading archive {:?}", e),
-            },
-            Err(err) => error!("{:?}", err),
+                Ok(file) => match upload_s3_file(
+                    &self.info_context(),
+                    self.request.archive.as_ref(),
+                    file.as_str(),
+                    AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
+                ) {
+                    Ok(_) => {
+                        let _ = fs::remove_file(file).map_err(|err| error!("Cannot delete file {}", err));
+                    }
+                    Err(e) => error!("Error while uploading archive {:?}", e),
+                },
+                Err(err) => error!("{:?}", err),
+            };
         };
 
         info!("infrastructure task {} finished", self.id());
@@ -398,22 +401,25 @@ impl Task for EnvironmentTask {
 
         handle_transaction_result(tx_result, self, &self.request, self.action_context(ProgressLevel::Info));
 
-        match qovery_engine::fs::create_workspace_archive(
-            engine.context().workspace_root_dir(),
-            engine.context().execution_id(),
-        ) {
-            Ok(file) => match upload_s3_file(
-                &self.info_context(),
-                self.request.archive.as_ref(),
-                file.as_str(),
-                AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
+        // only store if not running on a workstation
+        if env::var("DEPLOY_FROM_FILE_KIND").is_err() {
+            match qovery_engine::fs::create_workspace_archive(
+                engine.context().workspace_root_dir(),
+                engine.context().execution_id(),
             ) {
-                Ok(_) => {
-                    let _ = fs::remove_file(file).map_err(|err| error!("Cannot remove file {}", err));
-                }
-                Err(e) => error!("Error while uploading archive {:?}", e),
-            },
-            Err(err) => error!("{:?}", err),
+                Ok(file) => match upload_s3_file(
+                    &self.info_context(),
+                    self.request.archive.as_ref(),
+                    file.as_str(),
+                    AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
+                ) {
+                    Ok(_) => {
+                        let _ = fs::remove_file(file).map_err(|err| error!("Cannot remove file {}", err));
+                    }
+                    Err(e) => error!("Error while uploading archive {:?}", e),
+                },
+                Err(err) => error!("{:?}", err),
+            };
         };
 
         info!("environment task {} finished", self.id());
