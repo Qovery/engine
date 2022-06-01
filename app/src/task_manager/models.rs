@@ -85,9 +85,18 @@ impl EngineRequest {
                 ))
             })?;
 
+        let cluster_jwt_token: String = self
+            .cloud_provider
+            .kubernetes
+            .options
+            .get("jwt_token")
+            .iter()
+            .flat_map(|v| v.as_str())
+            .collect();
+
         let dns_provider = self
             .dns_provider
-            .to_engine_dns_provider(context.clone())
+            .to_engine_dns_provider(context.clone(), &cluster_jwt_token)
             .ok_or_else(|| RequestError::DnsProvider(format!("Invalid DNS provider: {:?}", self.dns_provider)))?;
         let dns_provider = Arc::new(dns_provider);
 
@@ -402,7 +411,7 @@ impl ContainerRegistry {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DnsProvider {
-    pub kind: qovery_engine::dns_provider::io::Kind,
+    pub kind: Kind,
     pub id: String,
     pub name: String,
     pub domain: String,
@@ -413,9 +422,10 @@ impl DnsProvider {
     pub fn to_engine_dns_provider(
         &self,
         context: Context,
+        cluster_jwt_token: &str,
     ) -> Option<Box<dyn qovery_engine::dns_provider::DnsProvider>> {
         match self.kind {
-            qovery_engine::dns_provider::io::Kind::Cloudflare => {
+            Kind::Cloudflare => {
                 let token = self.options.get("cloudflare_api_token")?;
                 let email = self.options.get("cloudflare_email")?;
 
@@ -431,7 +441,7 @@ impl DnsProvider {
             Kind::QoveryDns => {
                 let api_url = self.options.get("qoverydns_api_url")?;
                 let api_port = self.options.get("qoverydns_api_port")?;
-                let api_key = self.options.get("qoverydns_api_key")?;
+                let api_key = cluster_jwt_token;
 
                 Some(Box::new(QoveryDns::new(
                     context,
