@@ -16,9 +16,9 @@ data "aws_ami" "debian" {
   owners = [var.ec2_image_info.owners]
 }
 
-resource "aws_key_pair" "qovery_ssh_key" {
-  key_name   = "qovery-key"
-  public_key = "{{ qovery_ssh_key }}"
+resource "aws_key_pair" "user_ssh_key" {
+  key_name   = "user-key"
+  public_key = "{{ user_ssh_key }}"
 }
 
 resource "aws_instance" "ec2_instance" {
@@ -41,7 +41,7 @@ resource "aws_instance" "ec2_instance" {
   subnet_id = aws_subnet.ec2_zone_a[0].id
 
   # ssh
-  key_name = aws_key_pair.qovery_ssh_key.key_name
+  key_name = aws_key_pair.user_ssh_key.key_name
 
   # k3s install
   user_data = local.bootstrap

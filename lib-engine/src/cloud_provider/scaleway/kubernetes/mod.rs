@@ -67,6 +67,8 @@ pub struct KapsuleOptions {
     pub qovery_nats_user: String,
     pub qovery_nats_password: String,
     pub qovery_ssh_key: String,
+    #[serde(default)]
+    pub user_ssh_keys: Vec<String>,
     pub grafana_admin_user: String,
     pub grafana_admin_password: String,
     pub agent_version_controller_token: String,
@@ -111,6 +113,7 @@ impl KapsuleOptions {
             qovery_nats_user,
             qovery_nats_password,
             qovery_ssh_key,
+            user_ssh_keys: vec![],
             grafana_admin_user,
             grafana_admin_password,
             agent_version_controller_token,

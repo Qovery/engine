@@ -116,6 +116,8 @@ pub struct Options {
     pub qovery_nats_user: String,
     pub qovery_nats_password: String,
     pub qovery_ssh_key: String,
+    #[serde(default)]
+    pub user_ssh_keys: Vec<String>,
     // Others
     pub tls_email_report: String,
 }
@@ -496,6 +498,9 @@ fn tera_context(
     context.insert("qovery_nats_user", options.qovery_nats_user.as_str());
     context.insert("qovery_nats_password", options.qovery_nats_password.as_str());
     context.insert("qovery_ssh_key", options.qovery_ssh_key.as_str());
+    // AWS support only 1 ssh key
+    let user_ssh_key: Option<&str> = options.user_ssh_keys.get(0).map(|x| x.as_str());
+    context.insert("user_ssh_key", user_ssh_key.unwrap_or_default());
     context.insert("discord_api_key", options.discord_api_key.as_str());
 
     Ok(context)
