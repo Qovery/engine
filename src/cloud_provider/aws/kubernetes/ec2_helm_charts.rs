@@ -134,6 +134,36 @@ pub fn ec2_aws_helm_charts(
         },
     };
 
+    let registry_creds = CommonChart {
+        chart_info: ChartInfo {
+            name: "registry-creds".to_string(),
+            path: chart_path("charts/registry-creds"),
+            values: vec![
+                ChartSetValue {
+                    key: "ecr.enabled".to_string(),
+                    value: "true".to_string(),
+                },
+                ChartSetValue {
+                    key: "ecr.awsAccessKeyId".to_string(),
+                    value: chart_config_prerequisites.aws_access_key_id.clone(),
+                },
+                ChartSetValue {
+                    key: "ecr.awsSecretAccessKey".to_string(),
+                    value: chart_config_prerequisites.aws_secret_access_key.clone(),
+                },
+                ChartSetValue {
+                    key: "ecr.awsRegion".to_string(),
+                    value: chart_config_prerequisites.region.clone(),
+                },
+            ],
+            values_string: vec![ChartSetValue {
+                key: "ecr.awsAccount".to_string(),
+                value: qovery_terraform_config.aws_aws_account_id,
+            }],
+            ..Default::default()
+        },
+    };
+
     let external_dns = CommonChart {
         chart_info: ChartInfo {
             name: "externaldns".to_string(),
@@ -206,11 +236,11 @@ pub fn ec2_aws_helm_charts(
                 // resources limits
                 ChartSetValue {
                     key: "resources.limits.memory".to_string(),
-                    value: "50Mi".to_string(),
+                    value: "96Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.memory".to_string(),
-                    value: "50Mi".to_string(),
+                    value: "96Mi".to_string(),
                 },
                 // Webhooks resources limits
                 ChartSetValue {
@@ -224,11 +254,11 @@ pub fn ec2_aws_helm_charts(
                 // Cainjector resources limits
                 ChartSetValue {
                     key: "cainjector.resources.limits.memory".to_string(),
-                    value: "64Mi".to_string(),
+                    value: "96Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "cainjector.resources.requests.memory".to_string(),
-                    value: "64Mi".to_string(),
+                    value: "96Mi".to_string(),
                 },
             ],
             ..Default::default()
