@@ -17,6 +17,7 @@ data "aws_ami" "debian" {
 }
 
 resource "aws_key_pair" "user_ssh_key" {
+  count = "{{ user_ssh_key }}" != "" ? 1 : 0
   key_name   = "user-key"
   public_key = "{{ user_ssh_key }}"
 }
