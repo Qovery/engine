@@ -455,6 +455,10 @@ impl Helm {
             args_string.push("--set".to_string());
             args_string.push(format!("{}={}", value.key, value.value));
         }
+        for value in &chart.values_string {
+            args_string.push("--set-string".to_string());
+            args_string.push(format!("{}={}", value.key, value.value));
+        }
 
         for value_file in &chart.values_files {
             args_string.push("-f".to_string());

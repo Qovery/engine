@@ -15,6 +15,7 @@ use std::path::Path;
 pub struct AwsEc2QoveryTerraformConfig {
     pub aws_ec2_public_hostname: String,
     pub aws_ec2_kubernetes_port: String,
+    pub aws_aws_account_id: String,
 }
 
 impl AwsEc2QoveryTerraformConfig {
@@ -90,7 +91,19 @@ pub fn ec2_aws_helm_charts(
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
-    let _qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file)?;
+    let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file)?;
+
+    let aws_ebs_csi_driver = CommonChart {
+        chart_info: ChartInfo {
+            name: "aws-ebs-csi-driver".to_string(),
+            path: chart_path("/charts/aws-ebs-csi-driver"),
+            values: vec![ChartSetValue {
+                key: "controller.replicaCount".to_string(),
+                value: "1".to_string(),
+            }],
+            ..Default::default()
+        },
+    };
 
     // Qovery storage class
     let q_storage_class = CommonChart {
@@ -371,7 +384,12 @@ pub fn ec2_aws_helm_charts(
     }
 
     // chart deployment order matters!!!
-    let level_1: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(coredns_config)];
+    let level_1: Vec<Box<dyn HelmChart>> = vec![
+        Box::new(aws_ebs_csi_driver),
+        Box::new(q_storage_class),
+        Box::new(coredns_config),
+        Box::new(registry_creds),
+    ];
 
     let level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
