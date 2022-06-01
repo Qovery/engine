@@ -11,6 +11,7 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::BufReader;
+use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DigitalOceanQoveryTerraformConfig {
@@ -115,6 +116,8 @@ pub fn do_helm_charts(
     qovery_terraform_config_file: &str,
     chart_config_prerequisites: &ChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
+    _kubernetes_config: &Path,
+    _envs: &[(String, String)],
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     let content_file = match File::open(&qovery_terraform_config_file) {
         Ok(x) => x,
@@ -737,44 +740,6 @@ datasources:
         },
     };
 
-    let k8s_token_rotate = CommonChart {
-        chart_info: ChartInfo {
-            name: "k8s-token-rotate".to_string(),
-            path: chart_path("charts/do-k8s-token-rotate"),
-            values: vec![
-                ChartSetValue {
-                    key: "environmentVariables.DO_API_TOKEN".to_string(),
-                    value: chart_config_prerequisites.do_token.clone(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.SPACES_KEY_ACCESS".to_string(),
-                    value: chart_config_prerequisites.do_space_access_id.clone(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.SPACES_SECRET_KEY".to_string(),
-                    value: chart_config_prerequisites.do_space_secret_key.clone(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.SPACES_BUCKET".to_string(),
-                    value: chart_config_prerequisites.do_space_bucket_kubeconfig.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.SPACES_REGION".to_string(),
-                    value: chart_config_prerequisites.region.clone(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.SPACES_FILENAME".to_string(),
-                    value: chart_config_prerequisites.do_space_kubeconfig_filename.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.K8S_CLUSTER_ID".to_string(),
-                    value: chart_config_prerequisites.cluster_id.clone(),
-                },
-            ],
-            ..Default::default()
-        },
-    };
-
     let cluster_agent_context = ClusterAgentContext {
         api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
         api_token: &chart_config_prerequisites.infra_options.agent_version_controller_token,
@@ -1032,7 +997,6 @@ datasources:
         Box::new(shell_agent),
         Box::new(qovery_engine),
         Box::new(digital_mobius),
-        Box::new(k8s_token_rotate),
     ];
 
     // observability

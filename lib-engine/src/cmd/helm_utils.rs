@@ -3,18 +3,21 @@ use crate::cmd::helm::HelmError::CmdError;
 use crate::cmd::helm::{HelmCommand, HelmError};
 use crate::cmd::kubectl::{
     kubectl_apply_with_path, kubectl_create_secret_from_file, kubectl_delete_secret, kubectl_exec_get_secrets,
-    kubectl_get_resource_yaml,
+    kubectl_get_resource_yaml, kubernetes_is_metrics_server_working,
 };
 use crate::errors::CommandError;
 use crate::fs::{
     create_yaml_backup_file, create_yaml_file_from_secret, indent_file, remove_lines_starting_with,
     truncate_file_from_word,
 };
+use retry::delay::Fixed;
+use retry::OperationResult;
 use semver::Version;
 use serde_derive::Deserialize;
 use std::fs::OpenOptions;
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Backup {
@@ -406,4 +409,48 @@ where
         is_backupable: need_backup,
         backup_path: root_dir_path,
     })
+}
+
+fn common_chart_check<P>(
+    chart_name: &str,
+    interval: u64,
+    retries: usize,
+    check: Result<P, CommandError>,
+) -> Result<(), CommandError> {
+    let result = retry::retry(Fixed::from(Duration::from_secs(interval)).take(retries), || match &check {
+        Ok(_) => OperationResult::Ok(()),
+        Err(err) => OperationResult::Retry(format!("command error: {}", err)),
+    });
+
+    let error_message_safe = format!(
+        "{} is not ready after {} min retries",
+        chart_name,
+        interval * (retries as u64) / 60
+    );
+    match result {
+        Err(err) => match err {
+            retry::Error::Operation {
+                error: e,
+                total_delay: _,
+                tries: _,
+            } => Err(CommandError::new(error_message_safe, Some(e), None)),
+            retry::Error::Internal(e) => Err(CommandError::new(error_message_safe, Some(e), None)),
+        },
+        Ok(_) => Ok(()),
+    }
+}
+
+pub fn verify_metrics_server<P>(kubernetes_config: P, envs: &[(String, String)]) -> Result<(), CommandError>
+where
+    P: AsRef<Path>,
+{
+    common_chart_check(
+        "Metrics Server",
+        10,
+        30,
+        kubernetes_is_metrics_server_working(
+            kubernetes_config,
+            envs.iter().map(|(key, value)| (key.as_str(), value.as_str())).collect(),
+        ),
+    )
 }

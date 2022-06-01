@@ -657,10 +657,13 @@ impl DOKS {
             event_details.clone(),
             EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
         ));
+
         let helm_charts_to_deploy = do_helm_charts(
             format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
             &charts_prerequisites,
             Some(chart_prefix_path),
+            kubeconfig_path,
+            &credentials_environment_variables,
         )
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
