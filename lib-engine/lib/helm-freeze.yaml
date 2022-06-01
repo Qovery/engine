@@ -106,6 +106,8 @@ repos:
     url: https://honestica.github.io/lifen-charts
   - name: aws
     url: https://aws.github.io/eks-charts
+  - name: aws-ebs-csi-driver
+    url: https://kubernetes-sigs.github.io/aws-ebs-csi-driver
   - name: grafana
     url: https://grafana.github.io/helm-charts
   - name: pleco

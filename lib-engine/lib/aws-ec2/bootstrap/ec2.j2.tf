@@ -42,10 +42,13 @@ resource "aws_instance" "ec2_instance" {
   vpc_security_group_ids = [aws_security_group.ec2_instance.id]
   subnet_id = aws_subnet.ec2_zone_a[0].id
 
-  # ssh
   {% if user_ssh_key != "" -%}
+  # ssh
   key_name = aws_key_pair.user_ssh_key.key_name
   {%- endif %}
+
+  # ebs csi driver
+  iam_instance_profile = aws_iam_instance_profile.aws_ebs_csi_driver.name
 
   # k3s install
   user_data = local.bootstrap
