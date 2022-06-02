@@ -79,6 +79,12 @@ function print_title() {
 # enable logs to file and console
 exec > >(tee ${var.ec2_instance.user_data_logs_path}|logger -t user_data -s 2>/dev/console) 2>&1
 
+print_title "Wait for network to be available"
+while ! ping -c 1 -W 1 8.8.8.8 1>/dev/null ; do
+    echo "Waiting for network to be up..."
+    sleep 1
+done
+
 print_title "Install packages"
 apt-get update
 apt-get -y install curl s3cmd
