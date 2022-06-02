@@ -2,6 +2,7 @@
 ## Global Docker image parameters
 ## Please, note that this will override the image parameters, including dependencies, configured to use the global value
 ## Current available global Docker image parameters: imageRegistry, imagePullSecrets and storageClass
+##
 
 ## @param global.imageRegistry Global Docker image registry
 ## @param global.imagePullSecrets Global Docker registry secret names as an array
@@ -15,6 +16,7 @@ global:
   imagePullSecrets: []
 
 ## @section Common parameters
+##
 
 ## @param nameOverride String to partially override external-dns.fullname template (will maintain the release name)
 ##
@@ -26,7 +28,22 @@ fullnameOverride: ""
 ##
 clusterDomain: cluster.local
 
-## @section etcd parameters
+## @param commonLabels Labels to add to all deployed objects
+##
+commonLabels: {}
+## @param commonAnnotations Annotations to add to all deployed objects
+##
+commonAnnotations: {}
+##
+## @param extraDeploy Array of extra objects to deploy with the release (evaluated as a template).
+##
+extraDeploy: []
+## @param kubeVersion Force target Kubernetes version (using Helm capabilities if not set)
+##
+kubeVersion: ""
+
+## @section external-dns parameters
+##
 
 ## Bitnami external-dns image version
 ## ref: https://hub.docker.com/r/bitnami/external-dns/tags/
@@ -39,10 +56,10 @@ clusterDomain: cluster.local
 image:
   registry: docker.io
   repository: bitnami/external-dns
-  tag: 0.8.0-debian-10-r47
+  tag: 0.12.0-debian-10-r2
   ## Specify a imagePullPolicy
   ## Defaults to 'Always' if image tag is 'latest', else set to 'IfNotPresent'
-  ## ref: http://kubernetes.io/docs/user-guide/images/#pre-pulling-images
+  ## ref: https://kubernetes.io/docs/user-guide/images/#pre-pulling-images
   ##
   pullPolicy: IfNotPresent
   ## Optionally specify an array of imagePullSecrets.
@@ -58,6 +75,19 @@ image:
 ## https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/
 ##
 hostAliases: []
+
+## @param updateStrategy update strategy type
+## ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#update-strategies
+##
+updateStrategy: {}
+
+## @param command Override kiam default command
+##
+command: []
+## @param args Override kiam default args
+##
+args: []
+
 ## @param sources [array] K8s resources type to be observed for new DNS entries by ExternalDNS
 ##
 sources:
@@ -67,9 +97,15 @@ sources:
   # - contour-httpproxy
 ## @param provider DNS provider where the DNS records will be created.
 ## Available providers are:
-## - alibabacloud, aws, azure, azure-private-dns, cloudflare, coredns, designate, digitalocean, google, hetzner, infoblox, linode, rfc2136, transip
+## - alibabacloud, aws, azure, azure-private-dns, cloudflare, coredns, designate, digitalocean, google, hetzner, infoblox, linode, rfc2136, transip, oci
 ##
 provider: aws
+## @param initContainers Attach additional init containers to the pod (evaluated as a template)
+##
+initContainers: []
+## @param sidecars Attach additional containers to the pod (evaluated as a template)
+##
+sidecars: []
 ## Flags related to processing sources
 ## ref: https://github.com/kubernetes-sigs/external-dns/blob/master/pkg/apis/externaldns/types.go#L272
 ## @param namespace Limit sources of endpoints to a specific namespace (default: all namespaces)
@@ -78,6 +114,10 @@ namespace: ""
 ## @param fqdnTemplates Templated strings that are used to generate DNS names from sources that don't define a hostname themselves
 ##
 fqdnTemplates: []
+## @param containerPorts.http HTTP Container port
+##
+containerPorts:
+  http: 7979
 ## @param combineFQDNAnnotation Combine FQDN template and annotations instead of overwriting
 ##
 combineFQDNAnnotation: false
@@ -143,12 +183,19 @@ aws:
   ## @param aws.assumeRoleArn When using the AWS provider, assume role by specifying --aws-assume-role to the external-dns daemon
   ##
   assumeRoleArn: ""
+  ## @param aws.roleArn Specify role ARN to the external-dns daemon
+  ##
+  roleArn: ""
   ## @param aws.apiRetries Maximum number of retries for AWS API calls before giving up
   ##
   apiRetries: 3
   ## @param aws.batchChangeSize When using the AWS provider, set the maximum number of changes that will be applied in each batch
   ##
   batchChangeSize: 1000
+  ## @param aws.zonesCacheDuration If the list of Route53 zones managed by ExternalDNS doesn't change frequently, cache it by setting a TTL
+  ## (default 0 - disabled, can be set to time interval like 1m or 1h)
+  ##
+  zonesCacheDuration: 0
   ## @param aws.zoneTags When using the AWS provider, filter for zones with these tags
   ##
   zoneTags: []
@@ -275,7 +322,7 @@ designate:
   ## @param designate.customCAHostPath When using the Designate provider, use a CA file already on the host to validate Openstack APIs.  This conflicts with `designate.customCA.enabled`
   ## This conflicts setting the above customCA to true and chart rendering will fail if you set customCA to true and specify customCAHostPath
   ##
-  customCAHostPath: /path/to/cafile
+  customCAHostPath: ""
   ## Use a custom CA (optional)
   ## @param designate.customCA.enabled When using the Designate provider, enable a custom CA (optional)
   ## @param designate.customCA.content When using the Designate provider, set the content of the custom CA
@@ -312,6 +359,9 @@ google:
   ## @param google.serviceAccountKey When using the Google provider, specify the service account key JSON file. In this case a new secret will be created holding this service account (optional)
   ##
   serviceAccountKey: ""
+  ## @param google.zoneVisibility When using the Google provider, fiter for zones of a specific visibility (private or public)
+  ##
+  zoneVisibility: ""
 ## Hetzner configuration to be set via arguments/env. variables
 ##
 hetzner:
@@ -342,8 +392,9 @@ infoblox:
   view: ""
   ## Optional keys
   ##
-  ## Existing secret name, when in place wapiUsername and wapiPassword are not required
-  ## secretName: ""
+  ## @param infoblox.secretName Existing secret name, when in place wapiUsername and wapiPassword are not required
+  ##
+  secretName: ""
   ##
   ## @param infoblox.domainFilter When using the Infoblox provider, specify the domain (optional)
   ##
@@ -376,11 +427,51 @@ linode:
   ## This ignores linode.apiToken
   ##
   secretName: ""
+
 ## NS1 configuration to be set via arguments/env. variables
-## @param ns1.minTTL When using the ns1 provider, specify minimal TTL, as an integer, for records
 ##
 ns1:
+  ## @param ns1.minTTL When using the ns1 provider, specify minimal TTL, as an integer, for records
+  ##
   minTTL: 10
+  ## @param ns1.apiKey When using the ns1 provider, specify the API key to use
+  ##
+  apiKey: ""
+  ## @param ns1.secretName Use an existing secret with key "ns1-api-key" defined.
+  ## This ignores ns1.apiToken
+  ##
+  secretName: ""
+
+## oci configuration to be set via arguments/env. variables
+##
+oci:
+  ## @param oci.region When using the OCI provider, specify the region, where your zone is located in.
+  ##
+  region: ""
+  ## @param oci.tenancyOCID When using the OCI provider, specify your Tenancy OCID
+  ##
+  tenancyOCID: ""
+  ## @param oci.userOCID When using the OCI provider, specify your User OCID
+  ##
+  userOCID: ""
+  ## @param oci.compartmentOCID When using the OCI provider, specify your Compartment OCID where your DNS Zone is located in.
+  ##
+  compartmentOCID: ""
+  ## @param oci.privateKey [string] When using the OCI provider, paste in your RSA private key file for the Oracle API
+  ##
+  privateKey: |
+    -----BEGIN RSA PRIVATE KEY-----
+    -----END RSA PRIVATE KEY-----
+  ## @param oci.privateKeyFingerprint When using the OCI provider, put in the fingerprint of your privateKey
+  ##
+  privateKeyFingerprint: ""
+  ## @param oci.privateKeyPassphrase When using the OCI provider and your privateKey has a passphrase, put it in here. (optional)
+  ##
+  privateKeyPassphrase: ""
+  ## @param oci.secretName When using the OCI provider, it's the name of the secret containing `oci.yaml` file.
+  ## Ref: https://github.com/kubernetes-sigs/external-dns/blob/master/docs/tutorials/oracle.md#deploy-externaldns
+  ##
+  secretName: ""
 ## OVH configuration to be set via arguments/env. variables
 ##
 ovh:
@@ -393,7 +484,7 @@ ovh:
   ## @param ovh.applicationSecret When using the OVH provider with an existing application, specify the application secret. (required when provider=ovh and `ovh.secretName` is not provided.)
   ##
   applicationSecret: ""
-  ## @param ovh.secretName When using the OVH provider, it's the name of the secret containing `ovh_consumer_key`, `ovh_application_key` and `ovh_application_secret`. Disables usage of other `ovh.
+  ## @param ovh.secretName When using the OVH provider, it's the name of the secret containing `ovh_consumer_key`, `ovh_application_key` and `ovh_application_secret`. Disables usage of other `ovh`.
   ## with following keys:
   ##  - ovh_consumer_key
   ##  - ovh_application_key
@@ -443,6 +534,22 @@ rfc2136:
   ## @param rfc2136.minTTL When using the rfc2136 provider, specify minimal TTL (in duration format) for records[ns, us, ms, s, m, h], see more https://golang.org/pkg/time/#ParseDuration
   ##
   minTTL: "0s"
+  ## @param rfc2136.rfc3645Enabled When using the rfc2136 provider, extend using RFC3645 to support secure updates over Kerberos with GSS-TSIG
+  ##
+  rfc3645Enabled: false
+  ## @param rfc2136.kerberosConfig When using the rfc2136 provider with rfc3645Enabled, the contents of a configuration file for krb5 (optional)
+  ##
+  kerberosConfig: ""
+  ## @param rfc2136.kerberosUsername When using the rfc2136 provider with rfc3645Enabled, specify the username to authenticate with (optional)
+  ##
+  kerberosUsername: ""
+  ## @param rfc2136.kerberosPassword When using the rfc2136 provider with rfc3645Enabled, specify the password to authenticate with (optional)
+  ##
+  kerberosPassword: ""
+  ## @param rfc2136.kerberosRealm When using the rfc2136 provider with rfc3645Enabled, specify the realm to authenticate to (required when provider=rfc2136 and rfc2136.rfc3645Enabled=true)
+  ##
+  kerberosRealm: ""
+
 ## PowerDNS configuration to be set via arguments/env. variables
 ##
 pdns:
@@ -502,6 +609,9 @@ zoneIdFilters: []
 ## @param annotationFilter Filter sources managed by external-dns via annotation using label selector (optional)
 ##
 annotationFilter: ""
+## @param labelFilter Select sources managed by external-dns using label selector (optional)
+##
+labelFilter: ""
 ## @param dryRun When enabled, prints DNS record changes rather than actually performing them (optional)
 ##
 dryRun: false
@@ -548,25 +658,35 @@ txtOwnerId: ""
 ## NOTE: It is up to the end user to update AWS Service Discovery
 ## 'default' values in description fields to make it work with new
 ## value passed as txtOwnerId when forceTxtOwnerId=true
+##
 forceTxtOwnerId: false
 ## @param extraArgs Extra arguments to be passed to external-dns
 ##
 extraArgs: {}
-## @param extraEnv Extra environment variables to be passed to external-dns
+## @param extraEnvVars An array to add extra env vars
 ##
-## extraEnv:
-## - name: VARNAME1
-##   value: value1
-## - name: VARNAME2
-##   valueFrom:
-##     secretKeyRef:
-##       name: existing-secret
-##       key: varname2-key
+extraEnvVars: []
+## @param extraEnvVarsCM ConfigMap containing extra env vars
 ##
-extraEnv: []
-## @param replicas Desired number of ExternalDNS replicas
+extraEnvVarsCM: ""
+## @param extraEnvVarsSecret Secret containing extra env vars (in case of sensitive data)
 ##
-replicas: 1
+extraEnvVarsSecret: ""
+## @param lifecycleHooks [object] Override default etcd container hooks
+##
+lifecycleHooks: {}
+## @param schedulerName Alternative scheduler
+## ref: https://kubernetes.io/docs/tasks/administer-cluster/configure-multiple-schedulers/
+##
+schedulerName: ""
+## @param topologySpreadConstraints Topology Spread Constraints for pod assignment
+## https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
+## The value is evaluated as a template
+##
+topologySpreadConstraints: []
+## @param replicaCount Desired number of ExternalDNS replicas
+##
+replicaCount: 1
 ## @param podAffinityPreset Pod affinity preset. Ignored if `affinity` is set. Allowed values: `soft` or `hard`
 ## ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#inter-pod-affinity-and-anti-affinity
 ##
@@ -641,13 +761,15 @@ service:
   ## @param service.type Kubernetes Service type
   ##
   type: ClusterIP
-  ## @param service.port ExternalDNS client port
+  ## @param service.ports.http ExternalDNS client port
   ##
-  port: 7979
-  ## @param service.nodePort Port to bind to for NodePort service type (client port)
+  ports:
+    http: 7979
+  ## @param service.nodePorts.http Port to bind to for NodePort service type (client port)
   ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#type-nodeport
   ##
-  nodePort: ""
+  nodePorts:
+    http: ""
   ## @param service.clusterIP IP address to assign to service
   ##
   clusterIP: ""
@@ -660,6 +782,13 @@ service:
   ## @param service.loadBalancerSourceRanges List of IP CIDRs allowed access to load balancer (if supported)
   ##
   loadBalancerSourceRanges: []
+  ## @param service.externalTrafficPolicy Enable client source IP preservation
+  ## ref http://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip
+  ##
+  externalTrafficPolicy: Cluster
+  ## @param service.extraPorts Extra ports to expose in the service (normally used with the `sidecar` value)
+  ##
+  extraPorts: []
   ## @param service.annotations Annotations to add to service
   ## set the LoadBalancer service type to internal only.
   ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
@@ -671,6 +800,17 @@ service:
   ##  kubernetes.io/name: "external-dns"
   ##
   labels: {}
+  ## @param service.sessionAffinity Session Affinity for Kubernetes service, can be "None" or "ClientIP"
+  ## If "ClientIP", consecutive client requests will be directed to the same Pod
+  ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#virtual-ips-and-service-proxies
+  ##
+  sessionAffinity: None
+  ## @param service.sessionAffinityConfig Additional settings for the sessionAffinity
+  ## sessionAffinityConfig:
+  ##   clientIP:
+  ##     timeoutSeconds: 300
+  ##
+  sessionAffinityConfig: {}
 ## ServiceAccount parameters
 ## https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
 ##
@@ -700,10 +840,10 @@ rbac:
   ## @param rbac.apiVersion Version of the RBAC API
   ##
   apiVersion: v1
-  ## @param rbac.pspEnabled PodSecurityPolicy
+  ## @param rbac.pspEnabled Whether to create a PodSecurityPolicy. WARNING: PodSecurityPolicy is deprecated in Kubernetes v1.21 or later, unavailable in v1.25 or later
   ##
   pspEnabled: false
-## @param securityContext Security context for the container
+## @param containerSecurityContext Security context for the container
 ## https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
 ## Example:
 ## securityContext:
@@ -712,15 +852,17 @@ rbac:
 ##   capabilities:
 ##     drop: ["ALL"]
 ##
-securityContext: {}
+containerSecurityContext: {}
+## @param podSecurityContext.enabled Enable pod security context
 ## @param podSecurityContext.fsGroup Group ID for the container
 ## @param podSecurityContext.runAsUser User ID for the container
 ##
 podSecurityContext:
+  enabled: true
   fsGroup: 1001
   runAsUser: 1001
 ## Container resource requests and limits
-## ref: http://kubernetes.io/docs/user-guide/compute-resources/
+## ref: https://kubernetes.io/docs/user-guide/compute-resources/
 ## We usually recommend not to specify default resources and to leave this as a conscious
 ## choice for the user. This also increases chances charts run on environments with little
 ## resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -733,17 +875,17 @@ resources:
   ## limits:
   ##    cpu: 50m
   ##    memory: 50Mi
+  ##
   limits: {}
   ## Examples:
   ## requests:
   ##    cpu: 10m
   ##    memory: 50Mi
+  ##
   requests: {}
 ## Configure extra options for liveness probe
 ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
 ## @param livenessProbe.enabled Enable livenessProbe
-## @param livenessProbe.httpGet.path Request path for livenessProbe
-## @param livenessProbe.httpGet.port Port for livenessProbe
 ## @param livenessProbe.initialDelaySeconds Initial delay seconds for livenessProbe
 ## @param livenessProbe.periodSeconds Period seconds for livenessProbe
 ## @param livenessProbe.timeoutSeconds Timeout seconds for livenessProbe
@@ -752,9 +894,6 @@ resources:
 ##
 livenessProbe:
   enabled: true
-  httpGet:
-    path: /healthz
-    port: http
   initialDelaySeconds: 10
   periodSeconds: 10
   timeoutSeconds: 5
@@ -763,8 +902,6 @@ livenessProbe:
 ## Configure extra options for readiness probe
 ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/#configure-probes
 ## @param readinessProbe.enabled Enable readinessProbe
-## @param readinessProbe.httpGet.path Request path for readinessProbe
-## @param readinessProbe.httpGet.port Port for readinessProbe
 ## @param readinessProbe.initialDelaySeconds Initial delay seconds for readinessProbe
 ## @param readinessProbe.periodSeconds Period seconds for readinessProbe
 ## @param readinessProbe.timeoutSeconds Timeout seconds for readinessProbe
@@ -773,14 +910,36 @@ livenessProbe:
 ##
 readinessProbe:
   enabled: true
-  httpGet:
-    path: /healthz
-    port: http
   initialDelaySeconds: 5
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 6
   successThreshold: 1
+## Configure extra options for startup probe
+## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-startup-probes/#configure-probes
+## @param startupProbe.enabled Enable startupProbe
+## @param startupProbe.initialDelaySeconds Initial delay seconds for startupProbe
+## @param startupProbe.periodSeconds Period seconds for startupProbe
+## @param startupProbe.timeoutSeconds Timeout seconds for startupProbe
+## @param startupProbe.failureThreshold Failure threshold for startupProbe
+## @param startupProbe.successThreshold Success threshold for startupProbe
+##
+startupProbe:
+  enabled: false
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+  successThreshold: 1
+## @param customLivenessProbe Override default liveness probe
+##
+customLivenessProbe: {}
+## @param customReadinessProbe Override default readiness probe
+##
+customReadinessProbe: {}
+## @param customStartupProbe Override default startup probe
+##
+customStartupProbe: {}
 ## @param extraVolumes A list of volumes to be added to the pod
 ##
 extraVolumes: []
@@ -789,6 +948,8 @@ extraVolumes: []
 extraVolumeMounts: []
 ## @param podDisruptionBudget Configure PodDisruptionBudget
 ## ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
+##
+
 podDisruptionBudget: {}
 ## Prometheus Exporter / Metrics
 ##
@@ -823,3 +984,21 @@ metrics:
     ##   prometheus: my-prometheus
     ##
     selector: {}
+    ## @param metrics.serviceMonitor.metricRelabelings Specify Metric Relabelings to add to the scrape endpoint
+    ## ref: https://github.com/coreos/prometheus-operator/blob/master/Documentation/api.md#relabelconfig
+    ##
+    metricRelabelings: []
+    ## @param metrics.serviceMonitor.relabelings [array] Prometheus relabeling rules
+    ##
+    relabelings: []
+    ## @param metrics.serviceMonitor.honorLabels Specify honorLabels parameter to add the scrape endpoint
+    ##
+    honorLabels: false
+    ## DEPRECATED metrics.serviceMonitor.additionalLabels will be removed in a future release - Please use metrics.serviceMonitor.labels instead
+    ## @param metrics.serviceMonitor.labels Used to pass Labels that are required by the installed Prometheus Operator
+    ## ref: https://github.com/coreos/prometheus-operator/blob/master/Documentation/api.md#prometheusspec
+    ##
+    labels: {}
+    ## @param metrics.serviceMonitor.jobLabel The name of the label on the target service to use as the job name in prometheus.
+    ##
+    jobLabel: ""

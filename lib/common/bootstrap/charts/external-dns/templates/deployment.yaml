@@ -2,10 +2,19 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ template "external-dns.fullname" . }}
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ .Release.Namespace | quote }}
   labels: {{ include "external-dns.labels" . | nindent 4 }}
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
 spec:
-  replicas: {{ .Values.replicas }}
+  replicas: {{ coalesce .Values.replicas .Values.replicaCount }}
+  {{- if .Values.updateStrategy }}
+  strategy: {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels: {{ include "external-dns.matchLabels" . | nindent 6 }}
   template:
@@ -23,8 +32,8 @@ spec:
         {{- end }}
     spec:
       {{- include "external-dns.imagePullSecrets" . | nindent 6 }}
-      {{- if .Values.podSecurityContext }}
-      securityContext: {{ toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.podSecurityContext.enabled }}
+      securityContext: {{- omit .Values.podSecurityContext "enabled" | toYaml | nindent 8 }}
       {{- end }}
       {{- if .Values.affinity }}
       affinity: {{- include "common.tplvalues.render" (dict "value" .Values.affinity "context" $) | nindent 8 }}
@@ -33,6 +42,15 @@ spec:
         podAffinity: {{- include "common.affinities.pods" (dict "type" .Values.podAffinityPreset "context" $) | nindent 10 }}
         podAntiAffinity: {{- include "common.affinities.pods" (dict "type" .Values.podAntiAffinityPreset "context" $) | nindent 10 }}
         nodeAffinity: {{- include "common.affinities.nodes" (dict "type" .Values.nodeAffinityPreset.type "key" .Values.nodeAffinityPreset.key "values" .Values.nodeAffinityPreset.values) | nindent 10 }}
+      {{- end }}
+      {{- if .Values.schedulerName }}
+      schedulerName: {{ .Values.schedulerName | quote }}
+      {{- end }}
+      {{- if .Values.hostAliases }}
+      hostAliases: {{- include "common.tplvalues.render" (dict "value" .Values.hostAliases "context" $) | nindent 8 }}
+      {{- end }}
+      {{- if .Values.topologySpreadConstraints }}
+      topologySpreadConstraints: {{- include "common.tplvalues.render" (dict "value" .Values.topologySpreadConstraints "context" $) | nindent 8 }}
       {{- end }}
       {{- if .Values.nodeSelector }}
       nodeSelector: {{- include "common.tplvalues.render" (dict "value" .Values.nodeSelector "context" $) | nindent 8 }}
@@ -44,12 +62,22 @@ spec:
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName | quote }}
       {{- end }}
+      {{- if .Values.initContainers }}
+      initContainers: {{- include "common.tplvalues.render" (dict "value" .Values.initContainers "context" $) | nindent 8 }}
+      {{- end }}
       containers:
         - name: external-dns
-          image: "{{ template "external-dns.image" . }}"
+          image: {{ include "external-dns.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
+          {{- if .Values.command }}
+          command: {{- include "common.tplvalues.render" (dict "value" .Values.command "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.args }}
+          args: {{- include "common.tplvalues.render" (dict "value" .Values.args "context" $) | nindent 12 }}
+          {{- else }}
           args:
             # Generic arguments
+            - --metrics-address=:{{ .Values.containerPorts.http }}
             {{- if .Values.logLevel }}
             - --log-level={{ .Values.logLevel }}
             {{- end }}
@@ -121,6 +149,9 @@ spec:
             {{- if .Values.annotationFilter }}
             - --annotation-filter={{ .Values.annotationFilter }}
             {{- end }}
+            {{- if .Values.labelFilter }}
+            - --label-filter={{ .Values.labelFilter }}
+            {{- end }}
             {{- if .Values.crd.apiversion }}
             - --crd-source-apiversion={{ .Values.crd.apiversion }}
             {{- end }}
@@ -146,15 +177,16 @@ spec:
             {{- if .Values.aws.apiRetries }}
             - --aws-api-retries={{ .Values.aws.apiRetries }}
             {{- end }}
-            {{- if .Values.aws.zoneType }}
             - --aws-zone-type={{ .Values.aws.zoneType }}
-            {{- end }}
             {{- if .Values.aws.assumeRoleArn }}
             - --aws-assume-role={{ .Values.aws.assumeRoleArn }}
             {{- end }}
             {{- if .Values.aws.batchChangeSize }}
             - --aws-batch-change-size={{ .Values.aws.batchChangeSize }}
             {{- end }}
+            {{- end }}
+            {{- if .Values.aws.zonesCacheDuration }}
+            - --aws-zones-cache-duration={{ .Values.aws.zonesCacheDuration }}
             {{- end }}
             {{- range .Values.aws.zoneTags }}
             - --aws-zone-tags={{ . }}
@@ -186,6 +218,9 @@ spec:
             # Google Arguments
             {{- if .Values.google.project }}
             - --google-project={{ .Values.google.project }}
+            {{- end }}
+            {{- if .Values.google.zoneVisibility }}
+            - --google-zone-visibility={{ .Values.google.zoneVisibility }}
             {{- end }}
             {{- end }}
             {{- if eq .Values.provider "infoblox" }}
@@ -220,14 +255,19 @@ spec:
             - --rfc2136-port={{ .Values.rfc2136.port }}
             - --rfc2136-zone={{ required "rfc2136.zone must be supplied for provider 'rfc2136'" .Values.rfc2136.zone }}
             - --rfc2136-min-ttl={{ .Values.rfc2136.minTTL }}
-              {{- if .Values.rfc2136.tsigKeyname }}
+              {{- if .Values.rfc2136.tsigAxfr }}
+            - --rfc2136-tsig-axfr
+              {{- end }}
+              {{- if .Values.rfc2136.rfc3645Enabled }}
+            - --rfc2136-gss-tsig
+            - --rfc2136-kerberos-realm={{ .Values.rfc2136.kerberosRealm }}
+              {{- else }}
+                {{- if .Values.rfc2136.tsigKeyname }}
             - --rfc2136-tsig-secret-alg={{ .Values.rfc2136.tsigSecretAlg }}
             - --rfc2136-tsig-keyname={{ .Values.rfc2136.tsigKeyname }}
-                {{- if .Values.rfc2136.tsigAxfr }}
-            - --rfc2136-tsig-axfr
-                {{- end }}
-              {{- else }}
+                {{- else }}
             - --rfc2136-insecure
+                {{- end }}
               {{- end }}
             {{- end }}
             {{- if eq .Values.provider "pdns" }}
@@ -248,6 +288,7 @@ spec:
             - --{{ $key }}
               {{- end }}
             {{- end }}
+          {{- end }}
           env:
             {{- if or (eq .Values.provider "aws") (eq .Values.provider "aws-sd") }}
             # AWS environment variables
@@ -303,14 +344,14 @@ spec:
             - name: OPENSTACK_CA_FILE
               value: {{ .Values.designate.customCAHostPath }}
             {{- end }}
-            {{- if .Values.designate.username}}
+            {{- if .Values.designate.username }}
             - name: OS_USERNAME
               valueFrom:
                 secretKeyRef:
                   name: {{ template "external-dns.secretName" . }}
                   key: designate_username
             {{- end }}
-            {{- if .Values.designate.password}}
+            {{- if .Values.designate.password }}
             - name: OS_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -446,13 +487,26 @@ spec:
                   key: infoblox_wapi_password
             {{- end }}
             {{- end }}
-            {{- if or .Values.rfc2136.tsigSecret .Values.rfc2136.secretName }}
+            {{- if .Values.rfc2136.tsigSecret | or (and .Values.rfc2136.kerberosUsername .Values.rfc2136.kerberosPassword) | or .Values.rfc2136.secretName }}
             # RFC 2136 environment variables
+            {{- if .Values.rfc2136.rfc3645Enabled }}
+            - name: EXTERNAL_DNS_RFC2136_KERBEROS_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "external-dns.secretName" . }}
+                  key: rfc2136_kerberos_username
+            - name: EXTERNAL_DNS_RFC2136_KERBEROS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "external-dns.secretName" . }}
+                  key: rfc2136_kerberos_password
+            {{- else }}
             - name: EXTERNAL_DNS_RFC2136_TSIG_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ template "external-dns.secretName" . }}
                   key: rfc2136_tsig_secret
+            {{- end }}
             {{- end }}
             {{- if eq .Values.provider "pdns" }}
             # PowerDNS environment variables
@@ -483,21 +537,75 @@ spec:
                   key: vinyldns-secret-key
             {{- end }}
             {{- end }}
-            {{- if .Values.extraEnv }}
-            # Extra environment variables
-            {{- toYaml .Values.extraEnv | nindent 12 }}
+              {{- if .Values.extraEnvVars }}
+              {{- include "common.tplvalues.render" (dict "value" .Values.extraEnvVars "context" $) | nindent 12 }}
+              {{- end }}
+            {{- if eq .Values.provider "ns1" }}
+            # NS1 environment variables
+            {{- if or (.Values.ns1.apiKey) (.Values.ns1.secretName) }}
+            - name: NS1_APIKEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ template "external-dns.secretName" . }}
+                  key: ns1-api-key
+            {{- end }}
+            {{- end }}
+          envFrom:
+            {{- if .Values.extraEnvVarsCM }}
+            - configMapRef:
+                name: {{ include "common.tplvalues.render" (dict "value" .Values.extraEnvVarsCM "context" $) }}
+            {{- end }}
+            {{- if .Values.extraEnvVarsSecret }}
+            - secretRef:
+                name: {{ include "common.tplvalues.render" (dict "value" .Values.extraEnvVarsSecret "context" $) }}
             {{- end }}
           ports:
             - name: http
-              containerPort: {{ .Values.service.port }}
-          {{- if .Values.readinessProbe.enabled }}
-          readinessProbe: {{- omit .Values.readinessProbe "enabled" | toYaml | nindent 12 }}
-          {{- end }}
+              containerPort: {{ .Values.containerPorts.http }}
           {{- if .Values.livenessProbe.enabled }}
-          livenessProbe: {{- omit .Values.livenessProbe "enabled" | toYaml | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+          {{- else if .Values.customLivenessProbe }}
+          livenessProbe: {{- include "common.tplvalues.render" (dict "value" .Values.customLivenessProbe "context" $) | nindent 12 }}
           {{- end }}
-          {{- if .Values.securityContext }}
-          securityContext: {{ toYaml .Values.securityContext | nindent 12 }}
+          {{- if .Values.readinessProbe.enabled }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          {{- else if .Values.customReadinessProbe }}
+          readinessProbe: {{- include "common.tplvalues.render" (dict "value" .Values.customReadinessProbe "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.startupProbe.enabled }}
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: {{ .Values.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.startupProbe.successThreshold }}
+            failureThreshold: {{ .Values.startupProbe.failureThreshold }}
+          {{- else if .Values.customStartupProbe }}
+          startupProbe: {{- include "common.tplvalues.render" (dict "value" .Values.customStartupProbe "context" $) | nindent 12 }}
+          {{- end }}
+          {{- if .Values.containerSecurityContext }}
+          securityContext: {{- omit .Values.containerSecurityContext "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+          {{- if .Values.lifecycleHooks }}
+          lifecycle: {{- include "common.tplvalues.render" (dict "value" .Values.lifecycleHooks "context" $) | nindent 12 }}
           {{- end }}
           {{- if .Values.resources }}
           resources: {{- toYaml .Values.resources | nindent 12 }}
@@ -520,7 +628,7 @@ spec:
             - name: azure-config-file
               {{- if or .Values.azure.secretName (and .Values.azure.resourceGroup .Values.azure.tenantId .Values.azure.subscriptionId) }}
               mountPath: /etc/kubernetes/
-              {{- else if not .Values.azure.useManagedIdentityExtension }}
+              {{- else }}
               mountPath: /etc/kubernetes/azure.json
               {{- end }}
               readOnly: true
@@ -536,10 +644,14 @@ spec:
             - name: google-service-account
               mountPath: /etc/secrets/service-account/
             {{- end }}
+            {{- if eq .Values.provider "oci" }}
+            - name: oci-config-file
+              mountPath: /etc/kubernetes/
+            {{- end }}
             {{- if eq .Values.provider "designate" }}
             # Designate mountPath(s)
             {{- if and (.Values.designate.customCAHostPath) (.Values.designate.customCA.enabled) }}
-            {{- fail "designate.customCAHostPath cannot be specified with designate.customCA.enabled set to true"}}
+            {{- fail "designate.customCAHostPath cannot be specified with designate.customCA.enabled set to true" }}
             {{- else if .Values.designate.customCA.enabled }}
             - name: designate-custom-ca
               mountPath: {{ .Values.designate.customCA.mountPath }}
@@ -549,6 +661,11 @@ spec:
               mountPath: {{ .Values.designate.customCAHostPath }}
               readOnly: true
             {{- end }}
+            {{- end }}
+            {{- if and (eq .Values.provider "rfc2136") .Values.rfc2136.rfc3645Enabled }}
+            - name: krb5config
+              mountPath: /etc/krb5.conf
+              subPath: krb5.conf
             {{- end }}
             {{- if (eq .Values.provider "transip") }}
             # TransIP mountPath(s)
@@ -560,6 +677,9 @@ spec:
             # Extra volume mount(s)
             {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
             {{- end }}
+        {{- if .Values.sidecars }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.sidecars "context" $) | nindent 8 }}
+        {{- end }}
       volumes:
         {{- if and (eq .Values.provider "alibabacloud") (or (and .Values.alibabacloud.accessKeyId .Values.alibabacloud.accessKeySecret) .Values.alibabacloud.secretName) }}
         # Alibaba Cloud volume(s)
@@ -579,11 +699,19 @@ spec:
           {{- if or .Values.azure.secretName (and .Values.azure.resourceGroup .Values.azure.tenantId .Values.azure.subscriptionId) }}
           secret:
             secretName: {{ template "external-dns.secretName" . }}
-          {{- else if not .Values.azure.useManagedIdentityExtension }}
+          {{- else if .Values.azure.useManagedIdentityExtension }}
+          secret:
+            secretName: {{ template "external-dns.fullname" . }}
+          {{- else }}
           hostPath:
             path: /etc/kubernetes/azure.json
             type: File
           {{- end }}
+        {{- end }}
+        {{- if (eq .Values.provider "oci")}}
+        - name: oci-config-file
+          secret:
+            secretName: {{ template "external-dns.secretName" . }}
         {{- end }}
         {{- if and (eq .Values.provider "coredns") (.Values.coredns.etcdTLS.enabled) }}
         # CoreDNS volume(s)
@@ -618,11 +746,20 @@ spec:
             path: {{ .Values.designate.customCAHostPath }}
         {{- end }}
         {{- end }}
+        {{- if and (eq .Values.provider "rfc2136") .Values.rfc2136.rfc3645Enabled }}
+        # Kerberos config volume
+        - name: krb5config
+          configMap:
+            name: {{ template "external-dns.fullname" . }}
+            items:
+            - key: "krb5.conf"
+              path: "krb5.conf"
+        {{- end }}
         {{- if (eq .Values.provider "transip") }}
         # TransIP volume(s)
         - name: transip-api-key
           secret:
-            name: {{ template "external-dns.fullname" . }}
+            secretName: {{ template "external-dns.fullname" . }}
         {{- end }}
         {{- if .Values.extraVolumes }}
         # Extra volume(s)
