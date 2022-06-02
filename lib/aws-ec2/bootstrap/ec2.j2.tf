@@ -16,11 +16,12 @@ data "aws_ami" "debian" {
   owners = [var.ec2_image_info.owners]
 }
 
+{% if user_ssh_key != "" -%}
 resource "aws_key_pair" "user_ssh_key" {
-  count = "{{ user_ssh_key }}" != "" ? 1 : 0
   key_name   = "user-key"
   public_key = "{{ user_ssh_key }}"
 }
+{%- endif %}
 
 resource "aws_instance" "ec2_instance" {
   ami           = data.aws_ami.debian.id
@@ -42,7 +43,9 @@ resource "aws_instance" "ec2_instance" {
   subnet_id = aws_subnet.ec2_zone_a[0].id
 
   # ssh
+  {% if user_ssh_key != "" -%}
   key_name = aws_key_pair.user_ssh_key.key_name
+  {%- endif %}
 
   # k3s install
   user_data = local.bootstrap
