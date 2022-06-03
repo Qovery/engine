@@ -140,6 +140,7 @@ infra-without-cloud-providers:
     - build-and-lint-code
   tags:
     - bm-2cpu-4gmem-0g
+  interruptible: true
 
 #########
 # TESTS #
