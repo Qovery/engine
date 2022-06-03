@@ -8,6 +8,7 @@ metadata:
 spec:
   scope: Cluster
   group: crd.k8s.amazonaws.com
+  preserveUnknownFields: false
   versions:
     - name: v1alpha1
       served: true

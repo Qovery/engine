@@ -2,6 +2,7 @@ kind: DaemonSet
 apiVersion: apps/v1
 metadata:
   name: {{ include "aws-vpc-cni.fullname" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
 {{ include "aws-vpc-cni.labels" . | indent 4 }}
 spec:
@@ -39,8 +40,7 @@ spec:
       hostNetwork: true
       initContainers:
       - name: aws-vpc-cni-init
-        image: "{{- if .Values.init.image.override }}{{- .Values.init.image.override }}{{- else }}602401143452.dkr.ecr.{{- .Values.init.image.region }}.amazonaws.com/amazon-k8s-cni-init:{{- .Values.init.image.tag }}{{- end}}"
-        imagePullPolicy: {{ .Values.init.image.pullPolicy }}
+        image: "{{- if .Values.init.image.override }}{{- .Values.init.image.override }}{{- else }}{{- .Values.init.image.account }}.dkr.ecr.{{- .Values.init.image.region }}.{{- .Values.init.image.domain }}/amazon-k8s-cni-init:{{- .Values.init.image.tag }}{{- end}}"
         env:
 {{- range $key, $value := .Values.init.env }}
           - name: {{ $key }}
@@ -62,14 +62,13 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: aws-node
-          image: "{{- if .Values.image.override }}{{- .Values.image.override }}{{- else }}602401143452.dkr.ecr.{{- .Values.image.region }}.amazonaws.com/amazon-k8s-cni:{{- .Values.image.tag }}{{- end}}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{- if .Values.image.override }}{{- .Values.image.override }}{{- else }}{{- .Values.image.account }}.dkr.ecr.{{- .Values.image.region }}.{{- .Values.image.domain }}/amazon-k8s-cni:{{- .Values.image.tag }}{{- end}}"
           ports:
             - containerPort: 61678
               name: metrics
           livenessProbe:
 {{ toYaml .Values.livenessProbe | indent 12 }}
-            timeoutSeconds: {{ .Values.livenessProbeTimeoutSeconds }} 
+            timeoutSeconds: {{ .Values.livenessProbeTimeoutSeconds }}
           readinessProbe:
 {{ toYaml .Values.readinessProbe | indent 12 }}
             timeoutSeconds: {{ .Values.readinessProbeTimeoutSeconds }}
