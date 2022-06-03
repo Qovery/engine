@@ -3,9 +3,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   name: {{ include "aws-node-termination-handler.fullname" . }}
-  {{- if .Values.serviceMonitor.namespace }}
-  namespace: {{ .Values.serviceMonitor.namespace }}
-  {{- end }}
+  namespace: {{ default .Release.Namespace .Values.serviceMonitor.namespace }}
   labels:
     {{- include "aws-node-termination-handler.labels" . | nindent 4 }}
   {{- with .Values.serviceMonitor.labels }}

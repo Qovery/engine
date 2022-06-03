@@ -19,8 +19,8 @@ spec:
     max: {{ .Values.prometheusServerPort }}
 {{- end }}
 {{- if .Values.enableProbesServer }}
-  - min: {{ .Values.probesServerPort }}
-    max: {{ .Values.probesServerPort }}
+  - min: {{ .Values.probes.httpGet.port }}
+    max: {{ .Values.probes.httpGet.port }}
 {{- end }}
 {{- end }}
   readOnlyRootFilesystem: false

@@ -81,6 +81,9 @@ cordonOnly: false
 # Taint node upon spot interruption termination notice.
 taintNode: false
 
+# Exclude node from load balancer before cordoning via the ServiceNodeExclusion feature gate.
+excludeFromLoadBalancers: false
+
 # deleteLocalData tells kubectl to continue even if there are pods using
 # emptyDir (local data that will be deleted when the node is drained).
 deleteLocalData: true
@@ -168,13 +171,14 @@ queueURL: ""
 workers: 10
 
 # If true, check that the instance is tagged with "aws-node-termination-handler/managed" as the key before draining the node
+# If false, disables calls to ASG API.
 checkASGTagBeforeDraining: true
 
 # The tag to ensure is on a node if checkASGTagBeforeDraining is true
 managedAsgTag: "aws-node-termination-handler/managed"
 
-# If true, assume that ASG tags will be appear on the ASG's instances
-assumeAsgTagPropagation: false
+# If true, fetch node name through Kubernetes node spec ProviderID instead of AWS event PrivateDnsHostname.
+useProviderId: false
 
 # ---------------------------------------------------------------------------------------------------------------------
 # IMDS Mode
@@ -219,6 +223,7 @@ useHostNetwork: true
 
 # Daemonset DNS policy
 dnsPolicy: ""
+dnsConfig: {}
 linuxDnsPolicy: ClusterFirstWithHostNet
 windowsDnsPolicy: ClusterFirst
 

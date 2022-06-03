@@ -3,8 +3,9 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "aws-node-termination-handler.fullname" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "aws-node-termination-handler.labels" . | nindent 4 }}
+    {{- include "aws-node-termination-handler.labelsDeployment" . | nindent 4 }}
 spec:
   type: ClusterIP
   selector:

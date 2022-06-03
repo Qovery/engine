@@ -3,6 +3,7 @@ apiVersion: {{ include "aws-node-termination-handler.pdb.apiVersion" . }}
 kind: PodDisruptionBudget
 metadata:
   name: {{ include "aws-node-termination-handler.fullname" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "aws-node-termination-handler.labels" . | nindent 4 }}
 spec:
