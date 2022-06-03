@@ -39,12 +39,16 @@ The following table lists the configurable parameters for this chart and their d
 | `env`                   | List of environment variables. See [here](https://github.com/aws/amazon-vpc-cni-k8s#cni-configuration-variables) for options | (see `values.yaml`) |
 | `fullnameOverride`      | Override the fullname of the chart                      | `aws-node`                          |
 | `image.region`          | ECR repository region to use. Should match your cluster | `us-west-2`                         |
-| `image.tag`             | Image tag                                               | `v1.7.5`                            |
+| `image.tag`             | Image tag                                               | `v1.10.2`                           |
+| `image.account`         | ECR repository account number                           | `602401143452`                      |
+| `image.domain`          | ECR repository domain                                   | `amazonaws.com`                     |
 | `image.pullPolicy`      | Container pull policy                                   | `IfNotPresent`                      |
 | `image.override`        | A custom docker image to use                            | `nil`                               |
 | `imagePullSecrets`      | Docker registry pull secret                             | `[]`                                |
 | `init.image.region`     | ECR repository region to use. Should match your cluster | `us-west-2`                         |
-| `init.image.tag`        | Image tag                                               | `v1.7.5`                            |
+| `init.image.tag`        | Image tag                                               | `v1.10.2`                           |
+| `init.image.account`    | ECR repository account number                           | `602401143452`                      |
+| `init.image.domain`     | ECR repository domain                                   | `amazonaws.com`                     |
 | `init.image.pullPolicy` | Container pull policy                                   | `IfNotPresent`                      |
 | `init.image.override`   | A custom docker image to use                            | `nil`                               |
 | `init.env`              | List of init container environment variables. See [here](https://github.com/aws/amazon-vpc-cni-k8s#cni-configuration-variables) for options | (see `values.yaml`) |

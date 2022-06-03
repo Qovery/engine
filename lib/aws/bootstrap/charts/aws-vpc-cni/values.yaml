@@ -8,7 +8,7 @@ nameOverride: aws-node
 
 init:
   image:
-    tag: v1.10.2
+    tag: v1.11.0
     region: us-west-2
     account: "602401143452"   
     pullPolicy: Always
@@ -23,7 +23,7 @@ init:
 
 image:
   region: us-west-2
-  tag: v1.10.2
+  tag: v1.11.0
   account: "602401143452"   
   domain: "amazonaws.com"  
   pullPolicy: Always
@@ -90,7 +90,7 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name:
   annotations: {}
-    # eks.amazonaws.com/role-arn: arn:aws:iam::AWS_ACCOUNT_ID:role/IAM_ROLE_NAME
+    # To set annotations - serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=arn:aws:iam::<AWS_ACCOUNT_ID>:<IAM_ROLE_NAME>
 
 livenessProbe:
   exec:
@@ -167,4 +167,5 @@ eniConfig:
     #   - sg-789
 
 cri:
-  hostPath: # "/var/run/containerd/containerd.sock"
+  hostPath:
+#     path: /var/run/containerd/containerd.sock

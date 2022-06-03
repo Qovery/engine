@@ -3,7 +3,7 @@
 apiVersion: crd.k8s.amazonaws.com/v1alpha1
 kind: ENIConfig
 metadata:
-  name: {{ required ".Values.eniConfig.region must be specified" $.Values.eniConfig.region }}{{ $key }}
+  name: {{ $key }}
 spec:
   {{- if $value.securityGroups }}
   securityGroups:
