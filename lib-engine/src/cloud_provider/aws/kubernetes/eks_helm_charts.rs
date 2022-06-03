@@ -5,6 +5,7 @@ use crate::cloud_provider::helm::{
     ClusterAgentContext, CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
+use crate::cmd::helm_utils::get_common_helm_chart_version;
 use crate::cmd::helm_utils::CRDSUpdate;
 use crate::cmd::kubectl::{kubectl_delete_crash_looping_pods, kubectl_exec_get_daemonset, kubectl_exec_with_output};
 use crate::dns_provider::DnsProviderConfiguration;
@@ -203,10 +204,9 @@ pub fn eks_aws_helm_charts(
         },
     };
 
-    let aws_node_term_handler = CommonChart {
+    let mut aws_node_term_handler = CommonChart {
         chart_info: ChartInfo {
             name: "aws-node-term-handler".to_string(),
-            last_breaking_version_requiring_restart: Some(Version::new(0, 16, 1)),
             path: chart_path("charts/aws-node-termination-handler"),
             values: vec![
                 ChartSetValue {
@@ -245,6 +245,14 @@ pub fn eks_aws_helm_charts(
             ..Default::default()
         },
     };
+
+    // pod should be recreated each update according to documentation
+    // https://artifacthub.io/packages/helm/aws/aws-node-termination-handler#installing-the-chart
+    aws_node_term_handler.chart_info.last_breaking_version_requiring_restart =
+        match get_common_helm_chart_version(&aws_node_term_handler.chart_info) {
+            Ok(chart_version) => chart_version,
+            Err(_) => None,
+        };
 
     let aws_ui_view = CommonChart {
         chart_info: ChartInfo {

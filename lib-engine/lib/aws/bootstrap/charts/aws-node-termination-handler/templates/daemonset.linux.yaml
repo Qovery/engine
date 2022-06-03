@@ -3,8 +3,9 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: {{ include "aws-node-termination-handler.fullname" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "aws-node-termination-handler.labels" . | nindent 4 }}
+    {{- include "aws-node-termination-handler.labelsDaemonset" . | nindent 4 }}
 spec:
   {{- with .Values.updateStrategy }}
   updateStrategy:
@@ -45,6 +46,10 @@ spec:
       {{- end }}
       hostNetwork: {{ .Values.useHostNetwork }}
       dnsPolicy: {{ default .Values.linuxDnsPolicy .Values.dnsPolicy }}
+      {{- with .Values.dnsConfig }}
+      dnsConfig:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: aws-node-termination-handler
           {{- with .Values.securityContext }}
@@ -92,6 +97,8 @@ spec:
               value: {{ .Values.cordonOnly | quote }}
             - name: TAINT_NODE
               value: {{ .Values.taintNode | quote }}
+            - name: EXCLUDE_FROM_LOAD_BALANCERS
+              value: {{ .Values.excludeFromLoadBalancers | quote }}
             - name: DELETE_LOCAL_DATA
               value: {{ .Values.deleteLocalData | quote }}
             - name: IGNORE_DAEMON_SETS
@@ -152,9 +159,9 @@ spec:
              containerPort: {{ .Values.probes.httpGet.port }}
           {{- end }}
           {{- if .Values.enablePrometheusServer }}
-            - name: http-metrics
-              protocol: TCP
-              containerPort: {{ .Values.prometheusServerPort }}
+           - name: http-metrics
+             protocol: TCP
+             containerPort: {{ .Values.prometheusServerPort }}
           {{- end }}
           {{- end }}
           {{- if .Values.enableProbesServer }}

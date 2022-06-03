@@ -3,9 +3,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
   name: {{ template "aws-node-termination-handler.fullname" . }}
-  {{- if .Values.podMonitor.namespace }}
-  namespace: {{ .Values.podMonitor.namespace }}
-  {{- end }}
+  namespace: {{ default .Release.Namespace .Values.podMonitor.namespace }}
   labels:
     {{- include "aws-node-termination-handler.labels" . | nindent 4 }}
   {{- with .Values.podMonitor.labels }}

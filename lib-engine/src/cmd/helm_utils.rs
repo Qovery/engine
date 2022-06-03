@@ -348,23 +348,12 @@ pub fn get_common_helm_chart_version(chart: &ChartInfo) -> Result<Option<Version
         }
     };
 
-    if !chart_yaml.app_version.is_empty() {
-        return match Version::parse(chart_yaml.app_version.as_str()) {
-            Ok(version) => Ok(Some(version)),
-            Err(e) => Err(CmdError(
-                chart.clone().name,
-                HelmCommand::UPGRADE,
-                CommandError::new(
-                    format!("Unable to get chart version for {}.", chart.name.clone()),
-                    Some(e.to_string()),
-                    None,
-                ),
-            )),
-        };
-    }
-
     if !chart_yaml.version.is_empty() {
-        return match Version::parse(chart_yaml.version.as_str()) {
+        let mut chart_version = chart_yaml.version;
+        if chart_version.starts_with('v') {
+            chart_version = chart_version[1..].to_string();
+        }
+        return match Version::parse(chart_version.as_str()) {
             Ok(version) => Ok(Some(version)),
             Err(e) => Err(CmdError(
                 chart.clone().name,
