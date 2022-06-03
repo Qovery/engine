@@ -1,13 +1,15 @@
 {{- if .Values.podDisruptionBudget.enabled }}
-apiVersion: policy/v1beta1
+apiVersion: {{ include "k8s-prometheus-adapter.pdb.apiVersion" . }}
 kind: PodDisruptionBudget
 metadata:
   name: {{ template "k8s-prometheus-adapter.fullname" . }}
+  namespace: {{ include "k8s-prometheus-adapter.namespace" . }}
+  {{- if .Values.customAnnotations }}
+  annotations:
+  {{- toYaml .Values.customAnnotations | nindent 4 }}
+  {{- end }}
   labels:
-    app: {{ template "k8s-prometheus-adapter.name" . }}
-    chart: {{ template "k8s-prometheus-adapter.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
+    {{- include "k8s-prometheus-adapter.labels" . | indent 4 }}
 spec:
   {{- if .Values.podDisruptionBudget.minAvailable }}
   minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
@@ -17,6 +19,5 @@ spec:
   {{- end  }}
   selector:
     matchLabels:
-      app: {{ template "k8s-prometheus-adapter.name" . }}
-      release: {{ .Release.Name }}
+      {{- include "k8s-prometheus-adapter.selectorLabels" . | indent 6 }}
 {{- end }}

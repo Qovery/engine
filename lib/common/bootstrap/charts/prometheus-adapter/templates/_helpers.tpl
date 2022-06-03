@@ -25,11 +25,43 @@ If release name contains chart name it will be used as a full name.
 {{- end -}}
 
 {{/*
+Allow the release namespace to be overridden for multi-namespace deployments in combined charts
+*/}}
+{{- define "k8s-prometheus-adapter.namespace" -}}
+{{- default .Release.Namespace .Values.namespaceOverride -}}
+{{- end -}}
+
+{{/*
 Create chart name and version as used by the chart label.
 */}}
 {{- define "k8s-prometheus-adapter.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
+
+{{/*
+Generate basic labels
+*/}}
+{{- define "k8s-prometheus-adapter.labels" }}
+helm.sh/chart: {{ include "k8s-prometheus-adapter.chart" . }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+app.kubernetes.io/component: metrics
+app.kubernetes.io/part-of: {{ template "k8s-prometheus-adapter.name" . }}
+{{- include "k8s-prometheus-adapter.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+{{- if .Values.customLabels }}
+{{ toYaml .Values.customLabels }}
+{{- end }}
+{{- end }}
+
+{{/*
+Selector labels
+*/}}
+{{- define "k8s-prometheus-adapter.selectorLabels" }}
+app.kubernetes.io/name: {{ include "k8s-prometheus-adapter.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
 
 {{/*
 Create the name of the service account to use
@@ -39,5 +71,14 @@ Create the name of the service account to use
     {{ default (include "k8s-prometheus-adapter.fullname" .) .Values.serviceAccount.name }}
 {{- else -}}
     {{ default "default" .Values.serviceAccount.name }}
+{{- end -}}
+{{- end -}}
+
+{{/* Get Policy API Version */}}
+{{- define "k8s-prometheus-adapter.pdb.apiVersion" -}}
+{{- if and (.Capabilities.APIVersions.Has "policy/v1") (semverCompare ">= 1.21-0" .Capabilities.KubeVersion.Version) -}}
+    {{- print "policy/v1" -}}
+{{- else -}}
+    {{- print "policy/v1beta1" -}}
 {{- end -}}
 {{- end -}}

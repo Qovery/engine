@@ -544,6 +544,7 @@ pub fn eks_aws_helm_charts(
         chart_info: ChartInfo {
             name: "prometheus-adapter".to_string(),
             path: chart_path("common/charts/prometheus-adapter"),
+            last_breaking_version_requiring_restart: Some(Version::new(3, 3, 1)),
             namespace: prometheus_namespace,
             values: vec![
                 ChartSetValue {
@@ -565,11 +566,11 @@ pub fn eks_aws_helm_charts(
                 // resources limits
                 ChartSetValue {
                     key: "resources.limits.cpu".to_string(),
-                    value: "200m".to_string(),
+                    value: "250m".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.cpu".to_string(),
-                    value: "200m".to_string(),
+                    value: "250m".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.limits.memory".to_string(),

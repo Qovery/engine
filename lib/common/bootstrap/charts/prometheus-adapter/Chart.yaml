@@ -1,7 +1,7 @@
 apiVersion: v1
-appVersion: v0.8.4
+appVersion: v0.9.1
 description: A Helm chart for k8s prometheus adapter
-home: https://github.com/DirectXMan12/k8s-prometheus-adapter
+home: https://github.com/kubernetes-sigs/prometheus-adapter
 keywords:
 - hpa
 - metrics
@@ -16,5 +16,5 @@ maintainers:
 name: prometheus-adapter
 sources:
 - https://github.com/kubernetes/charts
-- https://github.com/DirectXMan12/k8s-prometheus-adapter
-version: 2.15.2
+- https://github.com/kubernetes-sigs/prometheus-adapter
+version: 3.3.1
