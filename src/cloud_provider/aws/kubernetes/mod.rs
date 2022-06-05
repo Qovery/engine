@@ -14,6 +14,7 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
 };
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
+use crate::cloud_provider::aws::kubernetes::vault::{ClusterSecretsAws, ClusterSecretsIoAws};
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
@@ -23,7 +24,6 @@ use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::utilities::{wait_until_port_is_open, TcpCheckSource};
 use crate::cloud_provider::CloudProvider;
-use crate::cmd;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
@@ -33,10 +33,9 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::{Context, Features, ListenersHelper, QoveryIdentifier, ToHelmString, ToTerraformString};
 use crate::object_storage::s3::S3;
-use crate::secret_manager::io::ClusterSecretsIo;
-use crate::secret_manager::vault;
-use crate::secret_manager::vault::{ClusterSecrets, QVaultClient};
+use crate::secret_manager::vault::QVaultClient;
 use crate::string::terraform_list_format;
+use crate::{cmd, secret_manager};
 
 pub mod ec2;
 mod ec2_helm_charts;
@@ -44,6 +43,7 @@ pub mod eks;
 pub mod eks_helm_charts;
 pub mod node;
 pub mod roles;
+mod vault;
 
 // https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -629,8 +629,8 @@ fn create(
         return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
     }
 
-    let mut cluster_secrets = vault::ClusterSecrets::new_from_cluster_secrets_io(
-        ClusterSecretsIo::new(
+    let mut cluster_secrets = ClusterSecretsAws::new_from_cluster_secrets_io(
+        ClusterSecretsIoAws::new(
             kubernetes.cloud_provider().access_key_id(),
             kubernetes.region(),
             kubernetes.cloud_provider().access_key_id(),
@@ -1432,7 +1432,7 @@ fn delete(
     // delete info on vault
     let vault_conn = QVaultClient::new(event_details);
     if let Ok(vault_conn) = vault_conn {
-        let mount = ClusterSecrets::get_vault_mount_name(kubernetes.context().is_test_cluster());
+        let mount = secret_manager::vault::get_vault_mount_name(kubernetes.context().is_test_cluster());
 
         // ignore on failure
         let _ = vault_conn.delete_secret(mount.as_str(), kubernetes.id());
