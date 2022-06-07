@@ -245,14 +245,14 @@ pub enum InfrastructureStep {
     Create,
     /// Created: cluster creation is ok.
     Created,
+    /// CreateError: error on creating a cluster.
+    CreateError,
     /// Pause: pausing a cluster.
     Pause,
     /// Paused: cluster pause is ok.
     Paused,
-    /// Resume: resume a paused cluster.
-    Resume,
-    /// Resumed: cluster resume is ok.
-    Resumed,
+    /// PauseError: error on pausing a cluster.
+    PauseError,
     /// Upgrade: upgrade a cluster.
     Upgrade,
     /// Upgraded: cluster upgrade is ok.
@@ -265,6 +265,8 @@ pub enum InfrastructureStep {
     Delete,
     /// Deleted: cluster deletion is ok.
     Deleted,
+    /// DeleteError: error on deleting a cluster.
+    DeleteError,
 }
 
 impl Display for InfrastructureStep {
@@ -279,13 +281,14 @@ impl Display for InfrastructureStep {
                 InfrastructureStep::Upgrade => "upgrade",
                 InfrastructureStep::Downgrade => "downgrade",
                 InfrastructureStep::Delete => "delete",
-                InfrastructureStep::Resume => "resume",
                 InfrastructureStep::Created => "created",
                 InfrastructureStep::Paused => "paused",
-                InfrastructureStep::Resumed => "resumed",
                 InfrastructureStep::Upgraded => "upgraded",
                 InfrastructureStep::Downgraded => "downgraded",
                 InfrastructureStep::Deleted => "deleted",
+                InfrastructureStep::CreateError => "create-error",
+                InfrastructureStep::PauseError => "pause-error",
+                InfrastructureStep::DeleteError => "delete-error",
             },
         )
     }
@@ -607,10 +610,6 @@ mod tests {
             (
                 Stage::Infrastructure(InfrastructureStep::Delete),
                 InfrastructureStep::Delete.to_string(),
-            ),
-            (
-                Stage::Infrastructure(InfrastructureStep::Resume),
-                InfrastructureStep::Resume.to_string(),
             ),
             (
                 Stage::Infrastructure(InfrastructureStep::Pause),

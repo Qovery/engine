@@ -12,8 +12,12 @@ use qovery_engine::cmd::docker::Docker;
 use url::Url;
 
 use qovery_engine::error::{EngineError, EngineErrorCause};
+use qovery_engine::errors;
 use qovery_engine::errors::ErrorMessageVerbosity;
-use qovery_engine::io_models::{Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope};
+use qovery_engine::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+use qovery_engine::io_models::{
+    Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope, QoveryIdentifier,
+};
 use qovery_engine::logger::Logger;
 use qovery_engine::object_storage::errors::ObjectStorageError;
 use qovery_engine::transaction::{RollbackError, StepName, Transaction, TransactionResult};
@@ -77,6 +81,103 @@ impl InfrastructureTask {
             self.id().to_string(),
             *self.created_at(),
         )
+    }
+
+    fn handle_transaction_result(&self, logger: Box<dyn Logger>, transaction_result: TransactionResult) {
+        match transaction_result {
+            TransactionResult::Ok => {
+                let action_context = self.action_context(ProgressLevel::Info);
+                self.send_progress(logger.clone(), action_context, None, None);
+            }
+            TransactionResult::Rollback(engine_error) => {
+                let action_context = self.action_context(ProgressLevel::Warn);
+                self.send_progress(
+                    logger.clone(),
+                    action_context,
+                    Some(format_engine_error_output(
+                        engine_error.to_legacy_engine_error(),
+                        None,
+                        ErrorMessageVerbosity::FullDetailsWithoutEnvVars,
+                    )),
+                    Some(engine_error),
+                );
+            }
+            TransactionResult::UnrecoverableError(engine_error, rollback_err) => {
+                let action_context = self.action_context(ProgressLevel::Error);
+                self.send_progress(
+                    logger.clone(),
+                    action_context,
+                    Some(format_engine_error_output(
+                        engine_error.to_legacy_engine_error(),
+                        Some(rollback_err),
+                        ErrorMessageVerbosity::FullDetailsWithoutEnvVars,
+                    )),
+                    Some(engine_error),
+                );
+            }
+            TransactionResult::Canceled => {
+                // should never happen by design
+                error!("Infrastructure task should never been canceled");
+            }
+        }
+    }
+
+    fn send_progress(
+        &self,
+        logger: Box<dyn Logger>,
+        context: ActionContext,
+        message: Option<String>,
+        option_engine_error: Option<errors::EngineError>,
+    ) {
+        let kubernetes = &self.request.cloud_provider.kubernetes;
+        if let Some(engine_error) = option_engine_error {
+            let infrastructure_step = match self.request.action {
+                Action::Create => InfrastructureStep::CreateError,
+                Action::Pause => InfrastructureStep::PauseError,
+                Action::Delete => InfrastructureStep::DeleteError,
+            };
+            let event_message =
+                EventMessage::new_from_safe(format!("Kubernetes cluster failure {}", &infrastructure_step));
+            let engine_event = EngineEvent::Error(engine_error, Some(event_message));
+
+            logger.log(engine_event);
+
+            let status = match self.request.action {
+                Action::Create => Status::new(State::DeploymentError, message, context),
+                Action::Pause => Status::new(State::PauseError, message, context),
+                Action::Delete => Status::new(State::DeleteError, message, context),
+            };
+            self.send_status(status)
+        } else {
+            let infrastructure_step = match self.request.action {
+                Action::Create => InfrastructureStep::Created,
+                Action::Pause => InfrastructureStep::Paused,
+                Action::Delete => InfrastructureStep::Deleted,
+            };
+            let event_message =
+                EventMessage::new_from_safe(format!("Kubernetes cluster successfully {}", &infrastructure_step));
+            let engine_event = EngineEvent::Info(
+                EventDetails::new(
+                    Some(self.request.cloud_provider.kind.clone()),
+                    QoveryIdentifier::from(self.request.organization_id.to_string()),
+                    QoveryIdentifier::new_from_long_id(kubernetes.long_id.to_string()),
+                    QoveryIdentifier::from(self.request.id.to_string()),
+                    Some(kubernetes.region.to_string()),
+                    Stage::Infrastructure(infrastructure_step),
+                    Transmitter::Kubernetes(kubernetes.id.to_string(), kubernetes.name.to_string()),
+                ),
+                event_message,
+            );
+
+            logger.log(engine_event);
+
+            let status = match self.request.action {
+                Action::Create => Status::new(State::Deployed, message, context),
+                Action::Pause => Status::new(State::Paused, message, context),
+                Action::Delete => Status::new(State::Deleted, message, context),
+            };
+            self.send_status(status)
+        }
     }
 }
 
@@ -160,7 +261,7 @@ impl Task for InfrastructureTask {
             Action::Delete => tx.delete_kubernetes(),
         };
 
-        handle_transaction_result(tx.commit(), self, &self.request, self.action_context(ProgressLevel::Info));
+        self.handle_transaction_result(logger.clone(), tx.commit());
 
         // only store if not running on a workstation
         if env::var("DEPLOY_FROM_FILE_KIND").is_err() {

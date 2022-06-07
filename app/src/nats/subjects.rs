@@ -31,9 +31,10 @@ impl Subject {
 
         Subject {
             name: format!(
-                "engine.logs.{}.{}",
+                "engine.infra.logs.{}.{}.{}",
                 event_details.organisation_id().to_string().to_lowercase(),
                 event_details.cluster_id().to_string().to_lowercase(),
+                event_details.execution_id().to_string().to_lowercase(),
             ),
         }
     }

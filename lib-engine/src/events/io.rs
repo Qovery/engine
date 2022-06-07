@@ -3,25 +3,34 @@
 use crate::cloud_provider::io::Kind;
 use crate::errors::io::EngineError;
 use crate::events;
+use chrono::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
-#[serde(tag = "type")]
+#[serde(untagged)]
 #[serde(rename_all = "lowercase")]
 pub enum EngineEvent {
     Debug {
+        r#type: String,
+        timestamp: DateTime<Utc>,
         details: EventDetails,
         message: EventMessage,
     },
     Info {
+        r#type: String,
+        timestamp: DateTime<Utc>,
         details: EventDetails,
         message: EventMessage,
     },
     Warning {
+        r#type: String,
+        timestamp: DateTime<Utc>,
         details: EventDetails,
         message: EventMessage,
     },
     Error {
+        r#type: String,
+        timestamp: DateTime<Utc>,
         error: EngineError,
         message: Option<EventMessage>,
     },
@@ -29,20 +38,29 @@ pub enum EngineEvent {
 
 impl From<events::EngineEvent> for EngineEvent {
     fn from(event: events::EngineEvent) -> Self {
+        let timestamp = Utc::now();
         match event {
             events::EngineEvent::Debug(d, m) => EngineEvent::Debug {
+                r#type: "debug".to_string(),
+                timestamp,
                 details: EventDetails::from(d),
                 message: EventMessage::from(m),
             },
             events::EngineEvent::Info(d, m) => EngineEvent::Info {
+                r#type: "info".to_string(),
+                timestamp,
                 details: EventDetails::from(d),
                 message: EventMessage::from(m),
             },
             events::EngineEvent::Warning(d, m) => EngineEvent::Warning {
+                r#type: "warning".to_string(),
+                timestamp,
                 details: EventDetails::from(d),
                 message: EventMessage::from(m),
             },
             events::EngineEvent::Error(e, m) => EngineEvent::Error {
+                r#type: "error".to_string(),
+                timestamp,
                 error: EngineError::from(e),
                 message: m.map(EventMessage::from),
             },
@@ -110,16 +128,17 @@ pub enum InfrastructureStep {
     LoadConfiguration,
     Create,
     Created,
+    CreateError,
     Pause,
     Paused,
-    Resume,
-    Resumed,
+    PauseError,
     Downgrade,
     Downgraded,
     Upgrade,
     Upgraded,
     Delete,
     Deleted,
+    DeleteError,
 }
 
 impl From<events::InfrastructureStep> for InfrastructureStep {
@@ -130,14 +149,15 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
             events::InfrastructureStep::Pause => InfrastructureStep::Pause,
             events::InfrastructureStep::Upgrade => InfrastructureStep::Upgrade,
             events::InfrastructureStep::Delete => InfrastructureStep::Delete,
-            events::InfrastructureStep::Resume => InfrastructureStep::Resume,
             events::InfrastructureStep::Downgrade => InfrastructureStep::Downgrade,
             events::InfrastructureStep::Created => InfrastructureStep::Created,
             events::InfrastructureStep::Paused => InfrastructureStep::Paused,
-            events::InfrastructureStep::Resumed => InfrastructureStep::Resumed,
             events::InfrastructureStep::Upgraded => InfrastructureStep::Upgraded,
             events::InfrastructureStep::Downgraded => InfrastructureStep::Downgraded,
             events::InfrastructureStep::Deleted => InfrastructureStep::Deleted,
+            events::InfrastructureStep::CreateError => InfrastructureStep::CreateError,
+            events::InfrastructureStep::PauseError => InfrastructureStep::PauseError,
+            events::InfrastructureStep::DeleteError => InfrastructureStep::DeleteError,
         }
     }
 }
@@ -266,7 +286,7 @@ impl From<events::Transmitter> for Transmitter {
 #[serde(rename_all = "lowercase")]
 pub struct EventDetails {
     provider_kind: Option<Kind>,
-    organisation_id: String,
+    organization_id: String,
     cluster_id: String,
     execution_id: String,
     region: Option<String>,
@@ -279,7 +299,7 @@ impl From<events::EventDetails> for EventDetails {
         let provider_kind = details.provider_kind.map(Kind::from);
         EventDetails {
             provider_kind,
-            organisation_id: details.organisation_id.to_string(),
+            organization_id: details.organisation_id.to_string(),
             cluster_id: details.cluster_id.to_string(),
             execution_id: details.execution_id.to_string(),
             region: details.region,
