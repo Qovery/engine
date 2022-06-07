@@ -633,7 +633,7 @@ fn create(
         ClusterSecretsIoAws::new(
             kubernetes.cloud_provider().access_key_id(),
             kubernetes.region(),
-            kubernetes.cloud_provider().access_key_id(),
+            kubernetes.cloud_provider().secret_access_key(),
             None,
             None,
             kubernetes.kind(),
