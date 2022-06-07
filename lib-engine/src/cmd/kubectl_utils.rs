@@ -7,7 +7,10 @@ use retry::OperationResult;
 use std::path::Path;
 use std::time::Duration;
 
-pub fn kubectl_are_pods_executed<P>(kubernetes_config: P, envs: &[(String, String)]) -> Result<(), CommandError>
+pub fn kubectl_are_qovery_infra_pods_executed<P>(
+    kubernetes_config: P,
+    envs: &[(String, String)],
+) -> Result<(), CommandError>
 where
     P: AsRef<Path>,
 {
@@ -20,7 +23,8 @@ where
         ) {
             Ok(res) => {
                 for pod in res.items {
-                    if pod.status.phase == KubernetesPodStatusPhase::Pending {
+                    if !pod.metadata.namespace.starts_with('z') && pod.status.phase == KubernetesPodStatusPhase::Pending
+                    {
                         return OperationResult::Retry(CommandError::new_from_safe_message(
                             "Pods didn't restart yet. Waiting...".to_string(),
                         ));

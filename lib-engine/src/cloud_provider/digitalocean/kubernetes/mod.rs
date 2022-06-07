@@ -32,7 +32,7 @@ use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{
     do_kubectl_exec_get_loadbalancer_id, kubectl_exec_get_all_namespaces, kubectl_exec_get_events,
 };
-use crate::cmd::kubectl_utils::kubectl_are_pods_executed;
+use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
@@ -646,10 +646,10 @@ impl DOKS {
 
         let chart_prefix_path = &temp_dir;
 
-        if let Err(e) = kubectl_are_pods_executed(kubeconfig_path, &credentials_environment_variables) {
+        if let Err(e) = kubectl_are_qovery_infra_pods_executed(kubeconfig_path, &credentials_environment_variables) {
             self.logger().log(EngineEvent::Warning(
                 event_details.clone(),
-                EventMessage::new_from_safe(format!("Didn't manage to restart all paused pods: {}", e.to_string())),
+                EventMessage::new_from_safe(format!("Didn't manage to restart all paused pods: {}", e)),
             ));
         }
 
