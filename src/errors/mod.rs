@@ -788,7 +788,7 @@ impl EngineError {
     }
 
     /// Converts to legacy engine error easing migration.
-    pub fn to_legacy_engine_error(self) -> LegacyEngineError {
+    pub fn to_legacy_engine_error(&self) -> LegacyEngineError {
         LegacyEngineError::new(
             EngineErrorCause::Internal,
             EngineErrorScope::from(self.event_details.transmitter()),
