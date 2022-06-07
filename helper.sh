@@ -28,6 +28,7 @@ export GITLAB_LOG_OUTPUT_DIR="$CI_PROJECT_DIR/gitlab-log-utilities/output"
 export LIB_ROOT_DIR=$(pwd)/$ENGINE_DIR/lib
 export RUNNING_ON_CI=0
 export ENGINE_BRANCH=""
+export DEFAULT_ENGINE_IMAGE_NAME="qoveryrd/engine"
 
 ## Main functions
 
@@ -138,11 +139,18 @@ function build_image() { ## Build Engine image locally. Args: <tag_version>
   export DOCKER_BUILDKIT=1
   export SCCACHE_ARGS=""
   if [ ! -z $CI_SCCACHE_REDIS ] ; then
-    SCCACHE_ARGS=$CI_SCCACHE_REDIS
+    SCCACHE_ARGS="--build-arg SCCACHE_REDIS=$CI_SCCACHE_REDIS"
   else
     echo "-> SCCACHE will not use Redis because CI_SCCACHE_REDIS isn't set!!!"
   fi
-  docker build --network "host" --build-arg SCCACHE_REDIS=$CI_SCCACHE_REDIS -t qoveryrd/engine:${tag} .
+
+  # disable sccache?
+  RUSTC="/usr/bin/sccache"
+  if [ ! -z $DISABLE_SCCACHE ] && [ $DISABLE_SCCACHE -eq 1 ]; then
+    RUSTC="/usr/bin/rustc"
+  fi
+  RUSTC_WRAPPER="--build-arg RUSTC_WRAPPER=$RUSTC"
+  docker build --network "host" $RUSTC_WRAPPER $SCCACHE_ARGS -t ${DEFAULT_ENGINE_IMAGE_NAME}:${tag} .
 
   rm -f docker/engine/load.sh
   rm -f bin_versions
@@ -169,7 +177,7 @@ function push_image() { ## Push Engine local image with current commit ID as tag
   set -e
 
   docker login -u $DOCKER_LOGIN -p $DOCKER_TOKEN
-  docker push qoveryrd/engine:${tag}
+  docker push ${DEFAULT_ENGINE_IMAGE_NAME}:${tag}
 }
 
 function push_ci_image() { ## Push CI local image with current commit ID as tag
@@ -189,7 +197,34 @@ function new_release() { ## Release a new engine version with commit ID as tag p
   build_image
   push_image
 
-  echo -e "\e[92mNew image name is: qoveryrd/engine:${tag}\e[0m"
+  echo -e "\e[92mNew image name is: ${DEFAULT_ENGINE_IMAGE_NAME}:${tag}\e[0m"
+}
+function prod_release() { ## Release a new engine version with commit ID as tag prepare_engine
+  set -e
+  git_tag=$(generate_image_tag)
+  archive_dir="./engine_$git_tag"
+  dest_folder="dist/engine_linux_amd64"
+
+  check_untracked_files
+  build_image
+
+  # create an archive from the required files
+  # 1. get content from docker image
+  container_id=$(docker create ${DEFAULT_ENGINE_IMAGE_NAME}:${git_tag})
+  test -d $archive_dir && rm -Rf $archive_dir
+  docker cp -a $container_id:/home/qovery $archive_dir
+  docker rm "$container_id"
+  # 2. clean cache and uneeded data
+  rm -Rf $archive_dir/.* || echo "clean done"
+  # 3. generate archive name
+  mkdir -p $dest_folder
+  tar -czf $dest_folder/engine.tgz $archive_dir
+  git tag v1.0-$git_tag
+ 
+  goreleaser release --rm-dist
+  git tag -d v1.0-$git_tag
+
+  echo -e "\e[92mNew image name is: ${DEFAULT_ENGINE_IMAGE_NAME}:${git_tag}\e[0m"
 }
 
 function set_release_ga() { ## Release a new engine version and mark it as globally available
@@ -268,7 +303,7 @@ buildResources.limits.ephemeral-storage="30Gi"
 
 function upgrade_on_dev() {
   tag=$(generate_image_tag)
-  kubectl --kubeconfig=$DO_DEV_KUBECONFIG -n qovery patch statefulset qovery-engine -p "{'spec':{'template':{'spec':{'containers[0]':{'image':'qoveryrd/engine:${tag}'}}}}}"
+  kubectl --kubeconfig=$DO_DEV_KUBECONFIG -n qovery patch statefulset qovery-engine -p "{'spec':{'template':{'spec':{'containers[0]':{'image':'${DEFAULT_ENGINE_IMAGE_NAME}:${tag}'}}}}}"
   kubectl --kubeconfig=$DO_DEV_KUBECONFIG rollout status --watch --timeout=600s -n qovery statefulset/qovery-engine
 }
 
@@ -277,7 +312,7 @@ function downgrade_on_dev() {
     return
   fi
 
-  kubectl --kubeconfig=$DO_DEV_KUBECONFIG -n qovery patch statefulset qovery-engine -p "{'spec':{'template':{'spec':{'containers[0]':{'image':'qoveryrd/engine:$1'}}}}}"
+  kubectl --kubeconfig=$DO_DEV_KUBECONFIG -n qovery patch statefulset qovery-engine -p "{'spec':{'template':{'spec':{'containers[0]':{'image':'${DEFAULT_ENGINE_IMAGE_NAME}:$1'}}}}}"
   kubectl --kubeconfig=$DO_DEV_KUBECONFIG rollout status --watch --timeout=600s -n qovery statefulset/qovery-engine
 }
 
@@ -313,8 +348,14 @@ function single_test() { ## Run a single test. Arg, test name: aws::aws_environm
 }
 
 function use_sccache() {
+  if [ ! -z $DISABLE_SCCACHE ] && [ $DISABLE_SCCACHE -eq 1 ]; then
+    echo "SCCACHE disabled"
+    return
+  fi
   export RUSTC_WRAPPER=/usr/bin/sccache
-  export SCCACHE_REDIS=$CI_SCCACHE_REDIS
+  if [ ! -z $CI_SCCACHE_REDIS ] ; then
+    export SCCACHE_REDIS=$CI_SCCACHE_REDIS
+  fi
   sccache --version
   sccache -s
 }
@@ -452,9 +493,6 @@ case $1 in
 await_docker)
   await_docker
   ;;
-build)
-  build
-  ;;
 build_image)
   build_image
   ;;
@@ -463,6 +501,9 @@ build_ci_image)
   ;;
 new_release)
   new_release
+  ;;
+prod_release)
+  prod_release
   ;;
 push_image)
   push_image

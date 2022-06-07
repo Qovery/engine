@@ -49,11 +49,15 @@ release-image:
   only:
     - merge_requests
 
-release-image-prod:
+release-image-and-binary:
   stage: build-and-lint
   retry: 1
   script:
-    - ./helper.sh new_release
+    - ./helper.sh prod_release
+  variables:
+    # Disable shallow cloning so that goreleaser can diff between tags to
+    # generate a changelog.
+    GIT_DEPTH: 0
   tags:
     - bm-7cpu-12gmem-0g
   when: always

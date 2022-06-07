@@ -16,3 +16,5 @@ qovery-engine/results.xml
 cloned-engine
 cloned_engine
 bin_versions
+/dist/
+/engine_*/

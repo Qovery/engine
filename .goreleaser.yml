@@ -1,0 +1,13 @@
+project_name: engine
+builds:
+  -
+    main: engine.go
+    goos: [linux]
+    goarch: [amd64]
+    binary: engine.tgz
+    hooks:
+      post: echo "build in progress"
+gitlab_urls:
+  use_generic_packages: true
+checksum:
+  name_template: 'checksums.txt'
