@@ -7,7 +7,7 @@ use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::command::QoveryCommand;
 use crate::cmd::helm::HelmCommand::{LIST, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{CannotRollback, CmdError, InvalidKubeConfig, ReleaseDoesNotExist};
-use crate::cmd::structs::{HelmChart, HelmListItem};
+use crate::cmd::structs::{HelmChart, HelmChartVersions, HelmListItem};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EventDetails;
 use semver::Version;
@@ -82,6 +82,12 @@ pub struct ReleaseInfo {
 pub struct ReleaseStatus {
     pub version: u64,
     pub info: ReleaseInfo,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct ChartVersion {
+    pub app_version: u64,
+    pub version: ReleaseInfo,
 }
 
 impl ReleaseStatus {
@@ -283,10 +289,19 @@ impl Helm {
         match values {
             Ok(all_helms) => {
                 for helm in all_helms {
-                    let last_dash_pos = helm.chart.rfind('-').expect("Can't parse helm chart") + 1;
+                    let mut last_dash_pos = helm.chart.rfind('-').expect("Can't parse helm chart") + 1;
+                    if helm.chart[last_dash_pos..].starts_with('v') {
+                        last_dash_pos += 1
+                    }
                     let raw_version = helm.chart[last_dash_pos..].to_string();
-                    let version = Version::from_str(raw_version.as_str()).ok();
-                    helms_charts.push(HelmChart::new(helm.name, helm.namespace, version))
+                    let chart_version = Version::from_str(raw_version.as_str()).ok();
+                    let mut app_version_raw = helm.app_version;
+                    if app_version_raw.starts_with('v') {
+                        app_version_raw = app_version_raw[1..].to_string()
+                    }
+                    let app_version = Version::from_str(app_version_raw.as_str()).ok();
+
+                    helms_charts.push(HelmChart::new(helm.name, helm.namespace, chart_version, app_version))
                 }
 
                 Ok(helms_charts)
@@ -312,11 +327,14 @@ impl Helm {
         chart_name: String,
         namespace: Option<&str>,
         envs: &[(&str, &str)],
-    ) -> Result<Option<Version>, HelmError> {
+    ) -> Result<Option<HelmChartVersions>, HelmError> {
         let deployed_charts = self.list_release(namespace, envs)?;
         for chart in deployed_charts {
             if chart.name == chart_name {
-                return Ok(chart.version);
+                return Ok(Some(HelmChartVersions {
+                    chart_version: chart.chart_version,
+                    app_version: chart.app_version,
+                }));
             }
         }
 
@@ -552,10 +570,10 @@ impl Helm {
         // If current installed version is older than breaking change one, then we delete
         // the chart before applying it.
         if let Some(breaking_version) = &chart.last_breaking_version_requiring_restart {
-            if let Some(installed_version) =
+            if let Some(installed_versions) =
                 self.get_chart_version(chart.name.clone(), Some(chart.get_namespace_string().as_str()), envs)?
             {
-                if installed_version.le(breaking_version) {
+                if installed_versions.chart_version.unwrap().le(breaking_version) {
                     self.uninstall(chart, envs)?;
                 }
             }

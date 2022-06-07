@@ -1,4 +1,4 @@
-{{- if and .Values.persistence.enabled (not .Values.persistence.existingClaim) (eq .Values.persistence.type "statefulset")}}
+{{- if or .Values.headlessService (and .Values.persistence.enabled (not .Values.persistence.existingClaim) (eq .Values.persistence.type "statefulset"))}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -15,4 +15,8 @@ spec:
   selector:
     {{- include "grafana.selectorLabels" . | nindent 4 }}
   type: ClusterIP
+  ports:
+  - protocol: TCP
+    port: 3000
+    targetPort: 3000
 {{- end }}

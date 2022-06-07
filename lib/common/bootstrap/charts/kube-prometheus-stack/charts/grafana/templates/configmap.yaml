@@ -60,7 +60,7 @@ data:
         {{- end }}
       {{- end }}
     {{- end }}
-
+  {{ $dashboardProviders := .Values.dashboardProviders }}
   {{- range $provider, $dashboards := .Values.dashboards }}
     {{- range $key, $value := $dashboards }}
       {{- if (or (hasKey $value "gnetId") (hasKey $value "url")) }}
@@ -74,9 +74,15 @@ data:
         {{- end }}
     -H "Content-Type: application/json;charset=UTF-8" \
       {{ end }}
-    {{- if $value.url -}}"{{ $value.url }}"{{- else -}}"https://grafana.com/api/dashboards/{{ $value.gnetId }}/revisions/{{- if $value.revision -}}{{ $value.revision }}{{- else -}}1{{- end -}}/download"{{- end -}}{{ if $value.datasource }} | sed '/-- .* --/! s/"datasource":.*,/"datasource": "{{ $value.datasource }}",/g'{{ end }}{{- if $value.b64content -}} | base64 -d {{- end -}} \
-    > "/var/lib/grafana/dashboards/{{ $provider }}/{{ $key }}.json"
+    {{- $dpPath := "" -}}
+    {{- range $kd := (index $dashboardProviders "dashboardproviders.yaml").providers -}}
+      {{- if eq $kd.name $provider -}}
+      {{- $dpPath = $kd.options.path -}}
       {{- end -}}
-    {{- end }}
+    {{- end -}}
+    {{- if $value.url -}}"{{ $value.url }}"{{- else -}}"https://grafana.com/api/dashboards/{{ $value.gnetId }}/revisions/{{- if $value.revision -}}{{ $value.revision }}{{- else -}}1{{- end -}}/download"{{- end -}}{{ if $value.datasource }} | sed '/-- .* --/! s/"datasource":.*,/"datasource": "{{ $value.datasource }}",/g'{{ end }}{{- if $value.b64content -}} | base64 -d {{- end -}} \
+    > "{{- if $dpPath -}}{{ $dpPath }}{{- else -}}/var/lib/grafana/dashboards/{{ $provider }}{{- end -}}/{{ $key }}.json"
+      {{- end }}
+    {{- end -}}
   {{- end }}
 {{- end }}

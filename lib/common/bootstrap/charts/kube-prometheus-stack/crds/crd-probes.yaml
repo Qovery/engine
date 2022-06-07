@@ -1,11 +1,10 @@
-# https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.49.0/example/prometheus-operator-crd/monitoring.coreos.com_probes.yaml
-
+# https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.56.3/example/prometheus-operator-crd/monitoring.coreos.com_probes.yaml
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.4.1
+    controller-gen.kubebuilder.io/version: v0.8.0
   creationTimestamp: null
   name: probes.monitoring.coreos.com
 spec:
@@ -16,6 +15,8 @@ spec:
     kind: Probe
     listKind: ProbeList
     plural: probes
+    shortNames:
+    - prb
     singular: probe
   scope: Namespaced
   versions:
@@ -40,6 +41,33 @@ spec:
             description: Specification of desired Ingress selection for target discovery
               by Prometheus.
             properties:
+              authorization:
+                description: Authorization section for this endpoint
+                properties:
+                  credentials:
+                    description: The secret's key that contains the credentials of
+                      the request
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be
+                          a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be
+                          defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  type:
+                    description: Set the authentication type. Defaults to Bearer,
+                      Basic will cause an error
+                    type: string
+                type: object
               basicAuth:
                 description: 'BasicAuth allow an endpoint to authenticate over basic
                   authentication. More info: https://prometheus.io/docs/operating/configuration/#endpoint'
@@ -105,15 +133,170 @@ spec:
               interval:
                 description: Interval at which targets are probed using the configured
                   prober. If not specified Prometheus' global scrape interval is used.
+                pattern: ^(0|(([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?)$
                 type: string
               jobName:
                 description: The job name assigned to scraped metrics by default.
                 type: string
+              labelLimit:
+                description: Per-scrape limit on number of labels that will be accepted
+                  for a sample. Only valid in Prometheus versions 2.27.0 and newer.
+                format: int64
+                type: integer
+              labelNameLengthLimit:
+                description: Per-scrape limit on length of labels name that will be
+                  accepted for a sample. Only valid in Prometheus versions 2.27.0
+                  and newer.
+                format: int64
+                type: integer
+              labelValueLengthLimit:
+                description: Per-scrape limit on length of labels value that will
+                  be accepted for a sample. Only valid in Prometheus versions 2.27.0
+                  and newer.
+                format: int64
+                type: integer
+              metricRelabelings:
+                description: MetricRelabelConfigs to apply to samples before ingestion.
+                items:
+                  description: 'RelabelConfig allows dynamic rewriting of the label
+                    set, being applied to samples before ingestion. It defines `<metric_relabel_configs>`-section
+                    of Prometheus configuration. More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_configs'
+                  properties:
+                    action:
+                      default: replace
+                      description: Action to perform based on regex matching. Default
+                        is 'replace'
+                      enum:
+                      - replace
+                      - keep
+                      - drop
+                      - hashmod
+                      - labelmap
+                      - labeldrop
+                      - labelkeep
+                      type: string
+                    modulus:
+                      description: Modulus to take of the hash of the source label
+                        values.
+                      format: int64
+                      type: integer
+                    regex:
+                      description: Regular expression against which the extracted
+                        value is matched. Default is '(.*)'
+                      type: string
+                    replacement:
+                      description: Replacement value against which a regex replace
+                        is performed if the regular expression matches. Regex capture
+                        groups are available. Default is '$1'
+                      type: string
+                    separator:
+                      description: Separator placed between concatenated source label
+                        values. default is ';'.
+                      type: string
+                    sourceLabels:
+                      description: The source labels select values from existing labels.
+                        Their content is concatenated using the configured separator
+                        and matched against the configured regular expression for
+                        the replace, keep, and drop actions.
+                      items:
+                        description: LabelName is a valid Prometheus label name which
+                          may only contain ASCII letters, numbers, as well as underscores.
+                        pattern: ^[a-zA-Z_][a-zA-Z0-9_]*$
+                        type: string
+                      type: array
+                    targetLabel:
+                      description: Label to which the resulting value is written in
+                        a replace action. It is mandatory for replace actions. Regex
+                        capture groups are available.
+                      type: string
+                  type: object
+                type: array
               module:
                 description: 'The module to use for probing specifying how to probe
                   the target. Example module configuring in the blackbox exporter:
                   https://github.com/prometheus/blackbox_exporter/blob/master/example.yml'
                 type: string
+              oauth2:
+                description: OAuth2 for the URL. Only valid in Prometheus versions
+                  2.27.0 and newer.
+                properties:
+                  clientId:
+                    description: The secret or configmap containing the OAuth2 client
+                      id
+                    properties:
+                      configMap:
+                        description: ConfigMap containing data to use for the targets.
+                        properties:
+                          key:
+                            description: The key to select.
+                            type: string
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                          optional:
+                            description: Specify whether the ConfigMap or its key
+                              must be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                      secret:
+                        description: Secret containing data to use for the targets.
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must
+                              be a valid secret key.
+                            type: string
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must
+                              be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                    type: object
+                  clientSecret:
+                    description: The secret containing the OAuth2 client secret
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be
+                          a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be
+                          defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  endpointParams:
+                    additionalProperties:
+                      type: string
+                    description: Parameters to append to the token URL
+                    type: object
+                  scopes:
+                    description: OAuth2 scopes used for the token request
+                    items:
+                      type: string
+                    type: array
+                  tokenUrl:
+                    description: The URL to fetch the token from
+                    minLength: 1
+                    type: string
+                required:
+                - clientId
+                - clientSecret
+                - tokenUrl
+                type: object
               prober:
                 description: Specification for the prober to use for probing targets.
                   The prober.URL parameter is required. Targets cannot be probed if
@@ -134,33 +317,50 @@ spec:
                 required:
                 - url
                 type: object
+              sampleLimit:
+                description: SampleLimit defines per-scrape limit on number of scraped
+                  samples that will be accepted.
+                format: int64
+                type: integer
               scrapeTimeout:
                 description: Timeout for scraping metrics from the Prometheus exporter.
+                  If not specified, the Prometheus global scrape interval is used.
+                pattern: ^(0|(([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?)$
                 type: string
+              targetLimit:
+                description: TargetLimit defines a limit on the number of scraped
+                  targets that will be accepted.
+                format: int64
+                type: integer
               targets:
-                description: Targets defines a set of static and/or dynamically discovered
-                  targets to be probed using the prober.
+                description: Targets defines a set of static or dynamically discovered
+                  targets to probe.
                 properties:
                   ingress:
-                    description: Ingress defines the set of dynamically discovered
-                      ingress objects which hosts are considered for probing.
+                    description: ingress defines the Ingress objects to probe and
+                      the relabeling configuration. If `staticConfig` is also defined,
+                      `staticConfig` takes precedence.
                     properties:
                       namespaceSelector:
-                        description: Select Ingress objects by namespace.
+                        description: From which namespaces to select Ingress objects.
                         properties:
                           any:
                             description: Boolean describing whether all namespaces
                               are selected in contrast to a list restricting them.
                             type: boolean
                           matchNames:
-                            description: List of namespace names.
+                            description: List of namespace names to select from.
                             items:
                               type: string
                             type: array
                         type: object
                       relabelingConfigs:
-                        description: 'RelabelConfigs to apply to samples before ingestion.
-                          More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config'
+                        description: 'RelabelConfigs to apply to the label set of
+                          the target before it gets scraped. The original ingress
+                          address is available via the `__tmp_prometheus_ingress_address`
+                          label. It can be used to customize the probed URL. The original
+                          scrape job''s name is available via the `__tmp_prometheus_job_name`
+                          label. More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config'
                         items:
                           description: 'RelabelConfig allows dynamic rewriting of
                             the label set, being applied to samples before ingestion.
@@ -168,8 +368,17 @@ spec:
                             configuration. More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_configs'
                           properties:
                             action:
+                              default: replace
                               description: Action to perform based on regex matching.
                                 Default is 'replace'
+                              enum:
+                              - replace
+                              - keep
+                              - drop
+                              - hashmod
+                              - labelmap
+                              - labeldrop
+                              - labelkeep
                               type: string
                             modulus:
                               description: Modulus to take of the hash of the source
@@ -195,6 +404,10 @@ spec:
                                 separator and matched against the configured regular
                                 expression for the replace, keep, and drop actions.
                               items:
+                                description: LabelName is a valid Prometheus label
+                                  name which may only contain ASCII letters, numbers,
+                                  as well as underscores.
+                                pattern: ^[a-zA-Z_][a-zA-Z0-9_]*$
                                 type: string
                               type: array
                             targetLabel:
@@ -205,7 +418,7 @@ spec:
                           type: object
                         type: array
                       selector:
-                        description: Select Ingress objects by labels.
+                        description: Selector to select the Ingress objects.
                         properties:
                           matchExpressions:
                             description: matchExpressions is a list of label selector
@@ -251,8 +464,9 @@ spec:
                         type: object
                     type: object
                   staticConfig:
-                    description: 'StaticConfig defines static targets which are considers
-                      for probing. More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#static_config.'
+                    description: 'staticConfig defines the static list of targets
+                      to probe and the relabeling configuration. If `ingress` is also
+                      defined, `staticConfig` takes precedence. More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#static_config.'
                     properties:
                       labels:
                         additionalProperties:
@@ -261,8 +475,8 @@ spec:
                           targets.
                         type: object
                       relabelingConfigs:
-                        description: 'RelabelConfigs to apply to samples before ingestion.
-                          More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config'
+                        description: 'RelabelConfigs to apply to the label set of
+                          the targets before it gets scraped. More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config'
                         items:
                           description: 'RelabelConfig allows dynamic rewriting of
                             the label set, being applied to samples before ingestion.
@@ -270,8 +484,17 @@ spec:
                             configuration. More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_configs'
                           properties:
                             action:
+                              default: replace
                               description: Action to perform based on regex matching.
                                 Default is 'replace'
+                              enum:
+                              - replace
+                              - keep
+                              - drop
+                              - hashmod
+                              - labelmap
+                              - labeldrop
+                              - labelkeep
                               type: string
                             modulus:
                               description: Modulus to take of the hash of the source
@@ -297,6 +520,10 @@ spec:
                                 separator and matched against the configured regular
                                 expression for the replace, keep, and drop actions.
                               items:
+                                description: LabelName is a valid Prometheus label
+                                  name which may only contain ASCII letters, numbers,
+                                  as well as underscores.
+                                pattern: ^[a-zA-Z_][a-zA-Z0-9_]*$
                                 type: string
                               type: array
                             targetLabel:
@@ -307,8 +534,7 @@ spec:
                           type: object
                         type: array
                       static:
-                        description: Targets is a list of URLs to probe using the
-                          configured prober.
+                        description: The list of hosts to probe.
                         items:
                           type: string
                         type: array

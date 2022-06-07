@@ -74,6 +74,7 @@ pub struct ItemMetadata {
     pub creation_timestamp: String,
     pub name: String,
     pub resource_version: String,
+    #[serde(default)]
     pub self_link: String,
     pub uid: String,
     pub annotations: HashMap<String, String>,
@@ -377,7 +378,6 @@ pub struct ServerVersion {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct HelmListItem {
     pub name: String,
     pub namespace: String,
@@ -385,7 +385,6 @@ pub struct HelmListItem {
     pub updated: String,
     pub status: String,
     pub chart: String,
-    #[serde(rename = "app_version")]
     pub app_version: String,
 }
 
@@ -393,15 +392,28 @@ pub struct HelmListItem {
 pub struct HelmChart {
     pub name: String,
     pub namespace: String,
-    pub version: Option<Version>,
+    pub chart_version: Option<Version>,
+    pub app_version: Option<Version>,
+}
+
+#[derive(Clone, PartialEq)]
+pub struct HelmChartVersions {
+    pub chart_version: Option<Version>,
+    pub app_version: Option<Version>,
 }
 
 impl HelmChart {
-    pub fn new(name: String, namespace: String, version: Option<Version>) -> HelmChart {
+    pub fn new(
+        name: String,
+        namespace: String,
+        chart_version: Option<Version>,
+        app_version: Option<Version>,
+    ) -> HelmChart {
         HelmChart {
             name,
             namespace,
-            version,
+            chart_version,
+            app_version,
         }
     }
 }

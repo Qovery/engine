@@ -4,17 +4,17 @@ Do not change in-place! In order to change this file first read following link:
 https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack/hack
 */ -}}
 {{- $kubeTargetVersion := default .Capabilities.KubeVersion.GitVersion .Values.kubeTargetVersionOverride }}
-{{- if and (or .Values.grafana.enabled .Values.grafana.forceDeployDashboards) (semverCompare ">=1.14.0-0" $kubeTargetVersion) (semverCompare "<9.9.9-9" $kubeTargetVersion) .Values.grafana.defaultDashboardsEnabled }}
+{{- if and (or .Values.grafana.enabled .Values.grafana.forceDeployDashboards) (semverCompare ">=1.14.0-0" $kubeTargetVersion) (semverCompare "<9.9.9-9" $kubeTargetVersion) .Values.grafana.defaultDashboardsEnabled .Values.nodeExporter.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  namespace: {{ template "kube-prometheus-stack.namespace" . }}
+  namespace: {{ template "kube-prometheus-stack-grafana.namespace" . }}
   name: {{ printf "%s-%s" (include "kube-prometheus-stack.fullname" $) "nodes" | trunc 63 | trimSuffix "-" }}
   annotations:
 {{ toYaml .Values.grafana.sidecar.dashboards.annotations | indent 4 }}
   labels:
     {{- if $.Values.grafana.sidecar.dashboards.label }}
-    {{ $.Values.grafana.sidecar.dashboards.label }}: "1"
+    {{ $.Values.grafana.sidecar.dashboards.label }}: {{ ternary $.Values.grafana.sidecar.dashboards.labelValue "1" (not (empty $.Values.grafana.sidecar.dashboards.labelValue)) | quote }}
     {{- end }}
     app: {{ template "kube-prometheus-stack.name" $ }}-grafana
 {{ include "kube-prometheus-stack.labels" $ | indent 4 }}
@@ -34,13 +34,13 @@ data:
         },
         "editable": false,
         "gnetId": null,
-        "graphTooltip": 0,
+        "graphTooltip": 1,
         "hideControls": false,
         "id": null,
         "links": [
 
         ],
-        "refresh": "",
+        "refresh": "30s",
         "rows": [
             {
                 "collapse": false,
@@ -92,7 +92,7 @@ data:
                         "steppedLine": false,
                         "targets": [
                             {
-                                "expr": "(\n  (1 - rate(node_cpu_seconds_total{job=\"node-exporter\", mode=\"idle\", instance=\"$instance\"}[$__rate_interval]))\n/ ignoring(cpu) group_left\n  count without (cpu)( node_cpu_seconds_total{job=\"node-exporter\", mode=\"idle\", instance=\"$instance\"})\n)\n",
+                                "expr": "(\n  (1 - sum without (mode) (rate(node_cpu_seconds_total{job=\"node-exporter\", mode=~\"idle|iowait|steal\", instance=\"$instance\"}[$__rate_interval])))\n/ ignoring(cpu) group_left\n  count without (cpu, mode) (node_cpu_seconds_total{job=\"node-exporter\", mode=\"idle\", instance=\"$instance\"})\n)\n",
                                 "format": "time_series",
                                 "intervalFactor": 5,
                                 "legendFormat": "{{`{{`}}cpu{{`}}`}}",
@@ -257,8 +257,8 @@ data:
                 "repeat": null,
                 "repeatIteration": null,
                 "repeatRowId": null,
-                "showTitle": false,
-                "title": "Dashboard Row",
+                "showTitle": true,
+                "title": "CPU",
                 "titleSize": "h6",
                 "type": "row"
             },
@@ -381,92 +381,53 @@ data:
                         ]
                     },
                     {
-                        "cacheTimeout": null,
-                        "colorBackground": false,
-                        "colorValue": false,
-                        "colors": [
-                            "rgba(50, 172, 45, 0.97)",
-                            "rgba(237, 129, 40, 0.89)",
-                            "rgba(245, 54, 54, 0.9)"
-                        ],
                         "datasource": "$datasource",
-                        "format": "percent",
-                        "gauge": {
-                            "maxValue": 100,
-                            "minValue": 0,
-                            "show": true,
-                            "thresholdLabels": false,
-                            "thresholdMarkers": true
+                        "fieldConfig": {
+                            "defaults": {
+                                "max": 100,
+                                "min": 0,
+                                "thresholds": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {
+                                            "color": "rgba(50, 172, 45, 0.97)"
+                                        },
+                                        {
+                                            "color": "rgba(237, 129, 40, 0.89)",
+                                            "value": 80
+                                        },
+                                        {
+                                            "color": "rgba(245, 54, 54, 0.9)",
+                                            "value": 90
+                                        }
+                                    ]
+                                },
+                                "unit": "percent"
+                            }
                         },
                         "gridPos": {
 
                         },
                         "id": 5,
-                        "interval": null,
-                        "links": [
-
-                        ],
-                        "mappingType": 1,
-                        "mappingTypes": [
-                            {
-                                "name": "value to text",
-                                "value": 1
-                            },
-                            {
-                                "name": "range to text",
-                                "value": 2
-                            }
-                        ],
-                        "maxDataPoints": 100,
-                        "nullPointMode": "connected",
-                        "nullText": null,
-                        "postfix": "",
-                        "postfixFontSize": "50%",
-                        "prefix": "",
-                        "prefixFontSize": "50%",
-                        "rangeMaps": [
-                            {
-                                "from": "null",
-                                "text": "N/A",
-                                "to": "null"
-                            }
-                        ],
                         "span": 3,
-                        "sparkline": {
-                            "fillColor": "rgba(31, 118, 189, 0.18)",
-                            "full": false,
-                            "lineColor": "rgb(31, 120, 193)",
-                            "show": false
-                        },
-                        "tableColumn": "",
                         "targets": [
                             {
-                                "expr": "100 -\n(\n  avg(node_memory_MemAvailable_bytes{job=\"node-exporter\", instance=\"$instance\"})\n/\n  avg(node_memory_MemTotal_bytes{job=\"node-exporter\", instance=\"$instance\"})\n* 100\n)\n",
+                                "expr": "100 -\n(\n  avg(node_memory_MemAvailable_bytes{job=\"node-exporter\", instance=\"$instance\"}) /\n  avg(node_memory_MemTotal_bytes{job=\"node-exporter\", instance=\"$instance\"})\n* 100\n)\n",
                                 "format": "time_series",
                                 "intervalFactor": 2,
-                                "legendFormat": "",
-                                "refId": "A"
+                                "legendFormat": ""
                             }
                         ],
-                        "thresholds": "80, 90",
                         "title": "Memory Usage",
-                        "type": "singlestat",
-                        "valueFontSize": "80%",
-                        "valueMaps": [
-                            {
-                                "op": "=",
-                                "text": "N/A",
-                                "value": "null"
-                            }
-                        ],
-                        "valueName": "current"
+                        "transparent": false,
+                        "type": "gauge"
                     }
                 ],
                 "repeat": null,
                 "repeatIteration": null,
                 "repeatRowId": null,
-                "showTitle": false,
-                "title": "Dashboard Row",
+                "showTitle": true,
+                "title": "Memory",
                 "titleSize": "h6",
                 "type": "row"
             },
@@ -699,8 +660,8 @@ data:
                 "repeat": null,
                 "repeatIteration": null,
                 "repeatRowId": null,
-                "showTitle": false,
-                "title": "Dashboard Row",
+                "showTitle": true,
+                "title": "Disk",
                 "titleSize": "h6",
                 "type": "row"
             },
@@ -898,8 +859,8 @@ data:
                 "repeat": null,
                 "repeatIteration": null,
                 "repeatRowId": null,
-                "showTitle": false,
-                "title": "Dashboard Row",
+                "showTitle": true,
+                "title": "Network",
                 "titleSize": "h6",
                 "type": "row"
             }
@@ -907,17 +868,17 @@ data:
         "schemaVersion": 14,
         "style": "dark",
         "tags": [
-
+            "node-exporter-mixin"
         ],
         "templating": {
             "list": [
                 {
                     "current": {
-                        "text": "Prometheus",
-                        "value": "Prometheus"
+                        "text": "default",
+                        "value": "default"
                     },
                     "hide": 0,
-                    "label": null,
+                    "label": "Data Source",
                     "name": "datasource",
                     "options": [
 
@@ -935,13 +896,13 @@ data:
                     "datasource": "$datasource",
                     "hide": 0,
                     "includeAll": false,
-                    "label": null,
+                    "label": "Instance",
                     "multi": false,
                     "name": "instance",
                     "options": [
 
                     ],
-                    "query": "label_values(node_exporter_build_info{job=\"node-exporter\"}, instance)",
+                    "query": "label_values(node_uname_info{job=\"node-exporter\", sysname!=\"Darwin\"}, instance)",
                     "refresh": 2,
                     "regex": "",
                     "sort": 0,
@@ -984,8 +945,8 @@ data:
                 "30d"
             ]
         },
-        "timezone": "browser",
-        "title": "Nodes",
+        "timezone": "{{ .Values.grafana.defaultDashboardsTimezone }}",
+        "title": "Node Exporter / Nodes",
         "version": 0
     }
 {{- end }}

@@ -2,10 +2,10 @@ use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
     get_chart_for_cert_manager_config, get_chart_for_cluster_agent, get_chart_for_shell_agent,
     get_engine_helm_action_from_location, ChartInfo, ChartPayload, ChartSetValue, ChartValuesGenerated,
-    ClusterAgentContext, CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces,
-    PrometheusOperatorConfigChart, ShellAgentContext,
+    ClusterAgentContext, CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
+use crate::cmd::helm_utils::CRDSUpdate;
 use crate::cmd::kubectl::{kubectl_delete_crash_looping_pods, kubectl_exec_get_daemonset, kubectl_exec_with_output};
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::{CommandError, ErrorMessageVerbosity};
@@ -467,7 +467,7 @@ pub fn eks_aws_helm_charts(
         },
     };*/
 
-    let kube_prometheus_stack = PrometheusOperatorConfigChart {
+    let kube_prometheus_stack = CommonChart {
         chart_info: ChartInfo {
             name: "kube-prometheus-stack".to_string(),
             path: chart_path("/common/charts/kube-prometheus-stack"),
@@ -475,6 +475,19 @@ pub fn eks_aws_helm_charts(
             // high timeout because on bootstrap, it's one of the biggest dependencies and on upgrade, it can takes time
             // to upgrade because of the CRD and the number of elements it has to deploy
             timeout_in_seconds: 480,
+            crds_update: Some(CRDSUpdate{
+                path:"https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.56.0/example/prometheus-operator-crd".to_string(), 
+                resources: vec![
+                    "monitoring.coreos.com_alertmanagerconfigs.yaml".to_string(),
+                    "monitoring.coreos.com_alertmanagers.yaml".to_string(),
+                    "monitoring.coreos.com_podmonitors.yaml".to_string(),
+                    "monitoring.coreos.com_probes.yaml".to_string(),
+                    "monitoring.coreos.com_prometheuses.yaml".to_string(),
+                    "monitoring.coreos.com_prometheusrules.yaml".to_string(),
+                    "monitoring.coreos.com_servicemonitors.yaml".to_string(),
+                    "monitoring.coreos.com_thanosrulers.yaml".to_string(),
+                ]
+            }),
             values_files: vec![chart_path("chart_values/kube-prometheus-stack.yaml")],
             values: vec![
                 ChartSetValue {
@@ -499,6 +512,14 @@ pub fn eks_aws_helm_charts(
                 },
                 ChartSetValue {
                     key: "prometheusOperator.admissionWebhooks.enabled".to_string(),
+                    value: "false".to_string(),
+                },
+                ChartSetValue {
+                    key: "prometheus-node-exporter.prometheus.monitor.enabled".to_string(),
+                    value: "false".to_string(),
+                },
+                ChartSetValue {
+                    key: "grafana.serviceMonitor.enabled".to_string(),
                     value: "false".to_string(),
                 },
                 // Limits prometheus-node-exporter

@@ -17,7 +17,7 @@ charts:
     version: 4.1.2
   - name: kube-prometheus-stack
     repo_name: prometheus-community
-    version: 17.0.3
+    version: 35.5.0
   - name: aws-node-termination-handler
     repo_name: aws
     dest: aws-bootstrap

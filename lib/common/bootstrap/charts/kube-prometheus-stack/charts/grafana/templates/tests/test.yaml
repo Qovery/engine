@@ -7,25 +7,28 @@ metadata:
     {{- include "grafana.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": test-success
+    "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded"
   namespace: {{ template "grafana.namespace" . }}
 spec:
   serviceAccountName: {{ template "grafana.serviceAccountNameTest" . }}
   {{- if .Values.testFramework.securityContext }}
   securityContext: {{ toYaml .Values.testFramework.securityContext | nindent 4 }}
   {{- end }}
+  {{- $root := . }}
   {{- if .Values.image.pullSecrets }}
   imagePullSecrets:
   {{- range .Values.image.pullSecrets }}
-    - name: {{ . }}
+    - name: {{ tpl . $root }}
   {{- end}}
   {{- end }}
   {{- with .Values.nodeSelector }}
   nodeSelector:
 {{ toYaml . | indent 4 }}
   {{- end }}
+  {{- $root := . }}
   {{- with .Values.affinity }}
   affinity:
-{{ toYaml . | indent 4 }}
+{{ tpl (toYaml .) $root | indent 4 }}
   {{- end }}
   {{- with .Values.tolerations }}
   tolerations:

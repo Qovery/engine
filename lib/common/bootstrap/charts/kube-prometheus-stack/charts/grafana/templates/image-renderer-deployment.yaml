@@ -56,8 +56,9 @@ spec:
       {{- end }}
       {{- if .Values.imageRenderer.image.pullSecrets }}
       imagePullSecrets:
+      {{- $root := . }}
       {{- range .Values.imageRenderer.image.pullSecrets }}
-        - name: {{ . }}
+        - name: {{ tpl . $root }}
       {{- end}}
       {{- end }}
       containers:
@@ -78,6 +79,10 @@ spec:
             - name: {{ .Values.imageRenderer.service.portName }}
               containerPort: {{ .Values.imageRenderer.service.port }}
               protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.imageRenderer.service.portName }}
           env:
             - name: HTTP_PORT
               value: {{ .Values.imageRenderer.service.port | quote }}
@@ -101,9 +106,10 @@ spec:
       nodeSelector:
 {{ toYaml . | indent 8 }}
       {{- end }}
+      {{- $root := . }}
       {{- with .Values.imageRenderer.affinity }}
       affinity:
-{{ toYaml . | indent 8 }}
+{{ tpl (toYaml .) $root | indent 8 }}
       {{- end }}
       {{- with .Values.imageRenderer.tolerations }}
       tolerations:

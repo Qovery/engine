@@ -16,7 +16,7 @@ hostAliases:
 {{- if .Values.priorityClassName }}
 priorityClassName: {{ .Values.priorityClassName }}
 {{- end }}
-{{- if ( or .Values.persistence.enabled .Values.dashboards .Values.sidecar.datasources.enabled .Values.sidecar.notifiers.enabled .Values.extraInitContainers) }}
+{{- if ( or .Values.persistence.enabled .Values.dashboards .Values.sidecar.notifiers.enabled .Values.extraInitContainers (and .Values.sidecar.datasources.enabled .Values.sidecar.datasources.initDatasources)) }}
 initContainers:
 {{- end }}
 {{- if ( and .Values.persistence.enabled .Values.initChownData.enabled ) }}
@@ -37,7 +37,7 @@ initContainers:
       - name: storage
         mountPath: "/var/lib/grafana"
 {{- if .Values.persistence.subPath }}
-        subPath: {{ .Values.persistence.subPath }}
+        subPath: {{ tpl .Values.persistence.subPath . }}
 {{- end }}
 {{- end }}
 {{- if .Values.dashboards }}
@@ -69,7 +69,7 @@ initContainers:
       - name: storage
         mountPath: "/var/lib/grafana"
 {{- if .Values.persistence.subPath }}
-        subPath: {{ .Values.persistence.subPath }}
+        subPath: {{ tpl .Values.persistence.subPath . }}
 {{- end }}
     {{- range .Values.extraSecretMounts }}
       - name: {{ .name }}
@@ -77,8 +77,8 @@ initContainers:
         readOnly: {{ .readOnly }}
     {{- end }}
 {{- end }}
-{{- if .Values.sidecar.datasources.enabled }}
-  - name: {{ template "grafana.name" . }}-sc-datasources
+{{- if and .Values.sidecar.datasources.enabled .Values.sidecar.datasources.initDatasources }}
+  - name: {{ template "grafana.name" . }}-init-sc-datasources
     {{- if .Values.sidecar.image.sha }}
     image: "{{ .Values.sidecar.image.repository }}:{{ .Values.sidecar.image.tag }}@sha256:{{ .Values.sidecar.image.sha }}"
     {{- else }}
@@ -87,7 +87,7 @@ initContainers:
     imagePullPolicy: {{ .Values.sidecar.imagePullPolicy }}
     env:
       - name: METHOD
-        value: LIST
+        value: "LIST"
       - name: LABEL
         value: "{{ .Values.sidecar.datasources.label }}"
       {{- if .Values.sidecar.datasources.labelValue }}
@@ -104,7 +104,7 @@ initContainers:
       {{- end }}
       {{- if .Values.sidecar.datasources.searchNamespace }}
       - name: NAMESPACE
-        value: "{{ .Values.sidecar.datasources.searchNamespace }}"
+        value: "{{ .Values.sidecar.datasources.searchNamespace | join "," }}"
       {{- end }}
       {{- if .Values.sidecar.skipTlsVerify }}
       - name: SKIP_TLS_VERIFY
@@ -112,10 +112,14 @@ initContainers:
       {{- end }}
     resources:
 {{ toYaml .Values.sidecar.resources | indent 6 }}
+{{- if .Values.sidecar.securityContext }}
+    securityContext:
+{{- toYaml .Values.sidecar.securityContext | nindent 6 }}
+{{- end }}
     volumeMounts:
       - name: sc-datasources-volume
         mountPath: "/etc/grafana/provisioning/datasources"
-{{- end}}
+{{- end }}
 {{- if .Values.sidecar.notifiers.enabled }}
   - name: {{ template "grafana.name" . }}-sc-notifiers
     {{- if .Values.sidecar.image.sha }}
@@ -139,28 +143,43 @@ initContainers:
       {{- end }}
       {{- if .Values.sidecar.notifiers.searchNamespace }}
       - name: NAMESPACE
-        value: "{{ .Values.sidecar.notifiers.searchNamespace }}"
+        value: "{{ .Values.sidecar.notifiers.searchNamespace | join "," }}"
       {{- end }}
       {{- if .Values.sidecar.skipTlsVerify }}
       - name: SKIP_TLS_VERIFY
         value: "{{ .Values.sidecar.skipTlsVerify }}"
       {{- end }}
+{{- if .Values.sidecar.livenessProbe }}
+    livenessProbe:
+{{ toYaml .Values.livenessProbe | indent 6 }}
+{{- end }}
+{{- if .Values.sidecar.readinessProbe }}
+    readinessProbe:
+{{ toYaml .Values.readinessProbe | indent 6 }}
+{{- end }}
     resources:
 {{ toYaml .Values.sidecar.resources | indent 6 }}
+{{- if .Values.sidecar.securityContext }}
+    securityContext:
+{{- toYaml .Values.sidecar.securityContext | nindent 6 }}
+{{- end }}
     volumeMounts:
       - name: sc-notifiers-volume
         mountPath: "/etc/grafana/provisioning/notifiers"
 {{- end}}
 {{- if .Values.extraInitContainers }}
-{{ toYaml .Values.extraInitContainers | indent 2 }}
+{{ tpl (toYaml .Values.extraInitContainers) . | indent 2 }}
 {{- end }}
 {{- if .Values.image.pullSecrets }}
 imagePullSecrets:
+{{- $root := . }}
 {{- range .Values.image.pullSecrets }}
-  - name: {{ . }}
+  - name: {{ tpl . $root }}
 {{- end}}
 {{- end }}
+{{- if not .Values.enableKubeBackwardCompatibility }}
 enableServiceLinks: {{ .Values.enableServiceLinks }}
+{{- end }}
 containers:
 {{- if .Values.sidecar.dashboards.enabled }}
   - name: {{ template "grafana.name" . }}-sc-dashboard
@@ -189,7 +208,7 @@ containers:
       {{- end }}
       {{- if .Values.sidecar.dashboards.searchNamespace }}
       - name: NAMESPACE
-        value: "{{ .Values.sidecar.dashboards.searchNamespace }}"
+        value: "{{ .Values.sidecar.dashboards.searchNamespace | join "," }}"
       {{- end }}
       {{- if .Values.sidecar.skipTlsVerify }}
       - name: SKIP_TLS_VERIFY
@@ -199,17 +218,186 @@ containers:
       - name: FOLDER_ANNOTATION
         value: "{{ .Values.sidecar.dashboards.folderAnnotation }}"
       {{- end }}
+      {{- if .Values.sidecar.dashboards.script }}
+      - name: SCRIPT
+        value: "{{ .Values.sidecar.dashboards.script }}"
+      {{- end }}
+      {{- if .Values.sidecar.dashboards.watchServerTimeout }}
+      - name: WATCH_SERVER_TIMEOUT
+        value: "{{ .Values.sidecar.dashboards.watchServerTimeout }}"
+      {{- end }}
+      {{- if .Values.sidecar.dashboards.watchClientTimeout }}
+      - name: WATCH_CLIENT_TIMEOUT
+        value: "{{ .Values.sidecar.dashboards.watchClientTimeout }}"
+      {{- end }}
+{{- if .Values.sidecar.livenessProbe }}
+    livenessProbe:
+{{ toYaml .Values.livenessProbe | indent 6 }}
+{{- end }}
+{{- if .Values.sidecar.readinessProbe }}
+    readinessProbe:
+{{ toYaml .Values.readinessProbe | indent 6 }}
+{{- end }}
     resources:
 {{ toYaml .Values.sidecar.resources | indent 6 }}
+{{- if .Values.sidecar.securityContext }}
+    securityContext:
+{{- toYaml .Values.sidecar.securityContext | nindent 6 }}
+{{- end }}
     volumeMounts:
       - name: sc-dashboard-volume
         mountPath: {{ .Values.sidecar.dashboards.folder | quote }}
+      {{- if .Values.sidecar.dashboards.extraMounts }}
+      {{- toYaml .Values.sidecar.dashboards.extraMounts | trim | nindent 6}}
+      {{- end }}
+{{- end}}
+{{- if .Values.sidecar.datasources.enabled }}
+  - name: {{ template "grafana.name" . }}-sc-datasources
+    {{- if .Values.sidecar.image.sha }}
+    image: "{{ .Values.sidecar.image.repository }}:{{ .Values.sidecar.image.tag }}@sha256:{{ .Values.sidecar.image.sha }}"
+    {{- else }}
+    image: "{{ .Values.sidecar.image.repository }}:{{ .Values.sidecar.image.tag }}"
+    {{- end }}
+    imagePullPolicy: {{ .Values.sidecar.imagePullPolicy }}
+    env:
+      - name: METHOD
+        value: {{ .Values.sidecar.datasources.watchMethod }}
+      - name: LABEL
+        value: "{{ .Values.sidecar.datasources.label }}"
+      {{- if .Values.sidecar.datasources.labelValue }}
+      - name: LABEL_VALUE
+        value: {{ quote .Values.sidecar.datasources.labelValue }}
+      {{- end }}
+      - name: FOLDER
+        value: "/etc/grafana/provisioning/datasources"
+      - name: RESOURCE
+        value: {{ quote .Values.sidecar.datasources.resource }}
+      {{- if .Values.sidecar.enableUniqueFilenames }}
+      - name: UNIQUE_FILENAMES
+        value: "{{ .Values.sidecar.enableUniqueFilenames }}"
+      {{- end }}
+      {{- if .Values.sidecar.datasources.searchNamespace }}
+      - name: NAMESPACE
+        value: "{{ .Values.sidecar.datasources.searchNamespace | join "," }}"
+      {{- end }}
+      {{- if .Values.sidecar.skipTlsVerify }}
+      - name: SKIP_TLS_VERIFY
+        value: "{{ .Values.sidecar.skipTlsVerify }}"
+      {{- end }}
+      {{- if and (not .Values.env.GF_SECURITY_ADMIN_USER) (not .Values.env.GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION) }}
+      - name: REQ_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: {{ (tpl .Values.admin.existingSecret .) | default (include "grafana.fullname" .) }}
+            key: {{ .Values.admin.userKey | default "admin-user" }}
+      {{- end }}
+      {{- if and (not .Values.env.GF_SECURITY_ADMIN_PASSWORD) (not .Values.env.GF_SECURITY_ADMIN_PASSWORD__FILE) (not .Values.env.GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION) }}
+      - name: REQ_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: {{ (tpl .Values.admin.existingSecret .) | default (include "grafana.fullname" .) }}
+            key: {{ .Values.admin.passwordKey | default "admin-password" }}
+      {{- end }}
+      {{- if not .Values.sidecar.datasources.skipReload }}
+      - name: REQ_URL
+        value: {{ .Values.sidecar.datasources.reloadURL }}
+      - name: REQ_METHOD
+        value: POST
+      {{- end }}
+{{- if .Values.sidecar.livenessProbe }}
+    livenessProbe:
+{{ toYaml .Values.livenessProbe | indent 6 }}
+{{- end }}
+{{- if .Values.sidecar.readinessProbe }}
+    readinessProbe:
+{{ toYaml .Values.readinessProbe | indent 6 }}
+{{- end }}
+    resources:
+{{ toYaml .Values.sidecar.resources | indent 6 }}
+{{- if .Values.sidecar.securityContext }}
+    securityContext:
+{{- toYaml .Values.sidecar.securityContext | nindent 6 }}
+{{- end }}
+    volumeMounts:
+      - name: sc-datasources-volume
+        mountPath: "/etc/grafana/provisioning/datasources"
+{{- end}}
+{{- if .Values.sidecar.plugins.enabled }}
+  - name: {{ template "grafana.name" . }}-sc-plugins
+    {{- if .Values.sidecar.image.sha }}
+    image: "{{ .Values.sidecar.image.repository }}:{{ .Values.sidecar.image.tag }}@sha256:{{ .Values.sidecar.image.sha }}"
+    {{- else }}
+    image: "{{ .Values.sidecar.image.repository }}:{{ .Values.sidecar.image.tag }}"
+    {{- end }}
+    imagePullPolicy: {{ .Values.sidecar.imagePullPolicy }}
+    env:
+      - name: METHOD
+        value: {{ .Values.sidecar.plugins.watchMethod }}
+      - name: LABEL
+        value: "{{ .Values.sidecar.plugins.label }}"
+      {{- if .Values.sidecar.plugins.labelValue }}
+      - name: LABEL_VALUE
+        value: {{ quote .Values.sidecar.plugins.labelValue }}
+      {{- end }}
+      - name: FOLDER
+        value: "/etc/grafana/provisioning/plugins"
+      - name: RESOURCE
+        value: {{ quote .Values.sidecar.plugins.resource }}
+      {{- if .Values.sidecar.enableUniqueFilenames }}
+      - name: UNIQUE_FILENAMES
+        value: "{{ .Values.sidecar.enableUniqueFilenames }}"
+      {{- end }}
+      {{- if .Values.sidecar.plugins.searchNamespace }}
+      - name: NAMESPACE
+        value: "{{ .Values.sidecar.plugins.searchNamespace | join "," }}"
+      {{- end }}
+      {{- if .Values.sidecar.skipTlsVerify }}
+      - name: SKIP_TLS_VERIFY
+        value: "{{ .Values.sidecar.skipTlsVerify }}"
+      {{- end }}
+      {{- if and (not .Values.env.GF_SECURITY_ADMIN_USER) (not .Values.env.GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION) }}
+      - name: REQ_USERNAME
+        valueFrom:
+          secretKeyRef:
+            name: {{ (tpl .Values.admin.existingSecret .) | default (include "grafana.fullname" .) }}
+            key: {{ .Values.admin.userKey | default "admin-user" }}
+      {{- end }}
+      {{- if and (not .Values.env.GF_SECURITY_ADMIN_PASSWORD) (not .Values.env.GF_SECURITY_ADMIN_PASSWORD__FILE) (not .Values.env.GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION) }}
+      - name: REQ_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: {{ (tpl .Values.admin.existingSecret .) | default (include "grafana.fullname" .) }}
+            key: {{ .Values.admin.passwordKey | default "admin-password" }}
+      {{- end }}
+      {{- if not .Values.sidecar.plugins.skipReload }}
+      - name: REQ_URL
+        value: {{ .Values.sidecar.plugins.reloadURL }}
+      - name: REQ_METHOD
+        value: POST
+      {{- end }}
+{{- if .Values.sidecar.livenessProbe }}
+    livenessProbe:
+{{ toYaml .Values.livenessProbe | indent 6 }}
+{{- end }}
+{{- if .Values.sidecar.readinessProbe }}
+    readinessProbe:
+{{ toYaml .Values.readinessProbe | indent 6 }}
+{{- end }}
+    resources:
+{{ toYaml .Values.sidecar.resources | indent 6 }}
+{{- if .Values.sidecar.securityContext }}
+    securityContext:
+{{- toYaml .Values.sidecar.securityContext | nindent 6 }}
+{{- end }}
+    volumeMounts:
+      - name: sc-plugins-volume
+        mountPath: "/etc/grafana/provisioning/plugins"
 {{- end}}
   - name: {{ .Chart.Name }}
     {{- if .Values.image.sha }}
-    image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}@sha256:{{ .Values.image.sha }}"
+    image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}@sha256:{{ .Values.image.sha }}"
     {{- else }}
-    image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+    image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
     {{- end }}
     imagePullPolicy: {{ .Values.image.pullPolicy }}
   {{- if .Values.command }}
@@ -231,16 +419,17 @@ containers:
         mountPath: "/etc/grafana/ldap.toml"
         subPath: ldap.toml
       {{- end }}
+      {{- $root := . }}
       {{- range .Values.extraConfigmapMounts }}
-      - name: {{ .name }}
-        mountPath: {{ .mountPath }}
-        subPath: {{ .subPath | default "" }}
+      - name: {{ tpl .name $root }}
+        mountPath: {{ tpl .mountPath $root }}
+        subPath: {{ (tpl .subPath $root) | default "" }}
         readOnly: {{ .readOnly }}
       {{- end }}
       - name: storage
         mountPath: "/var/lib/grafana"
 {{- if .Values.persistence.subPath }}
-        subPath: {{ .Values.persistence.subPath }}
+        subPath: {{ tpl .Values.persistence.subPath . }}
 {{- end }}
 {{- if .Values.dashboards }}
 {{- range $provider, $dashboards := .Values.dashboards }}
@@ -260,19 +449,25 @@ containers:
 {{- end }}
 {{- end }}
 {{- if .Values.datasources }}
+{{- range (keys .Values.datasources | sortAlpha) }}
       - name: config
-        mountPath: "/etc/grafana/provisioning/datasources/datasources.yaml"
-        subPath: datasources.yaml
+        mountPath: "/etc/grafana/provisioning/datasources/{{ . }}"
+        subPath: {{ . | quote }}
+{{- end }}
 {{- end }}
 {{- if .Values.notifiers }}
+{{- range (keys .Values.notifiers | sortAlpha) }}
       - name: config
-        mountPath: "/etc/grafana/provisioning/notifiers/notifiers.yaml"
-        subPath: notifiers.yaml
+        mountPath: "/etc/grafana/provisioning/notifiers/{{ . }}"
+        subPath: {{ . | quote }}
+{{- end }}
 {{- end }}
 {{- if .Values.dashboardProviders }}
+{{- range (keys .Values.dashboardProviders | sortAlpha) }}
       - name: config
-        mountPath: "/etc/grafana/provisioning/dashboards/dashboardproviders.yaml"
-        subPath: dashboardproviders.yaml
+        mountPath: "/etc/grafana/provisioning/dashboards/{{ . }}"
+        subPath: {{ . | quote }}
+{{- end }}
 {{- end }}
 {{- if .Values.sidecar.dashboards.enabled }}
       - name: sc-dashboard-volume
@@ -286,6 +481,10 @@ containers:
 {{- if .Values.sidecar.datasources.enabled }}
       - name: sc-datasources-volume
         mountPath: "/etc/grafana/provisioning/datasources"
+{{- end}}
+{{- if .Values.sidecar.plugins.enabled }}
+      - name: sc-plugins-volume
+        mountPath: "/etc/grafana/provisioning/plugins"
 {{- end}}
 {{- if .Values.sidecar.notifiers.enabled }}
       - name: sc-notifiers-volume
@@ -319,14 +518,14 @@ containers:
       - name: GF_SECURITY_ADMIN_USER
         valueFrom:
           secretKeyRef:
-            name: {{ .Values.admin.existingSecret | default (include "grafana.fullname" .) }}
+            name: {{ (tpl .Values.admin.existingSecret .) | default (include "grafana.fullname" .) }}
             key: {{ .Values.admin.userKey | default "admin-user" }}
       {{- end }}
       {{- if and (not .Values.env.GF_SECURITY_ADMIN_PASSWORD) (not .Values.env.GF_SECURITY_ADMIN_PASSWORD__FILE) (not .Values.env.GF_SECURITY_DISABLE_INITIAL_ADMIN_CREATION) }}
       - name: GF_SECURITY_ADMIN_PASSWORD
         valueFrom:
           secretKeyRef:
-            name: {{ .Values.admin.existingSecret | default (include "grafana.fullname" .) }}
+            name: {{ (tpl .Values.admin.existingSecret .) | default (include "grafana.fullname" .) }}
             key: {{ .Values.admin.passwordKey | default "admin-password" }}
       {{- end }}
       {{- if .Values.plugins }}
@@ -348,12 +547,12 @@ containers:
             name: {{ .Values.smtp.existingSecret }}
             key: {{ .Values.smtp.passwordKey | default "password" }}
       {{- end }}
-      {{ if .Values.imageRenderer.enabled }}
+      {{- if .Values.imageRenderer.enabled }}
       - name: GF_RENDERING_SERVER_URL
         value: http://{{ template "grafana.fullname" . }}-image-renderer.{{ template "grafana.namespace" . }}:{{ .Values.imageRenderer.service.port }}/render
       - name: GF_RENDERING_CALLBACK_URL
-        value: http://{{ template "grafana.fullname" . }}.{{ template "grafana.namespace" . }}:{{ .Values.service.port }}/{{ .Values.imageRenderer.grafanaSubPath }}
-      {{ end }}
+        value: {{ .Values.imageRenderer.grafanaProtocol }}://{{ template "grafana.fullname" . }}.{{ template "grafana.namespace" . }}:{{ .Values.service.port }}/{{ .Values.imageRenderer.grafanaSubPath }}
+      {{- end }}
       - name: GF_PATHS_DATA
         value: {{ (get .Values "grafana.ini").paths.data }}
       - name: GF_PATHS_LOGS
@@ -365,26 +564,40 @@ containers:
     {{- range $key, $value := .Values.envValueFrom }}
       - name: {{ $key | quote }}
         valueFrom:
-{{ toYaml $value | indent 10 }}
+{{ tpl (toYaml $value) $ | indent 10 }}
     {{- end }}
 {{- range $key, $value := .Values.env }}
       - name: "{{ tpl $key $ }}"
         value: "{{ tpl (print $value) $ }}"
 {{- end }}
-    {{- if .Values.envFromSecret }}
+    {{- if or .Values.envFromSecret (or .Values.envRenderSecret .Values.envFromSecrets) .Values.envFromConfigMaps }}
     envFrom:
+    {{- if .Values.envFromSecret }}
       - secretRef:
           name: {{ tpl .Values.envFromSecret . }}
     {{- end }}
     {{- if .Values.envRenderSecret }}
-    envFrom:
       - secretRef:
           name: {{ template "grafana.fullname" . }}-env
+    {{- end }}
+    {{- range .Values.envFromSecrets }}
+      - secretRef:
+          name: {{ tpl .name $ }}
+          optional: {{ .optional | default false }}
+    {{- end }}
+    {{- range .Values.envFromConfigMaps }}
+      - configMapRef:
+          name: {{ tpl .name $ }}
+          optional: {{ .optional | default false }}
+    {{- end }}
     {{- end }}
     livenessProbe:
 {{ toYaml .Values.livenessProbe | indent 6 }}
     readinessProbe:
 {{ toYaml .Values.readinessProbe | indent 6 }}
+{{- if .Values.lifecycleHooks }}
+    lifecycle: {{ tpl (.Values.lifecycleHooks | toYaml) . | nindent 6 }}
+{{- end }}
     resources:
 {{ toYaml .Values.resources | indent 6 }}
 {{- with .Values.extraContainers }}
@@ -394,9 +607,10 @@ containers:
 nodeSelector:
 {{ toYaml . | indent 2 }}
 {{- end }}
+{{- $root := . }}
 {{- with .Values.affinity }}
 affinity:
-{{ toYaml . | indent 2 }}
+{{ tpl (toYaml .) $root | indent 2 }}
 {{- end }}
 {{- with .Values.tolerations }}
 tolerations:
@@ -406,10 +620,11 @@ volumes:
   - name: config
     configMap:
       name: {{ template "grafana.fullname" . }}
+{{- $root := . }}
 {{- range .Values.extraConfigmapMounts }}
-  - name: {{ .name }}
+  - name: {{ tpl .name $root }}
     configMap:
-      name: {{ .configMap }}
+      name: {{ tpl .configMap $root }}
 {{- end }}
   {{- if .Values.dashboards }}
     {{- range (keys .Values.dashboards | sortAlpha) }}
@@ -441,7 +656,7 @@ volumes:
 {{- if and .Values.persistence.enabled (eq .Values.persistence.type "pvc") }}
   - name: storage
     persistentVolumeClaim:
-      claimName: {{ .Values.persistence.existingClaim | default (include "grafana.fullname" .) }}
+      claimName: {{ tpl (.Values.persistence.existingClaim | default (include "grafana.fullname" .)) . }}
 {{- else if and .Values.persistence.enabled (eq .Values.persistence.type "statefulset") }}
 # nothing
 {{- else }}
@@ -458,7 +673,12 @@ volumes:
 {{- end -}}
 {{- if .Values.sidecar.dashboards.enabled }}
   - name: sc-dashboard-volume
+{{- if .Values.sidecar.dashboards.sizeLimit }}
+    emptyDir:
+      sizeLimit: {{ .Values.sidecar.dashboards.sizeLimit }}
+{{- else }}
     emptyDir: {}
+{{- end -}}
 {{- if .Values.sidecar.dashboards.SCProvider }}
   - name: sc-dashboard-provider
     configMap:
@@ -467,11 +687,30 @@ volumes:
 {{- end }}
 {{- if .Values.sidecar.datasources.enabled }}
   - name: sc-datasources-volume
+{{- if .Values.sidecar.datasources.sizeLimit }}
+    emptyDir:
+      sizeLimit: {{ .Values.sidecar.datasources.sizeLimit }}
+{{- else }}
     emptyDir: {}
+{{- end -}}
+{{- end -}}
+{{- if .Values.sidecar.plugins.enabled }}
+  - name: sc-plugins-volume
+{{- if .Values.sidecar.plugins.sizeLimit }}
+    emptyDir:
+      sizeLimit: {{ .Values.sidecar.plugins.sizeLimit }}
+{{- else }}
+    emptyDir: {}
+{{- end -}}
 {{- end -}}
 {{- if .Values.sidecar.notifiers.enabled }}
   - name: sc-notifiers-volume
+{{- if .Values.sidecar.notifiers.sizeLimit }}
+    emptyDir:
+      sizeLimit: {{ .Values.sidecar.notifiers.sizeLimit }}
+{{- else }}
     emptyDir: {}
+{{- end -}}
 {{- end -}}
 {{- range .Values.extraSecretMounts }}
 {{- if .secretName }}
