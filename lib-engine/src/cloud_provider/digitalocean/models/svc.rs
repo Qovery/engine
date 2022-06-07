@@ -390,5 +390,6 @@ pub struct Ingress {
 #[serde(rename_all = "camelCase")]
 pub struct Metadata2 {
     pub resource_version: String,
+    #[serde(default)]
     pub self_link: String,
 }

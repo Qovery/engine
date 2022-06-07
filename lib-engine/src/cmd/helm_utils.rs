@@ -1,6 +1,6 @@
 use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::helm::HelmError::CmdError;
-use crate::cmd::helm::{HelmCommand, HelmError};
+use crate::cmd::helm::{Helm, HelmCommand, HelmError};
 use crate::cmd::kubectl::{
     kubectl_apply_with_path, kubectl_create_secret_from_file, kubectl_delete_secret, kubectl_exec_get_secrets,
     kubectl_get_resource_yaml, kubernetes_is_metrics_server_working,
@@ -44,6 +44,12 @@ pub struct ChartYAML {
 pub struct BackupStatus {
     pub is_backupable: bool,
     pub backup_path: PathBuf,
+}
+
+#[derive(Clone)]
+pub struct CRDSUpdate {
+    pub path: String,
+    pub resources: Vec<String>,
 }
 
 pub fn prepare_chart_backup<P, T>(
@@ -228,7 +234,7 @@ where
                 },
             };
 
-            if let Err(e) = kubectl_apply_with_path(&kubernetes_config, envs.to_vec(), path.as_str()) {
+            if let Err(e) = kubectl_apply_with_path(&kubernetes_config, envs.to_vec(), path.as_str(), None) {
                 return Err(CmdError(
                     chart.clone().name,
                     HelmCommand::UPGRADE,
@@ -453,4 +459,43 @@ where
             envs.iter().map(|(key, value)| (key.as_str(), value.as_str())).collect(),
         ),
     )
+}
+
+pub fn update_crds_on_upgrade<P>(
+    kubernetes_config: P,
+    chart: ChartInfo,
+    envs: &[(&str, &str)],
+    helm: &Helm,
+) -> Result<(), HelmError>
+where
+    P: AsRef<Path>,
+{
+    let installed_versions =
+        helm.get_chart_version(chart.clone().name, Some(chart.namespace.to_string().as_str()), envs)?;
+
+    if chart.crds_update.is_some()
+        && installed_versions.is_some()
+        && installed_versions.as_ref().unwrap().app_version.is_some()
+    {
+        let app_major = installed_versions.as_ref().unwrap().app_version.as_ref().unwrap().major;
+        let app_minor = installed_versions.as_ref().unwrap().app_version.as_ref().unwrap().minor;
+
+        let pattern = format!("/v{}.{}.", app_major, app_minor);
+        let unwraped_chart = chart.crds_update.as_ref().unwrap().clone();
+
+        if !unwraped_chart.path.contains(&pattern) {
+            for crd in unwraped_chart.resources {
+                if let Err(e) = kubectl_apply_with_path(
+                    &kubernetes_config,
+                    envs.to_vec(),
+                    format!("{}/{}", unwraped_chart.path.clone(), crd.clone()).as_str(),
+                    Some(vec!["--server-side", "--force-conflicts"]),
+                ) {
+                    return Err(CmdError(chart.name, HelmCommand::UPGRADE, e));
+                }
+            }
+        }
+    }
+
+    Ok(())
 }

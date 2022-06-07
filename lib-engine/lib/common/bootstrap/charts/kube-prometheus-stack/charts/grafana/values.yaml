@@ -17,11 +17,15 @@ serviceAccount:
   create: true
   name:
   nameTest:
+## Service account annotations. Can be templated.
 #  annotations:
 #    eks.amazonaws.com/role-arn: arn:aws:iam::123456789000:role/iam-role-name-here
   autoMount: true
 
 replicas: 1
+
+## Create a headless service for the deployment
+headlessService: false
 
 ## Create HorizontalPodAutoscaler object for deployment type
 #
@@ -70,13 +74,15 @@ livenessProbe:
 
 image:
   repository: grafana/grafana
-  tag: 8.0.5
+  # Overrides the Grafana image tag whose default is the chart appVersion
+  tag: ""
   sha: ""
   pullPolicy: IfNotPresent
 
   ## Optionally specify an array of imagePullSecrets.
   ## Secrets must be manually created in the namespace.
   ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+  ## Can be templated.
   ##
   # pullSecrets:
   #   - myRegistrKeySecretName
@@ -84,7 +90,7 @@ image:
 testFramework:
   enabled: true
   image: "bats/bats"
-  tag: "v1.1.0"
+  tag: "v1.4.1"
   imagePullPolicy: IfNotPresent
   securityContext: {}
 
@@ -96,6 +102,8 @@ securityContext:
 containerSecurityContext:
   {}
 
+# Extra configmaps to mount in grafana pods
+# Values are templated.
 extraConfigmapMounts: []
   # - name: certs-configmap
   #   mountPath: /etc/grafana/ssl/
@@ -233,15 +241,19 @@ nodeSelector: {}
 ##
 tolerations: []
 
-## Affinity for pod assignment
+## Affinity for pod assignment (evaluated as template)
 ## ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity
 ##
 affinity: {}
 
+## Additional init containers (evaluated as template)
+## ref: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
+##
 extraInitContainers: []
 
 ## Enable an Specify container in extraContainers. This is meant to allow adding an authentication proxy to a grafana pod
-extraContainers: |
+extraContainers: ""
+# extraContainers: |
 # - name: proxy
 #   image: quay.io/gambol99/keycloak-proxy:latest
 #   args:
@@ -279,7 +291,9 @@ persistence:
   finalizers:
     - kubernetes.io/pvc-protection
   # selectorLabels: {}
+  ## Sub-directory of the PV to mount. Can be templated.
   # subPath: ""
+  ## Name of an existing PVC. Can be templated.
   # existingClaim:
 
   ## If persistence is not enabled, this allows to mount the
@@ -325,6 +339,7 @@ adminUser: admin
 
 # Use an existing secret for the admin user.
 admin:
+  ## Name of the secret. Can be templated.
   existingSecret: ""
   userKey: admin-user
   passwordKey: admin-password
@@ -365,8 +380,8 @@ admin:
 
 env: {}
 
-## "valueFrom" environment variable references that will be added to deployment pods
-## ref: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.17/#envvarsource-v1-core
+## "valueFrom" environment variable references that will be added to deployment pods. Name is templated.
+## ref: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.19/#envvarsource-v1-core
 ## Renders in container spec as:
 ##   env:
 ##     ...
@@ -374,6 +389,10 @@ env: {}
 ##       valueFrom:
 ##         <value rendered as YAML>
 envValueFrom: {}
+  #  ENV_NAME:
+  #    configMapKeyRef:
+  #      name: configmap-name
+  #      key: value_key
 
 ## The name of a secret in the same kubernetes namespace which contain values to be added to the environment
 ## This can be useful for auth tokens, etc. Value is templated.
@@ -382,6 +401,21 @@ envFromSecret: ""
 ## Sensible environment variables that will be rendered as new secret object
 ## This can be useful for auth tokens, etc
 envRenderSecret: {}
+
+## The names of secrets in the same kubernetes namespace which contain values to be added to the environment
+## Each entry should contain a name key, and can optionally specify whether the secret must be defined with an optional key.
+## Name is templated.
+envFromSecrets: []
+## - name: secret-name
+##   optional: true
+
+## The names of conifgmaps in the same kubernetes namespace which contain values to be added to the environment
+## Each entry should contain a name key, and can optionally specify whether the configmap must be defined with an optional key.
+## Name is templated.
+## ref: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.23/#configmapenvsource-v1-core
+envFromConfigMaps: []
+## - name: configmap-name
+##   optional: true
 
 # Inject Kubernetes services as environment variables.
 # See https://kubernetes.io/docs/concepts/services-networking/connect-applications-service/#environment-variables
@@ -431,6 +465,12 @@ extraVolumeMounts: []
   #   mountPath: /mnt/volume1
   #   readOnly: true
   #   hostPath: /usr/shared/
+
+## Container Lifecycle Hooks. Execute a specific bash command or make an HTTP request
+lifecycleHooks: {}
+  # postStart:
+  #   exec:
+  #     command: []
 
 ## Pass the plugins you want installed as a list.
 ##
@@ -608,7 +648,7 @@ smtp:
 sidecar:
   image:
     repository: quay.io/kiwigrid/k8s-sidecar
-    tag: 1.12.2
+    tag: 1.15.6
     sha: ""
   imagePullPolicy: IfNotPresent
   resources: {}
@@ -618,9 +658,12 @@ sidecar:
 #   requests:
 #     cpu: 50m
 #     memory: 50Mi
+  securityContext: {}
   # skipTlsVerify Set to true to skip tls verification for kube api calls
   # skipTlsVerify: true
   enableUniqueFilenames: false
+  readinessProbe: {}
+  livenessProbe: {}
   dashboards:
     enabled: false
     SCProvider: true
@@ -632,15 +675,29 @@ sidecar:
     folder: /tmp/dashboards
     # The default folder name, it will create a subfolder under the `folder` and put dashboards in there instead
     defaultFolderName: null
-    # If specified, the sidecar will search for dashboard config-maps inside this namespace.
+    # Namespaces list. If specified, the sidecar will search for config-maps/secrets inside these namespaces.
     # Otherwise the namespace in which the sidecar is running will be used.
-    # It's also possible to specify ALL to search in all namespaces
+    # It's also possible to specify ALL to search in all namespaces.
     searchNamespace: null
+    # Method to use to detect ConfigMap changes. With WATCH the sidecar will do a WATCH requests, with SLEEP it will list all ConfigMaps, then sleep for 60 seconds.
+    watchMethod: WATCH
     # search in configmap, secret or both
     resource: both
     # If specified, the sidecar will look for annotation with this name to create folder and put graph here.
     # You can use this parameter together with `provider.foldersFromFilesStructure`to annotate configmaps and create folder structure.
     folderAnnotation: null
+    # Absolute path to shell script to execute after a configmap got reloaded
+    script: null
+    # watchServerTimeout: request to the server, asking it to cleanly close the connection after that.
+    # defaults to 60sec; much higher values like 3600 seconds (1h) are feasible for non-Azure K8S
+    # watchServerTimeout: 3600
+    #
+    # watchClientTimeout: is a client-side timeout, configuring your local socket.
+    # If you have a network outage dropping all packets with no RST/FIN,
+    # this is how long your client waits before realizing & dropping the connection.
+    # defaults to 66sec (sic!)
+    # watchClientTimeout: 60
+    #
     # provider configuration that lets grafana manage the dashboards
     provider:
       # name of the provider, should be unique
@@ -657,6 +714,10 @@ sidecar:
       allowUiUpdates: false
       # allow Grafana to replicate dashboard structure from filesystem
       foldersFromFilesStructure: false
+    # Additional dashboard sidecar volume mounts
+    extraMounts: []
+    # Sets the size limit of the dashboard sidecar emptyDir volume
+    sizeLimit: {}
   datasources:
     enabled: false
     # label that the configmaps with datasources are marked with
@@ -667,8 +728,40 @@ sidecar:
     # Otherwise the namespace in which the sidecar is running will be used.
     # It's also possible to specify ALL to search in all namespaces
     searchNamespace: null
+    # Method to use to detect ConfigMap changes. With WATCH the sidecar will do a WATCH requests, with SLEEP it will list all ConfigMaps, then sleep for 60 seconds.
+    watchMethod: WATCH
     # search in configmap, secret or both
     resource: both
+    # Endpoint to send request to reload datasources
+    reloadURL: "http://localhost:3000/api/admin/provisioning/datasources/reload"
+    skipReload: false
+    # Deploy the datasource sidecar as an initContainer in addition to a container.
+    # This is needed if skipReload is true, to load any datasources defined at startup time.
+    initDatasources: false
+    # Sets the size limit of the datasource sidecar emptyDir volume
+    sizeLimit: {}
+  plugins:
+    enabled: false
+    # label that the configmaps with plugins are marked with
+    label: grafana_plugin
+    # value of label that the configmaps with plugins are set to
+    labelValue: null
+    # If specified, the sidecar will search for plugin config-maps inside this namespace.
+    # Otherwise the namespace in which the sidecar is running will be used.
+    # It's also possible to specify ALL to search in all namespaces
+    searchNamespace: null
+    # Method to use to detect ConfigMap changes. With WATCH the sidecar will do a WATCH requests, with SLEEP it will list all ConfigMaps, then sleep for 60 seconds.
+    watchMethod: WATCH
+    # search in configmap, secret or both
+    resource: both
+    # Endpoint to send request to reload plugins
+    reloadURL: "http://localhost:3000/api/admin/provisioning/plugins/reload"
+    skipReload: false
+    # Deploy the datasource sidecar as an initContainer in addition to a container.
+    # This is needed if skipReload is true, to load any plugins defined at startup time.
+    initPlugins: false
+    # Sets the size limit of the plugin sidecar emptyDir volume
+    sizeLimit: {}
   notifiers:
     enabled: false
     # label that the configmaps with notifiers are marked with
@@ -679,6 +772,8 @@ sidecar:
     searchNamespace: null
     # search in configmap, secret or both
     resource: both
+    # Sets the size limit of the notifier sidecar emptyDir volume
+    sizeLimit: {}
 
 ## Override the deployment namespace
 ##
@@ -705,8 +800,9 @@ imageRenderer:
   # extra environment variables
   env:
     HTTP_HOST: "0.0.0.0"
-    # RENDERING_ARGS: --disable-gpu,--window-size=1280x758
+    # RENDERING_ARGS: --no-sandbox,--disable-gpu,--window-size=1280x758
     # RENDERING_MODE: clustered
+    # IGNORE_HTTPS_ERRORS: true
   # image-renderer deployment serviceAccount
   serviceAccountName: ""
   # image-renderer deployment securityContext
@@ -723,6 +819,8 @@ imageRenderer:
     # image-renderer service port used by both service and deployment
     port: 8081
     targetPort: 8081
+  # If https is enabled in Grafana, this needs to be set as 'https' to correctly configure the callback used in Grafana
+  grafanaProtocol: http
   # In case a sub_path is used this needs to be added to the image renderer callback
   grafanaSubPath: ""
   # name of the image-renderer port on the pod
@@ -741,3 +839,58 @@ imageRenderer:
 #   requests:
 #     cpu: 50m
 #     memory: 50Mi
+  ## Node labels for pod assignment
+  ## ref: https://kubernetes.io/docs/user-guide/node-selection/
+  #
+  nodeSelector: {}
+
+  ## Tolerations for pod assignment
+  ## ref: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
+  ##
+  tolerations: []
+
+  ## Affinity for pod assignment (evaluated as template)
+  ## ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity
+  ##
+  affinity: {}
+
+networkPolicy:
+  ## @param networkPolicy.enabled Enable creation of NetworkPolicy resources. Only Ingress traffic is filtered for now.
+  ##
+  enabled: false
+  ## @param networkPolicy.allowExternal Don't require client label for connections
+  ## The Policy model to apply. When set to false, only pods with the correct
+  ## client label will have network access to  grafana port defined.
+  ## When true, grafana will accept connections from any source
+  ## (with the correct destination port).
+  ##
+  allowExternal: true
+  ## @param networkPolicy.explicitNamespacesSelector A Kubernetes LabelSelector to explicitly select namespaces from which traffic could be allowed
+  ## If explicitNamespacesSelector is missing or set to {}, only client Pods that are in the networkPolicy's namespace
+  ## and that match other criteria, the ones that have the good label, can reach the grafana.
+  ## But sometimes, we want the grafana to be accessible to clients from other namespaces, in this case, we can use this
+  ## LabelSelector to select these namespaces, note that the networkPolicy's namespace should also be explicitly added.
+  ##
+  ## Example:
+  ## explicitNamespacesSelector:
+  ##   matchLabels:
+  ##     role: frontend
+  ##   matchExpressions:
+  ##    - {key: role, operator: In, values: [frontend]}
+  ##
+  explicitNamespacesSelector: {}
+
+# Enable backward compatibility of kubernetes where version below 1.13 doesn't have the enableServiceLinks option
+enableKubeBackwardCompatibility: false
+
+# Create a dynamic manifests via values:
+extraObjects: []
+  # - apiVersion: "kubernetes-client.io/v1"
+  #   kind: ExternalSecret
+  #   metadata:
+  #     name: grafana-secrets
+  #   spec:
+  #     backendType: gcpSecretsManager
+  #     data:
+  #       - key: grafana-admin-password
+  #         name: adminPassword

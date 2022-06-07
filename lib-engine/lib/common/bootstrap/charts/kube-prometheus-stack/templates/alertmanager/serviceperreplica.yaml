@@ -30,6 +30,9 @@ items:
         - {{ $cidr }}
       {{- end }}
       {{- end }}
+      {{- if ne $serviceValues.type "ClusterIP" }}
+      externalTrafficPolicy: {{ $serviceValues.externalTrafficPolicy }}
+      {{- end }}
       ports:
         - name: {{ $.Values.alertmanager.alertmanagerSpec.portName }}
           {{- if eq $serviceValues.type "NodePort" }}
@@ -38,7 +41,7 @@ items:
           port: {{ $serviceValues.port }}
           targetPort: {{ $serviceValues.targetPort }}
       selector:
-        app: alertmanager
+        app.kubernetes.io/name: alertmanager
         alertmanager: {{ template "kube-prometheus-stack.fullname" $ }}-alertmanager
         statefulset.kubernetes.io/pod-name: alertmanager-{{ include "kube-prometheus-stack.fullname" $ }}-alertmanager-{{ $i }}
       type: "{{ $serviceValues.type }}"

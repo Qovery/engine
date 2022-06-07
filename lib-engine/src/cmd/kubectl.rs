@@ -1333,11 +1333,23 @@ pub fn kubectl_apply_with_path<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
     file_path: &str,
+    args: Option<Vec<&str>>,
 ) -> Result<String, CommandError>
 where
     P: AsRef<Path>,
 {
-    kubectl_exec_raw_output::<P>(vec!["apply", "-f", file_path], kubernetes_config, envs, false)
+    let mut cmd_args = vec!["apply"];
+
+    if let Some(args) = args {
+        for arg in args {
+            cmd_args.push(arg)
+        }
+    }
+
+    cmd_args.push("-f");
+    cmd_args.push(file_path);
+
+    kubectl_exec_raw_output::<P>(cmd_args, kubernetes_config, envs, false)
 }
 
 pub fn kubectl_create_secret<P>(

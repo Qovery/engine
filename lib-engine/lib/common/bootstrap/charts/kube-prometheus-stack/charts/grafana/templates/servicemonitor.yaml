@@ -6,6 +6,8 @@ metadata:
   name: {{ template "grafana.fullname" . }}
   {{- if .Values.serviceMonitor.namespace }}
   namespace: {{ .Values.serviceMonitor.namespace }}
+  {{- else }}
+  namespace: {{ template "grafana.namespace" . }}
   {{- end }}
   labels:
     {{- include "grafana.labels" . | nindent 4 }}
@@ -14,12 +16,14 @@ metadata:
     {{- end }}
 spec:
   endpoints:
-  - interval: {{ .Values.serviceMonitor.interval }}
-    {{- if .Values.serviceMonitor.scrapeTimeout }}
-    scrapeTimeout: {{ .Values.serviceMonitor.scrapeTimeout }}
+  - port: {{ .Values.service.portName }}
+    {{- with .Values.serviceMonitor.interval }}
+    interval: {{ . }}
+    {{- end }}
+    {{- with .Values.serviceMonitor.scrapeTimeout }}
+    scrapeTimeout: {{ . }}
     {{- end }}
     honorLabels: true
-    port: {{ .Values.service.portName }}
     path: {{ .Values.serviceMonitor.path }}
     scheme: {{ .Values.serviceMonitor.scheme }}
     {{- if .Values.serviceMonitor.tlsConfig }}
