@@ -1,6 +1,6 @@
 {%- if routes|length >= 1  %}
 ---
-apiVersion: networking.k8s.io/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ sanitized_name }}
@@ -57,9 +57,12 @@ spec:
         paths:
         {%- for route in routes %}
         - path: "{{ route.path }}"
+          pathType: Prefix
           backend:
-            serviceName: "{{ route.application_name }}"
-            servicePort: {{ route.application_port }}
+            service:
+              name: "{{ route.application_name }}"
+              port:
+                number: {{ route.application_port }}
         {%- endfor %}
     {%- for domain in custom_domains %}
     - host: "{{ domain.domain }}"
@@ -67,9 +70,12 @@ spec:
         paths:
         {%- for route in routes %}
         - path: "{{ route.path }}"
+          pathType: Prefix
           backend:
-            serviceName: "{{ route.application_name }}"
-            servicePort: {{ route.application_port }}
+            service:
+              name: "{{ route.application_name }}"
+              port:
+                number: {{ route.application_port }}
         {%- endfor %}
     {%- endfor %}
 {%- endif %}
