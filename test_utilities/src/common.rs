@@ -1732,15 +1732,7 @@ pub fn cluster_test(
                 panic!("{:?}", err)
             }
             assert!(matches!(upgrade_tx.commit(), TransactionResult::Ok));
-            if let Err(err) = metrics_server_test(
-                engine
-                    .kubernetes()
-                    .get_kubeconfig_file_path()
-                    .expect("Unable to get config file path"),
-                engine.kubernetes().cloud_provider().credentials_environment_variables(),
-            ) {
-                panic!("{:?}", err)
-            }
+
             // Delete
             if let Err(err) = delete_tx.delete_kubernetes() {
                 panic!("{:?}", err)

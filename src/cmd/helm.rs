@@ -289,13 +289,18 @@ impl Helm {
         match values {
             Ok(all_helms) => {
                 for helm in all_helms {
+                    // chart version is stored in chart name (i.e loki-3.4.5) so we look for last dash position to parse name.
                     let mut last_dash_pos = helm.chart.rfind('-').expect("Can't parse helm chart") + 1;
+                    // sometime chart version in name start with 'v' (i.e loki-v3.4.5). We squeeze it.
                     if helm.chart[last_dash_pos..].starts_with('v') {
                         last_dash_pos += 1
                     }
-                    let raw_version = helm.chart[last_dash_pos..].to_string();
-                    let chart_version = Version::from_str(raw_version.as_str()).ok();
+
+                    let chart_version_raw = helm.chart[last_dash_pos..].to_string();
+                    let chart_version = Version::from_str(chart_version_raw.as_str()).ok();
+
                     let mut app_version_raw = helm.app_version;
+                    // sometime app version start with 'v'. We squeeze it.
                     if app_version_raw.starts_with('v') {
                         app_version_raw = app_version_raw[1..].to_string()
                     }
@@ -573,7 +578,12 @@ impl Helm {
             if let Some(installed_versions) =
                 self.get_chart_version(chart.name.clone(), Some(chart.get_namespace_string().as_str()), envs)?
             {
-                if installed_versions.chart_version.unwrap().le(breaking_version) {
+                if installed_versions.chart_version.is_some()
+                    && installed_versions
+                        .chart_version
+                        .expect("No chart version found")
+                        .le(breaking_version)
+                {
                     self.uninstall(chart, envs)?;
                 }
             }

@@ -3,11 +3,15 @@ defaultRules:
   rules:
     alertmanager: false
     etcd: false
-    kubeApiserver: false
+    configReloaders: true
     kubeApiserverAvailability: false
-    kubeApiserverError: false
+    kubeApiserverBurnrate: false
+    kubeProxy: false
+    kubeApiserverHistogram: false
     kubeApiserverSlos: false
     kubeStateMetrics: false
+    nodeExporterAlerting: false
+    nodeExporterRecording: false
 
 alertmanager:
   enabled: false

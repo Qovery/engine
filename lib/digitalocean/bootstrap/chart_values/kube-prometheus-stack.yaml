@@ -3,11 +3,15 @@ defaultRules:
   rules:
     alertmanager: false
     etcd: false
-    kubeApiserver: false
+    configReloaders: true
     kubeApiserverAvailability: false
-    kubeApiserverError: false
+    kubeApiserverBurnrate: false
+    kubeProxy: false
+    kubeApiserverHistogram: false
     kubeApiserverSlos: false
     kubeStateMetrics: false
+    nodeExporterAlerting: false
+    nodeExporterRecording: false
 
 alertmanager:
   enabled: false
@@ -40,7 +44,7 @@ prometheus:
     storageSpec:
       volumeClaimTemplate:
         spec:
-          storageClassName: do-volume-standard-0
+          storageClassName: aws-ebs-gp2-0
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:

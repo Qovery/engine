@@ -317,8 +317,8 @@ pub trait HelmChart: Send {
             }
             HelmAction::Destroy => {
                 let chart_info = self.get_chart_info();
-                if chart_info.crds_update.is_some() {
-                    for crd in &chart_info.crds_update.as_ref().unwrap().resources {
+                if let Some(crds_update) = &chart_info.crds_update {
+                    for crd in &crds_update.resources {
                         if let Err(e) =
                             kubectl_exec_delete_crd(kubernetes_config, crd.as_str(), environment_variables.clone())
                         {
