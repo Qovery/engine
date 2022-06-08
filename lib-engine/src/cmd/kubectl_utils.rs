@@ -39,9 +39,10 @@ where
     match result {
         Ok(_) => Ok(()),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(CommandError::new_from_safe_message(format!(
-            "All pods didn't manage to restart after 10 min: {}",
-            e
-        ))),
+        Err(retry::Error::Internal(e)) => Err(CommandError::new(
+            "All pods didn't manage to restart after 10 min.".to_string(),
+            Some(e),
+            None,
+        )),
     }
 }

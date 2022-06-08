@@ -649,7 +649,7 @@ impl DOKS {
         if let Err(e) = kubectl_are_qovery_infra_pods_executed(kubeconfig_path, &credentials_environment_variables) {
             self.logger().log(EngineEvent::Warning(
                 event_details.clone(),
-                EventMessage::new_from_safe(format!("Didn't manage to restart all paused pods: {}", e)),
+                EventMessage::new("Didn't manage to restart all paused pods".to_string(), Some(e.to_string())),
             ));
         }
 
