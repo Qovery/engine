@@ -17,7 +17,9 @@ fn send_nats_request(json_file_path: &str, subject: &str) -> Result<(), ()> {
     };
 
     let mut buff = String::new();
-    create_cluster_file.read_to_string(&mut buff);
+    if let Err(_) = create_cluster_file.read_to_string(&mut buff) {
+        return Err(());
+    }
 
     match nc.request(subject, buff.as_bytes()) {
         Ok(_) => Ok(()),

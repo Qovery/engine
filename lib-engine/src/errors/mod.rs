@@ -463,6 +463,8 @@ pub enum Tag {
     NoClusterFound,
     /// ClusterHasNoWorkerNodes: represents an error where the current cluster doesn't have any worker nodes.
     ClusterHasNoWorkerNodes,
+    /// ClusterHasNoWorkerNodes: represents an error where the current cluster doesn't have any worker nodes.
+    ClusterWorkerNodeNotFound,
     /// CannotGetWorkspaceDirectory: represents an error while trying to get workspace directory.
     CannotGetWorkspaceDirectory,
     /// UnsupportedInstanceType: represents an unsupported instance type for the given cloud provider.
@@ -481,6 +483,8 @@ pub enum Tag {
     CannotCreateFile,
     /// CannotGetClusterNodes: represents an error while trying to get cluster's nodes.
     CannotGetClusterNodes,
+    /// NotEnoughNodesAvailableToDeployEnvironment: represents an error when trying to deploy an environment but there the desired number of nodes exceeds the maximum value.
+    NotEnoughNodesAvailableToDeployEnvironment,
     /// NotEnoughResourcesToDeployEnvironment: represents an error when trying to deploy an environment but there are not enough resources available on the cluster.
     NotEnoughResourcesToDeployEnvironment,
     /// CannotUninstallHelmChart: represents an error when trying to uninstall an helm chart on the cluster, uninstallation couldn't be proceeded.
@@ -866,6 +870,32 @@ impl EngineError {
         )
     }
 
+    /// Creates new error for cluster worker node is not found.
+    ///
+    ///
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_cluster_worker_node_not_found(
+        event_details: EventDetails,
+        raw_error: Option<CommandError>,
+    ) -> EngineError {
+        let message = "Worker node not found, can't proceed with operation.";
+        EngineError::new(
+            event_details,
+            Tag::ClusterWorkerNodeNotFound,
+            message.to_string(),
+            raw_error,
+            None,
+            Some(
+                "This can happen if there where a manual operations on the workers or the infrastructure is paused."
+                    .to_string(),
+            ),
+        )
+    }
+
     /// Missing API info from the Cloud provider itself
     ///
     /// Arguments:
@@ -1088,6 +1118,33 @@ impl EngineError {
             Some(error_message),
             None,
             None,
+        )
+    }
+
+    /// Creates new error for cannot deploy because the desired number of nodes is greater than the maximum allowed.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `actual_nodes`: The actual number of nodes running.
+    /// * `max_nodes`: The maximum number of nodes allowed.
+    pub fn new_cannot_deploy_max_nodes_exceeded(
+        event_details: EventDetails,
+        actual_nodes: i32,
+        max_nodes: i32,
+    ) -> EngineError {
+        let message = format!(
+            "The actual number of nodes {} can't be greater than the maximum value {}",
+            actual_nodes, max_nodes
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::NotEnoughNodesAvailableToDeployEnvironment,
+            message,
+            None,
+            None,
+            Some("Consider to upgrade your nodes configuration.".to_string()),
         )
     }
 
