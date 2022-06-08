@@ -21,7 +21,9 @@ use qovery_engine::logger::Logger;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 
-use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
+use crate::common::{
+    get_environment_test_kubernetes, Cluster, ClusterDomain, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES,
+};
 use crate::dns::dns_provider_cloudflare;
 use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
@@ -75,6 +77,8 @@ pub fn scw_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> 
             cluster_id: context.cluster_id().to_string(),
         },
         None,
+        KUBERNETES_MIN_NODES,
+        KUBERNETES_MAX_NODES,
     )
 }
 
@@ -87,6 +91,8 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         kubernetes_version: String,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
+        min_nodes: i32,
+        max_nodes: i32,
     ) -> EngineConfig {
         // use Scaleway CR
         let container_registry = Box::new(container_registry_scw(context));
@@ -107,6 +113,8 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             logger.clone(),
             localisation,
             vpc_network_mode,
+            min_nodes,
+            max_nodes,
         );
 
         EngineConfig::new(
@@ -158,10 +166,12 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         ))
     }
 
-    fn kubernetes_nodes() -> Vec<NodeGroups> {
+    fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups> {
         // Note: Dev1M is a bit too small to handle engine + local docker, hence using Dev1L
-        vec![NodeGroups::new("groupscw0".to_string(), 5, 10, "dev1-l".to_string(), 0)
-            .expect("Problem while setup SCW nodes")]
+        vec![
+            NodeGroups::new("groupscw0".to_string(), min_nodes, max_nodes, "dev1-l".to_string(), 0)
+                .expect("Problem while setup SCW nodes"),
+        ]
     }
 
     fn kubernetes_cluster_options(secrets: FuncTestsSecrets, _cluster_name: Option<String>) -> KapsuleOptions {

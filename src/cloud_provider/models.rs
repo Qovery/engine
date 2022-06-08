@@ -1,3 +1,5 @@
+use crate::errors::EngineError;
+use crate::events::EventDetails;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -70,6 +72,20 @@ pub struct NodeGroups {
     pub max_nodes: i32,
     pub instance_type: String,
     pub disk_size_in_gib: i32,
+}
+
+impl NodeGroups {
+    pub fn get_desired_nodes(&self, event_details: EventDetails, actual_nodes_count: i32) -> Result<i32, EngineError> {
+        if actual_nodes_count > self.max_nodes {
+            Err(EngineError::new_cannot_deploy_max_nodes_exceeded(
+                event_details,
+                actual_nodes_count,
+                self.max_nodes,
+            ))
+        } else {
+            Ok(self.max_nodes)
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]

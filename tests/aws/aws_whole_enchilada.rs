@@ -14,7 +14,10 @@ use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, g
 fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
     let secrets = FuncTestsSecrets::new();
 
-    let region = secrets.AWS_DEFAULT_REGION.as_ref().expect("AWS region was not found");
+    let region = secrets
+        .AWS_DEFAULT_REGION
+        .as_ref()
+        .expect("AWS region was not found in secrets");
     let aws_region = AwsRegion::from_str(region).expect("Wasn't able to convert the desired region");
     let aws_zones = aws_region.get_zones();
 
@@ -50,6 +53,52 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             &ClusterDomain::Custom(cluster_domain),
             Some(WithNatGateways),
             Some(&env_action),
+        )
+    })
+}
+
+#[cfg(feature = "test-aws-whole-enchilada")]
+#[named]
+#[test]
+fn create_resize_and_destroy_eks_cluster_with_env_in_eu_west_3() {
+    let secrets = FuncTestsSecrets::new();
+
+    let region = secrets
+        .AWS_DEFAULT_REGION
+        .as_ref()
+        .expect("AWS region was not found in secrets");
+    let aws_region = AwsRegion::from_str(region).expect("Wasn't able to convert the desired region");
+    let aws_zones = aws_region.get_zones();
+
+    let organization_id = generate_id();
+    let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
+    let context = context(organization_id.as_str(), cluster_id.as_str());
+
+    let cluster_domain = format!(
+        "{}.{}",
+        cluster_id.as_str(),
+        secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str()
+    );
+
+    engine_run_test(|| {
+        cluster_test(
+            function_name!(),
+            Kind::Aws,
+            KKind::Eks,
+            context.clone(),
+            logger(),
+            region,
+            Some(aws_zones),
+            ClusterTestType::WithNodesResize,
+            AWS_KUBERNETES_MAJOR_VERSION,
+            AWS_KUBERNETES_MINOR_VERSION,
+            &ClusterDomain::Custom(cluster_domain),
+            None,
+            None,
         )
     })
 }
