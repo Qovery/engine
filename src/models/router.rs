@@ -27,6 +27,10 @@ pub enum RouterError {
     InvalidConfig(String),
 }
 
+pub struct RouterAdvancedSettings {
+    pub custom_domain_check_enabled: bool,
+}
+
 pub struct Router<T: CloudProvider> {
     _marker: PhantomData<T>,
     pub(crate) context: Context,
@@ -41,6 +45,7 @@ pub struct Router<T: CloudProvider> {
     pub(crate) listeners: Listeners,
     pub(crate) logger: Box<dyn Logger>,
     pub(crate) _extra_settings: T::RouterExtraSettings,
+    pub(crate) advanced_settings: RouterAdvancedSettings,
 }
 
 impl<T: CloudProvider> Router<T> {
@@ -54,6 +59,7 @@ impl<T: CloudProvider> Router<T> {
         routes: Vec<Route>,
         sticky_sessions_enabled: bool,
         extra_settings: T::RouterExtraSettings,
+        advanced_settings: RouterAdvancedSettings,
         listeners: Listeners,
         logger: Box<dyn Logger>,
     ) -> Result<Self, RouterError> {
@@ -71,6 +77,7 @@ impl<T: CloudProvider> Router<T> {
             listeners,
             logger,
             _extra_settings: extra_settings,
+            advanced_settings,
         })
     }
 
@@ -558,6 +565,19 @@ where
 
         for domain in &self.custom_domains {
             domains.push(domain.domain.as_str());
+        }
+
+        domains
+    }
+
+    fn domains_to_check(&self) -> Vec<&str> {
+        let mut domains = Vec::with_capacity(1 + self.custom_domains.len());
+        domains.push(self.default_domain.as_str());
+
+        if self.advanced_settings.custom_domain_check_enabled {
+            for domain in &self.custom_domains {
+                domains.push(domain.domain.as_str());
+            }
         }
 
         domains
