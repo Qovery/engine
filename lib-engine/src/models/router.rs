@@ -201,20 +201,20 @@ impl<T: CloudProvider> Router<T> {
                             .expect("expected application advanced settings");
                         context.insert(
                             "ingress_proxy_body_size_mb",
-                            &advanced_settings.deployment_ingress_proxy_body_size_mb,
+                            &advanced_settings.network_ingress_proxy_body_size_mb,
                         );
-                        context.insert("ingress_cors_enable", &advanced_settings.deployment_ingress_cors_enable);
+                        context.insert("ingress_cors_enable", &advanced_settings.network_ingress_cors_enable);
                         context.insert(
                             "ingress_cors_allow_origin",
-                            &advanced_settings.deployment_ingress_cors_allow_origin,
+                            &advanced_settings.network_ingress_cors_allow_origin,
                         );
                         context.insert(
                             "ingress_cors_allow_methods",
-                            &advanced_settings.deployment_ingress_cors_allow_methods,
+                            &advanced_settings.network_ingress_cors_allow_methods,
                         );
                         context.insert(
                             "ingress_cors_allow_headers",
-                            &advanced_settings.deployment_ingress_cors_allow_headers,
+                            &advanced_settings.network_ingress_cors_allow_headers,
                         );
                     }
                 }
