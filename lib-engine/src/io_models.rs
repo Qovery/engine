@@ -27,7 +27,7 @@ use crate::models::application::{ApplicationError, ApplicationService};
 use crate::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
 use crate::models::database::{Container, DatabaseError, Managed, MongoDB, MySQL, PostgresSQL, Redis};
 use crate::models::digital_ocean::{DoAppExtraSettings, DoRouterExtraSettings, DoStorageType};
-use crate::models::router::RouterError;
+use crate::models::router::{RouterAdvancedSettings, RouterError};
 use crate::models::scaleway::{ScwAppExtraSettings, ScwRouterExtraSettings, ScwStorageType};
 use crate::models::types::{CloudProvider as CP, VersionsNumber, AWS, DO, SCW};
 use crate::utilities::to_short_id;
@@ -112,7 +112,20 @@ impl EnvironmentRequest {
 
         let mut routers = Vec::with_capacity(self.routers.len());
         for router in &self.routers {
-            match router.to_router_domain(context, cloud_provider, logger.clone()) {
+            let mut custom_domain_check_enabled = true;
+            for route in &router.routes {
+                for app in &self.applications {
+                    if route.application_name.as_str() == app.name.as_str()
+                        && !app.advanced_settings.deployment_custom_domain_check_enabled
+                    {
+                        // disable custom domain check for this router
+                        custom_domain_check_enabled = false;
+                        break;
+                    }
+                }
+            }
+
+            match router.to_router_domain(context, custom_domain_check_enabled, cloud_provider, logger.clone()) {
                 Ok(router) => routers.push(router),
                 Err(err) => {
                     //FIXME: propagate the correct Error
@@ -538,6 +551,7 @@ impl Router {
     pub fn to_router_domain(
         &self,
         context: &Context,
+        custom_domain_check_enabled: bool,
         cloud_provider: &dyn CloudProvider,
         logger: Box<dyn Logger>,
     ) -> Result<Box<dyn RouterService>, RouterError> {
@@ -560,6 +574,9 @@ impl Router {
             .collect::<Vec<_>>();
 
         let listeners = cloud_provider.listeners().clone();
+        let advanced_settings = RouterAdvancedSettings {
+            custom_domain_check_enabled,
+        };
 
         match cloud_provider.kind() {
             CPKind::Aws => {
@@ -573,6 +590,7 @@ impl Router {
                     routes,
                     self.sticky_sessions_enabled,
                     AwsRouterExtraSettings {},
+                    advanced_settings,
                     listeners,
                     logger,
                 )?);
@@ -589,6 +607,7 @@ impl Router {
                     routes,
                     self.sticky_sessions_enabled,
                     DoRouterExtraSettings {},
+                    advanced_settings,
                     listeners,
                     logger,
                 )?);
@@ -605,6 +624,7 @@ impl Router {
                     routes,
                     self.sticky_sessions_enabled,
                     ScwRouterExtraSettings {},
+                    advanced_settings,
                     listeners,
                     logger,
                 )?);
