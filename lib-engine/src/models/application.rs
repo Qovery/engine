@@ -12,7 +12,10 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
-use crate::io_models::{ApplicationAdvancedSettings, Context, Listen, Listener, Listeners, Port, QoveryIdentifier};
+use crate::io_models::{
+    ApplicationAdvancedSettings, ApplicationAdvancedSettingsProbeType, Context, Listen, Listener, Listeners, Port,
+    QoveryIdentifier,
+};
 use crate::logger::Logger;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::utilities::to_short_id;
@@ -129,10 +132,99 @@ impl<T: CloudProvider> Application<T> {
         let commit_id = self.build.image.commit_id.as_str();
         context.insert("helm_app_version", &commit_id[..7]);
         context.insert("image_name_with_tag", &self.build.image.full_image_name_with_tag());
+
+        let mut liveness_probe_initial_delay_seconds = self.advanced_settings.liveness_probe_initial_delay_seconds;
+        let mut readiness_probe_initial_delay_seconds = self.advanced_settings.readiness_probe_initial_delay_seconds;
+
+        if self.advanced_settings.deployment_delay_start_time_sec
+            > self.advanced_settings.liveness_probe_initial_delay_seconds
+            || self.advanced_settings.deployment_delay_start_time_sec
+                > self.advanced_settings.readiness_probe_initial_delay_seconds
+        {
+            // note deployment_delay_start_time_sec is deprecated but we can keep using it to avoid breaking users apps
+            // if the value is greater than `liveness_probe_initial_delay_seconds` or `readiness_probe_initial_delay_seconds` then we use it
+            liveness_probe_initial_delay_seconds = self.advanced_settings.deployment_delay_start_time_sec;
+            readiness_probe_initial_delay_seconds = self.advanced_settings.deployment_delay_start_time_sec;
+        }
+
+        context.insert("liveness_probe_initial_delay_seconds", &liveness_probe_initial_delay_seconds);
+        context.insert("readiness_probe_initial_delay_seconds", &readiness_probe_initial_delay_seconds);
         context.insert(
-            "start_timeout_in_seconds",
-            &self.advanced_settings.deployment_delay_start_time_sec,
+            "liveness_probe_http_get_path",
+            &self.advanced_settings.liveness_probe_http_get_path,
         );
+        context.insert(
+            "readiness_probe_http_get_path",
+            &self.advanced_settings.readiness_probe_http_get_path,
+        );
+        context.insert(
+            "liveness_probe_period_seconds",
+            &self.advanced_settings.liveness_probe_period_seconds,
+        );
+        context.insert(
+            "readiness_probe_period_seconds",
+            &self.advanced_settings.readiness_probe_period_seconds,
+        );
+        context.insert(
+            "liveness_probe_timeout_seconds",
+            &self.advanced_settings.liveness_probe_timeout_seconds,
+        );
+        context.insert(
+            "readiness_probe_timeout_seconds",
+            &self.advanced_settings.readiness_probe_timeout_seconds,
+        );
+        context.insert(
+            "liveness_probe_success_threshold",
+            &self.advanced_settings.liveness_probe_success_threshold,
+        );
+        context.insert(
+            "readiness_probe_success_threshold",
+            &self.advanced_settings.readiness_probe_success_threshold,
+        );
+        context.insert(
+            "liveness_probe_failure_threshold",
+            &self.advanced_settings.liveness_probe_failure_threshold,
+        );
+        context.insert(
+            "readiness_probe_failure_threshold",
+            &self.advanced_settings.readiness_probe_failure_threshold,
+        );
+
+        match self.advanced_settings.readiness_probe_type {
+            ApplicationAdvancedSettingsProbeType::None => {
+                context.insert("readiness_probe_enabled", &false);
+                context.insert("readiness_probe_tcp_enabled", &false);
+                context.insert("readiness_probe_http_enabled", &false);
+            }
+            ApplicationAdvancedSettingsProbeType::Tcp => {
+                context.insert("readiness_probe_enabled", &true);
+                context.insert("readiness_probe_tcp_enabled", &true);
+                context.insert("readiness_probe_http_enabled", &false);
+            }
+            ApplicationAdvancedSettingsProbeType::Http => {
+                context.insert("readiness_probe_enabled", &true);
+                context.insert("readiness_probe_tcp_enabled", &false);
+                context.insert("readiness_probe_http_enabled", &true);
+            }
+        };
+
+        match self.advanced_settings.liveness_probe_type {
+            ApplicationAdvancedSettingsProbeType::None => {
+                context.insert("liveness_probe_enabled", &false);
+                context.insert("liveness_probe_tcp_enabled", &false);
+                context.insert("liveness_probe_http_enabled", &false);
+            }
+            ApplicationAdvancedSettingsProbeType::Tcp => {
+                context.insert("liveness_probe_enabled", &true);
+                context.insert("liveness_probe_tcp_enabled", &true);
+                context.insert("liveness_probe_http_enabled", &false);
+            }
+            ApplicationAdvancedSettingsProbeType::Http => {
+                context.insert("liveness_probe_enabled", &true);
+                context.insert("liveness_probe_tcp_enabled", &false);
+                context.insert("liveness_probe_http_enabled", &true);
+            }
+        };
 
         let environment_variables = self
             .environment_variables

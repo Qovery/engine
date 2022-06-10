@@ -200,8 +200,19 @@ pub struct Port {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ApplicationAdvancedSettingsProbeType {
+    None,
+    Tcp,
+    Http,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(default)]
 pub struct ApplicationAdvancedSettings {
+    #[deprecated(
+        note = "please use `readiness_probe.initial_delay_seconds` and `liveness_probe.initial_delay_seconds` instead"
+    )]
     #[serde(alias = "deployment.delay_start_time_sec")]
     pub deployment_delay_start_time_sec: u32,
     #[serde(alias = "deployment.custom_domain_check_enabled")]
@@ -210,7 +221,7 @@ pub struct ApplicationAdvancedSettings {
     pub build_timeout_max_sec: u32,
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
     pub network_ingress_proxy_body_size_mb: u32,
-    #[serde(alias = "network.ingress.cors_enable")]
+    #[serde(alias = "network.ingress.cors_enabl e")]
     pub network_ingress_cors_enable: bool,
     #[serde(alias = "network.ingress.cors_allow_origin")]
     pub network_ingress_cors_allow_origin: String,
@@ -218,6 +229,34 @@ pub struct ApplicationAdvancedSettings {
     pub network_ingress_cors_allow_methods: String,
     #[serde(alias = "network.ingress.cors_allowed_headers")]
     pub network_ingress_cors_allow_headers: String,
+    #[serde(alias = "readiness_probe.type")]
+    pub readiness_probe_type: ApplicationAdvancedSettingsProbeType,
+    #[serde(alias = "readiness_probe.http_get.path")]
+    pub readiness_probe_http_get_path: String,
+    #[serde(alias = "readiness_probe.initial_delay_seconds")]
+    pub readiness_probe_initial_delay_seconds: u32,
+    #[serde(alias = "readiness_probe.period_seconds")]
+    pub readiness_probe_period_seconds: u32,
+    #[serde(alias = "readiness_probe.timeout_seconds")]
+    pub readiness_probe_timeout_seconds: u32,
+    #[serde(alias = "readiness_probe.success_threshold")]
+    pub readiness_probe_success_threshold: u32,
+    #[serde(alias = "readiness_probe.failure_threshold")]
+    pub readiness_probe_failure_threshold: u32,
+    #[serde(alias = "liveness_probe.type")]
+    pub liveness_probe_type: ApplicationAdvancedSettingsProbeType,
+    #[serde(alias = "liveness_probe.http_get.path")]
+    pub liveness_probe_http_get_path: String,
+    #[serde(alias = "liveness_probe.initial_delay_seconds")]
+    pub liveness_probe_initial_delay_seconds: u32,
+    #[serde(alias = "liveness_probe.period_seconds")]
+    pub liveness_probe_period_seconds: u32,
+    #[serde(alias = "liveness_probe.timeout_seconds")]
+    pub liveness_probe_timeout_seconds: u32,
+    #[serde(alias = "liveness_probe.success_threshold")]
+    pub liveness_probe_success_threshold: u32,
+    #[serde(alias = "liveness_probe.failure_threshold")]
+    pub liveness_probe_failure_threshold: u32,
 }
 
 impl Default for ApplicationAdvancedSettings {
@@ -230,7 +269,21 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_cors_enable: false,
             network_ingress_cors_allow_origin: "*".to_string(),
             network_ingress_cors_allow_methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS".to_string(),
-            network_ingress_cors_allow_headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization".to_string()
+            network_ingress_cors_allow_headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization".to_string(),
+            readiness_probe_type: ApplicationAdvancedSettingsProbeType::Tcp,
+            readiness_probe_http_get_path: "/".to_string(),
+            readiness_probe_initial_delay_seconds: 30,
+            readiness_probe_period_seconds: 10,
+            readiness_probe_timeout_seconds: 1,
+            readiness_probe_success_threshold: 1,
+            readiness_probe_failure_threshold: 3,
+            liveness_probe_type: ApplicationAdvancedSettingsProbeType::Tcp,
+            liveness_probe_http_get_path: "/".to_string(),
+            liveness_probe_initial_delay_seconds: 30,
+            liveness_probe_period_seconds: 10,
+            liveness_probe_timeout_seconds: 5,
+            liveness_probe_success_threshold: 1,
+            liveness_probe_failure_threshold: 3,
         }
     }
 }
