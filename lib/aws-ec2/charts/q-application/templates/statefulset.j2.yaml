@@ -72,41 +72,41 @@ spec:
               name: "p{{ port.port }}"
               protocol: TCP
             {%- endfor %}
-          { %- if readiness_probe_enabled % }
+          {%- if readiness_probe_enabled %}
           readinessProbe:
-            { %- if readiness_probe_tcp_enabled % }
+            {%- if readiness_probe_tcp_enabled %}
             tcpSocket:
               port: {{ private_port }}
-            { %- endif % }
-            { %- if readiness_probe_http_enabled % }
+            {%- endif %}
+            {%- if readiness_probe_http_enabled %}
             httpGet:
               port: {{ private_port }}
               path: {{ readiness_probe_http_get_path }}
-            { %- endif % }
+            {%- endif %}
             initialDelaySeconds: {{ readiness_probe_initial_delay_seconds }}
             periodSeconds: {{ readiness_probe_period_seconds }}
             timeoutSeconds: {{ readiness_probe_timeout_seconds }}
             successThreshold: {{ readiness_probe_success_threshold }}
             failureThreshold: {{ readiness_probe_failure_threshold }}
-          { %- endif % }
-          { %- if liveness_probe_enabled % }
+          {%- endif %}
+          {%- if liveness_probe_enabled %}
           livenessProbe:
-            { %- if liveness_probe_tcp_enabled % }
+            {%- if liveness_probe_tcp_enabled %}
             tcpSocket:
               port: {{ private_port }}
-            { %- endif % }
-            { %- if liveness_probe_http_enabled % }
+            {%- endif %}
+            {%- if liveness_probe_http_enabled %}
             httpGet:
               port: {{ private_port }}
               path: {{ liveness_probe_http_get_path }}
-            { %- endif % }
+            {%- endif %}
             initialDelaySeconds: {{ liveness_probe_initial_delay_seconds }}
             periodSeconds: {{ liveness_probe_period_seconds }}
             timeoutSeconds: {{ liveness_probe_timeout_seconds }}
             successThreshold: {{ liveness_probe_success_threshold }}
             failureThreshold: {{ liveness_probe_failure_threshold }}
-          { %- endif % }
-          { %- endif % }
+          {%- endif %}
+          {%- endif %}
           resources:
             limits:
               cpu: {{ cpu_burst }}
