@@ -574,7 +574,7 @@ scw-whole-enchilada:
   stage: deploy
   retry: 2
   dependencies:
-    - release-image-prod
+    - release-image-and-binary
   script:
     - ./helper.sh set_release_ga
   tags:
@@ -588,7 +588,7 @@ scw-whole-enchilada:
   stage: deploy
   retry: 0
   dependencies:
-    - release-image-prod
+    - release-image-and-binary
   script:
     - ./helper.sh deploy_engines_infra
   tags:
@@ -602,7 +602,7 @@ scw-whole-enchilada:
   stage: deploy
   retry: 0
   dependencies:
-    - release-image-prod
+    - release-image-and-binary
   script:
     - ./helper.sh deploy_all_clusters
   tags:
@@ -616,7 +616,7 @@ scw-whole-enchilada:
   stage: deploy
   retry: 0
   dependencies:
-    - release-image-prod
+    - release-image-and-binary
   script:
     - ./helper.sh deploy_engines_envs
   tags:
