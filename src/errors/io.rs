@@ -25,11 +25,13 @@ pub enum Tag {
     Unknown,
     MissingRequiredEnvVariable,
     ClusterHasNoWorkerNodes,
+    ClusterWorkerNodeNotFound,
     CannotGetWorkspaceDirectory,
     UnsupportedInstanceType,
     CannotRetrieveClusterConfigFile,
     CannotCreateFile,
     CannotGetClusterNodes,
+    NotEnoughNodesAvailableToDeployEnvironment,
     NotEnoughResourcesToDeployEnvironment,
     CannotUninstallHelmChart,
     CannotExecuteK8sVersion,
@@ -118,6 +120,15 @@ pub enum Tag {
     ObjectStorageCannotEmptyBucket,
     ObjectStorageCannotTagBucket,
     ObjectStorageCannotActivateBucketVersioning,
+    KubeconfigFileDoNotPermitToConnectToK8sCluster,
+    KubeconfigSecurityCheckError,
+    DeleteLocalKubeconfigFileError,
+    VaultConnectionError,
+    VaultSecretCouldNotBeRetrieved,
+    VaultSecretCouldNotBeCreatedOrUpdated,
+    VaultSecretCouldNotBeDeleted,
+    JsonDeserializationError,
+    ClusterSecretsManipulationError,
 }
 
 impl From<errors::Tag> for Tag {
@@ -128,9 +139,11 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CannotRetrieveClusterConfigFile => Tag::CannotRetrieveClusterConfigFile,
             errors::Tag::CannotCreateFile => Tag::CannotCreateFile,
             errors::Tag::CannotGetClusterNodes => Tag::CannotGetClusterNodes,
+            errors::Tag::NotEnoughNodesAvailableToDeployEnvironment => Tag::NotEnoughNodesAvailableToDeployEnvironment,
             errors::Tag::NotEnoughResourcesToDeployEnvironment => Tag::NotEnoughResourcesToDeployEnvironment,
             errors::Tag::MissingRequiredEnvVariable => Tag::MissingRequiredEnvVariable,
             errors::Tag::ClusterHasNoWorkerNodes => Tag::ClusterHasNoWorkerNodes,
+            errors::Tag::ClusterWorkerNodeNotFound => Tag::ClusterWorkerNodeNotFound,
             errors::Tag::CannotGetWorkspaceDirectory => Tag::CannotGetWorkspaceDirectory,
             errors::Tag::CannotUninstallHelmChart => Tag::CannotUninstallHelmChart,
             errors::Tag::CannotExecuteK8sVersion => Tag::CannotExecuteK8sVersion,
@@ -230,6 +243,17 @@ impl From<errors::Tag> for Tag {
             errors::Tag::UnsupportedClusterKind => Tag::UnsupportedClusterKind,
             errors::Tag::NotAllowedInstanceType => Tag::NotAllowedInstanceType,
             errors::Tag::TerraformQoveryConfigMismatch => Tag::TerraformQoveryConfigMismatch,
+            errors::Tag::KubeconfigFileDoNotPermitToConnectToK8sCluster => {
+                Tag::KubeconfigFileDoNotPermitToConnectToK8sCluster
+            }
+            errors::Tag::KubeconfigSecurityCheckError => Tag::KubeconfigSecurityCheckError,
+            errors::Tag::DeleteLocalKubeconfigFileError => Tag::DeleteLocalKubeconfigFileError,
+            errors::Tag::VaultConnectionError => Tag::VaultConnectionError,
+            errors::Tag::VaultSecretCouldNotBeRetrieved => Tag::VaultSecretCouldNotBeRetrieved,
+            errors::Tag::VaultSecretCouldNotBeCreatedOrUpdated => Tag::VaultSecretCouldNotBeCreatedOrUpdated,
+            errors::Tag::JsonDeserializationError => Tag::JsonDeserializationError,
+            errors::Tag::ClusterSecretsManipulationError => Tag::ClusterSecretsManipulationError,
+            errors::Tag::VaultSecretCouldNotBeDeleted => Tag::VaultSecretCouldNotBeDeleted,
         }
     }
 }
@@ -239,7 +263,6 @@ impl From<errors::Tag> for Tag {
 pub struct EngineError {
     tag: Tag,
     event_details: EventDetails,
-    qovery_log_message: String,
     user_log_message: String,
     underlying_error: Option<CommandError>,
     link: Option<String>,
@@ -251,7 +274,6 @@ impl From<errors::EngineError> for EngineError {
         EngineError {
             tag: Tag::from(error.tag),
             event_details: EventDetails::from(error.event_details),
-            qovery_log_message: error.qovery_log_message,
             user_log_message: error.user_log_message,
             underlying_error: error.underlying_error.map(CommandError::from),
             link: error.link.map(|url| url.to_string()),

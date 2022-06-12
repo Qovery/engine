@@ -6,7 +6,7 @@ metadata:
     aws-type: "gp2"
     qovery-type: "ssd"
     reclaim: "0"
-provisioner: kubernetes.io/aws-ebs
+provisioner: ebs.csi.aws.com
 parameters:
   type: gp2
   encrypted: 'true'
@@ -22,7 +22,7 @@ metadata:
     aws-type: "io1"
     qovery-type: "nvme"
     reclaim: "0"
-provisioner: kubernetes.io/aws-ebs
+provisioner: ebs.csi.aws.com
 parameters:
   type: io1
   iopsPerGB: "32"
@@ -39,7 +39,7 @@ metadata:
     aws-type: "st1"
     qovery-type: "hdd"
     reclaim: "0"
-provisioner: kubernetes.io/aws-ebs
+provisioner: ebs.csi.aws.com
 parameters:
   type: st1
   encrypted: 'true'
@@ -55,7 +55,7 @@ metadata:
     aws-type: "sc1"
     qovery-type: "cold"
     reclaim: "0"
-provisioner: kubernetes.io/aws-ebs
+provisioner: ebs.csi.aws.com
 parameters:
   type: sc1
   encrypted: 'true'

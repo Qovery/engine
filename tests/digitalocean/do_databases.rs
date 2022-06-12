@@ -9,6 +9,7 @@ use test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
 
+use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::utilities::to_short_id;
 use test_utilities::common::{database_test_environment, test_db, Infrastructure};
@@ -132,7 +133,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this db
-        let app_name = format!("postgresql{}-0", environment.databases[0].name);
+        let app_name = format!("postgresql-{}-0", environment.databases[0].name);
         let ret = get_pods(
             context.clone(),
             ProviderKind::Do,
@@ -414,7 +415,7 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
             version,
             test_name,
             DatabaseKind::Postgresql,
-            Kind::Do,
+            KubernetesKind::Doks,
             database_mode,
             is_public,
         )
@@ -512,7 +513,7 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
             version,
             test_name,
             DatabaseKind::Mongodb,
-            Kind::Do,
+            KubernetesKind::Doks,
             database_mode,
             is_public,
         )
@@ -609,7 +610,7 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
             version,
             test_name,
             DatabaseKind::Mysql,
-            Kind::Do,
+            KubernetesKind::Doks,
             database_mode,
             is_public,
         )
@@ -678,7 +679,7 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
             version,
             test_name,
             DatabaseKind::Redis,
-            Kind::Do,
+            KubernetesKind::Doks,
             database_mode,
             is_public,
         )

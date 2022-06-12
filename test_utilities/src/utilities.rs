@@ -76,14 +76,14 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
                     let ttl_converted: u32 = ttl.into_string().unwrap().parse().unwrap();
                     Some(ttl_converted)
                 }
-                None => Some(7200),
+                None => Some(10800),
             }
         },
         forced_upgrade: Option::from(env::var_os("forced_upgrade").is_some()),
         disable_pleco: Some(true),
     };
 
-    let enabled_features = vec![Features::LogsHistory];
+    let enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
 
     Context::new(
         organization_id,
@@ -111,6 +111,7 @@ pub struct FuncTestsSecrets {
     pub AWS_SECRET_ACCESS_KEY: Option<String>,
     pub AWS_TEST_CLUSTER_ID: Option<String>,
     pub AWS_TEST_ORGANIZATION_ID: Option<String>,
+    pub AWS_EC2_DEFAULT_CLUSTER_ID: Option<String>,
     pub BIN_VERSION_FILE: Option<String>,
     pub CLOUDFLARE_DOMAIN: Option<String>,
     pub CLOUDFLARE_ID: Option<String>,
@@ -206,6 +207,7 @@ impl FuncTestsSecrets {
             AWS_SECRET_ACCESS_KEY: None,
             AWS_TEST_CLUSTER_ID: None,
             AWS_TEST_ORGANIZATION_ID: None,
+            AWS_EC2_DEFAULT_CLUSTER_ID: None,
             BIN_VERSION_FILE: None,
             CLOUDFLARE_DOMAIN: None,
             CLOUDFLARE_ID: None,
@@ -292,6 +294,10 @@ impl FuncTestsSecrets {
             AWS_SECRET_ACCESS_KEY: Self::select_secret("AWS_SECRET_ACCESS_KEY", secrets.AWS_SECRET_ACCESS_KEY),
             AWS_TEST_ORGANIZATION_ID: Self::select_secret("AWS_TEST_ORGANIZATION_ID", secrets.AWS_TEST_ORGANIZATION_ID),
             AWS_TEST_CLUSTER_ID: Self::select_secret("AWS_TEST_CLUSTER_ID", secrets.AWS_TEST_CLUSTER_ID),
+            AWS_EC2_DEFAULT_CLUSTER_ID: Self::select_secret(
+                "AWS_EC2_DEFAULT_CLUSTER_ID",
+                secrets.AWS_EC2_DEFAULT_CLUSTER_ID,
+            ),
             BIN_VERSION_FILE: Self::select_secret("BIN_VERSION_FILE", secrets.BIN_VERSION_FILE),
             CLOUDFLARE_DOMAIN: Self::select_secret("CLOUDFLARE_DOMAIN", secrets.CLOUDFLARE_DOMAIN),
             CLOUDFLARE_ID: Self::select_secret("CLOUDFLARE_ID", secrets.CLOUDFLARE_ID),

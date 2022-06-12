@@ -1,0 +1,21 @@
+{{- if .Capabilities.APIVersions.Has "policy/v1/PodDisruptionBudget" }}
+apiVersion: policy/v1
+{{- else }}
+apiVersion: policy/v1beta1
+{{- end }}
+kind: PodDisruptionBudget
+metadata:
+  name: ebs-csi-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aws-ebs-csi-driver.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: ebs-csi-controller
+      {{- include "aws-ebs-csi-driver.selectorLabels" . | nindent 6 }}
+  {{- if le (.Values.controller.replicaCount | int) 2 }}
+  maxUnavailable: 1
+  {{- else }}
+  minAvailable: 2
+  {{- end }}

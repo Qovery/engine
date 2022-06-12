@@ -2,7 +2,8 @@ use std::net::Ipv4Addr;
 use tera::Context as TeraContext;
 
 use crate::dns_provider::errors::DnsProviderError;
-use crate::dns_provider::{DnsProvider, DnsProviderConfiguration, Kind};
+use crate::dns_provider::Kind;
+use crate::dns_provider::{DnsProvider, DnsProviderConfiguration};
 use crate::io_models::{Context, Domain};
 
 pub struct QoveryDnsConfig {

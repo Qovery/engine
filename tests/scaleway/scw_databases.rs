@@ -10,6 +10,7 @@ use test_utilities::utilities::{
     logger, FuncTestsSecrets,
 };
 
+use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::utilities::to_short_id;
 use test_utilities::common::test_db;
@@ -18,7 +19,6 @@ use test_utilities::scaleway::{
     clean_environments, scw_default_engine_config, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
     SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,
 };
-
 /**
 **
 ** Global database tests
@@ -420,7 +420,7 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
             version,
             test_name,
             DatabaseKind::Postgresql,
-            Kind::Scw,
+            KubernetesKind::ScwKapsule,
             database_mode,
             is_public,
         )
@@ -583,7 +583,7 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
             version,
             test_name,
             DatabaseKind::Mongodb,
-            Kind::Scw,
+            KubernetesKind::ScwKapsule,
             database_mode,
             is_public,
         )
@@ -681,7 +681,7 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
             version,
             test_name,
             DatabaseKind::Mysql,
-            Kind::Scw,
+            KubernetesKind::ScwKapsule,
             database_mode,
             is_public,
         )
@@ -766,7 +766,7 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
             version,
             test_name,
             DatabaseKind::Redis,
-            Kind::Scw,
+            KubernetesKind::ScwKapsule,
             database_mode,
             is_public,
         )

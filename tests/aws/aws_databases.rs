@@ -1,6 +1,7 @@
 extern crate test_utilities;
 
 use ::function_name::named;
+use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::io_models::{Action, CloneForTest, Database, DatabaseKind, DatabaseMode, Port, Protocol};
 use test_utilities::aws::aws_default_engine_config;
@@ -347,7 +348,13 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 **
 **/
 #[allow(dead_code)]
-fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
+pub fn test_postgresql_configuration(
+    version: &str,
+    test_name: &str,
+    database_mode: DatabaseMode,
+    kubernetes_kind: KubernetesKind,
+    is_public: bool,
+) {
     let secrets = FuncTestsSecrets::new();
     let context = context(
         secrets
@@ -373,7 +380,7 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
             version,
             test_name,
             DatabaseKind::Postgresql,
-            Kind::Aws,
+            kubernetes_kind,
             database_mode,
             is_public,
         )
@@ -385,7 +392,7 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
 #[named]
 #[test]
 fn private_postgresql_v10_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("10", function_name!(), CONTAINER, false);
+    test_postgresql_configuration("10", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -393,14 +400,14 @@ fn private_postgresql_v10_deploy_a_working_dev_environment() {
 #[test]
 #[ignore]
 fn public_postgresql_v10_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("10", function_name!(), CONTAINER, true);
+    test_postgresql_configuration("10", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn private_postgresql_v11_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("11", function_name!(), CONTAINER, false);
+    test_postgresql_configuration("11", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -408,14 +415,14 @@ fn private_postgresql_v11_deploy_a_working_dev_environment() {
 #[test]
 #[ignore]
 fn public_postgresql_v11_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("11", function_name!(), CONTAINER, true);
+    test_postgresql_configuration("11", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn private_postgresql_v12_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("12", function_name!(), CONTAINER, false);
+    test_postgresql_configuration("12", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -423,21 +430,21 @@ fn private_postgresql_v12_deploy_a_working_dev_environment() {
 #[test]
 #[ignore]
 fn public_postgresql_v12_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("12", function_name!(), CONTAINER, true);
+    test_postgresql_configuration("12", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn private_postgresql_v13_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("13", function_name!(), CONTAINER, false);
+    test_postgresql_configuration("13", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn public_postgresql_v13_deploy_a_working_dev_environment() {
-    test_postgresql_configuration("13", function_name!(), CONTAINER, true);
+    test_postgresql_configuration("13", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 // Postgres production environment
@@ -445,56 +452,56 @@ fn public_postgresql_v13_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn private_postgresql_v10_deploy_a_working_prod_environment() {
-    test_postgresql_configuration("10", function_name!(), MANAGED, false);
+    test_postgresql_configuration("10", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
 fn public_postgresql_v10_deploy_a_working_prod_environment() {
-    test_postgresql_configuration("10", function_name!(), MANAGED, true);
+    test_postgresql_configuration("10", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
 fn private_postgresql_v11_deploy_a_working_prod_environment() {
-    test_postgresql_configuration("11", function_name!(), MANAGED, false);
+    test_postgresql_configuration("11", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
 fn public_postgresql_v11_deploy_a_working_prod_environment() {
-    test_postgresql_configuration("11", function_name!(), MANAGED, true);
+    test_postgresql_configuration("11", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
 fn private_postgresql_v12_deploy_a_working_prod_environment() {
-    test_postgresql_configuration("12", function_name!(), MANAGED, false);
+    test_postgresql_configuration("12", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
 fn public_postgresql_v12_deploy_a_working_prod_environment() {
-    test_postgresql_configuration("12", function_name!(), MANAGED, true);
+    test_postgresql_configuration("12", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
 fn private_postgresql_v13_deploy_a_working_prod_environment() {
-    test_postgresql_configuration("13", function_name!(), MANAGED, false);
+    test_postgresql_configuration("13", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
 fn public_postgresql_v13_deploy_a_working_prod_environment() {
-    test_postgresql_configuration("13", function_name!(), MANAGED, true);
+    test_postgresql_configuration("13", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
 /**
@@ -503,7 +510,13 @@ fn public_postgresql_v13_deploy_a_working_prod_environment() {
 **
 **/
 #[allow(dead_code)]
-fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
+pub fn test_mongodb_configuration(
+    version: &str,
+    test_name: &str,
+    database_mode: DatabaseMode,
+    kubernetes_kind: KubernetesKind,
+    is_public: bool,
+) {
     let secrets = FuncTestsSecrets::new();
     let context = context(
         secrets
@@ -528,7 +541,7 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
             version,
             test_name,
             DatabaseKind::Mongodb,
-            Kind::Aws,
+            kubernetes_kind,
             database_mode,
             is_public,
         )
@@ -540,7 +553,7 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
 #[named]
 #[test]
 fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("3.6", function_name!(), CONTAINER, false);
+    test_mongodb_configuration("3.6", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -548,14 +561,14 @@ fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
 #[test]
 #[ignore]
 fn public_mongodb_v3_6_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("3.6", function_name!(), CONTAINER, true);
+    test_mongodb_configuration("3.6", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn private_mongodb_v4_0_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("4.0", function_name!(), CONTAINER, false);
+    test_mongodb_configuration("4.0", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -563,14 +576,14 @@ fn private_mongodb_v4_0_deploy_a_working_dev_environment() {
 #[test]
 #[ignore]
 fn public_mongodb_v4_0_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("4.0", function_name!(), CONTAINER, true);
+    test_mongodb_configuration("4.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("4.2", function_name!(), CONTAINER, false);
+    test_mongodb_configuration("4.2", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -578,21 +591,21 @@ fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
 #[test]
 #[ignore]
 fn public_mongodb_v4_2_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("4.2", function_name!(), CONTAINER, true);
+    test_mongodb_configuration("4.2", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("4.4", function_name!(), CONTAINER, false);
+    test_mongodb_configuration("4.4", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
-    test_mongodb_configuration("4.4", function_name!(), CONTAINER, true);
+    test_mongodb_configuration("4.4", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 // MongoDB production environment (DocumentDB)
@@ -600,7 +613,7 @@ fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn private_mongodb_v3_6_deploy_a_working_prod_environment() {
-    test_mongodb_configuration("3.6", function_name!(), MANAGED, false);
+    test_mongodb_configuration("3.6", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
@@ -608,14 +621,14 @@ fn private_mongodb_v3_6_deploy_a_working_prod_environment() {
 #[test]
 #[ignore]
 fn public_mongodb_v3_6_deploy_a_working_prod_environment() {
-    test_mongodb_configuration("3.6", function_name!(), MANAGED, true);
+    test_mongodb_configuration("3.6", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
 fn private_mongodb_v4_0_deploy_a_working_prod_environment() {
-    test_mongodb_configuration("4.0", function_name!(), MANAGED, false);
+    test_mongodb_configuration("4.0", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
@@ -623,7 +636,7 @@ fn private_mongodb_v4_0_deploy_a_working_prod_environment() {
 #[test]
 #[ignore]
 fn public_mongodb_v4_0_deploy_a_working_prod_environment() {
-    test_mongodb_configuration("4.0", function_name!(), MANAGED, true);
+    test_mongodb_configuration("4.0", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
 /**
@@ -632,7 +645,13 @@ fn public_mongodb_v4_0_deploy_a_working_prod_environment() {
 **
 **/
 #[allow(dead_code)]
-fn test_mysql_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
+pub fn test_mysql_configuration(
+    version: &str,
+    test_name: &str,
+    database_mode: DatabaseMode,
+    kubernetes_kind: KubernetesKind,
+    is_public: bool,
+) {
     let secrets = FuncTestsSecrets::new();
     let context = context(
         secrets
@@ -657,7 +676,7 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
             version,
             test_name,
             DatabaseKind::Mysql,
-            Kind::Aws,
+            kubernetes_kind,
             database_mode,
             is_public,
         )
@@ -669,7 +688,7 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
 #[named]
 #[test]
 fn private_mysql_v5_7_deploy_a_working_dev_environment() {
-    test_mysql_configuration("5.7", function_name!(), CONTAINER, false);
+    test_mysql_configuration("5.7", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -677,21 +696,21 @@ fn private_mysql_v5_7_deploy_a_working_dev_environment() {
 #[test]
 #[ignore]
 fn public_mysql_v5_7_deploy_a_working_dev_environment() {
-    test_mysql_configuration("5.7", function_name!(), CONTAINER, true);
+    test_mysql_configuration("5.7", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn private_mysql_v8_deploy_a_working_dev_environment() {
-    test_mysql_configuration("8.0", function_name!(), CONTAINER, false);
+    test_mysql_configuration("8.0", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn public_mysql_v8_deploy_a_working_dev_environment() {
-    test_mysql_configuration("8.0", function_name!(), CONTAINER, true);
+    test_mysql_configuration("8.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 // MySQL production environment (RDS)
@@ -699,28 +718,28 @@ fn public_mysql_v8_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn private_mysql_v5_7_deploy_a_working_prod_environment() {
-    test_mysql_configuration("5.7", function_name!(), MANAGED, false);
+    test_mysql_configuration("5.7", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
 fn public_mysql_v5_7_deploy_a_working_prod_environment() {
-    test_mysql_configuration("5.7", function_name!(), MANAGED, true);
+    test_mysql_configuration("5.7", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
 fn private_mysql_v8_0_deploy_a_working_prod_environment() {
-    test_mysql_configuration("8.0", function_name!(), MANAGED, false);
+    test_mysql_configuration("8.0", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
 fn public_mysql_v8_0_deploy_a_working_prod_environment() {
-    test_mysql_configuration("8.0", function_name!(), MANAGED, true);
+    test_mysql_configuration("8.0", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
 /**
@@ -729,7 +748,13 @@ fn public_mysql_v8_0_deploy_a_working_prod_environment() {
 **
 **/
 #[allow(dead_code)]
-fn test_redis_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
+pub fn test_redis_configuration(
+    version: &str,
+    test_name: &str,
+    database_mode: DatabaseMode,
+    kubernetes_kind: KubernetesKind,
+    is_public: bool,
+) {
     let secrets = FuncTestsSecrets::new();
     let context = context(
         secrets
@@ -754,7 +779,7 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
             version,
             test_name,
             DatabaseKind::Redis,
-            Kind::Aws,
+            kubernetes_kind,
             database_mode,
             is_public,
         )
@@ -766,7 +791,7 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
 #[named]
 #[test]
 fn private_redis_v5_deploy_a_working_dev_environment() {
-    test_redis_configuration("5", function_name!(), CONTAINER, false);
+    test_redis_configuration("5", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
@@ -774,21 +799,21 @@ fn private_redis_v5_deploy_a_working_dev_environment() {
 #[test]
 #[ignore]
 fn public_redis_v5_deploy_a_working_dev_environment() {
-    test_redis_configuration("5", function_name!(), CONTAINER, true);
+    test_redis_configuration("5", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn private_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6", function_name!(), CONTAINER, false);
+    test_redis_configuration("6", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn public_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6", function_name!(), CONTAINER, true);
+    test_redis_configuration("6", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 // Redis production environment (Elasticache)
@@ -796,7 +821,7 @@ fn public_redis_v6_deploy_a_working_dev_environment() {
 #[named]
 #[test]
 fn private_redis_v5_deploy_a_working_prod_environment() {
-    test_redis_configuration("5", function_name!(), MANAGED, false);
+    test_redis_configuration("5", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
@@ -804,14 +829,14 @@ fn private_redis_v5_deploy_a_working_prod_environment() {
 #[test]
 #[ignore]
 fn public_redis_v5_deploy_a_working_prod_environment() {
-    test_redis_configuration("5", function_name!(), MANAGED, true);
+    test_redis_configuration("5", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
 fn private_redis_v6_deploy_a_working_prod_environment() {
-    test_redis_configuration("6", function_name!(), MANAGED, false);
+    test_redis_configuration("6", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
 
 #[cfg(feature = "test-aws-managed-services")]
@@ -819,5 +844,5 @@ fn private_redis_v6_deploy_a_working_prod_environment() {
 #[test]
 #[ignore]
 fn public_redis_v6_deploy_a_working_prod_environment() {
-    test_redis_configuration("6", function_name!(), MANAGED, true);
+    test_redis_configuration("6", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }

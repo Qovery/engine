@@ -13,12 +13,12 @@ use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
-use tokio::fs;
 
 use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::models::{CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::CheckAction;
+use crate::cloud_provider::Kind as CloudProviderKind;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::cmd::kubectl::{
@@ -31,7 +31,7 @@ use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter};
-use crate::fs::workspace_directory;
+use crate::fs::{delete_file_if_exists, workspace_directory};
 use crate::io_models::ProgressLevel::Info;
 use crate::io_models::{
     Action, Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier, StringPath,
@@ -84,26 +84,39 @@ pub trait Kubernetes: Listen {
         format!("{}.yaml", self.id())
     }
 
+    fn get_bucket_name(&self) -> String {
+        format!("qovery-kubeconfigs-{}", self.id())
+    }
+
+    fn kubeconfig_local_file_path(&self) -> Result<String, EngineError> {
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+        let bucket_name = self.get_bucket_name();
+        let object_key = self.get_kubeconfig_filename();
+
+        match self.get_temp_dir(event_details) {
+            Ok(x) => Ok(format!("{}/{}/{}", &x, &bucket_name, &object_key)),
+            Err(e) => Err(e),
+        }
+    }
+
     fn get_kubeconfig_file(&self) -> Result<(String, File), EngineError> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-        let bucket_name = format!("qovery-kubeconfigs-{}", self.id());
         let object_key = self.get_kubeconfig_filename();
+        let bucket_name = self.get_bucket_name();
         let stage = Stage::General(GeneralStep::RetrieveClusterConfig);
 
         // check if kubeconfig locally exists
-        let local_kubeconfig = match self.get_temp_dir(event_details) {
-            Ok(x) => {
-                let local_kubeconfig_folder_path = format!("{}/{}", &x, &bucket_name);
-                let local_kubeconfig_generated = format!("{}/{}", &local_kubeconfig_folder_path, &object_key);
-                if Path::new(&local_kubeconfig_generated).exists() {
-                    match File::open(&local_kubeconfig_generated) {
-                        Ok(_) => Some(local_kubeconfig_generated),
+        let local_kubeconfig = match self.kubeconfig_local_file_path() {
+            Ok(kubeconfig_local_file_path) => {
+                if Path::new(&kubeconfig_local_file_path).exists() {
+                    match File::open(&kubeconfig_local_file_path) {
+                        Ok(_) => Some(kubeconfig_local_file_path),
                         Err(err) => {
                             self.logger().log(EngineEvent::Debug(
                                 self.get_event_details(stage.clone()),
                                 EventMessage::new(
                                     err.to_string(),
-                                    Some(format!("Error, couldn't open {} file", &local_kubeconfig_generated,)),
+                                    Some(format!("Error, couldn't open {} file", &kubeconfig_local_file_path)),
                                 ),
                             ));
                             None
@@ -163,6 +176,16 @@ pub trait Kubernetes: Listen {
             }
         };
 
+        // security: ensure size match with a kubeconfig file (< 16k)
+        let max_size = 16 * 1024;
+        if metadata.len() > max_size {
+            return Err(EngineError::new_kubeconfig_size_security_check_error(
+                event_details,
+                metadata.len(),
+                max_size,
+            ));
+        };
+
         let mut permissions = metadata.permissions();
         permissions.set_mode(0o400);
         if let Err(err) = std::fs::set_permissions(string_path.as_str(), permissions) {
@@ -182,13 +205,25 @@ pub trait Kubernetes: Listen {
         Ok(path)
     }
 
-    fn delete_local_kubeconfig(&self) {
-        // just ignoring if not already present
-        let file = match self.get_kubeconfig_file_path() {
-            Ok(x) => x,
-            Err(_) => return,
-        };
-        let _ = fs::remove_file(file);
+    fn delete_local_kubeconfig_terraform(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+        let file = self.kubeconfig_local_file_path()?;
+
+        delete_file_if_exists(file.as_str())
+            .map_err(|e| EngineError::new_delete_local_kubeconfig_file_error(event_details, file.as_str(), e))
+    }
+
+    fn delete_local_kubeconfig_object_storage_folder(&self) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+        let file = format!(
+            "{}/{}/{}",
+            self.config_file_store().workspace_dir_full_path(),
+            self.get_bucket_name(),
+            self.get_kubeconfig_filename()
+        );
+
+        delete_file_if_exists(file.as_str())
+            .map_err(|e| EngineError::new_delete_local_kubeconfig_file_error(event_details, file.as_str(), e))
     }
 
     fn resources(&self, _environment: &Environment) -> Result<Resources, EngineError> {
@@ -379,13 +414,24 @@ pub trait KubernetesNode {
     fn as_any(&self) -> &dyn Any;
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     Eks,
     Ec2,
     Doks,
     ScwKapsule,
+}
+
+impl Kind {
+    pub fn get_cloud_provider_kind(&self) -> CloudProviderKind {
+        match self {
+            Kind::Eks => CloudProviderKind::Aws,
+            Kind::Ec2 => CloudProviderKind::Aws,
+            Kind::Doks => CloudProviderKind::Do,
+            Kind::ScwKapsule => CloudProviderKind::Scw,
+        }
+    }
 }
 
 impl Display for Kind {

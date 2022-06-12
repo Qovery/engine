@@ -11,8 +11,9 @@ use qovery_engine::cloud_provider::Kind;
 use std::str::FromStr;
 use test_utilities::aws::{K3S_KUBERNETES_MAJOR_VERSION, K3S_KUBERNETES_MINOR_VERSION};
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
+use test_utilities::utilities::generate_cluster_id;
 
-#[cfg(feature = "test-aws-infra-ec2")]
+#[cfg(feature = "test-aws-ec2-infra")]
 fn create_and_destroy_aws_ec2_k3s_cluster(
     region: String,
     test_type: ClusterTestType,
@@ -24,7 +25,7 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
     engine_run_test(|| {
         let region = AwsRegion::from_str(region.as_str()).expect("Wasn't able to convert the desired region");
         let zones = region.get_zones();
-        let cluster_id = "ztest-abe3e22b0".to_string(); // don't change it to test qovery dns provider properly
+        let cluster_id = generate_cluster_id(region.to_string().as_str());
         cluster_test(
             test_name,
             Kind::Aws,
@@ -43,10 +44,9 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
     })
 }
 
-#[cfg(feature = "test-aws-infra-ec2")]
+#[cfg(feature = "test-aws-ec2-infra")]
 #[named]
 #[test]
-#[ignore] // TODO(benjaminch): to be reactivated once EC2 is ready
 fn create_and_destroy_aws_ec2_k3s_cluster_eu_west_3() {
     let region = "eu-west-3".to_string();
     create_and_destroy_aws_ec2_k3s_cluster(

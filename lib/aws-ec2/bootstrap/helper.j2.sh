@@ -28,7 +28,7 @@ function get_connection_details() { ## print environment variables to connect to
   echo 'export AWS_ACCESS_KEY_ID="{{ aws_access_key }}"'
   echo 'export AWS_SECRET_ACCESS_KEY="{{ aws_secret_key }}"'
   echo 'export AWS_DEFAULT_REGION="{{ aws_region }}"'
-  echo 'export KUBECONFIG=../../object-storage/s3/default-s3/{{ s3_kubeconfig_bucket }}/{{ kubernetes_cluster_id }}.yaml'
+  echo 'export KUBECONFIG=../../object-storage/s3/{{ s3_kubeconfig_bucket }}/{{ kubernetes_cluster_id }}.yaml'
 }
 
 case $1 in

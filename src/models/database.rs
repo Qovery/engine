@@ -8,7 +8,7 @@ use crate::cloud_provider::{service, DeploymentTarget};
 use crate::cmd::kubectl;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
-use crate::io_models::{Context, Listen, Listener, Listeners, ListenersHelper};
+use crate::io_models::{ApplicationAdvancedSettings, Context, Listen, Listener, Listeners, ListenersHelper};
 use crate::logger::Logger;
 use crate::models::database_utils::{
     get_self_hosted_mongodb_version, get_self_hosted_mysql_version, get_self_hosted_postgres_version,
@@ -198,6 +198,10 @@ where
         } else {
             format!("{}-{}", T::lib_directory_name(), &self.id)
         }
+    }
+
+    fn application_advanced_settings(&self) -> Option<ApplicationAdvancedSettings> {
+        None
     }
 
     fn version(&self) -> String {

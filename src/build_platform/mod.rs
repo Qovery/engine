@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cmd::command::CommandError;
 use crate::cmd::docker::{BuildResult, DockerError};
 use crate::errors::EngineError;
@@ -18,28 +19,44 @@ pub mod local_docker;
 
 #[derive(thiserror::Error, Debug)]
 pub enum BuildError {
-    #[error("Cannot build Application {0} due to an invalid config: {1}")]
-    InvalidConfig(String, String),
+    #[error("Cannot build Application {application:?} due to an invalid config: {raw_error_message:?}")]
+    InvalidConfig {
+        application: String,
+        raw_error_message: String,
+    },
 
-    #[error("Cannot build Application {0} due to an error with git: {1}")]
-    GitError(String, git2::Error),
+    #[error("Cannot build Application {application:?} due to an error with git: {raw_error:?}")]
+    GitError {
+        application: String,
+        raw_error: git2::Error,
+    },
 
-    #[error("Build of Application {0} have been aborted at user request")]
-    Aborted(String),
+    #[error("Build of Application {application:?} have been aborted at user request")]
+    Aborted { application: String },
 
-    #[error("Cannot build Application {0} due to an io error: {1} {2}")]
-    IoError(String, String, std::io::Error),
+    #[error("Cannot build Application {application:?} due to an io error: {action_description:?} {raw_error:?}")]
+    IoError {
+        application: String,
+        action_description: String,
+        raw_error: std::io::Error,
+    },
 
-    #[error("Cannot build Application {0} due to an error with docker: {1}")]
-    DockerError(String, DockerError),
+    #[error("Cannot build Application {application:?} due to an error with docker: {raw_error:?}")]
+    DockerError {
+        application: String,
+        raw_error: DockerError,
+    },
 
-    #[error("Cannot build Application {0} due to an error with buildpack: {1}")]
-    BuildpackError(String, CommandError),
+    #[error("Cannot build Application {application:?} due to an error with buildpack: {raw_error:?}")]
+    BuildpackError {
+        application: String,
+        raw_error: CommandError,
+    },
 }
 
 pub fn to_engine_error(event_details: EventDetails, err: BuildError) -> EngineError {
     match err {
-        BuildError::Aborted(_) => EngineError::new_task_cancellation_requested(event_details),
+        BuildError::Aborted { .. } => EngineError::new_task_cancellation_requested(event_details),
         _ => EngineError::new_build_error(event_details, err),
     }
 }
@@ -133,6 +150,12 @@ pub struct Image {
 impl Image {
     pub fn registry_host(&self) -> &str {
         self.registry_url.host_str().unwrap()
+    }
+    pub fn registry_secret_name(&self, kubernetes_kind: KubernetesKind) -> &str {
+        match kubernetes_kind {
+            KubernetesKind::Ec2 => "awsecr-cred", // required for registry-creds
+            _ => self.registry_host(),
+        }
     }
     pub fn repository_name(&self) -> &str {
         &self.repository_name

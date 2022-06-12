@@ -72,7 +72,7 @@ variable "ec2_instance" {
   default = {
     "instance_type" = "{{ eks_worker_nodes[0].instance_type }}"
     "disk_size_in_gb" = "{{ eks_worker_nodes[0].disk_size_in_gib }}"
-    "user_data_logs_path" = "/var/log/user-data.log" # install error logs location
+    "user_data_logs_path" = "/var/log/user_data.log" # install error logs location
   }
   type = map(string)
 }

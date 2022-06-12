@@ -505,7 +505,7 @@ controller:
 
   admissionWebhooks:
     annotations: {}
-    enabled: false
+    enabled: true
     failurePolicy: Fail
     # timeoutSeconds: 10
     port: 8443

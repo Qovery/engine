@@ -1,6 +1,6 @@
 charts:
   - name: cert-manager
-    version: v1.2.0
+    version: v1.3.0
     repo_name: jetstack
   - name: external-dns
     repo_name: bitnami
@@ -33,6 +33,14 @@ charts:
   - name: cluster-autoscaler
     repo_name: cluster-autoscaler
     version: 9.10.4
+  - name: registry-creds
+    repo_name: kir4h
+    dest: aws-ec2-bootstrap
+    version: 1.3.0
+  - name: aws-ebs-csi-driver
+    repo_name: aws-ebs-csi-driver
+    dest: aws-ec2-bootstrap
+    version: 2.6.8
   - name: metrics-server
     repo_name: bitnami
     version: 5.10.13
@@ -98,6 +106,8 @@ repos:
     url: https://honestica.github.io/lifen-charts
   - name: aws
     url: https://aws.github.io/eks-charts
+  - name: aws-ebs-csi-driver
+    url: https://kubernetes-sigs.github.io/aws-ebs-csi-driver
   - name: grafana
     url: https://grafana.github.io/helm-charts
   - name: pleco
@@ -114,12 +124,16 @@ repos:
     url: https://kubernetes.github.io/ingress-nginx/
   - name: datadog
     url: https://helm.datadoghq.com
+  - name: kir4h
+    url: https://kir4h.github.io/charts
 
 destinations:
   - name: default
     path: common/bootstrap/charts
   - name: aws-bootstrap
     path: aws/bootstrap/charts
+  - name: aws-ec2-bootstrap
+    path: aws-ec2/bootstrap/charts
   - name: do-bootstrap
     path: digitalocean/bootstrap/charts
   - name: services

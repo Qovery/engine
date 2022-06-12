@@ -560,9 +560,17 @@ pub struct HPAAnnotationCondition {
     pub conditions: Option<String>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsServer {
+    pub kind: String,
+    pub api_version: String,
+    pub name: String,
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::cmd::structs::{KubernetesList, KubernetesPod, KubernetesPodStatusReason, PDB, PVC, SVC};
+    use crate::cmd::structs::{KubernetesList, KubernetesPod, KubernetesPodStatusReason, MetricsServer, PDB, PVC, SVC};
 
     #[test]
     fn test_svc_deserialize() {
@@ -1797,6 +1805,23 @@ mod tests {
 
         // verify:
         match pdb {
+            Ok(_) => assert!(true),
+            Err(e) => {
+                return assert!(false, "{}", e);
+            }
+        }
+    }
+
+    #[test]
+    fn test_metrics_server_deserialize() {
+        // setup:
+        let payload = r#"{"kind":"APIGroup","apiVersion":"v1","name":"metrics.k8s.io","versions":[{"groupVersion":"metrics.k8s.io/v1beta1","version":"v1beta1"}],"preferredVersion":{"groupVersion":"metrics.k8s.io/v1beta1","version":"v1beta1"}}"#;
+
+        // execute:
+        let metrics_server = serde_json::from_str::<MetricsServer>(payload);
+
+        // verify:
+        match metrics_server {
             Ok(_) => assert!(true),
             Err(e) => {
                 return assert!(false, "{}", e);

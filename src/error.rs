@@ -47,6 +47,7 @@ pub enum EngineErrorScope {
     Database(Id, Type, Name),
     Application(Id, Name, Version),
     Router(Id, Name),
+    SecretManager(Name),
 }
 
 impl From<Transmitter> for EngineErrorScope {
@@ -62,6 +63,7 @@ impl From<Transmitter> for EngineErrorScope {
             Transmitter::Database(id, db_type, name) => EngineErrorScope::Database(id, db_type, name),
             Transmitter::Application(id, name, commit) => EngineErrorScope::Application(id, name, commit),
             Transmitter::Router(id, name) => EngineErrorScope::Router(id, name),
+            Transmitter::SecretManager(name) => EngineErrorScope::SecretManager(name),
         }
     }
 }

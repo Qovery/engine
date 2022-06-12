@@ -17,6 +17,7 @@ use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::cmd;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
+use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
@@ -67,6 +68,8 @@ pub struct KapsuleOptions {
     pub qovery_nats_user: String,
     pub qovery_nats_password: String,
     pub qovery_ssh_key: String,
+    #[serde(default)]
+    pub user_ssh_keys: Vec<String>,
     pub grafana_admin_user: String,
     pub grafana_admin_password: String,
     pub agent_version_controller_token: String,
@@ -111,6 +114,7 @@ impl KapsuleOptions {
             qovery_nats_user,
             qovery_nats_password,
             qovery_ssh_key,
+            user_ssh_keys: vec![],
             grafana_admin_user,
             grafana_admin_password,
             agent_version_controller_token,
@@ -960,6 +964,13 @@ impl Kapsule {
             self.context.disable_pleco(),
             self.options.clone(),
         );
+
+        if let Err(e) = kubectl_are_qovery_infra_pods_executed(kubeconfig_path, &credentials_environment_variables) {
+            self.logger().log(EngineEvent::Warning(
+                event_details.clone(),
+                EventMessage::new("Didn't manage to restart all paused pods".to_string(), Some(e.to_string())),
+            ));
+        }
 
         self.logger().log(EngineEvent::Info(
             event_details.clone(),

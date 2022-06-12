@@ -19,7 +19,7 @@ Before installing the chart, you must first install the cert-manager CustomResou
 This is performed in a separate step to allow you to easily uninstall and reinstall cert-manager without deleting your installed custom resources.
 
 ```bash
-$ kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.2.0/cert-manager.crds.yaml
+$ kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.3.0/cert-manager.crds.yaml
 ```
 
 To install the chart with the release name `my-release`:
@@ -65,7 +65,7 @@ If you want to completely uninstall cert-manager from your cluster, you will als
 delete the previously installed CustomResourceDefinition resources:
 
 ```console
-$ kubectl delete -f https://github.com/jetstack/cert-manager/releases/download/v1.2.0/cert-manager.crds.yaml
+$ kubectl delete -f https://github.com/jetstack/cert-manager/releases/download/v1.3.0/cert-manager.crds.yaml
 ```
 
 ## Configuration
@@ -85,7 +85,7 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `global.leaderElection.retryPeriod` | The duration the clients should wait between attempting acquisition and renewal of a leadership |  |
 | `installCRDs` | If true, CRD resources will be installed as part of the Helm chart. If enabled, when uninstalling CRD resources will be deleted causing all installed custom resources to be DELETED | `false` |
 | `image.repository` | Image repository | `quay.io/jetstack/cert-manager-controller` |
-| `image.tag` | Image tag | `v1.2.0` |
+| `image.tag` | Image tag | `v1.3.0` |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `replicaCount`  | Number of cert-manager replicas  | `1` |
 | `clusterResourceNamespace` | Override the namespace used to store DNS provider credentials etc. for ClusterIssuer resources | Same namespace as cert-manager pod |
@@ -95,6 +95,7 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `serviceAccount.create` | If `true`, create a new service account | `true` |
 | `serviceAccount.name` | Service account to be used. If not set and `serviceAccount.create` is `true`, a name is generated using the fullname template |  |
 | `serviceAccount.annotations` | Annotations to add to the service account |  |
+| `serviceAccount.automountServiceAccountToken` | Automount API credentials for the Service Account | `true` |
 | `volumes` | Optional volumes for cert-manager | `[]` |
 | `volumeMounts` | Optional volume mounts for cert-manager | `[]` |
 | `resources` | CPU/memory resource requests/limits | `{}` |
@@ -135,22 +136,23 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `webhook.serviceAccount.create` | If `true`, create a new service account for the webhook component | `true` |
 | `webhook.serviceAccount.name` | Service account for the webhook component to be used. If not set and `webhook.serviceAccount.create` is `true`, a name is generated using the fullname template |  |
 | `webhook.serviceAccount.annotations` | Annotations to add to the service account for the webhook component |  |
+| `webhook.serviceAccount.automountServiceAccountToken` | Automount API credentials for the webhook Service Account |  |
 | `webhook.resources` | CPU/memory resource requests/limits for the webhook pods | `{}` |
 | `webhook.nodeSelector` | Node labels for webhook pod assignment | `{}` |
 | `webhook.affinity` | Node affinity for webhook pod assignment | `{}` |
 | `webhook.tolerations` | Node tolerations for webhook pod assignment | `[]` |
 | `webhook.image.repository` | Webhook image repository | `quay.io/jetstack/cert-manager-webhook` |
-| `webhook.image.tag` | Webhook image tag | `v1.2.0` |
+| `webhook.image.tag` | Webhook image tag | `v1.3.0` |
 | `webhook.image.pullPolicy` | Webhook image pull policy | `IfNotPresent` |
 | `webhook.securePort` | The port that the webhook should listen on for requests. | `10250` |
 | `webhook.securityContext` | Security context for webhook pod assignment | `{}` |
 | `webhook.containerSecurityContext` | Security context to be set on the webhook component container | `{}` |
 | `webhook.hostNetwork` | If `true`, run the Webhook on the host network. | `false` |
-| `webhook.livenessProbe.failureThreshold` | The livneness probe failure threshold | `3` |
-| `webhook.livenessProbe.initialDelaySeconds` | The livneness probe initial delay (in seconds) | `60` |
-| `webhook.livenessProbe.periodSeconds` | The livneness probe period (in seconds) | `10` |
-| `webhook.livenessProbe.successThreshold` | The livneness probe success threshold | `1` |
-| `webhook.livenessProbe.timeoutSeconds` | The livneness probe timeout (in seconds) | `1` |
+| `webhook.livenessProbe.failureThreshold` | The liveness probe failure threshold | `3` |
+| `webhook.livenessProbe.initialDelaySeconds` | The liveness probe initial delay (in seconds) | `60` |
+| `webhook.livenessProbe.periodSeconds` | The liveness probe period (in seconds) | `10` |
+| `webhook.livenessProbe.successThreshold` | The liveness probe success threshold | `1` |
+| `webhook.livenessProbe.timeoutSeconds` | The liveness probe timeout (in seconds) | `1` |
 | `webhook.readinessProbe.failureThreshold` | The readiness probe failure threshold | `3` |
 | `webhook.readinessProbe.initialDelaySeconds` | The readiness probe initial delay (in seconds) | `5` |
 | `webhook.readinessProbe.periodSeconds` | The readiness probe period (in seconds) | `5` |
@@ -165,12 +167,13 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `cainjector.serviceAccount.create` | If `true`, create a new service account for the cainjector component | `true` |
 | `cainjector.serviceAccount.name` | Service account for the cainjector component to be used. If not set and `cainjector.serviceAccount.create` is `true`, a name is generated using the fullname template |  |
 | `cainjector.serviceAccount.annotations` | Annotations to add to the service account for the cainjector component |  |
+| `cainjector.serviceAccount.automountServiceAccountToken` | Automount API credentials for the cainjector Service Account | `true` |
 | `cainjector.resources` | CPU/memory resource requests/limits for the cainjector pods | `{}` |
 | `cainjector.nodeSelector` | Node labels for cainjector pod assignment | `{}` |
 | `cainjector.affinity` | Node affinity for cainjector pod assignment | `{}` |
 | `cainjector.tolerations` | Node tolerations for cainjector pod assignment | `[]` |
 | `cainjector.image.repository` | cainjector image repository | `quay.io/jetstack/cert-manager-cainjector` |
-| `cainjector.image.tag` | cainjector image tag | `v1.2.0` |
+| `cainjector.image.tag` | cainjector image tag | `v1.3.0` |
 | `cainjector.image.pullPolicy` | cainjector image pull policy | `IfNotPresent` |
 | `cainjector.securityContext` | Security context for cainjector pod assignment | `{}` |
 | `cainjector.containerSecurityContext` | Security context to be set on cainjector component container | `{}` |

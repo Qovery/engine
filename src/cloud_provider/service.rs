@@ -1,4 +1,5 @@
 use std::net::TcpStream;
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::mpsc;
 use std::sync::mpsc::TryRecvError;
@@ -16,18 +17,22 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd;
 use crate::cmd::helm;
 use crate::cmd::kubectl::ScalingKind::Statefulset;
-use crate::cmd::kubectl::{kubectl_exec_delete_secret, kubectl_exec_scale_replicas_by_selector, ScalingKind};
-use crate::cmd::structs::LabelsContent;
+use crate::cmd::kubectl::{
+    kubectl_exec_delete_pod, kubectl_exec_delete_secret, kubectl_exec_get_pods,
+    kubectl_exec_scale_replicas_by_selector, ScalingKind,
+};
+use crate::cmd::structs::{KubernetesPodStatusPhase, LabelsContent};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
 use crate::io_models::ProgressLevel::Info;
 use crate::io_models::{
-    Context, DatabaseMode, Listen, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-    QoveryIdentifier,
+    ApplicationAdvancedSettings, Context, DatabaseMode, Listen, Listeners, ListenersHelper, ProgressInfo,
+    ProgressLevel, ProgressScope, QoveryIdentifier,
 };
 use crate::logger::Logger;
 use crate::models::types::VersionsNumber;
 
+// todo: delete this useless trait
 pub trait Service: ToTransmitter {
     fn context(&self) -> &Context;
     fn service_type(&self) -> ServiceType;
@@ -67,6 +72,7 @@ pub trait Service: ToTransmitter {
             self.to_transmitter(),
         )
     }
+    fn application_advanced_settings(&self) -> Option<ApplicationAdvancedSettings>;
     fn version(&self) -> String;
     fn action(&self) -> &Action;
     fn private_port(&self) -> Option<u16>;
@@ -438,6 +444,14 @@ where
     helm.upgrade(&chart, &[])
         .map_err(|e| helm::to_engine_error(&event_details, e))?;
 
+    delete_pending_service(
+        kubernetes_config_file_path.as_str(),
+        environment.namespace(),
+        service.selector().unwrap_or_default().as_str(),
+        kubernetes.cloud_provider().credentials_environment_variables(),
+        event_details.clone(),
+    )?;
+
     crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
@@ -703,6 +717,14 @@ where
 
         helm.upgrade(&chart, &[])
             .map_err(|e| helm::to_engine_error(&event_details, e))?;
+
+        delete_pending_service(
+            kubernetes_config_file_path.as_str(),
+            environment.namespace(),
+            service.selector().unwrap_or_default().as_str(),
+            kubernetes.cloud_provider().credentials_environment_variables(),
+            event_details.clone(),
+        )?;
 
         // check app status
         let is_pod_ready = crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
@@ -1342,4 +1364,35 @@ pub fn get_tfstate_suffix(service: &dyn Service) -> String {
 // As mention the doc: Secrets will be named in the format: tfstate-{workspace}-{secret_suffix}.
 pub fn get_tfstate_name(service: &dyn Service) -> String {
     format!("tfstate-default-{}", service.id())
+}
+
+fn delete_pending_service<P>(
+    kubernetes_config: P,
+    namespace: &str,
+    selector: &str,
+    envs: Vec<(&str, &str)>,
+    event_details: EventDetails,
+) -> Result<(), EngineError>
+where
+    P: AsRef<Path>,
+{
+    match kubectl_exec_get_pods(&kubernetes_config, Some(namespace), Some(selector), envs.clone()) {
+        Ok(pods) => {
+            for pod in pods.items {
+                if pod.status.phase == KubernetesPodStatusPhase::Pending {
+                    if let Err(e) = kubectl_exec_delete_pod(
+                        &kubernetes_config,
+                        pod.metadata.namespace.as_str(),
+                        pod.metadata.name.as_str(),
+                        envs.clone(),
+                    ) {
+                        return Err(EngineError::new_k8s_service_issue(event_details, e));
+                    }
+                }
+            }
+
+            Ok(())
+        }
+        Err(e) => Err(EngineError::new_k8s_service_issue(event_details, e)),
+    }
 }

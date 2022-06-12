@@ -144,18 +144,18 @@ impl LocalDocker {
 
         // Going to inject only env var that are used by the dockerfile
         // so extracting it and modifying the image tag and env variables
-        let dockerfile_content = fs::read(dockerfile_complete_path).map_err(|err| {
-            BuildError::IoError(
-                build.image.application_id.clone(),
-                "reading dockerfile content".to_string(),
-                err,
-            )
+        let dockerfile_content = fs::read(dockerfile_complete_path).map_err(|err| BuildError::IoError {
+            application: build.image.application_id.clone(),
+            action_description: "reading dockerfile content".to_string(),
+            raw_error: err,
         })?;
         let dockerfile_args = match extract_dockerfile_args(dockerfile_content) {
             Ok(dockerfile_args) => dockerfile_args,
             Err(err) => {
-                let msg = format!("Cannot extract env vars from your dockerfile {}", err);
-                return Err(BuildError::InvalidConfig(build.image.application_id.clone(), msg));
+                return Err(BuildError::InvalidConfig {
+                    application: build.image.application_id.clone(),
+                    raw_error_message: format!("Cannot extract env vars from your dockerfile {}", err),
+                });
             }
         };
 
@@ -215,8 +215,13 @@ impl LocalDocker {
 
         match exit_status {
             Ok(build_result) => Ok(build_result),
-            Err(DockerError::Aborted(msg)) => Err(BuildError::Aborted(msg)),
-            Err(err) => Err(BuildError::DockerError(build.image.application_id.clone(), err)),
+            Err(DockerError::Aborted { .. }) => Err(BuildError::Aborted {
+                application: build.image.application_id.clone(),
+            }),
+            Err(err) => Err(BuildError::DockerError {
+                application: build.image.application_id.clone(),
+                raw_error: err,
+            }),
         }
     }
 
@@ -286,11 +291,13 @@ impl LocalDocker {
                         buildpacks_args.push(builder);
                     }
                     _ => {
-                        let msg = format!(
-                            "Invalid buildpacks language format: expected `builder[@version]` got {}",
-                            buildpacks_language
-                        );
-                        return Err(BuildError::InvalidConfig(build.image.application_id.clone(), msg));
+                        return Err(BuildError::InvalidConfig {
+                            application: build.image.application_id.clone(),
+                            raw_error_message: format!(
+                                "Invalid buildpacks language format: expected `builder[@version]` got {}",
+                                buildpacks_language
+                            ),
+                        });
                     }
                 }
             }
@@ -353,8 +360,13 @@ impl LocalDocker {
                 build_result.built(true);
                 Ok(build_result)
             }
-            Err(Killed(msg)) => Err(BuildError::Aborted(msg)),
-            Err(err) => Err(BuildError::BuildpackError(build.image.application_id.clone(), err)),
+            Err(Killed(_)) => Err(BuildError::Aborted {
+                application: build.image.application_id.clone(),
+            }),
+            Err(err) => Err(BuildError::BuildpackError {
+                application: build.image.application_id.clone(),
+                raw_error: err,
+            }),
         }
     }
 
@@ -364,12 +376,10 @@ impl LocalDocker {
             self.context.execution_id(),
             format!("build/{}", build.image.name.as_str()),
         )
-        .map_err(|err| {
-            BuildError::IoError(
-                build.image.application_id.clone(),
-                "when creating build workspace".to_string(),
-                err,
-            )
+        .map_err(|err| BuildError::IoError {
+            application: build.image.application_id.clone(),
+            action_description: "when creating build workspace".to_string(),
+            raw_error: err,
         })
     }
 }
@@ -398,7 +408,9 @@ impl BuildPlatform for LocalDocker {
 
         // check if we should already abort the task
         if is_task_canceled() {
-            return Err(BuildError::Aborted(build.image.application_id.clone()));
+            return Err(BuildError::Aborted {
+                application: build.image.application_id.clone(),
+            });
         }
 
         // LOGGING
@@ -443,8 +455,11 @@ impl BuildPlatform for LocalDocker {
         // FIXME: re-use the same repo and just checkout at the correct commit
         if repository_root_path.exists() {
             let app_id = app_id;
-            fs::remove_dir_all(&repository_root_path)
-                .map_err(|err| BuildError::IoError(app_id, "cleaning old repository".to_string(), err))?;
+            fs::remove_dir_all(&repository_root_path).map_err(|err| BuildError::IoError {
+                application: app_id,
+                action_description: "cleaning old repository".to_string(),
+                raw_error: err,
+            })?;
         }
 
         // Do the real git clone
@@ -454,11 +469,16 @@ impl BuildPlatform for LocalDocker {
             &repository_root_path,
             &get_credentials,
         ) {
-            return Err(BuildError::GitError(build.image.application_id.clone(), clone_error));
+            return Err(BuildError::GitError {
+                application: build.image.application_id.clone(),
+                raw_error: clone_error,
+            });
         }
 
         if is_task_canceled() {
-            return Err(BuildError::Aborted(build.image.application_id.clone()));
+            return Err(BuildError::Aborted {
+                application: build.image.application_id.clone(),
+            });
         }
 
         // ensure docker_path is a mounted volume, otherwise ignore because it's not what Qovery does in production
@@ -470,11 +490,13 @@ impl BuildPlatform for LocalDocker {
         // Check that the build context is correct
         let build_context_path = repository_root_path.join(&build.git_repository.root_path);
         if !build_context_path.is_dir() {
-            let msg = format!(
-                "Specified build context path {:?} does not exist within the repository",
-                &build.git_repository.root_path
-            );
-            return Err(BuildError::InvalidConfig(app_id, msg));
+            return Err(BuildError::InvalidConfig {
+                application: app_id,
+                raw_error_message: format!(
+                    "Specified build context path {:?} does not exist within the repository",
+                    &build.git_repository.root_path
+                ),
+            });
         }
 
         // Safety check to ensure we can't go up in the directory
@@ -483,11 +505,13 @@ impl BuildPlatform for LocalDocker {
             .unwrap_or_default()
             .starts_with(repository_root_path.canonicalize().unwrap_or_default())
         {
-            let msg = format!(
-                "Specified build context path {:?} tries to access directory outside of his git repository",
-                &build.git_repository.root_path
-            );
-            return Err(BuildError::InvalidConfig(app_id, msg));
+            return Err(BuildError::InvalidConfig {
+                application: app_id,
+                raw_error_message: format!(
+                    "Specified build context path {:?} tries to access directory outside of his git repository",
+                    &build.git_repository.root_path,
+                ),
+            });
         }
 
         // now we have to decide if we use buildpack or docker to build our application
@@ -499,11 +523,13 @@ impl BuildPlatform for LocalDocker {
 
             // If the dockerfile does not exist, abort
             if !dockerfile_absolute_path.is_file() {
-                let msg = format!(
-                    "Specified dockerfile path {:?} does not exist within the repository",
-                    &dockerfile_path
-                );
-                return Err(BuildError::InvalidConfig(app_id, msg));
+                return Err(BuildError::InvalidConfig {
+                    application: app_id,
+                    raw_error_message: format!(
+                        "Specified dockerfile path {:?} does not exist within the repository",
+                        &dockerfile_path
+                    ),
+                });
             }
 
             self.build_image_with_docker(

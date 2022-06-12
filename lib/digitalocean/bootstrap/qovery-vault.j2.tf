@@ -5,7 +5,7 @@ locals {
 // do not try to use count into resource, it will fails trying to connect to vault
 {% if vault_auth_method != "none" and not test_cluster %}
 resource "vault_generic_secret" "cluster-access" {
-  path = "official-clusters-access/${var.organization_id}-${var.kubernetes_cluster_id}"
+  path = "official-clusters-access/${var.kubernetes_full_cluster_id}"
   data_json = <<EOT
 {
   "cloud_provider": "${var.cloud_provider}",

@@ -243,16 +243,30 @@ pub enum InfrastructureStep {
     LoadConfiguration,
     /// Create: creating a cluster.
     Create,
+    /// Created: cluster creation is ok.
+    Created,
+    /// CreateError: error on creating a cluster.
+    CreateError,
     /// Pause: pausing a cluster.
     Pause,
-    /// Resume: resume a paused cluster.
-    Resume,
+    /// Paused: cluster pause is ok.
+    Paused,
+    /// PauseError: error on pausing a cluster.
+    PauseError,
     /// Upgrade: upgrade a cluster.
     Upgrade,
-    /// Downgrade: upgrade a cluster.
+    /// Upgraded: cluster upgrade is ok.
+    Upgraded,
+    /// Downgrade: downgrade a cluster.
     Downgrade,
+    /// Downgraded: cluster downgrade is ok.
+    Downgraded,
     /// Delete: delete a cluster.
     Delete,
+    /// Deleted: cluster deletion is ok.
+    Deleted,
+    /// DeleteError: error on deleting a cluster.
+    DeleteError,
 }
 
 impl Display for InfrastructureStep {
@@ -267,7 +281,14 @@ impl Display for InfrastructureStep {
                 InfrastructureStep::Upgrade => "upgrade",
                 InfrastructureStep::Downgrade => "downgrade",
                 InfrastructureStep::Delete => "delete",
-                InfrastructureStep::Resume => "resume",
+                InfrastructureStep::Created => "created",
+                InfrastructureStep::Paused => "paused",
+                InfrastructureStep::Upgraded => "upgraded",
+                InfrastructureStep::Downgraded => "downgraded",
+                InfrastructureStep::Deleted => "deleted",
+                InfrastructureStep::CreateError => "create-error",
+                InfrastructureStep::PauseError => "pause-error",
+                InfrastructureStep::DeleteError => "delete-error",
             },
         )
     }
@@ -280,20 +301,36 @@ pub enum EnvironmentStep {
     LoadConfiguration,
     /// Build: building an application (docker or build packs).
     Build,
+    /// Built: env is built.
+    Built,
     /// Deploy: deploy an environment (application to kubernetes).
     Deploy,
+    /// Deployed: env has been deployed.
+    Deployed,
     /// Pause: pause an environment.
     Pause,
+    /// Paused: env has been paused.
+    Paused,
     /// Resume: resume a paused environment.
     Resume,
+    /// Resumed: env has been resumed.
+    Resumed,
     /// Update: update an environment.
     Update,
+    /// Updated: env has been updated.
+    Updated,
     /// Delete: delete an environment.
     Delete,
-    /// ScaleDown: scale up an environment.
+    /// Deleted: env has been deleted.
+    Deleted,
+    /// ScaleUp: scale up an environment.
     ScaleUp,
+    /// ScaledUp: env has been scaled-up.
+    ScaledUp,
     /// ScaleDown: scale down an environment.
     ScaleDown,
+    /// ScaledDown: env has been scaled-down.
+    ScaledDown,
 }
 
 impl Display for EnvironmentStep {
@@ -311,6 +348,14 @@ impl Display for EnvironmentStep {
                 EnvironmentStep::LoadConfiguration => "load-configuration",
                 EnvironmentStep::ScaleUp => "scale-up",
                 EnvironmentStep::ScaleDown => "scale-down",
+                EnvironmentStep::Built => "built",
+                EnvironmentStep::Deployed => "deployed",
+                EnvironmentStep::Paused => "paused",
+                EnvironmentStep::Resumed => "resumed",
+                EnvironmentStep::Updated => "updated",
+                EnvironmentStep::Deleted => "deleted",
+                EnvironmentStep::ScaledUp => "scaled-up",
+                EnvironmentStep::ScaledDown => "scaled-down",
             },
         )
     }
@@ -352,6 +397,8 @@ pub enum Transmitter {
     Application(TransmitterId, TransmitterName, TransmitterVersion),
     /// Router: router engine part.
     Router(TransmitterId, TransmitterName),
+    /// SecretManager: secret manager part
+    SecretManager(TransmitterName),
 }
 
 impl Display for Transmitter {
@@ -371,6 +418,7 @@ impl Display for Transmitter {
                 Transmitter::Application(id, name, version) =>
                     format!("application({}, {}, commit: {})", id, name, version),
                 Transmitter::Router(id, name) => format!("router({}, {})", id, name),
+                Transmitter::SecretManager(name) => format!("secret_manager({})", name),
             }
         )
     }
@@ -434,6 +482,12 @@ impl EventDetails {
     pub fn clone_changing_stage(event_details: EventDetails, stage: Stage) -> Self {
         let mut event_details = event_details;
         event_details.stage = stage;
+        event_details
+    }
+
+    pub fn clone_changing_transmitter(event_details: EventDetails, transmitter: Transmitter) -> Self {
+        let mut event_details = event_details;
+        event_details.transmitter = transmitter;
         event_details
     }
 
@@ -556,10 +610,6 @@ mod tests {
             (
                 Stage::Infrastructure(InfrastructureStep::Delete),
                 InfrastructureStep::Delete.to_string(),
-            ),
-            (
-                Stage::Infrastructure(InfrastructureStep::Resume),
-                InfrastructureStep::Resume.to_string(),
             ),
             (
                 Stage::Infrastructure(InfrastructureStep::Pause),

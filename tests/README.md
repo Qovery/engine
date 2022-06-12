@@ -11,9 +11,9 @@ Of course functional tests takes a longer time to deploy and they requests sever
 In order to perform functional tests, you can use environment variables or Vault. Environment variables always overrides vault values.
 
 In order to run functional tests, here are the minimum environment variables:
-* LIB_ROOT_DIR=$HOME/qovery/engine/lib
+* LIB_ROOT_DIR=<projects_dir>/engine/lib-engine/lib
 * RUST_LOG=info
-* WORKSPACE_ROOT_DIR=$HOME/qovery/engine
+* WORKSPACE_ROOT_DIR=<projects_dir>/engine
 
 ## Other options
 

@@ -24,6 +24,7 @@ pub mod logger;
 pub mod models;
 pub mod object_storage;
 pub mod runtime;
+mod secret_manager;
 mod string;
 mod template;
 pub mod transaction;

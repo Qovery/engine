@@ -47,14 +47,14 @@ provider "aws" {
 }
 
 provider "vault" {
-  {% if vault_auth_method == "app_role" and not test_cluster %}
+{% if vault_auth_method == "app_role" and not test_cluster %}
   auth_login {
-    path = "auth/approle/login"
+  path = "auth/approle/login"
 
-    parameters = {
-      role_id   = "{{ vault_role_id }}"
-      secret_id = "{{ vault_secret_id }}"
+  parameters = {
+    role_id   = "{{ vault_role_id }}"
+    secret_id = "{{ vault_secret_id }}"
     }
   }
-  {% endif %}
+{% endif %}
 }

@@ -65,7 +65,7 @@ impl<T: CloudProvider> Application<T> {
         build: Build,
         storage: Vec<Storage<T::StorageTypes>>,
         environment_variables: Vec<EnvironmentVariable>,
-        advance_settings: ApplicationAdvancedSettings,
+        advanced_settings: ApplicationAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         listeners: Listeners,
         logger: Box<dyn Logger>,
@@ -90,7 +90,7 @@ impl<T: CloudProvider> Application<T> {
             environment_variables,
             listeners,
             logger,
-            advanced_settings: advance_settings,
+            advanced_settings,
             _extra_settings: extra_settings,
         })
     }
@@ -146,7 +146,7 @@ impl<T: CloudProvider> Application<T> {
         context.insert("environment_variables", &environment_variables);
         context.insert("ports", &self.ports);
         context.insert("is_registry_secret", &true);
-        context.insert("registry_secret", self.build().image.registry_host());
+        context.insert("registry_secret", self.build().image.registry_secret_name(kubernetes.kind()));
 
         if self.context.resource_expiration_in_seconds().is_some() {
             context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
@@ -281,16 +281,24 @@ where
         self.id()
     }
 
+    fn long_id(&self) -> &Uuid {
+        &self.long_id
+    }
+
     fn name(&self) -> &str {
         self.name()
+    }
+
+    fn sanitized_name(&self) -> String {
+        self.sanitized_name()
     }
 
     fn name_with_id_and_version(&self) -> String {
         format!("{} ({}) commit: {}", self.name(), self.id(), self.commit_id())
     }
 
-    fn sanitized_name(&self) -> String {
-        self.sanitized_name()
+    fn application_advanced_settings(&self) -> Option<ApplicationAdvancedSettings> {
+        Some(self.advanced_settings.clone())
     }
 
     fn version(&self) -> String {
@@ -339,10 +347,6 @@ where
 
     fn selector(&self) -> Option<String> {
         self.selector()
-    }
-
-    fn long_id(&self) -> &Uuid {
-        &self.long_id
     }
 }
 

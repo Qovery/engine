@@ -17,18 +17,20 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tracing::error;
 
-use crate::common::{get_environment_test_kubernetes, Cluster, ClusterDomain};
+use crate::common::{
+    get_environment_test_kubernetes, Cluster, ClusterDomain, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES,
+};
 use crate::dns::{dns_provider_cloudflare, dns_provider_qoverydns};
 use crate::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
 pub const AWS_TEST_REGION: AwsRegion = AwsRegion::EuWest3;
 pub const AWS_KUBERNETES_MAJOR_VERSION: u8 = 1;
-pub const AWS_KUBERNETES_MINOR_VERSION: u8 = 19;
+pub const AWS_KUBERNETES_MINOR_VERSION: u8 = 20;
 pub const AWS_KUBERNETES_VERSION: &str = formatcp!("{}.{}", AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION);
 pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t3.micro";
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
-pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 7200;
+pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 10800;
 pub const K3S_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const K3S_KUBERNETES_MINOR_VERSION: u8 = 20;
 
@@ -66,6 +68,8 @@ pub fn aws_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> 
             cluster_id: context.cluster_id().to_string(),
         },
         None,
+        KUBERNETES_MIN_NODES,
+        KUBERNETES_MAX_NODES,
     )
 }
 
@@ -78,6 +82,8 @@ impl Cluster<AWS, Options> for AWS {
         kubernetes_version: String,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
+        min_nodes: i32,
+        max_nodes: i32,
     ) -> EngineConfig {
         // use ECR
         let container_registry = Box::new(container_registry_ecr(context, logger.clone()));
@@ -87,7 +93,7 @@ impl Cluster<AWS, Options> for AWS {
 
         // use AWS
         let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(AWS::cloud_provider(context));
-        let dns_provider = match kubernetes_kind.clone() {
+        let dns_provider = match kubernetes_kind {
             KubernetesKind::Ec2 => Arc::new(dns_provider_qoverydns(context, cluster_domain)),
             _ => Arc::new(dns_provider_cloudflare(context, cluster_domain)),
         };
@@ -101,6 +107,8 @@ impl Cluster<AWS, Options> for AWS {
             logger.clone(),
             localisation,
             vpc_network_mode,
+            min_nodes,
+            max_nodes,
         );
 
         EngineConfig::new(
@@ -148,9 +156,9 @@ impl Cluster<AWS, Options> for AWS {
         ))
     }
 
-    fn kubernetes_nodes() -> Vec<NodeGroups> {
+    fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups> {
         vec![
-            NodeGroups::new("groupeks0".to_string(), 5, 10, "t3a.large".to_string(), 100)
+            NodeGroups::new("groupeks0".to_string(), min_nodes, max_nodes, "t3a.large".to_string(), 100)
                 .expect("Problem while setup EKS nodes"),
         ]
     }
@@ -250,6 +258,7 @@ impl Cluster<AWS, Options> for AWS {
             tls_email_report: secrets.LETS_ENCRYPT_EMAIL_REPORT.unwrap(),
             qovery_grpc_url: secrets.QOVERY_GRPC_URL.unwrap(),
             jwt_token: secrets.QOVERY_CLUSTER_JWT_TOKEN.unwrap(),
+            user_ssh_keys: vec![],
         }
     }
 }

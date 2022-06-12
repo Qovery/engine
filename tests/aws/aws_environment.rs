@@ -1041,8 +1041,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         for router in environment.routers.iter() {
             for route in router.routes.iter() {
                 assert!(session_is_sticky(
-                    Url::parse(format!("http://{}{}", ingress_host.to_string(), route.path).as_str())
-                        .expect("cannot parse URL"),
+                    Url::parse(format!("http://{}{}", ingress_host, route.path).as_str()).expect("cannot parse URL"),
                     router.default_domain.clone(),
                     85400,
                 ));

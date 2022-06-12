@@ -1,8 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
-    get_chart_for_cert_manager_config, get_chart_for_cluster_agent, get_chart_for_shell_agent, ChartInfo,
-    ChartSetValue, ClusterAgentContext, CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces,
-    ShellAgentContext,
+    get_chart_for_cluster_agent, get_chart_for_shell_agent, ChartInfo, ChartSetValue, ClusterAgentContext, CommonChart,
+    CoreDNSConfigChart, HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName};
 use crate::dns_provider::DnsProviderConfiguration;
@@ -16,6 +15,7 @@ use std::path::Path;
 pub struct AwsEc2QoveryTerraformConfig {
     pub aws_ec2_public_hostname: String,
     pub aws_ec2_kubernetes_port: String,
+    pub aws_aws_account_id: String,
 }
 
 impl AwsEc2QoveryTerraformConfig {
@@ -91,7 +91,19 @@ pub fn ec2_aws_helm_charts(
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
-    let _qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file)?;
+    let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file)?;
+
+    let aws_ebs_csi_driver = CommonChart {
+        chart_info: ChartInfo {
+            name: "aws-ebs-csi-driver".to_string(),
+            path: chart_path("/charts/aws-ebs-csi-driver"),
+            values: vec![ChartSetValue {
+                key: "controller.replicaCount".to_string(),
+                value: "1".to_string(),
+            }],
+            ..Default::default()
+        },
+    };
 
     // Qovery storage class
     let q_storage_class = CommonChart {
@@ -118,6 +130,36 @@ pub fn ec2_aws_helm_charts(
                         .clone(),
                 },
             ],
+            ..Default::default()
+        },
+    };
+
+    let registry_creds = CommonChart {
+        chart_info: ChartInfo {
+            name: "registry-creds".to_string(),
+            path: chart_path("charts/registry-creds"),
+            values: vec![
+                ChartSetValue {
+                    key: "ecr.enabled".to_string(),
+                    value: "true".to_string(),
+                },
+                ChartSetValue {
+                    key: "ecr.awsAccessKeyId".to_string(),
+                    value: chart_config_prerequisites.aws_access_key_id.clone(),
+                },
+                ChartSetValue {
+                    key: "ecr.awsSecretAccessKey".to_string(),
+                    value: chart_config_prerequisites.aws_secret_access_key.clone(),
+                },
+                ChartSetValue {
+                    key: "ecr.awsRegion".to_string(),
+                    value: chart_config_prerequisites.region.clone(),
+                },
+            ],
+            values_string: vec![ChartSetValue {
+                key: "ecr.awsAccount".to_string(),
+                value: qovery_terraform_config.aws_aws_account_id,
+            }],
             ..Default::default()
         },
     };
@@ -194,11 +236,11 @@ pub fn ec2_aws_helm_charts(
                 // resources limits
                 ChartSetValue {
                     key: "resources.limits.memory".to_string(),
-                    value: "50Mi".to_string(),
+                    value: "96Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.memory".to_string(),
-                    value: "50Mi".to_string(),
+                    value: "96Mi".to_string(),
                 },
                 // Webhooks resources limits
                 ChartSetValue {
@@ -212,24 +254,24 @@ pub fn ec2_aws_helm_charts(
                 // Cainjector resources limits
                 ChartSetValue {
                     key: "cainjector.resources.limits.memory".to_string(),
-                    value: "64Mi".to_string(),
+                    value: "96Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "cainjector.resources.requests.memory".to_string(),
-                    value: "64Mi".to_string(),
+                    value: "96Mi".to_string(),
                 },
             ],
             ..Default::default()
         },
     };
 
-    let cert_manager_config = get_chart_for_cert_manager_config(
-        &chart_config_prerequisites.dns_provider_config,
-        chart_path("common/charts/cert-manager-configs"),
-        chart_config_prerequisites.dns_email_report.clone(),
-        chart_config_prerequisites.acme_url.clone(),
-        chart_config_prerequisites.managed_dns_helm_format.clone(),
-    );
+    // let cert_manager_config = get_chart_for_cert_manager_config(
+    //     &chart_config_prerequisites.dns_provider_config,
+    //     chart_path("common/charts/cert-manager-configs"),
+    //     chart_config_prerequisites.dns_email_report.clone(),
+    //     chart_config_prerequisites.acme_url.clone(),
+    //     chart_config_prerequisites.managed_dns_helm_format.clone(),
+    // );
 
     let nginx_ingress = CommonChart {
         chart_info: ChartInfo {
@@ -240,6 +282,10 @@ pub fn ec2_aws_helm_charts(
             timeout_in_seconds: 300,
             values_files: vec![chart_path("chart_values/nginx-ingress.yaml")],
             values: vec![
+                ChartSetValue {
+                    key: "controller.admissionWebhooks.enabled".to_string(),
+                    value: "false".to_string(),
+                },
                 // Controller resources limits
                 ChartSetValue {
                     key: "controller.resources.limits.memory".to_string(),
@@ -368,7 +414,12 @@ pub fn ec2_aws_helm_charts(
     }
 
     // chart deployment order matters!!!
-    let level_1: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(coredns_config)];
+    let level_1: Vec<Box<dyn HelmChart>> = vec![
+        Box::new(aws_ebs_csi_driver),
+        Box::new(q_storage_class),
+        Box::new(coredns_config),
+        Box::new(registry_creds),
+    ];
 
     let level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
@@ -381,7 +432,7 @@ pub fn ec2_aws_helm_charts(
     let level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
 
     let level_7: Vec<Box<dyn HelmChart>> = vec![
-        Box::new(cert_manager_config),
+        //Box::new(cert_manager_config),
         Box::new(qovery_agent), // TODO: Migrate to the new cluster agent
         Box::new(cluster_agent),
         Box::new(shell_agent),

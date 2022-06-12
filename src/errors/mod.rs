@@ -15,6 +15,7 @@ use crate::models::types::VersionsNumber;
 use crate::object_storage::errors::ObjectStorageError;
 use derivative::Derivative;
 use std::fmt::{Display, Formatter};
+use std::io::Error;
 use thiserror::Error;
 use url::Url;
 
@@ -148,15 +149,306 @@ impl Display for CommandError {
     }
 }
 
+impl From<Error> for CommandError {
+    fn from(err: Error) -> Self {
+        CommandError::new("IO error".to_string(), Some(err.to_string()), None)
+    }
+}
+
 impl From<ObjectStorageError> for CommandError {
     fn from(object_storage_error: ObjectStorageError) -> Self {
-        CommandError::new_from_safe_message(object_storage_error.to_string())
+        // Note: safe message to be manually computed here because we are not 100% sure error won't leak some data
+        match object_storage_error {
+            ObjectStorageError::InvalidBucketName {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, invalid bucket name: `{}`", bucket_name),
+                Some(raw_error_message),
+                None,
+            ),
+            ObjectStorageError::CannotCreateBucket {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot create bucket: `{}`", bucket_name),
+                Some(raw_error_message),
+                None,
+            ),
+            ObjectStorageError::CannotDeleteBucket {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot delete bucket: `{}`", bucket_name),
+                Some(raw_error_message),
+                None,
+            ),
+            ObjectStorageError::CannotEmptyBucket {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot empty bucket: `{}`", bucket_name),
+                Some(raw_error_message),
+                None,
+            ),
+            ObjectStorageError::CannotTagBucket {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot tag bucket: `{}`", bucket_name),
+                Some(raw_error_message),
+                None,
+            ),
+            ObjectStorageError::CannotGetWorkspace {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot get workspace for bucket: `{}`", bucket_name),
+                Some(raw_error_message),
+                None,
+            ),
+            ObjectStorageError::CannotCreateFile {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot create file for bucket: `{}`", bucket_name),
+                Some(raw_error_message),
+                None,
+            ),
+            ObjectStorageError::CannotOpenFile {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot open file for bucket: `{}`", bucket_name),
+                Some(raw_error_message),
+                None,
+            ),
+            ObjectStorageError::CannotReadFile {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot read file for bucket: `{}`", bucket_name),
+                Some(raw_error_message),
+                None,
+            ),
+            ObjectStorageError::CannotGetObjectFile {
+                bucket_name,
+                file_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!(
+                    "Object storage error, cannot get file: `{}` in bucket: `{}`",
+                    file_name, bucket_name
+                ),
+                Some(raw_error_message),
+                None,
+            ),
+            ObjectStorageError::CannotUploadFile {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot upload file in bucket: `{}`", bucket_name),
+                Some(raw_error_message),
+                None,
+            ),
+        }
     }
 }
 
 impl From<ContainerRegistryError> for CommandError {
     fn from(container_registry_error: ContainerRegistryError) -> Self {
-        CommandError::new_from_safe_message(container_registry_error.to_string())
+        // Note: safe message to be manually computed here because we are not 100% sure error won't leak some data
+        match container_registry_error {
+            ContainerRegistryError::InvalidCredentials => {
+                CommandError::new_from_safe_message("Container registry error, invalid credentials".to_string())
+            }
+            ContainerRegistryError::CannotGetCredentials => {
+                CommandError::new_from_safe_message("Container registry error, cannot get credentials".to_string())
+            }
+            ContainerRegistryError::CannotCreateRegistry {
+                registry_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Container registry error, cannot create registry: `{}`", registry_name),
+                Some(raw_error_message),
+                None,
+            ),
+            ContainerRegistryError::CannotDeleteRegistry {
+                registry_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Container registry error, cannot delete registry: `{}`", registry_name),
+                Some(raw_error_message),
+                None,
+            ),
+            ContainerRegistryError::CannotDeleteImage {
+                registry_name,
+                repository_name,
+                image_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!(
+                    "Container registry error, cannot delete image `{}` from repository: `{}` in registry: `{}`",
+                    image_name, repository_name, registry_name
+                ),
+                Some(raw_error_message),
+                None,
+            ),
+            ContainerRegistryError::ImageDoesntExistInRegistry {
+                registry_name,
+                repository_name,
+                image_name,
+            } => CommandError::new_from_safe_message(format!(
+                "Container registry error, image `{}` doesn't exists in repository `{}` in registry: `{}`",
+                image_name, repository_name, registry_name
+            )),
+            ContainerRegistryError::RepositoryDoesntExistInRegistry {
+                registry_name,
+                repository_name,
+            } => CommandError::new_from_safe_message(format!(
+                "Container registry error, repository `{}` doesn't exist in registry: `{}`",
+                repository_name, registry_name
+            )),
+            ContainerRegistryError::RegistryDoesntExist {
+                registry_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Container registry error, registry: `{}` doesn't exist", registry_name),
+                Some(raw_error_message),
+                None,
+            ),
+            ContainerRegistryError::CannotLinkRegistryToCluster {
+                registry_name,
+                cluster_id,
+                raw_error_message,
+            } => CommandError::new(
+                format!(
+                    "Container registry error, cannot link cluster with id `{}` to registry: `{}`",
+                    cluster_id, registry_name
+                ),
+                Some(raw_error_message),
+                None,
+            ),
+            ContainerRegistryError::CannotCreateRepository {
+                repository_name,
+                registry_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!(
+                    "Container registry error, cannot create repository `{}` in registry: `{}`",
+                    repository_name, registry_name
+                ),
+                Some(raw_error_message),
+                None,
+            ),
+            ContainerRegistryError::CannotDeleteRepository {
+                repository_name,
+                registry_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!(
+                    "Container registry error, cannot delete repository `{}` in registry: `{}`",
+                    repository_name, registry_name
+                ),
+                Some(raw_error_message),
+                None,
+            ),
+            ContainerRegistryError::CannotSetRepositoryLifecyclePolicy {
+                repository_name,
+                registry_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!(
+                    "Container registry error, cannot set lifetime policy for repository `{}` in registry: `{}`",
+                    repository_name, registry_name
+                ),
+                Some(raw_error_message),
+                None,
+            ),
+        }
+    }
+}
+
+impl From<BuildError> for CommandError {
+    fn from(build_error: BuildError) -> Self {
+        // Note: safe message to be manually computed here because we are not 100% sure error won't leak some data
+        match build_error {
+            BuildError::InvalidConfig {
+                application,
+                raw_error_message,
+            } => CommandError::new(
+                format!(
+                    "Build error, cannot build application `{}` due to an invalid configuration",
+                    application
+                ),
+                Some(raw_error_message),
+                None,
+            ),
+            BuildError::GitError { application, raw_error } => CommandError::new(
+                format!("Build error, cannot build application `{}` due to a git error", application),
+                Some(raw_error.to_string()),
+                None,
+            ),
+            BuildError::Aborted { application } => CommandError::new_from_safe_message(format!(
+                "Build error, application `{}` build has been aborted",
+                application
+            )),
+            BuildError::IoError {
+                application,
+                action_description,
+                raw_error,
+            } => CommandError::new(
+                format!(
+                    "Build error, cannot build application `{}` due to an IO error `{}`",
+                    application, action_description
+                ),
+                Some(raw_error.to_string()),
+                None,
+            ),
+            BuildError::DockerError { application, raw_error } => CommandError::new(
+                format!("Build error, cannot build application `{}` due to a Docker error", application),
+                Some(raw_error.to_string()),
+                None,
+            ),
+            BuildError::BuildpackError { application, raw_error } => CommandError::new(
+                format!(
+                    "Build error, cannot build application `{}` due to a Buildpack error",
+                    application
+                ),
+                Some(raw_error.to_string()),
+                None,
+            ),
+        }
+    }
+}
+
+impl From<DockerError> for CommandError {
+    fn from(docker_error: DockerError) -> Self {
+        // Note: safe message to be manually computed here because we are not 100% sure error won't leak some data
+        match docker_error {
+            DockerError::InvalidConfig { raw_error_message } => {
+                CommandError::new("Docker error, invalid configuration".to_string(), Some(raw_error_message), None)
+            }
+            DockerError::ExecutionError { raw_error } => CommandError::new(
+                "Docker error, docker terminated with an unknown error".to_string(),
+                Some(raw_error.to_string()),
+                None,
+            ),
+            DockerError::ExitStatusError { exit_status } => CommandError::new_from_safe_message(format!(
+                "Docker error, docker terminated with a non success exit status: `{}`",
+                exit_status
+            )),
+            DockerError::Aborted { raw_error_message } => CommandError::new(
+                "Docker error, aborted due to user cancel request".to_string(),
+                Some(raw_error_message),
+                None,
+            ),
+            DockerError::Timeout { raw_error_message } => CommandError::new(
+                "Docker error, terminated due to timeout".to_string(),
+                Some(raw_error_message),
+                None,
+            ),
+        }
     }
 }
 
@@ -171,6 +463,8 @@ pub enum Tag {
     NoClusterFound,
     /// ClusterHasNoWorkerNodes: represents an error where the current cluster doesn't have any worker nodes.
     ClusterHasNoWorkerNodes,
+    /// ClusterHasNoWorkerNodes: represents an error where the current cluster doesn't have any worker nodes.
+    ClusterWorkerNodeNotFound,
     /// CannotGetWorkspaceDirectory: represents an error while trying to get workspace directory.
     CannotGetWorkspaceDirectory,
     /// UnsupportedInstanceType: represents an unsupported instance type for the given cloud provider.
@@ -189,6 +483,8 @@ pub enum Tag {
     CannotCreateFile,
     /// CannotGetClusterNodes: represents an error while trying to get cluster's nodes.
     CannotGetClusterNodes,
+    /// NotEnoughNodesAvailableToDeployEnvironment: represents an error when trying to deploy an environment but there the desired number of nodes exceeds the maximum value.
+    NotEnoughNodesAvailableToDeployEnvironment,
     /// NotEnoughResourcesToDeployEnvironment: represents an error when trying to deploy an environment but there are not enough resources available on the cluster.
     NotEnoughResourcesToDeployEnvironment,
     /// CannotUninstallHelmChart: represents an error when trying to uninstall an helm chart on the cluster, uninstallation couldn't be proceeded.
@@ -356,7 +652,25 @@ pub enum Tag {
     /// ObjectStorageCannotTagBucket: represents an error while trying to tag an object storage bucket.
     ObjectStorageCannotTagBucket,
     /// ObjectStorageCannotActivateBucketVersioning: represents an error while trying to activate bucket versioning for bucket.
+    /// KubeconfigFileDoNotPermitToConnectToK8sCluster: represent a kubeconfig mismatch, not permitting to connect to k8s cluster
+    KubeconfigFileDoNotPermitToConnectToK8sCluster,
+    /// KubeconfigSecurityCheckError: represent an error because of a security concern/doubt on the kubeconfig file
+    KubeconfigSecurityCheckError,
+    /// DeleteLocalKubeconfigFileError: represent an error when trying to delete Kubeconfig
+    DeleteLocalKubeconfigFileError,
     ObjectStorageCannotActivateBucketVersioning,
+    /// VaultConnectionError: represents an error while trying to connect ot Vault service
+    VaultConnectionError,
+    /// VaultSecretCouldNotBeRetrieved: represents an error to get the desired secret
+    VaultSecretCouldNotBeRetrieved,
+    /// VaultSecretCouldNotBeCreatedOrUpdated: represent a vault secret creation or update error
+    VaultSecretCouldNotBeCreatedOrUpdated,
+    /// VaultSecretCouldNotBeDeleted, represent a vault secret deletion error
+    VaultSecretCouldNotBeDeleted,
+    /// JsonDeserializationError: represent a deserialization issue
+    JsonDeserializationError,
+    /// ClusterSecretsManipulationError: represent an error while trying to manipulate ClusterSecrets
+    ClusterSecretsManipulationError,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -366,8 +680,6 @@ pub struct EngineError {
     tag: Tag,
     /// event_details: holds context details in which error was triggered such as organization ID, cluster ID, etc.
     event_details: EventDetails,
-    /// qovery_log_message: message targeted toward Qovery team, carrying eventual debug / more fine grained messages easing investigations.
-    qovery_log_message: String,
     /// user_log_message: message targeted toward Qovery users, might avoid any useless info for users such as Qovery specific identifiers and so on.
     user_log_message: String,
     /// underlying_error: raw error message such as command input / output.
@@ -389,11 +701,6 @@ impl EngineError {
         &self.event_details
     }
 
-    /// Returns qovery log message.
-    pub fn qovery_log_message(&self) -> &str {
-        &self.qovery_log_message
-    }
-
     /// Returns user log message.
     pub fn user_log_message(&self) -> &str {
         &self.user_log_message
@@ -403,7 +710,7 @@ impl EngineError {
     pub fn message(&self, message_verbosity: ErrorMessageVerbosity) -> String {
         match &self.underlying_error {
             Some(msg) => msg.message(message_verbosity),
-            None => self.qovery_log_message.to_string(),
+            None => self.user_log_message.to_string(),
         }
     }
 
@@ -428,27 +735,23 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `tag`: Error unique identifier.
-    /// * `qovery_log_message`: Error log message targeting Qovery team for investigation / monitoring purposes.
     /// * `user_log_message`: Error log message targeting Qovery user, avoiding any extending pointless details.
-    /// * `error_message`: Raw error message.
-    /// * `raw_message_safe`: Error raw message such as command input / output where any unsafe data as been omitted (such as plain passwords / tokens).
+    /// * `underlying_error`: raw error message such as command input / output.
     /// * `link`: Link documenting the given error.
     /// * `hint_message`: hint message aiming to give an hint to the user. For example: "Happens when application port has been changed but application hasn't been restarted.".
     fn new(
         event_details: EventDetails,
         tag: Tag,
-        qovery_log_message: String,
         user_log_message: String,
-        message: Option<CommandError>,
+        underlying_error: Option<CommandError>,
         link: Option<Url>,
         hint_message: Option<String>,
     ) -> Self {
         EngineError {
             event_details,
             tag,
-            qovery_log_message,
             user_log_message,
-            underlying_error: message,
+            underlying_error,
             link,
             hint_message,
         }
@@ -478,9 +781,9 @@ impl EngineError {
                     EngineErrorScope::Database(id, db_type, name) => Transmitter::Database(id, db_type, name),
                     EngineErrorScope::Application(id, name, commit) => Transmitter::Application(id, name, commit),
                     EngineErrorScope::Router(id, name) => Transmitter::Router(id, name),
+                    EngineErrorScope::SecretManager(id) => Transmitter::SecretManager(id),
                 },
             ),
-            qovery_log_message: message.to_string(),
             user_log_message: message,
             underlying_error: None,
             link: None,
@@ -489,7 +792,7 @@ impl EngineError {
     }
 
     /// Converts to legacy engine error easing migration.
-    pub fn to_legacy_engine_error(self) -> LegacyEngineError {
+    pub fn to_legacy_engine_error(&self) -> LegacyEngineError {
         LegacyEngineError::new(
             EngineErrorCause::Internal,
             EngineErrorScope::from(self.event_details.transmitter()),
@@ -507,25 +810,22 @@ impl EngineError {
     /// Arguments:
     ///
     /// * `event_details`: Error linked event details.
-    /// * `qovery_log_message`: Error log message targeting Qovery team for investigation / monitoring purposes.
     /// * `user_log_message`: Error log message targeting Qovery user, avoiding any extending pointless details.
-    /// * `message`: Error message such as command input / output.
+    /// * `underlying_error`: raw error message such as command input / output.
     /// * `link`: Link documenting the given error.
     /// * `hint_message`: hint message aiming to give an hint to the user. For example: "Happens when application port has been changed but application hasn't been restarted.".
     pub fn new_unknown(
         event_details: EventDetails,
-        qovery_log_message: String,
         user_log_message: String,
-        message: Option<CommandError>,
+        underlying_error: Option<CommandError>,
         link: Option<Url>,
         hint_message: Option<String>,
     ) -> EngineError {
         EngineError::new(
             event_details,
             Tag::Unknown,
-            qovery_log_message,
             user_log_message,
-            message,
+            underlying_error,
             link,
             hint_message,
         )
@@ -541,15 +841,7 @@ impl EngineError {
     /// * `variable_name`: Variable name which is not set.
     pub fn new_missing_required_env_variable(event_details: EventDetails, variable_name: String) -> EngineError {
         let message = format!("`{}` environment variable wasn't found.", variable_name);
-        EngineError::new(
-            event_details,
-            Tag::MissingRequiredEnvVariable,
-            message.to_string(),
-            message,
-            None,
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::MissingRequiredEnvVariable, message, None, None, None)
     }
 
     /// Creates new error for cluster has no worker nodes.
@@ -569,6 +861,31 @@ impl EngineError {
             event_details,
             Tag::ClusterHasNoWorkerNodes,
             message.to_string(),
+            raw_error,
+            None,
+            Some(
+                "This can happen if there where a manual operations on the workers or the infrastructure is paused."
+                    .to_string(),
+            ),
+        )
+    }
+
+    /// Creates new error for cluster worker node is not found.
+    ///
+    ///
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_cluster_worker_node_not_found(
+        event_details: EventDetails,
+        raw_error: Option<CommandError>,
+    ) -> EngineError {
+        let message = "Worker node not found, can't proceed with operation.";
+        EngineError::new(
+            event_details,
+            Tag::ClusterWorkerNodeNotFound,
             message.to_string(),
             raw_error,
             None,
@@ -594,7 +911,6 @@ impl EngineError {
             event_details,
             Tag::CloudProviderApiMissingInfo,
             message.to_string(),
-            message.to_string(),
             raw_error,
             None,
             Some(
@@ -619,7 +935,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::NotAllowedInstanceType,
-            message.to_string(),
             message,
             None,
             None, // TODO(documentation): Create a page entry to details this error
@@ -645,7 +960,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::UnsupportedInstanceType,
-            message.to_string(),
             message,
             Some(error_message),
             None, // TODO(documentation): Create a page entry to details this error
@@ -671,7 +985,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::UnsupportedClusterKind,
-            message.to_string(),
             message,
             Some(error_message),
             None, // TODO(documentation): Create a page entry to details this error
@@ -697,7 +1010,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::UnsupportedRegion,
-            message.to_string(),
             message,
             Some(error_message),
             None, // TODO(documentation): Create a page entry to details this error
@@ -725,7 +1037,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::UnsupportedZone,
-            message.to_string(),
             message,
             Some(error_message),
             None, // TODO(documentation): Create a page entry to details this error
@@ -746,7 +1057,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotGetWorkspaceDirectory,
-            message.to_string(),
             message.to_string(),
             Some(error_message),
             None,
@@ -769,7 +1079,6 @@ impl EngineError {
             event_details,
             Tag::CannotRetrieveClusterConfigFile,
             message.to_string(),
-            message.to_string(),
             Some(error_message),
             None,
             None,
@@ -787,7 +1096,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotCreateFile,
-            message.to_string(),
             message.to_string(),
             Some(error_message),
             None,
@@ -807,10 +1115,36 @@ impl EngineError {
             event_details,
             Tag::CannotRetrieveClusterConfigFile,
             message.to_string(),
-            message.to_string(),
             Some(error_message),
             None,
             None,
+        )
+    }
+
+    /// Creates new error for cannot deploy because the desired number of nodes is greater than the maximum allowed.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `actual_nodes`: The actual number of nodes running.
+    /// * `max_nodes`: The maximum number of nodes allowed.
+    pub fn new_cannot_deploy_max_nodes_exceeded(
+        event_details: EventDetails,
+        actual_nodes: i32,
+        max_nodes: i32,
+    ) -> EngineError {
+        let message = format!(
+            "The actual number of nodes {} can't be greater than the maximum value {}",
+            actual_nodes, max_nodes
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::NotEnoughNodesAvailableToDeployEnvironment,
+            message,
+            None,
+            None,
+            Some("Consider to upgrade your nodes configuration.".to_string()),
         )
     }
 
@@ -848,7 +1182,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::NotEnoughResourcesToDeployEnvironment,
-            message.to_string(),
             message,
             None,
             None,
@@ -876,7 +1209,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::NotEnoughResourcesToDeployEnvironment,
-            message.to_string(),
             message,
             None,
             None,
@@ -906,7 +1238,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotUninstallHelmChart,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -930,7 +1261,6 @@ impl EngineError {
             event_details,
             Tag::CannotExecuteK8sVersion,
             message.to_string(),
-            message.to_string(),
             Some(error_message),
             None,
             None,
@@ -949,15 +1279,7 @@ impl EngineError {
     ) -> EngineError {
         let message = format!("Unable to determine Kubernetes master version: `{}`", kubernetes_raw_version,);
 
-        EngineError::new(
-            event_details,
-            Tag::CannotDetermineK8sMasterVersion,
-            message.to_string(),
-            message,
-            None,
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::CannotDetermineK8sMasterVersion, message, None, None, None)
     }
 
     /// Creates new error for cannot determine kubernetes master version.
@@ -980,7 +1302,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotDetermineK8sRequestedUpgradeVersion,
-            message.to_string(),
             message,
             error_message,
             None,
@@ -1003,7 +1324,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotDetermineK8sKubeletWorkerVersion,
-            message.to_string(),
             message,
             None,
             None,
@@ -1026,12 +1346,75 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotDetermineK8sKubeProxyVersion,
-            message.to_string(),
             message,
             None,
             None,
             None,
         )
+    }
+
+    /// Creates new error delete local kubeconfig file error
+    ///
+    /// This is useful for EC2 when a kubeconfig stored in S3 do not match the current kubernetes
+    /// certificates and/or endpoint
+    ///
+    /// Arguments:
+    /// * `event_details`: Error linked event details.
+    /// * `kubeconfig_path`: Kubeconfig path
+    pub fn new_delete_local_kubeconfig_file_error(
+        event_details: EventDetails,
+        kubeconfig_path: &str,
+        err: Error,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::DeleteLocalKubeconfigFileError,
+            format!("Wasn't able to delete local kubeconfig file: `{}`", kubeconfig_path),
+            Some(CommandError::from(err)),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error to catch wrong kubeconfig file content
+    ///
+    /// This is useful for EC2 when a kubeconfig stored in S3 do not match the current kubernetes
+    /// certificates and/or endpoint
+    ///
+    /// Arguments:
+    /// * `event_details`: Error linked event details.
+    pub fn new_kubeconfig_file_do_not_match_the_current_cluster(event_details: EventDetails) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::KubeconfigFileDoNotPermitToConnectToK8sCluster,
+            "The kubeconfig stored in the S3 bucket is not valid and do not permit to connect to your current cluster"
+                .to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error to catch kubeconfig security issues
+    ///
+    /// Ensure kubeconfig is not corrupted
+    ///
+    /// Arguments:
+    /// * `event_details`: Error linked event details.
+    /// * `current_size`: Current size of the kubeconfig file
+    /// * `max_size`: Maximum authorized size of the kubeconfig file
+    pub fn new_kubeconfig_size_security_check_error(
+        event_details: EventDetails,
+        current_size: u64,
+        max_size: u64,
+    ) -> EngineError {
+        let message = format!(
+            "The kubeconfig stored in the S3 bucket did not pass our security check. Kubeconfig file size ({}k), exceed authorized kubeconfig size (< {}k)",
+            current_size,
+            max_size
+        );
+
+        EngineError::new(event_details, Tag::KubeconfigSecurityCheckError, message, None, None, None)
     }
 
     /// Creates new error for cannot get api custom metrics.
@@ -1049,7 +1432,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotExecuteK8sApiCustomMetrics,
-            message.to_string(),
             message.to_string(),
             Some(raw_k8s_error),
             None,
@@ -1069,7 +1451,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::K8sPodDisruptionBudgetInInvalidState,
-            message.to_string(),
             message,
             None,
             None,
@@ -1093,7 +1474,6 @@ impl EngineError {
             event_details,
             Tag::K8sPodsDisruptionBudgetCannotBeRetrieved,
             message.to_string(),
-            message.to_string(),
             Some(raw_k8s_error),
             None,
             None,
@@ -1114,15 +1494,7 @@ impl EngineError {
     ) -> EngineError {
         let message = format!("Unable to delete Kubernetes pod `{}`.", pod_name);
 
-        EngineError::new(
-            event_details,
-            Tag::K8sCannotDeletePod,
-            message.to_string(),
-            message,
-            Some(raw_k8s_error),
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::K8sCannotDeletePod, message, Some(raw_k8s_error), None, None)
     }
 
     /// Creates new error for kubernetes not being able to get crash looping pods.
@@ -1140,7 +1512,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::K8sCannotGetCrashLoopingPods,
-            message.to_string(),
             message.to_string(),
             Some(raw_k8s_error),
             None,
@@ -1160,7 +1531,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::K8sCannotGetPods,
-            message.to_string(),
             message.to_string(),
             Some(raw_k8s_error),
             None,
@@ -1190,7 +1560,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::K8sUpgradeDeployedVsRequestedVersionsInconsistency,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -1219,15 +1588,7 @@ impl EngineError {
             selector, requested_replicas, namespace,
         );
 
-        EngineError::new(
-            event_details,
-            Tag::K8sScaleReplicas,
-            message.to_string(),
-            message,
-            Some(raw_error),
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::K8sScaleReplicas, message, Some(raw_error), None, None)
     }
 
     /// Creates new error for kubernetes load balancer configuration issue.
@@ -1245,7 +1606,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::K8sLoadBalancerConfigurationIssue,
-            message.to_string(),
             message.to_string(),
             Some(raw_error),
             None,
@@ -1265,7 +1625,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::K8sServiceError,
-            message.to_string(),
             message.to_string(),
             Some(raw_error),
             None,
@@ -1292,15 +1651,7 @@ impl EngineError {
             selector, namespace
         );
 
-        EngineError::new(
-            event_details,
-            Tag::K8sGetLogs,
-            message.to_string(),
-            message,
-            Some(raw_error),
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::K8sGetLogs, message, Some(raw_error), None, None)
     }
 
     /// Creates new error for kubernetes get events.
@@ -1317,15 +1668,7 @@ impl EngineError {
     ) -> EngineError {
         let message = format!("Error, unable to retrieve events in namespace `{}`.", namespace);
 
-        EngineError::new(
-            event_details,
-            Tag::K8sGetLogs,
-            message.to_string(),
-            message,
-            Some(raw_error),
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::K8sGetLogs, message, Some(raw_error), None, None)
     }
 
     /// Creates new error for kubernetes describe.
@@ -1347,15 +1690,7 @@ impl EngineError {
             selector, namespace
         );
 
-        EngineError::new(
-            event_details,
-            Tag::K8sDescribe,
-            message.to_string(),
-            message,
-            Some(raw_error),
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::K8sDescribe, message, Some(raw_error), None, None)
     }
 
     /// Creates new error for kubernetes history.
@@ -1368,15 +1703,7 @@ impl EngineError {
     pub fn new_k8s_history(event_details: EventDetails, namespace: String, raw_error: CommandError) -> EngineError {
         let message = format!("Error, unable to get history in namespace `{}`.", namespace);
 
-        EngineError::new(
-            event_details,
-            Tag::K8sHistory,
-            message.to_string(),
-            message,
-            Some(raw_error),
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::K8sHistory, message, Some(raw_error), None, None)
     }
 
     /// Creates new error for kubernetes namespace creation issue.
@@ -1396,7 +1723,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::K8sCannotCreateNamespace,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -1423,15 +1749,7 @@ impl EngineError {
             selector, namespace
         );
 
-        EngineError::new(
-            event_details,
-            Tag::K8sPodIsNotReady,
-            message.to_string(),
-            message,
-            Some(raw_error),
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::K8sPodIsNotReady, message, Some(raw_error), None, None)
     }
 
     /// Creates new error for kubernetes node not being ready with the requested version.
@@ -1451,7 +1769,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::K8sNodeIsNotReadyWithTheRequestedVersion,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -1471,7 +1788,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::K8sNodeIsNotReady,
-            message.to_string(),
             message.to_string(),
             Some(raw_error),
             None,
@@ -1501,7 +1817,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::K8sValidateRequiredCPUandBurstableError,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -1518,15 +1833,7 @@ impl EngineError {
     pub fn new_missing_required_binary(event_details: EventDetails, missing_binary_name: String) -> EngineError {
         let message = format!("`{}` binary is required but was not found.", missing_binary_name);
 
-        EngineError::new(
-            event_details,
-            Tag::CannotFindRequiredBinary,
-            message.to_string(),
-            message,
-            None,
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::CannotFindRequiredBinary, message, None, None, None)
     }
 
     /// Creates new error for subnets count not being even. Subnets count should be even to get the same number as private and public.
@@ -1546,15 +1853,7 @@ impl EngineError {
             zone_name, subnets_count,
         );
 
-        EngineError::new(
-            event_details,
-            Tag::SubnetsCountShouldBeEven,
-            message.to_string(),
-            message,
-            None,
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::SubnetsCountShouldBeEven, message, None, None, None)
     }
 
     /// Creates new error for IAM role which cannot be retrieved or created.
@@ -1574,7 +1873,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotGetOrCreateIamRole,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -1601,7 +1899,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotCopyFilesFromDirectoryToDirectory,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -1624,7 +1921,6 @@ impl EngineError {
             event_details,
             Tag::CannotPauseClusterTasksAreRunning,
             message.to_string(),
-            message.to_string(),
             raw_error,
             None,
             None,
@@ -1643,7 +1939,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::TerraformQoveryConfigMismatch,
-            message.to_string(),
             message.to_string(),
             Some(raw_error),
             None,
@@ -1668,7 +1963,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::TerraformCannotRemoveEntryOut,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -1688,7 +1982,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::TerraformNoStateFileExists,
-            message.to_string(),
             message.to_string(),
             Some(raw_error),
             None,
@@ -1712,7 +2005,6 @@ impl EngineError {
             event_details,
             Tag::TerraformErrorWhileExecutingPipeline,
             message.to_string(),
-            message.to_string(),
             Some(raw_error),
             None,
             None,
@@ -1734,7 +2026,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::TerraformErrorWhileExecutingDestroyPipeline,
-            message.to_string(),
             message.to_string(),
             Some(raw_error),
             None,
@@ -1766,7 +2057,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::TerraformContextUnsupportedParameterValue,
-            message.to_string(),
             message,
             raw_error,
             None,
@@ -1787,7 +2077,6 @@ impl EngineError {
             event_details,
             Tag::HelmChartsSetupError,
             message.to_string(),
-            message.to_string(),
             Some(raw_error),
             None,
             None,
@@ -1806,7 +2095,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::HelmChartsDeployError,
-            message.to_string(),
             message.to_string(),
             Some(raw_error),
             None,
@@ -1827,7 +2115,6 @@ impl EngineError {
             event_details,
             Tag::HelmChartsUpgradeError,
             message.to_string(),
-            message.to_string(),
             Some(raw_error),
             None,
             None,
@@ -1841,12 +2128,12 @@ impl EngineError {
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
     pub fn new_container_registry_error(event_details: EventDetails, error: ContainerRegistryError) -> EngineError {
+        let command_error = CommandError::from(error);
         EngineError::new(
             event_details,
             Tag::ContainerRegistryError,
-            error.to_string(),
-            error.to_string(),
-            None,
+            command_error.message_safe(),
+            Some(command_error),
             None,
             None,
         )
@@ -1859,12 +2146,13 @@ impl EngineError {
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
     pub fn new_build_error(event_details: EventDetails, error: BuildError) -> EngineError {
+        let command_error = CommandError::from(error);
+
         EngineError::new(
             event_details,
             Tag::BuilderError,
-            error.to_string(),
-            error.to_string(),
-            None,
+            command_error.message_safe(),
+            Some(command_error),
             None,
             None,
         )
@@ -1885,7 +2173,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::HelmChartUninstallError,
-            error.to_string(),
             error.to_string(),
             cmd_error,
             None,
@@ -1910,7 +2197,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::HelmChartUninstallError,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -1937,15 +2223,7 @@ impl EngineError {
             helm_chart, namespace
         );
 
-        EngineError::new(
-            event_details,
-            Tag::HelmHistoryError,
-            message.to_string(),
-            message,
-            Some(raw_error),
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::HelmHistoryError, message, Some(raw_error), None, None)
     }
 
     /// Creates new error while trying to get any available VPC.
@@ -1960,7 +2238,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotGetAnyAvailableVPC,
-            message.to_string(),
             message.to_string(),
             Some(raw_error),
             None,
@@ -1985,7 +2262,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotGetSupportedVersions,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -2007,15 +2283,7 @@ impl EngineError {
     ) -> EngineError {
         let message = format!("Error, version `{}` is not supported for `{}`.", version, product_name);
 
-        EngineError::new(
-            event_details,
-            Tag::UnsupportedVersion,
-            message.to_string(),
-            message,
-            None,
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::UnsupportedVersion, message, None, None, None)
     }
 
     /// Creates new error while trying to get cluster.
@@ -2030,7 +2298,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotGetCluster,
-            message.to_string(),
             message.to_string(),
             Some(raw_error),
             None,
@@ -2056,7 +2323,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ClientServiceFailedToStart,
-            message.to_string(),
             message,
             None,
             None,
@@ -2086,7 +2352,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ClientServiceFailedToDeployBeforeStart,
-            message.to_string(),
             message,
             None,
             None,
@@ -2116,7 +2381,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::DatabaseFailedToStartAfterSeveralRetries,
-            message.to_string(),
             message,
             raw_error,
             None,
@@ -2132,15 +2396,7 @@ impl EngineError {
     pub fn new_router_failed_to_deploy(event_details: EventDetails) -> EngineError {
         let message = "Router has failed to be deployed.";
 
-        EngineError::new(
-            event_details,
-            Tag::RouterFailedToDeploy,
-            message.to_string(),
-            message.to_string(),
-            None,
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::RouterFailedToDeploy, message.to_string(), None, None, None)
     }
 
     /// Creates new error when trying to connect to user's account with its credentials.
@@ -2154,7 +2410,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CloudProviderClientInvalidCredentials,
-            message.to_string(),
             message.to_string(),
             None,
             None,
@@ -2179,7 +2434,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::VersionNumberParsingError,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -2200,7 +2454,6 @@ impl EngineError {
             event_details,
             Tag::CannotGetCluster,
             message.to_string(),
-            message.to_string(),
             Some(raw_error),
             None,
             Some("Maybe there is a lag and cluster is not yet reported, please retry later.".to_string()),
@@ -2219,7 +2472,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotGetCluster,
-            message.to_string(),
             message.to_string(),
             Some(raw_error),
             None,
@@ -2243,7 +2495,6 @@ impl EngineError {
             event_details,
             Tag::OnlyOneClusterExpected,
             message.to_string(),
-            message.to_string(),
             Some(raw_error),
             None,
             Some("Please contact Qovery support for investigation.".to_string()),
@@ -2261,7 +2512,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::TaskCancellationRequested,
-            message.to_string(),
             message.to_string(),
             None,
             None,
@@ -2281,7 +2531,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::BuilderDockerCannotFindAnyDockerfile,
-            message.to_string(),
             message,
             None,
             None,
@@ -2304,7 +2553,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::BuilderBuildpackInvalidLanguageFormat,
-            message.to_string(),
             message,
             None,
             None,
@@ -2318,6 +2566,7 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `container_image_name`: Container image name.
+    /// * `builders`: Builders name list.
     /// * `raw_error`: Raw error message.
     pub fn new_buildpack_cannot_build_container_image(
         event_details: EventDetails,
@@ -2330,7 +2579,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::BuilderBuildpackCannotBuildContainerImage,
-            message.to_string(),
             message.to_string(),
             Some(raw_error),
             None,
@@ -2356,15 +2604,7 @@ impl EngineError {
     ) -> EngineError {
         let message = format!("Error while trying to get build with commit ID: `{}`.", commit_id);
 
-        EngineError::new(
-            event_details,
-            Tag::BuilderGetBuildError,
-            message.to_string(),
-            message,
-            Some(raw_error),
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::BuilderGetBuildError, message, Some(raw_error), None, None)
     }
 
     /// Creates new error when builder is trying to clone a git repository.
@@ -2384,7 +2624,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::BuilderCloningRepositoryError,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -2400,15 +2639,7 @@ impl EngineError {
     pub fn new_not_implemented_error(event_details: EventDetails) -> EngineError {
         let message = "Error, something went wrong because it's not implemented.";
 
-        EngineError::new(
-            event_details,
-            Tag::NotImplementedError,
-            message.to_string(),
-            message.to_string(),
-            None,
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::NotImplementedError, message.to_string(), None, None, None)
     }
 
     /// Creates new error from an Docker error
@@ -2418,12 +2649,13 @@ impl EngineError {
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
     pub fn new_docker_error(event_details: EventDetails, error: DockerError) -> EngineError {
+        // build command error from underlying error in order to have proper safe message.
+        let command_error = CommandError::from(error);
         EngineError::new(
             event_details,
             Tag::DockerError,
-            error.to_string(),
-            error.to_string(),
-            None,
+            command_error.message_safe(),
+            Some(command_error),
             None,
             None,
         )
@@ -2448,15 +2680,7 @@ impl EngineError {
             image_name, repository_url
         );
 
-        EngineError::new(
-            event_details,
-            Tag::DockerPushImageError,
-            message.to_string(),
-            message,
-            Some(raw_error),
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::DockerPushImageError, message, Some(raw_error), None, None)
     }
 
     /// Creates new error when trying to pull a Docker image.
@@ -2478,15 +2702,7 @@ impl EngineError {
             image_name, repository_url
         );
 
-        EngineError::new(
-            event_details,
-            Tag::DockerPullImageError,
-            message.to_string(),
-            message,
-            Some(raw_error),
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::DockerPullImageError, message, Some(raw_error), None, None)
     }
 
     /// Creates new error when trying to read Dockerfile content.
@@ -2506,7 +2722,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::BuilderDockerCannotReadDockerfile,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -2531,7 +2746,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::BuilderDockerCannotExtractEnvVarsFromDockerfile,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -2556,7 +2770,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::BuilderDockerCannotBuildContainerImage,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -2583,7 +2796,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ContainerRegistryRepositoryCreationError,
-            message.to_string(),
             message,
             Some(raw_error.into()),
             None,
@@ -2608,7 +2820,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ContainerRegistryRepositorySetLifecycleError,
-            message.to_string(),
             message,
             Some(raw_error.into()),
             None,
@@ -2634,7 +2845,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ContainerRegistryGetCredentialsError,
-            message.to_string(),
             message,
             None,
             None,
@@ -2659,7 +2869,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ContainerRegistryDeleteImageError,
-            message.to_string(),
             message,
             Some(raw_error.into()),
             None,
@@ -2683,7 +2892,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ContainerRegistryImageDoesntExist,
-            message.to_string(),
             message,
             Some(raw_error.into()),
             None,
@@ -2710,7 +2918,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ContainerRegistryImageUnreachableAfterPush,
-            message.to_string(),
             message,
             None,
             None,
@@ -2734,7 +2941,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ContainerRegistryRepositoryDoesntExist,
-            message.to_string(),
             message,
             raw_error,
             None,
@@ -2759,7 +2965,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ContainerRegistryDeleteRepositoryError,
-            message.to_string(),
             message,
             raw_error,
             None,
@@ -2780,7 +2985,6 @@ impl EngineError {
             event_details,
             Tag::BuilderDockerCannotListImages,
             message.to_string(),
-            message.to_string(),
             Some(raw_error),
             None,
             None,
@@ -2799,7 +3003,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ObjectStorageInvalidBucketName,
-            message.to_string(),
             message,
             None,
             None,
@@ -2824,7 +3027,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ObjectStorageCannotCreateBucket,
-            message.to_string(),
             message,
             Some(raw_error.into()),
             None,
@@ -2854,7 +3056,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ObjectStorageCannotPutFileIntoBucket,
-            message.to_string(),
             message,
             Some(raw_error.into()),
             None,
@@ -2879,7 +3080,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ObjectStorageCannotEmptyBucket,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -2904,7 +3104,6 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ObjectStorageCannotTagBucket,
-            message.to_string(),
             message,
             Some(raw_error),
             None,
@@ -2932,8 +3131,108 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::ObjectStorageCannotActivateBucketVersioning,
-            message.to_string(),
             message,
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when trying to connect to vault endpoint
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_vault_connection_error(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message_safe = "Couldn't connect to Vault secret manager".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::VaultConnectionError,
+            message_safe,
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when Vault secret couldn't be retrieved
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_vault_secret_could_not_be_retrieved(
+        event_details: EventDetails,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message_safe = "Vault secret couldn't be retrieved".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::VaultSecretCouldNotBeRetrieved,
+            message_safe,
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when Vault secret couldn't be created or updated
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_vault_secret_could_not_be_created_or_updated(
+        event_details: EventDetails,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message_safe = "Vault secret couldn't be created or updated".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::VaultSecretCouldNotBeCreatedOrUpdated,
+            message_safe,
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when Vault secret couldn't be deleted
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_vault_secret_could_not_be_deleted(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message_safe = "Vault secret couldn't be deleted".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::VaultSecretCouldNotBeDeleted,
+            message_safe,
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when creating ClusterSecrets
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_error_when_create_cluster_secrets(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message_safe = "Qovery error when manipulating ClusterSecrets".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::ClusterSecretsManipulationError,
+            message_safe,
             Some(raw_error),
             None,
             None,
@@ -3009,7 +3308,6 @@ mod tests {
                 Stage::Infrastructure(InfrastructureStep::Create),
                 Transmitter::Kubernetes(cluster_id.to_string(), cluster_id.to_string()),
             ),
-            "qovery_log_message".to_string(),
             "user_log_message".to_string(),
             Some(command_err),
             None,
@@ -3043,7 +3341,6 @@ mod tests {
                 Stage::Infrastructure(InfrastructureStep::Create),
                 Transmitter::Kubernetes(cluster_id.to_string(), cluster_id.to_string()),
             ),
-            "qovery_log_message".to_string(),
             "user_log_message".to_string(),
             Some(command_err),
             None,
@@ -3094,7 +3391,6 @@ mod tests {
                 Stage::Infrastructure(InfrastructureStep::Create),
                 Transmitter::Kubernetes(cluster_id.to_string(), cluster_id.to_string()),
             ),
-            "qovery_log_message".to_string(),
             "user_log_message".to_string(),
             Some(command_err),
             None,

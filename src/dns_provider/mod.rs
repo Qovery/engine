@@ -3,17 +3,16 @@ use std::net::Ipv4Addr;
 use crate::dns_provider::cloudflare::CloudflareDnsConfig;
 use crate::dns_provider::errors::DnsProviderError;
 use crate::dns_provider::qoverydns::QoveryDnsConfig;
-use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
 use crate::io_models::{Context, Domain};
 
 pub mod cloudflare;
 pub mod errors;
+pub mod io;
 pub mod qoverydns;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[derive(Clone, Debug)]
 pub enum Kind {
     Cloudflare,
     QoveryDns,

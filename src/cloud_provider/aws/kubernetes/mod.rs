@@ -1,10 +1,12 @@
 use core::fmt;
-use std::env;
+use std::io::Read;
 use std::path::Path;
+use std::str::FromStr;
+use std::{env, fs};
 
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
-use retry::OperationResult;
+use retry::{Error, OperationResult};
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
@@ -13,6 +15,7 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
 };
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
+use crate::cloud_provider::aws::kubernetes::vault::{ClusterSecretsAws, ClusterSecretsIoAws};
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
@@ -22,9 +25,11 @@ use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::utilities::{wait_until_port_is_open, TcpCheckSource};
 use crate::cloud_provider::CloudProvider;
-use crate::cmd;
 use crate::cmd::helm::{to_engine_error, Helm};
-use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
+use crate::cmd::kubectl::{
+    kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events, kubectl_exec_get_node,
+};
+use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
@@ -32,7 +37,13 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::{Context, Features, ListenersHelper, QoveryIdentifier, ToHelmString, ToTerraformString};
 use crate::object_storage::s3::S3;
+use crate::runtime::block_on;
+use crate::secret_manager::vault::QVaultClient;
 use crate::string::terraform_list_format;
+use crate::{cmd, secret_manager};
+use rusoto_core::credential::StaticProvider;
+use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
+use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest, NodegroupScalingConfig};
 
 pub mod ec2;
 mod ec2_helm_charts;
@@ -40,6 +51,7 @@ pub mod eks;
 pub mod eks_helm_charts;
 pub mod node;
 pub mod roles;
+mod vault;
 
 // https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -112,6 +124,8 @@ pub struct Options {
     pub qovery_nats_user: String,
     pub qovery_nats_password: String,
     pub qovery_ssh_key: String,
+    #[serde(default)]
+    pub user_ssh_keys: Vec<String>,
     // Others
     pub tls_email_report: String,
 }
@@ -380,7 +394,10 @@ fn tera_context(
                 match env::var_os("VAULT_SECRET_ID") {
                     Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
                     None => kubernetes.logger().log(EngineEvent::Error(
-                        EngineError::new_missing_required_env_variable(event_details, "VAULT_SECRET_ID".to_string()),
+                        EngineError::new_missing_required_env_variable(
+                            event_details.clone(),
+                            "VAULT_SECRET_ID".to_string(),
+                        ),
                         None,
                     )),
                 }
@@ -428,6 +445,16 @@ fn tera_context(
             .as_str(),
     );
 
+    let eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
+        Ok(value) => value,
+        Err(error) => return Err(error),
+    };
+
+    let desired_nodes_states = match should_update_desired_nodes(event_details, kubernetes, node_groups, eks_client) {
+        Err(e) => return Err(e),
+        Ok(value) => value,
+    };
+
     context.insert("aws_region", &kubernetes.region());
     context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
     context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
@@ -444,6 +471,7 @@ fn tera_context(
     context.insert("kubernetes_full_cluster_id", kubernetes.context().cluster_id());
     context.insert("eks_region_cluster_id", region_cluster_id.as_str());
     context.insert("eks_worker_nodes", &node_groups);
+    context.insert("eks_worker_nodes_desired_states", &desired_nodes_states);
     context.insert("ec2_zone_a_subnet_blocks_private", &ec2_zone_a_subnet_blocks_private);
     context.insert("ec2_zone_b_subnet_blocks_private", &ec2_zone_b_subnet_blocks_private);
     context.insert("ec2_zone_c_subnet_blocks_private", &ec2_zone_c_subnet_blocks_private);
@@ -492,9 +520,173 @@ fn tera_context(
     context.insert("qovery_nats_user", options.qovery_nats_user.as_str());
     context.insert("qovery_nats_password", options.qovery_nats_password.as_str());
     context.insert("qovery_ssh_key", options.qovery_ssh_key.as_str());
+    // AWS support only 1 ssh key
+    let user_ssh_key: Option<&str> = options.user_ssh_keys.get(0).map(|x| x.as_str());
+    context.insert("user_ssh_key", user_ssh_key.unwrap_or_default());
     context.insert("discord_api_key", options.discord_api_key.as_str());
 
     Ok(context)
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct NodeGroupDesiredState {
+    pub update_desired_nodes: bool,
+    pub desired_nodes_count: i32,
+}
+
+/// Returns a tuple of (update_desired_node: bool, desired_nodes_count: i32).
+fn should_update_desired_nodes(
+    event_details: EventDetails,
+    kubernetes: &dyn Kubernetes,
+    node_groups: &[NodeGroups],
+    eks_client: EksClient,
+) -> Result<Vec<NodeGroupDesiredState>, EngineError> {
+    if node_groups.is_empty() {
+        return Err(EngineError::new_cluster_has_no_worker_nodes(
+            event_details,
+            Some(CommandError::new_from_safe_message(
+                "Could not find node_group in tera context".to_string(),
+            )),
+        ));
+    }
+    let cloud_provider = kubernetes.cloud_provider();
+
+    let mut desired_states = Vec::new();
+    for node_group in node_groups {
+        let scaling_config =
+            match get_node_scaling_config(event_details.clone(), kubernetes, node_group.clone(), eks_client.clone()) {
+                Ok(value) => match value {
+                    Some(v) => v,
+                    None => {
+                        desired_states.push(NodeGroupDesiredState {
+                            update_desired_nodes: false,
+                            desired_nodes_count: node_group.min_nodes,
+                        });
+                        continue;
+                    }
+                },
+                Err(error) => return Err(error),
+            };
+
+        let should_update_desired_nodes = scaling_config.min_size.unwrap_or_default()
+            != i64::from(node_group.min_nodes)
+            || scaling_config.max_size.unwrap_or_default() != i64::from(node_group.max_nodes);
+
+        let kubeconfig = match kubernetes.get_kubeconfig_file() {
+            Ok((path, _)) => path,
+            Err(_) => {
+                desired_states.push(NodeGroupDesiredState {
+                    update_desired_nodes: false,
+                    desired_nodes_count: scaling_config.desired_size.unwrap() as i32,
+                });
+                continue;
+            }
+        };
+
+        let get_node_result = retry::retry(Fixed::from_millis(10000).take(5), || {
+            match kubectl_exec_get_node(kubeconfig.clone(), cloud_provider.credentials_environment_variables().clone())
+            {
+                Err(e) => OperationResult::Retry(e),
+                Ok(nodes) => OperationResult::Ok(nodes.items.len() as i32),
+            }
+        });
+
+        let actual_nodes_count = match get_node_result {
+            Ok(value) => value,
+            Err(Operation { error, .. }) => {
+                return Err(EngineError::new_cluster_has_no_worker_nodes(event_details, Some(error)));
+            }
+            Err(Error::Internal(e)) => {
+                return Err(EngineError::new_cluster_has_no_worker_nodes(
+                    event_details,
+                    Some(CommandError::new(
+                        "Error while trying to get the number of nodes".to_string(),
+                        Some(e),
+                        None,
+                    )),
+                ));
+            }
+        };
+
+        match node_group.get_desired_nodes(event_details.clone(), actual_nodes_count) {
+            Ok(desired_nodes) => desired_states.push(NodeGroupDesiredState {
+                update_desired_nodes: should_update_desired_nodes,
+                desired_nodes_count: desired_nodes,
+            }),
+            Err(error) => return Err(error),
+        };
+    }
+
+    Ok(desired_states)
+}
+
+/// Returns a rusoto eks client using the current configuration.
+fn get_rusoto_eks_client(event_details: EventDetails, kubernetes: &dyn Kubernetes) -> Result<EksClient, EngineError> {
+    let cloud_provider = kubernetes.cloud_provider();
+    let region = match RusotoRegion::from_str(&kubernetes.region()) {
+        Ok(value) => value,
+        Err(error) => {
+            return Err(EngineError::new_unsupported_region(
+                event_details,
+                kubernetes.region(),
+                CommandError::new_from_safe_message(error.to_string()),
+            ));
+        }
+    };
+
+    let credentials =
+        StaticProvider::new(cloud_provider.access_key_id(), cloud_provider.secret_access_key(), None, None);
+
+    let client = Client::new_with(credentials, HttpClient::new().expect("unable to create new Http client"));
+    Ok(EksClient::new_with_client(client, region))
+}
+
+/// Returns the scaling config of a node_group by node_group_name.
+fn get_node_scaling_config(
+    event_details: EventDetails,
+    kubernetes: &dyn Kubernetes,
+    node_group: NodeGroups,
+    eks_client: EksClient,
+) -> Result<Option<NodegroupScalingConfig>, EngineError> {
+    let eks_node_groups = match block_on(eks_client.list_nodegroups(ListNodegroupsRequest {
+        cluster_name: kubernetes.cluster_name(),
+        ..Default::default()
+    })) {
+        Ok(res) => res.nodegroups.unwrap_or_default(),
+        Err(_) => return Ok(None),
+    };
+
+    // This could be empty on paused clusters, we should not return an error for this
+    if eks_node_groups.is_empty() {
+        return Ok(None);
+    }
+
+    // Find eks_node_group that matches the node_group.name passed in parameters
+    let mut scaling_config: Option<NodegroupScalingConfig> = None;
+    for eks_node_group_name in eks_node_groups {
+        let eks_node_group = match block_on(eks_client.describe_nodegroup(DescribeNodegroupRequest {
+            cluster_name: kubernetes.cluster_name(),
+            nodegroup_name: eks_node_group_name,
+        })) {
+            Ok(res) => res.nodegroup.unwrap_or_default(),
+            Err(error) => {
+                return Err(EngineError::new_cluster_worker_node_not_found(
+                    event_details,
+                    Some(CommandError::new(
+                        "Error while trying to get node groups from eks".to_string(),
+                        Some(error.to_string()),
+                        None,
+                    )),
+                ));
+            }
+        };
+        if eks_node_group.tags.unwrap_or_default()["QoveryNodeGroupName"] == node_group.name {
+            scaling_config = eks_node_group.scaling_config;
+            break;
+        }
+    }
+
+    Ok(scaling_config)
 }
 
 fn create(
@@ -620,35 +812,119 @@ fn create(
         return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
     }
 
+    let mut cluster_secrets = ClusterSecretsAws::new_from_cluster_secrets_io(
+        ClusterSecretsIoAws::new(
+            kubernetes.cloud_provider().access_key_id(),
+            kubernetes.region(),
+            kubernetes.cloud_provider().secret_access_key(),
+            None,
+            None,
+            kubernetes.kind(),
+            kubernetes.cluster_name(),
+            kubernetes_long_id.to_string(),
+            options.grafana_admin_user.clone(),
+            options.grafana_admin_password.clone(),
+            kubernetes.cloud_provider().organization_id().to_string(),
+            kubernetes.context().is_test_cluster().to_string(),
+        ),
+        event_details.clone(),
+    )?;
+
     // wait for AWS EC2 K3S port is open to avoid later deployment issues (and kubeconfig not available on S3)
     if let Kind::Ec2 = kubernetes.kind() {
-        kubernetes.delete_local_kubeconfig();
-        kubernetes.get_kubeconfig_file()?;
+        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
 
-        let qovery_teraform_config =
-            get_aws_ec2_qovery_terraform_config(format!("{}/qovery-tf-config.json", &temp_dir).as_str())
-                .map_err(|e| EngineError::new_terraform_qovery_config_mismatch(event_details.clone(), e))?;
+        // read config generated after terraform infra bootstrap/update
+        let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
+            .map_err(|e| EngineError::new_terraform_qovery_config_mismatch(event_details.clone(), e))?;
 
-        let port = qovery_teraform_config.kubernetes_port_to_u16().map_err(|e| {
-            EngineError::new_terraform_qovery_config_mismatch(
-                event_details.clone(),
-                CommandError::new_from_safe_message(e),
-            )
-        })?;
+        // send cluster info to vault if info mismatch
+        // create vault connection (Vault connectivity should not be on the critical deployment path,
+        // if it temporarily fails, just ignore it, data will be pushed on the next sync)
+        let vault_conn = match QVaultClient::new(event_details.clone()) {
+            Ok(x) => Some(x),
+            Err(_) => None,
+        };
+        if let Some(vault) = vault_conn {
+            cluster_secrets.k8s_cluster_endpoint = Some(qovery_terraform_config.aws_ec2_public_hostname.clone());
+            // update info without taking care of the kubeconfig because we don't have it yet
+            let _ = cluster_secrets.create_or_update_secret(&vault, true, event_details.clone());
+        };
 
+        let port = match qovery_terraform_config.kubernetes_port_to_u16() {
+            Ok(p) => p,
+            Err(e) => {
+                return Err(EngineError::new_terraform_qovery_config_mismatch(
+                    event_details,
+                    CommandError::new_from_safe_message(e),
+                ))
+            }
+        };
+
+        // wait for k3s port to be open
         wait_until_port_is_open(
-            &TcpCheckSource::DnsName(qovery_teraform_config.aws_ec2_public_hostname.as_str()),
+            &TcpCheckSource::DnsName(qovery_terraform_config.aws_ec2_public_hostname.as_str()),
             port,
             300,
             kubernetes.logger(),
             event_details.clone(),
         )
-        .map_err(|e| {
-            EngineError::new_terraform_qovery_config_mismatch(
-                event_details.clone(),
-                CommandError::new("Wasn't able to connect to Kubernetes API, can't continue. Did you manually performed changes AWS side?".to_string(), Some(format!("{:?}", e)), None),
-            )
-        })?;
+            .map_err(|e| {
+                EngineError::new_terraform_qovery_config_mismatch(
+                    event_details.clone(),
+                    CommandError::new("Wasn't able to connect to Kubernetes API, can't continue. Did you manually performed changes AWS side?".to_string(), Some(format!("{:?}", e)), None),
+                )
+            })?;
+
+        // during an instance replacement, the EC2 host dns will change and will require the kubeconfig to be updated
+        // we need to ensure the kubeconfig is the correct one by checking the current instance dns in the kubeconfig
+        // retry for 5 min
+        let result = retry::retry(Fixed::from_millis(5 * 1000).take(60), || {
+            // force s3 kubeconfig retrieve
+            if let Err(e) = kubernetes.delete_local_kubeconfig_object_storage_folder() {
+                return OperationResult::Err(e);
+            };
+            let mut kubeconfig_path = match kubernetes.get_kubeconfig_file() {
+                Ok((_, kubeconfig_filename)) => kubeconfig_filename,
+                Err(e) => return OperationResult::Err(e),
+            };
+
+            // ensure the kubeconfig content address match with the current instance dns
+            let mut buffer = String::new();
+            let _ = kubeconfig_path.read_to_string(&mut buffer);
+            match buffer.contains(&qovery_terraform_config.aws_ec2_public_hostname) {
+                true => {
+                    kubernetes.logger().log(EngineEvent::Info(
+                        event_details.clone(),
+                        EventMessage::new_from_safe(format!(
+                            "kubeconfig stored on s3 do correspond with the actual host {}",
+                            &qovery_terraform_config.aws_ec2_public_hostname
+                        )),
+                    ));
+                    OperationResult::Ok(())
+                }
+                false => {
+                    kubernetes.logger().log(EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new_from_safe(format!(
+                            "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
+                            &qovery_terraform_config.aws_ec2_public_hostname
+                        )),
+                    ));
+                    OperationResult::Retry(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
+                        event_details.clone(),
+                    ))
+                }
+            }
+        });
+
+        match result {
+            Ok(_) => {}
+            Err(Operation { error, .. }) => return Err(error),
+            Err(Error::Internal(_)) => {
+                return Err(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(event_details))
+            }
+        }
     };
 
     // kubernetes helm deployments on the cluster
@@ -661,6 +937,24 @@ fn create(
         .into_iter()
         .map(|x| (x.0.to_string(), x.1.to_string()))
         .collect();
+
+    // send cluster info with kubeconfig
+    // create vault connection (Vault connectivity should not be on the critical deployment path,
+    // if it temporarily fails, just ignore it, data will be pushed on the next sync)
+    let vault_conn = match QVaultClient::new(event_details.clone()) {
+        Ok(x) => Some(x),
+        Err(_) => None,
+    };
+    if let Some(vault) = vault_conn {
+        // encode base64 kubeconfig
+        let kubeconfig_content =
+            fs::read_to_string(kubeconfig_path).expect("kubeconfig was not found while it should be present");
+        let kubeconfig_b64 = base64::encode(kubeconfig_content);
+        cluster_secrets.kubeconfig_b64 = Some(kubeconfig_b64);
+
+        // update info without taking care of the kubeconfig because we don't have it yet
+        let _ = cluster_secrets.create_or_update_secret(&vault, false, event_details.clone());
+    };
 
     kubernetes.logger().log(EngineEvent::Info(
         event_details.clone(),
@@ -751,6 +1045,13 @@ fn create(
             ));
         }
     };
+
+    if let Err(e) = kubectl_are_qovery_infra_pods_executed(kubeconfig_path, &credentials_environment_variables) {
+        kubernetes.logger().log(EngineEvent::Warning(
+            event_details.clone(),
+            EventMessage::new("Didn't manage to restart all paused pods".to_string(), Some(e.to_string())),
+        ));
+    }
 
     deploy_charts_levels(
         kubeconfig_path,
@@ -1299,20 +1600,35 @@ fn delete(
                 &listeners_helper,
             );
             kubernetes.logger().log(EngineEvent::Info(
-                event_details,
+                event_details.clone(),
                 EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),
             ));
             Ok(())
         }
-        Err(Operation { error, .. }) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-            event_details,
-            error,
-        )),
-        Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-            event_details,
-            CommandError::new("Error while trying to perform Terraform destroy".to_string(), Some(msg), None),
-        )),
-    }
+        Err(Operation { error, .. }) => {
+            return Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
+                event_details,
+                error,
+            ))
+        }
+        Err(retry::Error::Internal(msg)) => {
+            return Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
+                event_details,
+                CommandError::new("Error while trying to perform Terraform destroy".to_string(), Some(msg), None),
+            ))
+        }
+    }?;
+
+    // delete info on vault
+    let vault_conn = QVaultClient::new(event_details);
+    if let Ok(vault_conn) = vault_conn {
+        let mount = secret_manager::vault::get_vault_mount_name(kubernetes.context().is_test_cluster());
+
+        // ignore on failure
+        let _ = vault_conn.delete_secret(mount.as_str(), kubernetes.id());
+    };
+
+    Ok(())
 }
 
 fn delete_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
