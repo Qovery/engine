@@ -227,7 +227,7 @@ function prod_release() { ## Release a new engine version with commit ID as tag 
     tar -C /usr/bin/ -xzvf /tmp/goreleaser.tgz goreleaser
   fi
  
-  goreleaser release --rm-dist
+  #goreleaser release --rm-dist
   git tag -d v1.0-$git_tag
 
   echo -e "\e[92mNew image name is: ${DEFAULT_ENGINE_IMAGE_NAME}:${git_tag}\e[0m"
