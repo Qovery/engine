@@ -222,7 +222,7 @@ function prod_release() { ## Release a new engine version with commit ID as tag 
   git tag v1.0-$git_tag
   # 4. get goreleaser if not exists
   set -x
-  if [ $(which goreleaser) ] ; then
+  if [ ! -f /usr/bin/goreleaser ] ; then
     curl -Lo /tmp/goreleaser.tgz https://github.com/goreleaser/goreleaser/releases/download/v1.9.2/goreleaser_Linux_x86_64.tar.gz
     tar -C /usr/bin/ -xzvf /tmp/goreleaser.tgz goreleaser
   fi
