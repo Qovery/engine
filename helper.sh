@@ -220,6 +220,11 @@ function prod_release() { ## Release a new engine version with commit ID as tag 
   mkdir -p $dest_folder
   tar -czf $dest_folder/engine.tgz $archive_dir
   git tag v1.0-$git_tag
+  # 4. get goreleaser if not exists
+  if [ $(which goreleaser) ] ; then
+    curl -Lso /tmp/goreleaser.tgz https://github.com/goreleaser/goreleaser/releases/download/v1.9.2/goreleaser_Linux_x86_64.tar.gz
+    tar -C /usr/bin/ -xzf goreleaser.tgz goreleaser
+  fi
  
   goreleaser release --rm-dist
   git tag -d v1.0-$git_tag
