@@ -762,12 +762,12 @@ impl EngineError {
             hint_message,
         }
     }
-    /// Clone an existing engine error to specify a terminated stage
+    /// Clone an existing engine error to specify a stage
     ///
     /// Arguments:
     ///
-    /// * `terminated_stage`: terminated stage that replaces the current stage of the engine error
-    pub fn clone_engine_error_with_terminated_stage(&self, terminated_stage: Stage) -> Self {
+    /// * `stage`: stage that replaces the current stage of the engine error
+    pub fn clone_engine_error_with_stage(&self, stage: Stage) -> Self {
         EngineError {
             event_details: EventDetails::new(
                 self.event_details.provider_kind(),
@@ -775,7 +775,7 @@ impl EngineError {
                 self.event_details.cluster_id().clone(),
                 self.event_details.execution_id().clone(),
                 self.event_details.region(),
-                terminated_stage,
+                stage,
                 self.event_details.transmitter(),
             ),
             tag: self.tag.clone(),
@@ -3526,7 +3526,7 @@ mod tests {
 
         // execute:
         let engine_error_with_terminated_stage =
-            engine_err.clone_engine_error_with_terminated_stage(Stage::Infrastructure(InfrastructureStep::CreateError));
+            engine_err.clone_engine_error_with_stage(Stage::Infrastructure(InfrastructureStep::CreateError));
 
         // verify:
         assert_eq!(
