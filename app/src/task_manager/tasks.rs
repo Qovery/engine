@@ -141,7 +141,7 @@ impl InfrastructureTask {
                 EventMessage::new_from_safe(format!("Kubernetes cluster failure {}", &infrastructure_step));
 
             let engine_event = EngineEvent::Error(
-                engine_error.clone_engine_error_with_terminated_stage(Infrastructure(infrastructure_step)),
+                engine_error.clone_engine_error_with_stage(Infrastructure(infrastructure_step)),
                 Some(event_message),
             );
 
