@@ -762,6 +762,29 @@ impl EngineError {
             hint_message,
         }
     }
+    /// Clone an existing engine error to specify a terminated stage
+    ///
+    /// Arguments:
+    ///
+    /// * `terminated_stage`: terminated stage that replaces the current stage of the engine error
+    pub fn clone_engine_error_with_terminated_stage(&self, terminated_stage: Stage) -> Self {
+        EngineError {
+            event_details: EventDetails::new(
+                self.event_details.provider_kind(),
+                self.event_details.organisation_id().clone(),
+                self.event_details.cluster_id().clone(),
+                self.event_details.execution_id().clone(),
+                self.event_details.region(),
+                terminated_stage,
+                self.event_details.transmitter(),
+            ),
+            tag: self.tag.clone(),
+            user_log_message: self.user_log_message.clone(),
+            underlying_error: self.underlying_error.as_ref().cloned(),
+            link: self.link.as_ref().cloned(),
+            hint_message: self.hint_message.as_ref().cloned(),
+        }
+    }
 
     /// Creates new engine error from legacy engine error easing migration.
     pub fn new_from_legacy_engine_error(e: LegacyEngineError) -> Self {
@@ -3474,5 +3497,41 @@ mod tests {
         // verify:
         assert!(!res.contains("my_secret"));
         assert!(!res.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn should_clone_engine_error_with_a_different_stage() {
+        // setup:
+        let command_err = CommandError::new(
+            "my safe message".to_string(),
+            Some("my raw message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+        let cluster_id = QoveryIdentifier::new_random();
+        let engine_err = EngineError::new_unknown(
+            EventDetails::new(
+                Some(Kind::Scw),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                Some(ScwRegion::Paris.as_str().to_string()),
+                Stage::Infrastructure(InfrastructureStep::Create),
+                Transmitter::Kubernetes(cluster_id.to_string(), cluster_id.to_string()),
+            ),
+            "user_log_message".to_string(),
+            Some(command_err),
+            None,
+            None,
+        );
+
+        // execute:
+        let engine_error_with_terminated_stage =
+            engine_err.clone_engine_error_with_terminated_stage(Stage::Infrastructure(InfrastructureStep::CreateError));
+
+        // verify:
+        assert_eq!(
+            engine_error_with_terminated_stage.event_details.stage(),
+            &Stage::Infrastructure(InfrastructureStep::CreateError)
+        );
     }
 }
