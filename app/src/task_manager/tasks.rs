@@ -14,6 +14,7 @@ use url::Url;
 use qovery_engine::error::{EngineError, EngineErrorCause};
 use qovery_engine::errors;
 use qovery_engine::errors::ErrorMessageVerbosity;
+use qovery_engine::events::Stage::Infrastructure;
 use qovery_engine::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use qovery_engine::io_models::{
     Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope, QoveryIdentifier,
@@ -138,7 +139,11 @@ impl InfrastructureTask {
             };
             let event_message =
                 EventMessage::new_from_safe(format!("Kubernetes cluster failure {}", &infrastructure_step));
-            let engine_event = EngineEvent::Error(engine_error, Some(event_message));
+
+            let engine_event = EngineEvent::Error(
+                engine_error.clone_engine_error_with_terminated_stage(Infrastructure(infrastructure_step)),
+                Some(event_message),
+            );
 
             logger.log(engine_event);
 
