@@ -103,7 +103,7 @@ impl From<events::Stage> for Stage {
 }
 
 #[derive(Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub enum GeneralStep {
     RetrieveClusterConfig,
     RetrieveClusterResources,
@@ -123,7 +123,7 @@ impl From<events::GeneralStep> for GeneralStep {
 }
 
 #[derive(Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub enum InfrastructureStep {
     LoadConfiguration,
     Create,
