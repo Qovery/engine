@@ -1189,7 +1189,12 @@ fn pause(
     };
 
     if tf_workers_resources.is_empty() {
-        return Err(EngineError::new_cluster_has_no_worker_nodes(event_details, None));
+        return Err(EngineError::new_cluster_has_no_worker_nodes(
+            event_details,
+            Some(CommandError::new_from_safe_message(
+                "Could not find workers resources in terraform state.".to_string(),
+            )),
+        ));
     }
 
     let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
