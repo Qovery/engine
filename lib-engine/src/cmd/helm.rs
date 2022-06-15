@@ -466,6 +466,9 @@ impl Helm {
         if chart.force_upgrade {
             args_string.push("--force".to_string())
         }
+        if chart.recreate_pods {
+            args_string.push("--recreate-pods".to_string())
+        }
         if chart.dry_run {
             args_string.push("--dry-run".to_string())
         }
