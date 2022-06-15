@@ -1112,12 +1112,13 @@ impl Kapsule {
         };
 
         if tf_workers_resources.is_empty() {
-            return Err(EngineError::new_cluster_has_no_worker_nodes(
+            self.logger().log(EngineEvent::Warning(
                 event_details,
-                Some(CommandError::new_from_safe_message(
-                    "Could not find workers resources in terraform state.".to_string(),
-                )),
+                EventMessage::new_from_safe(
+                    "Could not find workers resources in terraform state. Cluster seems already paused.".to_string(),
+                ),
             ));
+            return Ok(());
         }
 
         let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
