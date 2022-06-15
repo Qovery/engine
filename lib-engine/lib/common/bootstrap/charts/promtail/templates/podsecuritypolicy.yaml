@@ -1,10 +1,35 @@
-{{- if and .Values.rbac.create .Values.rbac.pspEnabled }}
+{{- if .Values.rbac.pspEnabled }}
 apiVersion: policy/v1beta1
 kind: PodSecurityPolicy
 metadata:
-  name: {{ include "promtail.fullname" . }}
+  name: {{ template "promtail.fullname" . }}
   labels:
-    {{- include "promtail.labels" . | nindent 4 }}
+    app: {{ template "promtail.name" . }}
+    chart: {{ template "promtail.chart" . }}
+    heritage: {{ .Release.Service }}
+    release: {{ .Release.Name }}
 spec:
-  {{- toYaml .Values.podSecurityPolicy | nindent 2 }}
-{{- end }}
+  privileged: false
+  allowPrivilegeEscalation: false
+  volumes:
+    - 'secret'
+    - 'configMap'
+    - 'hostPath'
+    - 'projected'
+    - 'downwardAPI'
+    - 'emptyDir'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'RunAsAny'
+  seLinux:
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+  readOnlyRootFilesystem: true
+  requiredDropCapabilities:
+    - ALL
+  {{- end }}
