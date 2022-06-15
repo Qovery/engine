@@ -585,7 +585,7 @@ impl Helm {
                     && installed_versions
                         .chart_version
                         .expect("No chart version found")
-                        .le(breaking_version)
+                        .lt(breaking_version)
                 {
                     self.uninstall(chart, envs)?;
                 }
