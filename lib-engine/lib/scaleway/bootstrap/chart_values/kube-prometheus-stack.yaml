@@ -44,7 +44,7 @@ prometheus:
     storageSpec:
       volumeClaimTemplate:
         spec:
-          storageClassName: aws-ebs-gp2-0
+          storageClassName: scw-sbv-ssd-0
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
