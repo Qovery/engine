@@ -371,7 +371,7 @@ pub fn eks_aws_helm_charts(
     let promtail = CommonChart {
         chart_info: ChartInfo {
             name: "promtail".to_string(),
-            last_breaking_version_requiring_restart: Some(Version::new(0, 24, 0)),
+            last_breaking_version_requiring_restart: Some(Version::new(5, 1, 0)),
             path: chart_path("common/charts/promtail"),
             // because of priorityClassName, we need to add it to kube-system
             namespace: HelmChartNamespaces::KubeSystem,

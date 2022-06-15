@@ -1,19 +1,18 @@
-{{- if .Values.rbac.create }}
+{{- if and .Values.rbac.create .Values.rbac.pspEnabled }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: {{ template "promtail.fullname" . }}
+  name: {{ include "promtail.fullname" . }}-psp
   namespace: {{ .Release.Namespace }}
   labels:
-    app: {{ template "promtail.name" . }}
-    chart: {{ template "promtail.chart" . }}
-    heritage: {{ .Release.Service }}
-    release: {{ .Release.Name }}
-{{- if .Values.rbac.pspEnabled }}
+    {{- include "promtail.labels" . | nindent 4 }}
 rules:
-- apiGroups:      ['extensions']
-  resources:      ['podsecuritypolicies']
-  verbs:          ['use']
-  resourceNames:  [{{ template "promtail.fullname" . }}]
-{{- end }}
+  - apiGroups:
+      - policy
+    resources:
+      - podsecuritypolicies
+    verbs:
+      - use
+    resourceNames:
+      - {{ include "promtail.fullname" . }}
 {{- end }}
