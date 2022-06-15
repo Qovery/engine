@@ -1629,7 +1629,8 @@ pub fn cluster_test(
             assert!(matches!(resume_tx.commit(), TransactionResult::Ok));
         }
         ClusterTestType::WithUpgrade => {
-            let upgrade_to_version = format!("{}.{}", major_boot_version, minor_boot_version + 1);
+            let upgrade_to_version =
+                format!("{}.{}", major_boot_version.to_string(), (minor_boot_version + 1).to_string());
             let engine = match provider_kind {
                 Kind::Aws => AWS::docker_cr_engine(
                     &context,
