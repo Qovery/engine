@@ -199,6 +199,7 @@ function new_release() { ## Release a new engine version with commit ID as tag p
 
   echo -e "\e[92mNew image name is: ${DEFAULT_ENGINE_IMAGE_NAME}:${tag}\e[0m"
 }
+
 function prod_release() { ## Release a new engine version with commit ID as tag prepare_engine
   set -e
   git_tag=$(generate_image_tag)
@@ -229,6 +230,7 @@ function prod_release() { ## Release a new engine version with commit ID as tag 
  
   #goreleaser release --rm-dist
   git tag -d v1.0-$git_tag
+  push_image
 
   echo -e "\e[92mNew image name is: ${DEFAULT_ENGINE_IMAGE_NAME}:${git_tag}\e[0m"
 }
