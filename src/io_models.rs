@@ -257,6 +257,8 @@ pub struct ApplicationAdvancedSettings {
     pub liveness_probe_success_threshold: u32,
     #[serde(alias = "liveness_probe.failure_threshold")]
     pub liveness_probe_failure_threshold: u32,
+    #[serde(alias = "hpa.cpu.average_utilization_percent")]
+    pub hpa_cpu_average_utilization_percent: i8,
 }
 
 impl Default for ApplicationAdvancedSettings {
@@ -284,6 +286,7 @@ impl Default for ApplicationAdvancedSettings {
             liveness_probe_timeout_seconds: 5,
             liveness_probe_success_threshold: 1,
             liveness_probe_failure_threshold: 3,
+            hpa_cpu_average_utilization_percent: 60
         }
     }
 }
