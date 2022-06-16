@@ -23,7 +23,7 @@ use qovery_engine::logger::Logger;
 use qovery_engine::models::digital_ocean::DoRegion;
 
 pub const DO_KUBERNETES_MAJOR_VERSION: u8 = 1;
-pub const DO_KUBERNETES_MINOR_VERSION: u8 = 20;
+pub const DO_KUBERNETES_MINOR_VERSION: u8 = 21;
 pub const DO_KUBERNETES_VERSION: &str = formatcp!("{}.{}", DO_KUBERNETES_MAJOR_VERSION, DO_KUBERNETES_MINOR_VERSION);
 pub const DOCR_ID: &str = "registry-the-one-and-unique";
 pub const DO_TEST_REGION: DoRegion = DoRegion::Amsterdam3;

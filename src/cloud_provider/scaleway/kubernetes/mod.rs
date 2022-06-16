@@ -1193,16 +1193,19 @@ impl Kapsule {
             EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
         ));
 
-        match terraform_exec(temp_dir.as_str(), terraform_args) {
-            Ok(_) => {
-                let message = format!("Kubernetes cluster {} successfully paused", self.name());
-                self.send_to_customer(&message, &listeners_helper);
-                self.logger()
-                    .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(message)));
-                Ok(())
-            }
-            Err(e) => Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e)),
+        if let Err(e) = terraform_exec(temp_dir.as_str(), terraform_args) {
+            return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
         }
+
+        if let Err(e) = self.check_workers_on_pause() {
+            return Err(EngineError::new_k8s_node_not_ready(event_details, e));
+        };
+
+        let message = format!("Kubernetes cluster {} successfully paused", self.name());
+        self.send_to_customer(&message, &listeners_helper);
+        self.logger()
+            .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(message)));
+        Ok(())
     }
 
     fn pause_error(&self) -> Result<(), EngineError> {

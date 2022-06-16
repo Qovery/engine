@@ -7,7 +7,6 @@ use test_utilities::digitalocean::{DO_KUBERNETES_MAJOR_VERSION, DO_KUBERNETES_MI
 use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets};
 
 #[cfg(feature = "test-do-whole-enchilada")]
-#[ignore]
 #[named]
 #[test]
 fn create_and_destroy_doks_cluster_with_env_in_ams_3() {
