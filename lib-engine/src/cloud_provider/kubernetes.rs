@@ -323,6 +323,20 @@ pub trait Kubernetes: Listen {
             check_workers_status(&kubeconfig, self.cloud_provider().credentials_environment_variables())
         })
     }
+
+    fn check_workers_on_pause(&self) -> Result<(), CommandError>
+    where
+        Self: Sized,
+    {
+        let kubeconfig = match self.get_kubeconfig_file() {
+            Ok((path, _)) => path,
+            Err(e) => return Err(e.underlying_error().unwrap_or_default()),
+        };
+
+        send_progress_on_long_task(self, Action::Create, || {
+            check_workers_pause(&kubeconfig, self.cloud_provider().credentials_environment_variables())
+        })
+    }
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError>;
     fn on_upgrade(&self) -> Result<(), EngineError>;
     fn on_upgrade_error(&self) -> Result<(), EngineError>;
@@ -1055,6 +1069,33 @@ where
                         ));
                     }
                 }
+                OperationResult::Ok(())
+            }
+        }
+    });
+
+    match result {
+        Ok(_) => Ok(()),
+        Err(Operation { error, .. }) => Err(error),
+        Err(retry::Error::Internal(e)) => Err(CommandError::new_from_safe_message(e)),
+    }
+}
+
+pub fn check_workers_pause<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<(), CommandError>
+where
+    P: AsRef<Path>,
+{
+    let result = retry::retry(Fixed::from_millis(10000).take(60), || {
+        match kubectl_exec_get_node(kubernetes_config.as_ref(), envs.clone()) {
+            //TODO: handle error properly
+            Err(_) => OperationResult::Ok(()),
+            Ok(nodes) => {
+                if !nodes.items.is_empty() {
+                    return OperationResult::Retry(CommandError::new_from_safe_message(
+                        "There are still not paused worker nodes.".to_string(),
+                    ));
+                }
+
                 OperationResult::Ok(())
             }
         }

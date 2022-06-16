@@ -270,6 +270,7 @@ impl DOKS {
         // DOKS
         context.insert("test_cluster", &self.context.is_test_cluster());
         context.insert("doks_cluster_id", &self.id());
+        context.insert("kubernetes_full_cluster_id", self.context().cluster_id());
         context.insert("doks_master_name", &self.name());
         context.insert("doks_version", self.get_supported_doks_version(event_details.clone())?.as_str());
         context.insert("do_space_kubeconfig_filename", &self.kubeconfig_file_name());
