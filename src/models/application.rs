@@ -119,6 +119,10 @@ impl<T: CloudProvider> Application<T> {
         context.insert("total_ram_in_mib", &self.total_ram_in_mib());
         context.insert("min_instances", &self.min_instances());
         context.insert("max_instances", &self.max_instances());
+        context.insert(
+            "hpa_cpu_average_utilization_percent",
+            &self.advanced_settings.hpa_cpu_average_utilization_percent,
+        );
 
         if let Some(private_port) = self.public_port() {
             context.insert("is_private_port", &true);
