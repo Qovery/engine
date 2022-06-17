@@ -436,8 +436,14 @@ where
         // check non custom domains
         self.check_domains(event_details.clone(), self.logger())?;
 
+        let domains_to_remove_from_check = self.domains_to_check();
+        let custom_domains_to_check = self
+            .custom_domains
+            .iter()
+            .filter(|cd| !domains_to_remove_from_check.contains(&cd.domain.as_str()));
+
         // Wait/Check that custom domain is a CNAME targeting qovery
-        for domain_to_check in self.custom_domains.iter() {
+        for domain_to_check in custom_domains_to_check {
             match check_cname_for(
                 self.progress_scope(),
                 self.listeners(),
@@ -453,7 +459,7 @@ where
                         event_details.clone(),
                         EventMessage::new(
                             format!(
-                                "Invalid CNAME for {}. Might not be an issue if user is using a CDN.",
+                                "Invalid CNAME for {}. It might not be an issue if user is using a CDN.",
                                 domain_to_check.domain,
                             ),
                             Some(err.to_string()),
