@@ -497,6 +497,12 @@ pub enum Tag {
     CannotDetermineK8sRequestedUpgradeVersion,
     /// CannotDetermineK8sKubeletWorkerVersion: represents an error when trying to determine kubelet worker version which cannot be retrieved.
     CannotDetermineK8sKubeletWorkerVersion,
+    /// CannotGetNodeGroupList: represents an error while getting node group list from the cloud provider
+    CannotGetNodeGroupList,
+    /// CannotGetNodeGroupInfo: represent and error caused by the cloud provider because no Nodegroup information has been returned
+    CannotGetNodeGroupInfo,
+    /// NumberOfMaxNodesIsBelowThanCurrentUsage: represents an error explaining to the user the requested maximum of nodes is below the current usage
+    NumberOfRequestedMaxNodesIsBelowThanCurrentUsage,
     /// CannotDetermineK8sKubeProxyVersion: represents an error when trying to determine kube proxy version which cannot be retrieved.
     CannotDetermineK8sKubeProxyVersion,
     /// CannotExecuteK8sApiCustomMetrics: represents an error when trying to get K8s API custom metrics.
@@ -1145,6 +1151,33 @@ impl EngineError {
             None,
             None,
             Some("Consider to upgrade your nodes configuration.".to_string()),
+        )
+    }
+
+    /// error explaining to the user the requested maximum of nodes is below the current usage
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `current_node_number`: The actual number of nodes running.
+    /// * `max_nodes`: The maximum number of nodes allowed.
+    pub fn new_number_of_requested_max_nodes_is_below_than_current_usage_error(
+        event_details: EventDetails,
+        current_node_number: i32,
+        max_nodes: i32,
+    ) -> EngineError {
+        let message = format!(
+            "The actual number of nodes {} is above then the maximum number ({}) requested. Reduce your resources usage or set it to a higher value",
+            current_node_number, max_nodes
+        );
+
+        EngineError::new(
+            event_details,
+            Tag::NumberOfRequestedMaxNodesIsBelowThanCurrentUsage,
+            message.clone(),
+            None,
+            None,
+            Some(message),
         )
     }
 
@@ -2457,6 +2490,44 @@ impl EngineError {
             Some(raw_error),
             None,
             Some("Maybe there is a lag and cluster is not yet reported, please retry later.".to_string()),
+        )
+    }
+
+    /// No nodegroup information given from the cloud provider
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_missing_nodegroup_information_error(event_details: EventDetails) -> EngineError {
+        let message = "Error from the cloud provider, missing Kubernetes nodegroup information";
+
+        EngineError::new(
+            event_details,
+            Tag::CannotGetNodeGroupInfo,
+            message.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Can't retrieve Cloud provider node group list
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_nodegroup_list_error(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message = "Error, cannot get Kubernetes nodegroup list from your cloud provider.";
+
+        EngineError::new(
+            event_details,
+            Tag::CannotGetNodeGroupList,
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
         )
     }
 
