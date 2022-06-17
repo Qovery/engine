@@ -81,11 +81,6 @@ pub trait Service: ToTransmitter {
     fn total_ram_in_mib(&self) -> u32;
     fn min_instances(&self) -> u32;
     fn max_instances(&self) -> u32;
-    fn cpu_average_utilization_percent(&self) -> i8 {
-        self.application_advanced_settings()
-            .unwrap_or_default()
-            .hpa_cpu_average_utilization_percent
-    }
     fn publicly_accessible(&self) -> bool;
     fn fqdn(&self, target: &DeploymentTarget, fqdn: &str, is_managed: bool) -> String {
         match &self.publicly_accessible() {
@@ -364,7 +359,6 @@ pub fn default_tera_context(
     context.insert("total_ram_in_mib", &service.total_ram_in_mib());
     context.insert("min_instances", &service.min_instances());
     context.insert("max_instances", &service.max_instances());
-    context.insert("cpu_average_utilization_percent", &service.cpu_average_utilization_percent());
 
     context.insert("is_private_port", &service.private_port().is_some());
     if let Some(private_port) = service.private_port() {
