@@ -129,6 +129,9 @@ pub enum Tag {
     VaultSecretCouldNotBeDeleted,
     JsonDeserializationError,
     ClusterSecretsManipulationError,
+    CannotGetNodeGroupList,
+    CannotGetNodeGroupInfo,
+    NumberOfRequestedMaxNodesIsBelowThanCurrentUsage,
 }
 
 impl From<errors::Tag> for Tag {
@@ -254,6 +257,11 @@ impl From<errors::Tag> for Tag {
             errors::Tag::JsonDeserializationError => Tag::JsonDeserializationError,
             errors::Tag::ClusterSecretsManipulationError => Tag::ClusterSecretsManipulationError,
             errors::Tag::VaultSecretCouldNotBeDeleted => Tag::VaultSecretCouldNotBeDeleted,
+            errors::Tag::CannotGetNodeGroupList => Tag::CannotGetNodeGroupList,
+            errors::Tag::CannotGetNodeGroupInfo => Tag::CannotGetNodeGroupInfo,
+            errors::Tag::NumberOfRequestedMaxNodesIsBelowThanCurrentUsage => {
+                Tag::NumberOfRequestedMaxNodesIsBelowThanCurrentUsage
+            }
         }
     }
 }
