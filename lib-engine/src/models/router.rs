@@ -618,6 +618,13 @@ where
             for domain in &self.custom_domains {
                 domains.push(domain.domain.as_str());
             }
+        } else {
+            let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+
+            self.logger().log(EngineEvent::Info(
+                event_details,
+                EventMessage::new("Custom domain check is disabled.".to_string(), None),
+            ));
         }
 
         domains
