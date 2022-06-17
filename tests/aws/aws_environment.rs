@@ -7,10 +7,11 @@ use self::test_utilities::utilities::{
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubernetes_get_all_pdbs;
-use qovery_engine::io_models::{Action, CloneForTest, Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::{Action, CloneForTest, CustomDomain, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
 use retry::delay::Fibonacci;
+use std::borrow::BorrowMut;
 use std::collections::BTreeMap;
 use test_utilities::aws::aws_default_engine_config;
 use test_utilities::utilities::{context, init, kubernetes_config_path};
@@ -524,6 +525,83 @@ fn deploy_a_working_environment_with_domain() {
                 .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
         );
+
+        let mut environment_delete = environment.clone();
+        environment_delete.action = Action::Delete;
+
+        let ea = environment.clone();
+        let ea_delete = environment_delete.clone();
+
+        let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_domain() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context(
+            secrets
+                .AWS_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("AWS_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
+        let engine_config = aws_default_engine_config(&context, logger.clone());
+        let context_for_deletion = context.clone_not_same_execution_id();
+        let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
+
+        let mut modified_environment = environment.clone();
+        let _ = modified_environment.applications.clear();
+
+        for (idx, mut router) in environment.routers.into_iter().enumerate() {
+            // add custom domain
+            let mut _router = router.clone();
+            let _ = _router.routes.clear();
+
+            let cd = CustomDomain {
+                domain: format!("fake-custom-domain-{}.qovery.io", idx),
+                target_domain: format!("validation-domain-{}", idx),
+            };
+
+            router.custom_domains = vec![cd];
+        }
+
+        for mut application in environment.applications.into_iter() {
+            let mut advanced_settings = application.advanced_settings.borrow_mut();
+            // disable custom domain check
+            advanced_settings.deployment_custom_domain_check_enabled = false;
+            modified_environment.applications.push(application);
+        }
+
+        environment = modified_environment;
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
