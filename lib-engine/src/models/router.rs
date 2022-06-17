@@ -434,13 +434,18 @@ where
         );
 
         // check non custom domains
-        self.check_domains(event_details.clone(), self.logger())?;
+        self.check_domains(vec![self.default_domain.as_str()], event_details.clone(), self.logger())?;
 
-        let domains_to_remove_from_check = self.domains_to_check();
-        let custom_domains_to_check = self
-            .custom_domains
-            .iter()
-            .filter(|cd| !domains_to_remove_from_check.contains(&cd.domain.as_str()));
+        let custom_domains_to_check = if self.advanced_settings.custom_domain_check_enabled {
+            self.custom_domains.iter().collect::<Vec<_>>()
+        } else {
+            self.logger().log(EngineEvent::Info(
+                event_details.clone(),
+                EventMessage::new("Custom domain check is disabled.".to_string(), None),
+            ));
+
+            vec![]
+        };
 
         // Wait/Check that custom domain is a CNAME targeting qovery
         for domain_to_check in custom_domains_to_check {
@@ -605,37 +610,6 @@ impl<T: CloudProvider> RouterService for Router<T>
 where
     Router<T>: Service,
 {
-    fn domains(&self) -> Vec<&str> {
-        let mut domains = Vec::with_capacity(1 + self.custom_domains.len());
-        domains.push(self.default_domain.as_str());
-
-        for domain in &self.custom_domains {
-            domains.push(domain.domain.as_str());
-        }
-
-        domains
-    }
-
-    fn domains_to_check(&self) -> Vec<&str> {
-        let mut domains = Vec::with_capacity(1 + self.custom_domains.len());
-        domains.push(self.default_domain.as_str());
-
-        if self.advanced_settings.custom_domain_check_enabled {
-            for domain in &self.custom_domains {
-                domains.push(domain.domain.as_str());
-            }
-        } else {
-            let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-
-            self.logger().log(EngineEvent::Info(
-                event_details,
-                EventMessage::new("Custom domain check is disabled.".to_string(), None),
-            ));
-        }
-
-        domains
-    }
-
     fn has_custom_domains(&self) -> bool {
         !self.custom_domains.is_empty()
     }
