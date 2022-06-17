@@ -221,7 +221,7 @@ pub struct ApplicationAdvancedSettings {
     pub build_timeout_max_sec: u32,
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
     pub network_ingress_proxy_body_size_mb: u32,
-    #[serde(alias = "network.ingress.cors_enabl e")]
+    #[serde(alias = "network.ingress.cors_enable")]
     pub network_ingress_cors_enable: bool,
     #[serde(alias = "network.ingress.cors_allow_origin")]
     pub network_ingress_cors_allow_origin: String,
