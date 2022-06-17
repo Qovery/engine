@@ -113,14 +113,14 @@ impl EnvironmentRequest {
         let mut routers = Vec::with_capacity(self.routers.len());
         for router in &self.routers {
             let mut custom_domain_check_enabled = true;
-            for route in &router.routes {
-                for app in &self.applications {
-                    if route.application_name.as_str() == app.name.as_str()
-                        && !app.advanced_settings.deployment_custom_domain_check_enabled
-                    {
-                        // disable custom domain check for this router
-                        custom_domain_check_enabled = false;
-                        break;
+            for app in &self.applications {
+                if !app.advanced_settings.deployment_custom_domain_check_enabled {
+                    for route in &router.routes {
+                        if route.application_name.as_str() == app.name.as_str() {
+                            // disable custom domain check for this router
+                            custom_domain_check_enabled = false;
+                            break;
+                        }
                     }
                 }
             }
@@ -286,7 +286,7 @@ impl Default for ApplicationAdvancedSettings {
             liveness_probe_timeout_seconds: 5,
             liveness_probe_success_threshold: 1,
             liveness_probe_failure_threshold: 3,
-            hpa_cpu_average_utilization_percent: 60
+            hpa_cpu_average_utilization_percent: 60,
         }
     }
 }
