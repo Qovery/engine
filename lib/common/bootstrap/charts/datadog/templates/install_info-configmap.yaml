@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "datadog.fullname" . }}-installinfo
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "datadog.labels" . | indent 4 }}
+  annotations:
+    checksum/install_info: {{ printf "%s-%s" .Chart.Name .Chart.Version | sha256sum }}
+data:
+  install_info: |
+    ---
+    install_method:
+      tool: helm
+      tool_version: {{ .Release.Service }}
+      installer_version: {{ .Chart.Name }}-{{ .Chart.Version }}

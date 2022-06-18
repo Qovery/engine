@@ -1,0 +1,67 @@
+deploymentStrategy:
+  type: Recreate
+
+persistence:
+  type: pvc
+  enabled: false
+  storageClassName: do-volume-standard-0
+  accessModes:
+    - ReadWriteOnce
+  size: 1Gi
+  finalizers:
+    - kubernetes.io/pvc-protection
+  inMemory:
+    enabled: true
+
+adminUser: "{{ grafana_admin_user }}"
+adminPassword: "{{ grafana_admin_password }}"
+
+{% if test_cluster %}
+notifiers: {}
+{% else %}
+notifiers:
+  notifiers.yaml:
+    notifiers:
+      - name: "Interrupt alerts"
+        type: discord
+        uid: qovery_discord_interrupt
+        is_default: true
+        send_reminder: true
+        frequency: 2h
+        disable_resolve_message: false
+        settings:
+          content: "{{ doks_cluster_id }}"
+          url: "{{ discord_api_key }}"
+{% endif %}
+
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+      - name: 'default'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: true
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+
+dashboards:
+  default:
+    node-exporter:
+      file: dashboards/node-exporter.json
+    kubernetes-cluster:
+      file: dashboards/kubernetes-cluster.json
+    cert-manager:
+      file: dashboards/cert-manager.json
+    aws-limits:
+      file: dashboards/aws-limits.json
+    detailed-pods-resources:
+      file: dashboards/detailed-pods-resources.json
+    client-pod-usage:
+      file: dashboards/client_pod_usage.json
+    kubernetes-capacity-planning:
+      file: dashboards/kubernetes-capacity-planning.json
+    engine:
+      file: dashboards/engine.json

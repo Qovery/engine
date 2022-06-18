@@ -1,0 +1,81 @@
+{%- if routes|length >= 1  %}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ sanitized_name }}
+  namespace: {{ namespace }}
+  labels:
+    routerId: {{ id }}
+    routerLongId: {{ long_id }}
+    envLongId: {{ environment_long_id }}
+    projectLongId: {{ project_long_id }}
+    envId: {{ environment_id }}
+    fqdn: "{{ router_default_domain }}"
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: {{ router_default_domain }}
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    kubernetes.io/tls-acme: "true"
+    {%- if custom_domains|length > 0 %}
+    cert-manager.io/issuer: {{ id }}
+    {%- else %}
+    cert-manager.io/cluster-issuer: {{ metadata_annotations_cert_manager_cluster_issuer }}
+    {%- endif %}
+    kubernetes.io/ingress.class: "nginx-qovery"
+    ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "{{ ingress_proxy_body_size_mb }}m"
+    {%- if ingress_cors_enable == true %}
+    nginx.ingress.kubernetes.io/enable-cors: "{{ ingress_cors_enable }}"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "{{ ingress_cors_allow_origin }}"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "{{ ingress_cors_allow_methods }}"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "{{ ingress_cors_allow_headers }}"
+    {%- endif %}
+    {%- if sticky_sessions_enabled == true %}
+    # https://kubernetes.github.io/ingress-nginx/examples/affinity/cookie/
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
+    nginx.ingress.kubernetes.io/session-cookie-secure: "true"
+    nginx.ingress.kubernetes.io/session-cookie-name: "INGRESSCOOKIE_QOVERY"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "85400" # 1 day
+    nginx.ingress.kubernetes.io/session-cookie-expires: "85400" # 1 day
+    nginx.ingress.kubernetes.io/session-cookie-samesite: "Lax"
+    {%- endif %}
+spec:
+  tls:
+    {%- if custom_domains|length > 0 %}
+    - secretName: "router-tls-{{ id }}"
+      hosts:
+        {%- for domain in custom_domains %}
+        - "{{ domain.domain }}"
+        {%- endfor %}
+    {%- endif %}
+  # We dont use secret name as we want to rely on default tls certificate from ingress controller
+  # which has our wildcard certificate https://cert-manager.io/next-docs/faq/kubed/
+  rules:
+    - host: "{{ router_default_domain }}"
+      http:
+        paths:
+        {%- for route in routes %}
+        - path: "{{ route.path }}"
+          pathType: Prefix
+          backend:
+            service:
+              name: "{{ route.application_name }}"
+              port:
+                number: {{ route.application_port }}
+        {%- endfor %}
+    {%- for domain in custom_domains %}
+    - host: "{{ domain.domain }}"
+      http:
+        paths:
+        {%- for route in routes %}
+        - path: "{{ route.path }}"
+          pathType: Prefix
+          backend:
+            service:
+              name: "{{ route.application_name }}"
+              port:
+                number: {{ route.application_port }}
+        {%- endfor %}
+    {%- endfor %}
+{%- endif %}

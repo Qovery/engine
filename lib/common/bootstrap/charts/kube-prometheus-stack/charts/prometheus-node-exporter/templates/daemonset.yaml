@@ -1,0 +1,198 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ template "prometheus-node-exporter.fullname" . }}
+  namespace: {{ template "prometheus-node-exporter.namespace" . }}
+  labels: {{ include "prometheus-node-exporter.labels" . | indent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "prometheus-node-exporter.name" . }}
+      release: {{ .Release.Name }}
+  {{- if .Values.updateStrategy }}
+  updateStrategy:
+{{ toYaml .Values.updateStrategy | indent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels: {{ include "prometheus-node-exporter.labels" . | indent 8 }}
+      {{- if .Values.podAnnotations }}
+      annotations:
+      {{- toYaml .Values.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
+      serviceAccountName: {{ template "prometheus-node-exporter.serviceAccountName" . }}
+{{- if .Values.securityContext }}
+      securityContext:
+{{ toYaml .Values.securityContext | indent 8 }}
+{{- end }}
+{{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+{{- end }}
+      {{- if .Values.extraInitContainers }}
+      initContainers:
+      {{ toYaml .Values.extraInitContainers | nindent 6 }}
+      {{- end }}
+      containers:
+        - name: node-exporter
+          image: {{ include "prometheus-node-exporter.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --path.procfs=/host/proc
+            - --path.sysfs=/host/sys
+            {{- if .Values.hostRootFsMount.enabled }}
+            - --path.rootfs=/host/root
+            {{- end }}
+            - --web.listen-address=[$(HOST_IP)]:{{ .Values.service.port }}
+{{- if .Values.extraArgs }}
+{{ toYaml .Values.extraArgs | indent 12 }}
+{{- end }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext: {{ toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+          - name: HOST_IP
+            {{- if .Values.service.listenOnAllInterfaces }}
+            value: 0.0.0.0
+            {{- else }}
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: status.hostIP
+            {{- end }}
+          {{- range $key, $value := .Values.env }}
+          - name: {{ $key }}
+            value: {{ $value | quote }}
+          {{- end }}
+          ports:
+            - name: {{ .Values.service.portName }}
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.service.port }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.service.port }}
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+          volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly:  true
+            - name: sys
+              mountPath: /host/sys
+              readOnly: true
+            {{- if .Values.hostRootFsMount.enabled }}
+            - name: root
+              mountPath: /host/root
+              {{- with .Values.hostRootFsMount.mountPropagation }}
+              mountPropagation: {{ . }}
+              {{- end }}
+              readOnly: true
+            {{- end }}
+            {{- if .Values.extraHostVolumeMounts }}
+            {{- range $_, $mount := .Values.extraHostVolumeMounts }}
+            - name: {{ $mount.name }}
+              mountPath: {{ $mount.mountPath }}
+              readOnly: {{ $mount.readOnly }}
+            {{- if $mount.mountPropagation }}
+              mountPropagation: {{ $mount.mountPropagation }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.sidecarVolumeMount }}
+            {{- range $_, $mount := .Values.sidecarVolumeMount }}
+            - name: {{ $mount.name }}
+              mountPath: {{ $mount.mountPath }}
+              readOnly: true
+            {{- end }}
+            {{- end }}
+            {{- if .Values.configmaps }}
+            {{- range $_, $mount := .Values.configmaps }}
+            - name: {{ $mount.name }}
+              mountPath: {{ $mount.mountPath }}
+            {{- end }}
+            {{- if .Values.secrets }}
+            {{- range $_, $mount := .Values.secrets }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
+{{- if .Values.sidecars }}
+{{ toYaml .Values.sidecars | indent 8 }}
+          {{- if .Values.sidecarVolumeMount }}
+          volumeMounts:
+            {{- range $_, $mount := .Values.sidecarVolumeMount }}
+            - name: {{ $mount.name }}
+              mountPath: {{ $mount.mountPath }}
+              readOnly: {{ $mount.readOnly }}
+            {{- end }}
+          {{- end }}
+{{- end }}
+{{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.imagePullSecrets | indent 8 }}
+      {{- end }}
+      hostNetwork: {{ .Values.hostNetwork }}
+      hostPID: {{ .Values.hostPID }}
+{{- if .Values.affinity }}
+      affinity:
+{{ toYaml .Values.affinity | indent 8 }}
+{{- end }}
+{{- with .Values.dnsConfig }}
+      dnsConfig:
+{{ toYaml . | indent 8 }}
+{{- end }}
+{{- if .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 8 }}
+{{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+    {{- end }}
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: sys
+          hostPath:
+            path: /sys
+        {{- if .Values.hostRootFsMount.enabled }}
+        - name: root
+          hostPath:
+            path: /
+        {{- end }}
+        {{- if .Values.extraHostVolumeMounts }}
+        {{- range $_, $mount := .Values.extraHostVolumeMounts }}
+        - name: {{ $mount.name }}
+          hostPath:
+            path: {{ $mount.hostPath }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.sidecarVolumeMount }}
+        {{- range $_, $mount := .Values.sidecarVolumeMount }}
+        - name: {{ $mount.name }}
+          emptyDir:
+            medium: Memory
+        {{- end }}
+        {{- end }}
+        {{- if .Values.configmaps }}
+        {{- range $_, $mount := .Values.configmaps }}
+        - name: {{ $mount.name }}
+          configMap:
+            name: {{ $mount.name }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.secrets }}
+        {{- range $_, $mount := .Values.secrets }}
+        - name: {{ $mount.name }}
+          secret:
+            secretName: {{ $mount.name }}
+        {{- end }}
+        {{- end }}

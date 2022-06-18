@@ -1,0 +1,44 @@
+{{- if .Values.clusterAgent.podSecurity.securityContextConstraints.create }}
+kind: SecurityContextConstraints
+apiVersion: security.openshift.io/v1
+metadata:
+  name: {{ template "datadog.fullname" . }}-cluster-agent
+  labels:
+{{ include "datadog.labels" . | indent 4 }}
+users:
+- system:serviceaccount:{{ .Release.Namespace }}:{{ template "datadog.fullname" . }}-cluster-agent
+priority: 10
+# Allow host ports if hostNetwork
+allowHostPorts: {{ .Values.clusterAgent.useHostNetwork }}
+allowHostNetwork: {{ .Values.clusterAgent.useHostNetwork}}
+# Default from restricted SCC
+allowHostDirVolumePlugin: false
+allowHostIPC: false
+allowHostPID: false
+allowPrivilegeEscalation: false
+allowPrivilegedContainer: false
+allowedCapabilities: null
+defaultAddCapabilities: null
+fsGroup:
+  type: MustRunAs
+readOnlyRootFilesystem: false
+requiredDropCapabilities:
+- KILL
+- MKNOD
+- SETUID
+- SETGID
+runAsUser:
+  type: MustRunAsRange
+seLinuxContext:
+  type: MustRunAs
+supplementalGroups:
+  type: RunAsAny
+users: []
+volumes:
+- configMap
+- downwardAPI
+- emptyDir
+- persistentVolumeClaim
+- projected
+- secret
+{{- end }}

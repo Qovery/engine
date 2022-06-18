@@ -1,0 +1,53 @@
+{{- if and $.Values.datadog.kubeStateMetricsEnabled (or $.Values.datadog.networkPolicy.create $.Values.datadog.kubeStateMetricsNetworkPolicy.create) (eq $.Values.datadog.networkPolicy.flavor "cilium") -}}
+apiVersion: "cilium.io/v2"
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ template "datadog.fullname" . }}-kube-state-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "datadog.labels" . | indent 4 }}
+specs:
+  - description: "Egress to Kube API server"
+    endpointSelector:
+      matchLabels:
+        app.kubernetes.io/name: kube-state-metrics
+    egress:
+      # toServices works only for endpoints outside of the cluster
+      # This section handles the case where the control plane is outside
+      # of the cluster.
+      - toServices:
+          - k8sService:
+              namespace: default
+              serviceName: kubernetes
+      # When the control plane is on the same cluster, we must allow connections
+      # to the node entity.
+      - toEntities:
+          - host
+          - remote-node
+        toPorts:
+          - ports:
+              - port: "443"
+                protocol: TCP
+  - description: Ingress from agent
+    endpointSelector:
+      matchLabels:
+        app.kubernetes.io/name: kube-state-metrics
+    ingress:
+    -
+      {{- if $.Values.agents.useHostNetwork }}
+      fromEntities:
+      - host
+      - remote-node
+      {{- else }}
+      fromEndpoints:
+        - matchLabels:
+            app: {{ template "datadog.fullname" . }}
+            {{- if .Values.agents.podLabels }}
+            {{ toYaml .Values.agents.podLabels | indent 10 }}
+            {{- end }}
+      {{- end }}
+      toPorts:
+      - ports:
+        - port: "8080"
+          protocol: TCP
+{{- end }}

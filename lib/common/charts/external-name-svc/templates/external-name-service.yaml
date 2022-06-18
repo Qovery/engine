@@ -1,0 +1,16 @@
+kind: Service
+apiVersion: v1
+metadata:
+  # This service is used for deployed services that do not have ingress like database
+  # It is used to provide to the end user an endpoint with desired name
+  name: {{ .Values.service_name }}
+  labels:
+    appId: {{.Values.app_id}}
+  {{ if .Values.publicly_accessible }}
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.source_fqdn }}
+  {{ end }}
+spec:
+  type: ExternalName
+  externalName: {{ .Values.target_hostname }}
+

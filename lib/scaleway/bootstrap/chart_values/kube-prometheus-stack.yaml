@@ -1,0 +1,51 @@
+defaultRules:
+  create: true
+  rules:
+    alertmanager: false
+    etcd: false
+    configReloaders: true
+    kubeApiserverAvailability: false
+    kubeApiserverBurnrate: false
+    kubeProxy: false
+    kubeApiserverHistogram: false
+    kubeApiserverSlos: false
+    kubeStateMetrics: false
+    nodeExporterAlerting: false
+    nodeExporterRecording: false
+
+alertmanager:
+  enabled: false
+
+grafana:
+  enabled: false
+
+kubeControllerManager:
+  enabled: false
+
+kubeEtcd:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+kubeProxy:
+  enabled: false
+
+kubeStateMetrics:
+  enabled: false
+
+prometheus:
+  enabled: true
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    retention: 90d
+    retentionSize: "40GB"
+    walCompression: true
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: scw-sbv-ssd-0
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: "50Gi"

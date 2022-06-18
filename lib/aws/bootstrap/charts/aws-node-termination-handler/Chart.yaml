@@ -1,0 +1,25 @@
+apiVersion: v2
+appVersion: 1.16.5
+description: A Helm chart for the AWS Node Termination Handler.
+home: https://github.com/aws/eks-charts
+icon: https://raw.githubusercontent.com/aws/eks-charts/master/docs/logo/aws.png
+keywords:
+- aws
+- eks
+- ec2
+- node-termination
+- spot
+kubeVersion: '>= 1.16-0'
+maintainers:
+- email: bwagner5@users.noreply.github.com
+  name: Brandon Wagner
+  url: https://github.com/bwagner5
+- email: jillmon@users.noreply.github.com
+  name: Jillian Kuentz
+  url: https://github.com/jillmon
+name: aws-node-termination-handler
+sources:
+- https://github.com/aws/aws-node-termination-handler/
+- https://github.com/aws/eks-charts/
+type: application
+version: 0.18.5

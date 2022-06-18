@@ -1,0 +1,57 @@
+cloudProvider: "aws"
+
+environmentVariables:
+  LOG_LEVEL: "debug"
+
+enabledFeatures:
+  disableDryRun: true
+  checkInterval: 120
+  kubernetes: "in"
+  s3: true
+
+awsFeatures:
+  awsRegions:
+    - us-east-2
+    - us-east-1
+    - us-west-2
+    - af-south-1
+    - ap-east-1
+    - ap-south-1
+    - ap-northeast-1
+    - ap-northeast-2
+    - ap-northeast-3
+    - ap-southeast-1
+    - ap-southeast-2
+    - ca-central-1
+    - cn-north-1
+    - cn-northwest-1
+    - eu-central-1
+    - eu-west-1
+    - eu-west-2
+    - eu-west-3
+    - eu-north-1
+    - eu-south-1
+    - me-south-1
+    - sa-east-1
+  rds: true
+  elasticache: true
+  documentdb: true
+  eks: true
+  vpc: true
+  elb: true
+  kms: true
+  cloudwatchLogs: true
+  iam: true
+  sshKeys: true
+  ecr: true
+  sfn: true
+  sqs: true
+  lambda: true
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 512Mi

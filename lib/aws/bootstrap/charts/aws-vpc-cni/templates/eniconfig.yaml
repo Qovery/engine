@@ -1,0 +1,17 @@
+{{- if .Values.eniConfig.create }}
+{{- range $key, $value := (required ".Values.eniConfig.subnets must be specified" .Values.eniConfig.subnets) }}
+apiVersion: crd.k8s.amazonaws.com/v1alpha1
+kind: ENIConfig
+metadata:
+  name: {{ $key }}
+spec:
+  {{- if $value.securityGroups }}
+  securityGroups:
+    {{- range $sg := $value.securityGroups }}
+    - {{ $sg }}
+    {{- end }}
+  {{- end }}
+  subnet: {{ $value.id }}
+---
+{{- end }}
+{{- end }}

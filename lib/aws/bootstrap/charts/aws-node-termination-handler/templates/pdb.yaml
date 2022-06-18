@@ -1,0 +1,14 @@
+{{- if and .Values.enableSqsTerminationDraining (and .Values.podDisruptionBudget (gt (int .Values.replicas) 1)) }}
+apiVersion: {{ include "aws-node-termination-handler.pdb.apiVersion" . }}
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "aws-node-termination-handler.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aws-node-termination-handler.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "aws-node-termination-handler.selectorLabelsDeployment" . | nindent 6 }}
+  {{- toYaml .Values.podDisruptionBudget | nindent 2 }}
+{{- end }}

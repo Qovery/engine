@@ -1,0 +1,19 @@
+{%- if not is_storage and min_instances != max_instances and hpa_cpu_average_utilization_percent >= 0 %}
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ sanitized_name }}
+  namespace: {{ namespace }}
+  labels:
+    envId: {{ environment_id }}
+    appId: {{ id }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ sanitized_name }}
+  minReplicas: {{ min_instances }}
+  maxReplicas: {{ max_instances }}
+  targetCPUUtilizationPercentage: {{ hpa_cpu_average_utilization_percent }}
+{%- endif %}
+

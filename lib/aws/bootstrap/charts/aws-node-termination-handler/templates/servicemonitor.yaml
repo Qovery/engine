@@ -1,0 +1,29 @@
+{{- if and .Values.enableSqsTerminationDraining (and .Values.enablePrometheusServer .Values.serviceMonitor.create) -}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "aws-node-termination-handler.fullname" . }}
+  namespace: {{ default .Release.Namespace .Values.serviceMonitor.namespace }}
+  labels:
+    {{- include "aws-node-termination-handler.labels" . | nindent 4 }}
+  {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  jobLabel: app.kubernetes.io/name
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: http-metrics
+      path: /metrics
+      {{- with .Values.serviceMonitor.interval }}
+      interval: {{ . }}
+      {{- end }}
+  {{- with .Values.serviceMonitor.sampleLimit }}
+  sampleLimit: {{ . }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "aws-node-termination-handler.selectorLabelsDeployment" . | nindent 6 }}
+{{- end -}}

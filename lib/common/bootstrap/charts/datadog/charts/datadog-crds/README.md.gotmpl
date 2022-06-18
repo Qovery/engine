@@ -1,0 +1,30 @@
+# Datadog CRDs
+
+{{ template "chart.versionBadge" . }}{{ template "chart.typeBadge" . }}{{ template "chart.appVersionBadge" . }}
+
+This chart was designed to allow other "datadog" charts to share `CustomResourceDefinitions` such as the `DatadogMetric`.
+
+## How to use Datadog Helm repository
+
+You need to add this repository to your Helm repositories:
+
+```
+helm repo add datadog https://helm.datadoghq.com
+helm repo update
+```
+
+## Prerequisites
+
+This chart can be used with Kubernetes `1.11+` or OpenShift `3.11+` since  `CustomResourceDefinitions` are supported starting with these versions.
+But the recommended Kubernetes versions are `1.16+`.
+
+{{ template "chart.valuesSection" . }}
+
+
+## Developers
+
+### How to update CRDs
+
+```shell
+./update-crds.sh <datadog-operator-tag>
+```

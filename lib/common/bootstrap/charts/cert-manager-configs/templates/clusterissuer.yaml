@@ -1,0 +1,23 @@
+apiVersion: cert-manager.io/v1alpha2
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-qovery
+  namespace: {{ .Values.namespace }}
+spec:
+  acme:
+    server: {{ .Values.acme.letsEncrypt.acmeUrl }}
+    email: {{ .Values.acme.letsEncrypt.emailReport }}
+
+    # Name of a secret used to store the ACME account private key
+    privateKeySecretRef:
+      name: letsencrypt-acme-priv-key
+
+    solvers:
+      - dns01:
+{{ if eq .Values.externalDnsProvider "cloudflare" }}
+          cloudflare:
+            email: {{ .Values.provider.cloudflare.email }}
+            apiTokenSecretRef:
+              name: {{ .Values.externalDnsProvider }}-api-token-secret
+              key: apiToken
+{{ end }}

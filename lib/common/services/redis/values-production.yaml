@@ -1,0 +1,127 @@
+## Cluster settings
+cluster:
+  enabled: true
+  slaveCount: 3
+
+networkPolicy:
+  ## Specifies whether a NetworkPolicy should be created
+  ##
+  enabled: true
+
+  ## The Policy model to apply. When set to false, only pods with the correct
+  ## client label will have network access to the port Redis is listening
+  ## on. When true, Redis will accept connections from any source
+  ## (with the correct destination port).
+  ##
+  # allowExternal: true
+
+  ## Allow connections from other namespaces. Just set label for namespace and set label for pods (optional).
+  ##
+  ingressNSMatchLabels: {}
+  ingressNSPodMatchLabels: {}
+
+## Redis password (both master and slave)
+## Defaults to a random 10-character alphanumeric string if not set and usePassword is true
+## ref: https://github.com/bitnami/bitnami-docker-redis#setting-the-server-password-on-first-run
+##
+password:
+
+## Prometheus Exporter / Metrics
+##
+metrics:
+  enabled: true
+
+  image:
+    registry: docker.io
+    repository: bitnami/redis-exporter
+    tag: 1.13.1-debian-10-r6
+    pullPolicy: IfNotPresent
+    ## Optionally specify an array of imagePullSecrets.
+    ## Secrets must be manually created in the namespace.
+    ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+    ##
+    # pullSecrets:
+    #   - myRegistryKeySecretName
+
+  ## Metrics exporter resource requests and limits
+  ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
+  ##
+  # resources: {}
+
+  ## Extra arguments for Metrics exporter, for example:
+  ## extraArgs:
+  ##   check-keys: myKey,myOtherKey
+  # extraArgs: {}
+
+  ## Metrics exporter pod Annotation and Labels
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9121"
+  # podLabels: {}
+
+  # Enable this if you're using https://github.com/coreos/prometheus-operator
+  serviceMonitor:
+    enabled: false
+    ## Specify a namespace if needed
+    # namespace: monitoring
+    # fallback to the prometheus default unless specified
+    # interval: 10s
+    ## Defaults to what's used if you follow CoreOS [Prometheus Install Instructions](https://github.com/bitnami/charts/tree/master/bitnami/prometheus-operator#tldr)
+    ## [Prometheus Selector Label](https://github.com/bitnami/charts/tree/master/bitnami/prometheus-operator#prometheus-operator-1)
+    ## [Kube Prometheus Selector Label](https://github.com/bitnami/charts/tree/master/bitnami/prometheus-operator#exporters)
+    selector:
+      prometheus: kube-prometheus
+
+  ## Custom PrometheusRule to be defined
+  ## The value is evaluated as a template, so, for example, the value can depend on .Release or .Chart
+  ## ref: https://github.com/coreos/prometheus-operator#customresourcedefinitions
+  prometheusRule:
+    enabled: false
+    additionalLabels: {}
+    namespace: ""
+    ## Redis prometheus rules
+    ## These are just examples rules, please adapt them to your needs.
+    ## Make sure to constraint the rules to the current redis service.
+    # rules:
+    #   - alert: RedisDown
+    #     expr: redis_up{service="{{ template "redis.fullname" . }}-metrics"} == 0
+    #     for: 2m
+    #     labels:
+    #       severity: error
+    #     annotations:
+    #       summary: Redis instance {{ "{{ $labels.instance }}" }} down
+    #       description: Redis instance {{ "{{ $labels.instance }}" }} is down
+    #    - alert: RedisMemoryHigh
+    #      expr: >
+    #        redis_memory_used_bytes{service="{{ template "redis.fullname" . }}-metrics"} * 100
+    #        /
+    #        redis_memory_max_bytes{service="{{ template "redis.fullname" . }}-metrics"}
+    #        > 90
+    #      for: 2m
+    #      labels:
+    #        severity: error
+    #      annotations:
+    #        summary: Redis instance {{ "{{ $labels.instance }}" }} is using too much memory
+    #        description: |
+    #          Redis instance {{ "{{ $labels.instance }}" }} is using {{ "{{ $value }}" }}% of its available memory.
+    #    - alert: RedisKeyEviction
+    #      expr: |
+    #        increase(redis_evicted_keys_total{service="{{ template "redis.fullname" . }}-metrics"}[5m]) > 0
+    #      for: 1s
+    #      labels:
+    #        severity: error
+    #      annotations:
+    #        summary: Redis instance {{ "{{ $labels.instance }}" }} has evicted keys
+    #        description: |
+    #          Redis instance {{ "{{ $labels.instance }}" }} has evicted {{ "{{ $value }}" }} keys in the last 5 minutes.
+    rules: []
+
+  ## Metrics exporter pod priorityClassName
+  # priorityClassName: ''
+  service:
+    type: ClusterIP
+    ## Use serviceLoadBalancerIP to request a specific static IP,
+    ## otherwise leave blank
+    # loadBalancerIP:
+    annotations: {}
+    labels: {}

@@ -1,0 +1,156 @@
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: {{ include "aws-vpc-cni.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "aws-vpc-cni.labels" . | indent 4 }}
+spec:
+  updateStrategy:
+{{ toYaml .Values.updateStrategy | indent 4 }}
+  selector:
+    matchLabels:
+{{- if .Values.originalMatchLabels }}
+      k8s-app: aws-node
+{{- else }}
+      app.kubernetes.io/name: {{ include "aws-vpc-cni.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- if .Values.podLabels }}
+{{ toYaml .Values.podLabels | indent 6 }}
+      {{- end }}
+{{- end }}
+  template:
+    metadata:
+      {{- if .Values.podAnnotations }}
+      annotations:
+      {{- range $key, $value := .Values.podAnnotations }}
+        {{ $key }}: {{ $value | quote }}
+      {{- end }}
+      {{- end }}
+      labels:
+        app.kubernetes.io/name: {{ include "aws-vpc-cni.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        k8s-app: aws-node
+        {{- if .Values.podLabels }}
+{{ toYaml .Values.podLabels | indent 8 }}
+        {{- end }}
+    spec:
+      priorityClassName: "{{ .Values.priorityClassName }}"
+      serviceAccountName: {{ template "aws-vpc-cni.serviceAccountName" . }}
+      hostNetwork: true
+      initContainers:
+      - name: aws-vpc-cni-init
+        image: "{{- if .Values.init.image.override }}{{- .Values.init.image.override }}{{- else }}{{- .Values.init.image.account }}.dkr.ecr.{{- .Values.init.image.region }}.{{- .Values.init.image.domain }}/amazon-k8s-cni-init:{{- .Values.init.image.tag }}{{- end}}"
+        env:
+{{- range $key, $value := .Values.init.env }}
+          - name: {{ $key }}
+            value: {{ $value | quote }}
+{{- end }}
+        securityContext:
+          {{- toYaml .Values.init.securityContext | nindent 12 }}
+        volumeMounts:
+          - mountPath: /host/opt/cni/bin
+            name: cni-bin-dir
+      terminationGracePeriodSeconds: 10
+      tolerations:
+        - operator: Exists
+    {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: aws-node
+          image: "{{- if .Values.image.override }}{{- .Values.image.override }}{{- else }}{{- .Values.image.account }}.dkr.ecr.{{- .Values.image.region }}.{{- .Values.image.domain }}/amazon-k8s-cni:{{- .Values.image.tag }}{{- end}}"
+          ports:
+            - containerPort: 61678
+              name: metrics
+          livenessProbe:
+{{ toYaml .Values.livenessProbe | indent 12 }}
+            timeoutSeconds: {{ .Values.livenessProbeTimeoutSeconds }}
+          readinessProbe:
+{{ toYaml .Values.readinessProbe | indent 12 }}
+            timeoutSeconds: {{ .Values.readinessProbeTimeoutSeconds }}
+          env:
+{{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+{{- end }}
+            - name: MY_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+          - mountPath: /host/opt/cni/bin
+            name: cni-bin-dir
+          - mountPath: /host/etc/cni/net.d
+            name: cni-net-dir
+{{- if .Values.cniConfig.enabled }}
+            # the dockerfile copies the baked in config to this location, lets overwrite it with ours
+            # the entrypoint.sh script will then copy our config to /host/etc/cni/net.d on boot
+          - name: cni-config
+            mountPath: /app/10-aws.conflist
+            subPath: 10-aws.conflist
+{{- end }}
+          - mountPath: /host/var/log/aws-routed-eni
+            name: log-dir
+{{- if .Values.cri.hostPath }}
+          - mountPath: /var/run/cri.sock
+            name: cri
+{{- else }}
+          - mountPath: /var/run/dockershim.sock
+            name: dockershim
+{{- end }}
+          - mountPath: /var/run/aws-node
+            name: run-dir
+          - mountPath: /run/xtables.lock
+            name: xtables-lock
+      volumes:
+      - name: cni-bin-dir
+        hostPath:
+          path: /opt/cni/bin
+      - name: cni-net-dir
+        hostPath:
+          path: /etc/cni/net.d
+{{- if .Values.cniConfig.enabled }}
+      - name: cni-config
+        configMap:
+          name: {{ include "aws-vpc-cni.fullname" . }}
+{{- end }}
+{{- with .Values.cri.hostPath }}
+      - name: cri
+        hostPath:
+          {{- toYaml . | nindent 10 }}
+{{- else }}
+      - name: dockershim
+        hostPath:
+          path: /var/run/dockershim.sock
+{{- end }}
+      - name: log-dir
+        hostPath:
+          path: /var/log/aws-routed-eni
+          type: DirectoryOrCreate
+      - name: run-dir
+        hostPath:
+          path: /var/run/aws-node
+          type: DirectoryOrCreate
+      - name: xtables-lock
+        hostPath:
+          path: /run/xtables.lock
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
