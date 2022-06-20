@@ -596,7 +596,7 @@ fn should_update_desired_nodes(
                 update_desired_nodes = true;
                 desired_nodes_count = node_group.min_nodes;
             // if there are multiple node groups, there is a lot of chance that dropping nodes won't be an issue,
-            // as other nodes of other groups will manage pod rebalance
+            // as other nodes of other groups will manage pod re-balance
             } else if desired_size > node_group.max_nodes && node_groups.len() == 1 {
                 return Err(
                     EngineError::new_number_of_requested_max_nodes_is_below_than_current_usage_error(
