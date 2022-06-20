@@ -1189,18 +1189,16 @@ impl EngineError {
         current_node_number: i32,
         max_nodes: i32,
     ) -> EngineError {
-        let message = format!(
-            "The actual number of nodes {} is above then the maximum number ({}) requested. Reduce your resources usage or set it to a higher value",
-            current_node_number, max_nodes
-        );
-
         EngineError::new(
             event_details,
             Tag::NumberOfRequestedMaxNodesIsBelowThanCurrentUsage,
-            message.clone(),
+            format!(
+                "The actual number of nodes {} is above than the maximum number ({}) requested.",
+                current_node_number, max_nodes
+            ),
             None,
             None,
-            Some(message),
+            Some("Reduce your resources usage or set it to a higher value".to_string()),
         )
     }
 
