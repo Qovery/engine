@@ -1,0 +1,5 @@
+config:
+  snippets:
+    extraRelabelConfigs:
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(appId)

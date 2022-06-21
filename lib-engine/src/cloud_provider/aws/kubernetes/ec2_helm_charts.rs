@@ -467,7 +467,7 @@ pub fn ec2_aws_helm_charts(
                 },
                 ChartSetValue {
                     key: "environmentVariables.LOKI_URL".to_string(),
-                    value: format!("http://{}.cluster.local:3100", "not-installed"),
+                    value: format!("http://{}", "not-installed"),
                 },
                 // resources limits
                 ChartSetValue {
