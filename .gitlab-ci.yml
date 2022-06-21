@@ -359,6 +359,7 @@ aws-whole-enchilada:
 #  interruptible: true
 
 do-whole-enchilada:
+  allow_failure: true
   stage: tests
   retry: 0
   timeout: 4 hours
@@ -385,6 +386,7 @@ do-whole-enchilada:
   interruptible: true
 
 do-infra:
+  allow_failure: true
   stage: tests
   retry: 0
   timeout: 4 hours
@@ -411,6 +413,7 @@ do-infra:
   interruptible: true
 
 do-managed-services:
+  allow_failure: true
   stage: tests
   retry: 0
   timeout: 3 hours
@@ -437,6 +440,7 @@ do-managed-services:
   interruptible: true
 
 do-self-hosted:
+  allow_failure: true
   stage: tests
   retry: 0
   timeout: 3 hours
