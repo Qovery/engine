@@ -43,10 +43,6 @@ pub fn dns_provider_qoverydns(context: &Context, domain: &ClusterDomain) -> Box<
             .expect("QOVERY_DNS_API_URL is not set")
             .as_str(),
         secrets
-            .QOVERY_DNS_API_PORT
-            .expect("QOVERY_DNS_API_PORT is not set")
-            .as_str(),
-        secrets
             .QOVERY_DNS_API_KEY
             .expect("QOVERY_DNS_API_KEY is not set")
             .as_str(),

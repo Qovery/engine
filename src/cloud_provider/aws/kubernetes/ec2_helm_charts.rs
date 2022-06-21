@@ -226,13 +226,6 @@ pub fn ec2_aws_helm_charts(
                         value: "48Mi".to_string(),
                     },
                 ],
-                values_string: vec![ChartSetValue {
-                    key: "secret.apiPort".to_string(),
-                    value: match &chart_config_prerequisites.dns_provider_config {
-                        DnsProviderConfiguration::Cloudflare(_) => "".to_string(),
-                        DnsProviderConfiguration::QoveryDns(q) => q.api_port.to_string(),
-                    },
-                }],
                 ..Default::default()
             },
         });

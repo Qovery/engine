@@ -22,7 +22,6 @@ pki:
 secret:
   apiKey: ""
   apiUrl: ""
-  apiPort: ""
 
 service:
   type: ClusterIP
