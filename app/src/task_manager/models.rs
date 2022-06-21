@@ -441,13 +441,11 @@ impl DnsProvider {
             }
             Kind::QoveryDns => {
                 let api_url = self.options.get("qoverydns_api_url")?;
-                let api_port = self.options.get("qoverydns_api_port")?;
 
                 Some(Box::new(QoveryDns::new(
                     context,
                     self.id.as_str(),
                     api_url,
-                    api_port,
                     &cluster_jwt_token,
                     self.name.as_str(),
                     Domain::new(self.domain.clone()),

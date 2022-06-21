@@ -151,7 +151,6 @@ pub struct FuncTestsSecrets {
     pub QOVERY_CLUSTER_SECRET_TOKEN: Option<String>,
     pub QOVERY_CLUSTER_JWT_TOKEN: Option<String>,
     pub QOVERY_DNS_API_URL: Option<String>,
-    pub QOVERY_DNS_API_PORT: Option<String>,
     pub QOVERY_DNS_API_KEY: Option<String>,
     pub QOVERY_DNS_DOMAIN: Option<String>,
 }
@@ -247,7 +246,6 @@ impl FuncTestsSecrets {
             QOVERY_CLUSTER_SECRET_TOKEN: None,
             QOVERY_CLUSTER_JWT_TOKEN: None,
             QOVERY_DNS_API_URL: None,
-            QOVERY_DNS_API_PORT: None,
             QOVERY_DNS_API_KEY: None,
             QOVERY_DNS_DOMAIN: None,
         };
@@ -376,7 +374,6 @@ impl FuncTestsSecrets {
             ),
             QOVERY_CLUSTER_JWT_TOKEN: Self::select_secret("QOVERY_CLUSTER_JWT_TOKEN", secrets.QOVERY_CLUSTER_JWT_TOKEN),
             QOVERY_DNS_API_URL: Self::select_secret("QOVERY_DNS_API_URL", secrets.QOVERY_DNS_API_URL),
-            QOVERY_DNS_API_PORT: Self::select_secret("QOVERY_DNS_API_PORT", secrets.QOVERY_DNS_API_PORT),
             QOVERY_DNS_API_KEY: Self::select_secret("QOVERY_DNS_API_KEY", secrets.QOVERY_DNS_API_KEY),
             QOVERY_DNS_DOMAIN: Self::select_secret("QOVERYDNS_DOMAIN", secrets.QOVERY_DNS_DOMAIN),
         }

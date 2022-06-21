@@ -963,10 +963,6 @@ pub fn get_chart_for_cert_manager_config(
                 key: "provider.pdns.apiUrl".to_string(),
                 value: q.api_url.clone(),
             });
-            cert_manager_config.chart_info.values_string.push(ChartSetValue {
-                key: "provider.pdns.apiPort".to_string(),
-                value: q.api_port.clone(),
-            });
         }
     };
 
