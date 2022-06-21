@@ -480,34 +480,20 @@ pub fn deploy_environment(
 ) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
-    let stateful_deployment_target = match kubernetes.kind() {
-        Kind::Eks => DeploymentTarget {
-            kubernetes,
-            environment,
-        },
-        Kind::Ec2 => DeploymentTarget {
-            kubernetes,
-            environment,
-        },
-        Kind::Doks => DeploymentTarget {
-            kubernetes,
-            environment,
-        },
-        Kind::ScwKapsule => DeploymentTarget {
-            kubernetes,
-            environment,
-        },
+    let deployment_target = DeploymentTarget {
+        kubernetes,
+        environment,
     };
 
     // create all stateful services (database)
     for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
-            service.exec_action(&stateful_deployment_target),
+            service.exec_action(&deployment_target),
             kubernetes,
             service,
             event_details.clone(),
             logger,
-            &stateful_deployment_target,
+            &deployment_target,
             &listeners_helper,
             "deployment",
             CheckAction::Deploy,
@@ -520,66 +506,34 @@ pub fn deploy_environment(
             service,
             event_details.clone(),
             logger,
-            &stateful_deployment_target,
+            &deployment_target,
             &listeners_helper,
             "check deployment",
             CheckAction::Deploy,
         )?;
     }
-
-    // Quick fix: adding 100 ms delay to avoid race condition on service status update
-    thread::sleep(std::time::Duration::from_millis(100));
-
-    // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
-    let stateless_deployment_target = DeploymentTarget {
-        kubernetes,
-        environment,
-    };
 
     // create all stateless services (router, application...)
     for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
-            service.exec_action(&stateless_deployment_target),
+            service.exec_action(&deployment_target),
             kubernetes,
             service,
             event_details.clone(),
             logger,
-            &stateless_deployment_target,
+            &deployment_target,
             &listeners_helper,
             "deployment",
             CheckAction::Deploy,
         )?;
-    }
 
-    // Quick fix: adding 100 ms delay to avoid race condition on service status update
-    thread::sleep(std::time::Duration::from_millis(100));
-
-    // check all deployed services
-    for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
             service.exec_check_action(),
             kubernetes,
             service,
             event_details.clone(),
             logger,
-            &stateless_deployment_target,
-            &listeners_helper,
-            "check deployment",
-            CheckAction::Deploy,
-        )?;
-    }
-
-    // Quick fix: adding 100 ms delay to avoid race condition on service status update
-    thread::sleep(std::time::Duration::from_millis(100));
-
-    for service in environment.stateless_services() {
-        let _ = service::check_kubernetes_service_error(
-            service.exec_check_action(),
-            kubernetes,
-            service,
-            event_details.clone(),
-            logger,
-            &stateless_deployment_target,
+            &deployment_target,
             &listeners_helper,
             "check deployment",
             CheckAction::Deploy,

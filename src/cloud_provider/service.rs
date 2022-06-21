@@ -127,19 +127,19 @@ pub trait StatelessService: Service + Create + Pause + Delete {
     fn as_stateless_service(&self) -> &dyn StatelessService;
     fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), EngineError> {
         match self.action() {
-            crate::cloud_provider::service::Action::Create => self.on_create(deployment_target),
-            crate::cloud_provider::service::Action::Delete => self.on_delete(deployment_target),
-            crate::cloud_provider::service::Action::Pause => self.on_pause(deployment_target),
-            crate::cloud_provider::service::Action::Nothing => Ok(()),
+            Action::Create => self.on_create(deployment_target),
+            Action::Delete => self.on_delete(deployment_target),
+            Action::Pause => self.on_pause(deployment_target),
+            Action::Nothing => Ok(()),
         }
     }
 
     fn exec_check_action(&self) -> Result<(), EngineError> {
         match self.action() {
-            crate::cloud_provider::service::Action::Create => self.on_create_check(),
-            crate::cloud_provider::service::Action::Delete => self.on_delete_check(),
-            crate::cloud_provider::service::Action::Pause => self.on_pause_check(),
-            crate::cloud_provider::service::Action::Nothing => Ok(()),
+            Action::Create => self.on_create_check(),
+            Action::Delete => self.on_delete_check(),
+            Action::Pause => self.on_pause_check(),
+            Action::Nothing => Ok(()),
         }
     }
 }
@@ -148,19 +148,19 @@ pub trait StatefulService: Service + Create + Pause + Delete {
     fn as_stateful_service(&self) -> &dyn StatefulService;
     fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), EngineError> {
         match self.action() {
-            crate::cloud_provider::service::Action::Create => self.on_create(deployment_target),
-            crate::cloud_provider::service::Action::Delete => self.on_delete(deployment_target),
-            crate::cloud_provider::service::Action::Pause => self.on_pause(deployment_target),
-            crate::cloud_provider::service::Action::Nothing => Ok(()),
+            Action::Create => self.on_create(deployment_target),
+            Action::Delete => self.on_delete(deployment_target),
+            Action::Pause => self.on_pause(deployment_target),
+            Action::Nothing => Ok(()),
         }
     }
 
     fn exec_check_action(&self) -> Result<(), EngineError> {
         match self.action() {
-            crate::cloud_provider::service::Action::Create => self.on_create_check(),
-            crate::cloud_provider::service::Action::Delete => self.on_delete_check(),
-            crate::cloud_provider::service::Action::Pause => self.on_pause_check(),
-            crate::cloud_provider::service::Action::Nothing => Ok(()),
+            Action::Create => self.on_create_check(),
+            Action::Delete => self.on_delete_check(),
+            Action::Pause => self.on_pause_check(),
+            Action::Nothing => Ok(()),
         }
     }
 
@@ -417,7 +417,7 @@ where
     });
 
     // create a namespace with labels if do not exists
-    crate::cmd::kubectl::kubectl_exec_create_namespace(
+    cmd::kubectl::kubectl_exec_create_namespace(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
         namespace_labels,
@@ -457,7 +457,7 @@ where
         event_details.clone(),
     )?;
 
-    crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
+    cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
         service.selector().unwrap_or_default().as_str(),
@@ -633,7 +633,7 @@ where
             ));
         }
 
-        let _ = crate::cmd::terraform::terraform_init_validate_plan_apply(
+        let _ = cmd::terraform::terraform_init_validate_plan_apply(
             workspace_dir.as_str(),
             service.context().is_dry_run_deploy(),
         )
@@ -691,7 +691,7 @@ where
         });
 
         // create a namespace with labels if it does not exist
-        crate::cmd::kubectl::kubectl_exec_create_namespace(
+        cmd::kubectl::kubectl_exec_create_namespace(
             &kubernetes_config_file_path,
             environment.namespace(),
             namespace_labels,
@@ -732,7 +732,7 @@ where
         )?;
 
         // check app status
-        let is_pod_ready = crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
+        let is_pod_ready = cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
             &kubernetes_config_file_path,
             environment.namespace(),
             service.selector().unwrap_or_default().as_str(),
@@ -824,7 +824,7 @@ where
             ));
         }
 
-        match crate::cmd::terraform::terraform_init_validate_destroy(workspace_dir.as_str(), true) {
+        match cmd::terraform::terraform_init_validate_destroy(workspace_dir.as_str(), true) {
             Ok(_) => {
                 logger.log(EngineEvent::Info(
                     event_details,
@@ -907,7 +907,7 @@ where
 
                 let progress_info = ProgressInfo::new(
                     service.progress_scope(),
-                    ProgressLevel::Info,
+                    Info,
                     Some(message.to_string()),
                     service.context().execution_id(),
                 );
@@ -1011,7 +1011,7 @@ where
 
     let progress_info = ProgressInfo::new(
         service.progress_scope(),
-        ProgressLevel::Info,
+        Info,
         Some(message.to_string()),
         kubernetes.context().execution_id(),
     );
@@ -1098,7 +1098,7 @@ where
         _ => {
             let progress_info = ProgressInfo::new(
                 service.progress_scope(),
-                ProgressLevel::Info,
+                Info,
                 Some(format!(
                     "{} succeeded for {} {}",
                     action_verb,
@@ -1138,7 +1138,7 @@ where
     let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
 
     // get logs
-    let logs = crate::cmd::kubectl::kubectl_exec_logs(
+    let logs = cmd::kubectl::kubectl_exec_logs(
         &kubernetes_config_file_path,
         environment.namespace(),
         selector.as_str(),
@@ -1156,7 +1156,7 @@ where
     let _ = result.extend(logs);
 
     // get pod state
-    let pods = crate::cmd::kubectl::kubectl_exec_get_pods(
+    let pods = kubectl_exec_get_pods(
         &kubernetes_config_file_path,
         Some(environment.namespace()),
         Some(selector.as_str()),
@@ -1196,7 +1196,7 @@ where
     }
 
     // get pod events
-    let events = crate::cmd::kubectl::kubectl_exec_get_json_events(
+    let events = cmd::kubectl::kubectl_exec_get_json_events(
         &kubernetes_config_file_path,
         environment.namespace(),
         kubernetes.cloud_provider().credentials_environment_variables(),
@@ -1229,7 +1229,7 @@ pub fn helm_uninstall_release(
 ) -> Result<(), EngineError> {
     let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
 
-    let helm = cmd::helm::Helm::new(
+    let helm = helm::Helm::new(
         &kubernetes_config_file_path,
         &kubernetes.cloud_provider().credentials_environment_variables(),
     )
@@ -1295,64 +1295,53 @@ where
     let (tx, rx) = mpsc::channel();
 
     // monitor thread to notify user while the blocking task is executed
-    let _ = std::thread::Builder::new()
-        .name("task-monitor".to_string())
-        .spawn(move || {
-            // stop the thread when the blocking task is done
-            let listeners_helper = ListenersHelper::new(&listeners);
-            let action = action;
-            let progress_info = progress_info;
-            let waiting_message = waiting_message.clone().unwrap_or_else(|| "No message...".to_string());
+    let _ = thread::Builder::new().name("task-monitor".to_string()).spawn(move || {
+        // stop the thread when the blocking task is done
+        let listeners_helper = ListenersHelper::new(&listeners);
+        let action = action;
+        let progress_info = progress_info;
+        let waiting_message = waiting_message.clone().unwrap_or_else(|| "No message...".to_string());
 
-            loop {
-                // do notify users here
-                let progress_info = std::clone::Clone::clone(&progress_info);
-                let event_details = std::clone::Clone::clone(&event_details);
-                let event_message = EventMessage::new_from_safe(waiting_message.to_string());
+        loop {
+            // do notify users here
+            let progress_info = Clone::clone(&progress_info);
+            let event_details = Clone::clone(&event_details);
+            let event_message = EventMessage::new_from_safe(waiting_message.to_string());
 
-                match action {
-                    Action::Create => {
-                        listeners_helper.deployment_in_progress(progress_info);
-                        logger.log(EngineEvent::Info(
-                            EventDetails::clone_changing_stage(
-                                event_details,
-                                Stage::Environment(EnvironmentStep::Deploy),
-                            ),
-                            event_message,
-                        ));
-                    }
-                    Action::Pause => {
-                        listeners_helper.pause_in_progress(progress_info);
-                        logger.log(EngineEvent::Info(
-                            EventDetails::clone_changing_stage(
-                                event_details,
-                                Stage::Environment(EnvironmentStep::Pause),
-                            ),
-                            event_message,
-                        ));
-                    }
-                    Action::Delete => {
-                        listeners_helper.delete_in_progress(progress_info);
-                        logger.log(EngineEvent::Info(
-                            EventDetails::clone_changing_stage(
-                                event_details,
-                                Stage::Environment(EnvironmentStep::Delete),
-                            ),
-                            event_message,
-                        ));
-                    }
-                    Action::Nothing => {} // should not happens
-                };
-
-                thread::sleep(Duration::from_secs(10));
-
-                // watch for thread termination
-                match rx.try_recv() {
-                    Ok(_) | Err(TryRecvError::Disconnected) => break,
-                    Err(TryRecvError::Empty) => {}
+            match action {
+                Action::Create => {
+                    listeners_helper.deployment_in_progress(progress_info);
+                    logger.log(EngineEvent::Info(
+                        EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Deploy)),
+                        event_message,
+                    ));
                 }
+                Action::Pause => {
+                    listeners_helper.pause_in_progress(progress_info);
+                    logger.log(EngineEvent::Info(
+                        EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Pause)),
+                        event_message,
+                    ));
+                }
+                Action::Delete => {
+                    listeners_helper.delete_in_progress(progress_info);
+                    logger.log(EngineEvent::Info(
+                        EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Delete)),
+                        event_message,
+                    ));
+                }
+                Action::Nothing => {} // should not happens
+            };
+
+            thread::sleep(Duration::from_secs(10));
+
+            // watch for thread termination
+            match rx.try_recv() {
+                Ok(_) | Err(TryRecvError::Disconnected) => break,
+                Err(TryRecvError::Empty) => {}
             }
-        });
+        }
+    });
 
     let blocking_task_result = long_task();
     let _ = tx.send(());
