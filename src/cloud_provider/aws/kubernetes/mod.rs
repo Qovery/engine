@@ -1024,6 +1024,7 @@ fn create(
                 ff_log_history_enabled: kubernetes.context().is_feature_enabled(&Features::LogsHistory),
                 ff_metrics_history_enabled: kubernetes.context().is_feature_enabled(&Features::MetricsHistory),
                 managed_dns_name: kubernetes.dns_provider().domain().to_string(),
+                managed_dns_name_wildcarded: kubernetes.dns_provider().domain().wildcarded().to_string(),
                 managed_dns_helm_format: kubernetes.dns_provider().domain().to_helm_format_string(),
                 managed_dns_resolvers_terraform_format: managed_dns_resolvers_terraform_format(
                     kubernetes.dns_provider(),

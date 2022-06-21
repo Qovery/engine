@@ -954,7 +954,20 @@ pub fn get_chart_for_cert_manager_config(
                 value: x.cloudflare_email.clone(),
             })
         }
-        DnsProviderConfiguration::QoveryDns(_) => {}
+        DnsProviderConfiguration::QoveryDns(q) => {
+            cert_manager_config.chart_info.values.push(ChartSetValue {
+                key: "provider.pdns.apiKey".to_string(),
+                value: q.api_key.clone(),
+            });
+            cert_manager_config.chart_info.values.push(ChartSetValue {
+                key: "provider.pdns.apiUrl".to_string(),
+                value: q.api_url.clone(),
+            });
+            cert_manager_config.chart_info.values_string.push(ChartSetValue {
+                key: "provider.pdns.apiPort".to_string(),
+                value: q.api_port.clone(),
+            });
+        }
     };
 
     cert_manager_config

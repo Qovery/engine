@@ -5,6 +5,7 @@ locals {
     OrganizationId = var.organization_id,
     Region = var.region
     creationDate = time_static.on_ec2_create.rfc3339
+    QoveryProduct = "EC2"
     {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds{% endif %}
   }
 

@@ -18,18 +18,19 @@ use crate::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service::{DatabaseOptions, RouterService};
 use crate::cloud_provider::Kind as CPKind;
-use crate::cloud_provider::{service, CloudProvider};
+use crate::cloud_provider::{kubernetes::Kind as KubernetesKind, service, CloudProvider};
 use crate::cmd::docker::Docker;
 use crate::container_registry::ContainerRegistryInfo;
 use crate::logger::Logger;
 use crate::models;
 use crate::models::application::{ApplicationError, ApplicationService};
 use crate::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
+use crate::models::aws_ec2::{AwsEc2AppExtraSettings, AwsEc2RouterExtraSettings, AwsEc2StorageType};
 use crate::models::database::{Container, DatabaseError, Managed, MongoDB, MySQL, PostgresSQL, Redis};
 use crate::models::digital_ocean::{DoAppExtraSettings, DoRouterExtraSettings, DoStorageType};
 use crate::models::router::{RouterAdvancedSettings, RouterError};
 use crate::models::scaleway::{ScwAppExtraSettings, ScwRouterExtraSettings, ScwStorageType};
-use crate::models::types::{CloudProvider as CP, VersionsNumber, AWS, DO, SCW};
+use crate::models::types::{AWSEc2, CloudProvider as CP, VersionsNumber, AWS, DO, SCW};
 use crate::utilities::to_short_id;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -330,25 +331,52 @@ impl Application {
         let listeners = cloud_provider.listeners().clone();
 
         match cloud_provider.kind() {
-            CPKind::Aws => Ok(Box::new(models::application::Application::<AWS>::new(
-                context.clone(),
-                self.long_id,
-                self.action.to_service_action(),
-                self.name.as_str(),
-                self.ports.clone(),
-                self.total_cpus.clone(),
-                self.cpu_burst.clone(),
-                self.total_ram_in_mib,
-                self.min_instances,
-                self.max_instances,
-                build,
-                self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
-                environment_variables,
-                self.advanced_settings.clone(),
-                AwsAppExtraSettings {},
-                listeners,
-                logger.clone(),
-            )?)),
+            CPKind::Aws => {
+                // Note: we check if kubernetes is EC2 to map to the proper implementation
+                // This is far from ideal, it should be checked against an exhaustive match
+                // But for the time being, it does the trick since we are already in AWS
+                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
+                    Ok(Box::new(models::application::Application::<AWS>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        self.ports.clone(),
+                        self.total_cpus.clone(),
+                        self.cpu_burst.clone(),
+                        self.total_ram_in_mib,
+                        self.min_instances,
+                        self.max_instances,
+                        build,
+                        self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
+                        environment_variables,
+                        self.advanced_settings.clone(),
+                        AwsAppExtraSettings {},
+                        listeners,
+                        logger.clone(),
+                    )?))
+                } else {
+                    Ok(Box::new(models::application::Application::<AWSEc2>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        self.ports.clone(),
+                        self.total_cpus.clone(),
+                        self.cpu_burst.clone(),
+                        self.total_ram_in_mib,
+                        self.min_instances,
+                        self.max_instances,
+                        build,
+                        self.storage.iter().map(|s| s.to_aws_ec2_storage()).collect::<Vec<_>>(),
+                        environment_variables,
+                        self.advanced_settings.clone(),
+                        AwsEc2AppExtraSettings {},
+                        listeners,
+                        logger.clone(),
+                    )?))
+                }
+            }
             CPKind::Do => Ok(Box::new(models::application::Application::<DO>::new(
                 context.clone(),
                 self.long_id,
@@ -565,6 +593,22 @@ impl Storage {
         }
     }
 
+    pub fn to_aws_ec2_storage(&self) -> crate::cloud_provider::models::Storage<AwsEc2StorageType> {
+        crate::cloud_provider::models::Storage {
+            id: self.id.clone(),
+            name: self.name.clone(),
+            storage_type: match self.storage_type {
+                StorageType::SlowHdd => AwsEc2StorageType::SC1,
+                StorageType::Hdd => AwsEc2StorageType::ST1,
+                StorageType::Ssd => AwsEc2StorageType::GP2,
+                StorageType::FastSsd => AwsEc2StorageType::IO1,
+            },
+            size_in_gib: self.size_in_gib,
+            mount_point: self.mount_point.clone(),
+            snapshot_retention_in_days: self.snapshot_retention_in_days,
+        }
+    }
+
     pub fn to_do_storage(&self) -> crate::cloud_provider::models::Storage<DoStorageType> {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
@@ -636,21 +680,40 @@ impl Router {
 
         match cloud_provider.kind() {
             CPKind::Aws => {
-                let router = Box::new(models::router::Router::<AWS>::new(
-                    context.clone(),
-                    self.long_id,
-                    self.name.as_str(),
-                    self.action.to_service_action(),
-                    self.default_domain.as_str(),
-                    custom_domains,
-                    routes,
-                    self.sticky_sessions_enabled,
-                    AwsRouterExtraSettings {},
-                    advanced_settings,
-                    listeners,
-                    logger,
-                )?);
-                Ok(router)
+                // Note: we check if kubernetes is EC2 to map to the proper implementation
+                // This is far from ideal, it should be checked against an exhaustive match
+                // But for the time being, it does the trick since we are already in AWS
+                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
+                    Ok(Box::new(models::router::Router::<AWS>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.name.as_str(),
+                        self.action.to_service_action(),
+                        self.default_domain.as_str(),
+                        custom_domains,
+                        routes,
+                        self.sticky_sessions_enabled,
+                        AwsRouterExtraSettings {},
+                        advanced_settings,
+                        listeners,
+                        logger,
+                    )?))
+                } else {
+                    Ok(Box::new(models::router::Router::<AWSEc2>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.name.as_str(),
+                        self.action.to_service_action(),
+                        self.default_domain.as_str(),
+                        custom_domains,
+                        routes,
+                        self.sticky_sessions_enabled,
+                        AwsEc2RouterExtraSettings {},
+                        advanced_settings,
+                        listeners,
+                        logger,
+                    )?))
+                }
             }
             CPKind::Do => {
                 let router = Box::new(models::router::Router::<DO>::new(
@@ -761,173 +824,341 @@ impl Database {
 
         match (cloud_provider.kind(), &self.kind, &self.mode) {
             (CPKind::Aws, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
-                let db = models::database::Database::<AWS, Managed, PostgresSQL>::new(
-                    context.clone(),
-                    self.long_id,
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    version,
-                    self.fqdn.as_str(),
-                    self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    self.database_instance_type.as_str(),
-                    database_options.publicly_accessible,
-                    database_options.port,
-                    database_options,
-                    listeners,
-                    logger,
-                )?;
-
-                Ok(Box::new(db))
+                // Note: we check if kubernetes is EC2 to map to the proper implementation
+                // This is far from ideal, it should be checked against an exhaustive match
+                // But for the time being, it does the trick since we are already in AWS
+                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
+                    Ok(Box::new(models::database::Database::<AWS, Managed, PostgresSQL>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                } else {
+                    Ok(Box::new(models::database::Database::<AWSEc2, Managed, PostgresSQL>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                }
             }
             (CPKind::Aws, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
-                let db = models::database::Database::<AWS, Container, PostgresSQL>::new(
-                    context.clone(),
-                    self.long_id,
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    version,
-                    self.fqdn.as_str(),
-                    self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    self.database_instance_type.as_str(),
-                    database_options.publicly_accessible,
-                    database_options.port,
-                    database_options,
-                    listeners,
-                    logger,
-                )?;
-
-                Ok(Box::new(db))
+                // Note: we check if kubernetes is EC2 to map to the proper implementation
+                // This is far from ideal, it should be checked against an exhaustive match
+                // But for the time being, it does the trick since we are already in AWS
+                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
+                    Ok(Box::new(models::database::Database::<AWS, Container, PostgresSQL>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                } else {
+                    Ok(Box::new(models::database::Database::<AWSEc2, Container, PostgresSQL>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                }
             }
 
             (CPKind::Aws, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
-                let db = models::database::Database::<AWS, Managed, MySQL>::new(
-                    context.clone(),
-                    self.long_id,
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    version,
-                    self.fqdn.as_str(),
-                    self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    self.database_instance_type.as_str(),
-                    database_options.publicly_accessible,
-                    database_options.port,
-                    database_options,
-                    listeners,
-                    logger,
-                )?;
-
-                Ok(Box::new(db))
+                // Note: we check if kubernetes is EC2 to map to the proper implementation
+                // This is far from ideal, it should be checked against an exhaustive match
+                // But for the time being, it does the trick since we are already in AWS
+                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
+                    Ok(Box::new(models::database::Database::<AWS, Managed, MySQL>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                } else {
+                    Ok(Box::new(models::database::Database::<AWSEc2, Managed, MySQL>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                }
             }
             (CPKind::Aws, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
-                let db = models::database::Database::<AWS, Container, MySQL>::new(
-                    context.clone(),
-                    self.long_id,
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    version,
-                    self.fqdn.as_str(),
-                    self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    self.database_instance_type.as_str(),
-                    database_options.publicly_accessible,
-                    database_options.port,
-                    database_options,
-                    listeners,
-                    logger,
-                )?;
-
-                Ok(Box::new(db))
+                // Note: we check if kubernetes is EC2 to map to the proper implementation
+                // This is far from ideal, it should be checked against an exhaustive match
+                // But for the time being, it does the trick since we are already in AWS
+                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
+                    Ok(Box::new(models::database::Database::<AWS, Container, MySQL>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                } else {
+                    Ok(Box::new(models::database::Database::<AWSEc2, Container, MySQL>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                }
             }
             (CPKind::Aws, DatabaseKind::Redis, DatabaseMode::MANAGED) => {
-                let db = models::database::Database::<AWS, Managed, Redis>::new(
-                    context.clone(),
-                    self.long_id,
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    version,
-                    self.fqdn.as_str(),
-                    self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    self.database_instance_type.as_str(),
-                    database_options.publicly_accessible,
-                    database_options.port,
-                    database_options,
-                    listeners,
-                    logger,
-                )?;
-
-                Ok(Box::new(db))
+                // Note: we check if kubernetes is EC2 to map to the proper implementation
+                // This is far from ideal, it should be checked against an exhaustive match
+                // But for the time being, it does the trick since we are already in AWS
+                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
+                    Ok(Box::new(models::database::Database::<AWS, Managed, Redis>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                } else {
+                    Ok(Box::new(models::database::Database::<AWSEc2, Managed, Redis>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                }
             }
             (CPKind::Aws, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
-                let db = models::database::Database::<AWS, Container, Redis>::new(
-                    context.clone(),
-                    self.long_id,
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    version,
-                    self.fqdn.as_str(),
-                    self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    self.database_instance_type.as_str(),
-                    database_options.publicly_accessible,
-                    database_options.port,
-                    database_options,
-                    listeners,
-                    logger,
-                )?;
-
-                Ok(Box::new(db))
+                // Note: we check if kubernetes is EC2 to map to the proper implementation
+                // This is far from ideal, it should be checked against an exhaustive match
+                // But for the time being, it does the trick since we are already in AWS
+                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
+                    Ok(Box::new(models::database::Database::<AWS, Container, Redis>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                } else {
+                    Ok(Box::new(models::database::Database::<AWSEc2, Container, Redis>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                }
             }
             (CPKind::Aws, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
-                let db = models::database::Database::<AWS, Managed, MongoDB>::new(
-                    context.clone(),
-                    self.long_id,
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    version,
-                    self.fqdn.as_str(),
-                    self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    self.database_instance_type.as_str(),
-                    database_options.publicly_accessible,
-                    database_options.port,
-                    database_options,
-                    listeners,
-                    logger,
-                )?;
-
-                Ok(Box::new(db))
+                // Note: we check if kubernetes is EC2 to map to the proper implementation
+                // This is far from ideal, it should be checked against an exhaustive match
+                // But for the time being, it does the trick since we are already in AWS
+                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
+                    Ok(Box::new(models::database::Database::<AWS, Managed, MongoDB>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                } else {
+                    Ok(Box::new(models::database::Database::<AWSEc2, Managed, MongoDB>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                }
             }
             (CPKind::Aws, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
-                let db = models::database::Database::<AWS, Container, MongoDB>::new(
-                    context.clone(),
-                    self.long_id,
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    version,
-                    self.fqdn.as_str(),
-                    self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    self.database_instance_type.as_str(),
-                    database_options.publicly_accessible,
-                    database_options.port,
-                    database_options,
-                    listeners,
-                    logger,
-                )?;
-
-                Ok(Box::new(db))
+                // Note: we check if kubernetes is EC2 to map to the proper implementation
+                // This is far from ideal, it should be checked against an exhaustive match
+                // But for the time being, it does the trick since we are already in AWS
+                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
+                    Ok(Box::new(models::database::Database::<AWS, Container, MongoDB>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                } else {
+                    Ok(Box::new(models::database::Database::<AWSEc2, Container, MongoDB>::new(
+                        context.clone(),
+                        self.long_id,
+                        self.action.to_service_action(),
+                        self.name.as_str(),
+                        version,
+                        self.fqdn.as_str(),
+                        self.fqdn_id.as_str(),
+                        self.total_cpus.clone(),
+                        self.total_ram_in_mib,
+                        self.database_instance_type.as_str(),
+                        database_options.publicly_accessible,
+                        database_options.port,
+                        database_options,
+                        listeners,
+                        logger,
+                    )?))
+                }
             }
 
             (CPKind::Do, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {

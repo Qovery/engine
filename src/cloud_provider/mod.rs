@@ -25,6 +25,7 @@ pub mod utilities;
 pub trait CloudProvider: Listen + ToTransmitter {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
+    fn kubernetes_kind(&self) -> kubernetes::Kind;
     fn id(&self) -> &str;
     fn organization_id(&self) -> &str;
     fn organization_long_id(&self) -> uuid::Uuid;

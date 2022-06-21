@@ -32,7 +32,7 @@ pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t3.micro";
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
 pub const AWS_RESOURCE_TTL_IN_SECONDS: u32 = 10800;
 pub const K3S_KUBERNETES_MAJOR_VERSION: u8 = 1;
-pub const K3S_KUBERNETES_MINOR_VERSION: u8 = 20;
+pub const K3S_KUBERNETES_MINOR_VERSION: u8 = 23;
 
 pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR {
     let secrets = FuncTestsSecrets::new();
@@ -144,6 +144,7 @@ impl Cluster<AWS, Options> for AWS {
                 .expect("AWS_SECRET_ACCESS_KEY is not set")
                 .as_str(),
             aws_region.get_zones_to_string(),
+            KubernetesKind::Eks,
             TerraformStateCredentials {
                 access_key_id: secrets
                     .TERRAFORM_AWS_ACCESS_KEY_ID
