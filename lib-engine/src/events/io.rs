@@ -343,7 +343,7 @@ mod test {
                 // validate:
                 assert_eq!(true, json.contains("{\"infrastructure\":\"CreateError\"}"))
             }
-            Err(error) => {
+            Err(_) => {
                 assert_eq!(0, 1)
             }
         }

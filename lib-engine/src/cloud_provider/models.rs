@@ -68,6 +68,19 @@ pub struct NodeGroups {
     pub id: Option<String>,
     pub min_nodes: i32,
     pub max_nodes: i32,
+    pub desired_nodes: Option<i32>,
+    pub instance_type: String,
+    pub disk_size_in_gib: i32,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct NodeGroupsWithDesiredState {
+    pub name: String,
+    pub id: Option<String>,
+    pub min_nodes: i32,
+    pub max_nodes: i32,
+    pub desired_size: i32,
+    pub enable_desired_size: bool,
     pub instance_type: String,
     pub disk_size_in_gib: i32,
 }
@@ -84,4 +97,14 @@ pub struct NodeGroupsFormat {
 pub struct InstanceEc2 {
     pub instance_type: String,
     pub disk_size_in_gib: i32,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum KubernetesClusterAction {
+    Bootstrap,
+    Update(Option<i32>),
+    Upgrade(Option<i32>),
+    Pause,
+    Resume(Option<i32>),
+    Delete,
 }
