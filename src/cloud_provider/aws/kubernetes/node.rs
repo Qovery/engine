@@ -177,7 +177,8 @@ mod tests {
                 min_nodes: 2,
                 max_nodes: 2,
                 instance_type: "t2.large".to_string(),
-                disk_size_in_gib: 20
+                disk_size_in_gib: 20,
+                desired_nodes: None
             }
         );
     }

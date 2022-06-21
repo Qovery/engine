@@ -21,7 +21,9 @@ use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, uninstall_cert_manager, Kind, Kubernetes, ProviderOptions,
 };
-use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
+use crate::cloud_provider::models::{
+    KubernetesClusterAction, NodeGroups, NodeGroupsFormat, NodeGroupsWithDesiredState,
+};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::utilities::{wait_until_port_is_open, TcpCheckSource};
 use crate::cloud_provider::CloudProvider;
@@ -42,6 +44,8 @@ use crate::{cmd, secret_manager};
 use rusoto_core::credential::StaticProvider;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest, NodegroupScalingConfig};
+
+use self::eks::select_nodegroups_autoscaling_group_behavior;
 
 pub mod ec2;
 mod ec2_helm_charts;
@@ -223,7 +227,7 @@ fn managed_dns_resolvers_terraform_format(dns_provider: &dyn DnsProvider) -> Str
 fn tera_context(
     kubernetes: &dyn Kubernetes,
     zones: &[AwsZones],
-    node_groups: &[NodeGroups],
+    node_groups: &[NodeGroupsWithDesiredState],
     options: &Options,
 ) -> Result<TeraContext, EngineError> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
@@ -392,10 +396,7 @@ fn tera_context(
                 match env::var_os("VAULT_SECRET_ID") {
                     Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
                     None => kubernetes.logger().log(EngineEvent::Error(
-                        EngineError::new_missing_required_env_variable(
-                            event_details.clone(),
-                            "VAULT_SECRET_ID".to_string(),
-                        ),
+                        EngineError::new_missing_required_env_variable(event_details, "VAULT_SECRET_ID".to_string()),
                         None,
                     )),
                 }
@@ -443,17 +444,6 @@ fn tera_context(
             .as_str(),
     );
 
-    let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
-        Ok(value) => Some(value),
-        Err(_) => None,
-    };
-
-    let desired_nodes_states = match should_update_desired_nodes(event_details, kubernetes, node_groups, aws_eks_client)
-    {
-        Err(e) => return Err(e),
-        Ok(value) => value,
-    };
-
     context.insert("aws_region", &kubernetes.region());
     context.insert("aws_terraform_backend_bucket", "qovery-terrafom-tfstates");
     context.insert("aws_terraform_backend_dynamodb_table", "qovery-terrafom-tfstates");
@@ -470,7 +460,6 @@ fn tera_context(
     context.insert("kubernetes_full_cluster_id", kubernetes.context().cluster_id());
     context.insert("eks_region_cluster_id", region_cluster_id.as_str());
     context.insert("eks_worker_nodes", &node_groups);
-    context.insert("eks_worker_nodes_desired_states", &desired_nodes_states);
     context.insert("ec2_zone_a_subnet_blocks_private", &ec2_zone_a_subnet_blocks_private);
     context.insert("ec2_zone_b_subnet_blocks_private", &ec2_zone_b_subnet_blocks_private);
     context.insert("ec2_zone_c_subnet_blocks_private", &ec2_zone_c_subnet_blocks_private);
@@ -546,72 +535,60 @@ impl NodeGroupDesiredState {
 fn should_update_desired_nodes(
     event_details: EventDetails,
     kubernetes: &dyn Kubernetes,
+    action: KubernetesClusterAction,
     node_groups: &[NodeGroups],
     aws_eks_client: Option<EksClient>,
-) -> Result<Vec<NodeGroupDesiredState>, EngineError> {
-    let mut desired_states = Vec::new();
-    if node_groups.is_empty() {
-        return Ok(desired_states);
-    }
-
-    for node_group in node_groups {
-        // safety guard in this block: do not set desired state to min! Just in case, to avoid delete nodes running production pods.
-        // Cluster autoscaler will automatically scale it down if necessary.
-        if aws_eks_client.is_none() {
-            desired_states.push(NodeGroupDesiredState::new(false, node_group.max_nodes));
-            continue;
-        };
-
-        let scaling_config = match get_nodegroup_autoscaling_config_from_aws(
+) -> Result<Vec<NodeGroupsWithDesiredState>, EngineError> {
+    let get_autoscaling_config = |node_group: &NodeGroups, eks_client: EksClient| -> Result<Option<i32>, EngineError> {
+        let current_nodes = get_nodegroup_autoscaling_config_from_aws(
             event_details.clone(),
             kubernetes,
             node_group.clone(),
-            aws_eks_client
-                .clone()
-                .expect("An AWS EKS connection was expected to read node groups information"),
-        ) {
-            Ok(value) => match value {
-                Some(v) => v,
-                None => {
-                    desired_states.push(NodeGroupDesiredState::new(false, node_group.max_nodes));
-                    continue;
-                }
+            eks_client,
+        )?;
+        match current_nodes {
+            Some(x) => match x.desired_size {
+                Some(n) => Ok(Some(n as i32)),
+                None => Ok(None),
             },
-            Err(_) => {
-                desired_states.push(NodeGroupDesiredState::new(false, node_group.max_nodes));
+            None => Ok(None),
+        }
+    };
+    let mut node_groups_with_size = Vec::with_capacity(node_groups.len());
+
+    for node_group in node_groups {
+        let eks_client = match aws_eks_client.clone() {
+            Some(x) => x,
+            None => {
+                // if no no clients, we're in bootstrap mode
+                select_nodegroups_autoscaling_group_behavior(action, node_group);
                 continue;
             }
         };
-
-        let mut update_desired_nodes = false;
-        let mut desired_nodes_count = node_group.max_nodes;
-
-        if scaling_config.desired_size.is_some() {
-            let desired_size = scaling_config
-                .desired_size
-                .expect("the desired size was expected and nothing was found") as i32;
-
-            // avoid desired nodes being < to the requested minimum node size
-            if desired_size < node_group.min_nodes {
-                update_desired_nodes = true;
-                desired_nodes_count = node_group.min_nodes;
-            // if there are multiple node groups, there is a lot of chance that dropping nodes won't be an issue,
-            // as other nodes of other groups will manage pod re-balance
-            } else if desired_size > node_group.max_nodes && node_groups.len() == 1 {
-                return Err(
-                    EngineError::new_number_of_requested_max_nodes_is_below_than_current_usage_error(
-                        event_details,
-                        desired_size,
-                        node_group.max_nodes,
-                    ),
-                );
-            };
+        let node_group_with_desired_state = match action {
+            KubernetesClusterAction::Bootstrap | KubernetesClusterAction::Pause | KubernetesClusterAction::Delete => {
+                select_nodegroups_autoscaling_group_behavior(action, node_group)
+            }
+            KubernetesClusterAction::Update(_) => {
+                let current_nodes = get_autoscaling_config(node_group, eks_client)?;
+                select_nodegroups_autoscaling_group_behavior(KubernetesClusterAction::Update(current_nodes), node_group)
+            }
+            KubernetesClusterAction::Upgrade(_) => {
+                let current_nodes = get_autoscaling_config(node_group, eks_client)?;
+                select_nodegroups_autoscaling_group_behavior(
+                    KubernetesClusterAction::Upgrade(current_nodes),
+                    node_group,
+                )
+            }
+            KubernetesClusterAction::Resume(_) => {
+                let current_nodes = get_autoscaling_config(node_group, eks_client)?;
+                select_nodegroups_autoscaling_group_behavior(KubernetesClusterAction::Resume(current_nodes), node_group)
+            }
         };
-
-        desired_states.push(NodeGroupDesiredState::new(update_desired_nodes, desired_nodes_count));
+        node_groups_with_size.push(node_group_with_desired_state)
     }
 
-    Ok(desired_states)
+    Ok(node_groups_with_size)
 }
 
 /// Returns a rusoto eks client using the current configuration.
@@ -706,6 +683,7 @@ fn create(
 ) -> Result<(), EngineError> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
+    let mut kubernetes_action = KubernetesClusterAction::Bootstrap;
 
     kubernetes.logger().log(EngineEvent::Info(
         event_details.clone(),
@@ -737,15 +715,20 @@ fn create(
                     return kubernetes.upgrade_with_status(x);
                 }
 
+                kubernetes_action = KubernetesClusterAction::Update(None);
+
                 kubernetes.logger().log(EngineEvent::Info(
                     event_details.clone(),
                     EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
                 ))
             }
             Err(e) => {
-                kubernetes.logger().log(EngineEvent::Error(e, Some(EventMessage::new_from_safe(
-                    "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
-                ))));
+                kubernetes.logger().log(EngineEvent::Error(
+                    e,
+                    Some(EventMessage::new_from_safe(
+                        "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
+                    )),
+                ));
             }
         },
         Err(_) => kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
@@ -771,8 +754,21 @@ fn create(
 
     let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
 
+    let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
+        Ok(value) => Some(value),
+        Err(_) => None,
+    };
+
+    let node_groups_with_desired_states = should_update_desired_nodes(
+        event_details.clone(),
+        kubernetes,
+        kubernetes_action,
+        node_groups,
+        aws_eks_client,
+    )?;
+
     // generate terraform files and copy them into temp dir
-    let context = tera_context(kubernetes, aws_zones, node_groups, options)?;
+    let context = tera_context(kubernetes, aws_zones, &node_groups_with_desired_states, options)?;
 
     if let Err(e) =
         crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
@@ -1146,8 +1142,21 @@ fn pause(
 
     let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
 
+    let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
+        Ok(value) => Some(value),
+        Err(_) => None,
+    };
+
+    let node_groups_with_desired_states = should_update_desired_nodes(
+        event_details.clone(),
+        kubernetes,
+        KubernetesClusterAction::Pause,
+        node_groups,
+        aws_eks_client,
+    )?;
+
     // generate terraform files and copy them into temp dir
-    let mut context = tera_context(kubernetes, aws_zones, node_groups, options)?;
+    let mut context = tera_context(kubernetes, aws_zones, &node_groups_with_desired_states, options)?;
 
     // pause: remove all worker nodes to reduce the bill but keep master to keep all the deployment config, certificates etc...
     let worker_nodes: Vec<NodeGroupsFormat> = Vec::new();
@@ -1337,9 +1346,21 @@ fn delete(
     ));
 
     let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
+    let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
+        Ok(value) => Some(value),
+        Err(_) => None,
+    };
+
+    let node_groups_with_desired_states = should_update_desired_nodes(
+        event_details.clone(),
+        kubernetes,
+        KubernetesClusterAction::Delete,
+        node_groups,
+        aws_eks_client,
+    )?;
 
     // generate terraform files and copy them into temp dir
-    let context = tera_context(kubernetes, aws_zones, node_groups, options)?;
+    let context = tera_context(kubernetes, aws_zones, &node_groups_with_desired_states, options)?;
 
     if let Err(e) =
         crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)

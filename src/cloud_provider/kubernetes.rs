@@ -40,6 +40,8 @@ use crate::models::types::VersionsNumber;
 use crate::object_storage::ObjectStorage;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
 
+use super::models::NodeGroupsWithDesiredState;
+
 pub trait ProviderOptions {}
 
 pub trait Kubernetes: Listen {
@@ -834,6 +836,25 @@ where
     Ok(())
 }
 
+impl NodeGroupsWithDesiredState {
+    pub fn new_from_node_groups(
+        nodegroup: &NodeGroups,
+        desired_nodes: i32,
+        enable_desired_nodes: bool,
+    ) -> NodeGroupsWithDesiredState {
+        NodeGroupsWithDesiredState {
+            name: nodegroup.name.clone(),
+            id: nodegroup.id.clone(),
+            min_nodes: nodegroup.min_nodes,
+            max_nodes: nodegroup.max_nodes,
+            desired_size: desired_nodes,
+            enable_desired_size: enable_desired_nodes,
+            instance_type: nodegroup.instance_type.clone(),
+            disk_size_in_gib: nodegroup.disk_size_in_gib,
+        }
+    }
+}
+
 pub fn is_kubernetes_upgrade_required<P>(
     kubernetes_config: P,
     requested_version: &str,
@@ -1257,6 +1278,7 @@ impl NodeGroups {
             max_nodes,
             instance_type,
             disk_size_in_gib,
+            desired_nodes: None,
         })
     }
 
@@ -1264,6 +1286,18 @@ impl NodeGroups {
         InstanceEc2 {
             instance_type: self.instance_type.clone(),
             disk_size_in_gib: self.disk_size_in_gib,
+        }
+    }
+
+    pub fn set_desired_nodes(&mut self, desired_nodes: i32) {
+        // desired nodes can't be lower than min nodes
+        if desired_nodes < self.min_nodes {
+            self.desired_nodes = Some(self.min_nodes)
+        // desired nodes can't be higher than max nodes
+        } else if desired_nodes > self.max_nodes {
+            self.desired_nodes = Some(self.max_nodes)
+        } else {
+            self.desired_nodes = Some(desired_nodes)
         }
     }
 }
