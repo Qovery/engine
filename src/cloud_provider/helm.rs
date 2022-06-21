@@ -918,7 +918,8 @@ pub fn get_chart_for_cert_manager_config(
             name: "cert-manager-configs".to_string(),
             path: chart_path,
             namespace: HelmChartNamespaces::CertManager,
-            backup_resources: Some(vec!["cert".to_string(), "issuer".to_string(), "clusterissuer".to_string()]),
+            // TODO: fix backup apply, it makes the chart deployment failed randomly
+            // backup_resources: Some(vec!["cert".to_string(), "issuer".to_string(), "clusterissuer".to_string()]),
             values: vec![
                 ChartSetValue {
                     key: "externalDnsProvider".to_string(),
