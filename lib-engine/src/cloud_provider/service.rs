@@ -1,8 +1,8 @@
 use std::net::TcpStream;
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::mpsc;
-use std::sync::mpsc::TryRecvError;
+use std::sync::mpsc::{RecvTimeoutError, TryRecvError};
+use std::sync::{mpsc, Arc, Barrier};
 use std::thread;
 use std::time::Duration;
 use tera::Context as TeraContext;
@@ -21,6 +21,7 @@ use crate::cmd::kubectl::{
     kubectl_exec_scale_replicas_by_selector, ScalingKind,
 };
 use crate::cmd::structs::{KubernetesPodStatusPhase, LabelsContent};
+use crate::deployment::deployment_info::{format_app_deployment_info, get_app_deployment_info};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
 use crate::io_models::ProgressLevel::Info;
@@ -29,7 +30,10 @@ use crate::io_models::{
     ProgressLevel, ProgressScope, QoveryIdentifier,
 };
 use crate::logger::Logger;
+use crate::models::application::ApplicationService;
 use crate::models::types::VersionsNumber;
+use crate::runtime::block_on;
+use crate::utilities::to_short_id;
 
 // todo: delete this useless trait
 pub trait Service: ToTransmitter {
@@ -1270,6 +1274,101 @@ where
 
 /// This function call (start|pause|delete)_in_progress function every 10 seconds when a
 /// long blocking task is running.
+pub fn send_progress_for_application<R, F>(
+    app: &dyn ApplicationService,
+    action: Action,
+    target: &DeploymentTarget,
+    long_task: F,
+) -> R
+where
+    F: Fn() -> R,
+{
+    let event_details = app.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+    let logger = app.logger().clone_dyn();
+    let execution_id = app.context().execution_id().to_string();
+    let scope = app.progress_scope();
+    let app_id = *app.long_id();
+    let namespace = target.environment.namespace().to_string();
+    let kube_client = target.kube.clone();
+    let log = {
+        let listeners = app.listeners().clone();
+        let step = match action {
+            Action::Create => EnvironmentStep::Deploy,
+            Action::Pause => EnvironmentStep::Pause,
+            Action::Delete => EnvironmentStep::Delete,
+            Action::Nothing => EnvironmentStep::Deploy, // should not happen
+        };
+        let event_details = EventDetails::clone_changing_stage(event_details, Stage::Environment(step));
+
+        move |msg: String| {
+            let listeners_helper = ListenersHelper::new(&listeners);
+            listeners_helper.deployment_in_progress(ProgressInfo::new(
+                scope.clone(),
+                Info,
+                Some(msg.clone()),
+                execution_id.clone(),
+            ));
+            logger.log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
+        }
+    };
+
+    // stop the thread when the blocking task is done
+    let (tx, rx) = mpsc::channel();
+    let deployment_start = Arc::new(Barrier::new(2));
+
+    // monitor thread to notify user while the blocking task is executed
+    let _ = thread::Builder::new().name("deployment-monitor".to_string()).spawn({
+        let deployment_start = deployment_start.clone();
+
+        move || {
+            // Before the launch of the deployment
+            if let Ok(deployment_info) = block_on(get_app_deployment_info(&kube_client, &app_id, &namespace)) {
+                log(format!(
+                    "🛰 Application `{}` deployment is going to start: You have {} pod(s) running, {} service(s) running, {} network volume(s)",
+                    to_short_id(&app_id),
+                    deployment_info.pods.len(),
+                    deployment_info.services.len(),
+                    deployment_info.pvc.len()
+                ));
+            }
+
+            // Wait to start the deployment
+            deployment_start.wait();
+
+            loop {
+                // watch for thread termination
+                match rx.recv_timeout(Duration::from_secs(10)) {
+                    Err(RecvTimeoutError::Timeout) => {}
+                    Ok(_) | Err(RecvTimeoutError::Disconnected) => break,
+                }
+
+                // Fetch deployment information
+                let deployment_info = match block_on(get_app_deployment_info(&kube_client, &app_id, &namespace)) {
+                    Ok(deployment_info) => deployment_info,
+                    Err(err) => {
+                        log(format!("Error while retrieving deployment information: {}", err));
+                        continue;
+                    }
+                };
+
+                // Format the deployment information and send to it to user
+                for message in format_app_deployment_info(&deployment_info).into_iter() {
+                    log(message);
+                }
+            }
+        }
+    });
+
+    // Wait for our watcher thread to be ready before starting
+    let _ = deployment_start.wait();
+    let blocking_task_result = long_task();
+    let _ = tx.send(());
+
+    blocking_task_result
+}
+
+/// This function call (start|pause|delete)_in_progress function every 10 seconds when a
+/// long blocking task is running.
 pub fn send_progress_on_long_task_with_message<S, R, F>(
     service: &S,
     waiting_message: Option<String>,
@@ -1283,7 +1382,7 @@ where
 {
     let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
     let logger = service.logger().clone_dyn();
-    let listeners = std::clone::Clone::clone(service.listeners());
+    let listeners = service.listeners().clone();
 
     let progress_info = ProgressInfo::new(
         service.progress_scope(),
@@ -1304,8 +1403,8 @@ where
 
         loop {
             // do notify users here
-            let progress_info = Clone::clone(&progress_info);
-            let event_details = Clone::clone(&event_details);
+            let progress_info = progress_info.clone();
+            let event_details = event_details.clone();
             let event_message = EventMessage::new_from_safe(waiting_message.to_string());
 
             match action {
