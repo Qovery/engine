@@ -897,7 +897,7 @@ fn private_redis_v5_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore]
+#[ignore] // managed redis cannot be public ATM
 fn public_redis_v5_deploy_a_working_prod_environment() {
     test_redis_configuration("5", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -912,7 +912,7 @@ fn private_redis_v6_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore]
+#[ignore] // managed redis cannot be public ATM
 fn public_redis_v6_deploy_a_working_prod_environment() {
     test_redis_configuration("6", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
