@@ -413,6 +413,7 @@ pub fn eks_aws_helm_charts(
             name: "loki".to_string(),
             path: chart_path("common/charts/loki"),
             namespace: loki_namespace,
+            timeout_in_seconds: 900,
             values_files: vec![chart_path("chart_values/loki.yaml")],
             values: vec![
                 ChartSetValue {
