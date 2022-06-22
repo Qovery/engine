@@ -505,6 +505,8 @@ pub enum Tag {
     NumberOfRequestedMaxNodesIsBelowThanCurrentUsage,
     /// CannotDetermineK8sKubeProxyVersion: represents an error when trying to determine kube proxy version which cannot be retrieved.
     CannotDetermineK8sKubeProxyVersion,
+    /// CannotConnectK8sCluster: represents an error when trying to connect to the kubernetes cluster
+    CannotConnectK8sCluster,
     /// CannotExecuteK8sApiCustomMetrics: represents an error when trying to get K8s API custom metrics.
     CannotExecuteK8sApiCustomMetrics,
     /// K8sPodDisruptionBudgetInInvalidState: represents an error where pod disruption budget is in an invalid state.
@@ -1405,6 +1407,12 @@ impl EngineError {
             None,
             None,
         )
+    }
+
+    pub fn new_cannot_connect_to_k8s_cluster(event_details: EventDetails, kube_error: kube::Error) -> EngineError {
+        let message = format!("Unable to connect to target k8s cluster: `{}`", kube_error);
+
+        EngineError::new(event_details, Tag::CannotConnectK8sCluster, message, None, None, None)
     }
 
     /// Creates new error delete local kubeconfig file error

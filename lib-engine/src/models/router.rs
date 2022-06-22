@@ -489,9 +489,7 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, crate::cloud_provider::service::Action::Create, || {
-            deploy_stateless_service_error(target, self)
-        })
+        send_progress_on_long_task(self, Action::Create, target, || deploy_stateless_service_error(target, self))
     }
 }
 
@@ -559,7 +557,7 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Delete, || {
+        send_progress_on_long_task(self, Action::Delete, target, || {
             delete_stateless_service(target, self, event_details.clone())
         })
     }
@@ -591,7 +589,7 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Delete, || {
+        send_progress_on_long_task(self, Action::Delete, target, || {
             delete_stateless_service(target, self, event_details.clone())
         })
     }

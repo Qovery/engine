@@ -1,3 +1,7 @@
+use retry::delay::{Fibonacci, Fixed};
+use retry::Error::Operation;
+use retry::OperationResult;
+use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
@@ -8,11 +12,6 @@ use std::sync::mpsc;
 use std::sync::mpsc::TryRecvError;
 use std::thread;
 use std::time::Duration;
-
-use retry::delay::{Fibonacci, Fixed};
-use retry::Error::Operation;
-use retry::OperationResult;
-use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
@@ -480,10 +479,8 @@ pub fn deploy_environment(
 ) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
-    let deployment_target = DeploymentTarget {
-        kubernetes,
-        environment,
-    };
+    let deployment_target = DeploymentTarget::new(kubernetes, environment)
+        .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
 
     // create all stateful services (database)
     for service in environment.stateful_services() {
@@ -561,44 +558,33 @@ pub fn deploy_environment_error(
         kubernetes.context().execution_id(),
     ));
 
-    let stateful_deployment_target = DeploymentTarget {
-        kubernetes,
-        environment,
-    };
+    let deployment_target = DeploymentTarget::new(kubernetes, environment)
+        .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
 
     // clean up all stateful services (database)
     for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
-            service.on_create_error(&stateful_deployment_target),
+            service.on_create_error(&deployment_target),
             kubernetes,
             service,
             event_details.clone(),
             logger,
-            &stateful_deployment_target,
+            &deployment_target,
             &listeners_helper,
             "revert deployment",
             CheckAction::Deploy,
         )?;
     }
 
-    // Quick fix: adding 100 ms delay to avoid race condition on service status update
-    thread::sleep(std::time::Duration::from_millis(100));
-
-    // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
-    let stateless_deployment_target = DeploymentTarget {
-        kubernetes,
-        environment,
-    };
-
     // clean up all stateless services (router, application...)
     for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
-            service.on_create_error(&stateless_deployment_target),
+            service.on_create_error(&deployment_target),
             kubernetes,
             service,
             event_details.clone(),
             logger,
-            &stateless_deployment_target,
+            &deployment_target,
             &listeners_helper,
             "revert deployment",
             CheckAction::Deploy,
@@ -617,52 +603,38 @@ pub fn pause_environment(
 ) -> Result<(), EngineError> {
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
 
-    let stateful_deployment_target = DeploymentTarget {
-        kubernetes,
-        environment,
-    };
-
-    // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
-    let stateless_deployment_target = DeploymentTarget {
-        kubernetes,
-        environment,
-    };
+    let deployment_target = DeploymentTarget::new(kubernetes, environment)
+        .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
 
     // create all stateless services (router, application...)
     for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
-            service.on_pause(&stateless_deployment_target),
+            service.on_pause(&deployment_target),
             kubernetes,
             service,
             event_details.clone(),
             logger,
-            &stateless_deployment_target,
+            &deployment_target,
             &listeners_helper,
             "pause",
             CheckAction::Pause,
         )?;
     }
-
-    // Quick fix: adding 100 ms delay to avoid race condition on service status update
-    thread::sleep(std::time::Duration::from_millis(100));
 
     // create all stateful services (database)
     for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
-            service.on_pause(&stateful_deployment_target),
+            service.on_pause(&deployment_target),
             kubernetes,
             service,
             event_details.clone(),
             logger,
-            &stateful_deployment_target,
+            &deployment_target,
             &listeners_helper,
             "pause",
             CheckAction::Pause,
         )?;
     }
-
-    // Quick fix: adding 100 ms delay to avoid race condition on service status update
-    thread::sleep(std::time::Duration::from_millis(100));
 
     for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
@@ -671,15 +643,12 @@ pub fn pause_environment(
             service,
             event_details.clone(),
             logger,
-            &stateless_deployment_target,
+            &deployment_target,
             &listeners_helper,
             "check pause",
             CheckAction::Pause,
         )?;
     }
-
-    // Quick fix: adding 100 ms delay to avoid race condition on service status update
-    thread::sleep(std::time::Duration::from_millis(100));
 
     // check all deployed services
     for service in environment.stateful_services() {
@@ -689,7 +658,7 @@ pub fn pause_environment(
             service,
             event_details.clone(),
             logger,
-            &stateful_deployment_target,
+            &deployment_target,
             &listeners_helper,
             "check pause",
             CheckAction::Pause,
@@ -721,52 +690,38 @@ pub fn delete_environment(
         return Ok(());
     };
 
-    let stateful_deployment_target = DeploymentTarget {
-        kubernetes,
-        environment,
-    };
-
-    // stateless services are deployed on kubernetes, that's why we choose the deployment target SelfHosted.
-    let stateless_deployment_target = DeploymentTarget {
-        kubernetes,
-        environment,
-    };
+    let deployment_target = DeploymentTarget::new(kubernetes, environment)
+        .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
 
     // delete all stateless services (router, application...)
     for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
-            service.on_delete(&stateful_deployment_target),
+            service.on_delete(&deployment_target),
             kubernetes,
             service,
             event_details.clone(),
             logger,
-            &stateless_deployment_target,
+            &deployment_target,
             &listeners_helper,
             "delete",
             CheckAction::Delete,
         );
     }
 
-    // Quick fix: adding 100 ms delay to avoid race condition on service status update
-    thread::sleep(std::time::Duration::from_millis(100));
-
     // delete all stateful services (database)
     for service in environment.stateful_services() {
         let _ = service::check_kubernetes_service_error(
-            service.on_delete(&stateful_deployment_target),
+            service.on_delete(&deployment_target),
             kubernetes,
             service,
             event_details.clone(),
             logger,
-            &stateful_deployment_target,
+            &deployment_target,
             &listeners_helper,
             "delete",
             CheckAction::Delete,
         )?;
     }
-
-    // Quick fix: adding 100 ms delay to avoid race condition on service status update
-    thread::sleep(std::time::Duration::from_millis(100));
 
     for service in environment.stateless_services() {
         let _ = service::check_kubernetes_service_error(
@@ -775,15 +730,12 @@ pub fn delete_environment(
             service,
             event_details.clone(),
             logger,
-            &stateless_deployment_target,
+            &deployment_target,
             &listeners_helper,
             "delete check",
             CheckAction::Delete,
         )?;
     }
-
-    // Quick fix: adding 100 ms delay to avoid race condition on service status update
-    thread::sleep(std::time::Duration::from_millis(100));
 
     // check all deployed services
     for service in environment.stateful_services() {
@@ -793,7 +745,7 @@ pub fn delete_environment(
             service,
             event_details.clone(),
             logger,
-            &stateful_deployment_target,
+            &deployment_target,
             &listeners_helper,
             "delete check",
             CheckAction::Delete,

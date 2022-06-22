@@ -5,7 +5,6 @@ use std::sync::mpsc;
 use std::sync::mpsc::TryRecvError;
 use std::thread;
 use std::time::Duration;
-
 use tera::Context as TeraContext;
 use uuid::Uuid;
 
@@ -1242,7 +1241,7 @@ pub fn helm_uninstall_release(
 
 /// This function call (start|pause|delete)_in_progress function every 10 seconds when a
 /// long blocking task is running.
-pub fn send_progress_on_long_task<S, R, F>(service: &S, action: Action, long_task: F) -> R
+pub fn send_progress_on_long_task<S, R, F>(service: &S, action: Action, target: &DeploymentTarget, long_task: F) -> R
 where
     S: Service + Listen,
     F: Fn() -> R,
@@ -1266,7 +1265,7 @@ where
         Action::Nothing => None,
     };
 
-    send_progress_on_long_task_with_message(service, waiting_message, action, long_task)
+    send_progress_on_long_task_with_message(service, waiting_message, action, target, long_task)
 }
 
 /// This function call (start|pause|delete)_in_progress function every 10 seconds when a
@@ -1275,6 +1274,7 @@ pub fn send_progress_on_long_task_with_message<S, R, F>(
     service: &S,
     waiting_message: Option<String>,
     action: Action,
+    _target: &DeploymentTarget,
     long_task: F,
 ) -> R
 where

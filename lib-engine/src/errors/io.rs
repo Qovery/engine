@@ -131,6 +131,7 @@ pub enum Tag {
     ClusterSecretsManipulationError,
     CannotGetNodeGroupList,
     CannotGetNodeGroupInfo,
+    CannotConnectK8sCluster,
     NumberOfRequestedMaxNodesIsBelowThanCurrentUsage,
 }
 
@@ -262,6 +263,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::NumberOfRequestedMaxNodesIsBelowThanCurrentUsage => {
                 Tag::NumberOfRequestedMaxNodesIsBelowThanCurrentUsage
             }
+            errors::Tag::CannotConnectK8sCluster => Tag::CannotConnectK8sCluster,
         }
     }
 }
