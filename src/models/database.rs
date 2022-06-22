@@ -300,7 +300,7 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Create, || {
+        send_progress_on_long_task(self, Action::Create, target, || {
             deploy_stateful_service(target, self, event_details.clone(), self.logger())
         })
     }
@@ -362,7 +362,7 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Pause, || scale_down_database(target, self, 0))
+        send_progress_on_long_task(self, Action::Pause, target, || scale_down_database(target, self, 0))
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
@@ -401,7 +401,7 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Delete, || {
+        send_progress_on_long_task(self, Action::Delete, target, || {
             delete_stateful_service(target, self, event_details.clone(), self.logger())
         })
     }

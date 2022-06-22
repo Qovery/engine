@@ -1,5 +1,7 @@
+use kube::config::{KubeConfigOptions, Kubeconfig, KubeconfigError};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 
@@ -51,6 +53,41 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
 
 pub fn to_short_id(id: &Uuid) -> String {
     format!("z{}", id.to_string().split_at(8).0)
+}
+
+pub async fn get_kube_client<P: AsRef<Path>>(
+    kubeconfig_path: P,
+    envs: &[(String, String)],
+) -> Result<kube::Client, kube::Error> {
+    let to_err = |err: KubeconfigError| -> kube::Error {
+        kube::Error::Service(Box::<dyn std::error::Error + Send + Sync>::from(err.to_string()))
+    };
+
+    // Read kube config
+    let mut kubeconfig = Kubeconfig::read_from(kubeconfig_path).map_err(to_err)?;
+
+    // Inject our env variables if needed
+    for auth in kubeconfig.auth_infos.iter_mut() {
+        if let Some(exec_config) = &mut auth.auth_info.exec {
+            let exec_envs = exec_config.env.get_or_insert(vec![]);
+            for (k, v) in envs {
+                let mut hash_map = HashMap::with_capacity(2);
+                hash_map.insert("name".to_string(), k.to_string());
+                hash_map.insert("value".to_string(), v.to_string());
+                exec_envs.push(hash_map);
+            }
+        }
+    }
+
+    // build kube client: the kube config must have already the good context selected
+    let kube_config = kube::Config::from_custom_kubeconfig(kubeconfig, &KubeConfigOptions::default())
+        .await
+        .map_err(to_err)?;
+    let kube_client = kube::Client::try_from(kube_config)?;
+
+    // Try to contact the api to verify we are correctly connected
+    kube_client.apiserver_version().await?;
+    Ok(kube_client)
 }
 
 #[cfg(test)]
