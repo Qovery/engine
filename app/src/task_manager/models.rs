@@ -26,6 +26,7 @@ use qovery_engine::models::scaleway::ScwZone;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use url::Url;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EngineRequest {
@@ -440,16 +441,20 @@ impl DnsProvider {
                 )))
             }
             Kind::QoveryDns => {
-                let api_url = self.options.get("qoverydns_api_url")?;
+                let qoverydns_api_url = self.options.get("qoverydns_api_url")?;
 
-                Some(Box::new(QoveryDns::new(
-                    context,
-                    self.id.as_str(),
-                    api_url,
-                    &cluster_jwt_token,
-                    self.name.as_str(),
-                    Domain::new(self.domain.clone()),
-                )))
+                if let Ok(api_url) = Url::parse(qoverydns_api_url) {
+                    return Some(Box::new(QoveryDns::new(
+                        context,
+                        self.id.as_str(),
+                        api_url,
+                        &cluster_jwt_token,
+                        self.name.as_str(),
+                        Domain::new(self.domain.clone()),
+                    )));
+                }
+
+                None
             }
         }
     }

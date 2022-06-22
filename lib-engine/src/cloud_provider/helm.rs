@@ -955,13 +955,17 @@ pub fn get_chart_for_cert_manager_config(
             })
         }
         DnsProviderConfiguration::QoveryDns(q) => {
-            cert_manager_config.chart_info.values.push(ChartSetValue {
-                key: "provider.pdns.apiKey".to_string(),
-                value: q.api_key.clone(),
+            cert_manager_config.chart_info.values_string.push(ChartSetValue {
+                key: "provider.pdns.apiPort".to_string(),
+                value: q.api_url_port.to_string(),
             });
             cert_manager_config.chart_info.values.push(ChartSetValue {
                 key: "provider.pdns.apiUrl".to_string(),
-                value: q.api_url.clone(),
+                value: q.api_url_scheme_and_domain.to_string(),
+            });
+            cert_manager_config.chart_info.values.push(ChartSetValue {
+                key: "provider.pdns.apiKey".to_string(),
+                value: q.api_key.clone(),
             });
         }
     };

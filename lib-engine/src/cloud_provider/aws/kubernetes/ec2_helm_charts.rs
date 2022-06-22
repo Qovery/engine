@@ -187,7 +187,7 @@ pub fn ec2_aws_helm_charts(
     };
 
     let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
-    if let DnsProviderConfiguration::QoveryDns(_) = &chart_config_prerequisites.dns_provider_config {
+    if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {
         qovery_cert_manager_webhook = Some(CommonChart {
             chart_info: ChartInfo {
                 name: "qovery-cert-manager-webhook".to_string(),
@@ -196,17 +196,11 @@ pub fn ec2_aws_helm_charts(
                 values: vec![
                     ChartSetValue {
                         key: "secret.apiKey".to_string(),
-                        value: match &chart_config_prerequisites.dns_provider_config {
-                            DnsProviderConfiguration::Cloudflare(_) => "".to_string(),
-                            DnsProviderConfiguration::QoveryDns(q) => q.api_key.to_string(),
-                        },
+                        value: qovery_dns_config.api_key.to_string(),
                     },
                     ChartSetValue {
                         key: "secret.apiUrl".to_string(),
-                        value: match &chart_config_prerequisites.dns_provider_config {
-                            DnsProviderConfiguration::Cloudflare(_) => "".to_string(),
-                            DnsProviderConfiguration::QoveryDns(q) => q.api_url.to_string(),
-                        },
+                        value: qovery_dns_config.api_url.to_string(), // URL standard port will be omitted from string as standard (80 HTTP & 443 HTTPS)
                     },
                     ChartSetValue {
                         key: "certManager.serviceAccountName".to_string(),
