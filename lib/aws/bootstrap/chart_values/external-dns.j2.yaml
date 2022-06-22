@@ -9,6 +9,7 @@ cloudflare:
 # Qovery DNS
 pdns:
   apiUrl: "{{ qoverydns_api_url }}"
+  apiPort: "{{ qoverydns_api_port }}"
   apiKey: "{{ qoverydns_api_key }}"
 {% endif %}
 
