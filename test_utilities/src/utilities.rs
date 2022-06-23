@@ -110,6 +110,7 @@ pub struct FuncTestsSecrets {
     pub AWS_DEFAULT_REGION: Option<String>,
     pub AWS_SECRET_ACCESS_KEY: Option<String>,
     pub AWS_TEST_CLUSTER_ID: Option<String>,
+    pub AWS_EC2_TEST_CLUSTER_ID: Option<String>,
     pub AWS_TEST_ORGANIZATION_ID: Option<String>,
     pub AWS_EC2_DEFAULT_CLUSTER_ID: Option<String>,
     pub BIN_VERSION_FILE: Option<String>,
@@ -205,6 +206,7 @@ impl FuncTestsSecrets {
             AWS_DEFAULT_REGION: None,
             AWS_SECRET_ACCESS_KEY: None,
             AWS_TEST_CLUSTER_ID: None,
+            AWS_EC2_TEST_CLUSTER_ID: None,
             AWS_TEST_ORGANIZATION_ID: None,
             AWS_EC2_DEFAULT_CLUSTER_ID: None,
             BIN_VERSION_FILE: None,
@@ -292,6 +294,7 @@ impl FuncTestsSecrets {
             AWS_SECRET_ACCESS_KEY: Self::select_secret("AWS_SECRET_ACCESS_KEY", secrets.AWS_SECRET_ACCESS_KEY),
             AWS_TEST_ORGANIZATION_ID: Self::select_secret("AWS_TEST_ORGANIZATION_ID", secrets.AWS_TEST_ORGANIZATION_ID),
             AWS_TEST_CLUSTER_ID: Self::select_secret("AWS_TEST_CLUSTER_ID", secrets.AWS_TEST_CLUSTER_ID),
+            AWS_EC2_TEST_CLUSTER_ID: Self::select_secret("AWS_EC2_TEST_CLUSTER_ID", secrets.AWS_EC2_TEST_CLUSTER_ID),
             AWS_EC2_DEFAULT_CLUSTER_ID: Self::select_secret(
                 "AWS_EC2_DEFAULT_CLUSTER_ID",
                 secrets.AWS_EC2_DEFAULT_CLUSTER_ID,

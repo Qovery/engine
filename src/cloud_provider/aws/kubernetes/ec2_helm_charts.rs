@@ -1,10 +1,10 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
-    get_chart_for_cert_manager_config, get_chart_for_cluster_agent, get_chart_for_shell_agent, ChartInfo,
-    ChartSetValue, ClusterAgentContext, CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces,
-    ShellAgentContext,
+    get_chart_for_cert_manager_config, get_chart_for_cluster_agent, get_chart_for_shell_agent,
+    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, ClusterAgentContext, CommonChart,
+    CoreDNSConfigChart, HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
-use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName};
+use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 use serde::{Deserialize, Serialize};
@@ -477,6 +477,111 @@ pub fn ec2_aws_helm_charts(
         })
     }
 
+    let qovery_engine_version: QoveryEngine = get_qovery_app_version(
+        QoveryAppName::Engine,
+        &chart_config_prerequisites.infra_options.engine_version_controller_token,
+        &chart_config_prerequisites.infra_options.qovery_api_url,
+        &chart_config_prerequisites.cluster_id,
+    )?;
+
+    let qovery_engine = CommonChart {
+        chart_info: ChartInfo {
+            name: "qovery-engine".to_string(),
+            action: get_engine_helm_action_from_location(&chart_config_prerequisites.qovery_engine_location),
+            path: chart_path("common/charts/qovery-engine"),
+            namespace: HelmChartNamespaces::Qovery,
+            timeout_in_seconds: 900,
+            values: vec![
+                ChartSetValue {
+                    key: "image.tag".to_string(),
+                    value: qovery_engine_version.version,
+                },
+                ChartSetValue {
+                    key: "autoscaler.min_replicas".to_string(),
+                    value: "1".to_string(),
+                },
+                ChartSetValue {
+                    key: "metrics.enabled".to_string(),
+                    value: "false".to_string(), // update this field if we decide to add prometheus support later
+                },
+                ChartSetValue {
+                    key: "volumes.storageClassName".to_string(),
+                    value: "aws-ebs-gp2-0".to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.QOVERY_NATS_URL".to_string(),
+                    value: chart_config_prerequisites.infra_options.qovery_nats_url.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.QOVERY_NATS_USER".to_string(),
+                    value: chart_config_prerequisites.infra_options.qovery_nats_user.to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.QOVERY_NATS_PASSWORD".to_string(),
+                    value: chart_config_prerequisites
+                        .infra_options
+                        .qovery_nats_password
+                        .to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.ORGANIZATION".to_string(),
+                    value: chart_config_prerequisites.organization_id.clone(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.CLOUD_PROVIDER".to_string(),
+                    value: chart_config_prerequisites.cloud_provider.clone(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.REGION".to_string(),
+                    value: chart_config_prerequisites.region.clone(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.LIB_ROOT_DIR".to_string(),
+                    value: "/home/qovery/lib".to_string(),
+                },
+                ChartSetValue {
+                    key: "environmentVariables.DOCKER_HOST".to_string(),
+                    value: "tcp://0.0.0.0:2375".to_string(),
+                },
+                // engine resources limits
+                ChartSetValue {
+                    key: "engineResources.limits.cpu".to_string(),
+                    value: "1".to_string(),
+                },
+                ChartSetValue {
+                    key: "engineResources.requests.cpu".to_string(),
+                    value: "500m".to_string(),
+                },
+                ChartSetValue {
+                    key: "engineResources.limits.memory".to_string(),
+                    value: "512Mi".to_string(),
+                },
+                ChartSetValue {
+                    key: "engineResources.requests.memory".to_string(),
+                    value: "512Mi".to_string(),
+                },
+                // build resources limits
+                ChartSetValue {
+                    key: "buildResources.limits.cpu".to_string(),
+                    value: "1".to_string(),
+                },
+                ChartSetValue {
+                    key: "buildResources.requests.cpu".to_string(),
+                    value: "500m".to_string(),
+                },
+                ChartSetValue {
+                    key: "buildResources.limits.memory".to_string(),
+                    value: "4Gi".to_string(),
+                },
+                ChartSetValue {
+                    key: "buildResources.requests.memory".to_string(),
+                    value: "4Gi".to_string(),
+                },
+            ],
+            ..Default::default()
+        },
+    };
+
     // chart deployment order matters!!!
     let level_1: Vec<Box<dyn HelmChart>> = vec![
         Box::new(aws_ebs_csi_driver),
@@ -499,6 +604,7 @@ pub fn ec2_aws_helm_charts(
         Box::new(nginx_ingress_wildcard_dns_record),
         Box::new(cert_manager_config),
         Box::new(qovery_agent), // TODO: Migrate to the new cluster agent
+        Box::new(qovery_engine),
         Box::new(cluster_agent),
         Box::new(shell_agent),
     ];

@@ -92,7 +92,8 @@ impl Cluster<AWS, Options> for AWS {
         let build_platform = Box::new(build_platform_local_docker(context, logger.clone()));
 
         // use AWS
-        let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(AWS::cloud_provider(context));
+        let cloud_provider: Arc<Box<dyn CloudProvider>> =
+            Arc::new(AWS::cloud_provider(context, kubernetes_kind.clone()));
         let dns_provider = match kubernetes_kind {
             KubernetesKind::Ec2 => Arc::new(dns_provider_qoverydns(context, cluster_domain)),
             _ => Arc::new(dns_provider_cloudflare(context, cluster_domain)),
@@ -101,7 +102,6 @@ impl Cluster<AWS, Options> for AWS {
         let kubernetes = get_environment_test_kubernetes(
             context,
             cloud_provider.clone(),
-            kubernetes_kind,
             kubernetes_version.as_str(),
             dns_provider.clone(),
             logger.clone(),
@@ -121,7 +121,7 @@ impl Cluster<AWS, Options> for AWS {
         )
     }
 
-    fn cloud_provider(context: &Context) -> Box<AWS> {
+    fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind) -> Box<AWS> {
         let secrets = FuncTestsSecrets::new();
         let aws_region =
             AwsRegion::from_str(secrets.AWS_DEFAULT_REGION.unwrap().as_str()).expect("AWS region not supported");
@@ -144,7 +144,7 @@ impl Cluster<AWS, Options> for AWS {
                 .expect("AWS_SECRET_ACCESS_KEY is not set")
                 .as_str(),
             aws_region.get_zones_to_string(),
-            KubernetesKind::Eks,
+            kubernetes_kind,
             TerraformStateCredentials {
                 access_key_id: secrets
                     .TERRAFORM_AWS_ACCESS_KEY_ID

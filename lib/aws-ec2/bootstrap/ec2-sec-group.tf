@@ -44,5 +44,43 @@ resource "aws_security_group" "ec2_instance" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  // MySQL
+  ingress {
+    description = "MySQL access"
+    from_port   = 3306
+    protocol    = "tcp"
+    to_port     = 3306
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  // PostgreSQL
+  ingress {
+    description = "PostgreSQL access"
+    from_port   = 5432
+    protocol    = "tcp"
+    to_port     = 5432
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  // MongoDB
+  ingress {
+    description = "MongoDB access"
+    from_port   = 27017
+    protocol    = "tcp"
+    to_port     = 27017
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  // Redis
+  ingress {
+    description = "Redis access"
+    from_port   = 6379
+    protocol    = "tcp"
+    to_port     = 6379
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+
   tags = local.tags_ec2
 }
+

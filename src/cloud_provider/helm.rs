@@ -101,6 +101,8 @@ impl ChartInfo {
         custom_namespace: String,
         timeout_in_seconds: i64,
         values_files: Vec<String>,
+        values: Vec<ChartSetValue>,
+        values_string: Vec<ChartSetValue>,
         parse_stderr_for_error: bool,
         k8s_selector: Option<String>,
     ) -> Self {
@@ -111,6 +113,8 @@ impl ChartInfo {
             custom_namespace: Some(custom_namespace),
             timeout_in_seconds,
             values_files,
+            values,
+            values_string,
             parse_stderr_for_error,
             k8s_selector,
             ..Default::default()

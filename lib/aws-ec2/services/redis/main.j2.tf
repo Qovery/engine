@@ -3,6 +3,10 @@ data "aws_vpc" "selected" {
     name = "tag:ClusterId"
     values = [var.kubernetes_cluster_id]
   }
+  filter {
+    name   = "tag:QoveryProduct"
+    values = ["EC2"]
+  }
 }
 
 data "aws_subnet_ids" "selected" {
@@ -18,13 +22,14 @@ data "aws_subnet_ids" "selected" {
 }
 
 data "aws_security_group" "selected" {
+  name = "qovery-ec2-${var.kubernetes_cluster_id}"
   filter {
-    name = "tag:Name"
-    values = ["qovery-eks-workers"]
+    name = "tag:ClusterId"
+    values = [var.kubernetes_cluster_id]
   }
   filter {
-    name   = "tag:kubernetes.io/cluster/${var.kubernetes_cluster_id}"
-    values = ["owned"]
+    name   = "tag:QoveryProduct"
+    values = ["EC2"]
   }
 }
 
@@ -32,43 +37,6 @@ data "aws_security_group" "selected" {
 locals {
   final_snap_timestamp = replace(timestamp(), "/[- TZ:]/", "")
   final_snapshot_name = "${var.final_snapshot_name}-${local.final_snap_timestamp}"
-}
-
-resource "helm_release" "elasticache_instance_external_name" {
-  name = "${aws_elasticache_cluster.elasticache_cluster.id}-externalname"
-  chart = "external-name-svc"
-  namespace = "{{namespace}}"
-  atomic = true
-  max_history = 50
-
-  set {
-    name = "target_hostname"
-    value = aws_elasticache_cluster.elasticache_cluster.cache_nodes.0.address
-  }
-
-  set {
-    name = "source_fqdn"
-    value = "{{database_fqdn}}"
-  }
-
-  set {
-    name = "app_id"
-    value = "{{database_id}}"
-  }
-
-  set {
-    name = "service_name"
-    value = "{{service_name}}"
-  }
-
-  set {
-    name = "publicly_accessible"
-    value = var.publicly_accessible
-  }
-
-  depends_on = [
-    aws_elasticache_cluster.elasticache_cluster
-  ]
 }
 
 resource "aws_elasticache_cluster" "elasticache_cluster" {

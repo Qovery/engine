@@ -4,7 +4,7 @@ locals {
   tags_ec2_vpc = merge(
   local.tags_common,
   {
-    Name = "qovery-ec2-workers",
+    Name = "qovery-ec2-${var.kubernetes_cluster_id}",
     "kubernetes.io/cluster/qovery-${var.kubernetes_cluster_id}" = "shared",
     "kubernetes.io/role/elb" = 1,
     {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds,{% endif %}

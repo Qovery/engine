@@ -78,13 +78,12 @@ impl Cluster<DO, DoksOptions> for DO {
         let build_platform = Box::new(build_platform_local_docker(context, logger.clone()));
 
         // use Digital Ocean
-        let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(Self::cloud_provider(context));
+        let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(Self::cloud_provider(context, kubernetes_kind));
         let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_cloudflare(context, cluster_domain));
 
         let k = get_environment_test_kubernetes(
             context,
             cloud_provider.clone(),
-            kubernetes_kind,
             kubernetes_version.as_str(),
             dns_provider.clone(),
             logger.clone(),
@@ -104,7 +103,7 @@ impl Cluster<DO, DoksOptions> for DO {
         )
     }
 
-    fn cloud_provider(context: &Context) -> Box<DO> {
+    fn cloud_provider(context: &Context, _kubernetes_kind: KubernetesKind) -> Box<DO> {
         let secrets = FuncTestsSecrets::new();
         let cluster_id = secrets
             .DIGITAL_OCEAN_TEST_CLUSTER_ID
