@@ -149,7 +149,10 @@ pub trait Kubernetes: Listen {
                             self.get_event_details(stage.clone()),
                             err.into(),
                         );
-                        self.logger().log(EngineEvent::Error(error.clone(), None));
+                        self.logger().log(EngineEvent::Info(
+                            self.get_event_details(stage.clone()),
+                            EventMessage::new_from_safe("Retrying to get kubeconfig file.".to_string()),
+                        ));
                         retry::OperationResult::Retry(error)
                     }
                 }
