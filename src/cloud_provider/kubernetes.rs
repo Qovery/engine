@@ -1419,7 +1419,7 @@ where
                     Action::Nothing => {} // should not happens
                 };
 
-                thread::sleep(Duration::from_secs(10));
+                thread::sleep(Duration::from_secs(30));
 
                 // watch for thread termination
                 match rx.try_recv() {
