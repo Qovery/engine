@@ -12,6 +12,10 @@ provider:
   cloudflare:
     apiToken: ""
     email: ""
+  pdns:
+    apiKey: ""
+    apiUrl: ""
+    apiPort: ""
 
 # Let's encrypt info
 acme:

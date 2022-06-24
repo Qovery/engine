@@ -5,7 +5,7 @@ use std::any::Any;
 use digitalocean::DigitalOcean;
 use uuid::Uuid;
 
-use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
+use crate::cloud_provider::{kubernetes::Kind as KubernetesKind, CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, GeneralStep, Stage, ToTransmitter, Transmitter};
@@ -67,6 +67,10 @@ impl CloudProvider for DO {
 
     fn kind(&self) -> Kind {
         Kind::Do
+    }
+
+    fn kubernetes_kind(&self) -> crate::cloud_provider::kubernetes::Kind {
+        KubernetesKind::Doks
     }
 
     fn id(&self) -> &str {

@@ -1,7 +1,8 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
-    get_chart_for_cluster_agent, get_chart_for_shell_agent, ChartInfo, ChartSetValue, ClusterAgentContext, CommonChart,
-    CoreDNSConfigChart, HelmChart, HelmChartNamespaces, ShellAgentContext,
+    get_chart_for_cert_manager_config, get_chart_for_cluster_agent, get_chart_for_shell_agent, ChartInfo,
+    ChartSetValue, ClusterAgentContext, CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces,
+    ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName};
 use crate::dns_provider::DnsProviderConfiguration;
@@ -46,6 +47,7 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
     pub managed_dns_name: String,
+    pub managed_dns_name_wildcarded: String,
     pub managed_dns_helm_format: String,
     pub managed_dns_resolvers_terraform_format: String,
     pub external_dns_provider: String,
@@ -184,6 +186,45 @@ pub fn ec2_aws_helm_charts(
         },
     };
 
+    let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
+    if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {
+        qovery_cert_manager_webhook = Some(CommonChart {
+            chart_info: ChartInfo {
+                name: "qovery-cert-manager-webhook".to_string(),
+                namespace: HelmChartNamespaces::CertManager,
+                path: chart_path("common/charts/qovery-cert-manager-webhook"),
+                values: vec![
+                    ChartSetValue {
+                        key: "secret.apiKey".to_string(),
+                        value: qovery_dns_config.api_key.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "secret.apiUrl".to_string(),
+                        value: qovery_dns_config.api_url.to_string(), // URL standard port will be omitted from string as standard (80 HTTP & 443 HTTPS)
+                    },
+                    ChartSetValue {
+                        key: "certManager.serviceAccountName".to_string(),
+                        value: "cert-manager".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "certManager.namespace".to_string(),
+                        value: HelmChartNamespaces::CertManager.to_string(),
+                    },
+                    // resources limits
+                    ChartSetValue {
+                        key: "resources.limits.memory".to_string(),
+                        value: "48Mi".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "resources.requests.memory".to_string(),
+                        value: "48Mi".to_string(),
+                    },
+                ],
+                ..Default::default()
+            },
+        });
+    }
+
     let metrics_server = CommonChart {
         chart_info: ChartInfo {
             name: "metrics-server".to_string(),
@@ -206,7 +247,7 @@ pub fn ec2_aws_helm_charts(
     let cert_manager = CommonChart {
         chart_info: ChartInfo {
             name: "cert-manager".to_string(),
-            path: chart_path("common/charts/cert-manager"),
+            path: chart_path("common/charts/cert-manager-1.8"),
             namespace: HelmChartNamespaces::CertManager,
             values: vec![
                 ChartSetValue {
@@ -265,13 +306,13 @@ pub fn ec2_aws_helm_charts(
         },
     };
 
-    // let cert_manager_config = get_chart_for_cert_manager_config(
-    //     &chart_config_prerequisites.dns_provider_config,
-    //     chart_path("common/charts/cert-manager-configs"),
-    //     chart_config_prerequisites.dns_email_report.clone(),
-    //     chart_config_prerequisites.acme_url.clone(),
-    //     chart_config_prerequisites.managed_dns_helm_format.clone(),
-    // );
+    let cert_manager_config = get_chart_for_cert_manager_config(
+        &chart_config_prerequisites.dns_provider_config,
+        chart_path("common/charts/cert-manager-configs"),
+        chart_config_prerequisites.dns_email_report.clone(),
+        chart_config_prerequisites.acme_url.clone(),
+        chart_config_prerequisites.managed_dns_helm_format.clone(),
+    );
 
     let nginx_ingress = CommonChart {
         chart_info: ChartInfo {
@@ -303,6 +344,29 @@ pub fn ec2_aws_helm_charts(
                 ChartSetValue {
                     key: "defaultBackend.resources.requests.memory".to_string(),
                     value: "32Mi".to_string(),
+                },
+            ],
+            ..Default::default()
+        },
+    };
+
+    let nginx_ingress_wildcard_dns_record = CommonChart {
+        chart_info: ChartInfo {
+            name: "nginx-ingress-wildcard-dns-record".to_string(),
+            path: chart_path("common/charts/external-name-svc"),
+            namespace: HelmChartNamespaces::NginxIngress,
+            values: vec![
+                ChartSetValue {
+                    key: "serviceName".to_string(),
+                    value: "nginx-ingress-wildcard-dns-record".to_string(),
+                },
+                ChartSetValue {
+                    key: "source".to_string(),
+                    value: chart_config_prerequisites.managed_dns_name_wildcarded.to_string(),
+                },
+                ChartSetValue {
+                    key: "destination".to_string(),
+                    value: qovery_terraform_config.aws_ec2_public_hostname,
                 },
             ],
             ..Default::default()
@@ -390,7 +454,7 @@ pub fn ec2_aws_helm_charts(
                 },
                 ChartSetValue {
                     key: "environmentVariables.LOKI_URL".to_string(),
-                    value: format!("http://{}.cluster.local:3100", "not-installed"),
+                    value: format!("http://{}", "not-installed"),
                 },
                 // resources limits
                 ChartSetValue {
@@ -423,7 +487,7 @@ pub fn ec2_aws_helm_charts(
 
     let level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
-    let level_3: Vec<Box<dyn HelmChart>> = vec![];
+    let mut level_3: Vec<Box<dyn HelmChart>> = vec![];
 
     let level_4: Vec<Box<dyn HelmChart>> = vec![];
 
@@ -432,11 +496,16 @@ pub fn ec2_aws_helm_charts(
     let level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
 
     let level_7: Vec<Box<dyn HelmChart>> = vec![
-        //Box::new(cert_manager_config),
+        Box::new(nginx_ingress_wildcard_dns_record),
+        Box::new(cert_manager_config),
         Box::new(qovery_agent), // TODO: Migrate to the new cluster agent
         Box::new(cluster_agent),
         Box::new(shell_agent),
     ];
+
+    if let Some(qovery_webhook) = qovery_cert_manager_webhook {
+        level_3.push(Box::new(qovery_webhook));
+    }
 
     info!("charts configuration preparation finished");
     Ok(vec![level_1, level_2, level_3, level_4, level_5, level_6, level_7])

@@ -1,5 +1,3 @@
-use crate::errors::EngineError;
-use crate::events::EventDetails;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -70,22 +68,21 @@ pub struct NodeGroups {
     pub id: Option<String>,
     pub min_nodes: i32,
     pub max_nodes: i32,
+    pub desired_nodes: Option<i32>,
     pub instance_type: String,
     pub disk_size_in_gib: i32,
 }
 
-impl NodeGroups {
-    pub fn get_desired_nodes(&self, event_details: EventDetails, actual_nodes_count: i32) -> Result<i32, EngineError> {
-        if actual_nodes_count > self.max_nodes {
-            Err(EngineError::new_cannot_deploy_max_nodes_exceeded(
-                event_details,
-                actual_nodes_count,
-                self.max_nodes,
-            ))
-        } else {
-            Ok(self.max_nodes)
-        }
-    }
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+pub struct NodeGroupsWithDesiredState {
+    pub name: String,
+    pub id: Option<String>,
+    pub min_nodes: i32,
+    pub max_nodes: i32,
+    pub desired_size: i32,
+    pub enable_desired_size: bool,
+    pub instance_type: String,
+    pub disk_size_in_gib: i32,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -100,4 +97,14 @@ pub struct NodeGroupsFormat {
 pub struct InstanceEc2 {
     pub instance_type: String,
     pub disk_size_in_gib: i32,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum KubernetesClusterAction {
+    Bootstrap,
+    Update(Option<i32>),
+    Upgrade(Option<i32>),
+    Pause,
+    Resume(Option<i32>),
+    Delete,
 }

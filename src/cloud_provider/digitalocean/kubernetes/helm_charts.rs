@@ -147,7 +147,7 @@ pub fn do_helm_charts(
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
     let prometheus_internal_url = format!("http://prometheus-operated.{}.svc", prometheus_namespace);
     let loki_namespace = HelmChartNamespaces::Logging;
-    let loki_kube_dns_prefix = format!("loki.{}.svc", loki_namespace);
+    let loki_kube_dns_name = format!("loki.{}.svc:3100", loki_namespace);
 
     // Qovery storage class
     let q_storage_class = CommonChart {
@@ -211,12 +211,13 @@ pub fn do_helm_charts(
             name: "promtail".to_string(),
             last_breaking_version_requiring_restart: Some(Version::new(5, 1, 0)),
             path: chart_path("common/charts/promtail"),
+            values_files: vec![chart_path("chart_values/promtail.yaml")],
             // because of priorityClassName, we need to add it to kube-system
             namespace: HelmChartNamespaces::KubeSystem,
             values: vec![
                 ChartSetValue {
-                    key: "loki.serviceName".to_string(),
-                    value: loki_kube_dns_prefix.clone(),
+                    key: "config.clients[0].url".to_string(),
+                    value: format!("http://{}/loki/api/v1/push", &loki_kube_dns_name),
                 },
                 // it's mandatory to get this class to ensure paused infra will behave properly on restore
                 ChartSetValue {
@@ -250,6 +251,7 @@ pub fn do_helm_charts(
             name: "loki".to_string(),
             path: chart_path("common/charts/loki"),
             namespace: loki_namespace,
+            timeout_in_seconds: 900,
             values_files: vec![chart_path("chart_values/loki.yaml")],
             values: vec![
                 ChartSetValue {
@@ -823,7 +825,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "environmentVariables.LOKI_URL".to_string(),
-                    value: format!("http://{}.cluster.local:3100", loki_kube_dns_prefix),
+                    value: format!("http://{}", loki_kube_dns_name),
                 },
                 // resources limits
                 ChartSetValue {

@@ -1,11 +1,10 @@
 use std::net::TcpStream;
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::mpsc;
-use std::sync::mpsc::TryRecvError;
+use std::sync::mpsc::{RecvTimeoutError, TryRecvError};
+use std::sync::{mpsc, Arc, Barrier};
 use std::thread;
 use std::time::Duration;
-
 use tera::Context as TeraContext;
 use uuid::Uuid;
 
@@ -22,6 +21,7 @@ use crate::cmd::kubectl::{
     kubectl_exec_scale_replicas_by_selector, ScalingKind,
 };
 use crate::cmd::structs::{KubernetesPodStatusPhase, LabelsContent};
+use crate::deployment::deployment_info::{format_app_deployment_info, get_app_deployment_info};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
 use crate::io_models::ProgressLevel::Info;
@@ -30,7 +30,10 @@ use crate::io_models::{
     ProgressLevel, ProgressScope, QoveryIdentifier,
 };
 use crate::logger::Logger;
+use crate::models::application::ApplicationService;
 use crate::models::types::VersionsNumber;
+use crate::runtime::block_on;
+use crate::utilities::to_short_id;
 
 // todo: delete this useless trait
 pub trait Service: ToTransmitter {
@@ -127,19 +130,19 @@ pub trait StatelessService: Service + Create + Pause + Delete {
     fn as_stateless_service(&self) -> &dyn StatelessService;
     fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), EngineError> {
         match self.action() {
-            crate::cloud_provider::service::Action::Create => self.on_create(deployment_target),
-            crate::cloud_provider::service::Action::Delete => self.on_delete(deployment_target),
-            crate::cloud_provider::service::Action::Pause => self.on_pause(deployment_target),
-            crate::cloud_provider::service::Action::Nothing => Ok(()),
+            Action::Create => self.on_create(deployment_target),
+            Action::Delete => self.on_delete(deployment_target),
+            Action::Pause => self.on_pause(deployment_target),
+            Action::Nothing => Ok(()),
         }
     }
 
     fn exec_check_action(&self) -> Result<(), EngineError> {
         match self.action() {
-            crate::cloud_provider::service::Action::Create => self.on_create_check(),
-            crate::cloud_provider::service::Action::Delete => self.on_delete_check(),
-            crate::cloud_provider::service::Action::Pause => self.on_pause_check(),
-            crate::cloud_provider::service::Action::Nothing => Ok(()),
+            Action::Create => self.on_create_check(),
+            Action::Delete => self.on_delete_check(),
+            Action::Pause => self.on_pause_check(),
+            Action::Nothing => Ok(()),
         }
     }
 }
@@ -148,19 +151,19 @@ pub trait StatefulService: Service + Create + Pause + Delete {
     fn as_stateful_service(&self) -> &dyn StatefulService;
     fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), EngineError> {
         match self.action() {
-            crate::cloud_provider::service::Action::Create => self.on_create(deployment_target),
-            crate::cloud_provider::service::Action::Delete => self.on_delete(deployment_target),
-            crate::cloud_provider::service::Action::Pause => self.on_pause(deployment_target),
-            crate::cloud_provider::service::Action::Nothing => Ok(()),
+            Action::Create => self.on_create(deployment_target),
+            Action::Delete => self.on_delete(deployment_target),
+            Action::Pause => self.on_pause(deployment_target),
+            Action::Nothing => Ok(()),
         }
     }
 
     fn exec_check_action(&self) -> Result<(), EngineError> {
         match self.action() {
-            crate::cloud_provider::service::Action::Create => self.on_create_check(),
-            crate::cloud_provider::service::Action::Delete => self.on_delete_check(),
-            crate::cloud_provider::service::Action::Pause => self.on_pause_check(),
-            crate::cloud_provider::service::Action::Nothing => Ok(()),
+            Action::Create => self.on_create_check(),
+            Action::Delete => self.on_delete_check(),
+            Action::Pause => self.on_pause_check(),
+            Action::Nothing => Ok(()),
         }
     }
 
@@ -417,7 +420,7 @@ where
     });
 
     // create a namespace with labels if do not exists
-    crate::cmd::kubectl::kubectl_exec_create_namespace(
+    cmd::kubectl::kubectl_exec_create_namespace(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
         namespace_labels,
@@ -457,7 +460,7 @@ where
         event_details.clone(),
     )?;
 
-    crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
+    cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
         kubernetes_config_file_path.as_str(),
         environment.namespace(),
         service.selector().unwrap_or_default().as_str(),
@@ -633,7 +636,7 @@ where
             ));
         }
 
-        let _ = crate::cmd::terraform::terraform_init_validate_plan_apply(
+        let _ = cmd::terraform::terraform_init_validate_plan_apply(
             workspace_dir.as_str(),
             service.context().is_dry_run_deploy(),
         )
@@ -691,7 +694,7 @@ where
         });
 
         // create a namespace with labels if it does not exist
-        crate::cmd::kubectl::kubectl_exec_create_namespace(
+        cmd::kubectl::kubectl_exec_create_namespace(
             &kubernetes_config_file_path,
             environment.namespace(),
             namespace_labels,
@@ -732,7 +735,7 @@ where
         )?;
 
         // check app status
-        let is_pod_ready = crate::cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
+        let is_pod_ready = cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
             &kubernetes_config_file_path,
             environment.namespace(),
             service.selector().unwrap_or_default().as_str(),
@@ -824,7 +827,7 @@ where
             ));
         }
 
-        match crate::cmd::terraform::terraform_init_validate_destroy(workspace_dir.as_str(), true) {
+        match cmd::terraform::terraform_init_validate_destroy(workspace_dir.as_str(), true) {
             Ok(_) => {
                 logger.log(EngineEvent::Info(
                     event_details,
@@ -907,7 +910,7 @@ where
 
                 let progress_info = ProgressInfo::new(
                     service.progress_scope(),
-                    ProgressLevel::Info,
+                    Info,
                     Some(message.to_string()),
                     service.context().execution_id(),
                 );
@@ -1011,7 +1014,7 @@ where
 
     let progress_info = ProgressInfo::new(
         service.progress_scope(),
-        ProgressLevel::Info,
+        Info,
         Some(message.to_string()),
         kubernetes.context().execution_id(),
     );
@@ -1098,7 +1101,7 @@ where
         _ => {
             let progress_info = ProgressInfo::new(
                 service.progress_scope(),
-                ProgressLevel::Info,
+                Info,
                 Some(format!(
                     "{} succeeded for {} {}",
                     action_verb,
@@ -1138,7 +1141,7 @@ where
     let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
 
     // get logs
-    let logs = crate::cmd::kubectl::kubectl_exec_logs(
+    let logs = cmd::kubectl::kubectl_exec_logs(
         &kubernetes_config_file_path,
         environment.namespace(),
         selector.as_str(),
@@ -1156,7 +1159,7 @@ where
     let _ = result.extend(logs);
 
     // get pod state
-    let pods = crate::cmd::kubectl::kubectl_exec_get_pods(
+    let pods = kubectl_exec_get_pods(
         &kubernetes_config_file_path,
         Some(environment.namespace()),
         Some(selector.as_str()),
@@ -1196,7 +1199,7 @@ where
     }
 
     // get pod events
-    let events = crate::cmd::kubectl::kubectl_exec_get_json_events(
+    let events = cmd::kubectl::kubectl_exec_get_json_events(
         &kubernetes_config_file_path,
         environment.namespace(),
         kubernetes.cloud_provider().credentials_environment_variables(),
@@ -1229,7 +1232,7 @@ pub fn helm_uninstall_release(
 ) -> Result<(), EngineError> {
     let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
 
-    let helm = cmd::helm::Helm::new(
+    let helm = helm::Helm::new(
         &kubernetes_config_file_path,
         &kubernetes.cloud_provider().credentials_environment_variables(),
     )
@@ -1242,7 +1245,7 @@ pub fn helm_uninstall_release(
 
 /// This function call (start|pause|delete)_in_progress function every 10 seconds when a
 /// long blocking task is running.
-pub fn send_progress_on_long_task<S, R, F>(service: &S, action: Action, long_task: F) -> R
+pub fn send_progress_on_long_task<S, R, F>(service: &S, action: Action, target: &DeploymentTarget, long_task: F) -> R
 where
     S: Service + Listen,
     F: Fn() -> R,
@@ -1266,7 +1269,102 @@ where
         Action::Nothing => None,
     };
 
-    send_progress_on_long_task_with_message(service, waiting_message, action, long_task)
+    send_progress_on_long_task_with_message(service, waiting_message, action, target, long_task)
+}
+
+/// This function call (start|pause|delete)_in_progress function every 10 seconds when a
+/// long blocking task is running.
+pub fn send_progress_for_application<R, F>(
+    app: &dyn ApplicationService,
+    action: Action,
+    target: &DeploymentTarget,
+    long_task: F,
+) -> R
+where
+    F: Fn() -> R,
+{
+    let event_details = app.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+    let logger = app.logger().clone_dyn();
+    let execution_id = app.context().execution_id().to_string();
+    let scope = app.progress_scope();
+    let app_id = *app.long_id();
+    let namespace = target.environment.namespace().to_string();
+    let kube_client = target.kube.clone();
+    let log = {
+        let listeners = app.listeners().clone();
+        let step = match action {
+            Action::Create => EnvironmentStep::Deploy,
+            Action::Pause => EnvironmentStep::Pause,
+            Action::Delete => EnvironmentStep::Delete,
+            Action::Nothing => EnvironmentStep::Deploy, // should not happen
+        };
+        let event_details = EventDetails::clone_changing_stage(event_details, Stage::Environment(step));
+
+        move |msg: String| {
+            let listeners_helper = ListenersHelper::new(&listeners);
+            listeners_helper.deployment_in_progress(ProgressInfo::new(
+                scope.clone(),
+                Info,
+                Some(msg.clone()),
+                execution_id.clone(),
+            ));
+            logger.log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
+        }
+    };
+
+    // stop the thread when the blocking task is done
+    let (tx, rx) = mpsc::channel();
+    let deployment_start = Arc::new(Barrier::new(2));
+
+    // monitor thread to notify user while the blocking task is executed
+    let _ = thread::Builder::new().name("deployment-monitor".to_string()).spawn({
+        let deployment_start = deployment_start.clone();
+
+        move || {
+            // Before the launch of the deployment
+            if let Ok(deployment_info) = block_on(get_app_deployment_info(&kube_client, &app_id, &namespace)) {
+                log(format!(
+                    "🛰 Application `{}` deployment is going to start: You have {} pod(s) running, {} service(s) running, {} network volume(s)",
+                    to_short_id(&app_id),
+                    deployment_info.pods.len(),
+                    deployment_info.services.len(),
+                    deployment_info.pvc.len()
+                ));
+            }
+
+            // Wait to start the deployment
+            deployment_start.wait();
+
+            loop {
+                // watch for thread termination
+                match rx.recv_timeout(Duration::from_secs(10)) {
+                    Err(RecvTimeoutError::Timeout) => {}
+                    Ok(_) | Err(RecvTimeoutError::Disconnected) => break,
+                }
+
+                // Fetch deployment information
+                let deployment_info = match block_on(get_app_deployment_info(&kube_client, &app_id, &namespace)) {
+                    Ok(deployment_info) => deployment_info,
+                    Err(err) => {
+                        log(format!("Error while retrieving deployment information: {}", err));
+                        continue;
+                    }
+                };
+
+                // Format the deployment information and send to it to user
+                for message in format_app_deployment_info(&deployment_info).into_iter() {
+                    log(message);
+                }
+            }
+        }
+    });
+
+    // Wait for our watcher thread to be ready before starting
+    let _ = deployment_start.wait();
+    let blocking_task_result = long_task();
+    let _ = tx.send(());
+
+    blocking_task_result
 }
 
 /// This function call (start|pause|delete)_in_progress function every 10 seconds when a
@@ -1275,6 +1373,7 @@ pub fn send_progress_on_long_task_with_message<S, R, F>(
     service: &S,
     waiting_message: Option<String>,
     action: Action,
+    _target: &DeploymentTarget,
     long_task: F,
 ) -> R
 where
@@ -1283,7 +1382,7 @@ where
 {
     let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
     let logger = service.logger().clone_dyn();
-    let listeners = std::clone::Clone::clone(service.listeners());
+    let listeners = service.listeners().clone();
 
     let progress_info = ProgressInfo::new(
         service.progress_scope(),
@@ -1295,64 +1394,53 @@ where
     let (tx, rx) = mpsc::channel();
 
     // monitor thread to notify user while the blocking task is executed
-    let _ = std::thread::Builder::new()
-        .name("task-monitor".to_string())
-        .spawn(move || {
-            // stop the thread when the blocking task is done
-            let listeners_helper = ListenersHelper::new(&listeners);
-            let action = action;
-            let progress_info = progress_info;
-            let waiting_message = waiting_message.clone().unwrap_or_else(|| "No message...".to_string());
+    let _ = thread::Builder::new().name("task-monitor".to_string()).spawn(move || {
+        // stop the thread when the blocking task is done
+        let listeners_helper = ListenersHelper::new(&listeners);
+        let action = action;
+        let progress_info = progress_info;
+        let waiting_message = waiting_message.clone().unwrap_or_else(|| "No message...".to_string());
 
-            loop {
-                // do notify users here
-                let progress_info = std::clone::Clone::clone(&progress_info);
-                let event_details = std::clone::Clone::clone(&event_details);
-                let event_message = EventMessage::new_from_safe(waiting_message.to_string());
+        loop {
+            // do notify users here
+            let progress_info = progress_info.clone();
+            let event_details = event_details.clone();
+            let event_message = EventMessage::new_from_safe(waiting_message.to_string());
 
-                match action {
-                    Action::Create => {
-                        listeners_helper.deployment_in_progress(progress_info);
-                        logger.log(EngineEvent::Info(
-                            EventDetails::clone_changing_stage(
-                                event_details,
-                                Stage::Environment(EnvironmentStep::Deploy),
-                            ),
-                            event_message,
-                        ));
-                    }
-                    Action::Pause => {
-                        listeners_helper.pause_in_progress(progress_info);
-                        logger.log(EngineEvent::Info(
-                            EventDetails::clone_changing_stage(
-                                event_details,
-                                Stage::Environment(EnvironmentStep::Pause),
-                            ),
-                            event_message,
-                        ));
-                    }
-                    Action::Delete => {
-                        listeners_helper.delete_in_progress(progress_info);
-                        logger.log(EngineEvent::Info(
-                            EventDetails::clone_changing_stage(
-                                event_details,
-                                Stage::Environment(EnvironmentStep::Delete),
-                            ),
-                            event_message,
-                        ));
-                    }
-                    Action::Nothing => {} // should not happens
-                };
-
-                thread::sleep(Duration::from_secs(10));
-
-                // watch for thread termination
-                match rx.try_recv() {
-                    Ok(_) | Err(TryRecvError::Disconnected) => break,
-                    Err(TryRecvError::Empty) => {}
+            match action {
+                Action::Create => {
+                    listeners_helper.deployment_in_progress(progress_info);
+                    logger.log(EngineEvent::Info(
+                        EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Deploy)),
+                        event_message,
+                    ));
                 }
+                Action::Pause => {
+                    listeners_helper.pause_in_progress(progress_info);
+                    logger.log(EngineEvent::Info(
+                        EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Pause)),
+                        event_message,
+                    ));
+                }
+                Action::Delete => {
+                    listeners_helper.delete_in_progress(progress_info);
+                    logger.log(EngineEvent::Info(
+                        EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Delete)),
+                        event_message,
+                    ));
+                }
+                Action::Nothing => {} // should not happens
+            };
+
+            thread::sleep(Duration::from_secs(10));
+
+            // watch for thread termination
+            match rx.try_recv() {
+                Ok(_) | Err(TryRecvError::Disconnected) => break,
+                Err(TryRecvError::Empty) => {}
             }
-        });
+        }
+    });
 
     let blocking_task_result = long_task();
     let _ = tx.send(());

@@ -80,7 +80,7 @@ variable "ec2_instance" {
 variable "k3s_config" {
   description = "K3s configuration"
   default = {
-    "version" = "v1.20.15+k3s1"
+    "version" = "v1.23.6+k3s1" // TODO: Kubernetes version to be dynamic
     "channel" = "stable"
     "exec" = "--disable=traefik --disable=metrics-server"
   }

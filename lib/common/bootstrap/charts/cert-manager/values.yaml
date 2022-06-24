@@ -104,7 +104,8 @@ resources: {}
 
 # Pod Security Context
 # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
-securityContext: {}
+securityContext:
+  runAsNonRoot: true
 # legacy securityContext parameter format: if enabled is set to true, only fsGroup and runAsUser are supported
 # securityContext:
 #   enabled: false
@@ -139,6 +140,9 @@ volumeMounts: []
 
 podLabels: {}
 
+# Optional additional labels to add to the controller Service
+# serviceLabels: {}
+
 # Optional DNS settings, useful if you have a public and private DNS zone for
 # the same domain on Route 53. What follows is an example of ensuring
 # cert-manager can access an ingress or DNS TXT records at all times.
@@ -170,7 +174,7 @@ prometheus:
 
 # Use these variables to configure the HTTP_PROXY environment variables
 # http_proxy: "http://proxy:8080"
-# http_proxy: "http://proxy:8080"
+# https_proxy: "https://proxy:8080"
 # no_proxy: 127.0.0.1,localhost
 
 # expects input structure as per specification https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.11/#affinity-v1-core
@@ -205,7 +209,10 @@ webhook:
     #   maxSurge: 0
     #   maxUnavailable: 1
 
-  securityContext: {}
+  # Pod Security Context to be set on the webhook component Pod
+  # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+  securityContext:
+    runAsNonRoot: true
 
   # Container Security Context to be set on the webhook component container
   # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
@@ -305,6 +312,17 @@ webhook:
   # running in hostNetwork mode.
   hostNetwork: false
 
+  # Specifies how the service should be handled. Useful if you want to expose the
+  # webhook to outside of the cluster. In some cases, the control plane cannot
+  # reach internal services.
+  serviceType: ClusterIP
+  # loadBalancerIP:
+
+  # Overrides the mutating webhook and validating webhook so they reach the webhook
+  # service using the `url` field instead of a service.
+  url: {}
+    # host:
+
 cainjector:
   enabled: true
   replicaCount: 1
@@ -315,7 +333,10 @@ cainjector:
     #   maxSurge: 0
     #   maxUnavailable: 1
 
-  securityContext: {}
+  # Pod Security Context to be set on the cainjector component Pod
+  # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+  securityContext:
+    runAsNonRoot: true
 
   # Container Security Context to be set on the cainjector component container
   # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/

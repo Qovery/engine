@@ -7,7 +7,7 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{
     send_progress_on_long_task, Kind, Kubernetes, KubernetesNodesType, KubernetesUpgradeStatus,
 };
-use crate::cloud_provider::models::NodeGroups;
+use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::kubectl::{kubectl_exec_scale_replicas, ScalingKind};
@@ -24,6 +24,8 @@ use function_name::named;
 use std::borrow::Borrow;
 use std::str::FromStr;
 use std::sync::Arc;
+
+use super::{get_rusoto_eks_client, should_update_desired_nodes};
 
 /// EKS kubernetes provider allowing to deploy an EKS cluster.
 pub struct EKS {
@@ -293,8 +295,21 @@ impl Kubernetes for EKS {
 
         let temp_dir = self.get_temp_dir(event_details.clone())?;
 
+        let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), self) {
+            Ok(value) => Some(value),
+            Err(_) => None,
+        };
+
+        let node_groups_with_desired_states = should_update_desired_nodes(
+            event_details.clone(),
+            self,
+            KubernetesClusterAction::Upgrade(None),
+            &self.nodes_groups,
+            aws_eks_client,
+        )?;
+
         // generate terraform files and copy them into temp dir
-        let mut context = kubernetes::tera_context(self, &self.zones, &self.nodes_groups, &self.options)?;
+        let mut context = kubernetes::tera_context(self, &self.zones, &node_groups_with_desired_states, &self.options)?;
 
         //
         // Upgrade master nodes
@@ -713,13 +728,154 @@ impl Listen for EKS {
     }
 }
 
+#[allow(dead_code)] // used in tests
+impl NodeGroupsWithDesiredState {
+    fn new(
+        name: String,
+        id: Option<String>,
+        min_nodes: i32,
+        max_nodes: i32,
+        desired_size: i32,
+        enable_desired_size: bool,
+        instance_type: String,
+        disk_size_in_gib: i32,
+    ) -> NodeGroupsWithDesiredState {
+        NodeGroupsWithDesiredState {
+            name,
+            id,
+            min_nodes,
+            max_nodes,
+            desired_size,
+            enable_desired_size,
+            instance_type,
+            disk_size_in_gib,
+        }
+    }
+}
+
+pub fn select_nodegroups_autoscaling_group_behavior(
+    action: KubernetesClusterAction,
+    nodegroup: &NodeGroups,
+) -> NodeGroupsWithDesiredState {
+    let nodegroup_desired_state = |x| {
+        // desired nodes can't be lower than min nodes
+        if x < nodegroup.min_nodes {
+            (true, nodegroup.min_nodes)
+        // desired nodes can't be higher than max nodes
+        } else if x > nodegroup.max_nodes {
+            (true, nodegroup.max_nodes)
+        } else {
+            (false, x)
+        }
+    };
+
+    match action {
+        KubernetesClusterAction::Bootstrap => {
+            NodeGroupsWithDesiredState::new_from_node_groups(nodegroup, nodegroup.min_nodes, true)
+        }
+        KubernetesClusterAction::Update(current_nodes) | KubernetesClusterAction::Upgrade(current_nodes) => {
+            let (upgrade_required, desired_state) = match current_nodes {
+                Some(x) => nodegroup_desired_state(x),
+                // if nothing is given, it's may be because the nodegroup has been deleted manually, so if we need to set it otherwise we won't be able to create a new nodegroup
+                None => (true, nodegroup.max_nodes),
+            };
+            NodeGroupsWithDesiredState::new_from_node_groups(nodegroup, desired_state, upgrade_required)
+        }
+        KubernetesClusterAction::Pause | KubernetesClusterAction::Delete => {
+            NodeGroupsWithDesiredState::new_from_node_groups(nodegroup, nodegroup.min_nodes, false)
+        }
+        KubernetesClusterAction::Resume(current_nodes) => {
+            // we always want to set the desired sate here to optimize the speed to return to the best situation
+            // TODO: (pmavro) save state on pause and reread it on resume
+            let resume_nodes_number = match current_nodes {
+                Some(x) => nodegroup_desired_state(x).1,
+                None => nodegroup.min_nodes,
+            };
+            NodeGroupsWithDesiredState::new_from_node_groups(nodegroup, resume_nodes_number, true)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::kubernetes::eks::EKS;
-    use crate::cloud_provider::models::NodeGroups;
+    use crate::cloud_provider::aws::kubernetes::eks::{select_nodegroups_autoscaling_group_behavior, EKS};
+    use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
     use crate::errors::Tag;
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
+
+    #[test]
+    fn test_nodegroup_autoscaling_group() {
+        let nodegroup_with_ds = |desired_nodes, enable_desired_nodes| {
+            NodeGroupsWithDesiredState::new(
+                "nodegroup".to_string(),
+                None,
+                3,
+                10,
+                desired_nodes,
+                enable_desired_nodes,
+                "t1000.xlarge".to_string(),
+                20,
+            )
+        };
+        let nodegroup = NodeGroups::new("nodegroup".to_string(), 3, 10, "t1000.xlarge".to_string(), 20).unwrap();
+
+        // bootstrap
+        assert_eq!(
+            select_nodegroups_autoscaling_group_behavior(KubernetesClusterAction::Bootstrap, &nodegroup),
+            nodegroup_with_ds(3, true) // need true because it's required from AWS to set desired node when initializing the autoscaler
+        );
+        // pause
+        assert_eq!(
+            select_nodegroups_autoscaling_group_behavior(KubernetesClusterAction::Pause, &nodegroup),
+            nodegroup_with_ds(3, false)
+        );
+        // delete
+        assert_eq!(
+            select_nodegroups_autoscaling_group_behavior(KubernetesClusterAction::Delete, &nodegroup),
+            nodegroup_with_ds(3, false)
+        );
+        // resume
+        assert_eq!(
+            select_nodegroups_autoscaling_group_behavior(KubernetesClusterAction::Resume(Some(5)), &nodegroup),
+            nodegroup_with_ds(5, true)
+        );
+        assert_eq!(
+            select_nodegroups_autoscaling_group_behavior(KubernetesClusterAction::Resume(None), &nodegroup),
+            // if no info is given during resume, we should take the max and let the autoscaler reduce afterwards
+            // but by setting it to the max, some users with have to ask support to raise limits
+            // also useful when a customer wants to try Qovery, and do not need to ask AWS support in the early phase
+            nodegroup_with_ds(3, true)
+        );
+        // update (we never have to change desired state during an update because the autoscaler manages it already)
+        assert_eq!(
+            select_nodegroups_autoscaling_group_behavior(KubernetesClusterAction::Update(Some(6)), &nodegroup),
+            nodegroup_with_ds(6, false)
+        );
+        assert_eq!(
+            select_nodegroups_autoscaling_group_behavior(KubernetesClusterAction::Update(None), &nodegroup),
+            nodegroup_with_ds(10, true) // max node is set just in case there is an issue with the AWS autoscaler to retrieve info, but should not be applied
+        );
+        // upgrade (we never have to change desired state during an update because the autoscaler manages it already)
+        assert_eq!(
+            select_nodegroups_autoscaling_group_behavior(KubernetesClusterAction::Upgrade(Some(7)), &nodegroup),
+            nodegroup_with_ds(7, false)
+        );
+        assert_eq!(
+            select_nodegroups_autoscaling_group_behavior(KubernetesClusterAction::Update(None), &nodegroup),
+            nodegroup_with_ds(10, true) // max node is set just in case there is an issue with the AWS autoscaler to retrieve info, but should not be applied
+        );
+
+        // test autocorrection of silly stuffs
+        assert_eq!(
+            select_nodegroups_autoscaling_group_behavior(KubernetesClusterAction::Update(Some(1)), &nodegroup),
+            nodegroup_with_ds(3, true) // set to minimum if desired is below min
+        );
+        assert_eq!(
+            select_nodegroups_autoscaling_group_behavior(KubernetesClusterAction::Update(Some(1000)), &nodegroup),
+            nodegroup_with_ds(10, true) // set to max if desired is above max
+        );
+    }
 
     #[test]
     fn test_allowed_eks_nodes() {

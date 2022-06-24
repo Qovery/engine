@@ -5,7 +5,7 @@ use rusoto_credential::StaticProvider;
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 use uuid::Uuid;
 
-use crate::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
+use crate::cloud_provider::{kubernetes::Kind as KubernetesKind, CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::errors::EngineError;
 use crate::events::{EventDetails, GeneralStep, Stage, ToTransmitter, Transmitter};
@@ -24,6 +24,7 @@ pub struct AWS {
     pub access_key_id: String,
     pub secret_access_key: String,
     pub zones: Vec<String>,
+    kubernetes_kind: KubernetesKind,
     terraform_state_credentials: TerraformStateCredentials,
     listeners: Listeners,
 }
@@ -38,6 +39,7 @@ impl AWS {
         access_key_id: &str,
         secret_access_key: &str,
         zones: Vec<String>,
+        kubernetes_kind: KubernetesKind,
         terraform_state_credentials: TerraformStateCredentials,
     ) -> Self {
         AWS {
@@ -49,6 +51,7 @@ impl AWS {
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
             zones,
+            kubernetes_kind,
             terraform_state_credentials,
             listeners: vec![],
         }
@@ -70,6 +73,10 @@ impl CloudProvider for AWS {
 
     fn kind(&self) -> Kind {
         Kind::Aws
+    }
+
+    fn kubernetes_kind(&self) -> KubernetesKind {
+        self.kubernetes_kind.clone()
     }
 
     fn id(&self) -> &str {

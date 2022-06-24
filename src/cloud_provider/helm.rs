@@ -918,7 +918,8 @@ pub fn get_chart_for_cert_manager_config(
             name: "cert-manager-configs".to_string(),
             path: chart_path,
             namespace: HelmChartNamespaces::CertManager,
-            backup_resources: Some(vec!["cert".to_string(), "issuer".to_string(), "clusterissuer".to_string()]),
+            // TODO: fix backup apply, it makes the chart deployment failed randomly
+            // backup_resources: Some(vec!["cert".to_string(), "issuer".to_string(), "clusterissuer".to_string()]),
             values: vec![
                 ChartSetValue {
                     key: "externalDnsProvider".to_string(),
@@ -953,7 +954,20 @@ pub fn get_chart_for_cert_manager_config(
                 value: x.cloudflare_email.clone(),
             })
         }
-        DnsProviderConfiguration::QoveryDns(_) => {}
+        DnsProviderConfiguration::QoveryDns(q) => {
+            cert_manager_config.chart_info.values_string.push(ChartSetValue {
+                key: "provider.pdns.apiPort".to_string(),
+                value: q.api_url_port.to_string(),
+            });
+            cert_manager_config.chart_info.values.push(ChartSetValue {
+                key: "provider.pdns.apiUrl".to_string(),
+                value: q.api_url_scheme_and_domain.to_string(),
+            });
+            cert_manager_config.chart_info.values.push(ChartSetValue {
+                key: "provider.pdns.apiKey".to_string(),
+                value: q.api_key.clone(),
+            });
+        }
     };
 
     cert_manager_config

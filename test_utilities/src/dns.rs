@@ -4,6 +4,7 @@ use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::dns_provider::qoverydns::QoveryDns;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::io_models::{Context, Domain};
+use url::Url;
 
 pub fn dns_provider_cloudflare(context: &Context, domain: &ClusterDomain) -> Box<dyn DnsProvider> {
     let secrets = FuncTestsSecrets::new();
@@ -38,14 +39,13 @@ pub fn dns_provider_qoverydns(context: &Context, domain: &ClusterDomain) -> Box<
     Box::new(QoveryDns::new(
         context.clone(),
         "qoverytestdnsqdns",
-        secrets
-            .QOVERY_DNS_API_URL
-            .expect("QOVERY_DNS_API_URL is not set")
-            .as_str(),
-        secrets
-            .QOVERY_DNS_API_PORT
-            .expect("QOVERY_DNS_API_PORT is not set")
-            .as_str(),
+        Url::parse(
+            secrets
+                .QOVERY_DNS_API_URL
+                .expect("QOVERY_DNS_API_URL is not set")
+                .as_str(),
+        )
+        .expect("QOVERY_DNS_API_URL is not a valid URL"),
         secrets
             .QOVERY_DNS_API_KEY
             .expect("QOVERY_DNS_API_KEY is not set")

@@ -13,6 +13,7 @@ metadata:
     projectLongId: {{ project_long_id }}
     fqdn: "{{ router_default_domain }}"
   annotations:
+    external-dns.alpha.kubernetes.io/exclude: "true" # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
     kubernetes.io/tls-acme: "true"
     {%- if custom_domains|length > 0 %}
     cert-manager.io/issuer: {{ id }}

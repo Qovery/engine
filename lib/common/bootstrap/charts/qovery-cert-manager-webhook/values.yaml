@@ -1,0 +1,46 @@
+groupName: acme.qovery.com
+
+certManager:
+  namespace: cert-manager
+  serviceAccountName: default
+
+image:
+  repository: registry.gitlab.com/qovery/backend/cert-manager-webhook-qovery
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  name: gitlab-qovery-cert-manager-webhook # It's expected to expose this secret for private gitlab repo
+  value: eyJhdXRocyI6eyJyZWdpc3RyeS5naXRsYWIuY29tIjp7InVzZXJuYW1lIjoiZ2l0bGFiK2RlcGxveS10b2tlbi0xMTA0Mzc5IiwicGFzc3dvcmQiOiI5V2JkczFObmtEV2ZvRDRWNXczaCIsImF1dGgiOiJaMmwwYkdGaUsyUmxjR3h2ZVMxMGIydGxiaTB4TVRBME16YzVPamxYWW1Sek1VNXVhMFJYWm05RU5GWTFkek5vIn19fQ==
+
+nameOverride: ""
+fullnameOverride: ""
+
+pki:
+  caDuration: 43800h # 5y
+  servingCertificateDuration: 8760h # 1y
+
+secret:
+  apiKey: ""
+  apiUrl: ""
+
+service:
+  type: ClusterIP
+  port: 443
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #  cpu: 100m
+  #  memory: 128Mi
+  # requests:
+  #  cpu: 100m
+  #  memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

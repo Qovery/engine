@@ -497,8 +497,16 @@ pub enum Tag {
     CannotDetermineK8sRequestedUpgradeVersion,
     /// CannotDetermineK8sKubeletWorkerVersion: represents an error when trying to determine kubelet worker version which cannot be retrieved.
     CannotDetermineK8sKubeletWorkerVersion,
+    /// CannotGetNodeGroupList: represents an error while getting node group list from the cloud provider
+    CannotGetNodeGroupList,
+    /// CannotGetNodeGroupInfo: represent and error caused by the cloud provider because no Nodegroup information has been returned
+    CannotGetNodeGroupInfo,
+    /// NumberOfMaxNodesIsBelowThanCurrentUsage: represents an error explaining to the user the requested maximum of nodes is below the current usage
+    NumberOfRequestedMaxNodesIsBelowThanCurrentUsage,
     /// CannotDetermineK8sKubeProxyVersion: represents an error when trying to determine kube proxy version which cannot be retrieved.
     CannotDetermineK8sKubeProxyVersion,
+    /// CannotConnectK8sCluster: represents an error when trying to connect to the kubernetes cluster
+    CannotConnectK8sCluster,
     /// CannotExecuteK8sApiCustomMetrics: represents an error when trying to get K8s API custom metrics.
     CannotExecuteK8sApiCustomMetrics,
     /// K8sPodDisruptionBudgetInInvalidState: represents an error where pod disruption budget is in an invalid state.
@@ -754,6 +762,29 @@ impl EngineError {
             underlying_error,
             link,
             hint_message,
+        }
+    }
+    /// Clone an existing engine error to specify a stage
+    ///
+    /// Arguments:
+    ///
+    /// * `stage`: stage that replaces the current stage of the engine error
+    pub fn clone_engine_error_with_stage(&self, stage: Stage) -> Self {
+        EngineError {
+            event_details: EventDetails::new(
+                self.event_details.provider_kind(),
+                self.event_details.organisation_id().clone(),
+                self.event_details.cluster_id().clone(),
+                self.event_details.execution_id().clone(),
+                self.event_details.region(),
+                stage,
+                self.event_details.transmitter(),
+            ),
+            tag: self.tag.clone(),
+            user_log_message: self.user_log_message.clone(),
+            underlying_error: self.underlying_error.as_ref().cloned(),
+            link: self.link.as_ref().cloned(),
+            hint_message: self.hint_message.as_ref().cloned(),
         }
     }
 
@@ -1148,6 +1179,31 @@ impl EngineError {
         )
     }
 
+    /// error explaining to the user the requested maximum of nodes is below the current usage
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `current_node_number`: The actual number of nodes running.
+    /// * `max_nodes`: The maximum number of nodes allowed.
+    pub fn new_number_of_requested_max_nodes_is_below_than_current_usage_error(
+        event_details: EventDetails,
+        current_node_number: i32,
+        max_nodes: i32,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::NumberOfRequestedMaxNodesIsBelowThanCurrentUsage,
+            format!(
+                "The actual number of nodes {} is above than the maximum number ({}) requested.",
+                current_node_number, max_nodes
+            ),
+            None,
+            None,
+            Some("Reduce your resources usage or set it to a higher value".to_string()),
+        )
+    }
+
     /// Creates new error for cannot deploy because there are not enough available resources on the cluster.
     ///
     /// Arguments:
@@ -1351,6 +1407,12 @@ impl EngineError {
             None,
             None,
         )
+    }
+
+    pub fn new_cannot_connect_to_k8s_cluster(event_details: EventDetails, kube_error: kube::Error) -> EngineError {
+        let message = format!("Unable to connect to target k8s cluster: `{}`", kube_error);
+
+        EngineError::new(event_details, Tag::CannotConnectK8sCluster, message, None, None, None)
     }
 
     /// Creates new error delete local kubeconfig file error
@@ -2460,6 +2522,44 @@ impl EngineError {
         )
     }
 
+    /// No nodegroup information given from the cloud provider
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_missing_nodegroup_information_error(event_details: EventDetails) -> EngineError {
+        let message = "Error from the cloud provider, missing Kubernetes nodegroup information";
+
+        EngineError::new(
+            event_details,
+            Tag::CannotGetNodeGroupInfo,
+            message.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Can't retrieve Cloud provider node group list
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_nodegroup_list_error(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message = "Error, cannot get Kubernetes nodegroup list from your cloud provider.";
+
+        EngineError::new(
+            event_details,
+            Tag::CannotGetNodeGroupList,
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
     /// No cluster found
     ///
     /// Arguments:
@@ -3403,5 +3503,41 @@ mod tests {
         // verify:
         assert!(!res.contains("my_secret"));
         assert!(!res.contains("my_secret_value"));
+    }
+
+    #[test]
+    fn should_clone_engine_error_with_a_different_stage() {
+        // setup:
+        let command_err = CommandError::new(
+            "my safe message".to_string(),
+            Some("my raw message".to_string()),
+            Some(vec![("my_secret".to_string(), "my_secret_value".to_string())]),
+        );
+        let cluster_id = QoveryIdentifier::new_random();
+        let engine_err = EngineError::new_unknown(
+            EventDetails::new(
+                Some(Kind::Scw),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                Some(ScwRegion::Paris.as_str().to_string()),
+                Stage::Infrastructure(InfrastructureStep::Create),
+                Transmitter::Kubernetes(cluster_id.to_string(), cluster_id.to_string()),
+            ),
+            "user_log_message".to_string(),
+            Some(command_err),
+            None,
+            None,
+        );
+
+        // execute:
+        let engine_error_with_terminated_stage =
+            engine_err.clone_engine_error_with_stage(Stage::Infrastructure(InfrastructureStep::CreateError));
+
+        // verify:
+        assert_eq!(
+            engine_error_with_terminated_stage.event_details.stage(),
+            &Stage::Infrastructure(InfrastructureStep::CreateError)
+        );
     }
 }

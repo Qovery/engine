@@ -1,7 +1,9 @@
 use std::any::Any;
 use uuid::Uuid;
 
-use crate::cloud_provider::{CloudProvider, EngineError, Kind, TerraformStateCredentials};
+use crate::cloud_provider::{
+    kubernetes::Kind as KubernetesKind, CloudProvider, EngineError, Kind, TerraformStateCredentials,
+};
 use crate::constants::{SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY};
 use crate::events::{EventDetails, Stage, ToTransmitter, Transmitter};
 use crate::io_models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
@@ -55,6 +57,10 @@ impl CloudProvider for Scaleway {
 
     fn kind(&self) -> Kind {
         Kind::Scw
+    }
+
+    fn kubernetes_kind(&self) -> crate::cloud_provider::kubernetes::Kind {
+        KubernetesKind::ScwKapsule
     }
 
     fn id(&self) -> &str {

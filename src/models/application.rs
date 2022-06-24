@@ -2,7 +2,7 @@ use crate::build_platform::Build;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate, Storage};
-use crate::cloud_provider::service::{delete_stateless_service, scale_down_application};
+use crate::cloud_provider::service::{delete_stateless_service, scale_down_application, send_progress_for_application};
 use crate::cloud_provider::service::{
     deploy_stateless_service_error, deploy_user_stateless_service, send_progress_on_long_task, Action, Create, Delete,
     Helm, Pause, Service, ServiceType, StatelessService,
@@ -487,7 +487,7 @@ where
             event_details,
             self.logger(),
         );
-        send_progress_on_long_task(self, Action::Create, || deploy_user_stateless_service(target, self))
+        send_progress_for_application(self, Action::Create, target, || deploy_user_stateless_service(target, self))
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -506,7 +506,7 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Create, || deploy_stateless_service_error(target, self))
+        send_progress_on_long_task(self, Action::Create, target, || deploy_stateless_service_error(target, self))
     }
 }
 
@@ -526,7 +526,7 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Pause, || {
+        send_progress_for_application(self, Action::Pause, target, || {
             scale_down_application(target, self, 0, if self.is_stateful() { Statefulset } else { Deployment })
         })
     }
@@ -567,7 +567,7 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Delete, || {
+        send_progress_for_application(self, Action::Delete, target, || {
             delete_stateless_service(target, self, event_details.clone())
         })
     }
@@ -588,7 +588,7 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Delete, || {
+        send_progress_on_long_task(self, Action::Delete, target, || {
             delete_stateless_service(target, self, event_details.clone())
         })
     }
@@ -603,7 +603,7 @@ where
     }
 }
 
-pub trait ApplicationService: StatelessService {
+pub trait ApplicationService: StatelessService + Listen {
     fn get_build(&self) -> &Build;
     fn get_build_mut(&mut self) -> &mut Build;
 }

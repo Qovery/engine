@@ -8,6 +8,8 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, ToTransmitter};
 use crate::io_models::{Context, Listen};
+use crate::runtime::block_on;
+use crate::utilities::get_kube_client;
 
 pub mod aws;
 pub mod digitalocean;
@@ -25,6 +27,7 @@ pub mod utilities;
 pub trait CloudProvider: Listen + ToTransmitter {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
+    fn kubernetes_kind(&self) -> kubernetes::Kind;
     fn id(&self) -> &str;
     fn organization_id(&self) -> &str;
     fn organization_long_id(&self) -> uuid::Uuid;
@@ -85,4 +88,26 @@ impl TerraformStateCredentials {
 pub struct DeploymentTarget<'a> {
     pub kubernetes: &'a dyn Kubernetes,
     pub environment: &'a Environment,
+    pub kube: kube::Client,
+}
+
+impl<'a> DeploymentTarget<'a> {
+    pub fn new(
+        kubernetes: &'a dyn Kubernetes,
+        environment: &'a Environment,
+    ) -> Result<DeploymentTarget<'a>, kube::Error> {
+        let kubeconfig_path = kubernetes.get_kubeconfig_file_path().unwrap_or_default();
+        let kube_credentials: Vec<(String, String)> = kubernetes
+            .cloud_provider()
+            .credentials_environment_variables()
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        let kube_client = block_on(get_kube_client(kubeconfig_path, kube_credentials.as_slice()))?;
+        Ok(DeploymentTarget {
+            kubernetes,
+            environment,
+            kube: kube_client,
+        })
+    }
 }

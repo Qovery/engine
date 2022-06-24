@@ -103,7 +103,6 @@ impl From<events::Stage> for Stage {
 }
 
 #[derive(Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
 pub enum GeneralStep {
     RetrieveClusterConfig,
     RetrieveClusterResources,
@@ -123,7 +122,6 @@ impl From<events::GeneralStep> for GeneralStep {
 }
 
 #[derive(Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
 pub enum InfrastructureStep {
     LoadConfiguration,
     Create,
@@ -305,6 +303,49 @@ impl From<events::EventDetails> for EventDetails {
             region: details.region,
             stage: Stage::from(details.stage),
             transmitter: Transmitter::from(details.transmitter),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::cloud_provider::Kind;
+    use crate::errors::EngineError;
+    use crate::events::io::EngineEvent as EngineEventIo;
+    use crate::events::{EngineEvent, EventDetails, InfrastructureStep, Stage, Transmitter};
+    use crate::io_models::QoveryIdentifier;
+    use crate::models::scaleway::ScwRegion;
+
+    #[test]
+    fn should_use_default_enum_value_when_serializing_infrastructure_step() {
+        // setup:
+        let engine_err = EngineError::new_unknown(
+            EventDetails::new(
+                Some(Kind::Scw),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                Some(ScwRegion::Paris.as_str().to_string()),
+                Stage::Infrastructure(InfrastructureStep::CreateError),
+                Transmitter::Kubernetes("".to_string(), "".to_string()),
+            ),
+            "user_log_message".to_string(),
+            None,
+            None,
+            None,
+        );
+        let event = EngineEvent::Error(engine_err, None);
+        let event_io = EngineEventIo::from(event);
+
+        // compute:
+        match serde_json::to_string(&event_io) {
+            Ok(json) => {
+                // validate:
+                assert_eq!(true, json.contains("{\"infrastructure\":\"CreateError\"}"))
+            }
+            Err(_) => {
+                assert_eq!(0, 1)
+            }
         }
     }
 }

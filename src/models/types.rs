@@ -9,6 +9,7 @@ use tera::Context as TeraContext;
 
 // Those types are just marker types that are use to tag our struct/object model
 pub struct AWS {}
+pub struct AWSEc2 {}
 pub struct DO {}
 pub struct SCW {}
 
