@@ -1370,7 +1370,7 @@ where
     let (tx, rx) = mpsc::channel();
 
     // monitor thread to notify user while the blocking task is executed
-    let _ = std::thread::Builder::new()
+    let handle = std::thread::Builder::new()
         .name("task-monitor".to_string())
         .spawn(move || {
             // stop the thread when the blocking task is done
@@ -1431,6 +1431,7 @@ where
 
     let blocking_task_result = long_task();
     let _ = tx.send(());
+    let _ = handle.map(|it| it.join());
 
     blocking_task_result
 }
