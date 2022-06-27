@@ -164,7 +164,7 @@ fn to_event_context(ev: &Event) -> Option<EventRenderContext> {
     match (&ev.type_, &ev.message) {
         (None, _) | (_, None) => None,
         (Some(type_), Some(msg)) => Some(EventRenderContext {
-            message: msg.to_string(),
+            message: msg.replace('\n', ""),
             type_: type_.to_string(),
         }),
     }
