@@ -28,6 +28,12 @@ data "aws_security_group" "selected" {
   }
 }
 
+# /!\ DO NOT REMOVE: adding a timestamp to final snapshot in order to avoid duplicate which triggers a tf error. /!\
+locals {
+  final_snap_timestamp = replace(timestamp(), "/[- TZ:]/", "")
+  final_snapshot_name = "${var.final_snapshot_name}-${local.final_snap_timestamp}"
+}
+
 resource "helm_release" "documentdb_instance_external_name" {
   name = "${aws_docdb_cluster.documentdb_cluster.id}-externalname"
   chart = "external-name-svc"
@@ -87,6 +93,7 @@ resource "aws_docdb_cluster" "documentdb_cluster" {
     update = "120m"
     delete = "60m"
   }
+
   master_password = var.password
   {%- if snapshot is defined and snapshot["snapshot_id"] %}
   # Snapshot
@@ -109,6 +116,11 @@ resource "aws_docdb_cluster" "documentdb_cluster" {
   preferred_backup_window = var.preferred_backup_window
   skip_final_snapshot = var.skip_final_snapshot
   {%- if not skip_final_snapshot %}
-  final_snapshot_identifier = var.final_snapshot_name
+  final_snapshot_identifier = local.final_snapshot_name
+  lifecycle {
+    ignore_changes = [
+      final_snapshot_identifier,
+    ]
+  }
   {%- endif %}
 }

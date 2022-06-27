@@ -19,3 +19,4 @@ bin_versions
 .DS_Store
 /dist/
 /engine_*/
+.internal/
