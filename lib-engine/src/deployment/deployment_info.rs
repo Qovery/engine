@@ -100,7 +100,7 @@ pub async fn get_app_deployment_info(
     app_id: &Uuid,
     namespace: &str,
 ) -> Result<AppDeploymentInfo, kube::Error> {
-    let selector = format!("appId={}", app_id);
+    let selector = format!("appId={}", to_short_id(app_id));
     let pods_api: Api<Pod> = Api::namespaced(kube.clone(), namespace);
     let svc_api: Api<Service> = Api::namespaced(kube.clone(), namespace);
     let pvc_api: Api<PersistentVolumeClaim> = Api::namespaced(kube.clone(), namespace);
