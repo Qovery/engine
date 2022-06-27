@@ -1,10 +1,7 @@
+use serde::Serialize;
 use std::net::TcpStream;
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::mpsc::{RecvTimeoutError, TryRecvError};
-use std::sync::{mpsc, Arc, Barrier};
-use std::thread;
-use std::time::Duration;
 use tera::Context as TeraContext;
 use uuid::Uuid;
 
@@ -21,7 +18,6 @@ use crate::cmd::kubectl::{
     kubectl_exec_scale_replicas_by_selector, ScalingKind,
 };
 use crate::cmd::structs::{KubernetesPodStatusPhase, LabelsContent};
-use crate::deployment::deployment_info::{get_app_deployment_info, render_app_deployment_info};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
 use crate::io_models::ProgressLevel::Info;
@@ -30,10 +26,7 @@ use crate::io_models::{
     ProgressLevel, ProgressScope, QoveryIdentifier,
 };
 use crate::logger::Logger;
-use crate::models::application::ApplicationService;
 use crate::models::types::VersionsNumber;
-use crate::runtime::block_on;
-use crate::utilities::to_short_id;
 
 // todo: delete this useless trait
 pub trait Service: ToTransmitter {
@@ -191,7 +184,7 @@ pub trait RouterService: StatelessService + Listen + Helm {
     }
 }
 
-pub trait DatabaseService: StatefulService {
+pub trait DatabaseService: StatefulService + Listen {
     fn check_domains(
         &self,
         listeners: Listeners,
@@ -211,6 +204,8 @@ pub trait DatabaseService: StatefulService {
         }
         Ok(())
     }
+
+    fn db_type(&self) -> DatabaseType;
 }
 
 pub trait Create {
@@ -267,7 +262,7 @@ pub struct DatabaseOptions {
     pub publicly_accessible: bool,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize)]
 pub enum DatabaseType {
     PostgreSQL,
     MongoDB,
@@ -1241,223 +1236,6 @@ pub fn helm_uninstall_release(
     let chart = ChartInfo::new_from_release_name(helm_release_name, environment.namespace());
     helm.uninstall(&chart, &[])
         .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))
-}
-
-/// This function call (start|pause|delete)_in_progress function every 10 seconds when a
-/// long blocking task is running.
-pub fn send_progress_on_long_task<S, R, F>(service: &S, action: Action, target: &DeploymentTarget, long_task: F) -> R
-where
-    S: Service + Listen,
-    F: Fn() -> R,
-{
-    let waiting_message = match action {
-        Action::Create => Some(format!(
-            "{} '{}' deployment is in progress...",
-            service.service_type().name(),
-            service.name_with_id_and_version(),
-        )),
-        Action::Pause => Some(format!(
-            "{} '{}' pause is in progress...",
-            service.service_type().name(),
-            service.name_with_id_and_version(),
-        )),
-        Action::Delete => Some(format!(
-            "{} '{}' deletion is in progress...",
-            service.service_type().name(),
-            service.name_with_id_and_version(),
-        )),
-        Action::Nothing => None,
-    };
-
-    send_progress_on_long_task_with_message(service, waiting_message, action, target, long_task)
-}
-
-/// This function call (start|pause|delete)_in_progress function every 10 seconds when a
-/// long blocking task is running.
-pub fn send_progress_for_application<R, F>(
-    app: &dyn ApplicationService,
-    action: Action,
-    target: &DeploymentTarget,
-    long_task: F,
-) -> R
-where
-    F: Fn() -> R,
-{
-    let event_details = app.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-    let logger = app.logger().clone_dyn();
-    let execution_id = app.context().execution_id().to_string();
-    let scope = app.progress_scope();
-    let app_id = *app.long_id();
-    let namespace = target.environment.namespace().to_string();
-    let kube_client = target.kube.clone();
-    let app_commit_id = app.get_build().git_repository.commit_id.to_string();
-    let log = {
-        let listeners = app.listeners().clone();
-        let step = match action {
-            Action::Create => EnvironmentStep::Deploy,
-            Action::Pause => EnvironmentStep::Pause,
-            Action::Delete => EnvironmentStep::Delete,
-            Action::Nothing => EnvironmentStep::Deploy, // should not happen
-        };
-        let event_details = EventDetails::clone_changing_stage(event_details, Stage::Environment(step));
-
-        move |msg: String| {
-            let listeners_helper = ListenersHelper::new(&listeners);
-            listeners_helper.deployment_in_progress(ProgressInfo::new(
-                scope.clone(),
-                Info,
-                Some(msg.clone()),
-                execution_id.clone(),
-            ));
-            logger.log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
-        }
-    };
-
-    // stop the thread when the blocking task is done
-    let (tx, rx) = mpsc::channel();
-    let deployment_start = Arc::new(Barrier::new(2));
-
-    // monitor thread to notify user while the blocking task is executed
-    let th_handle = thread::Builder::new().name("deployment-monitor".to_string()).spawn({
-        let deployment_start = deployment_start.clone();
-
-        move || {
-            // Before the launch of the deployment
-            if let Ok(deployment_info) = block_on(get_app_deployment_info(&kube_client, &app_id, &namespace)) {
-                log(format!(
-                    "🚀 Deployment of application `{}` at commit {} is starting: You have {} pod(s) running, {} service(s) running, {} network volume(s)",
-                    to_short_id(&app_id),
-                    app_commit_id,
-                    deployment_info.pods.len(),
-                    deployment_info.services.len(),
-                    deployment_info.pvcs.len()
-                ));
-            }
-
-            // Wait to start the deployment
-            deployment_start.wait();
-
-            loop {
-                // watch for thread termination
-                match rx.recv_timeout(Duration::from_secs(10)) {
-                    Err(RecvTimeoutError::Timeout) => {}
-                    Ok(_) | Err(RecvTimeoutError::Disconnected) => break,
-                }
-
-                // Fetch deployment information from kube api
-                let deployment_info = match block_on(get_app_deployment_info(&kube_client, &app_id, &namespace)) {
-                    Ok(deployment_info) => deployment_info,
-                    Err(err) => {
-                        log(format!("Error while retrieving deployment information: {}", err));
-                        continue;
-                    }
-                };
-
-                // Format the deployment information and send to it to user
-                let deployment_status_report = match render_app_deployment_info(&app_commit_id, &deployment_info) {
-                    Ok(deployment_status_report) => deployment_status_report,
-                    Err(err) => {
-                        log(format!("Cannot render deployment status report. Please contact us: {}", err));
-                        continue;
-                    },
-                };
-
-                // Send it to user
-                for line in deployment_status_report.trim_end().split('\n').map(str::to_string) {
-                    log(line)
-                }
-            }
-        }
-    });
-
-    // Wait for our watcher thread to be ready before starting
-    let _ = deployment_start.wait();
-    let blocking_task_result = long_task();
-    let _ = tx.send(()); // send signal to thread to terminate
-    let _ = th_handle.map(|th| th.join()); // wait for the thread to terminate
-
-    blocking_task_result
-}
-
-/// This function call (start|pause|delete)_in_progress function every 10 seconds when a
-/// long blocking task is running.
-pub fn send_progress_on_long_task_with_message<S, R, F>(
-    service: &S,
-    waiting_message: Option<String>,
-    action: Action,
-    _target: &DeploymentTarget,
-    long_task: F,
-) -> R
-where
-    S: Service + Listen,
-    F: Fn() -> R,
-{
-    let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-    let logger = service.logger().clone_dyn();
-    let listeners = service.listeners().clone();
-
-    let progress_info = ProgressInfo::new(
-        service.progress_scope(),
-        Info,
-        waiting_message.clone(),
-        service.context().execution_id(),
-    );
-
-    let (tx, rx) = mpsc::channel();
-
-    // monitor thread to notify user while the blocking task is executed
-    let _ = thread::Builder::new().name("task-monitor".to_string()).spawn(move || {
-        // stop the thread when the blocking task is done
-        let listeners_helper = ListenersHelper::new(&listeners);
-        let action = action;
-        let progress_info = progress_info;
-        let waiting_message = waiting_message.clone().unwrap_or_else(|| "No message...".to_string());
-
-        loop {
-            // do notify users here
-            let progress_info = progress_info.clone();
-            let event_details = event_details.clone();
-            let event_message = EventMessage::new_from_safe(waiting_message.to_string());
-
-            match action {
-                Action::Create => {
-                    listeners_helper.deployment_in_progress(progress_info);
-                    logger.log(EngineEvent::Info(
-                        EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Deploy)),
-                        event_message,
-                    ));
-                }
-                Action::Pause => {
-                    listeners_helper.pause_in_progress(progress_info);
-                    logger.log(EngineEvent::Info(
-                        EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Pause)),
-                        event_message,
-                    ));
-                }
-                Action::Delete => {
-                    listeners_helper.delete_in_progress(progress_info);
-                    logger.log(EngineEvent::Info(
-                        EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Delete)),
-                        event_message,
-                    ));
-                }
-                Action::Nothing => {} // should not happens
-            };
-
-            thread::sleep(Duration::from_secs(10));
-
-            // watch for thread termination
-            match rx.try_recv() {
-                Ok(_) | Err(TryRecvError::Disconnected) => break,
-                Err(TryRecvError::Empty) => {}
-            }
-        }
-    });
-
-    let blocking_task_result = long_task();
-    let _ = tx.send(());
-
-    blocking_task_result
 }
 
 pub fn get_tfstate_suffix(service: &dyn Service) -> String {
