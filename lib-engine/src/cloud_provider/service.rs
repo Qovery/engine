@@ -1363,7 +1363,7 @@ where
                 };
 
                 // Send it to user
-                for line in deployment_status_report.split('\n').map(str::to_string) {
+                for line in deployment_status_report.trim_end().split('\n').map(str::to_string) {
                     log(line)
                 }
             }
