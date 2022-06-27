@@ -1,24 +1,11 @@
-use crate::utilities::to_short_id;
 use itertools::Itertools;
 use k8s_openapi::api::core::v1::{
     ContainerState, ContainerStateTerminated, ContainerStateWaiting, Event, LoadBalancerStatus, PersistentVolumeClaim,
     Pod, PodStatus, Service, ServiceStatus,
 };
-use kube::api::ListParams;
-use kube::Api;
 use serde::Serialize;
 use std::collections::HashMap;
 use tera::Tera;
-use uuid::Uuid;
-
-#[derive(Debug)]
-pub struct AppDeploymentInfo {
-    pub id: Uuid,
-    pub pods: Vec<Pod>,
-    pub services: Vec<Service>,
-    pub pvcs: Vec<PersistentVolumeClaim>,
-    pub events: Vec<Event>,
-}
 
 #[derive(Debug, Serialize)]
 pub enum DeploymentState {
@@ -26,18 +13,6 @@ pub enum DeploymentState {
     Ready,
     Terminating,
     Failing,
-}
-
-#[derive(Debug, Serialize)]
-pub struct AppDeploymentRenderContext {
-    pub name: String,
-    pub commit: String,
-    pub services: Vec<ServiceRenderContext>,
-    pub nb_pods: usize,
-    pub pods_failing: Vec<PodRenderContext>,
-    pub pods_starting: Vec<PodRenderContext>,
-    pub pods_terminating: Vec<PodRenderContext>,
-    pub pvcs: Vec<PvcRenderContext>,
 }
 
 #[derive(Debug, Serialize)]
@@ -70,85 +45,13 @@ pub struct PvcRenderContext {
     pub events: Vec<EventRenderContext>,
 }
 
-const PROGRESS_INFO_TEMPLATE: &str = r#"
-
-Application at commit {{ commit }} deployment status report:
-{%- for service in services %}
-🔀 {{ service.type_ | capitalize }} {{ service.name }} is {{ service.state | upper }}: {{ service.message }}
-{%- for event in service.events %}
- |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
-{%- endfor -%}
-{%- endfor %}
-
-{% set all_pods = pods_failing | concat(with=pods_starting) -%}
-🛰 Application has {{ nb_pods }} pods. {{ pods_starting | length }} starting, {{ pods_terminating | length }} terminating and {{ pods_failing | length }} in error
-{%- for pod in all_pods %}
- |__ Pod {{ pod.name }} is {{ pod.state | upper }}: {{ pod.message }}
-{%- for event in pod.events %}
-    |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
-{%- endfor -%}
-{%- endfor %}
-{% for pvc in pvcs %}
-💽 Network volume {{ pvc.name }} is {{ pvc.state | upper }}:
-{%- for event in pvc.events %}
- |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
-{%- endfor -%}
-{%- endfor -%}"#;
-
-pub async fn get_app_deployment_info(
-    kube: &kube::Client,
-    app_id: &Uuid,
-    namespace: &str,
-) -> Result<AppDeploymentInfo, kube::Error> {
-    let selector = format!("appId={}", to_short_id(app_id));
-    let pods_api: Api<Pod> = Api::namespaced(kube.clone(), namespace);
-    let svc_api: Api<Service> = Api::namespaced(kube.clone(), namespace);
-    let pvc_api: Api<PersistentVolumeClaim> = Api::namespaced(kube.clone(), namespace);
-    let event_api: Api<Event> = Api::namespaced(kube.clone(), namespace);
-
-    let list_params = ListParams::default().labels(&selector).timeout(15);
-    let pods = pods_api.list(&list_params);
-    let services = svc_api.list(&list_params);
-    let pvcs = pvc_api.list(&list_params);
-    let events_params = ListParams::default().timeout(15);
-    let events = event_api.list(&events_params);
-    let (pods, services, pvcs, events) = futures::future::try_join4(pods, services, pvcs, events).await?;
-
-    Ok(AppDeploymentInfo {
-        id: *app_id,
-        pods: pods.items,
-        services: services.items,
-        pvcs: pvcs.items,
-        events: events.items,
-    })
-}
-
-pub fn render_app_deployment_info(
-    app_commit_id: &str,
-    deployment_info: &AppDeploymentInfo,
-) -> Result<String, tera::Error> {
-    let services_ctx = to_services_render_context(&deployment_info.services, &deployment_info.events);
-    let (pods_starting, pods_terminating, pods_failing) =
-        to_pods_render_context(&deployment_info.pods, &deployment_info.events);
-    let pvcs_ctx = to_pvc_render_context(&deployment_info.pvcs, &deployment_info.events);
-    let render_ctx = AppDeploymentRenderContext {
-        name: to_short_id(&deployment_info.id),
-        commit: app_commit_id.to_string(),
-        services: services_ctx,
-        nb_pods: deployment_info.pods.len(),
-        pods_failing,
-        pods_starting,
-        pods_terminating,
-        pvcs: pvcs_ctx,
-    };
-    let ctx = tera::Context::from_serialize(render_ctx).unwrap();
+pub fn get_tera_instance() -> Tera {
     let mut tera = Tera::default();
-    tera.register_filter("fmt_event_type", render_event_type);
-
-    tera.render_str(PROGRESS_INFO_TEMPLATE, &ctx)
+    tera.register_filter("fmt_event_type", fmt_event_type);
+    tera
 }
 
-fn render_event_type(value: &tera::Value, _: &HashMap<String, tera::Value>) -> Result<tera::Value, tera::Error> {
+pub fn fmt_event_type(value: &tera::Value, _: &HashMap<String, tera::Value>) -> Result<tera::Value, tera::Error> {
     // https://github.com/kubernetes/api/blob/7e99a1ef2ccdd2589e9a41f5083a95c375ada0a2/core/v1/types.go#L5671
     match value {
         tera::Value::String(type_) => match type_.as_str() {
@@ -160,7 +63,7 @@ fn render_event_type(value: &tera::Value, _: &HashMap<String, tera::Value>) -> R
     }
 }
 
-fn to_event_context(ev: &Event) -> Option<EventRenderContext> {
+pub fn to_event_context(ev: &Event) -> Option<EventRenderContext> {
     match (&ev.type_, &ev.message) {
         (None, _) | (_, None) => None,
         (Some(type_), Some(msg)) => Some(EventRenderContext {
@@ -170,7 +73,7 @@ fn to_event_context(ev: &Event) -> Option<EventRenderContext> {
     }
 }
 
-fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec<ServiceRenderContext> {
+pub fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec<ServiceRenderContext> {
     if services.is_empty() {
         return vec![];
     }
@@ -266,7 +169,7 @@ fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec<Ser
     svc_ctx
 }
 
-fn to_pods_render_context(
+pub fn to_pods_render_context(
     pods: &[Pod],
     events: &[Event],
 ) -> (Vec<PodRenderContext>, Vec<PodRenderContext>, Vec<PodRenderContext>) {
@@ -320,7 +223,7 @@ fn to_pods_render_context(
     (pods_starting, pods_terminating, pods_failing)
 }
 
-fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -> Vec<PvcRenderContext> {
+pub fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -> Vec<PvcRenderContext> {
     if pvcs.is_empty() {
         return vec![];
     }
@@ -384,7 +287,7 @@ fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -> Ve
     pvcs_context
 }
 
-fn is_pod_in_error<'a>(pod: &'a Pod) -> Option<&'a str> {
+pub fn is_pod_in_error<'a>(pod: &'a Pod) -> Option<&'a str> {
     // https://stackoverflow.com/questions/57821723/list-of-all-reasons-for-container-states-in-kubernetes
     let is_error_reason = |reason: &str| {
         matches!(
@@ -439,7 +342,7 @@ fn is_pod_in_error<'a>(pod: &'a Pod) -> Option<&'a str> {
     }
 }
 
-fn is_pod_starting(pod: &Pod) -> bool {
+pub fn is_pod_starting(pod: &Pod) -> bool {
     // If the pod is in pending phase, it means it starts
     if let Some("Pending") = pod.status.as_ref().and_then(|x| x.phase.as_deref()) {
         return true;
@@ -460,7 +363,7 @@ fn is_pod_starting(pod: &Pod) -> bool {
     false
 }
 
-fn get_last_events_for<'a>(
+pub fn get_last_events_for<'a>(
     events: impl Iterator<Item = &'a Event>,
     uid: &str,
     max_events: usize,
@@ -475,129 +378,4 @@ fn get_last_events_for<'a>(
         // last first
         .sorted_by(|evl, evr| evl.last_timestamp.cmp(&evr.last_timestamp).reverse())
         .take(max_events)
-}
-
-#[cfg(test)]
-mod test {
-    use crate::deployment::deployment_info::{
-        render_event_type, AppDeploymentRenderContext, DeploymentState, EventRenderContext, PodRenderContext,
-        PvcRenderContext, ServiceRenderContext, PROGRESS_INFO_TEMPLATE,
-    };
-    use crate::utilities::to_short_id;
-    use tera::Tera;
-    use uuid::Uuid;
-
-    #[test]
-    fn test_application_rendering() {
-        let app_id = Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap();
-        let render_ctx = AppDeploymentRenderContext {
-            name: to_short_id(&app_id),
-            commit: "34645524c3221a596fb59e8dbad4381f10f93933".to_string(),
-            services: vec![ServiceRenderContext {
-                name: "app-z85ba6759".to_string(),
-                type_: "Cloud load balancer".to_string(),
-                state: DeploymentState::Starting,
-                message: None, //Some("waiting to acquire an ip address".to_string()),
-                events: vec![
-                    EventRenderContext {
-                        message: "No lease of ip yet".to_string(),
-                        type_: "Normal".to_string(),
-                    },
-                    EventRenderContext {
-                        message: "Pool of ip exhausted".to_string(),
-                        type_: "Warning".to_string(),
-                    },
-                ],
-            }],
-            nb_pods: 6,
-            pods_failing: vec![
-                PodRenderContext {
-                    name: "app-pod-1".to_string(),
-                    state: DeploymentState::Failing,
-                    message: Some("pod have been killed due to lack of/using too much memory resources".to_string()),
-                    events: vec![],
-                },
-                PodRenderContext {
-                    name: "app-pod-2".to_string(),
-                    state: DeploymentState::Failing,
-                    message: None,
-                    events: vec![
-                        EventRenderContext {
-                            message: "Liveliness probe failed".to_string(),
-                            type_: "Normal".to_string(),
-                        },
-                        EventRenderContext {
-                            message: "Readiness probe failed".to_string(),
-                            type_: "Warning".to_string(),
-                        },
-                    ],
-                },
-            ],
-            pods_starting: vec![PodRenderContext {
-                name: "app-pod-3".to_string(),
-                state: DeploymentState::Starting,
-                message: None,
-                events: vec![
-                    EventRenderContext {
-                        message: "Pulling image :P".to_string(),
-                        type_: "Normal".to_string(),
-                    },
-                    EventRenderContext {
-                        message: "Container started".to_string(),
-                        type_: "Warning".to_string(),
-                    },
-                ],
-            }],
-            pods_terminating: vec![PodRenderContext {
-                name: "app-pod-4".to_string(),
-                state: DeploymentState::Terminating,
-                message: None,
-                events: vec![],
-            }],
-            pvcs: vec![
-                PvcRenderContext {
-                name: "pvc-1212".to_string(),
-                state: DeploymentState::Starting,
-                events: vec![EventRenderContext {
-                    message: "Failed to provision volume with StorageClass \"aws-ebs-io1-0\": InvalidParameterValue: The volume size is invalid for io1 volumes: 1 GiB. io1 volumes must be at least 4 GiB in size. Please specify a volume size above the minimum limit".to_string(),
-                    type_: "Warning".to_string(),
-                }],
-            },
-                PvcRenderContext {
-                    name: "pvc-2121".to_string(),
-                    state: DeploymentState::Ready,
-                    events: vec![],
-                }
-            ],
-        };
-
-        let ctx = tera::Context::from_serialize(render_ctx).unwrap();
-        let mut tera = Tera::default();
-        tera.register_filter("fmt_event_type", render_event_type);
-
-        let rendered_report = tera.render_str(PROGRESS_INFO_TEMPLATE, &ctx).unwrap();
-        println!("{}", rendered_report);
-
-        let gold_standard = r#"
-
-Application at commit 34645524c3221a596fb59e8dbad4381f10f93933 deployment status report:
-🔀 Cloud load balancer app-z85ba6759 is STARTING: 
- |__ ℹ️ No lease of ip yet
- |__ ⚠️ Pool of ip exhausted
-
-🛰 Application has 6 pods. 1 starting, 1 terminating and 2 in error
- |__ Pod app-pod-1 is FAILING: pod have been killed due to lack of/using too much memory resources
- |__ Pod app-pod-2 is FAILING: 
-    |__ ℹ️ Liveliness probe failed
-    |__ ⚠️ Readiness probe failed
- |__ Pod app-pod-3 is STARTING: 
-    |__ ℹ️ Pulling image :P
-    |__ ⚠️ Container started
-
-💽 Network volume pvc-1212 is STARTING:
- |__ ⚠️ Failed to provision volume with StorageClass "aws-ebs-io1-0": InvalidParameterValue: The volume size is invalid for io1 volumes: 1 GiB. io1 volumes must be at least 4 GiB in size. Please specify a volume size above the minimum limit
-💽 Network volume pvc-2121 is READY:"#;
-
-        assert_eq!(rendered_report, gold_standard);
-    }
 }

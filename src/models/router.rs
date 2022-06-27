@@ -1,13 +1,15 @@
 use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateless_service, deploy_stateless_service_error, send_progress_on_long_task, Action,
-    Create, Delete, Helm, Pause, RouterService, Service, ServiceType, StatelessService,
+    default_tera_context, delete_stateless_service, deploy_stateless_service_error, Action, Create, Delete, Helm,
+    Pause, RouterService, Service, ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{check_cname_for, print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::helm;
 use crate::cmd::helm::to_engine_error;
+use crate::deployment_report::execute_long_deployment;
+use crate::deployment_report::router::reporter::RouterDeploymentReporter;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage, ToTransmitter, Transmitter};
 use crate::io_models::{ApplicationAdvancedSettings, Context, Listen, Listener, Listeners};
@@ -370,55 +372,60 @@ where
             event_details.clone(),
             self.logger(),
         );
-        let kubernetes = target.kubernetes;
-        let environment = target.environment;
-        let workspace_dir = self.workspace_directory();
-        let helm_release_name = self.helm_release_name();
 
-        let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
+        execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Create), || {
+            let kubernetes = target.kubernetes;
+            let environment = target.environment;
+            let workspace_dir = self.workspace_directory();
+            let helm_release_name = self.helm_release_name();
 
-        // respect order - getting the context here and not before is mandatory
-        // the nginx-ingress must be available to get the external dns target if necessary
-        let context = self.tera_context(target)?;
+            let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
 
-        let from_dir = format!(
-            "{}/{}/charts/q-ingress-tls",
-            self.context.lib_root_dir(),
-            T::lib_directory_name()
-        );
-        if let Err(e) =
-            crate::template::generate_and_copy_all_files_into_dir(from_dir.as_str(), workspace_dir.as_str(), context)
-        {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                from_dir,
-                workspace_dir,
-                e,
-            ));
-        }
+            // respect order - getting the context here and not before is mandatory
+            // the nginx-ingress must be available to get the external dns target if necessary
+            let context = self.tera_context(target)?;
 
-        // do exec helm upgrade and return the last deployment status
-        let helm = helm::Helm::new(
-            &kubernetes_config_file_path,
-            &kubernetes.cloud_provider().credentials_environment_variables(),
-        )
-        .map_err(|e| to_engine_error(&event_details, e))?;
+            let from_dir = format!(
+                "{}/{}/charts/q-ingress-tls",
+                self.context.lib_root_dir(),
+                T::lib_directory_name()
+            );
+            if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+                from_dir.as_str(),
+                workspace_dir.as_str(),
+                context,
+            ) {
+                return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                    event_details.clone(),
+                    from_dir,
+                    workspace_dir,
+                    e,
+                ));
+            }
 
-        let chart = ChartInfo::new_from_custom_namespace(
-            helm_release_name,
-            workspace_dir.clone(),
-            environment.namespace().to_string(),
-            600_i64,
-            match self.service_type() {
-                ServiceType::Database(_) => vec![format!("{}/q-values.yaml", &workspace_dir)],
-                _ => vec![],
-            },
-            false,
-            self.selector(),
-        );
+            // do exec helm upgrade and return the last deployment status
+            let helm = helm::Helm::new(
+                &kubernetes_config_file_path,
+                &kubernetes.cloud_provider().credentials_environment_variables(),
+            )
+            .map_err(|e| to_engine_error(&event_details, e))?;
 
-        helm.upgrade(&chart, &[])
-            .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))
+            let chart = ChartInfo::new_from_custom_namespace(
+                helm_release_name,
+                workspace_dir.clone(),
+                environment.namespace().to_string(),
+                600_i64,
+                match self.service_type() {
+                    ServiceType::Database(_) => vec![format!("{}/q-values.yaml", &workspace_dir)],
+                    _ => vec![],
+                },
+                false,
+                self.selector(),
+            );
+
+            helm.upgrade(&chart, &[])
+                .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))
+        })
     }
 
     #[named]
@@ -489,7 +496,9 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Create, target, || deploy_stateless_service_error(target, self))
+        execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Create), || {
+            deploy_stateless_service_error(target, self)
+        })
     }
 }
 
@@ -557,7 +566,7 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Delete, target, || {
+        execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Delete), || {
             delete_stateless_service(target, self, event_details.clone())
         })
     }
@@ -578,20 +587,18 @@ where
     }
 
     #[named]
-    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
             T::short_name(),
             "router",
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Delete, target, || {
-            delete_stateless_service(target, self, event_details.clone())
-        })
+        Ok(())
     }
 }
 
