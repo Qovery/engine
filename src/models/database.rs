@@ -1,11 +1,13 @@
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
-    get_tfstate_suffix, scale_down_database, send_progress_on_long_task, Action, Create, DatabaseOptions,
-    DatabaseService, Delete, Helm, Pause, Service, ServiceType, ServiceVersionCheckResult, StatefulService, Terraform,
+    get_tfstate_suffix, scale_down_database, Action, Create, DatabaseOptions, DatabaseService, Delete, Helm, Pause,
+    Service, ServiceType, ServiceVersionCheckResult, StatefulService, Terraform,
 };
 use crate::cloud_provider::utilities::{check_domain_for, managed_db_name_sanitizer, print_action};
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::cmd::kubectl;
+use crate::deployment_report::database::reporter::DatabaseDeploymentReporter;
+use crate::deployment_report::execute_long_deployment;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
 use crate::io_models::{ApplicationAdvancedSettings, Context, Listen, Listener, Listeners, ListenersHelper};
@@ -300,7 +302,7 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Create, target, || {
+        execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
             deploy_stateful_service(target, self, event_details.clone(), self.logger())
         })
     }
@@ -362,7 +364,9 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Pause, target, || scale_down_database(target, self, 0))
+        execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Pause), || {
+            scale_down_database(target, self, 0)
+        })
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
@@ -401,7 +405,7 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Delete, target, || {
+        execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Delete), || {
             delete_stateful_service(target, self, event_details.clone(), self.logger())
         })
     }
@@ -439,9 +443,13 @@ where
     }
 }
 
-impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> DatabaseService for Database<C, M, T> where
-    Database<C, M, T>: ToTeraContext
+impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> DatabaseService for Database<C, M, T>
+where
+    Database<C, M, T>: ToTeraContext,
 {
+    fn db_type(&self) -> service::DatabaseType {
+        T::db_type()
+    }
 }
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>

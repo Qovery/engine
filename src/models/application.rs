@@ -2,14 +2,16 @@ use crate::build_platform::Build;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate, Storage};
-use crate::cloud_provider::service::{delete_stateless_service, scale_down_application, send_progress_for_application};
+use crate::cloud_provider::service::{delete_stateless_service, scale_down_application};
 use crate::cloud_provider::service::{
-    deploy_stateless_service_error, deploy_user_stateless_service, send_progress_on_long_task, Action, Create, Delete,
-    Helm, Pause, Service, ServiceType, StatelessService,
+    deploy_stateless_service_error, deploy_user_stateless_service, Action, Create, Delete, Helm, Pause, Service,
+    ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
+use crate::deployment_report::application::reporter::ApplicationDeploymentReporter;
+use crate::deployment_report::execute_long_deployment;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
 use crate::io_models::{
@@ -487,7 +489,10 @@ where
             event_details,
             self.logger(),
         );
-        send_progress_for_application(self, Action::Create, target, || deploy_user_stateless_service(target, self))
+
+        execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Create), || {
+            deploy_user_stateless_service(target, self)
+        })
     }
 
     fn on_create_check(&self) -> Result<(), EngineError> {
@@ -506,7 +511,9 @@ where
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Create, target, || deploy_stateless_service_error(target, self))
+        execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Create), || {
+            deploy_stateless_service_error(target, self)
+        })
     }
 }
 
@@ -526,7 +533,7 @@ where
             self.logger(),
         );
 
-        send_progress_for_application(self, Action::Pause, target, || {
+        execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Pause), || {
             scale_down_application(target, self, 0, if self.is_stateful() { Statefulset } else { Deployment })
         })
     }
@@ -567,7 +574,7 @@ where
             self.logger(),
         );
 
-        send_progress_for_application(self, Action::Delete, target, || {
+        execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Delete), || {
             delete_stateless_service(target, self, event_details.clone())
         })
     }
@@ -577,20 +584,18 @@ where
     }
 
     #[named]
-    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
             T::short_name(),
             "application",
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
 
-        send_progress_on_long_task(self, Action::Delete, target, || {
-            delete_stateless_service(target, self, event_details.clone())
-        })
+        Ok(())
     }
 }
 
