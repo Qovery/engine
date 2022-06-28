@@ -116,12 +116,13 @@ impl DatabaseDeploymentReporter {
 
             move |msg: String| {
                 let listeners_helper = ListenersHelper::new(&listeners);
-                listeners_helper.deployment_in_progress(ProgressInfo::new(
-                    scope.clone(),
-                    Info,
-                    Some(msg.clone()),
-                    execution_id.clone(),
-                ));
+                let info = ProgressInfo::new(scope.clone(), Info, Some(msg.clone()), execution_id.clone());
+                match action {
+                    Action::Create => listeners_helper.deployment_in_progress(info),
+                    Action::Pause => listeners_helper.pause_in_progress(info),
+                    Action::Delete => listeners_helper.delete_in_progress(info),
+                    Action::Nothing => listeners_helper.deployment_in_progress(info),
+                };
                 logger.log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
             }
         };
