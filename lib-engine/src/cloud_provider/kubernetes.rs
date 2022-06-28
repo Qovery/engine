@@ -488,11 +488,11 @@ pub fn deploy_environment(
         .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
 
     // create all stateful services (database)
-    for service in environment.stateful_services() {
+    for database in &environment.databases {
         let _ = service::check_kubernetes_service_error(
-            service.exec_action(&deployment_target),
+            database.exec_action(&deployment_target),
             kubernetes,
-            service,
+            database.as_service(),
             event_details.clone(),
             logger,
             &deployment_target,
@@ -503,9 +503,9 @@ pub fn deploy_environment(
 
         // check all deployed services
         let _ = service::check_kubernetes_service_error(
-            service.exec_check_action(),
+            database.exec_check_action(),
             kubernetes,
-            service,
+            database.as_service(),
             event_details.clone(),
             logger,
             &deployment_target,
@@ -567,11 +567,11 @@ pub fn deploy_environment_error(
         .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
 
     // clean up all stateful services (database)
-    for service in environment.stateful_services() {
+    for service in &environment.databases {
         let _ = service::check_kubernetes_service_error(
             service.on_create_error(&deployment_target),
             kubernetes,
-            service,
+            service.as_service(),
             event_details.clone(),
             logger,
             &deployment_target,
@@ -627,11 +627,11 @@ pub fn pause_environment(
     }
 
     // create all stateful services (database)
-    for service in environment.stateful_services() {
+    for database in &environment.databases {
         let _ = service::check_kubernetes_service_error(
-            service.on_pause(&deployment_target),
+            database.on_pause(&deployment_target),
             kubernetes,
-            service,
+            database.as_service(),
             event_details.clone(),
             logger,
             &deployment_target,
@@ -656,11 +656,11 @@ pub fn pause_environment(
     }
 
     // check all deployed services
-    for service in environment.stateful_services() {
+    for database in &environment.databases {
         let _ = service::check_kubernetes_service_error(
-            service.on_pause_check(),
+            database.on_pause_check(),
             kubernetes,
-            service,
+            database.as_service(),
             event_details.clone(),
             logger,
             &deployment_target,
@@ -714,11 +714,11 @@ pub fn delete_environment(
     }
 
     // delete all stateful services (database)
-    for service in environment.stateful_services() {
+    for database in &environment.databases {
         let _ = service::check_kubernetes_service_error(
-            service.on_delete(&deployment_target),
+            database.on_delete(&deployment_target),
             kubernetes,
-            service,
+            database.as_service(),
             event_details.clone(),
             logger,
             &deployment_target,
@@ -743,11 +743,11 @@ pub fn delete_environment(
     }
 
     // check all deployed services
-    for service in environment.stateful_services() {
+    for database in &environment.databases {
         let _ = service::check_kubernetes_service_error(
-            service.on_delete_check(),
+            database.on_delete_check(),
             kubernetes,
-            service,
+            database.as_service(),
             event_details.clone(),
             logger,
             &deployment_target,
