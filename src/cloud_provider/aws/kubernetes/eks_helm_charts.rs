@@ -309,11 +309,11 @@ pub fn eks_aws_helm_charts(
                 },
                 ChartSetValue {
                     key: "resources.limits.memory".to_string(),
-                    value: "512Mi".to_string(),
+                    value: "640Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.memory".to_string(),
-                    value: "512Mi".to_string(),
+                    value: "640Mi".to_string(),
                 },
             ],
             ..Default::default()
