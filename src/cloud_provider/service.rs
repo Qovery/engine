@@ -21,7 +21,7 @@ use crate::cmd::kubectl::{
     kubectl_exec_scale_replicas_by_selector, ScalingKind,
 };
 use crate::cmd::structs::{KubernetesPodStatusPhase, LabelsContent};
-use crate::deployment::deployment_info::{format_app_deployment_info, get_app_deployment_info};
+use crate::deployment::deployment_info::{get_app_deployment_info, render_app_deployment_info};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
 use crate::io_models::ProgressLevel::Info;
@@ -1290,6 +1290,7 @@ where
     let app_id = *app.long_id();
     let namespace = target.environment.namespace().to_string();
     let kube_client = target.kube.clone();
+    let app_commit_id = app.get_build().git_repository.commit_id.to_string();
     let log = {
         let listeners = app.listeners().clone();
         let step = match action {
@@ -1317,18 +1318,19 @@ where
     let deployment_start = Arc::new(Barrier::new(2));
 
     // monitor thread to notify user while the blocking task is executed
-    let _ = thread::Builder::new().name("deployment-monitor".to_string()).spawn({
+    let th_handle = thread::Builder::new().name("deployment-monitor".to_string()).spawn({
         let deployment_start = deployment_start.clone();
 
         move || {
             // Before the launch of the deployment
             if let Ok(deployment_info) = block_on(get_app_deployment_info(&kube_client, &app_id, &namespace)) {
                 log(format!(
-                    "🛰 Application `{}` deployment is going to start: You have {} pod(s) running, {} service(s) running, {} network volume(s)",
+                    "🚀 Deployment of application `{}` at commit {} is starting: You have {} pod(s) running, {} service(s) running, {} network volume(s)",
                     to_short_id(&app_id),
+                    app_commit_id,
                     deployment_info.pods.len(),
                     deployment_info.services.len(),
-                    deployment_info.pvc.len()
+                    deployment_info.pvcs.len()
                 ));
             }
 
@@ -1342,7 +1344,7 @@ where
                     Ok(_) | Err(RecvTimeoutError::Disconnected) => break,
                 }
 
-                // Fetch deployment information
+                // Fetch deployment information from kube api
                 let deployment_info = match block_on(get_app_deployment_info(&kube_client, &app_id, &namespace)) {
                     Ok(deployment_info) => deployment_info,
                     Err(err) => {
@@ -1352,8 +1354,17 @@ where
                 };
 
                 // Format the deployment information and send to it to user
-                for message in format_app_deployment_info(&deployment_info).into_iter() {
-                    log(message);
+                let deployment_status_report = match render_app_deployment_info(&app_commit_id, &deployment_info) {
+                    Ok(deployment_status_report) => deployment_status_report,
+                    Err(err) => {
+                        log(format!("Cannot render deployment status report. Please contact us: {}", err));
+                        continue;
+                    },
+                };
+
+                // Send it to user
+                for line in deployment_status_report.trim_end().split('\n').map(str::to_string) {
+                    log(line)
                 }
             }
         }
@@ -1362,7 +1373,8 @@ where
     // Wait for our watcher thread to be ready before starting
     let _ = deployment_start.wait();
     let blocking_task_result = long_task();
-    let _ = tx.send(());
+    let _ = tx.send(()); // send signal to thread to terminate
+    let _ = th_handle.map(|th| th.join()); // wait for the thread to terminate
 
     blocking_task_result
 }
