@@ -2886,6 +2886,7 @@ name = "qovery-engine"
 version = "0.1.0"
 dependencies = [
  "base64 0.13.0",
+ "bitflags",
  "chrono",
  "cmd_lib",
  "derivative",

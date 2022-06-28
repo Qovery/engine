@@ -19,6 +19,7 @@ use crate::cmd;
 use crate::cmd::helm;
 use crate::cmd::kubectl::{kubectl_exec_delete_pod, kubectl_exec_delete_secret, kubectl_exec_get_pods};
 use crate::cmd::structs::KubernetesPodStatusPhase;
+use crate::cmd::terraform::TerraformError;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventDetails, EventMessage, Stage, ToTransmitter};
 use crate::io_models::ProgressLevel::Info;
@@ -239,36 +240,26 @@ pub struct DatabaseTerraformConfig {
     pub target_fqdn: String,
 }
 
-pub enum DatabaseTerraformConfigError {
-    FileDoesntExist(CommandError),
-    FileCannotBeParsed(CommandError),
-}
-
 pub fn get_database_terraform_config(
     database_terraform_config_file: &str,
-) -> Result<DatabaseTerraformConfig, DatabaseTerraformConfigError> {
+) -> Result<DatabaseTerraformConfig, TerraformError> {
     let file_content = match File::open(&database_terraform_config_file) {
         Ok(f) => f,
         Err(e) => {
-            return Err(DatabaseTerraformConfigError::FileDoesntExist(CommandError::new(
-                format!("Cannot open database config file: {}", database_terraform_config_file),
-                Some(e.to_string()),
-                None,
-            )));
+            return Err(TerraformError::ConfigFileNotFound {
+                path: database_terraform_config_file.to_string(),
+                raw_message: format!("Terraform config error, database config cannot be found.\n{}", e),
+            });
         }
     };
 
     let reader = BufReader::new(file_content);
     match serde_json::from_reader(reader) {
         Ok(config) => Ok(config),
-        Err(e) => Err(DatabaseTerraformConfigError::FileCannotBeParsed(CommandError::new(
-            format!(
-                "Error while parsing database terraform config file {}",
-                database_terraform_config_file
-            ),
-            Some(e.to_string()),
-            None,
-        ))),
+        Err(e) => Err(TerraformError::ConfigFileInvalidContent {
+            path: database_terraform_config_file.to_string(),
+            raw_message: format!("Terraform config error, database config cannot be parsed.\n{}", e),
+        }),
     }
 }
 
@@ -413,7 +404,7 @@ where
     }
 
     cmd::terraform::terraform_init_validate_plan_apply(workspace_dir.as_str(), service.context().is_dry_run_deploy())
-        .map_err(|e| EngineError::new_terraform_error_while_executing_pipeline(event_details.clone(), e))?;
+        .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
     // Gather database TF generated JSON config if any
     // if configuration exists, it means that HELM will be used to deploy managed DB service external name chart instead on Terraform
@@ -472,14 +463,7 @@ where
             helm.upgrade(&chart, &[])
                 .map_err(|e| helm::to_engine_error(&event_details, e))?;
         }
-        Err(e) => match e {
-            DatabaseTerraformConfigError::FileDoesntExist(e) => {
-                return Err(EngineError::new_terraform_database_config_mismatch(event_details, e));
-            }
-            DatabaseTerraformConfigError::FileCannotBeParsed(e) => {
-                return Err(EngineError::new_terraform_database_config_mismatch(event_details, e));
-            }
-        },
+        Err(e) => return Err(EngineError::new_terraform_error(event_details, e)),
     }
 
     Ok(())
@@ -566,7 +550,7 @@ where
             let _ = delete_terraform_tfstate_secret(kubernetes, environment.namespace(), &get_tfstate_name(service));
         }
         Err(e) => {
-            let engine_err = EngineError::new_terraform_error_while_executing_destroy_pipeline(event_details, e);
+            let engine_err = EngineError::new_terraform_error(event_details, e);
 
             logger.log(EngineEvent::Error(engine_err.clone(), None));
 

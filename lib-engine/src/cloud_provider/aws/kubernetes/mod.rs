@@ -33,7 +33,10 @@ use crate::cloud_provider::CloudProvider;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
-use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
+use crate::cmd::terraform::{
+    terraform_apply_with_tf_workers_resources, terraform_init_validate_plan_apply, terraform_init_validate_state_list,
+    TerraformError,
+};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
@@ -890,7 +893,7 @@ fn create(
 
     // terraform deployment dedicated to cloud resources
     if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), kubernetes.context().is_dry_run_deploy()) {
-        return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
+        return Err(EngineError::new_terraform_error(event_details, e));
     }
 
     let mut cluster_secrets = ClusterSecretsAws::new_from_cluster_secrets_io(
@@ -922,7 +925,7 @@ fn create(
 
             // read config generated after terraform infra bootstrap/update
             let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
-                .map_err(|e| EngineError::new_terraform_qovery_config_mismatch(event_details.clone(), e))?;
+                .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
             // send cluster info to vault if info mismatch
             // create vault connection (Vault connectivity should not be on the critical deployment path,
@@ -940,9 +943,12 @@ fn create(
             let port = match qovery_terraform_config.kubernetes_port_to_u16() {
                 Ok(p) => p,
                 Err(e) => {
-                    return Err(EngineError::new_terraform_qovery_config_mismatch(
+                    return Err(EngineError::new_terraform_error(
                         event_details,
-                        CommandError::new_from_safe_message(e),
+                        TerraformError::ConfigFileInvalidContent {
+                            path: qovery_terraform_config_file,
+                            raw_message: e,
+                        },
                     ))
                 }
             };
@@ -950,18 +956,13 @@ fn create(
             // wait for k3s port to be open
             // retry for 10 min, a reboot will occur after 5 min if nothing happens (see EC2 Terraform user config)
             wait_until_port_is_open(
-                    &TcpCheckSource::DnsName(qovery_terraform_config.aws_ec2_public_hostname.as_str()),
-                    port,
-                    600,
-                    kubernetes.logger(),
-                    event_details.clone(),
-                )
-                    .map_err(|e| {
-                        EngineError::new_terraform_qovery_config_mismatch(
-                            event_details.clone(),
-                            CommandError::new("Wasn't able to connect to Kubernetes API, can't continue. Did you manually performed changes AWS side?".to_string(), Some(format!("{:?}", e)), None),
-                        )
-                    })?;
+                &TcpCheckSource::DnsName(qovery_terraform_config.aws_ec2_public_hostname.as_str()),
+                port,
+                600,
+                kubernetes.logger(),
+                event_details.clone(),
+            )
+            .map_err(|_| EngineError::new_k8s_cannot_reach_api(event_details.clone()))?;
 
             // during an instance replacement, the EC2 host dns will change and will require the kubeconfig to be updated
             // we need to ensure the kubeconfig is the correct one by checking the current instance dns in the kubeconfig
@@ -1292,7 +1293,7 @@ fn pause(
             tf_workers_resources_name
         }
         Err(e) => {
-            let error = EngineError::new_terraform_state_does_not_exist(event_details, e);
+            let error = EngineError::new_terraform_error(event_details, e);
             kubernetes.logger().log(EngineEvent::Error(error.clone(), None));
             return Err(error);
         }
@@ -1367,12 +1368,6 @@ fn pause(
         }
     }
 
-    let mut terraform_args_string = vec!["apply".to_string(), "-auto-approve".to_string()];
-    for x in tf_workers_resources {
-        terraform_args_string.push(format!("-target={}", x));
-    }
-    let terraform_args = terraform_args_string.iter().map(|x| &**x).collect();
-
     kubernetes.send_to_customer(
         format!(
             "Pausing {} {} cluster deployment with id {}",
@@ -1389,7 +1384,7 @@ fn pause(
         EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
     ));
 
-    match terraform_exec(temp_dir.as_str(), terraform_args) {
+    match terraform_apply_with_tf_workers_resources(temp_dir.as_str(), tf_workers_resources) {
         Ok(_) => {
             let message = format!("Kubernetes cluster {} successfully paused", kubernetes.name());
             kubernetes.send_to_customer(&message, &listeners_helper);
@@ -1399,7 +1394,7 @@ fn pause(
 
             Ok(())
         }
-        Err(e) => Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e)),
+        Err(e) => Err(EngineError::new_terraform_error(event_details, e)),
     }
 }
 
@@ -1540,7 +1535,7 @@ fn delete(
     if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), false) {
         // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
         kubernetes.logger().log(EngineEvent::Error(
-            EngineError::new_terraform_error_while_executing_pipeline(event_details.clone(), e),
+            EngineError::new_terraform_error(event_details.clone(), e),
             None,
         ));
     };
@@ -1759,17 +1754,12 @@ fn delete(
             ));
             Ok(())
         }
-        Err(Operation { error, .. }) => {
-            return Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-                event_details,
-                error,
-            ))
-        }
+        Err(Operation { error, .. }) => return Err(EngineError::new_terraform_error(event_details, error)),
         Err(Error::Internal(msg)) => {
-            return Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
+            return Err(EngineError::new_terraform_error(
                 event_details,
-                CommandError::new("Error while trying to perform Terraform destroy".to_string(), Some(msg), None),
-            ))
+                TerraformError::Destroy { raw_message: msg },
+            ));
         }
     }?;
 

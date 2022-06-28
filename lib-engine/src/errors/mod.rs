@@ -7,6 +7,7 @@ use crate::build_platform::BuildError;
 use crate::cmd;
 use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
+use crate::cmd::terraform::TerraformError;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
 use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
@@ -19,6 +20,8 @@ use std::fmt::{Display, Formatter};
 use std::io::Error;
 use thiserror::Error;
 use url::Url;
+
+const DEFAULT_HINT_MESSAGE: &str = "Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/";
 
 /// ErrorMessageVerbosity: represents command error message's verbosity from minimal to full verbosity.
 pub enum ErrorMessageVerbosity {
@@ -461,6 +464,47 @@ impl From<DockerError> for CommandError {
     }
 }
 
+impl From<TerraformError> for CommandError {
+    fn from(terraform_error: TerraformError) -> Self {
+        // Terraform errors are 99% safe and carry useful data to be sent to end-users.
+        // Hence, for the time being, everything is sent back to end-users.
+        // TODO(benjaminch): Terraform errors should be parsed properly extracting useful data from it.
+        match terraform_error {
+            TerraformError::Unknown { message, raw_message } => {
+                CommandError::new(format!("{} {}", message, raw_message), None, None)
+            }
+            TerraformError::CannotDeleteLockFile {
+                terraform_provider_lock: _terraform_provider_lock,
+                raw_message,
+            } => CommandError::new(raw_message, None, None),
+            TerraformError::Initialize { raw_message } => CommandError::new(raw_message, None, None),
+            TerraformError::Validate { raw_message } => CommandError::new(raw_message, None, None),
+            TerraformError::StateList { raw_message } => CommandError::new(raw_message, None, None),
+            TerraformError::Plan { raw_message } => CommandError::new(raw_message, None, None),
+            TerraformError::Apply { raw_message } => CommandError::new(raw_message, None, None),
+            TerraformError::Destroy { raw_message } => CommandError::new(raw_message, None, None),
+            TerraformError::ConfigFileNotFound {
+                path: _path,
+                raw_message,
+            } => CommandError::new(raw_message, None, None),
+            TerraformError::ConfigFileInvalidContent {
+                path: _path,
+                raw_message,
+            } => CommandError::new(raw_message, None, None),
+            TerraformError::CannotRemoveEntryOutOfStateList {
+                entry_to_be_removed: _entry_to_be_removed,
+                raw_message,
+            } => CommandError::new(raw_message, None, None),
+            TerraformError::ContextUnsupportedParameterValue {
+                service_type: _service_type,
+                parameter_name: _parameter_name,
+                parameter_value: _parameter_value,
+                raw_message,
+            } => CommandError::new(raw_message, None, None),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 /// Tag: unique identifier for an error.
 pub enum Tag {
@@ -518,6 +562,8 @@ pub enum Tag {
     CannotConnectK8sCluster,
     /// CannotExecuteK8sApiCustomMetrics: represents an error when trying to get K8s API custom metrics.
     CannotExecuteK8sApiCustomMetrics,
+    /// K8sCannotConnectToApi: represents an error when trying to contact K8s API.
+    K8sCannotReachToApi,
     /// K8sPodDisruptionBudgetInInvalidState: represents an error where pod disruption budget is in an invalid state.
     K8sPodDisruptionBudgetInInvalidState,
     /// K8sPodDisruptionBudgetCqnnotBeRetrieved: represents an error where pod disruption budget cannot be retrieved.
@@ -568,12 +614,26 @@ pub enum Tag {
     CannotCopyFilesFromDirectoryToDirectory,
     /// CannotPauseClusterTasksAreRunning: represents an error where we cannot pause the cluster because some tasks are still running in the engine.
     CannotPauseClusterTasksAreRunning,
-    /// TerraformQoveryConfigMismatch: terraform qovery config retrieve mismatch
-    TerraformQoveryConfigMismatch,
-    /// TerraformDatabaseConfigMismatch: terraform database config retrieve mismatch
-    TerraformDatabaseConfigMismatch,
-    /// TerraformDatabaseMissingConfig: terraform database config retrieve fail
-    TerraformDatabaseMissingConfig,
+    /// TerraformUnknownError: terraform unknown error
+    TerraformUnknownError,
+    /// TerraformConfigFileNotFound: terraform config file cannot be found
+    TerraformConfigFileNotFound,
+    /// TerraformConfigFileInvalidContent: terraform config file has invalid content
+    TerraformConfigFileInvalidContent,
+    /// TerraformCannotDeleteLockFile: terraform cannot delete Lock file.
+    TerraformCannotDeleteLockFile,
+    /// TerraformInitError: terraform error while applying init command.
+    TerraformInitError,
+    /// TerraformValidateError: terraform error while applying validate command.
+    TerraformValidateError,
+    /// TerraformPlanError: terraform error while applying plan command.
+    TerraformPlanError,
+    /// TerraformApplyError: terraform error while applying apply command.
+    TerraformApplyError,
+    /// TerraformStateListError: terraform error while applying state list command.
+    TerraformStatelistError,
+    /// TerraformDestroyError: terraform error while applying apply destroy command.
+    TerraformDestroyError,
     /// TerraformCannotRemoveEntryOut: represents an error where we cannot remove an entry out of Terraform.
     TerraformCannotRemoveEntryOut,
     /// TerraformNoStateFileExists: represents an error where there is no Terraform state file.
@@ -1572,6 +1632,22 @@ impl EngineError {
         )
     }
 
+    /// Creates new error for kubernetes API cannot be reached.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_k8s_cannot_reach_api(event_details: EventDetails) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sCannotReachToApi,
+            "Kubernetes API cannot be reached.".to_string(),
+            None,
+            None,
+            Some("Did you manually performed changes AWS side?".to_string()),
+        )
+    }
+
     /// Creates new error for kubernetes pod disruption budget being in an invalid state.
     ///
     /// Arguments:
@@ -2082,179 +2158,114 @@ impl EngineError {
         )
     }
 
-    /// Creates new error for terraform qovery config mismatch
+    /// Creates new error for terraform.
+    /// Every single Terraform error raised in the engine should end-up here.
     ///
     /// Arguments:
     ///
     /// * `event_details`: Error linked event details.
-    /// * `raw_error`: Raw error message.
-    pub fn new_terraform_qovery_config_mismatch(event_details: EventDetails, raw_error: CommandError) -> EngineError {
-        let message = "Error while trying to use Qovery Terraform generated config.";
-
-        EngineError::new(
-            event_details,
-            Tag::TerraformQoveryConfigMismatch,
-            message.to_string(),
-            Some(raw_error),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new error for terraform database config mismatch
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `raw_error`: Raw error message.
-    pub fn new_terraform_database_config_mismatch(event_details: EventDetails, raw_error: CommandError) -> EngineError {
-        let message = "Error while trying to use database Terraform generated config.";
-
-        EngineError::new(
-            event_details,
-            Tag::TerraformDatabaseConfigMismatch,
-            message.to_string(),
-            Some(raw_error),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new error for terraform database missing
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `raw_error`: Raw error message.
-    pub fn new_terraform_database_missing_config(event_details: EventDetails, raw_error: CommandError) -> EngineError {
-        let message = "Error while trying to find database Terraform generated config.";
-
-        EngineError::new(
-            event_details,
-            Tag::TerraformDatabaseMissingConfig,
-            message.to_string(),
-            Some(raw_error),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new error for removing an element out of terraform.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `entry`: Entry which failed to be removed out of Terraform.
-    /// * `raw_error`: Raw error message.
-    pub fn new_terraform_cannot_remove_entry_out(
-        event_details: EventDetails,
-        entry: String,
-        raw_error: CommandError,
-    ) -> EngineError {
-        let message = format!("Error while trying to remove {} out of terraform state file.", entry);
-
-        EngineError::new(
-            event_details,
-            Tag::TerraformCannotRemoveEntryOut,
-            message,
-            Some(raw_error),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new error for Terraform state file doesn't exist.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `raw_error`: Raw error message.
-    pub fn new_terraform_state_does_not_exist(event_details: EventDetails, raw_error: CommandError) -> EngineError {
-        let message = "No state list exists yet.";
-
-        EngineError::new(
-            event_details,
-            Tag::TerraformNoStateFileExists,
-            message.to_string(),
-            Some(raw_error),
-            None,
-            Some("This is normal if it's a newly created cluster".to_string()),
-        )
-    }
-
-    /// Creates new error for Terraform having an issue during Terraform pipeline: init, plan & apply.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `raw_error`: Raw error message.
-    pub fn new_terraform_error_while_executing_pipeline(
-        event_details: EventDetails,
-        raw_error: CommandError,
-    ) -> EngineError {
-        let message = "Error while applying Terraform pipeline: init, plan & apply";
-
-        EngineError::new(
-            event_details,
-            Tag::TerraformErrorWhileExecutingPipeline,
-            message.to_string(),
-            Some(raw_error),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new error for Terraform having an issue during Terraform pipeline: init, validate & destroy.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `raw_error`: Raw error message.
-    pub fn new_terraform_error_while_executing_destroy_pipeline(
-        event_details: EventDetails,
-        raw_error: CommandError,
-    ) -> EngineError {
-        let message = "Error while applying Terraform pipeline: init, validate & destroy";
-
-        EngineError::new(
-            event_details,
-            Tag::TerraformErrorWhileExecutingDestroyPipeline,
-            message.to_string(),
-            Some(raw_error),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new error representing an unsupported value for Terraform context parameter.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `service_type`: Service type.
-    /// * `parameter_name`: Context parameter name.
-    /// * `parameter_value`: Context parameter value.
-    /// * `raw_error`: Raw error message.
-    pub fn new_terraform_unsupported_context_parameter_value(
-        event_details: EventDetails,
-        service_type: String,
-        parameter_name: String,
-        parameter_value: String,
-        raw_error: Option<CommandError>,
-    ) -> EngineError {
-        let message = format!(
-            "{} value `{}` not supported for parameter `{}`",
-            service_type, parameter_value, parameter_name,
-        );
-
-        EngineError::new(
-            event_details,
-            Tag::TerraformContextUnsupportedParameterValue,
-            message,
-            raw_error,
-            None,
-            None,
-        )
+    /// * `raw_error`: Raw Terraform error message.
+    pub fn new_terraform_error(event_details: EventDetails, terraform_error: TerraformError) -> EngineError {
+        // All Terraform issues are handled here.
+        // TODO(benjaminch): Add some point, safe message should be moved inside Terraform impl directly
+        match terraform_error {
+            TerraformError::Unknown { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformUnknownError,
+                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                Some(DEFAULT_HINT_MESSAGE.to_string()),
+            ),
+            TerraformError::ConfigFileNotFound { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformConfigFileNotFound,
+                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                Some("This is normal if it's a newly created cluster".to_string()),
+            ),
+            TerraformError::ConfigFileInvalidContent { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformConfigFileInvalidContent,
+                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                Some("Did you manually performed changes AWS side?".to_string()),
+            ),
+            TerraformError::CannotDeleteLockFile { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformCannotDeleteLockFile,
+                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                None,
+            ),
+            TerraformError::CannotRemoveEntryOutOfStateList { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformCannotRemoveEntryOut,
+                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                None,
+            ),
+            TerraformError::Initialize { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformInitError,
+                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                None,
+            ),
+            TerraformError::Validate { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformValidateError,
+                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                None,
+            ),
+            TerraformError::StateList { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformStatelistError,
+                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                None,
+            ),
+            TerraformError::Plan { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformPlanError,
+                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                None,
+            ),
+            TerraformError::Apply { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformApplyError,
+                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                None,
+            ),
+            TerraformError::Destroy { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformDestroyError,
+                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                None,
+            ),
+            TerraformError::ContextUnsupportedParameterValue { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformContextUnsupportedParameterValue,
+                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                None,
+            ),
+        }
     }
 
     /// Creates new error while setup Helm charts to deploy.

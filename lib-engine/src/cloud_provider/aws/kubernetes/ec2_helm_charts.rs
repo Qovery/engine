@@ -5,6 +5,7 @@ use crate::cloud_provider::helm::{
     CoreDNSConfigChart, HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
+use crate::cmd::terraform::TerraformError;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 use serde::{Deserialize, Serialize};
@@ -61,26 +62,24 @@ pub struct Ec2ChartsConfigPrerequisites {
 
 pub fn get_aws_ec2_qovery_terraform_config(
     qovery_terraform_config_file: &str,
-) -> Result<AwsEc2QoveryTerraformConfig, CommandError> {
+) -> Result<AwsEc2QoveryTerraformConfig, TerraformError> {
     let content_file = match File::open(&qovery_terraform_config_file) {
         Ok(x) => x,
         Err(e) => {
-            return Err(CommandError::new(
-                "Can't deploy helm chart as Qovery terraform config file has not been rendered by Terraform. Are you running it in dry run mode?".to_string(),
-                Some(e.to_string()),
-                None,
-            ));
+            return Err(TerraformError::ConfigFileNotFound {
+                path: qovery_terraform_config_file.to_string(),
+                raw_message: e.to_string(),
+            });
         }
     };
 
     let reader = BufReader::new(content_file);
     match serde_json::from_reader(reader) {
         Ok(config) => Ok(config),
-        Err(e) => Err(CommandError::new(
-            format!("Error while parsing terraform config file {}", qovery_terraform_config_file),
-            Some(e.to_string()),
-            None,
-        )),
+        Err(e) => Err(TerraformError::ConfigFileInvalidContent {
+            path: qovery_terraform_config_file.to_string(),
+            raw_message: e.to_string(),
+        }),
     }
 }
 
