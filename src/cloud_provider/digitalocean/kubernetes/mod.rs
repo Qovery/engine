@@ -33,7 +33,9 @@ use crate::cmd::kubectl::{
     do_kubectl_exec_get_loadbalancer_id, kubectl_exec_get_all_namespaces, kubectl_exec_get_events,
 };
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
-use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
+use crate::cmd::terraform::{
+    terraform_init_validate_plan_apply, terraform_init_validate_state_list, terraform_state_rm_entry, TerraformError,
+};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
@@ -548,17 +550,13 @@ impl DOKS {
                 for item in items_type {
                     for entry in x.clone() {
                         if entry.starts_with(item) {
-                            match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
+                            match terraform_state_rm_entry(temp_dir.as_str(), &entry) {
                                 Ok(_) => self.logger().log(EngineEvent::Info(
                                     event_details.clone(),
                                     EventMessage::new_from_safe(format!("Successfully removed {}", &entry)),
                                 )),
                                 Err(e) => {
-                                    return Err(EngineError::new_terraform_cannot_remove_entry_out(
-                                        event_details,
-                                        entry.to_string(),
-                                        e,
-                                    ))
+                                    return Err(EngineError::new_terraform_error(event_details, e));
                                 }
                             }
                         };
@@ -566,7 +564,7 @@ impl DOKS {
                 }
             }
             Err(e) => self.logger().log(EngineEvent::Error(
-                EngineError::new_terraform_state_does_not_exist(event_details.clone(), e),
+                EngineError::new_terraform_error(event_details.clone(), e),
                 None,
             )),
         };
@@ -581,7 +579,7 @@ impl DOKS {
 
         // terraform deployment dedicated to cloud resources
         if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
-            return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
+            return Err(EngineError::new_terraform_error(event_details, e));
         }
 
         let kubeconfig_path = &self.get_kubeconfig_file_path()?;
@@ -869,7 +867,7 @@ impl DOKS {
         if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), false) {
             // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
             self.logger().log(EngineEvent::Error(
-                EngineError::new_terraform_error_while_executing_pipeline(event_details.clone(), e),
+                EngineError::new_terraform_error(event_details.clone(), e),
                 None,
             ));
         };
@@ -1078,13 +1076,10 @@ impl DOKS {
                 ));
                 Ok(())
             }
-            Err(Operation { error, .. }) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
+            Err(Operation { error, .. }) => Err(EngineError::new_terraform_error(event_details, error)),
+            Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error(
                 event_details,
-                error,
-            )),
-            Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-                event_details,
-                CommandError::new("Error while performing Terraform destroy.".to_string(), Some(msg), None),
+                TerraformError::Destroy { raw_message: msg },
             )),
         }
     }
@@ -1451,7 +1446,7 @@ impl Kubernetes for DOKS {
                 }
             },
             Err(e) => {
-                return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
+                return Err(EngineError::new_terraform_error(event_details, e));
             }
         }
 

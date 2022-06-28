@@ -388,7 +388,7 @@ impl Kubernetes for EKS {
                         ));
                     }
                     Err(e) => {
-                        return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
+                        return Err(EngineError::new_terraform_error(event_details, e));
                     }
                 }
             }
@@ -523,7 +523,7 @@ impl Kubernetes for EKS {
                 // enable cluster autoscaler deployment
                 self.set_cluster_autoscaler_replicas(event_details.clone(), 1)?;
 
-                return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
+                return Err(EngineError::new_terraform_error(event_details, e));
             }
         }
 

@@ -91,8 +91,6 @@ pub enum Tag {
     K8sValidateRequiredCPUandBurstableError,
     TerraformContextUnsupportedParameterValue,
     TerraformQoveryConfigMismatch,
-    TerraformDatabaseConfigMismatch,
-    TerraformDatabaseMissingConfig,
     ClientServiceFailedToStart,
     ClientServiceFailedToDeployBeforeStart,
     DatabaseFailedToStartAfterSeveralRetries,
@@ -143,6 +141,16 @@ pub enum Tag {
     CloudProviderInformationError,
     DnsProviderInvalidCredentials,
     DnsProviderInvalidApiUrl,
+    K8sCannotReachToApi,
+    TerraformUnknownError,
+    TerraformConfigFileInvalidContent,
+    TerraformCannotDeleteLockFile,
+    TerraformInitError,
+    TerraformValidateError,
+    TerraformPlanError,
+    TerraformApplyError,
+    TerraformStatelistError,
+    TerraformDestroyError,
 }
 
 impl From<errors::Tag> for Tag {
@@ -258,9 +266,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::ContainerRegistryError => Tag::ContainerRegistryError,
             errors::Tag::UnsupportedClusterKind => Tag::UnsupportedClusterKind,
             errors::Tag::NotAllowedInstanceType => Tag::NotAllowedInstanceType,
-            errors::Tag::TerraformQoveryConfigMismatch => Tag::TerraformQoveryConfigMismatch,
-            errors::Tag::TerraformDatabaseConfigMismatch => Tag::TerraformDatabaseConfigMismatch,
-            errors::Tag::TerraformDatabaseMissingConfig => Tag::TerraformDatabaseMissingConfig,
+            errors::Tag::TerraformConfigFileNotFound => Tag::TerraformQoveryConfigMismatch,
             errors::Tag::KubeconfigFileDoNotPermitToConnectToK8sCluster => {
                 Tag::KubeconfigFileDoNotPermitToConnectToK8sCluster
             }
@@ -284,6 +290,16 @@ impl From<errors::Tag> for Tag {
             errors::Tag::DnsProviderInvalidCredentials => Tag::DnsProviderInvalidCredentials,
             errors::Tag::DnsProviderInvalidApiUrl => Tag::DnsProviderInvalidApiUrl,
             errors::Tag::K8sErrorCopySecret => Tag::K8sErrorCopySecret,
+            errors::Tag::K8sCannotReachToApi => Tag::K8sCannotReachToApi,
+            errors::Tag::TerraformUnknownError => Tag::TerraformUnknownError,
+            errors::Tag::TerraformConfigFileInvalidContent => Tag::TerraformConfigFileInvalidContent,
+            errors::Tag::TerraformCannotDeleteLockFile => Tag::TerraformCannotDeleteLockFile,
+            errors::Tag::TerraformInitError => Tag::TerraformInitError,
+            errors::Tag::TerraformValidateError => Tag::TerraformValidateError,
+            errors::Tag::TerraformPlanError => Tag::TerraformPlanError,
+            errors::Tag::TerraformApplyError => Tag::TerraformApplyError,
+            errors::Tag::TerraformStatelistError => Tag::TerraformStatelistError,
+            errors::Tag::TerraformDestroyError => Tag::TerraformDestroyError,
         }
     }
 }
