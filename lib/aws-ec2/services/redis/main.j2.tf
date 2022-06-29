@@ -28,6 +28,12 @@ data "aws_security_group" "selected" {
   }
 }
 
+# /!\ DO NOT REMOVE: adding a timestamp to final snapshot in order to avoid duplicate which triggers a tf error. /!\
+locals {
+  final_snap_timestamp = replace(timestamp(), "/[- TZ:]/", "")
+  final_snapshot_name = "${var.final_snapshot_name}-${local.final_snap_timestamp}"
+}
+
 resource "helm_release" "elasticache_instance_external_name" {
   name = "${aws_elasticache_cluster.elasticache_cluster.id}-externalname"
   chart = "external-name-svc"
@@ -77,7 +83,7 @@ resource "aws_elasticache_cluster" "elasticache_cluster" {
   # need to add this dirty trick while Hashicorp fix this issue
   # https://github.com/hashicorp/terraform-provider-aws/issues/15625
   lifecycle {
-    ignore_changes = [engine_version]
+    ignore_changes = [engine_version {%- if not skip_final_snapshot %}, final_snapshot_identifier{%- endif %}]
   }
 
   {%- if replication_group_id is defined %}
@@ -109,6 +115,6 @@ resource "aws_elasticache_cluster" "elasticache_cluster" {
   snapshot_window = var.preferred_backup_window
   snapshot_retention_limit = var.backup_retention_period
   {%- if not skip_final_snapshot %}
-  final_snapshot_identifier = var.final_snapshot_name
+  final_snapshot_identifier = local.final_snapshot_name
   {%- endif %}
 }

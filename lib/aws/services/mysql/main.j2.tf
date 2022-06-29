@@ -32,6 +32,12 @@ data "aws_iam_role" "rds_enhanced_monitoring" {
   name = "qovery-rds-enhanced-monitoring-${var.kubernetes_cluster_id}"
 }
 
+# /!\ DO NOT REMOVE: adding a timestamp to final snapshot in order to avoid duplicate which triggers a tf error. /!\
+locals {
+  final_snap_timestamp = replace(timestamp(), "/[- TZ:]/", "")
+  final_snapshot_name = "${var.final_snapshot_name}-${local.final_snap_timestamp}"
+}
+
 resource "helm_release" "mysql_instance_external_name" {
   name = "${aws_db_instance.mysql_instance.id}-externalname"
   chart = "external-name-svc"
@@ -124,7 +130,12 @@ resource "aws_db_instance" "mysql_instance" {
   backup_window = var.preferred_backup_window
   skip_final_snapshot = var.skip_final_snapshot
   {%- if not skip_final_snapshot %}
-  final_snapshot_identifier = var.final_snapshot_name
+  final_snapshot_identifier = local.final_snapshot_name
+  lifecycle {
+    ignore_changes = [
+      final_snapshot_identifier,
+    ]
+  }
   {%- endif %}
   copy_tags_to_snapshot = true
   delete_automated_backups = var.delete_automated_backups
