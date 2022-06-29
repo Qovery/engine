@@ -29,6 +29,7 @@ pub struct PodRenderContext {
     pub name: String,
     pub state: DeploymentState,
     pub message: Option<String>,
+    pub restart_count: u32,
     pub events: Vec<EventRenderContext>,
 }
 
@@ -190,16 +191,18 @@ pub fn to_pods_render_context(
                 name: pod_name.to_string(),
                 state: DeploymentState::Terminating,
                 message: None,
+                restart_count: pod.restart_count(),
                 events: vec![],
             });
             continue;
         }
 
-        if let Some(error_reason) = is_pod_in_error(pod) {
+        if let Some(error_reason) = pod.is_failing() {
             pods_failing.push(PodRenderContext {
                 name: pod_name.to_string(),
                 state: DeploymentState::Failing,
                 message: Some(error_reason.to_string()),
+                restart_count: pod.restart_count(),
                 events: get_last_events_for(events.iter(), pod_uid, 2)
                     .flat_map(to_event_context)
                     .collect(),
@@ -207,11 +210,12 @@ pub fn to_pods_render_context(
             continue;
         }
 
-        if is_pod_starting(pod) {
+        if pod.is_starting() {
             pods_starting.push(PodRenderContext {
                 name: pod_name.to_string(),
                 state: DeploymentState::Starting,
                 message: None,
+                restart_count: pod.restart_count(),
                 events: get_last_events_for(events.iter(), pod_uid, 2)
                     .flat_map(to_event_context)
                     .collect(),
@@ -287,80 +291,99 @@ pub fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -
     pvcs_context
 }
 
-pub fn is_pod_in_error<'a>(pod: &'a Pod) -> Option<&'a str> {
-    // https://stackoverflow.com/questions/57821723/list-of-all-reasons-for-container-states-in-kubernetes
-    let is_error_reason = |reason: &str| {
-        matches!(
-            reason,
-            "OOMKilled"
-                | "Error"
-                | "CrashLoopBackOff"
-                | "ErrImagePull"
-                | "ImagePullBackOff"
-                | "CreateContainerConfigError"
-                | "InvalidImageName"
-                | "CreateContainerError"
-                | "ContainerCannotRun"
-                | "DeadlineExceeded"
-        )
-    };
-
-    let to_error_message = |reason: &'a str| -> &'a str {
-        match reason {
-            "OOMKilled" => "OOM killed, pod have been killed due to lack of/using too much memory resources",
-            "CrashLoopBackOff" => "crash loop, pod is restarting too frequently. Look into your application logs",
-            "ErrImagePull" => "cannot pull the image for your container",
-            "ImagePullBackOff" => "cannot pull the image for your container",
-            "Error" => "an undefined error occurred. Look into your applications logs and message below",
-            _ => reason,
-        }
-    };
-
-    // We need to loop over all status of each container in the pod in order to know
-    // if there is something fishy or not, not really friendly...
-    match pod.status.as_ref() {
-        Some(PodStatus {
-            container_statuses: Some(ref statuses),
-            ..
-        }) => {
-            for status in statuses {
-                match &status.state {
-                    Some(ContainerState {
-                        waiting: Some(ContainerStateWaiting { reason: Some(r), .. }),
-                        ..
-                    }) if is_error_reason(r) => return Some(to_error_message(r)),
-                    Some(ContainerState {
-                        terminated: Some(ContainerStateTerminated { reason: Some(r), .. }),
-                        ..
-                    }) if is_error_reason(r) => return Some(to_error_message(r)),
-                    _ => {}
-                }
-            }
-            None
-        }
-        _ => None,
-    }
+pub trait QPodExt {
+    fn restart_count(&self) -> u32;
+    fn is_starting(&self) -> bool;
+    fn is_failing(&self) -> Option<&str>;
 }
 
-pub fn is_pod_starting(pod: &Pod) -> bool {
-    // If the pod is in pending phase, it means it starts
-    if let Some("Pending") = pod.status.as_ref().and_then(|x| x.phase.as_deref()) {
-        return true;
-    }
-
-    let conditions = match &pod.status {
-        None => return true,
-        Some(status) => status.conditions.as_deref().unwrap_or(&[]),
-    };
-
-    // If there is a condition not ready, it means the pod is still starting
-    for condition in conditions {
-        if condition.status == "False" {
-            return true;
+impl QPodExt for Pod {
+    fn restart_count(&self) -> u32 {
+        match &self.status {
+            None => 0,
+            Some(status) => status
+                .container_statuses
+                .iter()
+                .flatten()
+                .fold(0, |acc, status| acc + status.restart_count as u32),
         }
     }
 
-    false
+    fn is_starting(&self) -> bool {
+        // If the pod is in pending phase, it means it starts
+        if let Some("Pending") = self.status.as_ref().and_then(|x| x.phase.as_deref()) {
+            return true;
+        }
+
+        let conditions = match &self.status {
+            None => return true,
+            Some(status) => status.conditions.as_deref().unwrap_or(&[]),
+        };
+
+        // If there is a condition not ready, it means the pod is still starting
+        for condition in conditions {
+            if condition.status == "False" {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn is_failing<'a>(&'a self) -> Option<&'a str> {
+        // https://stackoverflow.com/questions/57821723/list-of-all-reasons-for-container-states-in-kubernetes
+        let is_error_reason = |reason: &str| {
+            matches!(
+                reason,
+                "OOMKilled"
+                    | "Error"
+                    | "CrashLoopBackOff"
+                    | "ErrImagePull"
+                    | "ImagePullBackOff"
+                    | "CreateContainerConfigError"
+                    | "InvalidImageName"
+                    | "CreateContainerError"
+                    | "ContainerCannotRun"
+                    | "DeadlineExceeded"
+            )
+        };
+
+        let to_error_message = |reason: &'a str| -> &'a str {
+            match reason {
+                "OOMKilled" => "OOM killed, pod have been killed due to lack of/using too much memory resources",
+                "CrashLoopBackOff" => "crash loop, pod is restarting too frequently. Look into your application logs",
+                "ErrImagePull" => "cannot pull the image for your container",
+                "ImagePullBackOff" => "cannot pull the image for your container",
+                "Error" => "an undefined error occurred. Look into your applications logs and message below",
+                _ => reason,
+            }
+        };
+
+        // We need to loop over all status of each container in the pod in order to know
+        // if there is something fishy or not, not really friendly...
+        match self.status.as_ref() {
+            Some(PodStatus {
+                container_statuses: Some(ref statuses),
+                ..
+            }) => {
+                for status in statuses {
+                    match &status.state {
+                        Some(ContainerState {
+                            waiting: Some(ContainerStateWaiting { reason: Some(r), .. }),
+                            ..
+                        }) if is_error_reason(r) => return Some(to_error_message(r)),
+                        Some(ContainerState {
+                            terminated: Some(ContainerStateTerminated { reason: Some(r), .. }),
+                            ..
+                        }) if is_error_reason(r) => return Some(to_error_message(r)),
+                        _ => {}
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
 }
 
 pub fn get_last_events_for<'a>(
@@ -368,13 +391,9 @@ pub fn get_last_events_for<'a>(
     uid: &str,
     max_events: usize,
 ) -> impl Iterator<Item = &'a Event> {
-    let oldest_event = chrono::Utc::now() - chrono::Duration::minutes(2);
     events
         // keep only selected object and events that are older than above time (2min)
-        .filter(|ev| {
-            ev.involved_object.uid.as_deref() == Some(uid)
-                && ev.last_timestamp.as_ref().map_or(false, |t| t.0 > oldest_event)
-        })
+        .filter(|ev| ev.involved_object.uid.as_deref() == Some(uid))
         // last first
         .sorted_by(|evl, evr| evl.last_timestamp.cmp(&evr.last_timestamp).reverse())
         .take(max_events)
