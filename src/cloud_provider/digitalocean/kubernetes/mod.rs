@@ -137,7 +137,7 @@ impl DOKS {
                         QoveryIdentifier::new_from_long_id(context.cluster_id().to_string()),
                         QoveryIdentifier::new_from_long_id(context.execution_id().to_string()),
                         Some(region.to_string()),
-                        Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
+                        Infrastructure(InfrastructureStep::LoadConfiguration),
                         Transmitter::Kubernetes(id, name),
                     ),
                     node_group.instance_type.as_str(),
@@ -198,7 +198,7 @@ impl DOKS {
 
     // create a context to render tf files (terraform) contained in lib/digitalocean/
     fn tera_context(&self) -> Result<TeraContext, EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let mut context = TeraContext::new();
 
         // Digital Ocean
@@ -447,7 +447,7 @@ impl DOKS {
     }
 
     fn create(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         listeners_helper.deployment_in_progress(ProgressInfo::new(
@@ -742,12 +742,12 @@ impl DOKS {
     }
 
     fn create_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
         let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
 
         self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create)),
+            self.get_event_details(Infrastructure(InfrastructureStep::Create)),
             EventMessage::new_from_safe("DOKS.create_error() called.".to_string()),
         ));
 
@@ -769,7 +769,7 @@ impl DOKS {
 
     fn upgrade_error(&self) -> Result<(), EngineError> {
         self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade)),
+            self.get_event_details(Infrastructure(InfrastructureStep::Upgrade)),
             EventMessage::new_from_safe("DOKS.upgrade_error() called.".to_string()),
         ));
 
@@ -782,7 +782,7 @@ impl DOKS {
 
     fn downgrade_error(&self) -> Result<(), EngineError> {
         self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade)),
+            self.get_event_details(Infrastructure(InfrastructureStep::Downgrade)),
             EventMessage::new_from_safe("DOKS.downgrade_error() called.".to_string()),
         ));
 
@@ -795,7 +795,7 @@ impl DOKS {
 
     fn pause_error(&self) -> Result<(), EngineError> {
         self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
+            self.get_event_details(Infrastructure(InfrastructureStep::Pause)),
             EventMessage::new_from_safe("DOKS.pause_error() called.".to_string()),
         ));
 
@@ -803,7 +803,7 @@ impl DOKS {
     }
 
     fn delete(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let skip_kubernetes_step = false;
         self.send_to_customer(
@@ -866,7 +866,7 @@ impl DOKS {
             event_details.clone(),
             EventMessage::new_from_safe("Running Terraform apply before running a delete.".to_string()),
         ));
-        if let Err(e) = cmd::terraform::terraform_init_validate_plan_apply(temp_dir.as_str(), false) {
+        if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), false) {
             // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
             self.logger().log(EngineEvent::Error(
                 EngineError::new_terraform_error_while_executing_pipeline(event_details.clone(), e),
@@ -1091,7 +1091,7 @@ impl DOKS {
 
     fn delete_error(&self) -> Result<(), EngineError> {
         self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete)),
+            self.get_event_details(Infrastructure(InfrastructureStep::Delete)),
             EventMessage::new_from_safe("DOKS.delete_error() called.".to_string()),
         ));
 

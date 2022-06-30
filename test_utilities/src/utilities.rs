@@ -61,10 +61,9 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
     let organization_id = organization_id.to_string();
     let cluster_id = cluster_id.to_string();
     let execution_id = execution_id();
-    let home_dir =
-        std::env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_str().unwrap().to_string());
-    let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
-    let docker_host = std::env::var("DOCKER_HOST").map(|x| Url::parse(&x).unwrap()).ok();
+    let home_dir = env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_str().unwrap().to_string());
+    let lib_root_dir = env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
+    let docker_host = env::var("DOCKER_HOST").map(|x| Url::parse(&x).unwrap()).ok();
     let docker = Docker::new(docker_host.clone()).expect("Can't init docker");
 
     let metadata = Metadata {
@@ -446,7 +445,7 @@ pub fn generate_password(provider_kind: Kind, db_mode: DatabaseMode) -> String {
         '"', '\'', '(', ')', ',', '.', '/', ':', ';', '<', '>', '@', '[', '\\', ']', '^', '`', '{', '|', '}', '~',
     ];
 
-    let allow_using_symbols = provider_kind == Kind::Scw && db_mode == DatabaseMode::MANAGED;
+    let allow_using_symbols = provider_kind == Kind::Scw && db_mode == MANAGED;
     if !allow_using_symbols {
         return generate_id();
     };
@@ -1038,11 +1037,11 @@ pub fn db_disk_type(provider_kind: Kind, database_mode: DatabaseMode) -> String 
     match provider_kind {
         Kind::Aws => "gp2",
         Kind::Do => match database_mode {
-            DatabaseMode::MANAGED => DO_MANAGED_DATABASE_DISK_TYPE,
+            MANAGED => DO_MANAGED_DATABASE_DISK_TYPE,
             DatabaseMode::CONTAINER => DO_SELF_HOSTED_DATABASE_DISK_TYPE,
         },
         Kind::Scw => match database_mode {
-            DatabaseMode::MANAGED => SCW_MANAGED_DATABASE_DISK_TYPE,
+            MANAGED => SCW_MANAGED_DATABASE_DISK_TYPE,
             DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
         },
     }
@@ -1058,11 +1057,11 @@ pub fn db_instance_type(provider_kind: Kind, db_kind: DatabaseKind, database_mod
             DatabaseKind::Redis => "cache.t3.micro",
         },
         Kind::Do => match database_mode {
-            DatabaseMode::MANAGED => DO_MANAGED_DATABASE_INSTANCE_TYPE,
+            MANAGED => DO_MANAGED_DATABASE_INSTANCE_TYPE,
             DatabaseMode::CONTAINER => DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
         },
         Kind::Scw => match database_mode {
-            DatabaseMode::MANAGED => SCW_MANAGED_DATABASE_INSTANCE_TYPE,
+            MANAGED => SCW_MANAGED_DATABASE_INSTANCE_TYPE,
             DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
         },
     }

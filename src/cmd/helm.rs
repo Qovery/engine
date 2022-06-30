@@ -280,7 +280,7 @@ impl Helm {
             &mut |line| output_string.push(line),
             &mut |line| error!("{}", line),
         ) {
-            return Err(HelmError::CmdError("none".to_string(), LIST, cmd_error));
+            return Err(CmdError("none".to_string(), LIST, cmd_error));
         }
 
         let values = serde_json::from_str::<Vec<HelmListItem>>(&output_string.join(""));
@@ -311,7 +311,7 @@ impl Helm {
 
                 Ok(helms_charts)
             }
-            Err(e) => Err(HelmError::CmdError(
+            Err(e) => Err(CmdError(
                 "none".to_string(),
                 LIST,
                 CommandError::new(
@@ -387,7 +387,7 @@ impl Helm {
                             .collect::<Vec<(String, String)>>(),
                     ),
                 );
-                return Err(HelmError::CmdError(chart.name.clone(), HelmCommand::UPGRADE, cmd_err));
+                return Err(CmdError(chart.name.clone(), UPGRADE, cmd_err));
             };
 
             args_string.push("-f".to_string());
@@ -509,7 +509,7 @@ impl Helm {
                             .collect::<Vec<(String, String)>>(),
                     ),
                 );
-                return Err(HelmError::CmdError(chart.name.clone(), HelmCommand::UPGRADE, cmd_err));
+                return Err(CmdError(chart.name.clone(), UPGRADE, cmd_err));
             };
 
             args_string.push("-f".to_string());
@@ -553,7 +553,7 @@ impl Helm {
             } else {
                 CmdError(
                     chart.name.clone(),
-                    HelmCommand::UPGRADE,
+                    UPGRADE,
                     CommandError::new(
                         "Helm error".to_string(),
                         Some(stderr_msg),

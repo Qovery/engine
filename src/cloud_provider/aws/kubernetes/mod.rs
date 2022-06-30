@@ -7,6 +7,9 @@ use std::{env, fs};
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
 use retry::{Error, OperationResult};
+use rusoto_core::credential::StaticProvider;
+use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
+use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest, NodegroupScalingConfig};
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
 
@@ -41,9 +44,6 @@ use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
 use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
-use rusoto_core::credential::StaticProvider;
-use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
-use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest, NodegroupScalingConfig};
 
 use self::eks::select_nodegroups_autoscaling_group_behavior;
 
@@ -1270,7 +1270,7 @@ fn pause(
                     Err(Operation { error, .. }) => {
                         return Err(error);
                     }
-                    Err(retry::Error::Internal(msg)) => {
+                    Err(Error::Internal(msg)) => {
                         return Err(EngineError::new_cannot_pause_cluster_tasks_are_running(event_details, Some(CommandError::new_from_safe_message(msg))));
                     }
                 }
@@ -1423,7 +1423,7 @@ fn delete(
         EventMessage::new_from_safe("Running Terraform apply before running a delete.".to_string()),
     ));
 
-    if let Err(e) = cmd::terraform::terraform_init_validate_plan_apply(temp_dir.as_str(), false) {
+    if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), false) {
         // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
         kubernetes.logger().log(EngineEvent::Error(
             EngineError::new_terraform_error_while_executing_pipeline(event_details.clone(), e),
@@ -1651,7 +1651,7 @@ fn delete(
                 error,
             ))
         }
-        Err(retry::Error::Internal(msg)) => {
+        Err(Error::Internal(msg)) => {
             return Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
                 event_details,
                 CommandError::new("Error while trying to perform Terraform destroy".to_string(), Some(msg), None),

@@ -125,7 +125,7 @@ pub fn write_rendered_templates(rendered_templates: &[RenderedTemplate], into: &
         let _ = fs::remove_file(dest.as_str());
 
         // create an empty file
-        let mut f = fs::File::create(&dest).map_err(|e| {
+        let mut f = File::create(&dest).map_err(|e| {
             CommandError::new(
                 "Error while creating template destination file.".to_string(),
                 Some(e.to_string()),
