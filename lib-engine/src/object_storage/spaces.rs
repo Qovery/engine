@@ -15,7 +15,6 @@ use crate::io_models::{Context, StringPath};
 use crate::models::digital_ocean::DoRegion;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::{Kind, ObjectStorage};
-use crate::runtime;
 use crate::runtime::block_on;
 
 pub enum BucketDeleteStrategy {

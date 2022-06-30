@@ -59,7 +59,7 @@ impl CloudProvider for Scaleway {
         Kind::Scw
     }
 
-    fn kubernetes_kind(&self) -> kubernetes::Kind {
+    fn kubernetes_kind(&self) -> KubernetesKind {
         KubernetesKind::ScwKapsule
     }
 

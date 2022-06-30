@@ -14,8 +14,8 @@ use core::fmt::Formatter;
 use prometheus::{self, IntGauge};
 use qovery_engine::io_models::{ProgressLevel, ProgressScope};
 use qovery_engine::logger::Logger;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use tracing;
 

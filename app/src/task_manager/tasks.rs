@@ -15,7 +15,7 @@ use qovery_engine::error::{EngineError, EngineErrorCause};
 use qovery_engine::errors;
 use qovery_engine::errors::ErrorMessageVerbosity;
 use qovery_engine::events::Stage::Infrastructure;
-use qovery_engine::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+use qovery_engine::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
 use qovery_engine::io_models::{
     Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope, QoveryIdentifier,
 };
