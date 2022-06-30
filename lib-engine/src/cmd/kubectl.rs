@@ -226,12 +226,7 @@ where
     P: AsRef<Path>,
 {
     let result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
-        let r = crate::cmd::kubectl::kubectl_exec_is_pod_ready(
-            kubernetes_config.as_ref(),
-            namespace,
-            selector,
-            envs.clone(),
-        );
+        let r = kubectl_exec_is_pod_ready(kubernetes_config.as_ref(), namespace, selector, envs.clone());
 
         match r {
             Ok(is_ready) => match is_ready {
@@ -316,12 +311,7 @@ where
     P: AsRef<Path>,
 {
     let result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
-        let r = crate::cmd::kubectl::kubectl_exec_is_job_ready(
-            kubernetes_config.as_ref(),
-            namespace,
-            job_name,
-            envs.clone(),
-        );
+        let r = kubectl_exec_is_job_ready(kubernetes_config.as_ref(), namespace, job_name, envs.clone());
 
         match r {
             Ok(is_ready) => match is_ready {

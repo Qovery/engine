@@ -415,7 +415,7 @@ impl Kubernetes for EKS {
             None,
             Some(3),
             self.cloud_provider().credentials_environment_variables(),
-            Stage::Infrastructure(InfrastructureStep::Upgrade),
+            Infrastructure(InfrastructureStep::Upgrade),
         ) {
             self.logger().log(EngineEvent::Error(e.clone(), None));
             return Err(e);

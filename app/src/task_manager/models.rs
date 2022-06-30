@@ -250,7 +250,7 @@ impl Kubernetes {
         context: &Context,
         cloud_provider: Arc<Box<dyn qovery_engine::cloud_provider::CloudProvider>>,
         dns_provider: Arc<Box<dyn qovery_engine::dns_provider::DnsProvider>>,
-        logger: Box<dyn qovery_engine::logger::Logger>,
+        logger: Box<dyn Logger>,
     ) -> Result<Box<dyn qovery_engine::cloud_provider::kubernetes::Kubernetes + 'a>, EngineError> {
         match self.kind {
             qovery_engine::cloud_provider::kubernetes::Kind::Eks => match EKS::new(

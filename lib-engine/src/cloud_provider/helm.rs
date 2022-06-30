@@ -45,7 +45,7 @@ impl Display for HelmChartNamespaces {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
             HelmChartNamespaces::Custom => "custom",
-            HelmChartNamespaces::KubeSystem => "kube-system",
+            KubeSystem => "kube-system",
             HelmChartNamespaces::Prometheus => "prometheus",
             HelmChartNamespaces::Logging => "logging",
             HelmChartNamespaces::CertManager => "cert-manager",
@@ -243,7 +243,7 @@ pub trait HelmChart: Send {
         let helm = Helm::new(kubernetes_config, &environment_variables).map_err(to_command_error)?;
 
         match chart_info.action {
-            HelmAction::Deploy => {
+            Deploy => {
                 if let Err(e) = helm.uninstall_chart_if_breaking_version(chart_info, &[]) {
                     warn!(
                         "error while trying to destroy chart if breaking change is detected: {:?}",
@@ -439,7 +439,7 @@ pub fn deploy_charts_levels(
         for chart in &level {
             let chart_info = chart.get_chart_info();
             // don't do diff on destroy or skip
-            if chart_info.action == HelmAction::Deploy {
+            if chart_info.action == Deploy {
                 let _ = helm.upgrade_diff(chart_info, &[]);
             }
         }
@@ -707,7 +707,7 @@ pub fn get_latest_successful_deployment(helm_history_list: &[HelmHistoryRow]) ->
 
 pub fn get_engine_helm_action_from_location(location: &EngineLocation) -> HelmAction {
     match location {
-        EngineLocation::ClientSide => HelmAction::Deploy,
+        EngineLocation::ClientSide => Deploy,
         EngineLocation::QoverySide => HelmAction::Destroy,
     }
 }

@@ -52,7 +52,7 @@ impl QoveryIdentifier {
     }
 
     pub fn new_random() -> Self {
-        Self::new_from_long_id(uuid::Uuid::new_v4().to_string())
+        Self::new_from_long_id(Uuid::new_v4().to_string())
     }
 
     fn extract_short(raw: &str) -> String {
@@ -168,12 +168,12 @@ pub enum Action {
 }
 
 impl Action {
-    pub fn to_service_action(&self) -> crate::cloud_provider::service::Action {
+    pub fn to_service_action(&self) -> service::Action {
         match self {
-            Action::Create => crate::cloud_provider::service::Action::Create,
-            Action::Pause => crate::cloud_provider::service::Action::Pause,
-            Action::Delete => crate::cloud_provider::service::Action::Delete,
-            Action::Nothing => crate::cloud_provider::service::Action::Nothing,
+            Action::Create => service::Action::Create,
+            Action::Pause => service::Action::Pause,
+            Action::Delete => service::Action::Delete,
+            Action::Nothing => service::Action::Nothing,
         }
     }
 }
@@ -192,7 +192,7 @@ pub enum Protocol {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Port {
     pub id: String,
-    pub long_id: uuid::Uuid,
+    pub long_id: Uuid,
     pub port: u16,
     pub public_port: Option<u16>,
     pub name: Option<String>,
@@ -803,7 +803,7 @@ impl Database {
         context: &Context,
         cloud_provider: &dyn CloudProvider,
         logger: Box<dyn Logger>,
-    ) -> Result<Box<dyn crate::cloud_provider::service::DatabaseService>, DatabaseError> {
+    ) -> Result<Box<dyn service::DatabaseService>, DatabaseError> {
         let database_options = DatabaseOptions {
             mode: self.mode.clone(),
             login: self.username.clone(),

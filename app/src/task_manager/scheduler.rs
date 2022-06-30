@@ -122,7 +122,7 @@ impl TaskManager {
 
     /// gracefully end the remaining tasks but stop accepting new ones
     pub fn stop(&self) {
-        self.should_stop.store(true, Ordering::Release)
+        self.should_stop.store(true, Release)
     }
 
     /// run task manager - only a single instance will run
@@ -391,7 +391,7 @@ mod tests {
         let task = WaitingTask::new(tm.task_status_tx.clone());
 
         assert_eq!(tm.running_tasks.get(), 0);
-        assert_eq!(task.have_been_run.load(Ordering::Acquire), false);
+        assert_eq!(task.have_been_run.load(Acquire), false);
         tm.add_task(Box::new(task.clone()));
 
         let task_status_rx = tm.task_status_rx.clone();
@@ -411,7 +411,7 @@ mod tests {
             nb_iter += 1;
             assert_ne!(nb_iter, 5);
         }
-        assert_eq!(task.have_been_run.load(Ordering::Acquire), true);
+        assert_eq!(task.have_been_run.load(Acquire), true);
         assert_eq!(tm.running_tasks.get(), 0);
 
         // Test that we clean the Internal Hashmap

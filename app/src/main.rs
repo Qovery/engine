@@ -136,7 +136,7 @@ fn check_versions_from(path: &str) -> Result<(), EngineInitError> {
             let version = lowercase.split('=').last().unwrap_or("").replace('"', "");
 
             if !result_cmd.contains(&version) {
-                return Err(EngineInitError::Regular(ErrorKind::BinVersion));
+                return Err(EngineInitError::Regular(BinVersion));
             }
 
             info!("{} is on right version {}", binary_name.to_string(), version);
@@ -146,12 +146,12 @@ fn check_versions_from(path: &str) -> Result<(), EngineInitError> {
     Ok(())
 }
 
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+fn read_lines<P>(filename: P) -> io::Result<io::Lines<BufReader<File>>>
 where
     P: AsRef<Path>,
 {
     let file = File::open(filename)?;
-    Ok(io::BufReader::new(file).lines())
+    Ok(BufReader::new(file).lines())
 }
 
 fn generate_id() -> u32 {
@@ -183,9 +183,9 @@ pub fn main() -> io::Result<()> {
     let version_file = env::var("BIN_VERSION_FILE").expect("BIN_VERSION_FILE is mandatory");
     let region = env::var("REGION");
     let nats_server = env::var("QOVERY_NATS_URL").expect("QOVERY_NATS_URL is mandatory");
-    let nats_login = std::env::var("QOVERY_NATS_USER");
-    let nats_password = std::env::var("QOVERY_NATS_PASSWORD");
-    let test_cluster_env_var = std::env::var("TEST_CLUSTER");
+    let nats_login = env::var("QOVERY_NATS_USER");
+    let nats_password = env::var("QOVERY_NATS_PASSWORD");
+    let test_cluster_env_var = env::var("TEST_CLUSTER");
     let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or_else(|_| "lib".to_string());
     let docker_host = env::var("DOCKER_HOST").map(|val| Url::parse(&val).unwrap()).ok();
     let workspace_root_dir =
@@ -527,7 +527,7 @@ fn spawn_task_poller(
 
     let thread_name = format!("{}-poller", task_name);
     let thread_name_logger = thread_name.clone();
-    let subject = nats::subjects::Subject::new(&mode, &task_selector);
+    let subject = Subject::new(&mode, &task_selector);
 
     let func = move || {
         let _drop_logger = LogErrorOnDrop::new(thread_name_logger.as_str());
@@ -553,7 +553,7 @@ fn spawn_task_poller(
 
             // If msg is null, there is no task available just sleep and retry
             if msg.data == "null".as_bytes() {
-                thread::sleep(Duration::from_secs(5));
+                sleep(Duration::from_secs(5));
                 continue;
             }
 
