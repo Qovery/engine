@@ -889,87 +889,6 @@ datasources:
         },
     };
 
-    // let qovery_portal_fqdn = format!(
-    //     "qovery-{}.{}",
-    //     chart_config_prerequisites.cluster_id.clone(),
-    //     chart_config_prerequisites.managed_dns_name
-    // );
-    // let qovery_portal = CommonChart {
-    //     chart_info: ChartInfo {
-    //         name: "qovery-portal".to_string(),
-    //         path: chart_path("common/charts/qovery-portal"),
-    //         namespace: HelmChartNamespaces::Qovery,
-    //         values: vec![
-    //             ChartSetValue {
-    //                 key: "hostName".to_string(),
-    //                 value: qovery_portal_fqdn.clone(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "portal.title".to_string(),
-    //                 value: qovery_portal_fqdn.clone(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.redirectUrl".to_string(),
-    //                 value: format!("https://{}/oauth2/callback", &qovery_portal_fqdn),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.upstreams".to_string(),
-    //                 value: format!("https://{}/", &qovery_portal_fqdn),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.oidcIssuerUrl".to_string(),
-    //                 value: "https://qovery.eu.auth0.com/".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.clientId".to_string(),
-    //                 value: "shouldn't be client propagated".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.clientSecret".to_string(),
-    //                 value: "shouldn't be client propagated".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.cookieName".to_string(),
-    //                 value: "xxx".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.cookieSecret".to_string(),
-    //                 value: "xxx".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "oauthConfig.emailDomains".to_string(),
-    //                 value: "shouldn't be client propagated".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "clusterIssuer".to_string(),
-    //                 value: "????????????".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "ingressClass".to_string(),
-    //                 value: "nginx-ingress".to_string(),
-    //             },
-    //             // resources limits
-    //             ChartSetValue {
-    //                 key: "resources.limits.cpu".to_string(),
-    //                 value: "1".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "resources.requests.cpu".to_string(),
-    //                 value: "200m".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "resources.limits.memory".to_string(),
-    //                 value: "500Mi".to_string(),
-    //             },
-    //             ChartSetValue {
-    //                 key: "resources.requests.memory".to_string(),
-    //                 value: "500Mi".to_string(),
-    //             },
-    //         ],
-    //         ..Default::default()
-    //     },
-    // };
-
     let cluster_agent_context = ClusterAgentContext {
         api_url: &chart_config_prerequisites.infra_options.qovery_api_url,
         api_token: &chart_config_prerequisites.infra_options.agent_version_controller_token,
@@ -1083,7 +1002,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "autoscaler.min_replicas".to_string(),
-                    value: "2".to_string(),
+                    value: "1".to_string(),
                 },
                 ChartSetValue {
                     key: "metrics.enabled".to_string(),

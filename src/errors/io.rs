@@ -88,6 +88,7 @@ pub enum Tag {
     K8sValidateRequiredCPUandBurstableError,
     TerraformContextUnsupportedParameterValue,
     TerraformQoveryConfigMismatch,
+    TerraformDatabaseConfigMismatch,
     ClientServiceFailedToStart,
     ClientServiceFailedToDeployBeforeStart,
     DatabaseFailedToStartAfterSeveralRetries,
@@ -247,6 +248,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::UnsupportedClusterKind => Tag::UnsupportedClusterKind,
             errors::Tag::NotAllowedInstanceType => Tag::NotAllowedInstanceType,
             errors::Tag::TerraformQoveryConfigMismatch => Tag::TerraformQoveryConfigMismatch,
+            errors::Tag::TerraformDatabaseConfigMismatch => Tag::TerraformDatabaseConfigMismatch,
             errors::Tag::KubeconfigFileDoNotPermitToConnectToK8sCluster => {
                 Tag::KubeconfigFileDoNotPermitToConnectToK8sCluster
             }

@@ -22,39 +22,50 @@ pub struct DatabaseDeploymentRenderContext {
 }
 
 const MANAGED_REPORT_TEMPLATE: &str = r#"
-Managed database {{ type_ }} v{{ version }} deployment status report:
-{%- for service in services %}
-🔀 {{ service.type_ | capitalize }} {{ service.name }} is {{ service.state | upper }}: {{ service.message }}
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ Managed database {{ type_ }} v{{ version }} deployment status report:
+┃ {%- for service in services %}
+┃ 🔀 {{ service.type_ | capitalize }} {{ service.name }} is {{ service.state | upper }} {{ service.message }}
 {%- for event in service.events %}
- |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
+┃  |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
 {%- endfor -%}
 {%- endfor %}
-
-⛅️ Database instance is being provisionned at your cloud provider ..."#;
+┃
+┃ ⛅️ Database instance is being provisionned at your cloud provider ...
+┃
+┃ ⛑ Need Help ? Please consult our FAQ in order to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
 const CONTAINER_REPORT_TEMPLATE: &str = r#"
-Container database {{ type_ }} v{{ version }} deployment status report:
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ Container database {{ type_ }} v{{ version }} deployment status report:
 {%- for service in services %}
-🔀 {{ service.type_ | capitalize }} {{ service.name }} is {{ service.state | upper }}: {{ service.message }}
+┃ 🔀 {{ service.type_ | capitalize }} {{ service.name }} is {{ service.state | upper }} {{ service.message }}
 {%- for event in service.events %}
- |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
+┃  |__ {{ event.type_ | fmt_event_type }} {{ event.message -}}
 {%- endfor -%}
 {%- endfor %}
-
+┃
 {% set all_pods = pods_failing | concat(with=pods_starting) -%}
-🛰 Database has {{ nb_pods }} pods. {{ pods_starting | length }} starting, {{ pods_terminating | length }} terminating and {{ pods_failing | length }} in error
+┃ 🛰 Database has {{ nb_pods }} pods. {{ pods_starting | length }} starting, {{ pods_terminating | length }} terminating and {{ pods_failing | length }} in error
 {%- for pod in all_pods %}
- |__ Pod {{ pod.name }} is {{ pod.state | upper }}: {{ pod.message }}
+┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }} {{ pod.message }}{%- if pod.restart_count > 0 %}
+┃     |__ 💢 Pod crashed {{ pod.restart_count }} times
+{%- endif -%}
 {%- for event in pod.events %}
-    |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
+┃     |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
 {%- endfor -%}
 {%- endfor %}
-{% for pvc in pvcs %}
-💽 Network volume {{ pvc.name }} is {{ pvc.state | upper }}:
+┃
+{%- for pvc in pvcs %}
+┃ 💽 Network volume {{ pvc.name }} is {{ pvc.state | upper }}
 {%- for event in pvc.events %}
- |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
+┃  |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
 {%- endfor -%}
-{%- endfor -%}"#;
+{%- endfor %}
+┃
+┃ ⛑ Need Help ? Please consult our FAQ in order to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
 pub(super) fn render_database_deployment_report(
     deployment_report: &DatabaseDeploymentReport,
@@ -129,12 +140,14 @@ mod test {
                     name: "app-pod-1".to_string(),
                     state: DeploymentState::Failing,
                     message: Some("pod have been killed due to lack of/using too much memory resources".to_string()),
+                    restart_count: 0,
                     events: vec![],
                 },
                 PodRenderContext {
                     name: "app-pod-2".to_string(),
                     state: DeploymentState::Failing,
                     message: None,
+                    restart_count: 0,
                     events: vec![
                         EventRenderContext {
                             message: "Liveliness probe failed".to_string(),
@@ -151,6 +164,7 @@ mod test {
                 name: "app-pod-3".to_string(),
                 state: DeploymentState::Starting,
                 message: None,
+                restart_count: 3,
                 events: vec![
                     EventRenderContext {
                         message: "Pulling image :P".to_string(),
@@ -166,6 +180,7 @@ mod test {
                 name: "app-pod-4".to_string(),
                 state: DeploymentState::Terminating,
                 message: None,
+                restart_count: 0,
                 events: vec![],
             }],
             pvcs: vec![
@@ -190,25 +205,32 @@ mod test {
         println!("{}", rendered_report);
 
         let gold_standard = r#"
-Container database PostgreSQL v14 deployment status report:
-🔀 Cloud load balancer app-z85ba6759 is STARTING: 
- |__ ℹ️ No lease of ip yet
- |__ ⚠️ Pool of ip exhausted
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ Container database PostgreSQL v14 deployment status report:
+┃ 🔀 Cloud load balancer app-z85ba6759 is STARTING
+┃  |__ ℹ️ No lease of ip yet
+┃  |__ ⚠️ Pool of ip exhausted
+┃
+┃ 🛰 Database has 6 pods. 1 starting, 1 terminating and 2 in error
+┃  |__ Pod app-pod-1 is FAILING pod have been killed due to lack of/using too much memory resources
+┃  |__ Pod app-pod-2 is FAILING
+┃     |__ ℹ️ Liveliness probe failed
+┃     |__ ⚠️ Readiness probe failed
+┃  |__ Pod app-pod-3 is STARTING
+┃     |__ 💢 Pod crashed 3 times
+┃     |__ ℹ️ Pulling image :P
+┃     |__ ⚠️ Container started
+┃
+┃ 💽 Network volume pvc-1212 is STARTING
+┃  |__ ⚠️ Failed to provision volume with StorageClass "aws-ebs-io1-0": InvalidParameterValue: The volume size is invalid for io1 volumes: 1 GiB. io1 volumes must be at least 4 GiB in size. Please specify a volume size above the minimum limit
+┃ 💽 Network volume pvc-2121 is READY
+┃
+┃ ⛑ Need Help ? Please consult our FAQ in order to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
-🛰 Database has 6 pods. 1 starting, 1 terminating and 2 in error
- |__ Pod app-pod-1 is FAILING: pod have been killed due to lack of/using too much memory resources
- |__ Pod app-pod-2 is FAILING: 
-    |__ ℹ️ Liveliness probe failed
-    |__ ⚠️ Readiness probe failed
- |__ Pod app-pod-3 is STARTING: 
-    |__ ℹ️ Pulling image :P
-    |__ ⚠️ Container started
-
-💽 Network volume pvc-1212 is STARTING:
- |__ ⚠️ Failed to provision volume with StorageClass "aws-ebs-io1-0": InvalidParameterValue: The volume size is invalid for io1 volumes: 1 GiB. io1 volumes must be at least 4 GiB in size. Please specify a volume size above the minimum limit
-💽 Network volume pvc-2121 is READY:"#;
-
-        assert_eq!(rendered_report, gold_standard);
+        for (rendered_line, gold_line) in rendered_report.lines().zip(gold_standard.lines()) {
+            assert_eq!(rendered_line.trim_end(), gold_line);
+        }
     }
 
     #[test]
@@ -247,13 +269,20 @@ Container database PostgreSQL v14 deployment status report:
         println!("{}", rendered_report);
 
         let gold_standard = r#"
-Managed database PostgreSQL v13 deployment status report:
-🔀 Cloud load balancer app-z85ba6759 is STARTING: 
- |__ ℹ️ No lease of ip yet
- |__ ⚠️ Pool of ip exhausted
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┃ Managed database PostgreSQL v13 deployment status report:
+┃
+┃ 🔀 Cloud load balancer app-z85ba6759 is STARTING
+┃  |__ ℹ️ No lease of ip yet
+┃  |__ ⚠️ Pool of ip exhausted
+┃
+┃ ⛅️ Database instance is being provisionned at your cloud provider ...
+┃
+┃ ⛑ Need Help ? Please consult our FAQ in order to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
-⛅️ Database instance is being provisionned at your cloud provider ..."#;
-
-        assert_eq!(rendered_report, gold_standard);
+        for (rendered_line, gold_line) in rendered_report.lines().zip(gold_standard.lines()) {
+            assert_eq!(rendered_line.trim_end(), gold_line);
+        }
     }
 }

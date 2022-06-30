@@ -419,6 +419,8 @@ where
                     ServiceType::Database(_) => vec![format!("{}/q-values.yaml", &workspace_dir)],
                     _ => vec![],
                 },
+                vec![],
+                vec![],
                 false,
                 self.selector(),
             );

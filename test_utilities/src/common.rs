@@ -75,7 +75,7 @@ pub trait Cluster<T, U> {
         min_nodes: i32,
         max_nodes: i32,
     ) -> EngineConfig;
-    fn cloud_provider(context: &Context) -> Box<T>;
+    fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind) -> Box<T>;
     fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups>;
     fn kubernetes_cluster_options(secrets: FuncTestsSecrets, cluster_id: Option<String>) -> U;
 }
@@ -1302,7 +1302,6 @@ pub fn test_db(
 pub fn get_environment_test_kubernetes(
     context: &Context,
     cloud_provider: Arc<Box<dyn CloudProvider>>,
-    kubernetes_kind: KubernetesKind,
     kubernetes_version: &str,
     dns_provider: Arc<Box<dyn DnsProvider>>,
     logger: Box<dyn Logger>,
@@ -1313,7 +1312,7 @@ pub fn get_environment_test_kubernetes(
 ) -> Box<dyn Kubernetes> {
     let secrets = FuncTestsSecrets::new();
 
-    let kubernetes: Box<dyn Kubernetes> = match kubernetes_kind {
+    let kubernetes: Box<dyn Kubernetes> = match cloud_provider.kubernetes_kind() {
         KubernetesKind::Eks => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
             let mut options = AWS::kubernetes_cluster_options(secrets, None);

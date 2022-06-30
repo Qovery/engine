@@ -169,6 +169,7 @@ where
         let kube_config_file_path = kubernetes.get_kubeconfig_file_path()?;
         context.insert("kubeconfig_path", &kube_config_file_path);
 
+        // todo: move out from teracontext, it should only contains config, not commands
         kubectl::kubectl_exec_create_namespace_without_labels(
             environment.namespace(),
             kube_config_file_path.as_str(),

@@ -557,6 +557,8 @@ pub enum Tag {
     CannotPauseClusterTasksAreRunning,
     /// TerraformQoveryConfigMismatch: terraform qovery config retrieve mismatch
     TerraformQoveryConfigMismatch,
+    /// TerraformDatabaseConfigMismatch: terraform database config retrieve mismatch
+    TerraformDatabaseConfigMismatch,
     /// TerraformCannotRemoveEntryOut: represents an error where we cannot remove an entry out of Terraform.
     TerraformCannotRemoveEntryOut,
     /// TerraformNoStateFileExists: represents an error where there is no Terraform state file.
@@ -2001,6 +2003,25 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::TerraformQoveryConfigMismatch,
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for terraform database config mismatch
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_terraform_database_config_mismatch(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message = "Error while trying to use database Terraform generated config.";
+
+        EngineError::new(
+            event_details,
+            Tag::TerraformDatabaseConfigMismatch,
             message.to_string(),
             Some(raw_error),
             None,

@@ -1,4 +1,4 @@
-use crate::cloud_provider::service::{Action, DatabaseService, RouterService, StatefulService, StatelessService};
+use crate::cloud_provider::service::{Action, DatabaseService, RouterService, StatelessService};
 use crate::models::application::ApplicationService;
 use crate::utilities::to_short_id;
 use uuid::Uuid;
@@ -65,13 +65,6 @@ impl Environment {
         );
 
         stateless_services
-    }
-
-    pub fn stateful_services(&self) -> Vec<&dyn StatefulService> {
-        self.databases
-            .iter()
-            .map(|x| x.as_stateful_service())
-            .collect::<Vec<_>>()
     }
 
     pub fn namespace(&self) -> &str {

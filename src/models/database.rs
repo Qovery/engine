@@ -1,7 +1,7 @@
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
     get_tfstate_suffix, scale_down_database, Action, Create, DatabaseOptions, DatabaseService, Delete, Helm, Pause,
-    Service, ServiceType, ServiceVersionCheckResult, StatefulService, Terraform,
+    Service, ServiceType, ServiceVersionCheckResult, Terraform,
 };
 use crate::cloud_provider::utilities::{check_domain_for, managed_db_name_sanitizer, print_action};
 use crate::cloud_provider::{service, DeploymentTarget};
@@ -195,7 +195,8 @@ where
     fn sanitized_name(&self) -> String {
         // FIXME: specific case only for aws ;'(
         // This is sad, but can't change that as it would break/wipe all container db for users
-        if C::lib_directory_name() == "aws" {
+        // AWS and AWS-EC2
+        if C::lib_directory_name().starts_with("aws") {
             managed_db_name_sanitizer(60, T::lib_directory_name(), &self.id)
         } else {
             format!("{}-{}", T::lib_directory_name(), &self.id)
@@ -430,25 +431,20 @@ where
     }
 }
 
-impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> StatefulService for Database<C, M, T>
-where
-    Database<C, M, T>: ToTeraContext,
-{
-    fn as_stateful_service(&self) -> &dyn StatefulService {
-        self
-    }
-
-    fn is_managed_service(&self) -> bool {
-        M::is_managed()
-    }
-}
-
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> DatabaseService for Database<C, M, T>
 where
     Database<C, M, T>: ToTeraContext,
 {
+    fn is_managed_service(&self) -> bool {
+        M::is_managed()
+    }
+
     fn db_type(&self) -> service::DatabaseType {
         T::db_type()
+    }
+
+    fn as_service(&self) -> &dyn Service {
+        self
     }
 }
 

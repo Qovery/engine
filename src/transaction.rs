@@ -505,8 +505,14 @@ impl<'a> Transaction<'a> {
 
                 // !!! don't change the order
                 // terminal update
-                for service in environment.stateful_services() {
-                    send_progress(self.engine.kubernetes(), &environment.action, service, execution_id, true);
+                for database in &environment.databases {
+                    send_progress(
+                        self.engine.kubernetes(),
+                        &environment.action,
+                        database.as_service(),
+                        execution_id,
+                        true,
+                    );
                 }
 
                 for service in environment.stateless_services() {
@@ -517,8 +523,14 @@ impl<'a> Transaction<'a> {
             }
             _ => {
                 // terminal update
-                for service in environment.stateful_services() {
-                    send_progress(self.engine.kubernetes(), &environment.action, service, execution_id, false);
+                for database in &environment.databases {
+                    send_progress(
+                        self.engine.kubernetes(),
+                        &environment.action,
+                        database.as_service(),
+                        execution_id,
+                        false,
+                    );
                 }
 
                 for service in environment.stateless_services() {
