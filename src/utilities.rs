@@ -5,7 +5,6 @@ use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 
-use reqwest::header;
 use reqwest::header::{HeaderMap, HeaderValue};
 use uuid::Uuid;
 

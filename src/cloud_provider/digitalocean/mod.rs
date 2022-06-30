@@ -69,7 +69,7 @@ impl CloudProvider for DO {
         Kind::Do
     }
 
-    fn kubernetes_kind(&self) -> kubernetes::Kind {
+    fn kubernetes_kind(&self) -> KubernetesKind {
         KubernetesKind::Doks
     }
 
