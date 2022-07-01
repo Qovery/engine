@@ -32,7 +32,7 @@ build-and-lint-code:
     - ./helper.sh build
   when: always
   tags:
-    - bm-7cpu-8gmem-0g
+    - bm-7cpu-12gmem-0g
   only:
     - merge_requests
   interruptible: true
