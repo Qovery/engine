@@ -20,7 +20,7 @@ pub struct AppDeploymentRenderContext {
 
 const REPORT_TEMPLATE: &str = r#"
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-┃ Application at commit {{ commit }} deployment status report:
+┃ Application at commit {{ commit }} deployment is in progress ⏳, below the current status:
 {%- for service in services %}
 ┃ 🔀 {{ service.type_ | capitalize }} {{ service.name }} is {{ service.state | upper }} {{ service.message }}
 {%- for event in service.events %}
@@ -180,7 +180,7 @@ mod test {
 
         let gold_standard = r#"
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-┃ Application at commit 34645524c3221a596fb59e8dbad4381f10f93933 deployment status report:
+┃ Application at commit 34645524c3221a596fb59e8dbad4381f10f93933 deployment is in progress ⏳, below the current status:
 ┃ 🔀 Cloud load balancer app-z85ba6759 is STARTING
 ┃  |__ ℹ️ No lease of ip yet
 ┃  |__ ⚠️ Pool of ip exhausted
