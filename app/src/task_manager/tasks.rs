@@ -88,11 +88,11 @@ impl InfrastructureTask {
         match transaction_result {
             TransactionResult::Ok => {
                 let action_context = self.action_context(ProgressLevel::Info);
-                self.send_progress(logger.clone(), action_context, None, None);
+                self.send_infrastructure_progress(logger.clone(), action_context, None, None);
             }
             TransactionResult::Rollback(engine_error) => {
                 let action_context = self.action_context(ProgressLevel::Warn);
-                self.send_progress(
+                self.send_infrastructure_progress(
                     logger.clone(),
                     action_context,
                     Some(format_engine_error_output(
@@ -105,7 +105,7 @@ impl InfrastructureTask {
             }
             TransactionResult::UnrecoverableError(engine_error, rollback_err) => {
                 let action_context = self.action_context(ProgressLevel::Error);
-                self.send_progress(
+                self.send_infrastructure_progress(
                     logger.clone(),
                     action_context,
                     Some(format_engine_error_output(
@@ -123,7 +123,7 @@ impl InfrastructureTask {
         }
     }
 
-    fn send_progress(
+    fn send_infrastructure_progress(
         &self,
         logger: Box<dyn Logger>,
         context: ActionContext,
@@ -229,14 +229,11 @@ impl Task for InfrastructureTask {
         {
             Ok(engine) => engine,
             Err(err) => {
-                send_progress(
-                    self,
-                    &self.request,
+                self.send_infrastructure_progress(
+                    logger.clone(),
                     self.action_context(ProgressLevel::Error),
-                    Some(format!("failed to create engine {:?}", err)),
-                    true,
-                    true,
-                    false,
+                    Some("Failed to create the engine".to_string()),
+                    Some(err),
                 );
                 return;
             }

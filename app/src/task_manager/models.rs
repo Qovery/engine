@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use qovery_engine::errors::{CommandError, EngineError as IoEngineError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -19,7 +20,8 @@ use qovery_engine::dns_provider::io::Kind;
 use qovery_engine::dns_provider::qoverydns::QoveryDns;
 use qovery_engine::engine::EngineConfig;
 use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use qovery_engine::io_models::{Context, Domain, EnvironmentRequest, Features, Listener, Metadata};
+use qovery_engine::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+use qovery_engine::io_models::{Context, Domain, EnvironmentRequest, Features, Listener, Metadata, QoveryIdentifier};
 use qovery_engine::logger::Logger;
 use qovery_engine::models::digital_ocean::DoRegion;
 use qovery_engine::models::scaleway::ScwZone;
@@ -50,20 +52,13 @@ pub struct EngineRequest {
     pub bytes_payload: Vec<u8>,
 }
 
-#[derive(Debug)]
-pub enum RequestError {
-    CloudProvider(String),
-    ContainerRegistry(String),
-    DnsProvider(String),
-}
-
 impl EngineRequest {
     pub fn engine(
         &self,
         context: &Context,
         progress_listener: Listener,
         logger: Box<dyn Logger>,
-    ) -> Result<EngineConfig, RequestError> {
+    ) -> Result<EngineConfig, IoEngineError> {
         let mut build_platform = self.build_platform.to_engine_build_platform(context, logger.clone());
         build_platform.add_listener(progress_listener.clone());
 
@@ -71,7 +66,15 @@ impl EngineRequest {
             .cloud_provider
             .to_engine_cloud_provider(context.clone(), self.organization_id.as_str(), self.organization_long_id)
             .ok_or_else(|| {
-                RequestError::CloudProvider(format!("Invalid cloud provider info: {:?}", self.cloud_provider))
+                let event_details = self.create_event_details();
+                IoEngineError::new_error_on_cloud_provider_information(
+                    event_details,
+                    CommandError::new(
+                        "Invalid cloud provider information".to_string(),
+                        Some(format!("Invalid cloud provider information: {:?}", self.cloud_provider)),
+                        None,
+                    ),
+                )
             })?;
         cloud_provider.add_listener(progress_listener.clone());
         let cloud_provider = Arc::new(cloud_provider);
@@ -80,10 +83,15 @@ impl EngineRequest {
             .container_registry
             .to_engine_container_registry(context.clone(), progress_listener.clone(), logger.clone())
             .ok_or_else(|| {
-                RequestError::ContainerRegistry(format!(
-                    "Invalid container registry info: {:?}",
-                    self.container_registry
-                ))
+                let event_details = self.create_event_details();
+                IoEngineError::new_error_on_container_registry_information(
+                    event_details,
+                    CommandError::new(
+                        "Invalid container registry information".to_string(),
+                        Some(format!("Invalid container registry information: {:?}", self.container_registry)),
+                        None,
+                    ),
+                )
             })?;
 
         let cluster_jwt_token: String = self
@@ -98,7 +106,17 @@ impl EngineRequest {
         let dns_provider = self
             .dns_provider
             .to_engine_dns_provider(context.clone(), cluster_jwt_token)
-            .ok_or_else(|| RequestError::DnsProvider(format!("Invalid DNS provider: {:?}", self.dns_provider)))?;
+            .ok_or_else(|| {
+                let event_details = self.create_event_details();
+                IoEngineError::new_error_on_dns_provider_information(
+                    event_details,
+                    CommandError::new(
+                        "Invalid DNS provider information".to_string(),
+                        Some(format!("Invalid DNS provider information: {:?}", self.dns_provider)),
+                        None,
+                    ),
+                )
+            })?;
         let dns_provider = Arc::new(dns_provider);
 
         let kubernetes = match self.cloud_provider.kubernetes.to_engine_kubernetes(
@@ -127,6 +145,24 @@ impl EngineRequest {
     pub fn environment(&self) -> Option<EnvironmentRequest> {
         let environment = self.target_environment.as_ref().unwrap().clone();
         Some(environment)
+    }
+
+    fn create_event_details(&self) -> EventDetails {
+        let infrastructure_step = match self.action {
+            Action::Create => InfrastructureStep::Create,
+            Action::Pause => InfrastructureStep::Pause,
+            Action::Delete => InfrastructureStep::Delete,
+        };
+        let kubernetes = &self.cloud_provider.kubernetes;
+        EventDetails::new(
+            Some(self.cloud_provider.kind.clone()),
+            QoveryIdentifier::from(self.organization_id.to_string()),
+            QoveryIdentifier::new_from_long_id(kubernetes.long_id.to_string()),
+            QoveryIdentifier::from(self.id.to_string()),
+            Some(kubernetes.region.to_string()),
+            Stage::Infrastructure(infrastructure_step),
+            Transmitter::Kubernetes(kubernetes.id.to_string(), kubernetes.name.to_string()),
+        )
     }
 }
 
