@@ -687,6 +687,10 @@ pub enum Tag {
     ClusterSecretsManipulationError,
     /// DnsProviderInformationError: represent an error on DNS provider information provided.
     DnsProviderInformationError,
+    /// DnsProviderInvalidCredentials: represent an error on invalid DNS provider credentials.
+    DnsProviderInvalidCredentials,
+    /// DnsProviderInvalidApiUrl: represent an error on invalid DNS provider api url.
+    DnsProviderInvalidApiUrl,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -3426,6 +3430,42 @@ impl EngineError {
             Some(raw_error),
             None,
             Some("Check your DNS provider information".to_string()),
+        )
+    }
+
+    /// Creates new error when client DNS provider credentials are invalid
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_error_on_dns_provider_invalid_credentials(event_details: EventDetails) -> EngineError {
+        let message_safe = "Invalid DNS provider credentials".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::DnsProviderInvalidCredentials,
+            message_safe,
+            None,
+            None,
+            Some("Check your DNS provider credentials".to_string()),
+        )
+    }
+
+    /// Creates new error when client DNS provider credentials are invalid
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_error_on_dns_provider_invalid_api_url(event_details: EventDetails) -> EngineError {
+        let message_safe = "Invalid DNS provider api url".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::DnsProviderInvalidApiUrl,
+            message_safe,
+            None,
+            None,
+            Some("Check your DNS provider api url".to_string()),
         )
     }
 }
