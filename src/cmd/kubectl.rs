@@ -75,7 +75,7 @@ where
     _envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(20);
-    let _ = kubectl_exec_with_output(
+    kubectl_exec_with_output(
         vec![
             "get",
             "po",
@@ -109,7 +109,7 @@ where
     let mut output_vec: Vec<String> = Vec::with_capacity(20);
     let mut err_output_vec: Vec<String> = Vec::with_capacity(20);
     let cmd_args = vec!["get", "svc", "-n", namespace, service_name, "-o", "json"];
-    let _ = kubectl_exec_with_output(cmd_args.clone(), envs.clone(), &mut |line| output_vec.push(line), &mut |line| {
+    kubectl_exec_with_output(cmd_args.clone(), envs.clone(), &mut |line| output_vec.push(line), &mut |line| {
         err_output_vec.push(line)
     })?;
 
@@ -399,7 +399,7 @@ where
         _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
         _envs.extend(envs.clone());
 
-        let _ = kubectl_exec_with_output(
+        kubectl_exec_with_output(
             vec!["create", "namespace", namespace],
             _envs,
             &mut |line| info!("{}", line),
@@ -454,7 +454,7 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs.clone());
 
-    let _ = kubectl_exec_with_output(command_args, _envs, &mut |line| info!("{}", line), &mut |line| {
+    kubectl_exec_with_output(command_args, _envs, &mut |line| info!("{}", line), &mut |line| {
         error!("{}", line)
     })?;
 
@@ -542,7 +542,7 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
 
-    let _ = kubectl_exec_with_output(
+    kubectl_exec_with_output(
         vec!["delete", "namespace", namespace],
         _envs,
         &mut |line| info!("{}", line),
@@ -564,7 +564,7 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
 
-    let _ = kubectl_exec_with_output(
+    kubectl_exec_with_output(
         vec!["delete", "crd", crd_name],
         _envs,
         &mut |line| info!("{}", line),
@@ -587,7 +587,7 @@ where
     _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
     _envs.extend(envs);
 
-    let _ = kubectl_exec_with_output(
+    kubectl_exec_with_output(
         vec!["-n", namespace, "delete", "secret", secret],
         _envs,
         &mut |line| info!("{}", line),
@@ -611,7 +611,7 @@ where
     _envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
-    let _ = kubectl_exec_with_output(
+    kubectl_exec_with_output(
         vec!["logs", "--tail", "1000", "-n", namespace, "-l", selector],
         _envs,
         &mut |line| output_vec.push(line),
@@ -635,7 +635,7 @@ where
     _envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
-    let _ = kubectl_exec_with_output(
+    kubectl_exec_with_output(
         vec!["describe", "pod", "-n", namespace, "-l", selector],
         _envs,
         &mut |line| output_vec.push(line),
@@ -1189,7 +1189,7 @@ where
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
     let mut err_vec = Vec::new();
-    let _ = kubectl_exec_with_output(
+    kubectl_exec_with_output(
         args.clone(),
         extended_envs.clone(),
         &mut |line| output_vec.push(line),
@@ -1234,7 +1234,7 @@ where
     _envs.extend(envs);
 
     let mut output_vec: Vec<String> = Vec::with_capacity(50);
-    let _ = kubectl_exec_with_output(args.clone(), _envs.clone(), &mut |line| output_vec.push(line), &mut |line| {
+    kubectl_exec_with_output(args.clone(), _envs.clone(), &mut |line| output_vec.push(line), &mut |line| {
         error!("{}", line)
     })?;
 

@@ -325,8 +325,8 @@ mod tests {
     use crate::cmd::command::{does_binary_exist, run_version_command_for, CommandError, CommandKiller, QoveryCommand};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Barrier};
+    use std::thread;
     use std::time::Duration;
-    use std::{thread, time};
 
     #[test]
     fn test_binary_exist() {

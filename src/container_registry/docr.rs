@@ -191,7 +191,7 @@ impl ContainerRegistry for DOCR {
     fn create_registry(&self) -> Result<(), ContainerRegistryError> {
         // Digital Ocean only allow one registry per account...
         if get_current_registry_name(self.api_key.as_str()).is_err() {
-            let _ = self.create_registry(self.name())?;
+            self.create_registry(self.name())?;
         }
 
         Ok(())

@@ -146,7 +146,7 @@ pub fn generate_supported_version(
         None => "".to_string(),
     };
 
-    let _ = match update_min {
+    match update_min {
         // manage minor with updates
         Some(_) => {
             latest_major_version = format!("{}.{}.{}{}", major, minor_max, update_max.unwrap(), suffix);

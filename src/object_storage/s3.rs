@@ -94,7 +94,7 @@ impl S3 {
     }
 
     fn empty_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
-        let _ = S3::is_bucket_name_valid(bucket_name)?;
+        S3::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
@@ -161,7 +161,7 @@ impl ObjectStorage for S3 {
     }
 
     fn create_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
-        let _ = S3::is_bucket_name_valid(bucket_name)?;
+        S3::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
@@ -219,7 +219,7 @@ impl ObjectStorage for S3 {
     }
 
     fn delete_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
-        let _ = S3::is_bucket_name_valid(bucket_name)?;
+        S3::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
@@ -246,7 +246,7 @@ impl ObjectStorage for S3 {
         object_key: &str,
         use_cache: bool,
     ) -> Result<(StringPath, File), ObjectStorageError> {
-        let _ = S3::is_bucket_name_valid(bucket_name)?;
+        S3::is_bucket_name_valid(bucket_name)?;
 
         let workspace_directory = crate::fs::workspace_directory(
             self.context().workspace_root_dir(),
@@ -317,7 +317,7 @@ impl ObjectStorage for S3 {
     }
 
     fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), ObjectStorageError> {
-        let _ = S3::is_bucket_name_valid(bucket_name)?;
+        S3::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 

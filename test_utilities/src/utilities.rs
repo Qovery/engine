@@ -530,7 +530,7 @@ where
     P: AsRef<Path>,
 {
     // return the file if it already exists and should use cache
-    let _ = if let Ok(f) = fs::File::open(file_path.as_ref()) {
+    if let Ok(f) = fs::File::open(file_path.as_ref()) {
         return Ok(f);
     };
 
@@ -621,27 +621,25 @@ where
                     if cluster.tags.is_some() {
                         for tag in cluster.tags.as_ref().unwrap().iter() {
                             if tag.as_str() == expected_test_server_tag.as_str() {
-                                match block_on(scaleway_api_rs::apis::clusters_api::get_cluster_kube_config(
+                                return match block_on(scaleway_api_rs::apis::clusters_api::get_cluster_kube_config(
                                     &configuration,
                                     zone.region().as_str(),
                                     cluster.id.as_ref().unwrap().as_str(),
                                 )) {
-                                    Ok(res) => {
-                                        return OperationResult::Ok(
-                                            base64::decode(res.content.unwrap())
-                                                .unwrap()
-                                                .to_str()
-                                                .unwrap()
-                                                .to_string(),
-                                        );
-                                    }
+                                    Ok(res) => OperationResult::Ok(
+                                        base64::decode(res.content.unwrap())
+                                            .unwrap()
+                                            .to_str()
+                                            .unwrap()
+                                            .to_string(),
+                                    ),
                                     Err(e) => {
                                         let message_safe = "Error while trying to get clusters";
-                                        return OperationResult::Retry(CommandError::new(
+                                        OperationResult::Retry(CommandError::new(
                                             message_safe.to_string(),
                                             Some(e.to_string()),
                                             None,
-                                        ));
+                                        ))
                                     }
                                 };
                             }
@@ -673,7 +671,7 @@ where
         .truncate(true)
         .open(file_path.as_ref())
         .map_err(|e| CommandError::new("Error opening kubeconfig file.".to_string(), Some(e.to_string()), None))?;
-    let _ = kubernetes_config_file
+    kubernetes_config_file
         .write_all(file_content.as_bytes())
         .map_err(|_| CommandError::new_from_safe_message("Error while trying to write into file.".to_string()))?;
 

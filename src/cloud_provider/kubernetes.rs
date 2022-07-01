@@ -489,7 +489,7 @@ pub fn deploy_environment(
 
     // create all stateful services (database)
     for database in &environment.databases {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             database.exec_action(&deployment_target),
             kubernetes,
             database.as_service(),
@@ -502,7 +502,7 @@ pub fn deploy_environment(
         )?;
 
         // check all deployed services
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             database.exec_check_action(),
             kubernetes,
             database.as_service(),
@@ -517,7 +517,7 @@ pub fn deploy_environment(
 
     // create all stateless services (router, application...)
     for service in environment.stateless_services() {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             service.exec_action(&deployment_target),
             kubernetes,
             service,
@@ -529,7 +529,7 @@ pub fn deploy_environment(
             CheckAction::Deploy,
         )?;
 
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             service.exec_check_action(),
             kubernetes,
             service,
@@ -568,7 +568,7 @@ pub fn deploy_environment_error(
 
     // clean up all stateful services (database)
     for service in &environment.databases {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             service.on_create_error(&deployment_target),
             kubernetes,
             service.as_service(),
@@ -583,7 +583,7 @@ pub fn deploy_environment_error(
 
     // clean up all stateless services (router, application...)
     for service in environment.stateless_services() {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             service.on_create_error(&deployment_target),
             kubernetes,
             service,
@@ -613,7 +613,7 @@ pub fn pause_environment(
 
     // create all stateless services (router, application...)
     for service in environment.stateless_services() {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             service.on_pause(&deployment_target),
             kubernetes,
             service,
@@ -628,7 +628,7 @@ pub fn pause_environment(
 
     // create all stateful services (database)
     for database in &environment.databases {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             database.on_pause(&deployment_target),
             kubernetes,
             database.as_service(),
@@ -642,7 +642,7 @@ pub fn pause_environment(
     }
 
     for service in environment.stateless_services() {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             service.on_pause_check(),
             kubernetes,
             service,
@@ -657,7 +657,7 @@ pub fn pause_environment(
 
     // check all deployed services
     for database in &environment.databases {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             database.on_pause_check(),
             kubernetes,
             database.as_service(),
@@ -715,7 +715,7 @@ pub fn delete_environment(
 
     // delete all stateful services (database)
     for database in &environment.databases {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             database.on_delete(&deployment_target),
             kubernetes,
             database.as_service(),
@@ -729,7 +729,7 @@ pub fn delete_environment(
     }
 
     for service in environment.stateless_services() {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             service.on_delete_check(),
             kubernetes,
             service,
@@ -744,7 +744,7 @@ pub fn delete_environment(
 
     // check all deployed services
     for database in &environment.databases {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             database.on_delete_check(),
             kubernetes,
             database.as_service(),

@@ -103,7 +103,7 @@ impl ScalewayOS {
 
     fn empty_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
-        let _ = ScalewayOS::is_bucket_name_valid(bucket_name)?;
+        ScalewayOS::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
@@ -180,7 +180,7 @@ impl ObjectStorage for ScalewayOS {
 
     fn create_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
-        let _ = ScalewayOS::is_bucket_name_valid(bucket_name)?;
+        ScalewayOS::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
@@ -245,7 +245,7 @@ impl ObjectStorage for ScalewayOS {
 
     fn delete_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
-        let _ = ScalewayOS::is_bucket_name_valid(bucket_name)?;
+        ScalewayOS::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
@@ -279,7 +279,7 @@ impl ObjectStorage for ScalewayOS {
         use_cache: bool,
     ) -> Result<(StringPath, File), ObjectStorageError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
-        let _ = ScalewayOS::is_bucket_name_valid(bucket_name)?;
+        ScalewayOS::is_bucket_name_valid(bucket_name)?;
 
         let workspace_directory = crate::fs::workspace_directory(
             self.context().workspace_root_dir(),
@@ -350,7 +350,7 @@ impl ObjectStorage for ScalewayOS {
 
     fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), ObjectStorageError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
-        let _ = ScalewayOS::is_bucket_name_valid(bucket_name)?;
+        ScalewayOS::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 

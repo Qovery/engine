@@ -38,7 +38,7 @@ pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), 
         false => files.collect::<Vec<_>>(),
     };
 
-    let _ = create_dir_all(to)?;
+    create_dir_all(to)?;
     let from_str = from.to_str().unwrap();
 
     for file in files {
@@ -46,7 +46,7 @@ pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), 
         let dest = format!("{}{}", to.to_str().unwrap(), path_str.replace(from_str, "").as_str());
 
         if file.metadata().unwrap().is_dir() {
-            let _ = create_dir_all(&dest)?;
+            create_dir_all(&dest)?;
         }
 
         let _ = fs::copy(file.path(), dest);
