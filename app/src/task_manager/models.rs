@@ -147,7 +147,7 @@ impl EngineRequest {
         Some(environment)
     }
 
-    fn create_event_details(&self) -> EventDetails {
+    pub fn create_event_details(&self) -> EventDetails {
         let infrastructure_step = match self.action {
             Action::Create => InfrastructureStep::Create,
             Action::Pause => InfrastructureStep::Pause,

@@ -137,6 +137,8 @@ pub enum Tag {
     NumberOfRequestedMaxNodesIsBelowThanCurrentUsage,
     DnsProviderInformationError,
     CloudProviderInformationError,
+    DnsProviderInvalidCredentials,
+    DnsProviderInvalidApiUrl,
 }
 
 impl From<errors::Tag> for Tag {
@@ -272,6 +274,8 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CannotConnectK8sCluster => Tag::CannotConnectK8sCluster,
             errors::Tag::DnsProviderInformationError => Tag::DnsProviderInformationError,
             errors::Tag::CloudProviderInformationError => Tag::CloudProviderInformationError,
+            errors::Tag::DnsProviderInvalidCredentials => Tag::DnsProviderInvalidCredentials,
+            errors::Tag::DnsProviderInvalidApiUrl => Tag::DnsProviderInvalidApiUrl,
         }
     }
 }

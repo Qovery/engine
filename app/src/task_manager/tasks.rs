@@ -9,6 +9,8 @@ use chrono::{DateTime, Utc};
 use crossbeam_channel::Sender;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cmd::docker::Docker;
+use qovery_engine::dns_provider::errors::DnsProviderError;
+use qovery_engine::engine::EngineConfigError;
 use url::Url;
 
 use qovery_engine::error::{EngineError, EngineErrorCause};
@@ -243,16 +245,28 @@ impl Task for InfrastructureTask {
         let mut tx = match Transaction::new(&engine, logger.clone(), self.cancel_checker(), Box::new(|_| {})) {
             Ok(transaction) => transaction,
             Err(err) => {
-                send_progress(
-                    self,
-                    &self.request,
+                let engine_error = match err {
+                    EngineConfigError::BuildPlatformNotValid(engine_error) => engine_error,
+                    EngineConfigError::CloudProviderNotValid(engine_error) => engine_error,
+                    EngineConfigError::DnsProviderNotValid(dns_provider_error) => {
+                        let event_details = self.request.create_event_details();
+                        match dns_provider_error {
+                            DnsProviderError::InvalidCredentials => {
+                                errors::EngineError::new_error_on_dns_provider_invalid_credentials(event_details)
+                            }
+                            DnsProviderError::InvalidApiUrl => {
+                                errors::EngineError::new_error_on_dns_provider_invalid_api_url(event_details)
+                            }
+                        }
+                    }
+                    EngineConfigError::KubernetesNotValid(engine_error) => engine_error,
+                };
+                self.send_infrastructure_progress(
+                    logger.clone(),
                     self.action_context(ProgressLevel::Error),
-                    Some(format!("failed to get engine session {:?}", err)),
-                    true,
-                    true,
-                    false,
+                    Some("Failed to get engine session".to_string()),
+                    Some(engine_error),
                 );
-
                 return;
             }
         };
