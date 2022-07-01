@@ -2202,7 +2202,7 @@ impl EngineError {
     /// * `event_details`: Error linked event details.
     /// * `raw_error`: Raw error message.
     pub fn new_helm_charts_upgrade_error(event_details: EventDetails, raw_error: CommandError) -> EngineError {
-        let message = "Error while helm charts deployment";
+        let message = "Error while helm charts upgrade";
 
         EngineError::new(
             event_details,
