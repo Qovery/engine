@@ -50,11 +50,11 @@ impl RouterDeploymentReporter {
 }
 
 impl DeploymentReporter for RouterDeploymentReporter {
-    fn before_deployment_start(&self) {
+    fn before_deployment_start(&mut self) {
         (self.send_progress)(format!("🚀 Deployment of router `{}` is starting", to_short_id(&self.long_id)));
     }
 
-    fn deployment_in_progress(&self) {
+    fn deployment_in_progress(&mut self) {
         (self.send_progress)("⌛️ Deployment of router in progress ...".to_string());
     }
 }
