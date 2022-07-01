@@ -197,7 +197,8 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             }
         };
 
-        if rendered_report == self.last_report {
+        // Managed database don't make any progress, so display the message from time to time
+        if !self.is_managed && rendered_report == self.last_report {
             return;
         }
         self.last_report = rendered_report;
