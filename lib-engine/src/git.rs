@@ -60,7 +60,7 @@ fn checkout<'a>(repo: &'a Repository, commit_id: &'a str) -> Result<Object<'a>, 
     let mut checkout_opts = CheckoutBuilder::new();
     checkout_opts.force().remove_ignored(true).remove_untracked(true);
 
-    let _ = repo.reset(&obj, Hard, Some(&mut checkout_opts))?;
+    repo.reset(&obj, Hard, Some(&mut checkout_opts))?;
     Ok(obj)
 }
 

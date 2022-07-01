@@ -33,7 +33,7 @@ impl<'a> Transaction<'a> {
         is_transaction_aborted: Box<dyn Fn() -> bool>,
         on_step_change: Box<dyn Fn(&StepName)>,
     ) -> Result<Self, EngineConfigError> {
-        let _ = engine.is_valid()?;
+        engine.is_valid()?;
         if let Err(e) = engine.kubernetes().is_valid() {
             return Err(EngineConfigError::KubernetesNotValid(e));
         }
@@ -170,7 +170,7 @@ impl<'a> Transaction<'a> {
 
         // Do setup of registry and be sure we are login to the registry
         let cr_registry = self.engine.container_registry();
-        let _ = cr_registry.create_registry().map_err(cr_to_engine_error)?;
+        cr_registry.create_registry().map_err(cr_to_engine_error)?;
 
         for app in apps_to_build.iter_mut() {
             // If image already exist in the registry, skip the build
@@ -179,8 +179,7 @@ impl<'a> Transaction<'a> {
             }
 
             // Be sure that our repository exist before trying to pull/push images from it
-            let _ = self
-                .engine
+            self.engine
                 .container_registry()
                 .create_repository(app.get_build().image.repository_name())
                 .map_err(cr_to_engine_error)?;
@@ -275,7 +274,7 @@ impl<'a> Transaction<'a> {
             Action::Nothing => Ok(()),
         };
 
-        let _ = match action {
+        match action {
             Ok(_) => {}
             Err(err) => return Err(RollbackError::CommitError(Box::new(err))),
         };
@@ -493,7 +492,7 @@ impl<'a> Transaction<'a> {
             };
         }
 
-        let _ = match action_fn(environment) {
+        match action_fn(environment) {
             Err(err) => {
                 let rollback_result = match self.rollback() {
                     Ok(_) => TransactionResult::Rollback(err),

@@ -93,7 +93,7 @@ impl Spaces {
     }
 
     pub fn empty_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
-        let _ = Spaces::is_bucket_name_valid(bucket_name)?;
+        Spaces::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
@@ -235,7 +235,7 @@ impl ObjectStorage for Spaces {
     }
 
     fn create_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
-        let _ = Spaces::is_bucket_name_valid(bucket_name)?;
+        Spaces::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
@@ -345,7 +345,7 @@ impl ObjectStorage for Spaces {
 
     fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), ObjectStorageError> {
         // TODO(benjamin): switch to `digitalocean-api-rs` once we'll made the auo-generated lib
-        let _ = Spaces::is_bucket_name_valid(bucket_name)?;
+        Spaces::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
