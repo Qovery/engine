@@ -112,7 +112,7 @@ spec:
                 # Check if prometheus is shutdown before shutting down docker builder. DO NOT REMOVE.
                 # If we don't check it, processes like docker are hard kill and it generates issues.
                 command: ["/bin/sh", "-c", "echo 'Stopping docker container...' > /proc/1/fd/1 ; while nc -z localhost 8080; do sleep 1; done; echo 'Stopping docker container now...' > /proc/1/fd/1"]
-initContainers:
+      initContainers:
         - name: clean-data
           image: busybox:latest
           command:
