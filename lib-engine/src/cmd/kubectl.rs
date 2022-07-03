@@ -1088,6 +1088,19 @@ where
     Ok(crash_looping_pods)
 }
 
+pub fn kubectl_delete_apiservice<P>(
+    kubernetes_config: P,
+    selector: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let cmd_args = vec!["delete", "apiservice", "-l", selector];
+
+    kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, false)
+}
+
 /// kubectl_get_crash_looping_pods: gets crash looping pods.
 ///
 /// Arguments

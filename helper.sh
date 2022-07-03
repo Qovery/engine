@@ -439,7 +439,7 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
 }
 
 # shellcheck disable=SC2120
-function lint() {
+function lint() { ## run linter
   nb_treads=$2
   export RUST_LOG=info
   use_sccache

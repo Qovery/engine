@@ -19,7 +19,7 @@ use crate::cloud_provider::models::{CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::CheckAction;
 use crate::cloud_provider::Kind as CloudProviderKind;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
-use crate::cmd::kubectl;
+use crate::cmd::kubectl::{self, kubectl_delete_apiservice};
 use crate::cmd::kubectl::{
     kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_delete_pod,
     kubectl_exec_get_node, kubectl_exec_is_namespace_present, kubectl_exec_version, kubectl_get_crash_looping_pods,
@@ -835,6 +835,9 @@ where
             )),
         }
     }
+
+    // delete qovery apiservice deployed by Qvery webhook to avoid namespace in infinite Terminating state
+    let _ = kubectl_delete_apiservice(kubernetes_config, "release=qovery-cert-manager-webhook", envs);
 
     Ok(())
 }

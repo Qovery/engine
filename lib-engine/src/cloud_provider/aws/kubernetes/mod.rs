@@ -758,7 +758,6 @@ fn create(
     }
 
     let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
-
     let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
         Ok(value) => Some(value),
         Err(_) => None,
@@ -1335,6 +1334,11 @@ fn delete(
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
     let mut skip_kubernetes_step = false;
 
+    kubernetes.logger().log(EngineEvent::Info(
+        event_details.clone(),
+        EventMessage::new_from_safe(format!("Preparing to delete {} cluster.", kubernetes.kind())),
+    ));
+
     kubernetes.send_to_customer(
         format!(
             "Preparing to delete {} cluster {} with id {}",
@@ -1345,24 +1349,40 @@ fn delete(
         .as_str(),
         &listeners_helper,
     );
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe(format!("Preparing to delete {} cluster.", kubernetes.kind())),
-    ));
 
     let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
-    let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
-        Ok(value) => Some(value),
-        Err(_) => None,
-    };
+    let node_groups_with_desired_states = match kubernetes.kind() {
+        Kind::Eks => {
+            let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
+                Ok(value) => Some(value),
+                Err(_) => None,
+            };
 
-    let node_groups_with_desired_states = should_update_desired_nodes(
-        event_details.clone(),
-        kubernetes,
-        KubernetesClusterAction::Delete,
-        node_groups,
-        aws_eks_client,
-    )?;
+            should_update_desired_nodes(
+                event_details.clone(),
+                kubernetes,
+                KubernetesClusterAction::Delete,
+                node_groups,
+                aws_eks_client,
+            )?
+        }
+        Kind::Ec2 => {
+            vec![NodeGroupsWithDesiredState::new_from_node_groups(
+                &node_groups[0],
+                1,
+                false,
+            )]
+        }
+        _ => {
+            return Err(EngineError::new_unsupported_cluster_kind(
+                event_details,
+                "only AWS clusters are supported for this delete method",
+                CommandError::new_from_safe_message(
+                    "please contact Qovery, deletion can't happen on something else than AWS clsuter type".to_string(),
+                ),
+            ))
+        }
+    };
 
     // generate terraform files and copy them into temp dir
     let context = tera_context(kubernetes, aws_zones, &node_groups_with_desired_states, options)?;
