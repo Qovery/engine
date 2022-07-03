@@ -13,7 +13,6 @@ use test_utilities::aws::{K3S_KUBERNETES_MAJOR_VERSION, K3S_KUBERNETES_MINOR_VER
 use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
 use test_utilities::utilities::generate_cluster_id;
 
-#[cfg(feature = "test-aws-ec2-infra")]
 fn create_and_destroy_aws_ec2_k3s_cluster(
     region: String,
     test_type: ClusterTestType,
@@ -22,7 +21,7 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
     vpc_network_mode: VpcQoveryNetworkMode,
     test_name: &str,
 ) {
-    engine_run_test(|| {
+    engine_run_test(|| -> String {
         let region = AwsRegion::from_str(region.as_str()).expect("Wasn't able to convert the desired region");
         let zones = region.get_zones();
         let cluster_id = generate_cluster_id(region.to_string().as_str());
