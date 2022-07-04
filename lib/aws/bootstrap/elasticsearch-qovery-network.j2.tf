@@ -1,3 +1,5 @@
+{%- if not user_provided_network -%}
+
 locals {
   tags_elasticsearch = merge(
     local.tags_eks,
@@ -7,8 +9,27 @@ locals {
   )
 }
 
-# Network
+# Elasticsearch
+variable "elasticsearch_subnets_zone_a" {
+description = "Elasticsearch subnets Zone A"
+default = {{ elasticsearch_zone_a_subnet_blocks }}
+type = list(string)
+}
 
+variable "elasticsearch_subnets_zone_b" {
+description = "Elasticsearch subnets Zone B"
+default = {{ elasticsearch_zone_b_subnet_blocks }}
+type = list(string)
+}
+
+variable "elasticsearch_subnets_zone_c" {
+description = "Elasticsearch subnets Zone C"
+default = {{ elasticsearch_zone_c_subnet_blocks }}
+type = list(string)
+}
+
+
+# Network
 resource "aws_subnet" "elasticsearch_zone_a" {
   count = length(var.elasticsearch_subnets_zone_a)
 
@@ -77,3 +98,5 @@ resource "aws_security_group" "elasticsearch" {
 
   tags = local.tags_elasticsearch
 }
+
+{%- endif -%}
