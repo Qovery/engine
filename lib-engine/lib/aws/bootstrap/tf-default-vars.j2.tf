@@ -209,31 +209,6 @@ variable "rds_cidr_subnet" {
   type        = number
 }
 
-# DocumentDB
-
-variable "documentdb_subnets_zone_a" {
-  description = "DocumentDB subnets Zone A"
-  default = {{ documentdb_zone_a_subnet_blocks }}
-  type = list(string)
-}
-
-variable "documentdb_subnets_zone_b" {
-  description = "DocumentDB subnets Zone B"
-  default = {{ documentdb_zone_b_subnet_blocks }}
-  type = list(string)
-}
-
-variable "documentdb_subnets_zone_c" {
-  description = "DocumentDB subnets Zone C"
-  default = {{ documentdb_zone_c_subnet_blocks }}
-  type = list(string)
-}
-
-variable "documentdb_cidr_subnet" {
-  description = "DocumentDB CIDR (x.x.x.x/CIDR)"
-  default     = {{ documentdb_cidr_subnet }}
-  type        = number
-}
 
 # Elasticache
 

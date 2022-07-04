@@ -233,6 +233,7 @@ fn tera_context(
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
     let mut context = TeraContext::new();
 
+    context.insert("user_provided_network", &false);
     let format_ips =
         |ips: &Vec<String>| -> Vec<String> { ips.iter().map(|ip| format!("\"{}\"", ip)).collect::<Vec<_>>() };
 
