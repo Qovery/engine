@@ -210,34 +210,7 @@ variable "rds_cidr_subnet" {
 }
 
 
-# Elasticache
-
-variable "elasticache_subnets_zone_a" {
-  description = "Elasticache subnets Zone A"
-  default = {{ elasticache_zone_a_subnet_blocks }}
-  type = list(string)
-}
-
-variable "elasticache_subnets_zone_b" {
-  description = "Elasticache subnets Zone B"
-  default = {{ elasticache_zone_b_subnet_blocks }}
-  type = list(string)
-}
-
-variable "elasticache_subnets_zone_c" {
-  description = "Elasticache subnets Zone C"
-  default = {{ elasticache_zone_c_subnet_blocks }}
-  type = list(string)
-}
-
-variable "elasticache_cidr_subnet" {
-  description = "Elasticache CIDR (x.x.x.x/CIDR)"
-  default     = {{ elasticache_cidr_subnet }}
-  type        = number
-}
-
 # Elasticsearch
-
 variable "elasticsearch_subnets_zone_a" {
   description = "Elasticsearch subnets Zone A"
   default = {{ elasticsearch_zone_a_subnet_blocks }}
