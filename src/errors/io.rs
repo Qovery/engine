@@ -57,6 +57,7 @@ pub enum Tag {
     K8sPodIsNotReady,
     K8sNodeIsNotReadyWithTheRequestedVersion,
     K8sNodeIsNotReady,
+    K8sErrorCopySecret,
     UnsupportedRegion,
     UnsupportedZone,
     CannotFindRequiredBinary,
@@ -276,6 +277,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CloudProviderInformationError => Tag::CloudProviderInformationError,
             errors::Tag::DnsProviderInvalidCredentials => Tag::DnsProviderInvalidCredentials,
             errors::Tag::DnsProviderInvalidApiUrl => Tag::DnsProviderInvalidApiUrl,
+            errors::Tag::K8sErrorCopySecret => Tag::K8sErrorCopySecret,
         }
     }
 }
