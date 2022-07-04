@@ -183,33 +183,6 @@ variable "qovery_agent_replicas" {
   type = number
 }
 
-# RDS
-
-variable "rds_subnets_zone_a" {
-  description = "RDS subnets Zone A"
-  default = {{ rds_zone_a_subnet_blocks }}
-  type = list(string)
-}
-
-variable "rds_subnets_zone_b" {
-  description = "RDS subnets Zone B"
-  default = {{ rds_zone_b_subnet_blocks }}
-  type = list(string)
-}
-
-variable "rds_subnets_zone_c" {
-  description = "RDS subnets Zone C"
-  default = {{ rds_zone_c_subnet_blocks }}
-  type = list(string)
-}
-
-variable "rds_cidr_subnet" {
-  description = "RDS CIDR (x.x.x.x/CIDR)"
-  default     = {{ rds_cidr_subnet }}
-  type        = number
-}
-
-
 # Helm alert manager discord
 
 variable "discord_api_key" {
