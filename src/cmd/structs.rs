@@ -214,7 +214,7 @@ pub enum KubernetesPodStatusReason {
 
 impl Default for KubernetesPodStatusReason {
     fn default() -> Self {
-        KubernetesPodStatusReason::Unknown(None)
+        Unknown(None)
     }
 }
 

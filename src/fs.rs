@@ -19,7 +19,7 @@ pub fn delete_file_if_exists(file: &str) -> Result<(), Error> {
         return Ok(());
     }
 
-    if let Err(e) = std::fs::remove_file(&file) {
+    if let Err(e) = fs::remove_file(&file) {
         return Err(e);
     };
     Ok(())
@@ -38,7 +38,7 @@ pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), 
         false => files.collect::<Vec<_>>(),
     };
 
-    let _ = fs::create_dir_all(to)?;
+    create_dir_all(to)?;
     let from_str = from.to_str().unwrap();
 
     for file in files {
@@ -46,7 +46,7 @@ pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), 
         let dest = format!("{}{}", to.to_str().unwrap(), path_str.replace(from_str, "").as_str());
 
         if file.metadata().unwrap().is_dir() {
-            let _ = fs::create_dir_all(&dest)?;
+            create_dir_all(&dest)?;
         }
 
         let _ = fs::copy(file.path(), dest);
@@ -55,7 +55,7 @@ pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), 
     Ok(())
 }
 
-pub fn root_workspace_directory<X, S>(working_root_dir: X, execution_id: S) -> Result<String, std::io::Error>
+pub fn root_workspace_directory<X, S>(working_root_dir: X, execution_id: S) -> Result<String, Error>
 where
     X: AsRef<Path>,
     S: AsRef<Path>,
@@ -63,7 +63,7 @@ where
     workspace_directory(working_root_dir, execution_id, ".")
 }
 
-pub fn workspace_directory<X, S, P>(working_root_dir: X, execution_id: S, dir_name: P) -> Result<String, std::io::Error>
+pub fn workspace_directory<X, S, P>(working_root_dir: X, execution_id: S, dir_name: P) -> Result<String, Error>
 where
     X: AsRef<Path>,
     S: AsRef<Path>,
@@ -82,8 +82,8 @@ where
         .ok_or_else(|| Error::from(ErrorKind::NotFound))
 }
 
-fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<String, std::io::Error> {
-    let workspace_dir = crate::fs::root_workspace_directory(working_root_dir, execution_id)?;
+fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<String, Error> {
+    let workspace_dir = root_workspace_directory(working_root_dir, execution_id)?;
     let tgz_file_path = format!("{}/.qovery-workspace/{}.tgz", working_root_dir, execution_id);
     let tgz_file = File::create(tgz_file_path.as_str())?;
 
@@ -119,9 +119,9 @@ fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Re
     Ok(tgz_file_path)
 }
 
-pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<(), std::io::Error> {
-    return match crate::fs::root_workspace_directory(working_root_dir, execution_id) {
-        Ok(workspace_dir) => match std::fs::remove_dir_all(match workspace_dir.strip_suffix("/.") {
+pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<(), Error> {
+    return match root_workspace_directory(working_root_dir, execution_id) {
+        Ok(workspace_dir) => match fs::remove_dir_all(match workspace_dir.strip_suffix("/.") {
             Some(striped_workspace_dir) => striped_workspace_dir, // Removing extra dir name allowing to delete directory properly ("/dir/." => "dir")
             None => &workspace_dir,
         }) {
@@ -151,7 +151,7 @@ pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -
     };
 }
 
-pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> Result<String, std::io::Error> {
+pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> Result<String, Error> {
     info!("archive workspace directory in progress");
 
     match archive_workspace_directory(working_root_dir, execution_id) {
@@ -427,7 +427,7 @@ mod tests {
         ];
         directories_to_create
             .iter()
-            .for_each(|d| fs::create_dir_all(d).expect("error creating directory"));
+            .for_each(|d| create_dir_all(d).expect("error creating directory"));
 
         let tmp_files = vec![
             (".terraform/file-1.txt", "content"),

@@ -20,7 +20,7 @@ pub struct DO {
     context: Context,
     id: String,
     organization_id: String,
-    organization_long_id: uuid::Uuid,
+    organization_long_id: Uuid,
     name: String,
     pub token: String,
     spaces_access_id: String,
@@ -34,7 +34,7 @@ impl DO {
         context: Context,
         id: &str,
         organization_id: &str,
-        organization_long_id: uuid::Uuid,
+        organization_long_id: Uuid,
         token: &str,
         spaces_access_id: &str,
         spaces_secret_key: &str,
@@ -69,7 +69,7 @@ impl CloudProvider for DO {
         Kind::Do
     }
 
-    fn kubernetes_kind(&self) -> crate::cloud_provider::kubernetes::Kind {
+    fn kubernetes_kind(&self) -> KubernetesKind {
         KubernetesKind::Doks
     }
 

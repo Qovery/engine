@@ -301,7 +301,7 @@ impl ServiceType {
     }
 }
 
-impl<'a> ToString for ServiceType {
+impl ToString for ServiceType {
     fn to_string(&self) -> String {
         self.name()
     }
@@ -566,7 +566,7 @@ where
     let helm_release_name = service.helm_release_name();
 
     // clean the resource
-    let _ = helm_uninstall_release(kubernetes, environment, helm_release_name.as_str(), event_details)?;
+    helm_uninstall_release(kubernetes, environment, helm_release_name.as_str(), event_details)?;
 
     Ok(())
 }
@@ -712,7 +712,7 @@ where
             ));
         }
 
-        let _ = cmd::terraform::terraform_init_validate_plan_apply(
+        cmd::terraform::terraform_init_validate_plan_apply(
             workspace_dir.as_str(),
             service.context().is_dry_run_deploy(),
         )
@@ -981,7 +981,7 @@ where
         // If not managed, we use helm to deploy
         let helm_release_name = service.helm_release_name();
         // clean the resource
-        let _ = helm_uninstall_release(kubernetes, environment, helm_release_name.as_str(), event_details)?;
+        helm_uninstall_release(kubernetes, environment, helm_release_name.as_str(), event_details)?;
     }
 
     Ok(())
@@ -1289,7 +1289,7 @@ where
         )
     })?;
 
-    let _ = result.extend(logs);
+    result.extend(logs);
 
     // get pod state
     let pods = kubectl_exec_get_pods(

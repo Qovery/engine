@@ -5,7 +5,6 @@ use thiserror::Error;
 use crate::build_platform::BuildPlatform;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::CloudProvider;
-use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::ContainerRegistry;
 use crate::dns_provider::errors::DnsProviderError;
 use crate::dns_provider::DnsProvider;
@@ -16,8 +15,6 @@ use crate::io_models::Context;
 pub enum EngineConfigError {
     #[error("Build platform is not valid error: {0}")]
     BuildPlatformNotValid(EngineError),
-    #[error("Container registry is not valid error: {0}")]
-    ContainerRegistryNotValid(ContainerRegistryError),
     #[error("Cloud provider is not valid error: {0}")]
     CloudProviderNotValid(EngineError),
     #[error("DNS provider is not valid error: {0}")]

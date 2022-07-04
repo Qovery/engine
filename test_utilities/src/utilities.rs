@@ -61,10 +61,9 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
     let organization_id = organization_id.to_string();
     let cluster_id = cluster_id.to_string();
     let execution_id = execution_id();
-    let home_dir =
-        std::env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_str().unwrap().to_string());
-    let lib_root_dir = std::env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
-    let docker_host = std::env::var("DOCKER_HOST").map(|x| Url::parse(&x).unwrap()).ok();
+    let home_dir = env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_str().unwrap().to_string());
+    let lib_root_dir = env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
+    let docker_host = env::var("DOCKER_HOST").map(|x| Url::parse(&x).unwrap()).ok();
     let docker = Docker::new(docker_host.clone()).expect("Can't init docker");
 
     let metadata = Metadata {
@@ -446,7 +445,7 @@ pub fn generate_password(provider_kind: Kind, db_mode: DatabaseMode) -> String {
         '"', '\'', '(', ')', ',', '.', '/', ':', ';', '<', '>', '@', '[', '\\', ']', '^', '`', '{', '|', '}', '~',
     ];
 
-    let allow_using_symbols = provider_kind == Kind::Scw && db_mode == DatabaseMode::MANAGED;
+    let allow_using_symbols = provider_kind == Kind::Scw && db_mode == MANAGED;
     if !allow_using_symbols {
         return generate_id();
     };
@@ -531,7 +530,7 @@ where
     P: AsRef<Path>,
 {
     // return the file if it already exists and should use cache
-    let _ = if let Ok(f) = fs::File::open(file_path.as_ref()) {
+    if let Ok(f) = fs::File::open(file_path.as_ref()) {
         return Ok(f);
     };
 
@@ -622,27 +621,25 @@ where
                     if cluster.tags.is_some() {
                         for tag in cluster.tags.as_ref().unwrap().iter() {
                             if tag.as_str() == expected_test_server_tag.as_str() {
-                                match block_on(scaleway_api_rs::apis::clusters_api::get_cluster_kube_config(
+                                return match block_on(scaleway_api_rs::apis::clusters_api::get_cluster_kube_config(
                                     &configuration,
                                     zone.region().as_str(),
                                     cluster.id.as_ref().unwrap().as_str(),
                                 )) {
-                                    Ok(res) => {
-                                        return OperationResult::Ok(
-                                            base64::decode(res.content.unwrap())
-                                                .unwrap()
-                                                .to_str()
-                                                .unwrap()
-                                                .to_string(),
-                                        );
-                                    }
+                                    Ok(res) => OperationResult::Ok(
+                                        base64::decode(res.content.unwrap())
+                                            .unwrap()
+                                            .to_str()
+                                            .unwrap()
+                                            .to_string(),
+                                    ),
                                     Err(e) => {
                                         let message_safe = "Error while trying to get clusters";
-                                        return OperationResult::Retry(CommandError::new(
+                                        OperationResult::Retry(CommandError::new(
                                             message_safe.to_string(),
                                             Some(e.to_string()),
                                             None,
-                                        ));
+                                        ))
                                     }
                                 };
                             }
@@ -674,7 +671,7 @@ where
         .truncate(true)
         .open(file_path.as_ref())
         .map_err(|e| CommandError::new("Error opening kubeconfig file.".to_string(), Some(e.to_string()), None))?;
-    let _ = kubernetes_config_file
+    kubernetes_config_file
         .write_all(file_content.as_bytes())
         .map_err(|_| CommandError::new_from_safe_message("Error while trying to write into file.".to_string()))?;
 
@@ -1038,11 +1035,11 @@ pub fn db_disk_type(provider_kind: Kind, database_mode: DatabaseMode) -> String 
     match provider_kind {
         Kind::Aws => "gp2",
         Kind::Do => match database_mode {
-            DatabaseMode::MANAGED => DO_MANAGED_DATABASE_DISK_TYPE,
+            MANAGED => DO_MANAGED_DATABASE_DISK_TYPE,
             DatabaseMode::CONTAINER => DO_SELF_HOSTED_DATABASE_DISK_TYPE,
         },
         Kind::Scw => match database_mode {
-            DatabaseMode::MANAGED => SCW_MANAGED_DATABASE_DISK_TYPE,
+            MANAGED => SCW_MANAGED_DATABASE_DISK_TYPE,
             DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
         },
     }
@@ -1058,11 +1055,11 @@ pub fn db_instance_type(provider_kind: Kind, db_kind: DatabaseKind, database_mod
             DatabaseKind::Redis => "cache.t3.micro",
         },
         Kind::Do => match database_mode {
-            DatabaseMode::MANAGED => DO_MANAGED_DATABASE_INSTANCE_TYPE,
+            MANAGED => DO_MANAGED_DATABASE_INSTANCE_TYPE,
             DatabaseMode::CONTAINER => DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
         },
         Kind::Scw => match database_mode {
-            DatabaseMode::MANAGED => SCW_MANAGED_DATABASE_INSTANCE_TYPE,
+            MANAGED => SCW_MANAGED_DATABASE_INSTANCE_TYPE,
             DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
         },
     }

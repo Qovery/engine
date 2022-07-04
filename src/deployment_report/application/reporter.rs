@@ -18,6 +18,7 @@ pub struct ApplicationDeploymentReporter {
     commit: String,
     namespace: String,
     kube_client: kube::Client,
+    last_report: String,
     send_progress: Box<dyn Fn(String) + Send>,
 }
 
@@ -60,13 +61,14 @@ impl ApplicationDeploymentReporter {
             commit: app.get_build().git_repository.commit_id.clone(),
             namespace: deployment_target.environment.namespace().to_string(),
             kube_client: deployment_target.kube.clone(),
+            last_report: "".to_string(),
             send_progress: Box::new(log),
         }
     }
 }
 
 impl DeploymentReporter for ApplicationDeploymentReporter {
-    fn before_deployment_start(&self) {
+    fn before_deployment_start(&mut self) {
         if let Ok(deployment_info) =
             block_on(fetch_app_deployment_report(&self.kube_client, &self.long_id, &self.namespace))
         {
@@ -81,7 +83,7 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
         }
     }
 
-    fn deployment_in_progress(&self) {
+    fn deployment_in_progress(&mut self) {
         // Fetch deployment information from kube api
         let report = match block_on(fetch_app_deployment_report(&self.kube_client, &self.long_id, &self.namespace)) {
             Ok(deployment_info) => deployment_info,
@@ -100,8 +102,13 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
             }
         };
 
+        if rendered_report == self.last_report {
+            return;
+        }
+        self.last_report = rendered_report;
+
         // Send it to user
-        for line in rendered_report.trim_end().split('\n').map(str::to_string) {
+        for line in self.last_report.trim_end().split('\n').map(str::to_string) {
             (self.send_progress)(line);
         }
     }

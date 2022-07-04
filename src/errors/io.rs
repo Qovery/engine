@@ -117,6 +117,7 @@ pub enum Tag {
     ContainerRegistryRepositoryDoesntExist,
     ContainerRegistryDeleteRepositoryError,
     ContainerRegistryDeleteImageError,
+    ContainerRegistryInformationError,
     ObjectStorageInvalidBucketName,
     ObjectStorageCannotEmptyBucket,
     ObjectStorageCannotTagBucket,
@@ -134,6 +135,10 @@ pub enum Tag {
     CannotGetNodeGroupInfo,
     CannotConnectK8sCluster,
     NumberOfRequestedMaxNodesIsBelowThanCurrentUsage,
+    DnsProviderInformationError,
+    CloudProviderInformationError,
+    DnsProviderInvalidCredentials,
+    DnsProviderInvalidApiUrl,
 }
 
 impl From<errors::Tag> for Tag {
@@ -235,6 +240,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::ContainerRegistryImageUnreachableAfterPush => Tag::ContainerRegistryImageUnreachableAfterPush,
             errors::Tag::ContainerRegistryRepositoryDoesntExist => Tag::ContainerRegistryRepositoryDoesntExist,
             errors::Tag::ContainerRegistryDeleteRepositoryError => Tag::ContainerRegistryDeleteRepositoryError,
+            errors::Tag::ContainerRegistryInformationError => Tag::ContainerRegistryInformationError,
             errors::Tag::BuilderDockerCannotListImages => Tag::BuilderDockerCannotListImages,
             errors::Tag::DockerError => Tag::DockerError,
             errors::Tag::ObjectStorageInvalidBucketName => Tag::ObjectStorageInvalidBucketName,
@@ -266,6 +272,10 @@ impl From<errors::Tag> for Tag {
                 Tag::NumberOfRequestedMaxNodesIsBelowThanCurrentUsage
             }
             errors::Tag::CannotConnectK8sCluster => Tag::CannotConnectK8sCluster,
+            errors::Tag::DnsProviderInformationError => Tag::DnsProviderInformationError,
+            errors::Tag::CloudProviderInformationError => Tag::CloudProviderInformationError,
+            errors::Tag::DnsProviderInvalidCredentials => Tag::DnsProviderInvalidCredentials,
+            errors::Tag::DnsProviderInvalidApiUrl => Tag::DnsProviderInvalidApiUrl,
         }
     }
 }

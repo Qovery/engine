@@ -579,12 +579,12 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
         );
 
         let mut modified_environment = environment.clone();
-        let _ = modified_environment.applications.clear();
+        modified_environment.applications.clear();
 
         for (idx, mut router) in environment.routers.into_iter().enumerate() {
             // add custom domain
             let mut _router = router.clone();
-            let _ = _router.routes.clear();
+            _router.routes.clear();
 
             let cd = CustomDomain {
                 domain: format!("fake-custom-domain-{}.qovery.io", idx),

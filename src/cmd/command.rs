@@ -13,7 +13,7 @@ use timeout_readwrite::TimeoutReader;
 #[derive(thiserror::Error, Debug)]
 pub enum CommandError {
     #[error("Error while executing command")]
-    ExecutionError(#[from] std::io::Error),
+    ExecutionError(#[from] Error),
 
     #[error("Command terminated with a non success exit status code: {0}")]
     ExitStatusError(ExitStatus),
@@ -154,7 +154,7 @@ impl QoveryCommand {
             .map_err(ExecutionError)?;
 
         // Read stdout/stderr until timeout is reached
-        let reader_timeout = std::time::Duration::from_secs(1);
+        let reader_timeout = Duration::from_secs(1);
         let stdout = cmd_handle
             .stdout
             .take()
@@ -167,7 +167,7 @@ impl QoveryCommand {
             .ok_or_else(|| ExecutionError(Error::new(ErrorKind::BrokenPipe, "Cannot get stderr for command")))?;
         let mut stderr_reader = BufReader::new(TimeoutReader::new(
             stderr,
-            std::time::Duration::from_secs(0), // don't block on stderr
+            Duration::from_secs(0), // don't block on stderr
         ))
         .lines();
 
@@ -273,7 +273,7 @@ impl QoveryCommand {
             };
 
             // Sleep a bit and retry to check
-            std::thread::sleep(std::time::Duration::from_secs(1));
+            std::thread::sleep(Duration::from_secs(1));
         }
 
         if !exit_status.success() {
@@ -325,8 +325,8 @@ mod tests {
     use crate::cmd::command::{does_binary_exist, run_version_command_for, CommandError, CommandKiller, QoveryCommand};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Barrier};
+    use std::thread;
     use std::time::Duration;
-    use std::{thread, time};
 
     #[test]
     fn test_binary_exist() {
@@ -377,7 +377,7 @@ mod tests {
             let barrier = barrier.clone();
             move || {
                 barrier.wait();
-                thread::sleep(time::Duration::from_secs(2));
+                thread::sleep(Duration::from_secs(2));
                 should_kill.store(true, Ordering::Release);
             }
         });

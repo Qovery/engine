@@ -66,8 +66,7 @@ impl ECR {
         let _ = registry_url.set_password(Some(&credentials.password));
 
         cr.log_info(format!("🔓 Login to ECR registry {}", credentials.endpoint_url));
-        let _ = cr
-            .context
+        cr.context
             .docker
             .login(&registry_url)
             .map_err(|_err| ContainerRegistryError::InvalidCredentials)?;

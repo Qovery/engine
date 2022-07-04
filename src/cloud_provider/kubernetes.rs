@@ -153,7 +153,7 @@ pub trait Kubernetes: Listen {
                             self.get_event_details(stage.clone()),
                             EventMessage::new_from_safe("Retrying to get kubeconfig file.".to_string()),
                         ));
-                        retry::OperationResult::Retry(error)
+                        OperationResult::Retry(error)
                     }
                 }
             }) {
@@ -234,7 +234,7 @@ pub trait Kubernetes: Listen {
         let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
         let stage = Stage::General(GeneralStep::RetrieveClusterResources);
 
-        let nodes = match crate::cmd::kubectl::kubectl_exec_get_node(
+        let nodes = match kubectl_exec_get_node(
             kubernetes_config_file_path,
             self.cloud_provider().credentials_environment_variables(),
         ) {
@@ -362,7 +362,7 @@ pub trait Kubernetes: Listen {
             ProgressScope::Infrastructure {
                 execution_id: self.context().execution_id().to_string(),
             },
-            ProgressLevel::Info,
+            Info,
             Some(message),
             self.context().execution_id(),
         ))
@@ -489,7 +489,7 @@ pub fn deploy_environment(
 
     // create all stateful services (database)
     for database in &environment.databases {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             database.exec_action(&deployment_target),
             kubernetes,
             database.as_service(),
@@ -502,7 +502,7 @@ pub fn deploy_environment(
         )?;
 
         // check all deployed services
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             database.exec_check_action(),
             kubernetes,
             database.as_service(),
@@ -517,7 +517,7 @@ pub fn deploy_environment(
 
     // create all stateless services (router, application...)
     for service in environment.stateless_services() {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             service.exec_action(&deployment_target),
             kubernetes,
             service,
@@ -529,7 +529,7 @@ pub fn deploy_environment(
             CheckAction::Deploy,
         )?;
 
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             service.exec_check_action(),
             kubernetes,
             service,
@@ -568,7 +568,7 @@ pub fn deploy_environment_error(
 
     // clean up all stateful services (database)
     for service in &environment.databases {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             service.on_create_error(&deployment_target),
             kubernetes,
             service.as_service(),
@@ -583,7 +583,7 @@ pub fn deploy_environment_error(
 
     // clean up all stateless services (router, application...)
     for service in environment.stateless_services() {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             service.on_create_error(&deployment_target),
             kubernetes,
             service,
@@ -613,7 +613,7 @@ pub fn pause_environment(
 
     // create all stateless services (router, application...)
     for service in environment.stateless_services() {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             service.on_pause(&deployment_target),
             kubernetes,
             service,
@@ -628,7 +628,7 @@ pub fn pause_environment(
 
     // create all stateful services (database)
     for database in &environment.databases {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             database.on_pause(&deployment_target),
             kubernetes,
             database.as_service(),
@@ -642,7 +642,7 @@ pub fn pause_environment(
     }
 
     for service in environment.stateless_services() {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             service.on_pause_check(),
             kubernetes,
             service,
@@ -657,7 +657,7 @@ pub fn pause_environment(
 
     // check all deployed services
     for database in &environment.databases {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             database.on_pause_check(),
             kubernetes,
             database.as_service(),
@@ -715,7 +715,7 @@ pub fn delete_environment(
 
     // delete all stateful services (database)
     for database in &environment.databases {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             database.on_delete(&deployment_target),
             kubernetes,
             database.as_service(),
@@ -729,7 +729,7 @@ pub fn delete_environment(
     }
 
     for service in environment.stateless_services() {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             service.on_delete_check(),
             kubernetes,
             service,
@@ -744,7 +744,7 @@ pub fn delete_environment(
 
     // check all deployed services
     for database in &environment.databases {
-        let _ = service::check_kubernetes_service_error(
+        service::check_kubernetes_service_error(
             database.on_delete_check(),
             kubernetes,
             database.as_service(),
@@ -1356,7 +1356,7 @@ where
 {
     let listeners = std::clone::Clone::clone(kubernetes.listeners());
     let logger = kubernetes.logger().clone_dyn();
-    let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
+    let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Create));
 
     let progress_info = ProgressInfo::new(
         ProgressScope::Infrastructure {
@@ -1370,64 +1370,53 @@ where
     let (tx, rx) = mpsc::channel();
 
     // monitor thread to notify user while the blocking task is executed
-    let handle = std::thread::Builder::new()
-        .name("task-monitor".to_string())
-        .spawn(move || {
-            // stop the thread when the blocking task is done
-            let listeners_helper = ListenersHelper::new(&listeners);
-            let action = action;
-            let progress_info = progress_info;
-            let waiting_message = waiting_message.unwrap_or_else(|| "no message ...".to_string());
+    let handle = thread::Builder::new().name("task-monitor".to_string()).spawn(move || {
+        // stop the thread when the blocking task is done
+        let listeners_helper = ListenersHelper::new(&listeners);
+        let action = action;
+        let progress_info = progress_info;
+        let waiting_message = waiting_message.unwrap_or_else(|| "no message ...".to_string());
 
-            loop {
-                // do notify users here
-                let progress_info = std::clone::Clone::clone(&progress_info);
-                let event_details = std::clone::Clone::clone(&event_details);
-                let event_message = EventMessage::new_from_safe(waiting_message.to_string());
+        loop {
+            // do notify users here
+            let progress_info = Clone::clone(&progress_info);
+            let event_details = Clone::clone(&event_details);
+            let event_message = EventMessage::new_from_safe(waiting_message.to_string());
 
-                match action {
-                    Action::Create => {
-                        listeners_helper.deployment_in_progress(progress_info);
-                        logger.log(EngineEvent::Info(
-                            EventDetails::clone_changing_stage(
-                                event_details,
-                                Stage::Infrastructure(InfrastructureStep::Create),
-                            ),
-                            event_message,
-                        ));
-                    }
-                    Action::Pause => {
-                        listeners_helper.pause_in_progress(progress_info);
-                        logger.log(EngineEvent::Info(
-                            EventDetails::clone_changing_stage(
-                                event_details,
-                                Stage::Infrastructure(InfrastructureStep::Pause),
-                            ),
-                            event_message,
-                        ));
-                    }
-                    Action::Delete => {
-                        listeners_helper.delete_in_progress(progress_info);
-                        logger.log(EngineEvent::Info(
-                            EventDetails::clone_changing_stage(
-                                event_details,
-                                Stage::Infrastructure(InfrastructureStep::Delete),
-                            ),
-                            event_message,
-                        ));
-                    }
-                    Action::Nothing => {} // should not happens
-                };
-
-                thread::sleep(Duration::from_secs(30));
-
-                // watch for thread termination
-                match rx.try_recv() {
-                    Ok(_) | Err(TryRecvError::Disconnected) => break,
-                    Err(TryRecvError::Empty) => {}
+            match action {
+                Action::Create => {
+                    listeners_helper.deployment_in_progress(progress_info);
+                    logger.log(EngineEvent::Info(
+                        EventDetails::clone_changing_stage(event_details, Infrastructure(InfrastructureStep::Create)),
+                        event_message,
+                    ));
                 }
+                Action::Pause => {
+                    listeners_helper.pause_in_progress(progress_info);
+                    logger.log(EngineEvent::Info(
+                        EventDetails::clone_changing_stage(event_details, Infrastructure(InfrastructureStep::Pause)),
+                        event_message,
+                    ));
+                }
+                Action::Delete => {
+                    listeners_helper.delete_in_progress(progress_info);
+                    logger.log(EngineEvent::Info(
+                        EventDetails::clone_changing_stage(event_details, Infrastructure(InfrastructureStep::Delete)),
+                        event_message,
+                    ));
+                }
+                Action::Nothing => {} // should not happens
+            };
+
+            thread::sleep(Duration::from_secs(30));
+
+            // watch for thread termination
+            match rx.try_recv() {
+                Ok(_) | Err(TryRecvError::Disconnected) => break,
+                Err(TryRecvError::Empty) => {}
             }
-        });
+        }
+    });
 
     let blocking_task_result = long_task();
     let _ = tx.send(());

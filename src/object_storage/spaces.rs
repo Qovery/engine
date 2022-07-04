@@ -15,7 +15,6 @@ use crate::io_models::{Context, StringPath};
 use crate::models::digital_ocean::DoRegion;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::{Kind, ObjectStorage};
-use crate::runtime;
 use crate::runtime::block_on;
 
 pub enum BucketDeleteStrategy {
@@ -94,7 +93,7 @@ impl Spaces {
     }
 
     pub fn empty_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
-        let _ = Spaces::is_bucket_name_valid(bucket_name)?;
+        Spaces::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
@@ -236,7 +235,7 @@ impl ObjectStorage for Spaces {
     }
 
     fn create_bucket(&self, bucket_name: &str) -> Result<(), ObjectStorageError> {
-        let _ = Spaces::is_bucket_name_valid(bucket_name)?;
+        Spaces::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 
@@ -315,7 +314,7 @@ impl ObjectStorage for Spaces {
 
         // retrieve config file from object storage
         let result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
-            match runtime::block_on(self.get_object(bucket_name, object_key, file_path.as_str())) {
+            match block_on(self.get_object(bucket_name, object_key, file_path.as_str())) {
                 Ok(file) => OperationResult::Ok(file),
                 Err(err) => OperationResult::Retry(err),
             }
@@ -346,7 +345,7 @@ impl ObjectStorage for Spaces {
 
     fn put(&self, bucket_name: &str, object_key: &str, file_path: &str) -> Result<(), ObjectStorageError> {
         // TODO(benjamin): switch to `digitalocean-api-rs` once we'll made the auo-generated lib
-        let _ = Spaces::is_bucket_name_valid(bucket_name)?;
+        Spaces::is_bucket_name_valid(bucket_name)?;
 
         let s3_client = self.get_s3_client();
 

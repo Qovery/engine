@@ -452,7 +452,7 @@ impl Docker {
 
         args_string.push(context.to_str().unwrap_or_default().to_string());
 
-        let _ = docker_exec(
+        docker_exec(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(&[]),
             stdout_output,
@@ -462,7 +462,7 @@ impl Docker {
         build_result.built(true);
 
         if push_after_build {
-            let _ = self.push(image_to_build, stdout_output, stderr_output, should_abort)?;
+            self.push(image_to_build, stdout_output, stderr_output, should_abort)?;
             build_result.pushed(true);
         }
 

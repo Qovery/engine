@@ -170,7 +170,7 @@ impl Kapsule {
                         QoveryIdentifier::new_from_long_id(context.cluster_id().to_string()),
                         QoveryIdentifier::new_from_long_id(context.execution_id().to_string()),
                         Some(zone.region_str()),
-                        Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
+                        Infrastructure(InfrastructureStep::LoadConfiguration),
                         Transmitter::Kubernetes(id, name),
                     ),
                     node_group.instance_type.as_str(),
@@ -429,7 +429,7 @@ impl Kapsule {
     }
 
     fn tera_context(&self) -> Result<TeraContext, EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let mut context = TeraContext::new();
 
         // Scaleway
@@ -582,7 +582,7 @@ impl Kapsule {
 
     fn create(&self) -> Result<(), EngineError> {
         let listeners_helper = ListenersHelper::new(&self.listeners);
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
 
         // TODO(DEV-1061): remove legacy logger
         self.send_to_customer(
@@ -664,36 +664,6 @@ impl Kapsule {
             format!("Deploying SCW {} cluster deployment with id {}", self.name(), self.id()).as_str(),
             &listeners_helper,
         );
-
-        // temporary: remove helm/kube management from terraform
-        match terraform_init_validate_state_list(temp_dir.as_str()) {
-            Ok(x) => {
-                let items_type = vec!["helm_release", "kubernetes_namespace"];
-                for item in items_type {
-                    for entry in x.clone() {
-                        if entry.starts_with(item) {
-                            match terraform_exec(temp_dir.as_str(), vec!["state", "rm", &entry]) {
-                                Ok(_) => self.logger().log(EngineEvent::Info(
-                                    event_details.clone(),
-                                    EventMessage::new_from_safe(format!("Successfully removed {}", &entry)),
-                                )),
-                                Err(e) => {
-                                    return Err(EngineError::new_terraform_cannot_remove_entry_out(
-                                        event_details,
-                                        entry.to_string(),
-                                        e,
-                                    ))
-                                }
-                            }
-                        };
-                    }
-                }
-            }
-            Err(e) => self.logger().log(EngineEvent::Error(
-                EngineError::new_terraform_state_does_not_exist(event_details.clone(), e),
-                None,
-            )),
-        };
 
         // TODO(benjaminch): move this elsewhere
         // Create object-storage buckets
@@ -995,12 +965,12 @@ impl Kapsule {
     }
 
     fn create_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
         let environment_variables: Vec<(&str, &str)> = self.cloud_provider.credentials_environment_variables();
 
         self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create)),
+            self.get_event_details(Infrastructure(InfrastructureStep::Create)),
             EventMessage::new_from_safe("SCW.create_error() called.".to_string()),
         ));
 
@@ -1022,7 +992,7 @@ impl Kapsule {
 
     fn upgrade_error(&self) -> Result<(), EngineError> {
         self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade)),
+            self.get_event_details(Infrastructure(InfrastructureStep::Upgrade)),
             EventMessage::new_from_safe("SCW.upgrade_error() called.".to_string()),
         ));
 
@@ -1035,7 +1005,7 @@ impl Kapsule {
 
     fn downgrade_error(&self) -> Result<(), EngineError> {
         self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade)),
+            self.get_event_details(Infrastructure(InfrastructureStep::Downgrade)),
             EventMessage::new_from_safe("SCW.downgrade_error() called.".to_string()),
         ));
 
@@ -1043,7 +1013,7 @@ impl Kapsule {
     }
 
     fn pause(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         let listeners_helper = ListenersHelper::new(&self.listeners);
 
         self.send_to_customer(
@@ -1052,7 +1022,7 @@ impl Kapsule {
         );
 
         self.logger().log(EngineEvent::Info(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
+            self.get_event_details(Infrastructure(InfrastructureStep::Pause)),
             EventMessage::new_from_safe("Preparing cluster pause.".to_string()),
         ));
 
@@ -1210,7 +1180,7 @@ impl Kapsule {
 
     fn pause_error(&self) -> Result<(), EngineError> {
         self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
+            self.get_event_details(Infrastructure(InfrastructureStep::Pause)),
             EventMessage::new_from_safe("SCW.pause_error() called.".to_string()),
         ));
 
@@ -1218,7 +1188,7 @@ impl Kapsule {
     }
 
     fn delete(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let skip_kubernetes_step = false;
 
@@ -1278,7 +1248,7 @@ impl Kapsule {
             event_details.clone(),
             EventMessage::new_from_safe("Running Terraform apply before running a delete.".to_string()),
         ));
-        if let Err(e) = cmd::terraform::terraform_init_validate_plan_apply(temp_dir.as_str(), false) {
+        if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), false) {
             // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
             self.logger().log(EngineEvent::Error(
                 EngineError::new_terraform_error_while_executing_pipeline(event_details.clone(), e),
@@ -1513,7 +1483,7 @@ impl Kapsule {
 
     fn delete_error(&self) -> Result<(), EngineError> {
         self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete)),
+            self.get_event_details(Infrastructure(InfrastructureStep::Delete)),
             EventMessage::new_from_safe("SCW.delete_error() called.".to_string()),
         ));
 
@@ -1637,7 +1607,7 @@ impl Kubernetes for Kapsule {
             None,
             Some(3),
             self.cloud_provider().credentials_environment_variables(),
-            Stage::Infrastructure(InfrastructureStep::Upgrade),
+            Infrastructure(InfrastructureStep::Upgrade),
         ) {
             self.logger().log(EngineEvent::Error(e.clone(), None));
             return Err(e);

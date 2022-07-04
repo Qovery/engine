@@ -89,6 +89,7 @@ pub struct DatabaseDeploymentReporter {
     is_managed: bool,
     type_: DatabaseType,
     version: String,
+    last_report: String,
     kube_client: kube::Client,
     send_progress: Box<dyn Fn(String) + Send>,
 }
@@ -133,6 +134,7 @@ impl DatabaseDeploymentReporter {
             is_managed: db.is_managed_service(),
             type_: db.db_type(),
             version: db.version(),
+            last_report: "".to_string(),
             kube_client: deployment_target.kube.clone(),
             send_progress: Box::new(log),
         }
@@ -140,7 +142,7 @@ impl DatabaseDeploymentReporter {
 }
 
 impl DeploymentReporter for DatabaseDeploymentReporter {
-    fn before_deployment_start(&self) {
+    fn before_deployment_start(&mut self) {
         // managed db
         if self.is_managed {
             (self.send_progress)(format!(
@@ -169,7 +171,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         }
     }
 
-    fn deployment_in_progress(&self) {
+    fn deployment_in_progress(&mut self) {
         // Fetch deployment information from kube api
         let report = match block_on(fetch_database_deployment_report(
             &self.kube_client,
@@ -195,8 +197,14 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             }
         };
 
+        // Managed database don't make any progress, so display the message from time to time
+        if !self.is_managed && rendered_report == self.last_report {
+            return;
+        }
+        self.last_report = rendered_report;
+
         // Send it to user
-        for line in rendered_report.trim_end().split('\n').map(str::to_string) {
+        for line in self.last_report.trim_end().split('\n').map(str::to_string) {
             (self.send_progress)(line);
         }
     }

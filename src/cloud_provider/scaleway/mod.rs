@@ -15,7 +15,7 @@ pub struct Scaleway {
     id: String,
     name: String,
     organization_id: String,
-    organization_long_id: uuid::Uuid,
+    organization_long_id: Uuid,
     access_key: String,
     secret_key: String,
     project_id: String,
@@ -28,7 +28,7 @@ impl Scaleway {
         context: Context,
         id: &str,
         organization_id: &str,
-        organization_long_id: uuid::Uuid,
+        organization_long_id: Uuid,
         name: &str,
         access_key: &str,
         secret_key: &str,
@@ -59,7 +59,7 @@ impl CloudProvider for Scaleway {
         Kind::Scw
     }
 
-    fn kubernetes_kind(&self) -> crate::cloud_provider::kubernetes::Kind {
+    fn kubernetes_kind(&self) -> KubernetesKind {
         KubernetesKind::ScwKapsule
     }
 

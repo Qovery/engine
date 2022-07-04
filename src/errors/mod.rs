@@ -601,6 +601,8 @@ pub enum Tag {
     DatabaseFailedToStartAfterSeveralRetries,
     /// RouterFailedToDeploy: represents an error while trying to deploy a router.
     RouterFailedToDeploy,
+    /// CloudProviderInformationError: represents an error when checking cloud provider information provided.
+    CloudProviderInformationError,
     /// CloudProviderClientInvalidCredentials: represents an error where client credentials for a cloud providers appear to be invalid.
     CloudProviderClientInvalidCredentials,
     /// CloudProviderApiMissingInfo: represents an error while expecting mandatory info
@@ -655,6 +657,8 @@ pub enum Tag {
     ContainerRegistryRepositoryDoesntExist,
     /// ContainerRegistryDeleteRepositoryError: represents an error while trying to delete a repository.
     ContainerRegistryDeleteRepositoryError,
+    /// ContainerRegistryInformationError: represents an error on container registry information provided.
+    ContainerRegistryInformationError,
     /// ObjectStorageInvalidBucketName: represents an error, bucket name is not valid.
     ObjectStorageInvalidBucketName,
     /// ObjectStorageCannotEmptyBucket: represents an error while trying to empty an object storage bucket.
@@ -681,6 +685,12 @@ pub enum Tag {
     JsonDeserializationError,
     /// ClusterSecretsManipulationError: represent an error while trying to manipulate ClusterSecrets
     ClusterSecretsManipulationError,
+    /// DnsProviderInformationError: represent an error on DNS provider information provided.
+    DnsProviderInformationError,
+    /// DnsProviderInvalidCredentials: represent an error on invalid DNS provider credentials.
+    DnsProviderInvalidCredentials,
+    /// DnsProviderInvalidApiUrl: represent an error on invalid DNS provider api url.
+    DnsProviderInvalidApiUrl,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -2192,7 +2202,7 @@ impl EngineError {
     /// * `event_details`: Error linked event details.
     /// * `raw_error`: Raw error message.
     pub fn new_helm_charts_upgrade_error(event_details: EventDetails, raw_error: CommandError) -> EngineError {
-        let message = "Error while helm charts deployment";
+        let message = "Error while helm charts upgrade";
 
         EngineError::new(
             event_details,
@@ -3357,6 +3367,105 @@ impl EngineError {
             Some(raw_error),
             None,
             None,
+        )
+    }
+
+    /// Creates new error when checking cloud provider information provided
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_error_on_cloud_provider_information(
+        event_details: EventDetails,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message_safe = "Invalid cloud provider information".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::CloudProviderInformationError,
+            message_safe,
+            Some(raw_error),
+            None,
+            Some("Check your cloud provider information".to_string()),
+        )
+    }
+
+    /// Creates new error when checking container registry information provided
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_error_on_container_registry_information(
+        event_details: EventDetails,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message_safe = "Invalid container registry information".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::ContainerRegistryInformationError,
+            message_safe,
+            Some(raw_error),
+            None,
+            Some("Check your container registry information".to_string()),
+        )
+    }
+
+    /// Creates new error when checking DNS provider information provided
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_error_on_dns_provider_information(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message_safe = "Invalid DNS provider information".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::DnsProviderInformationError,
+            message_safe,
+            Some(raw_error),
+            None,
+            Some("Check your DNS provider information".to_string()),
+        )
+    }
+
+    /// Creates new error when client DNS provider credentials are invalid
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_error_on_dns_provider_invalid_credentials(event_details: EventDetails) -> EngineError {
+        let message_safe = "Invalid DNS provider credentials".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::DnsProviderInvalidCredentials,
+            message_safe,
+            None,
+            None,
+            Some("Check your DNS provider credentials".to_string()),
+        )
+    }
+
+    /// Creates new error when client DNS provider credentials are invalid
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_error_on_dns_provider_invalid_api_url(event_details: EventDetails) -> EngineError {
+        let message_safe = "Invalid DNS provider api url".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::DnsProviderInvalidApiUrl,
+            message_safe,
+            None,
+            None,
+            Some("Check your DNS provider api url".to_string()),
         )
     }
 }

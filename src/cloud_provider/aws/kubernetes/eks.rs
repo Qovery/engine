@@ -155,7 +155,7 @@ impl EKS {
         let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
         let selector = "cluster-autoscaler-aws-cluster-autoscaler";
         let namespace = "kube-system";
-        let _ = kubectl_exec_scale_replicas(
+        kubectl_exec_scale_replicas(
             kubeconfig_path,
             self.cloud_provider().credentials_environment_variables(),
             namespace,
@@ -415,7 +415,7 @@ impl Kubernetes for EKS {
             None,
             Some(3),
             self.cloud_provider().credentials_environment_variables(),
-            Stage::Infrastructure(InfrastructureStep::Upgrade),
+            Infrastructure(InfrastructureStep::Upgrade),
         ) {
             self.logger().log(EngineEvent::Error(e.clone(), None));
             return Err(e);
@@ -478,7 +478,7 @@ impl Kubernetes for EKS {
         ));
 
         // Disable cluster autoscaler deployment
-        let _ = self.set_cluster_autoscaler_replicas(event_details.clone(), 0)?;
+        self.set_cluster_autoscaler_replicas(event_details.clone(), 0)?;
 
         match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
             Ok(_) => {
@@ -501,7 +501,7 @@ impl Kubernetes for EKS {
             }
             Err(e) => {
                 // enable cluster autoscaler deployment
-                let _ = self.set_cluster_autoscaler_replicas(event_details.clone(), 1)?;
+                self.set_cluster_autoscaler_replicas(event_details.clone(), 1)?;
 
                 return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
             }

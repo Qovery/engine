@@ -329,14 +329,14 @@ impl AwsZones {
     }
 }
 
-impl fmt::Display for AwsRegion {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Display for AwsRegion {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl fmt::Display for AwsZones {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl Display for AwsZones {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let str = match self {
             UsEast1A => "us-east-1a",
             UsEast1B => "us-east-1b",
@@ -419,9 +419,9 @@ mod tests {
 
     #[test]
     fn test_aws_zones() {
-        assert_eq!(AwsZones::EuWest3A.to_string(), "eu-west-3a".to_string());
+        assert_eq!(EuWest3A.to_string(), "eu-west-3a".to_string());
         assert_eq!(AwsZones::ApNortheast1D.to_string(), "ap-northeast-1d".to_string());
-        assert_eq!(AwsZones::from_string("eu-west-3a".to_string()), Ok(AwsZones::EuWest3A));
+        assert_eq!(AwsZones::from_string("eu-west-3a".to_string()), Ok(EuWest3A));
 
         // ensure all zones are supported
         for zone in AwsZones::iter() {
@@ -437,7 +437,7 @@ mod tests {
 
     #[test]
     fn test_aws_get_region_from_zone() {
-        assert_eq!(AwsZones::EuWest3A.get_region(), "eu-west-3".to_string());
+        assert_eq!(EuWest3A.get_region(), "eu-west-3".to_string());
         assert_eq!(AwsZones::ApNortheast1D.get_region(), "ap-northeast-1".to_string());
     }
 

@@ -234,7 +234,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     let database_port_mongo = 27017;
     let database_db_name_mongo = "my-mongodb".to_string();
     let database_username_mongo = "superuser".to_string();
-    let database_password_mongo = generate_password(provider_kind.clone(), DatabaseMode::CONTAINER);
+    let database_password_mongo = generate_password(provider_kind.clone(), CONTAINER);
     let database_uri_mongo = format!(
         "mongodb://{}:{}@{}:{}/{}",
         database_username_mongo,
@@ -249,7 +249,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     let fqdn = get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()).to_string();
     let database_port = 5432;
     let database_username = "superuser".to_string();
-    let database_password = generate_password(provider_kind.clone(), DatabaseMode::CONTAINER);
+    let database_password = generate_password(provider_kind.clone(), CONTAINER);
     let database_name = "postgres".to_string();
 
     // pSQL 2 management part
@@ -673,7 +673,7 @@ pub fn environnement_2_app_2_routers_1_psql(
 
     let database_port = 5432;
     let database_username = "superuser".to_string();
-    let database_password = generate_password(provider_kind, DatabaseMode::CONTAINER);
+    let database_password = generate_password(provider_kind, CONTAINER);
     let database_name = "postgres".to_string();
 
     let suffix = generate_id();
@@ -1135,7 +1135,7 @@ pub fn test_db(
             app.environment_vars = db_infos.app_env_vars.clone();
             app
         })
-        .collect::<Vec<qovery_engine::io_models::Application>>();
+        .collect::<Vec<Application>>();
 
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;
@@ -1207,7 +1207,7 @@ pub fn test_db(
     assert!(matches!(ret, TransactionResult::Ok));
 
     match database_mode {
-        DatabaseMode::CONTAINER => {
+        CONTAINER => {
             match get_pvc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
@@ -1324,7 +1324,7 @@ pub fn get_environment_test_kubernetes(
                 EKS::new(
                     context.clone(),
                     context.cluster_id(),
-                    uuid::Uuid::new_v4(),
+                    Uuid::new_v4(),
                     format!("qovery-{}", context.cluster_id()).as_str(),
                     kubernetes_version,
                     region.clone(),
@@ -1349,7 +1349,7 @@ pub fn get_environment_test_kubernetes(
                 EC2::new(
                     context.clone(),
                     context.cluster_id(),
-                    uuid::Uuid::new_v4(),
+                    Uuid::new_v4(),
                     format!("qovery-{}", context.cluster_id()).as_str(),
                     kubernetes_version,
                     region.clone(),
@@ -1369,7 +1369,7 @@ pub fn get_environment_test_kubernetes(
                 DOKS::new(
                     context.clone(),
                     context.cluster_id().to_string(),
-                    uuid::Uuid::new_v4(),
+                    Uuid::new_v4(),
                     format!("qovery-{}", context.cluster_id()),
                     kubernetes_version.to_string(),
                     region,
@@ -1388,7 +1388,7 @@ pub fn get_environment_test_kubernetes(
                 Kapsule::new(
                     context.clone(),
                     context.cluster_id().to_string(),
-                    uuid::Uuid::new_v4(),
+                    Uuid::new_v4(),
                     format!("qovery-{}", context.cluster_id()),
                     kubernetes_version.to_string(),
                     zone,
@@ -1435,7 +1435,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                 EKS::new(
                     context.clone(),
                     cluster_id.as_str(),
-                    uuid::Uuid::new_v4(),
+                    Uuid::new_v4(),
                     cluster_name.as_str(),
                     boot_version.as_str(),
                     aws_region,
@@ -1461,7 +1461,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                 EC2::new(
                     context.clone(),
                     cluster_id.as_str(),
-                    uuid::Uuid::new_v4(),
+                    Uuid::new_v4(),
                     cluster_name.as_str(),
                     boot_version.as_str(),
                     aws_region,
@@ -1479,7 +1479,7 @@ pub fn get_cluster_test_kubernetes<'a>(
             DOKS::new(
                 context.clone(),
                 cluster_id,
-                uuid::Uuid::new_v4(),
+                Uuid::new_v4(),
                 cluster_name.clone(),
                 boot_version,
                 DoRegion::from_str(localisation).expect("Unknown region set for DOKS"),
@@ -1495,7 +1495,7 @@ pub fn get_cluster_test_kubernetes<'a>(
             Kapsule::new(
                 context.clone(),
                 cluster_id,
-                uuid::Uuid::new_v4(),
+                Uuid::new_v4(),
                 cluster_name,
                 boot_version,
                 ScwZone::from_str(localisation).expect("Unknown zone set for Kapsule"),
@@ -1868,7 +1868,7 @@ pub fn test_db_on_upgrade(
             app.environment_vars = db_infos.app_env_vars.clone();
             app
         })
-        .collect::<Vec<qovery_engine::io_models::Application>>();
+        .collect::<Vec<Application>>();
 
     let mut environment_delete = environment.clone();
     environment_delete.action = Action::Delete;
@@ -1927,7 +1927,7 @@ pub fn test_db_on_upgrade(
     assert!(matches!(ret, TransactionResult::Ok));
 
     match database_mode {
-        DatabaseMode::CONTAINER => {
+        CONTAINER => {
             match get_pvc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,

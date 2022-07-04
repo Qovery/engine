@@ -9,14 +9,14 @@ pub mod router;
 mod utils;
 
 pub trait DeploymentReporter: Send {
-    fn before_deployment_start(&self);
-    fn deployment_in_progress(&self);
+    fn before_deployment_start(&mut self);
+    fn deployment_in_progress(&mut self);
     fn report_frequency(&self) -> Duration {
         Duration::from_secs(10)
     }
 }
 
-pub fn execute_long_deployment<R, F>(deployment_reporter: impl DeploymentReporter + 'static, long_task: F) -> R
+pub fn execute_long_deployment<R, F>(mut deployment_reporter: impl DeploymentReporter + 'static, long_task: F) -> R
 where
     F: Fn() -> R,
 {
@@ -74,12 +74,12 @@ mod test {
     }
 
     impl DeploymentReporter for DeploymentReporterTest {
-        fn before_deployment_start(&self) {
+        fn before_deployment_start(&mut self) {
             assert!(!self.is_task_started.load(Ordering::SeqCst));
             self.before_deployment.store(true, Ordering::SeqCst)
         }
 
-        fn deployment_in_progress(&self) {
+        fn deployment_in_progress(&mut self) {
             self.deployment_in_progress.store(true, Ordering::SeqCst)
         }
 

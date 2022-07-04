@@ -75,6 +75,12 @@ spec:
               # Required for image cleaning
             - name: docker-graph-storage
               mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
+          lifecycle:
+            preStop:
+              exec:
+                # Check if no task is running before shutting down engine. DO NOT REMOVE.
+                # If we don't check it, processes like terraform are hard kill and it generates issues.
+                command: ["/bin/sh", "-c", "echo 'Stopping engine container...' > /proc/1/fd/1 ; while [ $(curl -s http://127.0.0.1:8080/metrics | awk '/^taskmanager_nb_running_tasks/{ print $2}') -ne 0 ] ; do sleep 1  ; done;  echo 'Stopping engine container now...' > /proc/1/fd/1"]
         - name: docker-build
           image: "{{ .Values.buildContainer.image }}:{{ .Values.buildContainer.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -100,6 +106,12 @@ spec:
           volumeMounts:
             - name: docker-graph-storage
               mountPath: {{ .Values.volumes.dockerGraphStorage.path }}
+          lifecycle:
+            preStop:
+              exec:
+                # Check if prometheus is shutdown before shutting down docker builder. DO NOT REMOVE.
+                # If we don't check it, processes like docker are hard kill and it generates issues.
+                command: ["/bin/sh", "-c", "echo 'Stopping docker container...' > /proc/1/fd/1 ; while nc -z localhost 8080; do sleep 1; done; echo 'Stopping docker container now...' > /proc/1/fd/1"]
       initContainers:
         - name: clean-data
           image: busybox:latest

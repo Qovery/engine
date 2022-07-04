@@ -316,7 +316,7 @@ terraform {
         "#;
 
         let dest_dir = "/tmp/test";
-        let _ = fs::create_dir_all(&dest_dir).unwrap();
+        fs::create_dir_all(&dest_dir).unwrap();
 
         let _ = fs::write(format!("{}/.terraform.lock.hcl", &dest_dir), terraform_lock_file);
         let _ = fs::write(format!("{}/providers.tf", &dest_dir), provider_file);
