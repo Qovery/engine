@@ -1,3 +1,6 @@
+use k8s_openapi::api::core::v1::Secret;
+use kube::api::PostParams;
+use kube::{Api, Error};
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
 use retry::OperationResult;
@@ -1493,13 +1496,46 @@ pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, CommandError> 
     }
 }
 
+pub async fn kube_does_secret_exists(kube: &kube::Client, name: &str, namespace: &str) -> Result<bool, kube::Error> {
+    let item: Api<Secret> = Api::namespaced(kube.clone(), namespace);
+    match item.get(name).await {
+        Ok(_) => Ok(true),
+        Err(e) => match e {
+            Error::Api(api_err) if api_err.code == 404 => Ok(false),
+            _ => Err(e),
+        },
+    }
+}
+
+pub async fn kube_copy_secret_to_another_namespace(
+    kube: &kube::Client,
+    name: &str,
+    namespace_src: &str,
+    namespace_dest: &str,
+) -> Result<(), kube::Error> {
+    let post_param = PostParams::default();
+
+    let secret_src: Api<Secret> = Api::namespaced(kube.clone(), namespace_src);
+    let mut secret_content = secret_src.get(name).await?;
+    secret_content.metadata.namespace = Some(namespace_dest.to_string());
+    secret_content.metadata.resource_version = None;
+    secret_content.metadata.uid = None;
+    secret_content.metadata.creation_timestamp = None;
+
+    let secret_dest: Api<Secret> = Api::namespaced(kube.clone(), namespace_dest);
+    secret_dest.create(&post_param, &secret_content).await?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+
     use crate::cloud_provider::Kind::Aws;
 
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, convert_k8s_cpu_value_to_f32,
-        validate_k8s_required_cpu_and_burstable, KubernetesNodesType,
+        kube_does_secret_exists, validate_k8s_required_cpu_and_burstable, KubernetesNodesType,
     };
     use crate::cloud_provider::models::CpuLimits;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
@@ -1507,7 +1543,33 @@ mod tests {
     use crate::io_models::{ListenersHelper, QoveryIdentifier};
     use crate::logger::StdIoLogger;
     use crate::models::types::VersionsNumber;
+    use crate::runtime::block_on;
+    use crate::utilities::get_kube_client;
     use std::str::FromStr;
+
+    use super::kube_copy_secret_to_another_namespace;
+    pub const KUBECONFIG_PATH: &str = "/home/qovery/kubeconfig";
+
+    //#[test]
+    #[allow(dead_code)]
+    pub fn k8s_does_secret_exists_test() {
+        let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
+        let res = block_on(kube_does_secret_exists(&kube_client, "awsecr-cred", "default")).unwrap();
+        assert_eq!(res, true);
+    }
+
+    //#[test]
+    #[allow(dead_code)]
+    pub fn k8s_copy_secret_test() {
+        let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
+        block_on(kube_copy_secret_to_another_namespace(
+            &kube_client,
+            "awsecr-cred",
+            "default",
+            "qovery",
+        ))
+        .unwrap();
+    }
 
     #[test]
     pub fn check_kubernetes_upgrade_method() {

@@ -14,6 +14,7 @@ use crate::io_models::QoveryIdentifier;
 use crate::models::types::VersionsNumber;
 use crate::object_storage::errors::ObjectStorageError;
 use derivative::Derivative;
+use kube::error::Error as KubeError;
 use std::fmt::{Display, Formatter};
 use std::io::Error;
 use thiserror::Error;
@@ -545,6 +546,8 @@ pub enum Tag {
     K8sNodeIsNotReady,
     /// K8sValidateRequiredCPUandBurstableError: represents an error validating required CPU and burstable.
     K8sValidateRequiredCPUandBurstableError,
+    /// K8sErrorCopySecret: represents an error while copying secret from one namespace to another
+    K8sErrorCopySecret,
     /// CannotFindRequiredBinary: represents an error where a required binary is not found on the system.
     CannotFindRequiredBinary,
     /// SubnetsCountShouldBeEven: represents an error where subnets count should be even to have as many public than private subnets.
@@ -911,6 +914,28 @@ impl EngineError {
                     .to_string(),
             ),
         )
+    }
+
+    /// Creates new error when copying secrets from a namespace to another
+    ///
+    ///
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_copy_secrets_to_another_namespace_error(
+        event_details: EventDetails,
+        raw_error: KubeError,
+        from_namespace: &str,
+        to_namespace: &str,
+    ) -> EngineError {
+        let message = format!(
+            "error while copying secret from namespace {} to {}: ",
+            from_namespace, to_namespace
+        );
+        let cmd_err = CommandError::new(message.clone(), Some(format!("{:?}", raw_error)), None);
+        EngineError::new(event_details, Tag::K8sErrorCopySecret, message, Some(cmd_err), None, None)
     }
 
     /// Creates new error for cluster worker node is not found.
