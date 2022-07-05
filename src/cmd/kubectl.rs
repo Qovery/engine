@@ -11,10 +11,10 @@ use crate::cloud_provider::digitalocean::models::svc::DoLoadBalancer;
 use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::command::QoveryCommand;
 use crate::cmd::structs::{
-    Configmap, Daemonset, Item, KubernetesEvent, KubernetesIngress, KubernetesIngressStatusLoadBalancerIngress,
-    KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase,
-    KubernetesPodStatusReason, KubernetesService, KubernetesVersion, LabelsContent, MetricsServer, Namespace, Secrets,
-    HPA, PDB, PVC, SVC,
+    Configmap, Daemonset, Item, KubernetesDeployment, KubernetesEvent, KubernetesIngress,
+    KubernetesIngressStatusLoadBalancerIngress, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
+    KubernetesPod, KubernetesPodStatusPhase, KubernetesPodStatusReason, KubernetesService, KubernetesStatfulSet,
+    KubernetesVersion, LabelsContent, MetricsServer, Namespace, Secrets, HPA, PDB, PVC, SVC,
 };
 use crate::constants::KUBECONFIG;
 use crate::error::{SimpleError, SimpleErrorKind};
@@ -749,6 +749,60 @@ where
     kubectl_exec::<P, KubernetesList<KubernetesPod>>(cmd_args, kubernetes_config, envs)
 }
 
+pub fn kubectl_exec_get_deployments<P>(
+    kubernetes_config: P,
+    namespace: Option<&str>,
+    selector: Option<&str>,
+    envs: Vec<(&str, &str)>,
+) -> Result<KubernetesList<KubernetesDeployment>, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let mut cmd_args = vec!["get", "deployment", "-o", "json"];
+
+    match namespace {
+        Some(n) => {
+            cmd_args.push("-n");
+            cmd_args.push(n);
+        }
+        None => cmd_args.push("--all-namespaces"),
+    }
+
+    if let Some(s) = selector {
+        cmd_args.push("--selector");
+        cmd_args.push(s);
+    }
+
+    kubectl_exec::<P, KubernetesList<KubernetesDeployment>>(cmd_args, kubernetes_config, envs)
+}
+
+pub fn kubectl_exec_get_statefulsets<P>(
+    kubernetes_config: P,
+    namespace: Option<&str>,
+    selector: Option<&str>,
+    envs: Vec<(&str, &str)>,
+) -> Result<KubernetesList<KubernetesStatfulSet>, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let mut cmd_args = vec!["get", "statfulset", "-o", "json"];
+
+    match namespace {
+        Some(n) => {
+            cmd_args.push("-n");
+            cmd_args.push(n);
+        }
+        None => cmd_args.push("--all-namespaces"),
+    }
+
+    if let Some(s) = selector {
+        cmd_args.push("--selector");
+        cmd_args.push(s);
+    }
+
+    kubectl_exec::<P, KubernetesList<KubernetesStatfulSet>>(cmd_args, kubernetes_config, envs)
+}
+
 /// kubectl_exec_get_pod_by_name: allows to retrieve a pod by its name
 ///
 /// # Arguments
@@ -958,6 +1012,27 @@ pub fn kubectl_exec_scale_replicas_by_selector<P>(
 where
     P: AsRef<Path>,
 {
+    match kind {
+        ScalingKind::Deployment => {
+            if let Ok(deployments) =
+                kubectl_exec_get_deployments(&kubernetes_config, Some(namespace), Some(selector), envs.clone())
+            {
+                if deployments.items.is_empty() {
+                    return Ok(());
+                }
+            }
+        }
+        ScalingKind::Statefulset => {
+            if let Ok(statefulsets) =
+                kubectl_exec_get_statefulsets(&kubernetes_config, Some(namespace), Some(selector), envs.clone())
+            {
+                if statefulsets.items.is_empty() {
+                    return Ok(());
+                }
+            }
+        }
+    };
+
     let kind_formatted = match kind {
         ScalingKind::Deployment => "deployment",
         ScalingKind::Statefulset => "statefulset",
