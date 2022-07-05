@@ -81,7 +81,7 @@ resource "aws_route_table_association" "elasticache_cluster_zone_c" {
 resource "aws_elasticache_subnet_group" "elasticache" {
   description = "Elasticache linked to ${var.kubernetes_cluster_id}"
   # WARNING: this "name" value is used into elasticache clusters, you need to update it accordingly
-  name = "elasticache-${aws_vpc.eks.id}"
+  name = "elasticache-${data.aws_vpc.eks.id}"
   subnet_ids = flatten([data.aws_subnet.elasticache_zone_a.*.id, data.aws_subnet.elasticache_zone_b.*.id, data.aws_subnet.elasticache_zone_c.*.id])
 }
 

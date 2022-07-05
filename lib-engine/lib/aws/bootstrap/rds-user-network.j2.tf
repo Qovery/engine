@@ -93,7 +93,7 @@ resource "aws_route_table_association" "rds_cluster_zone_c" {
 
 resource "aws_db_subnet_group" "rds" {
   description = "RDS linked to ${var.kubernetes_cluster_id}"
-  name = aws_vpc.eks.id
+  name = data.aws_vpc.eks.id
   subnet_ids = flatten([data.aws_subnet.rds_zone_a.*.id, data.aws_subnet.rds_zone_b.*.id, data.aws_subnet.rds_zone_c.*.id])
 
   tags = local.tags_rds

@@ -5,7 +5,7 @@
 resource "aws_security_group" "eks_cluster_workers" {
   name        = "qovery-eks-workers-${var.kubernetes_cluster_id}"
   description = "Security group for all nodes in the cluster"
-  vpc_id      = aws_vpc.eks.id
+  vpc_id      = {%- if user_provided_network -%} data.aws_vpc.eks.id {%- else -%} aws_vpc.eks.id {%- endif %}
 
   egress {
     from_port   = 0
