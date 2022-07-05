@@ -38,36 +38,6 @@ locals {
   final_snapshot_name = "${var.final_snapshot_name}-${local.final_snap_timestamp}"
 }
 
-resource "helm_release" "postgres_instance_external_name" {
-  name = "${aws_db_instance.postgresql_instance.id}-externalname"
-  chart = "external-name-svc"
-  namespace = "{{namespace}}"
-  atomic = true
-  max_history = 50
-
-  set {
-    name = "target_hostname"
-    value = aws_db_instance.postgresql_instance.address
-  }
-  set {
-    name = "source_fqdn"
-    value = "{{database_fqdn}}"
-  }
-  set {
-    name = "app_id"
-    value = "{{database_id}}"
-  }
-  set {
-    name = "service_name"
-    value = "{{service_name}}"
-  }
-
-  depends_on = [
-    aws_db_instance.postgresql_instance
-  ]
-}
-
-
 # Non snapshoted version
 resource "aws_db_instance" "postgresql_instance" {
   identifier = var.postgresql_identifier

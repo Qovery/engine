@@ -1,5 +1,11 @@
 target_hostname: ""
 source_fqdn: ""
 service_name: ""
-app_id: ""
+envId: ""
+envLongId: ""
+projectLongId: ""
+#appId: ""
+#appLongId: ""
+#databaseId: ""
+#databaseLongId: ""
 publicly_accessible: {{ publicly_accessible }}

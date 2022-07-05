@@ -666,7 +666,7 @@ pub fn prepare_namespace(
     Ok(())
 }
 
-pub fn deploy_stateful_service<T>(
+pub fn deploy_database_service<T>(
     target: &DeploymentTarget,
     service: &T,
     event_details: EventDetails,
@@ -788,8 +788,24 @@ where
                             value: database_config.target_fqdn,
                         },
                         ChartSetValue {
-                            key: "app_id".to_string(),
+                            key: "database_id".to_string(),
                             value: service.id().to_string(),
+                        },
+                        ChartSetValue {
+                            key: "database_long_id".to_string(),
+                            value: service.long_id().to_string(),
+                        },
+                        ChartSetValue {
+                            key: "environment_id".to_string(),
+                            value: environment.id.to_string(),
+                        },
+                        ChartSetValue {
+                            key: "environment_long_id".to_string(),
+                            value: environment.long_id.to_string(),
+                        },
+                        ChartSetValue {
+                            key: "project_long_id".to_string(),
+                            value: environment.project_long_id.to_string(),
                         },
                         ChartSetValue {
                             key: "service_name".to_string(),
