@@ -85,16 +85,4 @@ resource "aws_elasticache_subnet_group" "elasticache" {
   subnet_ids = flatten([data.aws_subnet.elasticache_zone_a.*.id, data.aws_subnet.elasticache_zone_b.*.id, data.aws_subnet.elasticache_zone_c.*.id])
 }
 
-# Todo: create a bastion to avoid this
-
-resource "aws_security_group_rule" "elasticache_remote_access" {
-  cidr_blocks       = ["0.0.0.0/0"]
-  description       = "Allow Redis incoming access from anywhere"
-  from_port         = 6379
-  protocol          = "tcp"
-  security_group_id = aws_security_group.eks_cluster_workers.id
-  to_port           = 6379
-  type              = "ingress"
-}
-
 {%- endif -%}

@@ -74,22 +74,4 @@ resource "aws_route_table_association" "elasticsearch_cluster_zone_c" {
   route_table_id = aws_route_table.eks_cluster.id
 }
 
-resource "aws_security_group" "elasticsearch" {
-  name = "elasticsearch-${var.kubernetes_cluster_id}"
-  description = "Elasticsearch security group"
-  vpc_id = data.aws_vpc.eks.id
-
-  ingress {
-    from_port = 443
-    to_port = 443
-    protocol = "tcp"
-
-    cidr_blocks = [
-      data.aws_vpc.eks.cidr_block
-    ]
-  }
-
-  tags = local.tags_elasticsearch
-}
-
 {%- endif -%}

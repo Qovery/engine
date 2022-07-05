@@ -1,4 +1,4 @@
-{% if vpc_qovery_network_mode == "WithNatGateways" %}
+{% if vpc_qovery_network_mode == "WithNatGateways" and not user_provided_network %}
 
 variable "eks_subnets_zone_a_private" {
   description = "EKS private subnets Zone A"

@@ -112,26 +112,4 @@ resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }
 
-# Todo: create a bastion to avoid this
-
-resource "aws_security_group_rule" "postgres_remote_access" {
-  cidr_blocks       = ["0.0.0.0/0"]
-  description       = "Allow RDS PostgreSQL incoming access from anywhere"
-  from_port         = 5432
-  protocol          = "tcp"
-  security_group_id = aws_security_group.eks_cluster_workers.id
-  to_port           = 5432
-  type              = "ingress"
-}
-
-resource "aws_security_group_rule" "mysql_remote_access" {
-  cidr_blocks       = ["0.0.0.0/0"]
-  description       = "Allow RDS MySQL incoming access from anywhere"
-  from_port         = 3306
-  protocol          = "tcp"
-  security_group_id = aws_security_group.eks_cluster_workers.id
-  to_port           = 3306
-  type              = "ingress"
-}
-
 {%- endif -%}
