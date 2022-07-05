@@ -302,10 +302,13 @@ master:
 
   ## Redis Master resource requests and limits
   ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
-  # resources:
-  #   requests:
-  #     memory: 256Mi
-  #     cpu: 100m
+  resources:
+    requests:
+      cpu: {{ total_cpus }}
+      memory: {{ total_ram_in_mib }}Mi
+    limits:
+      cpu: {{ total_cpus }}
+      memory: {{ total_ram_in_mib }}Mi
   ## Use an alternate scheduler, e.g. "stork".
   ## ref: https://kubernetes.io/docs/tasks/administer-cluster/configure-multiple-schedulers/
   ##

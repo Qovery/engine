@@ -448,8 +448,11 @@ slave:
 ##
 resources:
   requests:
-    memory: "{{ database_ram_size_in_mib }}Mi"
-    cpu: "{{ database_total_cpus }}"
+    cpu: {{ total_cpus }}
+    memory: {{ total_ram_in_mib }}Mi
+  limits:
+    cpu: {{ total_cpus }}
+    memory: {{ total_ram_in_mib }}Mi
 
 ## Add annotations to all the deployed resources
 ##
