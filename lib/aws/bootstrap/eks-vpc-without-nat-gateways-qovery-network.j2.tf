@@ -1,4 +1,23 @@
-{% if vpc_qovery_network_mode == "WithoutNatGateways" %}
+{% if vpc_qovery_network_mode == "WithoutNatGateways" and not user_provided_network %}
+
+variable "eks_subnets_zone_a_private" {
+  description = "EKS private subnets Zone A"
+  default = {{ eks_zone_a_subnet_blocks_private }}
+  type = list(string)
+}
+
+variable "eks_subnets_zone_b_private" {
+  description = "EKS private subnets Zone B"
+  default = {{ eks_zone_b_subnet_blocks_private }}
+  type = list(string)
+}
+
+variable "eks_subnets_zone_c_private" {
+  description = "EKS private subnets Zone C"
+  default = {{ eks_zone_c_subnet_blocks_private }}
+  type = list(string)
+}
+
 # Public subnets
 resource "aws_subnet" "eks_zone_a" {
   count = length(var.eks_subnets_zone_a_private)

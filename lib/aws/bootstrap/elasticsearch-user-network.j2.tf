@@ -77,7 +77,7 @@ resource "aws_route_table_association" "elasticsearch_cluster_zone_c" {
 resource "aws_security_group" "elasticsearch" {
   name = "elasticsearch-${var.kubernetes_cluster_id}"
   description = "Elasticsearch security group"
-  vpc_id = aws_vpc.eks.id
+  vpc_id = data.aws_vpc.eks.id
 
   ingress {
     from_port = 443
@@ -85,7 +85,7 @@ resource "aws_security_group" "elasticsearch" {
     protocol = "tcp"
 
     cidr_blocks = [
-      aws_vpc.eks.cidr_block
+      data.aws_vpc.eks.cidr_block
     ]
   }
 

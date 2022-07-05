@@ -1,5 +1,4 @@
-data "aws_availability_zones" "available" {}
-
+{%- if user_provided_network -%}
 locals {
   tags_eks_vpc = merge(
   local.tags_common,
@@ -27,16 +26,14 @@ locals {
 }
 
 # VPC
-resource "aws_vpc" "eks" {
-  cidr_block = var.vpc_cidr_block
-  enable_dns_hostnames = true
-
-  tags = local.tags_eks_vpc
+data "aws_vpc" "eks" {
+  id = "{{ aws_vpc_eks_id }}"
 }
 
 # Internet gateway
 resource "aws_internet_gateway" "eks_cluster" {
-  vpc_id = aws_vpc.eks.id
+  vpc_id = data.aws_vpc.eks.id
 
   tags = local.tags_eks_vpc
 }
+{%- endif -%}

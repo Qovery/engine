@@ -57,51 +57,6 @@ variable "vpc_cidr_block" {
 }
 
 # Kubernetes
-
-variable "eks_subnets_zone_a_private" {
-  description = "EKS private subnets Zone A"
-  default = {{ eks_zone_a_subnet_blocks_private }}
-  type = list(string)
-}
-
-variable "eks_subnets_zone_b_private" {
-  description = "EKS private subnets Zone B"
-  default = {{ eks_zone_b_subnet_blocks_private }}
-  type = list(string)
-}
-
-variable "eks_subnets_zone_c_private" {
-  description = "EKS private subnets Zone C"
-  default = {{ eks_zone_c_subnet_blocks_private }}
-  type = list(string)
-}
-
-{% if vpc_qovery_network_mode == "WithNatGateways" %}
-variable "eks_subnets_zone_a_public" {
-  description = "EKS public subnets Zone A"
-  default = {{ eks_zone_a_subnet_blocks_public }}
-  type = list(string)
-}
-
-variable "eks_subnets_zone_b_public" {
-  description = "EKS public subnets Zone B"
-  default = {{ eks_zone_b_subnet_blocks_public }}
-  type = list(string)
-}
-
-variable "eks_subnets_zone_c_public" {
-  description = "EKS public subnets Zone C"
-  default = {{ eks_zone_c_subnet_blocks_public }}
-  type = list(string)
-}
-{% endif %}
-
-variable "eks_cidr_subnet" {
-  description = "EKS CIDR (x.x.x.x/CIDR)"
-  default     = {{ eks_cidr_subnet }}
-  type        = number
-}
-
 variable "eks_k8s_versions" {
   description = "Kubernetes version"
   default = {
