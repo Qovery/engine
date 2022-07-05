@@ -899,7 +899,7 @@ fn create(
             };
             let mut kubeconfig_path = match kubernetes.get_kubeconfig_file() {
                 Ok((_, kubeconfig_filename)) => kubeconfig_filename,
-                Err(e) => return OperationResult::Err(e),
+                Err(e) => return OperationResult::Retry(e),
             };
 
             // ensure the kubeconfig content address match with the current instance dns
