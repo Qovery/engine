@@ -931,7 +931,7 @@ impl EngineError {
         to_namespace: &str,
     ) -> EngineError {
         let message = format!(
-            "error while copying secret from namespace {} to {}: ",
+            "error while copying secret from namespace {} to {}",
             from_namespace, to_namespace
         );
         let cmd_err = CommandError::new(message.clone(), Some(format!("{:?}", raw_error)), None);
