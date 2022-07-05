@@ -1550,7 +1550,7 @@ mod tests {
     use super::kube_copy_secret_to_another_namespace;
     pub const KUBECONFIG_PATH: &str = "/home/qovery/kubeconfig";
 
-    //#[test]
+    #[ignore]
     #[allow(dead_code)]
     pub fn k8s_does_secret_exists_test() {
         let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
@@ -1558,7 +1558,7 @@ mod tests {
         assert_eq!(res, true);
     }
 
-    //#[test]
+    #[ignore]
     #[allow(dead_code)]
     pub fn k8s_copy_secret_test() {
         let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
