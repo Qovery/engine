@@ -13,7 +13,7 @@ use crate::cmd::command::QoveryCommand;
 use crate::cmd::structs::{
     Configmap, Daemonset, Item, KubernetesDeployment, KubernetesEvent, KubernetesIngress,
     KubernetesIngressStatusLoadBalancerIngress, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
-    KubernetesPod, KubernetesPodStatusPhase, KubernetesPodStatusReason, KubernetesService, KubernetesStatfulSet,
+    KubernetesPod, KubernetesPodStatusPhase, KubernetesPodStatusReason, KubernetesService, KubernetesStatefulSet,
     KubernetesVersion, LabelsContent, MetricsServer, Namespace, Secrets, HPA, PDB, PVC, SVC,
 };
 use crate::constants::KUBECONFIG;
@@ -781,7 +781,7 @@ pub fn kubectl_exec_get_statefulsets<P>(
     namespace: Option<&str>,
     selector: Option<&str>,
     envs: Vec<(&str, &str)>,
-) -> Result<KubernetesList<KubernetesStatfulSet>, CommandError>
+) -> Result<KubernetesList<KubernetesStatefulSet>, CommandError>
 where
     P: AsRef<Path>,
 {
@@ -800,7 +800,7 @@ where
         cmd_args.push(s);
     }
 
-    kubectl_exec::<P, KubernetesList<KubernetesStatfulSet>>(cmd_args, kubernetes_config, envs)
+    kubectl_exec::<P, KubernetesList<KubernetesStatefulSet>>(cmd_args, kubernetes_config, envs)
 }
 
 /// kubectl_exec_get_pod_by_name: allows to retrieve a pod by its name
