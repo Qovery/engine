@@ -588,7 +588,7 @@ pub struct KubernetesDeployment {
 
 #[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct KubernetesStatfulSet {
+pub struct KubernetesStatefulSet {
     pub kind: String,
 }
 
