@@ -57,6 +57,7 @@ pub fn do_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> E
         None,
         KUBERNETES_MIN_NODES,
         KUBERNETES_MAX_NODES,
+        EngineLocation::ClientSide,
     )
 }
 
@@ -71,6 +72,7 @@ impl Cluster<DO, DoksOptions> for DO {
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
         min_nodes: i32,
         max_nodes: i32,
+        engine_location: EngineLocation,
     ) -> EngineConfig {
         // use DigitalOcean Container Registry
         let container_registry = Box::new(container_registry_digital_ocean(context));
@@ -91,6 +93,7 @@ impl Cluster<DO, DoksOptions> for DO {
             vpc_network_mode,
             min_nodes,
             max_nodes,
+            engine_location,
         );
 
         EngineConfig::new(
@@ -148,7 +151,11 @@ impl Cluster<DO, DoksOptions> for DO {
         ]
     }
 
-    fn kubernetes_cluster_options(secrets: FuncTestsSecrets, cluster_name: Option<String>) -> DoksOptions {
+    fn kubernetes_cluster_options(
+        secrets: FuncTestsSecrets,
+        cluster_name: Option<String>,
+        engine_location: EngineLocation,
+    ) -> DoksOptions {
         DoksOptions {
             vpc_cidr_block: "should-not-bet-set".to_string(), // vpc_cidr_set to autodetect will fil this empty string
             vpc_cidr_set: VpcInitKind::Autodetect,
@@ -156,7 +163,7 @@ impl Cluster<DO, DoksOptions> for DO {
             qovery_api_url: secrets.QOVERY_API_URL.unwrap(),
             qovery_grpc_url: secrets.QOVERY_GRPC_URL.unwrap(),
             jwt_token: secrets.QOVERY_CLUSTER_JWT_TOKEN.unwrap(),
-            qovery_engine_location: EngineLocation::ClientSide,
+            qovery_engine_location: engine_location,
             engine_version_controller_token: secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),
             agent_version_controller_token: secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),
             grafana_admin_user: "admin".to_string(),

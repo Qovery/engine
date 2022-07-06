@@ -7,7 +7,7 @@ use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::cloud_provider::models::NodeGroups;
-use qovery_engine::cloud_provider::qovery::EngineLocation::ClientSide;
+use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::engine::EngineConfig;
@@ -70,6 +70,7 @@ pub fn aws_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> 
         None,
         KUBERNETES_MIN_NODES,
         KUBERNETES_MAX_NODES,
+        EngineLocation::ClientSide,
     )
 }
 
@@ -84,6 +85,7 @@ impl Cluster<AWS, Options> for AWS {
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
         min_nodes: i32,
         max_nodes: i32,
+        engine_location: EngineLocation,
     ) -> EngineConfig {
         // use ECR
         let container_registry = Box::new(container_registry_ecr(context, logger.clone()));
@@ -109,6 +111,7 @@ impl Cluster<AWS, Options> for AWS {
             vpc_network_mode,
             min_nodes,
             max_nodes,
+            engine_location,
         );
 
         EngineConfig::new(
@@ -164,7 +167,11 @@ impl Cluster<AWS, Options> for AWS {
         ]
     }
 
-    fn kubernetes_cluster_options(secrets: FuncTestsSecrets, _cluster_name: Option<String>) -> Options {
+    fn kubernetes_cluster_options(
+        secrets: FuncTestsSecrets,
+        _cluster_id: Option<String>,
+        engine_location: EngineLocation,
+    ) -> Options {
         Options {
             ec2_zone_a_subnet_blocks: vec!["10.0.0.0/20".to_string(), "10.0.16.0/20".to_string()],
             ec2_zone_b_subnet_blocks: vec!["10.0.32.0/20".to_string(), "10.0.48.0/20".to_string()],
@@ -246,7 +253,7 @@ impl Cluster<AWS, Options> for AWS {
             elasticache_cidr_subnet: "23".to_string(),
             elasticsearch_cidr_subnet: "23".to_string(),
             qovery_api_url: secrets.QOVERY_API_URL.unwrap(),
-            qovery_engine_location: ClientSide,
+            qovery_engine_location: engine_location,
             engine_version_controller_token: secrets.QOVERY_ENGINE_CONTROLLER_TOKEN.unwrap(),
             agent_version_controller_token: secrets.QOVERY_AGENT_CONTROLLER_TOKEN.unwrap(),
             grafana_admin_user: "admin".to_string(),

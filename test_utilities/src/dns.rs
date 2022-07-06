@@ -9,12 +9,13 @@ use url::Url;
 pub fn dns_provider_cloudflare(context: &Context, domain: &ClusterDomain) -> Box<dyn DnsProvider> {
     let secrets = FuncTestsSecrets::new();
     let domain = Domain::new(match domain {
-        ClusterDomain::Custom(domain) => domain.to_string(),
+        ClusterDomain::Custom { domain } => domain.to_string(),
         ClusterDomain::Default { cluster_id } => format!(
             "{}.{}",
             cluster_id,
             secrets.CLOUDFLARE_DOMAIN.expect("CLOUDFLARE_DOMAIN is not set")
         ),
+        ClusterDomain::QoveryOwnedDomain { cluster_id, domain } => format!("{}.{}", cluster_id, domain,),
     });
     Box::new(Cloudflare::new(
         context.clone(),
@@ -26,15 +27,16 @@ pub fn dns_provider_cloudflare(context: &Context, domain: &ClusterDomain) -> Box
     ))
 }
 
-pub fn dns_provider_qoverydns(context: &Context, domain: &ClusterDomain) -> Box<dyn DnsProvider> {
+pub fn dns_provider_qoverydns(context: &Context, cluster_domain: &ClusterDomain) -> Box<dyn DnsProvider> {
     let secrets = FuncTestsSecrets::new();
-    let domain = Domain::new(match domain {
-        ClusterDomain::Custom(domain) => domain.to_string(),
+    let domain = Domain::new(match cluster_domain {
+        ClusterDomain::Custom { domain } => domain.to_string(),
         ClusterDomain::Default { cluster_id } => format!(
             "{}.{}",
             cluster_id,
-            secrets.CLOUDFLARE_DOMAIN.expect("QOVERYDNS_DOMAIN is not set")
+            secrets.CLOUDFLARE_DOMAIN.expect("CLOUDFLARE_DOMAIN is not set")
         ),
+        ClusterDomain::QoveryOwnedDomain { cluster_id, domain } => format!("{}.{}", cluster_id, domain,),
     });
     Box::new(QoveryDns::new(
         context.clone(),
@@ -47,8 +49,8 @@ pub fn dns_provider_qoverydns(context: &Context, domain: &ClusterDomain) -> Box<
         )
         .expect("QOVERY_DNS_API_URL is not a valid URL"),
         secrets
-            .QOVERY_DNS_API_KEY
-            .expect("QOVERY_DNS_API_KEY is not set")
+            .QOVERY_CLUSTER_JWT_TOKEN
+            .expect("QOVERY_CLUSTER_JWT_TOKEN is not set")
             .as_str(),
         "Qovery Test QoveryDNS",
         domain,

@@ -12,7 +12,7 @@ use test_utilities::utilities::{
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::utilities::to_short_id;
-use test_utilities::common::{database_test_environment, test_db, Infrastructure};
+use test_utilities::common::{database_test_environment, test_db, ClusterDomain, Infrastructure};
 use test_utilities::digitalocean::{
     clean_environments, do_default_engine_config, DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE,
     DO_SELF_HOSTED_DATABASE_DISK_TYPE, DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE, DO_TEST_REGION,
@@ -393,15 +393,17 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 #[allow(dead_code)]
 fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
     let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .DIGITAL_OCEAN_TEST_CLUSTER_ID
+        .as_ref()
+        .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set")
+        .to_string();
     let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
-        secrets
-            .DIGITAL_OCEAN_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        cluster_id.as_str(),
     );
 
     let environment = database_test_environment(&context);
@@ -418,6 +420,10 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
             KubernetesKind::Doks,
             database_mode,
             is_public,
+            ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
+            None,
         )
     })
 }
@@ -491,15 +497,17 @@ fn public_postgresql_v13_deploy_a_working_dev_environment() {
 #[allow(dead_code)]
 fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
     let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .DIGITAL_OCEAN_TEST_CLUSTER_ID
+        .as_ref()
+        .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set")
+        .to_string();
     let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
-        secrets
-            .DIGITAL_OCEAN_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        cluster_id.as_str(),
     );
 
     let environment = database_test_environment(&context);
@@ -516,6 +524,10 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
             KubernetesKind::Doks,
             database_mode,
             is_public,
+            ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
+            None,
         )
     })
 }
@@ -588,15 +600,17 @@ fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
 #[allow(dead_code)]
 fn test_mysql_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
     let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .DIGITAL_OCEAN_TEST_CLUSTER_ID
+        .as_ref()
+        .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set")
+        .to_string();
     let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
-        secrets
-            .DIGITAL_OCEAN_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        cluster_id.as_str(),
     );
 
     let environment = database_test_environment(&context);
@@ -613,6 +627,10 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
             KubernetesKind::Doks,
             database_mode,
             is_public,
+            ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
+            None,
         )
     })
 }
@@ -657,15 +675,17 @@ fn public_mysql_v8_deploy_a_working_dev_environment() {
 #[allow(dead_code)]
 fn test_redis_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
     let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .DIGITAL_OCEAN_TEST_CLUSTER_ID
+        .as_ref()
+        .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set")
+        .to_string();
     let context = context(
         secrets
             .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set"),
-        secrets
-            .DIGITAL_OCEAN_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("DIGITAL_OCEAN_TEST_CLUSTER_ID is not set"),
+        cluster_id.as_str(),
     );
 
     let environment = database_test_environment(&context);
@@ -682,6 +702,10 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
             KubernetesKind::Doks,
             database_mode,
             is_public,
+            ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
+            None,
         )
     })
 }
