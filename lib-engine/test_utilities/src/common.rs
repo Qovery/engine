@@ -31,6 +31,7 @@ use qovery_engine::cloud_provider::environment::Environment;
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::cloud_provider::kubernetes::Kubernetes;
 use qovery_engine::cloud_provider::models::NodeGroups;
+use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
@@ -58,9 +59,11 @@ pub enum RegionActivationStatus {
     Activated,
 }
 
+#[derive(Clone)]
 pub enum ClusterDomain {
     Default { cluster_id: String },
-    Custom(String),
+    QoveryOwnedDomain { cluster_id: String, domain: String },
+    Custom { domain: String },
 }
 
 pub trait Cluster<T, U> {
@@ -74,10 +77,15 @@ pub trait Cluster<T, U> {
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
         min_nodes: i32,
         max_nodes: i32,
+        engine_location: EngineLocation,
     ) -> EngineConfig;
     fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind) -> Box<T>;
     fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups>;
-    fn kubernetes_cluster_options(secrets: FuncTestsSecrets, cluster_id: Option<String>) -> U;
+    fn kubernetes_cluster_options(
+        secrets: FuncTestsSecrets,
+        cluster_id: Option<String>,
+        engine_location: EngineLocation,
+    ) -> U;
 }
 
 pub trait Infrastructure {
@@ -1037,6 +1045,14 @@ pub fn session_is_sticky(url: Url, host: String, max_age: u32) -> bool {
     is_ok
 }
 
+fn compute_test_cluster_endpoint(cluster_domain: &ClusterDomain, default_domain: String) -> String {
+    match cluster_domain {
+        ClusterDomain::Default { cluster_id } => format!("{}.{}", cluster_id, default_domain),
+        ClusterDomain::QoveryOwnedDomain { cluster_id, domain } => format!("{}.{}", cluster_id, domain),
+        ClusterDomain::Custom { domain } => domain.to_string(),
+    }
+}
+
 pub fn test_db(
     context: Context,
     logger: Box<dyn Logger>,
@@ -1048,6 +1064,8 @@ pub fn test_db(
     kubernetes_kind: KubernetesKind,
     database_mode: DatabaseMode,
     is_public: bool,
+    cluster_domain: ClusterDomain,
+    existing_engine_config: Option<&EngineConfig>,
 ) -> String {
     init();
 
@@ -1063,13 +1081,23 @@ pub fn test_db(
     let db_id = generate_id();
     let database_host = format!("{}-{}", db_id, db_kind_str);
     let database_fqdn = format!(
-        "{}.{}.{}",
+        "{}.{}",
         database_host,
-        context.cluster_id(),
-        secrets
-            .clone()
-            .DEFAULT_TEST_DOMAIN
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+        compute_test_cluster_endpoint(
+            &cluster_domain,
+            match kubernetes_kind {
+                KubernetesKind::Ec2 => secrets
+                    .AWS_EC2_TEST_CLUSTER_DOMAIN
+                    .as_ref()
+                    .expect("AWS_EC2_TEST_CLUSTER_DOMAIN must be set")
+                    .to_string(),
+                _ => secrets
+                    .DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("DEFAULT_TEST_DOMAIN must be set")
+                    .to_string(),
+            }
+        )
     );
 
     let db_infos = db_infos(
@@ -1099,8 +1127,8 @@ pub fn test_db(
         port: database_port,
         username: database_username,
         password: database_password,
-        total_cpus: "200m".to_string(),
-        total_ram_in_mib: 256,
+        total_cpus: "250m".to_string(),
+        total_ram_in_mib: 512, // MySQL requires at least 512Mo in order to boot
         disk_size_in_gib: storage_size,
         database_instance_type: db_instance_type,
         database_disk_type: db_disk_type,
@@ -1148,62 +1176,65 @@ pub fn test_db(
         Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
     };
 
-    let engine_config = match kubernetes_kind {
-        KubernetesKind::Eks => AWS::docker_cr_engine(
-            &context,
-            logger.clone(),
-            localisation.as_str(),
-            KubernetesKind::Eks,
-            kubernetes_version.clone(),
-            &ClusterDomain::Default {
-                cluster_id: context.cluster_id().to_string(),
-            },
-            None,
-            KUBERNETES_MIN_NODES,
-            KUBERNETES_MAX_NODES,
-        ),
-        KubernetesKind::Ec2 => AWS::docker_cr_engine(
-            &context,
-            logger.clone(),
-            localisation.as_str(),
-            KubernetesKind::Ec2,
-            kubernetes_version.clone(),
-            &ClusterDomain::Default {
-                cluster_id: context.cluster_id().to_string(),
-            },
-            None,
-            1,
-            1,
-        ),
-        KubernetesKind::Doks => DO::docker_cr_engine(
-            &context,
-            logger.clone(),
-            localisation.as_str(),
-            KubernetesKind::Doks,
-            kubernetes_version.clone(),
-            &ClusterDomain::Default {
-                cluster_id: context.cluster_id().to_string(),
-            },
-            None,
-            KUBERNETES_MIN_NODES,
-            KUBERNETES_MAX_NODES,
-        ),
-        KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
-            &context,
-            logger.clone(),
-            localisation.as_str(),
-            KubernetesKind::ScwKapsule,
-            kubernetes_version.clone(),
-            &ClusterDomain::Default {
-                cluster_id: context.cluster_id().to_string(),
-            },
-            None,
-            KUBERNETES_MIN_NODES,
-            KUBERNETES_MAX_NODES,
-        ),
+    let computed_engine_config: EngineConfig;
+    let engine_config = match existing_engine_config {
+        Some(c) => c,
+        None => {
+            computed_engine_config = match kubernetes_kind {
+                KubernetesKind::Eks => AWS::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Eks,
+                    kubernetes_version.clone(),
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    EngineLocation::ClientSide,
+                ),
+                KubernetesKind::Ec2 => AWS::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Ec2,
+                    kubernetes_version.clone(),
+                    &cluster_domain,
+                    None,
+                    1,
+                    1,
+                    EngineLocation::QoverySide, // EC2 is not meant to run Engine
+                ),
+                KubernetesKind::Doks => DO::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Doks,
+                    kubernetes_version.clone(),
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    EngineLocation::ClientSide,
+                ),
+                KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::ScwKapsule,
+                    kubernetes_version.clone(),
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    EngineLocation::ClientSide,
+                ),
+            };
+            &computed_engine_config
+        }
     };
 
-    let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
+    let ret = environment.deploy_environment(&ea, logger.clone(), engine_config);
     assert!(matches!(ret, TransactionResult::Ok));
 
     match database_mode {
@@ -1255,42 +1286,62 @@ pub fn test_db(
         }
     }
 
-    let cluster_id = context.cluster_id().to_string();
-
-    let engine_config_for_delete = match provider_kind {
-        Kind::Aws => AWS::docker_cr_engine(
-            &context_for_delete,
-            logger.clone(),
-            localisation.as_str(),
-            KubernetesKind::Eks,
-            kubernetes_version,
-            &ClusterDomain::Default { cluster_id },
-            None,
-            KUBERNETES_MIN_NODES,
-            KUBERNETES_MAX_NODES,
-        ),
-        Kind::Do => DO::docker_cr_engine(
-            &context_for_delete,
-            logger.clone(),
-            localisation.as_str(),
-            KubernetesKind::Doks,
-            kubernetes_version,
-            &ClusterDomain::Default { cluster_id },
-            None,
-            KUBERNETES_MIN_NODES,
-            KUBERNETES_MAX_NODES,
-        ),
-        Kind::Scw => Scaleway::docker_cr_engine(
-            &context_for_delete,
-            logger.clone(),
-            localisation.as_str(),
-            KubernetesKind::ScwKapsule,
-            kubernetes_version,
-            &ClusterDomain::Default { cluster_id },
-            None,
-            KUBERNETES_MIN_NODES,
-            KUBERNETES_MAX_NODES,
-        ),
+    let computed_engine_config_for_delete: EngineConfig;
+    let engine_config_for_delete = match existing_engine_config {
+        Some(c) => c,
+        None => {
+            computed_engine_config_for_delete = match kubernetes_kind {
+                KubernetesKind::Eks => AWS::docker_cr_engine(
+                    &context_for_delete,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Eks,
+                    kubernetes_version.clone(),
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    EngineLocation::ClientSide,
+                ),
+                KubernetesKind::Ec2 => AWS::docker_cr_engine(
+                    &context_for_delete,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Ec2,
+                    kubernetes_version.clone(),
+                    &cluster_domain,
+                    None,
+                    1,
+                    1,
+                    EngineLocation::QoverySide, // EC2 is not meant to run Engine
+                ),
+                KubernetesKind::Doks => DO::docker_cr_engine(
+                    &context_for_delete,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Doks,
+                    kubernetes_version.clone(),
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    EngineLocation::ClientSide,
+                ),
+                KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
+                    &context_for_delete,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::ScwKapsule,
+                    kubernetes_version.clone(),
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    EngineLocation::ClientSide,
+                ),
+            };
+            &computed_engine_config_for_delete
+        }
     };
 
     let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
@@ -1309,13 +1360,14 @@ pub fn get_environment_test_kubernetes(
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
     min_nodes: i32,
     max_nodes: i32,
+    engine_location: EngineLocation,
 ) -> Box<dyn Kubernetes> {
     let secrets = FuncTestsSecrets::new();
 
     let kubernetes: Box<dyn Kubernetes> = match cloud_provider.kubernetes_kind() {
         KubernetesKind::Eks => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
-            let mut options = AWS::kubernetes_cluster_options(secrets, None);
+            let mut options = AWS::kubernetes_cluster_options(secrets, None, engine_location);
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
             }
@@ -1340,7 +1392,7 @@ pub fn get_environment_test_kubernetes(
         }
         KubernetesKind::Ec2 => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
-            let mut options = AWS::kubernetes_cluster_options(secrets, None);
+            let mut options = AWS::kubernetes_cluster_options(secrets, None, EngineLocation::QoverySide);
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
             }
@@ -1376,7 +1428,11 @@ pub fn get_environment_test_kubernetes(
                     cloud_provider,
                     dns_provider,
                     DO::kubernetes_nodes(min_nodes, max_nodes),
-                    DO::kubernetes_cluster_options(secrets, Option::from(context.cluster_id().to_string())),
+                    DO::kubernetes_cluster_options(
+                        secrets,
+                        Option::from(context.cluster_id().to_string()),
+                        EngineLocation::ClientSide,
+                    ),
                     logger,
                 )
                 .unwrap(),
@@ -1395,7 +1451,7 @@ pub fn get_environment_test_kubernetes(
                     cloud_provider,
                     dns_provider,
                     Scaleway::kubernetes_nodes(min_nodes, max_nodes),
-                    Scaleway::kubernetes_cluster_options(secrets, None),
+                    Scaleway::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
                     logger,
                 )
                 .unwrap(),
@@ -1424,7 +1480,7 @@ pub fn get_cluster_test_kubernetes<'a>(
 ) -> Box<dyn Kubernetes + 'a> {
     let kubernetes: Box<dyn Kubernetes> = match kubernetes_provider {
         KubernetesKind::Eks => {
-            let mut options = AWS::kubernetes_cluster_options(secrets, None);
+            let mut options = AWS::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide);
             let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
@@ -1450,7 +1506,7 @@ pub fn get_cluster_test_kubernetes<'a>(
             )
         }
         KubernetesKind::Ec2 => {
-            let mut options = AWS::kubernetes_cluster_options(secrets, None);
+            let mut options = AWS::kubernetes_cluster_options(secrets, None, EngineLocation::QoverySide);
             let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
@@ -1486,7 +1542,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                 cloud_provider,
                 dns_provider,
                 DO::kubernetes_nodes(min_nodes, max_nodes),
-                DO::kubernetes_cluster_options(secrets, Option::from(cluster_name)),
+                DO::kubernetes_cluster_options(secrets, Option::from(cluster_name), EngineLocation::ClientSide),
                 logger,
             )
             .unwrap(),
@@ -1502,7 +1558,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                 cloud_provider,
                 dns_provider,
                 Scaleway::kubernetes_nodes(min_nodes, max_nodes),
-                Scaleway::kubernetes_cluster_options(secrets, None),
+                Scaleway::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
                 logger,
             )
             .unwrap(),
@@ -1544,6 +1600,7 @@ pub fn cluster_test(
             vpc_network_mode.clone(),
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
+            EngineLocation::ClientSide,
         ),
         Kind::Do => DO::docker_cr_engine(
             &context,
@@ -1555,6 +1612,7 @@ pub fn cluster_test(
             vpc_network_mode.clone(),
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
+            EngineLocation::ClientSide,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
@@ -1566,6 +1624,7 @@ pub fn cluster_test(
             vpc_network_mode.clone(),
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
+            EngineLocation::ClientSide,
         ),
     };
     let mut deploy_tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
@@ -1640,6 +1699,7 @@ pub fn cluster_test(
                     vpc_network_mode,
                     KUBERNETES_MIN_NODES,
                     KUBERNETES_MAX_NODES,
+                    EngineLocation::ClientSide,
                 ),
                 Kind::Do => DO::docker_cr_engine(
                     &context,
@@ -1651,6 +1711,7 @@ pub fn cluster_test(
                     vpc_network_mode,
                     KUBERNETES_MIN_NODES,
                     KUBERNETES_MAX_NODES,
+                    EngineLocation::ClientSide,
                 ),
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
@@ -1662,6 +1723,7 @@ pub fn cluster_test(
                     vpc_network_mode,
                     KUBERNETES_MIN_NODES,
                     KUBERNETES_MAX_NODES,
+                    EngineLocation::ClientSide,
                 ),
             };
             let mut upgrade_tx =
@@ -1698,6 +1760,7 @@ pub fn cluster_test(
                     vpc_network_mode,
                     min_nodes,
                     max_nodes,
+                    EngineLocation::ClientSide,
                 ),
                 Kind::Do => DO::docker_cr_engine(
                     &context,
@@ -1709,6 +1772,7 @@ pub fn cluster_test(
                     vpc_network_mode,
                     min_nodes,
                     max_nodes,
+                    EngineLocation::ClientSide,
                 ),
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
@@ -1720,6 +1784,7 @@ pub fn cluster_test(
                     vpc_network_mode,
                     min_nodes,
                     max_nodes,
+                    EngineLocation::ClientSide,
                 ),
             };
             let mut upgrade_tx =
@@ -1894,6 +1959,7 @@ pub fn test_db_on_upgrade(
             None,
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
+            EngineLocation::ClientSide,
         ),
         Kind::Do => DO::docker_cr_engine(
             &context,
@@ -1907,6 +1973,7 @@ pub fn test_db_on_upgrade(
             None,
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
+            EngineLocation::ClientSide,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
@@ -1920,6 +1987,7 @@ pub fn test_db_on_upgrade(
             None,
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
+            EngineLocation::ClientSide,
         ),
     };
 
@@ -1988,6 +2056,7 @@ pub fn test_db_on_upgrade(
             None,
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
+            EngineLocation::ClientSide,
         ),
         Kind::Do => DO::docker_cr_engine(
             &context_for_delete,
@@ -2001,6 +2070,7 @@ pub fn test_db_on_upgrade(
             None,
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
+            EngineLocation::ClientSide,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context_for_delete,
@@ -2014,6 +2084,7 @@ pub fn test_db_on_upgrade(
             None,
             KUBERNETES_MIN_NODES,
             KUBERNETES_MAX_NODES,
+            EngineLocation::ClientSide,
         ),
     };
 
