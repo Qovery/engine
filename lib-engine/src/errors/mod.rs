@@ -526,6 +526,8 @@ pub enum Tag {
     K8sCannotDeletePod,
     /// K8sCannotGetCrashLoopingPods: represents an error where we are not able to get crash looping pods.
     K8sCannotGetCrashLoopingPods,
+    /// K8sCannotDeleteCompletedJobs: represents an error where we are not able to delete completed jobs.
+    K8sCannotDeleteCompletedJobs,
     /// K8sCannotGetPods: represents an error where we are not able to get pods.
     K8sCannotGetPods,
     /// K8sUpgradeDeployedVsRequestedVersionsInconsistency: represents an error where there is a K8s versions inconsistency between deployed and requested.
@@ -1623,6 +1625,28 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::K8sCannotGetCrashLoopingPods,
+            message.to_string(),
+            Some(raw_k8s_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for kubernetes not being able to delete completed jobs.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_k8s_error`: Raw error message.
+    pub fn new_k8s_cannot_delete_completed_jobs(
+        event_details: EventDetails,
+        raw_k8s_error: CommandError,
+    ) -> EngineError {
+        let message = "Unable to delete completed Kubernetes jobs.";
+
+        EngineError::new(
+            event_details,
+            Tag::K8sCannotDeleteCompletedJobs,
             message.to_string(),
             Some(raw_k8s_error),
             None,

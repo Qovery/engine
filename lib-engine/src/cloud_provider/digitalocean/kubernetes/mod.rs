@@ -1341,17 +1341,6 @@ impl Kubernetes for DOKS {
         // generate terraform files and copy them into temp dir
         let mut context = self.tera_context()?;
 
-        if let Err(e) = self.delete_crashlooping_pods(
-            None,
-            None,
-            Some(3),
-            self.cloud_provider().credentials_environment_variables(),
-            event_details.stage().clone(),
-        ) {
-            self.logger().log(EngineEvent::Error(e.clone(), None));
-            return Err(e);
-        }
-
         //
         // Upgrade worker nodes
         //
@@ -1421,6 +1410,25 @@ impl Kubernetes for DOKS {
             event_details.clone(),
             EventMessage::new_from_safe("Upgrading Kubernetes nodes.".to_string()),
         ));
+
+        if let Err(e) = self.delete_crashlooping_pods(
+            None,
+            None,
+            Some(3),
+            self.cloud_provider().credentials_environment_variables(),
+            Infrastructure(InfrastructureStep::Upgrade),
+        ) {
+            self.logger().log(EngineEvent::Error(e.clone(), None));
+            return Err(e);
+        }
+
+        if let Err(e) = self.delete_completed_jobs(
+            self.cloud_provider().credentials_environment_variables(),
+            Infrastructure(InfrastructureStep::Upgrade),
+        ) {
+            self.logger().log(EngineEvent::Error(e.clone(), None));
+            return Err(e);
+        }
 
         match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
             Ok(_) => match self.check_workers_on_upgrade(kubernetes_upgrade_status.requested_version.to_string()) {

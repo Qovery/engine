@@ -481,6 +481,25 @@ impl Kubernetes for EKS {
         // Disable cluster autoscaler deployment
         self.set_cluster_autoscaler_replicas(event_details.clone(), 0)?;
 
+        if let Err(e) = self.delete_crashlooping_pods(
+            None,
+            None,
+            Some(3),
+            self.cloud_provider().credentials_environment_variables(),
+            Infrastructure(InfrastructureStep::Upgrade),
+        ) {
+            self.logger().log(EngineEvent::Error(e.clone(), None));
+            return Err(e);
+        }
+
+        if let Err(e) = self.delete_completed_jobs(
+            self.cloud_provider().credentials_environment_variables(),
+            Infrastructure(InfrastructureStep::Upgrade),
+        ) {
+            self.logger().log(EngineEvent::Error(e.clone(), None));
+            return Err(e);
+        }
+
         match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
             Ok(_) => {
                 // ensure all nodes are ready on Kubernetes
