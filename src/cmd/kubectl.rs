@@ -1410,3 +1410,43 @@ where
 
     kubectl_create_secret(kubernetes_config, envs, namespace, backup_name, key, content)
 }
+
+pub fn kubectl_get_completed_jobs<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+) -> Result<KubernetesList<KubernetesJob>, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let cmd_args = vec![
+        "get",
+        "jobs",
+        "--all-namespaces",
+        "--field-selector",
+        "status.successful=1",
+        "-o",
+        "json",
+    ];
+
+    kubectl_exec::<P, KubernetesList<KubernetesJob>>(cmd_args, kubernetes_config, envs)
+}
+
+pub fn kubectl_delete_completed_jobs<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let jobs = kubectl_get_completed_jobs(&kubernetes_config, envs.clone())?;
+
+    if jobs.items.is_empty() {
+        return Ok("No completed job to delete.".to_string());
+    }
+    let cmd_args = vec![
+        "delete",
+        "jobs",
+        "--all-namespaces",
+        "--field-selector",
+        "status.successful=1",
+    ];
+
+    kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, false)
+}

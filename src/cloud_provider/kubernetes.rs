@@ -22,7 +22,7 @@ use crate::cloud_provider::models::{CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::CheckAction;
 use crate::cloud_provider::Kind as CloudProviderKind;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
-use crate::cmd::kubectl::{self, kubectl_delete_apiservice};
+use crate::cmd::kubectl::{self, kubectl_delete_apiservice, kubectl_delete_completed_jobs};
 use crate::cmd::kubectl::{
     kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_delete_pod,
     kubectl_exec_get_node, kubectl_exec_is_namespace_present, kubectl_exec_version, kubectl_get_crash_looping_pods,
@@ -472,6 +472,21 @@ pub trait Kubernetes: Listen {
                 }
             },
         };
+
+        Ok(())
+    }
+
+    fn delete_completed_jobs(&self, envs: Vec<(&str, &str)>, stage: Stage) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(stage);
+
+        match self.get_kubeconfig_file() {
+            Err(e) => return Err(e),
+            Ok((config_path, _)) => {
+                if let Err(e) = kubectl_delete_completed_jobs(&config_path, envs) {
+                    return Err(EngineError::new_k8s_cannot_delete_completed_jobs(event_details, e));
+                };
+            }
+        }
 
         Ok(())
     }

@@ -44,6 +44,7 @@ pub enum Tag {
     K8sPodsDisruptionBudgetCannotBeRetrieved,
     K8sCannotDeletePod,
     K8sCannotGetCrashLoopingPods,
+    K8sCannotDeleteCompletedJobs,
     K8sCannotGetPods,
     K8sUpgradeDeployedVsRequestedVersionsInconsistency,
     K8sScaleReplicas,
@@ -169,6 +170,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::K8sPodsDisruptionBudgetCannotBeRetrieved => Tag::K8sPodsDisruptionBudgetCannotBeRetrieved,
             errors::Tag::K8sCannotDeletePod => Tag::K8sCannotDeletePod,
             errors::Tag::K8sCannotGetCrashLoopingPods => Tag::K8sCannotGetCrashLoopingPods,
+            errors::Tag::K8sCannotDeleteCompletedJobs => Tag::K8sCannotDeleteCompletedJobs,
             errors::Tag::K8sCannotGetPods => Tag::K8sCannotGetPods,
             errors::Tag::K8sUpgradeDeployedVsRequestedVersionsInconsistency => {
                 Tag::K8sUpgradeDeployedVsRequestedVersionsInconsistency
