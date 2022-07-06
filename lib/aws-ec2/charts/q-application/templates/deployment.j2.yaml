@@ -42,16 +42,6 @@ spec:
       annotations:
         checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
     spec:
-      affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: "app"
-                    operator: In
-                    values:
-                    - {{ sanitized_name }}
-              topologyKey: "kubernetes.io/hostname"
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
       securityContext: {}
