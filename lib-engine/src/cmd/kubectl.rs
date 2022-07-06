@@ -14,7 +14,7 @@ use crate::cmd::structs::{
     Configmap, Daemonset, Item, KubernetesDeployment, KubernetesEvent, KubernetesIngress,
     KubernetesIngressStatusLoadBalancerIngress, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
     KubernetesPod, KubernetesPodStatusPhase, KubernetesPodStatusReason, KubernetesService, KubernetesStatefulSet,
-    KubernetesVersion, LabelsContent, MetricsServer, Namespace, Secrets, HPA, PDB, PVC, SVC,
+    KubernetesVersion, MetricsServer, Namespace, Secrets, HPA, PDB, PVC, SVC,
 };
 use crate::constants::KUBECONFIG;
 use crate::error::{SimpleError, SimpleErrorKind};
@@ -377,88 +377,6 @@ where
     );
 
     result.is_ok()
-}
-
-pub fn kubectl_exec_create_namespace_without_labels(namespace: &str, kube_config: &str, envs: Vec<(&str, &str)>) {
-    let _ = kubectl_exec_create_namespace(kube_config, namespace, None, envs);
-}
-
-pub fn kubectl_exec_create_namespace<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    labels: Option<Vec<LabelsContent>>,
-    envs: Vec<(&str, &str)>,
-) -> Result<(), CommandError>
-where
-    P: AsRef<Path>,
-{
-    // don't create the namespace if already exists and not not return error in this case
-    if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace, envs.clone()) {
-        // create namespace
-        let mut _envs = Vec::with_capacity(envs.len() + 1);
-        _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-        _envs.extend(envs.clone());
-
-        kubectl_exec_with_output(
-            vec!["create", "namespace", namespace],
-            _envs,
-            &mut |line| info!("{}", line),
-            &mut |line| error!("{}", line),
-        )?;
-    }
-
-    // additional labels
-    if let Some(..) = labels {
-        match kubectl_add_labels_to_namespace(kubernetes_config, namespace, labels.unwrap_or_default(), envs) {
-            Ok(_) => {}
-            Err(e) => return Err(e),
-        }
-    };
-
-    Ok(())
-}
-
-pub fn kubectl_add_labels_to_namespace<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    labels: Vec<LabelsContent>,
-    envs: Vec<(&str, &str)>,
-) -> Result<(), CommandError>
-where
-    P: AsRef<Path>,
-{
-    if labels.is_empty() {
-        return Err(CommandError::new_from_safe_message(
-            "No labels were defined, can't set them".to_string(),
-        ));
-    };
-
-    if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace, envs.clone()) {
-        return Err(CommandError::new_from_safe_message(format!(
-            "Can't set labels on namespace {} because it doesn't exists",
-            namespace
-        )));
-    }
-
-    let mut command_args = Vec::new();
-    let mut labels_string = Vec::new();
-    command_args.extend(vec!["label", "namespace", namespace, "--overwrite"]);
-
-    for label in labels.iter() {
-        labels_string.push(format! {"{}={}", label.name, label.value});
-    }
-    let labels_str = labels_string.iter().map(|x| x.as_ref()).collect::<Vec<&str>>();
-    command_args.extend(labels_str);
-
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-    _envs.extend(envs.clone());
-
-    kubectl_exec_with_output(command_args, _envs, &mut |line| info!("{}", line), &mut |line| {
-        error!("{}", line)
-    })?;
-
-    Ok(())
 }
 
 // used for testing the does_contain_terraform_tfstate

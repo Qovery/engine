@@ -1,5 +1,5 @@
-use k8s_openapi::api::core::v1::Secret;
-use kube::api::PostParams;
+use k8s_openapi::api::core::v1::{Namespace, Secret};
+use kube::api::{ObjectMeta, PostParams};
 use kube::{Api, Error};
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
@@ -1540,6 +1540,34 @@ pub async fn kube_does_secret_exists(kube: &kube::Client, name: &str, namespace:
     }
 }
 
+pub async fn kube_create_namespace_if_not_exists(
+    kube: &kube::Client,
+    namespace_name: &str,
+    labels: Option<std::collections::BTreeMap<String, String>>,
+) -> Result<(), kube::Error> {
+    let namespace = Api::all(kube.clone());
+    let namespace_labels = Namespace {
+        metadata: ObjectMeta {
+            name: Some(namespace_name.to_string()),
+            labels,
+            ..Default::default()
+        },
+        spec: None,
+        status: None,
+    };
+
+    // create namespace
+    if let Err(e) = namespace.create(&PostParams::default(), &namespace_labels).await {
+        match e {
+            // namespace already exists
+            Error::Api(api_err) if api_err.code == 409 => {}
+            _ => return Err(e),
+        }
+    };
+
+    Ok(())
+}
+
 pub async fn kube_copy_secret_to_another_namespace(
     kube: &kube::Client,
     name: &str,
@@ -1556,9 +1584,13 @@ pub async fn kube_copy_secret_to_another_namespace(
     secret_content.metadata.creation_timestamp = None;
 
     let secret_dest: Api<Secret> = Api::namespaced(kube.clone(), namespace_dest);
-    secret_dest.create(&post_param, &secret_content).await?;
-
-    Ok(())
+    match secret_dest.create(&post_param, &secret_content).await {
+        Ok(_) => Ok(()),
+        Err(kube_err) => match kube_err {
+            Error::Api(e) if e.code == 409 => Ok(()),
+            _ => Err(kube_err),
+        },
+    }
 }
 
 #[cfg(test)]
@@ -1568,7 +1600,8 @@ mod tests {
 
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, convert_k8s_cpu_value_to_f32,
-        kube_does_secret_exists, validate_k8s_required_cpu_and_burstable, KubernetesNodesType,
+        kube_create_namespace_if_not_exists, kube_does_secret_exists, validate_k8s_required_cpu_and_burstable,
+        KubernetesNodesType,
     };
     use crate::cloud_provider::models::CpuLimits;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
@@ -1581,10 +1614,22 @@ mod tests {
     use std::str::FromStr;
 
     use super::kube_copy_secret_to_another_namespace;
-    pub const KUBECONFIG_PATH: &str = "/home/qovery/kubeconfig";
+    pub const KUBECONFIG_PATH: &str = "/home/pmavro/kubeconfig";
 
     #[ignore]
     #[allow(dead_code)]
+    #[test]
+    pub fn k8s_create_namespace() {
+        let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
+        assert_eq!(
+            block_on(kube_create_namespace_if_not_exists(&kube_client, "qovery-test-ns", None)).unwrap(),
+            ()
+        );
+    }
+
+    #[ignore]
+    #[allow(dead_code)]
+    #[test]
     pub fn k8s_does_secret_exists_test() {
         let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
         let res = block_on(kube_does_secret_exists(&kube_client, "awsecr-cred", "default")).unwrap();
@@ -1593,6 +1638,7 @@ mod tests {
 
     #[ignore]
     #[allow(dead_code)]
+    #[test]
     pub fn k8s_copy_secret_test() {
         let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
         block_on(kube_copy_secret_to_another_namespace(
