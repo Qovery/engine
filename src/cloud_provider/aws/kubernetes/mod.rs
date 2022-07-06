@@ -758,7 +758,6 @@ fn create(
     }
 
     let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
-
     let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
         Ok(value) => Some(value),
         Err(_) => None,
@@ -838,8 +837,14 @@ fn create(
         event_details.clone(),
     )?;
 
+    let kubeconfig_path = kubernetes.get_kubeconfig_file_path()?;
+
+    if kubernetes.kind() == Kind::Eks {
+        kubernetes.put_kubeconfig_file_to_object_storage(kubeconfig_path.as_str())?
+    };
+
     // wait for AWS EC2 K3S port is open to avoid later deployment issues (and kubeconfig not available on S3)
-    if let Kind::Ec2 = kubernetes.kind() {
+    if kubernetes.kind() == Kind::Ec2 {
         let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
 
         // read config generated after terraform infra bootstrap/update
@@ -871,18 +876,18 @@ fn create(
 
         // wait for k3s port to be open
         wait_until_port_is_open(
-            &TcpCheckSource::DnsName(qovery_terraform_config.aws_ec2_public_hostname.as_str()),
-            port,
-            300,
-            kubernetes.logger(),
-            event_details.clone(),
-        )
-            .map_err(|e| {
-                EngineError::new_terraform_qovery_config_mismatch(
-                    event_details.clone(),
-                    CommandError::new("Wasn't able to connect to Kubernetes API, can't continue. Did you manually performed changes AWS side?".to_string(), Some(format!("{:?}", e)), None),
-                )
-            })?;
+                &TcpCheckSource::DnsName(qovery_terraform_config.aws_ec2_public_hostname.as_str()),
+                port,
+                300,
+                kubernetes.logger(),
+                event_details.clone(),
+            )
+                .map_err(|e| {
+                    EngineError::new_terraform_qovery_config_mismatch(
+                        event_details.clone(),
+                        CommandError::new("Wasn't able to connect to Kubernetes API, can't continue. Did you manually performed changes AWS side?".to_string(), Some(format!("{:?}", e)), None),
+                    )
+                })?;
 
         // during an instance replacement, the EC2 host dns will change and will require the kubeconfig to be updated
         // we need to ensure the kubeconfig is the correct one by checking the current instance dns in the kubeconfig
@@ -894,7 +899,7 @@ fn create(
             };
             let mut kubeconfig_path = match kubernetes.get_kubeconfig_file() {
                 Ok((_, kubeconfig_filename)) => kubeconfig_filename,
-                Err(e) => return OperationResult::Err(e),
+                Err(e) => return OperationResult::Retry(e),
             };
 
             // ensure the kubeconfig content address match with the current instance dns
@@ -913,12 +918,12 @@ fn create(
                 }
                 false => {
                     kubernetes.logger().log(EngineEvent::Warning(
-                        event_details.clone(),
-                        EventMessage::new_from_safe(format!(
-                            "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
-                            &qovery_terraform_config.aws_ec2_public_hostname
-                        )),
-                    ));
+                            event_details.clone(),
+                            EventMessage::new_from_safe(format!(
+                                "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
+                                &qovery_terraform_config.aws_ec2_public_hostname
+                            )),
+                        ));
                     OperationResult::Retry(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
                         event_details.clone(),
                     ))
@@ -936,7 +941,6 @@ fn create(
     };
 
     // kubernetes helm deployments on the cluster
-    let kubeconfig_path = kubernetes.get_kubeconfig_file_path()?;
     let kubeconfig_path = Path::new(&kubeconfig_path);
 
     let credentials_environment_variables: Vec<(String, String)> = kubernetes
@@ -1335,6 +1339,11 @@ fn delete(
     let listeners_helper = ListenersHelper::new(kubernetes.listeners());
     let mut skip_kubernetes_step = false;
 
+    kubernetes.logger().log(EngineEvent::Info(
+        event_details.clone(),
+        EventMessage::new_from_safe(format!("Preparing to delete {} cluster.", kubernetes.kind())),
+    ));
+
     kubernetes.send_to_customer(
         format!(
             "Preparing to delete {} cluster {} with id {}",
@@ -1345,24 +1354,45 @@ fn delete(
         .as_str(),
         &listeners_helper,
     );
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe(format!("Preparing to delete {} cluster.", kubernetes.kind())),
-    ));
 
     let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
-    let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
-        Ok(value) => Some(value),
-        Err(_) => None,
+    let node_groups_with_desired_states = match kubernetes.kind() {
+        Kind::Eks => {
+            let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
+                Ok(value) => Some(value),
+                Err(_) => None,
+            };
+
+            should_update_desired_nodes(
+                event_details.clone(),
+                kubernetes,
+                KubernetesClusterAction::Delete,
+                node_groups,
+                aws_eks_client,
+            )?
+        }
+        Kind::Ec2 => {
+            vec![NodeGroupsWithDesiredState::new_from_node_groups(
+                &node_groups[0],
+                1,
+                false,
+            )]
+        }
+        _ => {
+            return Err(EngineError::new_unsupported_cluster_kind(
+                event_details,
+                "only AWS clusters are supported for this delete method",
+                CommandError::new_from_safe_message(
+                    "please contact Qovery, deletion can't happen on something else than AWS clsuter type".to_string(),
+                ),
+            ))
+        }
     };
 
-    let node_groups_with_desired_states = should_update_desired_nodes(
-        event_details.clone(),
-        kubernetes,
-        KubernetesClusterAction::Delete,
-        node_groups,
-        aws_eks_client,
-    )?;
+    // delete kubeconfig on s3 to avoid obsolete kubeconfig (not for EC2 because S3 kubeconfig upload is not done the same way)
+    if kubernetes.kind() != Kind::Ec2 {
+        let _ = kubernetes.ensure_kubeconfig_is_not_in_object_storage();
+    };
 
     // generate terraform files and copy them into temp dir
     let context = tera_context(kubernetes, aws_zones, &node_groups_with_desired_states, options)?;

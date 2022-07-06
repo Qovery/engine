@@ -95,6 +95,24 @@ pub fn ec2_aws_helm_charts(
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
     let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file)?;
 
+    // CSI driver
+    let aws_ebs_csi_driver_secret = CommonChart {
+        chart_info: ChartInfo {
+            name: "aws-ebs-csi-driver-secret".to_string(),
+            path: chart_path("/charts/aws-ebs-csi-driver-secret"),
+            values: vec![
+                ChartSetValue {
+                    key: "awsAccessKeyId".to_string(),
+                    value: chart_config_prerequisites.aws_access_key_id.clone(),
+                },
+                ChartSetValue {
+                    key: "awsSecretAccessKeyId".to_string(),
+                    value: chart_config_prerequisites.aws_secret_access_key.clone(),
+                },
+            ],
+            ..Default::default()
+        },
+    };
     let aws_ebs_csi_driver = CommonChart {
         chart_info: ChartInfo {
             name: "aws-ebs-csi-driver".to_string(),
@@ -502,7 +520,7 @@ pub fn ec2_aws_helm_charts(
                 },
                 ChartSetValue {
                     key: "metrics.enabled".to_string(),
-                    value: "false".to_string(), // update this field if we decide to add prometheus support later
+                    value: "false".to_string(), // update this field if we decide to add prometheus support later on EC2
                 },
                 ChartSetValue {
                     key: "volumes.storageClassName".to_string(),
@@ -584,6 +602,7 @@ pub fn ec2_aws_helm_charts(
 
     // chart deployment order matters!!!
     let level_1: Vec<Box<dyn HelmChart>> = vec![
+        Box::new(aws_ebs_csi_driver_secret),
         Box::new(aws_ebs_csi_driver),
         Box::new(q_storage_class),
         Box::new(coredns_config),

@@ -24,7 +24,7 @@ pub struct DatabaseDeploymentRenderContext {
 const MANAGED_REPORT_TEMPLATE: &str = r#"
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ Managed database {{ type_ }} v{{ version }} deployment is in progress ⏳, below the current status:
-┃ {%- for service in services %}
+{%- for service in services %}
 ┃ 🔀 {{ service.type_ | capitalize }} {{ service.name }} is {{ service.state | upper }} {{ service.message }}
 {%- for event in service.events %}
 ┃  |__ {{ event.type_ | fmt_event_type }} {{ event.message }}
@@ -271,7 +271,6 @@ mod test {
         let gold_standard = r#"
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ Managed database PostgreSQL v13 deployment is in progress ⏳, below the current status:
-┃
 ┃ 🔀 Cloud load balancer app-z85ba6759 is STARTING
 ┃  |__ ℹ️ No lease of ip yet
 ┃  |__ ⚠️ Pool of ip exhausted

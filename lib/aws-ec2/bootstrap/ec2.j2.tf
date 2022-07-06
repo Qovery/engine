@@ -18,7 +18,7 @@ data "aws_ami" "debian" {
 
 {% if user_ssh_key != "" -%}
 resource "aws_key_pair" "user_ssh_key" {
-  key_name   = "user-key"
+  key_name   = "qovery-${var.kubernetes_cluster_id}"
   public_key = "{{ user_ssh_key }}"
 }
 {%- endif %}

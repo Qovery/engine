@@ -34,38 +34,6 @@ locals {
   final_snapshot_name = "${var.final_snapshot_name}-${local.final_snap_timestamp}"
 }
 
-resource "helm_release" "documentdb_instance_external_name" {
-  name = "${aws_docdb_cluster.documentdb_cluster.id}-externalname"
-  chart = "external-name-svc"
-  namespace = "{{namespace}}"
-  atomic = true
-  max_history = 50
-
-  set {
-    name = "target_hostname"
-    value = aws_docdb_cluster.documentdb_cluster.endpoint
-  }
-
-  set {
-    name = "source_fqdn"
-    value = "{{database_fqdn}}"
-  }
-
-  set {
-    name = "app_id"
-    value = "{{database_id}}"
-  }
-
-  set {
-    name = "service_name"
-    value = "{{service_name}}"
-  }
-
-  depends_on = [
-    aws_docdb_cluster.documentdb_cluster
-  ]
-}
-
 resource "aws_docdb_cluster_instance" "documentdb_cluster_instances" {
   count              = var.documentdb_instances_number
 

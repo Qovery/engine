@@ -1,5 +1,5 @@
 use crate::cloud_provider::service::{
-    check_service_version, default_tera_context, delete_stateful_service, deploy_stateful_service, get_tfstate_name,
+    check_service_version, default_tera_context, delete_stateful_service, deploy_database_service, get_tfstate_name,
     get_tfstate_suffix, scale_down_database, Action, Create, DatabaseOptions, DatabaseService, Delete, Helm, Pause,
     Service, ServiceType, ServiceVersionCheckResult, Terraform,
 };
@@ -304,7 +304,7 @@ where
         );
 
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
-            deploy_stateful_service(target, self, event_details.clone(), self.logger())
+            deploy_database_service(target, self, event_details.clone(), self.logger())
         })
     }
 

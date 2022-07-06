@@ -1,3 +1,6 @@
+use k8s_openapi::api::core::v1::Secret;
+use kube::api::PostParams;
+use kube::{Api, Error};
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
 use retry::OperationResult;
@@ -19,7 +22,7 @@ use crate::cloud_provider::models::{CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::CheckAction;
 use crate::cloud_provider::Kind as CloudProviderKind;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
-use crate::cmd::kubectl;
+use crate::cmd::kubectl::{self, kubectl_delete_apiservice};
 use crate::cmd::kubectl::{
     kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_delete_pod,
     kubectl_exec_get_node, kubectl_exec_is_namespace_present, kubectl_exec_version, kubectl_get_crash_looping_pods,
@@ -83,6 +86,39 @@ pub trait Kubernetes: Listen {
 
     fn get_kubeconfig_filename(&self) -> String {
         format!("{}.yaml", self.id())
+    }
+
+    fn put_kubeconfig_file_to_object_storage(&self, file_path: &str) -> Result<(), EngineError> {
+        if let Err(e) = self.config_file_store().put(
+            self.get_bucket_name().as_str(),
+            self.get_kubeconfig_filename().as_str(),
+            file_path,
+        ) {
+            let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+            return Err(EngineError::new_object_storage_cannot_put_file_into_bucket_error(
+                event_details,
+                self.get_bucket_name(),
+                self.get_kubeconfig_filename(),
+                e,
+            ));
+        };
+        Ok(())
+    }
+
+    fn ensure_kubeconfig_is_not_in_object_storage(&self) -> Result<(), EngineError> {
+        if let Err(e) = self
+            .config_file_store()
+            .ensure_file_is_absent(self.get_bucket_name().as_str(), self.get_kubeconfig_filename().as_str())
+        {
+            let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+            return Err(EngineError::new_object_storage_cannot_delete_file_into_bucket_error(
+                event_details,
+                self.get_bucket_name(),
+                self.get_kubeconfig_filename(),
+                e,
+            ));
+        };
+        Ok(())
     }
 
     fn get_bucket_name(&self) -> String {
@@ -149,11 +185,11 @@ pub trait Kubernetes: Listen {
                             self.get_event_details(stage.clone()),
                             err.into(),
                         );
-                        self.logger().log(EngineEvent::Info(
-                            self.get_event_details(stage.clone()),
-                            EventMessage::new_from_safe("Retrying to get kubeconfig file.".to_string()),
+                        self.logger().log(EngineEvent::Warning(
+                            event_details.clone(),
+                            EventMessage::new_from_safe(error.to_string()),
                         ));
-                        OperationResult::Retry(error)
+                        retry::OperationResult::Retry(error)
                     }
                 }
             }) {
@@ -836,6 +872,9 @@ where
         }
     }
 
+    // delete qovery apiservice deployed by Qvery webhook to avoid namespace in infinite Terminating state
+    let _ = kubectl_delete_apiservice(kubernetes_config, "release=qovery-cert-manager-webhook", envs);
+
     Ok(())
 }
 
@@ -1490,13 +1529,46 @@ pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, CommandError> 
     }
 }
 
+pub async fn kube_does_secret_exists(kube: &kube::Client, name: &str, namespace: &str) -> Result<bool, kube::Error> {
+    let item: Api<Secret> = Api::namespaced(kube.clone(), namespace);
+    match item.get(name).await {
+        Ok(_) => Ok(true),
+        Err(e) => match e {
+            Error::Api(api_err) if api_err.code == 404 => Ok(false),
+            _ => Err(e),
+        },
+    }
+}
+
+pub async fn kube_copy_secret_to_another_namespace(
+    kube: &kube::Client,
+    name: &str,
+    namespace_src: &str,
+    namespace_dest: &str,
+) -> Result<(), kube::Error> {
+    let post_param = PostParams::default();
+
+    let secret_src: Api<Secret> = Api::namespaced(kube.clone(), namespace_src);
+    let mut secret_content = secret_src.get(name).await?;
+    secret_content.metadata.namespace = Some(namespace_dest.to_string());
+    secret_content.metadata.resource_version = None;
+    secret_content.metadata.uid = None;
+    secret_content.metadata.creation_timestamp = None;
+
+    let secret_dest: Api<Secret> = Api::namespaced(kube.clone(), namespace_dest);
+    secret_dest.create(&post_param, &secret_content).await?;
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+
     use crate::cloud_provider::Kind::Aws;
 
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, convert_k8s_cpu_value_to_f32,
-        validate_k8s_required_cpu_and_burstable, KubernetesNodesType,
+        kube_does_secret_exists, validate_k8s_required_cpu_and_burstable, KubernetesNodesType,
     };
     use crate::cloud_provider::models::CpuLimits;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
@@ -1504,7 +1576,33 @@ mod tests {
     use crate::io_models::{ListenersHelper, QoveryIdentifier};
     use crate::logger::StdIoLogger;
     use crate::models::types::VersionsNumber;
+    use crate::runtime::block_on;
+    use crate::utilities::get_kube_client;
     use std::str::FromStr;
+
+    use super::kube_copy_secret_to_another_namespace;
+    pub const KUBECONFIG_PATH: &str = "/home/qovery/kubeconfig";
+
+    #[ignore]
+    #[allow(dead_code)]
+    pub fn k8s_does_secret_exists_test() {
+        let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
+        let res = block_on(kube_does_secret_exists(&kube_client, "awsecr-cred", "default")).unwrap();
+        assert_eq!(res, true);
+    }
+
+    #[ignore]
+    #[allow(dead_code)]
+    pub fn k8s_copy_secret_test() {
+        let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
+        block_on(kube_copy_secret_to_another_namespace(
+            &kube_client,
+            "awsecr-cred",
+            "default",
+            "qovery",
+        ))
+        .unwrap();
+    }
 
     #[test]
     pub fn check_kubernetes_upgrade_method() {

@@ -5,7 +5,17 @@ metadata:
   # It is used to provide to the end user an endpoint with desired name
   name: {{ .Values.service_name }}
   labels:
-    appId: {{.Values.app_id}}
+    envId: {{ .Values.environment_id }}
+    envLongId: {{ .Values.environment_long_id }}
+    projectLongId: {{ .Values.project_long_id }}
+  {{ if .Values.app_id }}
+    appId: {{ .Values.app_id }}
+    appLongId: {{ .Values.app_long_id }}
+  {{ end }}
+  {{ if .Values.database_id }}
+    databaseId: {{ .Values.database_id }}
+    databaseLongId: {{ .Values.database_long_id }}
+  {{ end }}
   {{ if .Values.publicly_accessible }}
   annotations:
     external-dns.alpha.kubernetes.io/hostname: {{ .Values.source_fqdn }}

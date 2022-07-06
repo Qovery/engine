@@ -398,21 +398,21 @@ impl Kapsule {
     fn check_missing_nodegroup_info<T>(&self, item: &Option<T>, name: &str) -> Result<(), ScwNodeGroupErrors> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
 
-        self.logger.log(EngineEvent::Error(
-            EngineError::new_missing_workers_group_info_error(
-                event_details,
-                CommandError::new_from_safe_message(format!(
-                    "Missing node pool info {} for cluster {}",
-                    name,
-                    self.context.cluster_id()
-                )),
-            ),
-            None,
-        ));
-
         if item.is_none() {
+            self.logger.log(EngineEvent::Error(
+                EngineError::new_missing_workers_group_info_error(
+                    event_details,
+                    CommandError::new_from_safe_message(format!(
+                        "Missing node pool info {} for cluster {}",
+                        name,
+                        self.context.cluster_id()
+                    )),
+                ),
+                None,
+            ));
             return Err(ScwNodeGroupErrors::MissingNodePoolInfo);
         };
+
         Ok(())
     }
 
@@ -700,7 +700,7 @@ impl Kapsule {
         // push config file to object storage
         let kubeconfig_path = &self.get_kubeconfig_file_path()?;
         let kubeconfig_path = Path::new(kubeconfig_path);
-        let kubeconfig_name = format!("{}.yaml", self.id());
+        let kubeconfig_name = self.get_kubeconfig_filename();
         if let Err(e) = self.object_storage.put(
             self.kubeconfig_bucket_name().as_str(),
             kubeconfig_name.as_str(),

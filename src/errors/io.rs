@@ -57,6 +57,7 @@ pub enum Tag {
     K8sPodIsNotReady,
     K8sNodeIsNotReadyWithTheRequestedVersion,
     K8sNodeIsNotReady,
+    K8sErrorCopySecret,
     UnsupportedRegion,
     UnsupportedZone,
     CannotFindRequiredBinary,
@@ -82,6 +83,7 @@ pub enum Tag {
     ContainerRegistryError,
     ObjectStorageCannotCreateBucket,
     ObjectStorageCannotPutFileIntoBucket,
+    ObjectStorageCannotDeleteFileIntoBucket,
     NoClusterFound,
     OnlyOneClusterExpected,
     CloudProviderApiMissingInfo,
@@ -266,6 +268,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::JsonDeserializationError => Tag::JsonDeserializationError,
             errors::Tag::ClusterSecretsManipulationError => Tag::ClusterSecretsManipulationError,
             errors::Tag::VaultSecretCouldNotBeDeleted => Tag::VaultSecretCouldNotBeDeleted,
+            errors::Tag::ObjectStorageCannotDeleteFileIntoBucket => Tag::ObjectStorageCannotDeleteFileIntoBucket,
             errors::Tag::CannotGetNodeGroupList => Tag::CannotGetNodeGroupList,
             errors::Tag::CannotGetNodeGroupInfo => Tag::CannotGetNodeGroupInfo,
             errors::Tag::NumberOfRequestedMaxNodesIsBelowThanCurrentUsage => {
@@ -276,6 +279,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CloudProviderInformationError => Tag::CloudProviderInformationError,
             errors::Tag::DnsProviderInvalidCredentials => Tag::DnsProviderInvalidCredentials,
             errors::Tag::DnsProviderInvalidApiUrl => Tag::DnsProviderInvalidApiUrl,
+            errors::Tag::K8sErrorCopySecret => Tag::K8sErrorCopySecret,
         }
     }
 }

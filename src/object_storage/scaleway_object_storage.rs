@@ -11,9 +11,9 @@ use crate::runtime::block_on;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
-    CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectsRequest,
-    GetObjectRequest, HeadBucketRequest, ListObjectsRequest, ObjectIdentifier, PutBucketTaggingRequest,
-    PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, Tag, Tagging, S3,
+    CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectRequest,
+    DeleteObjectsRequest, GetObjectRequest, HeadBucketRequest, ListObjectsRequest, ObjectIdentifier,
+    PutBucketTaggingRequest, PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, Tag, Tagging, S3,
 };
 use tokio::io;
 
@@ -370,6 +370,32 @@ impl ObjectStorage for ScalewayOS {
         })) {
             Ok(_) => Ok(()),
             Err(e) => Err(ObjectStorageError::CannotUploadFile {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
+        }
+    }
+
+    fn ensure_file_is_absent(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError> {
+        if ScalewayOS::is_bucket_name_valid(bucket_name).is_err() {
+            // bucket is missing it's ok as file can't be present
+            return Ok(());
+        };
+
+        // check if file already exists
+        if self.get(bucket_name, object_key, false).is_err() {
+            return Ok(());
+        };
+
+        let s3_client = self.get_s3_client();
+
+        match block_on(s3_client.delete_object(DeleteObjectRequest {
+            bucket: bucket_name.to_string(),
+            key: object_key.to_string(),
+            ..Default::default()
+        })) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(ObjectStorageError::CannotDeleteFile {
                 bucket_name: bucket_name.to_string(),
                 raw_error_message: e.to_string(),
             }),

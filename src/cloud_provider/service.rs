@@ -10,7 +10,9 @@ use uuid::Uuid;
 
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::{ChartInfo, ChartSetValue};
-use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::kubernetes::{
+    kube_copy_secret_to_another_namespace, kube_does_secret_exists, Kind, Kubernetes,
+};
 use crate::cloud_provider::utilities::check_domain_for;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd;
@@ -31,6 +33,7 @@ use crate::io_models::{
 use crate::logger::Logger;
 
 use crate::models::types::VersionsNumber;
+use crate::runtime::block_on;
 
 // todo: delete this useless trait
 pub trait Service: ToTransmitter {
@@ -417,16 +420,15 @@ where
         ]
     });
 
-    // create a namespace with labels if do not exists
-    cmd::kubectl::kubectl_exec_create_namespace(
-        kubernetes_config_file_path.as_str(),
-        environment.namespace(),
+    prepare_namespace(
+        kubernetes_config_file_path.clone(),
+        environment,
         namespace_labels,
         kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| {
-        EngineError::new_k8s_create_namespace(event_details.clone(), environment.namespace().to_string(), e)
-    })?;
+        event_details.clone(),
+        kubernetes.kind(),
+        &target.kube,
+    )?;
 
     // do exec helm upgrade and return the last deployment status
     let helm = helm::Helm::new(
@@ -616,7 +618,55 @@ pub fn get_database_terraform_config(
     }
 }
 
-pub fn deploy_stateful_service<T>(
+pub fn prepare_namespace(
+    kubernetes_config_file_path: String,
+    environment: &Environment,
+    namespace_labels: Option<Vec<LabelsContent>>,
+    envs: Vec<(&str, &str)>,
+    event_details: EventDetails,
+    kubernetes_kind: Kind,
+    kube: &kube::Client,
+) -> Result<(), EngineError> {
+    // create a namespace with labels if it does not exist
+    cmd::kubectl::kubectl_exec_create_namespace(
+        &kubernetes_config_file_path,
+        environment.namespace(),
+        namespace_labels,
+        envs,
+    )
+    .map_err(|e| {
+        EngineError::new_k8s_create_namespace(event_details.clone(), environment.namespace().to_string(), e)
+    })?;
+
+    // upmc-enterprises/registry-creds sometimes is too long to copy the secret to the namespace
+    // this workaround speed up the process to avoid application fails with ImagePullError on the first deployment
+    if kubernetes_kind == Kind::Ec2 {
+        let from_namespace = "default";
+        match block_on(kube_does_secret_exists(kube, "awsecr-cred", "default")) {
+            Ok(x) if !x => {
+                block_on(kube_copy_secret_to_another_namespace(
+                    kube,
+                    "awsecr-cred",
+                    from_namespace,
+                    environment.namespace(),
+                ))
+                .map_err(|e| {
+                    EngineError::new_copy_secrets_to_another_namespace_error(
+                        event_details.clone(),
+                        e,
+                        from_namespace,
+                        environment.namespace(),
+                    )
+                })?;
+            }
+            _ => {}
+        };
+    };
+
+    Ok(())
+}
+
+pub fn deploy_database_service<T>(
     target: &DeploymentTarget,
     service: &T,
     event_details: EventDetails,
@@ -641,17 +691,6 @@ where
             }),
         ]
     });
-
-    // create a namespace with labels if it does not exist
-    cmd::kubectl::kubectl_exec_create_namespace(
-        &kubernetes_config_file_path,
-        environment.namespace(),
-        namespace_labels,
-        kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| {
-        EngineError::new_k8s_create_namespace(event_details.clone(), environment.namespace().to_string(), e)
-    })?;
 
     // do exec helm upgrade and return the last deployment status
     let helm = helm::Helm::new(
@@ -712,6 +751,16 @@ where
             ));
         }
 
+        prepare_namespace(
+            kubernetes_config_file_path,
+            environment,
+            namespace_labels,
+            kubernetes.cloud_provider().credentials_environment_variables(),
+            event_details.clone(),
+            kubernetes.kind(),
+            &target.kube,
+        )?;
+
         cmd::terraform::terraform_init_validate_plan_apply(
             workspace_dir.as_str(),
             service.context().is_dry_run_deploy(),
@@ -739,8 +788,24 @@ where
                             value: database_config.target_fqdn,
                         },
                         ChartSetValue {
-                            key: "app_id".to_string(),
+                            key: "database_id".to_string(),
                             value: service.id().to_string(),
+                        },
+                        ChartSetValue {
+                            key: "database_long_id".to_string(),
+                            value: service.long_id().to_string(),
+                        },
+                        ChartSetValue {
+                            key: "environment_id".to_string(),
+                            value: environment.id.to_string(),
+                        },
+                        ChartSetValue {
+                            key: "environment_long_id".to_string(),
+                            value: environment.long_id.to_string(),
+                        },
+                        ChartSetValue {
+                            key: "project_long_id".to_string(),
+                            value: environment.project_long_id.to_string(),
                         },
                         ChartSetValue {
                             key: "service_name".to_string(),
@@ -824,16 +889,15 @@ where
             ]
         });
 
-        // create a namespace with labels if it does not exist
-        cmd::kubectl::kubectl_exec_create_namespace(
-            &kubernetes_config_file_path,
-            environment.namespace(),
+        prepare_namespace(
+            kubernetes_config_file_path.clone(),
+            environment,
             namespace_labels,
             kubernetes.cloud_provider().credentials_environment_variables(),
-        )
-        .map_err(|e| {
-            EngineError::new_k8s_create_namespace(event_details.clone(), environment.namespace().to_string(), e)
-        })?;
+            event_details.clone(),
+            kubernetes.kind(),
+            &target.kube,
+        )?;
 
         // do exec helm upgrade and return the last deployment status
         let helm = helm::Helm::new(
