@@ -33,7 +33,7 @@ strum = "0.24.0"
 strum_macros = "0.24.0"
 urlencoding = "2.1.0"
 
-kube = { version = "0.73.1", features = [] }
+kube = { version = "0.73.1", features = ["default", "runtime", "derive"] }
 k8s-openapi = { version = "0.15.0", default-features = false, features = ["v1_21"] }
 
 # FIXME use https://crates.io/crates/blocking instead of runtime.rs

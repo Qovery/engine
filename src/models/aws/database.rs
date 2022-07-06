@@ -3,7 +3,6 @@ use crate::cloud_provider::service::{
     ServiceVersionCheckResult,
 };
 use crate::cloud_provider::{service, DeploymentTarget};
-use crate::cmd::kubectl;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::models::aws::database_utils::{
@@ -168,13 +167,6 @@ where
         // we need the kubernetes config file to store tfstates file in kube secrets
         let kube_config_file_path = kubernetes.get_kubeconfig_file_path()?;
         context.insert("kubeconfig_path", &kube_config_file_path);
-
-        kubectl::kubectl_exec_create_namespace_without_labels(
-            environment.namespace(),
-            kube_config_file_path.as_str(),
-            kubernetes.cloud_provider().credentials_environment_variables(),
-        );
-
         context.insert("namespace", environment.namespace());
 
         let version = self
