@@ -59,6 +59,16 @@ pub trait DatabaseType<T: CloudProvider, M: DatabaseMode> {
     fn short_name() -> &'static str;
     fn lib_directory_name() -> &'static str;
     fn db_type() -> service::DatabaseType;
+    // autocorrect resources if needed
+    fn cpu_validate(desired_cpu: String) -> String {
+        desired_cpu
+    }
+    fn cpu_burst_value(desired_cpu: String) -> String {
+        desired_cpu
+    }
+    fn memory_validate(desired_memory: u32) -> u32 {
+        desired_memory
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -120,8 +130,8 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
             version,
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
-            total_cpus,
-            total_ram_in_mib,
+            total_cpus: T::cpu_validate(total_cpus),
+            total_ram_in_mib: T::memory_validate(total_ram_in_mib),
             database_instance_type: database_instance_type.to_string(),
             publicly_accessible,
             private_port,
@@ -499,6 +509,7 @@ where
         context.insert("database_disk_type", &options.database_disk_type);
         context.insert("database_ram_size_in_mib", &self.total_ram_in_mib);
         context.insert("database_total_cpus", &self.total_cpus);
+        context.insert("database_total_cpus_burst", &T::cpu_burst_value(self.total_cpus.clone()));
         context.insert("database_fqdn", &options.host.as_str());
         context.insert("database_id", &self.id());
         context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));

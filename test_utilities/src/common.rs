@@ -1099,7 +1099,7 @@ pub fn test_db(
         port: database_port,
         username: database_username,
         password: database_password,
-        total_cpus: "50m".to_string(),
+        total_cpus: "200m".to_string(),
         total_ram_in_mib: 256,
         disk_size_in_gib: storage_size,
         database_instance_type: db_instance_type,
