@@ -680,13 +680,13 @@ pub enum Tag {
     ObjectStorageCannotEmptyBucket,
     /// ObjectStorageCannotTagBucket: represents an error while trying to tag an object storage bucket.
     ObjectStorageCannotTagBucket,
-    /// ObjectStorageCannotActivateBucketVersioning: represents an error while trying to activate bucket versioning for bucket.
     /// KubeconfigFileDoNotPermitToConnectToK8sCluster: represent a kubeconfig mismatch, not permitting to connect to k8s cluster
     KubeconfigFileDoNotPermitToConnectToK8sCluster,
     /// KubeconfigSecurityCheckError: represent an error because of a security concern/doubt on the kubeconfig file
     KubeconfigSecurityCheckError,
     /// DeleteLocalKubeconfigFileError: represent an error when trying to delete Kubeconfig
     DeleteLocalKubeconfigFileError,
+    /// ObjectStorageCannotActivateBucketVersioning: represents an error while trying to activate bucket versioning for bucket.
     ObjectStorageCannotActivateBucketVersioning,
     /// VaultConnectionError: represents an error while trying to connect ot Vault service
     VaultConnectionError,
