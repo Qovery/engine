@@ -185,21 +185,35 @@ pub trait Kubernetes: Listen {
                             self.get_event_details(stage.clone()),
                             err.into(),
                         );
-                        self.logger().log(EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new_from_safe(error.to_string()),
-                        ));
+
                         retry::OperationResult::Retry(error)
                     }
                 }
             }) {
                 Ok((path, file)) => (path, file),
-                Err(Operation { error, .. }) => return Err(error),
+                Err(Operation { error, .. }) => {
+                    // TODO(benjaminch):ENG-1252
+                    // This message should not be fired in case of new cluster.
+                    // If existing cluster, it should be a warning.
+                    self.logger().log(EngineEvent::Info(
+                        event_details,
+                        EventMessage::new(
+                            "Cannot retrieve kubeconfig from previous installation.".to_string(),
+                            Some(error.to_string()),
+                        ),
+                    ));
+
+                    return Err(error);
+                }
                 Err(retry::Error::Internal(msg)) => {
                     return Err(EngineError::new_cannot_retrieve_cluster_config_file(
                         self.get_event_details(stage),
-                        CommandError::new("Error while trying to get kubeconfig file.".to_string(), Some(msg), None),
-                    ))
+                        CommandError::new(
+                            "Cannot retrieve kubeconfig from previous installation.".to_string(),
+                            Some(msg),
+                            None,
+                        ),
+                    ));
                 }
             },
         };
@@ -1335,7 +1349,7 @@ impl NodeGroups {
         // desired nodes can't be lower than min nodes
         if desired_nodes < self.min_nodes {
             self.desired_nodes = Some(self.min_nodes)
-        // desired nodes can't be higher than max nodes
+            // desired nodes can't be higher than max nodes
         } else if desired_nodes > self.max_nodes {
             self.desired_nodes = Some(self.max_nodes)
         } else {
