@@ -91,6 +91,7 @@ pub enum Tag {
     TerraformContextUnsupportedParameterValue,
     TerraformQoveryConfigMismatch,
     TerraformDatabaseConfigMismatch,
+    TerraformDatabaseMissingConfig,
     ClientServiceFailedToStart,
     ClientServiceFailedToDeployBeforeStart,
     DatabaseFailedToStartAfterSeveralRetries,
@@ -257,6 +258,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::NotAllowedInstanceType => Tag::NotAllowedInstanceType,
             errors::Tag::TerraformQoveryConfigMismatch => Tag::TerraformQoveryConfigMismatch,
             errors::Tag::TerraformDatabaseConfigMismatch => Tag::TerraformDatabaseConfigMismatch,
+            errors::Tag::TerraformDatabaseMissingConfig => Tag::TerraformDatabaseMissingConfig,
             errors::Tag::KubeconfigFileDoNotPermitToConnectToK8sCluster => {
                 Tag::KubeconfigFileDoNotPermitToConnectToK8sCluster
             }

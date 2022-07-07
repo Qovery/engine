@@ -838,18 +838,14 @@ where
                 helm.upgrade(&chart, &[])
                     .map_err(|e| helm::to_engine_error(&event_details, e))?;
             }
-            Err(e) => {
-                match e {
-                    DatabaseTerraformConfigError::FileDoesntExist(_) => {
-                        // Service External name for DB creation is supposed to be handled by Terraform
-                        // do nothing
-                    }
-                    DatabaseTerraformConfigError::FileCannotBeParsed(e) => {
-                        // Database config file is here but cannot be parsed, it's an issue
-                        return Err(EngineError::new_terraform_database_config_mismatch(event_details, e));
-                    }
+            Err(e) => match e {
+                DatabaseTerraformConfigError::FileDoesntExist(e) => {
+                    return Err(EngineError::new_terraform_database_config_mismatch(event_details, e));
                 }
-            }
+                DatabaseTerraformConfigError::FileCannotBeParsed(e) => {
+                    return Err(EngineError::new_terraform_database_config_mismatch(event_details, e));
+                }
+            },
         }
     } else {
         // use helm

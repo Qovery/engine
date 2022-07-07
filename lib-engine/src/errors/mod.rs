@@ -570,6 +570,8 @@ pub enum Tag {
     TerraformQoveryConfigMismatch,
     /// TerraformDatabaseConfigMismatch: terraform database config retrieve mismatch
     TerraformDatabaseConfigMismatch,
+    /// TerraformDatabaseMissingConfig: terraform database config retrieve fail
+    TerraformDatabaseMissingConfig,
     /// TerraformCannotRemoveEntryOut: represents an error where we cannot remove an entry out of Terraform.
     TerraformCannotRemoveEntryOut,
     /// TerraformNoStateFileExists: represents an error where there is no Terraform state file.
@@ -2067,6 +2069,25 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::TerraformDatabaseConfigMismatch,
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for terraform database missing
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_terraform_database_missing_config(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message = "Error while trying to find database Terraform generated config.";
+
+        EngineError::new(
+            event_details,
+            Tag::TerraformDatabaseMissingConfig,
             message.to_string(),
             Some(raw_error),
             None,
