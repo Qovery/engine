@@ -59,6 +59,7 @@ dependencies = [
  "chrono",
  "crossbeam-channel",
  "ctrlc",
+ "derivative",
  "dirs",
  "dotenv",
  "evmap",

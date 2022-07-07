@@ -3,6 +3,7 @@ use qovery_engine::errors::{CommandError, EngineError as IoEngineError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use derivative::Derivative;
 use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::aws::kubernetes::{ec2::EC2, eks::EKS};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
@@ -496,25 +497,33 @@ impl DnsProvider {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Derivative)]
+#[derivative(Debug)]
 pub struct Options {
     // TODO(benjaminch): Refactor this struct properly, each providers might have their own options
     login: Option<String>,
+    #[derivative(Debug = "ignore")]
     password: Option<String>,
     access_key_id: Option<String>,
+    #[derivative(Debug = "ignore")]
     secret_access_key: Option<String>,
     spaces_access_id: Option<String>,
+    #[derivative(Debug = "ignore")]
     spaces_secret_key: Option<String>,
     scaleway_project_id: Option<String>,
     scaleway_access_key: Option<String>,
+    #[derivative(Debug = "ignore")]
     scaleway_secret_key: Option<String>,
+    #[derivative(Debug = "ignore")]
     token: Option<String>,
     region: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Derivative)]
+#[derivative(Debug)]
 pub struct Archive {
     pub bucket_name: String,
     pub access_key_id: String,
+    #[derivative(Debug = "ignore")]
     pub secret_access_key: String,
 }
