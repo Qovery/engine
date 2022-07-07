@@ -266,11 +266,11 @@ master:
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
     # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
     requests:
-      cpu: {{ total_cpus }}
-      memory: {{ total_ram_in_mib }}Mi
+      cpu: {{ database_total_cpus }}
+      memory: {{ database_ram_size_in_mib }}Mi
     limits:
-      cpu: {{ total_cpus }}
-      memory: {{ total_ram_in_mib }}Mi
+      cpu: {{ database_total_cpus_burst }}
+      memory: {{ database_ram_size_in_mib }}Mi
 
   ## MySQL master containers' liveness and readiness probes
   ## ref: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#container-probes
