@@ -107,7 +107,6 @@ impl DatabaseType<AWS, Container> for Redis {
     fn lib_directory_name() -> &'static str {
         "redis"
     }
-
     fn db_type() -> service::DatabaseType {
         service::DatabaseType::Redis
     }
@@ -137,13 +136,11 @@ impl DatabaseType<AWS, Container> for MongoDB {
     type DatabaseOptions = DatabaseOptions;
 
     fn short_name() -> &'static str {
-        "Redis"
+        "MongoDb"
     }
-
     fn lib_directory_name() -> &'static str {
         "mongodb"
     }
-
     fn db_type() -> service::DatabaseType {
         service::DatabaseType::MongoDB
     }
