@@ -580,6 +580,18 @@ pub struct MetricsServer {
     pub name: String,
 }
 
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesDeployment {
+    pub kind: String,
+}
+
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesStatefulSet {
+    pub kind: String,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::cmd::structs::{KubernetesList, KubernetesPod, KubernetesPodStatusReason, MetricsServer, PDB, PVC, SVC};

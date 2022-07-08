@@ -75,9 +75,7 @@ volumePermissions:
     #   - myRegistryKeySecretName
   resources:
     limits: {}
-    requests:
-      cpu: "{{ total_cpus }}"
-      memory: "{{ total_ram_in_mib }}Mi"
+    requests: {}
 
 ## Enable authentication
 ## ref: https://docs.mongodb.com/manual/tutorial/enable-authentication/
@@ -232,7 +230,13 @@ podLabels:
 ## Configure resource requests and limits
 ## ref: http://kubernetes.io/docs/user-guide/compute-resources/
 ##
-resources: {}
+resources:
+  requests:
+    cpu: {{ total_cpus }}
+    memory: {{ total_ram_in_mib }}Mi
+  limits:
+    cpu: {{ total_cpus }}
+    memory: {{ total_ram_in_mib }}Mi
 # Define separate resources per arbiter, which are less then primary or secondary
 # used only when replica set is enabled
 resourcesArbiter: {}

@@ -526,6 +526,8 @@ pub enum Tag {
     K8sCannotDeletePod,
     /// K8sCannotGetCrashLoopingPods: represents an error where we are not able to get crash looping pods.
     K8sCannotGetCrashLoopingPods,
+    /// K8sCannotDeleteCompletedJobs: represents an error where we are not able to delete completed jobs.
+    K8sCannotDeleteCompletedJobs,
     /// K8sCannotGetPods: represents an error where we are not able to get pods.
     K8sCannotGetPods,
     /// K8sUpgradeDeployedVsRequestedVersionsInconsistency: represents an error where there is a K8s versions inconsistency between deployed and requested.
@@ -570,6 +572,8 @@ pub enum Tag {
     TerraformQoveryConfigMismatch,
     /// TerraformDatabaseConfigMismatch: terraform database config retrieve mismatch
     TerraformDatabaseConfigMismatch,
+    /// TerraformDatabaseMissingConfig: terraform database config retrieve fail
+    TerraformDatabaseMissingConfig,
     /// TerraformCannotRemoveEntryOut: represents an error where we cannot remove an entry out of Terraform.
     TerraformCannotRemoveEntryOut,
     /// TerraformNoStateFileExists: represents an error where there is no Terraform state file.
@@ -678,13 +682,13 @@ pub enum Tag {
     ObjectStorageCannotEmptyBucket,
     /// ObjectStorageCannotTagBucket: represents an error while trying to tag an object storage bucket.
     ObjectStorageCannotTagBucket,
-    /// ObjectStorageCannotActivateBucketVersioning: represents an error while trying to activate bucket versioning for bucket.
     /// KubeconfigFileDoNotPermitToConnectToK8sCluster: represent a kubeconfig mismatch, not permitting to connect to k8s cluster
     KubeconfigFileDoNotPermitToConnectToK8sCluster,
     /// KubeconfigSecurityCheckError: represent an error because of a security concern/doubt on the kubeconfig file
     KubeconfigSecurityCheckError,
     /// DeleteLocalKubeconfigFileError: represent an error when trying to delete Kubeconfig
     DeleteLocalKubeconfigFileError,
+    /// ObjectStorageCannotActivateBucketVersioning: represents an error while trying to activate bucket versioning for bucket.
     ObjectStorageCannotActivateBucketVersioning,
     /// VaultConnectionError: represents an error while trying to connect ot Vault service
     VaultConnectionError,
@@ -1628,6 +1632,28 @@ impl EngineError {
         )
     }
 
+    /// Creates new error for kubernetes not being able to delete completed jobs.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_k8s_error`: Raw error message.
+    pub fn new_k8s_cannot_delete_completed_jobs(
+        event_details: EventDetails,
+        raw_k8s_error: CommandError,
+    ) -> EngineError {
+        let message = "Unable to delete completed Kubernetes jobs.";
+
+        EngineError::new(
+            event_details,
+            Tag::K8sCannotDeleteCompletedJobs,
+            message.to_string(),
+            Some(raw_k8s_error),
+            None,
+            None,
+        )
+    }
+
     /// Creates new error for kubernetes not being able to get pods.
     ///
     /// Arguments:
@@ -2067,6 +2093,25 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::TerraformDatabaseConfigMismatch,
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for terraform database missing
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_terraform_database_missing_config(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message = "Error while trying to find database Terraform generated config.";
+
+        EngineError::new(
+            event_details,
+            Tag::TerraformDatabaseMissingConfig,
             message.to_string(),
             Some(raw_error),
             None,

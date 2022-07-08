@@ -11,10 +11,10 @@ use crate::cloud_provider::digitalocean::models::svc::DoLoadBalancer;
 use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::command::QoveryCommand;
 use crate::cmd::structs::{
-    Configmap, Daemonset, Item, KubernetesEvent, KubernetesIngress, KubernetesIngressStatusLoadBalancerIngress,
-    KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusPhase,
-    KubernetesPodStatusReason, KubernetesService, KubernetesVersion, LabelsContent, MetricsServer, Namespace, Secrets,
-    HPA, PDB, PVC, SVC,
+    Configmap, Daemonset, Item, KubernetesDeployment, KubernetesEvent, KubernetesIngress,
+    KubernetesIngressStatusLoadBalancerIngress, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
+    KubernetesPod, KubernetesPodStatusPhase, KubernetesPodStatusReason, KubernetesService, KubernetesStatefulSet,
+    KubernetesVersion, MetricsServer, Namespace, Secrets, HPA, PDB, PVC, SVC,
 };
 use crate::constants::KUBECONFIG;
 use crate::error::{SimpleError, SimpleErrorKind};
@@ -379,88 +379,6 @@ where
     result.is_ok()
 }
 
-pub fn kubectl_exec_create_namespace_without_labels(namespace: &str, kube_config: &str, envs: Vec<(&str, &str)>) {
-    let _ = kubectl_exec_create_namespace(kube_config, namespace, None, envs);
-}
-
-pub fn kubectl_exec_create_namespace<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    labels: Option<Vec<LabelsContent>>,
-    envs: Vec<(&str, &str)>,
-) -> Result<(), CommandError>
-where
-    P: AsRef<Path>,
-{
-    // don't create the namespace if already exists and not not return error in this case
-    if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace, envs.clone()) {
-        // create namespace
-        let mut _envs = Vec::with_capacity(envs.len() + 1);
-        _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-        _envs.extend(envs.clone());
-
-        kubectl_exec_with_output(
-            vec!["create", "namespace", namespace],
-            _envs,
-            &mut |line| info!("{}", line),
-            &mut |line| error!("{}", line),
-        )?;
-    }
-
-    // additional labels
-    if let Some(..) = labels {
-        match kubectl_add_labels_to_namespace(kubernetes_config, namespace, labels.unwrap_or_default(), envs) {
-            Ok(_) => {}
-            Err(e) => return Err(e),
-        }
-    };
-
-    Ok(())
-}
-
-pub fn kubectl_add_labels_to_namespace<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    labels: Vec<LabelsContent>,
-    envs: Vec<(&str, &str)>,
-) -> Result<(), CommandError>
-where
-    P: AsRef<Path>,
-{
-    if labels.is_empty() {
-        return Err(CommandError::new_from_safe_message(
-            "No labels were defined, can't set them".to_string(),
-        ));
-    };
-
-    if !kubectl_exec_is_namespace_present(kubernetes_config.as_ref(), namespace, envs.clone()) {
-        return Err(CommandError::new_from_safe_message(format!(
-            "Can't set labels on namespace {} because it doesn't exists",
-            namespace
-        )));
-    }
-
-    let mut command_args = Vec::new();
-    let mut labels_string = Vec::new();
-    command_args.extend(vec!["label", "namespace", namespace, "--overwrite"]);
-
-    for label in labels.iter() {
-        labels_string.push(format! {"{}={}", label.name, label.value});
-    }
-    let labels_str = labels_string.iter().map(|x| x.as_ref()).collect::<Vec<&str>>();
-    command_args.extend(labels_str);
-
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-    _envs.extend(envs.clone());
-
-    kubectl_exec_with_output(command_args, _envs, &mut |line| info!("{}", line), &mut |line| {
-        error!("{}", line)
-    })?;
-
-    Ok(())
-}
-
 // used for testing the does_contain_terraform_tfstate
 pub fn does_contain_terraform_tfstate<P>(
     kubernetes_config: P,
@@ -749,6 +667,60 @@ where
     kubectl_exec::<P, KubernetesList<KubernetesPod>>(cmd_args, kubernetes_config, envs)
 }
 
+pub fn kubectl_exec_get_deployments<P>(
+    kubernetes_config: P,
+    namespace: Option<&str>,
+    selector: Option<&str>,
+    envs: Vec<(&str, &str)>,
+) -> Result<KubernetesList<KubernetesDeployment>, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let mut cmd_args = vec!["get", "deployment", "-o", "json"];
+
+    match namespace {
+        Some(n) => {
+            cmd_args.push("-n");
+            cmd_args.push(n);
+        }
+        None => cmd_args.push("--all-namespaces"),
+    }
+
+    if let Some(s) = selector {
+        cmd_args.push("--selector");
+        cmd_args.push(s);
+    }
+
+    kubectl_exec::<P, KubernetesList<KubernetesDeployment>>(cmd_args, kubernetes_config, envs)
+}
+
+pub fn kubectl_exec_get_statefulsets<P>(
+    kubernetes_config: P,
+    namespace: Option<&str>,
+    selector: Option<&str>,
+    envs: Vec<(&str, &str)>,
+) -> Result<KubernetesList<KubernetesStatefulSet>, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let mut cmd_args = vec!["get", "statfulset", "-o", "json"];
+
+    match namespace {
+        Some(n) => {
+            cmd_args.push("-n");
+            cmd_args.push(n);
+        }
+        None => cmd_args.push("--all-namespaces"),
+    }
+
+    if let Some(s) = selector {
+        cmd_args.push("--selector");
+        cmd_args.push(s);
+    }
+
+    kubectl_exec::<P, KubernetesList<KubernetesStatefulSet>>(cmd_args, kubernetes_config, envs)
+}
+
 /// kubectl_exec_get_pod_by_name: allows to retrieve a pod by its name
 ///
 /// # Arguments
@@ -958,6 +930,27 @@ pub fn kubectl_exec_scale_replicas_by_selector<P>(
 where
     P: AsRef<Path>,
 {
+    match kind {
+        ScalingKind::Deployment => {
+            if let Ok(deployments) =
+                kubectl_exec_get_deployments(&kubernetes_config, Some(namespace), Some(selector), envs.clone())
+            {
+                if deployments.items.is_empty() {
+                    return Ok(());
+                }
+            }
+        }
+        ScalingKind::Statefulset => {
+            if let Ok(statefulsets) =
+                kubectl_exec_get_statefulsets(&kubernetes_config, Some(namespace), Some(selector), envs.clone())
+            {
+                if statefulsets.items.is_empty() {
+                    return Ok(());
+                }
+            }
+        }
+    };
+
     let kind_formatted = match kind {
         ScalingKind::Deployment => "deployment",
         ScalingKind::Statefulset => "statefulset",
@@ -1416,4 +1409,44 @@ where
     let _ = file.read_to_string(&mut content);
 
     kubectl_create_secret(kubernetes_config, envs, namespace, backup_name, key, content)
+}
+
+pub fn kubectl_get_completed_jobs<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+) -> Result<KubernetesList<KubernetesJob>, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let cmd_args = vec![
+        "get",
+        "jobs",
+        "--all-namespaces",
+        "--field-selector",
+        "status.successful=1",
+        "-o",
+        "json",
+    ];
+
+    kubectl_exec::<P, KubernetesList<KubernetesJob>>(cmd_args, kubernetes_config, envs)
+}
+
+pub fn kubectl_delete_completed_jobs<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let jobs = kubectl_get_completed_jobs(&kubernetes_config, envs.clone())?;
+
+    if jobs.items.is_empty() {
+        return Ok("No completed job to delete.".to_string());
+    }
+    let cmd_args = vec![
+        "delete",
+        "jobs",
+        "--all-namespaces",
+        "--field-selector",
+        "status.successful=1",
+    ];
+
+    kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, false)
 }

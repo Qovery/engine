@@ -1,5 +1,5 @@
-use k8s_openapi::api::core::v1::Secret;
-use kube::api::PostParams;
+use k8s_openapi::api::core::v1::{Namespace, Secret};
+use kube::api::{ObjectMeta, PostParams};
 use kube::{Api, Error};
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
@@ -22,7 +22,7 @@ use crate::cloud_provider::models::{CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::CheckAction;
 use crate::cloud_provider::Kind as CloudProviderKind;
 use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
-use crate::cmd::kubectl::{self, kubectl_delete_apiservice};
+use crate::cmd::kubectl::{self, kubectl_delete_apiservice, kubectl_delete_completed_jobs};
 use crate::cmd::kubectl::{
     kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_delete_pod,
     kubectl_exec_get_node, kubectl_exec_is_namespace_present, kubectl_exec_version, kubectl_get_crash_looping_pods,
@@ -185,21 +185,35 @@ pub trait Kubernetes: Listen {
                             self.get_event_details(stage.clone()),
                             err.into(),
                         );
-                        self.logger().log(EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::new_from_safe(error.to_string()),
-                        ));
+
                         retry::OperationResult::Retry(error)
                     }
                 }
             }) {
                 Ok((path, file)) => (path, file),
-                Err(Operation { error, .. }) => return Err(error),
+                Err(Operation { error, .. }) => {
+                    // TODO(benjaminch):ENG-1252
+                    // This message should not be fired in case of new cluster.
+                    // If existing cluster, it should be a warning.
+                    self.logger().log(EngineEvent::Info(
+                        event_details,
+                        EventMessage::new(
+                            "Cannot retrieve kubeconfig from previous installation.".to_string(),
+                            Some(error.to_string()),
+                        ),
+                    ));
+
+                    return Err(error);
+                }
                 Err(retry::Error::Internal(msg)) => {
                     return Err(EngineError::new_cannot_retrieve_cluster_config_file(
                         self.get_event_details(stage),
-                        CommandError::new("Error while trying to get kubeconfig file.".to_string(), Some(msg), None),
-                    ))
+                        CommandError::new(
+                            "Cannot retrieve kubeconfig from previous installation.".to_string(),
+                            Some(msg),
+                            None,
+                        ),
+                    ));
                 }
             },
         };
@@ -209,7 +223,7 @@ pub trait Kubernetes: Listen {
             Err(err) => {
                 let error = EngineError::new_cannot_retrieve_cluster_config_file(
                     self.get_event_details(stage),
-                    CommandError::new_from_safe_message(format!("Error getting file metadata, error: {}", err,)),
+                    CommandError::new("Error getting file metadata.".to_string(), Some(err.to_string()), None),
                 );
                 self.logger().log(EngineEvent::Error(error.clone(), None));
                 return Err(error);
@@ -231,7 +245,7 @@ pub trait Kubernetes: Listen {
         if let Err(err) = std::fs::set_permissions(string_path.as_str(), permissions) {
             let error = EngineError::new_cannot_retrieve_cluster_config_file(
                 self.get_event_details(stage),
-                CommandError::new_from_safe_message(format!("Error setting file permissions, error: {}", err,)),
+                CommandError::new("Error getting file permissions.".to_string(), Some(err.to_string()), None),
             );
             self.logger().log(EngineEvent::Error(error.clone(), None));
             return Err(error);
@@ -458,6 +472,21 @@ pub trait Kubernetes: Listen {
                 }
             },
         };
+
+        Ok(())
+    }
+
+    fn delete_completed_jobs(&self, envs: Vec<(&str, &str)>, stage: Stage) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(stage);
+
+        match self.get_kubeconfig_file() {
+            Err(e) => return Err(e),
+            Ok((config_path, _)) => {
+                if let Err(e) = kubectl_delete_completed_jobs(&config_path, envs) {
+                    return Err(EngineError::new_k8s_cannot_delete_completed_jobs(event_details, e));
+                };
+            }
+        }
 
         Ok(())
     }
@@ -1335,7 +1364,7 @@ impl NodeGroups {
         // desired nodes can't be lower than min nodes
         if desired_nodes < self.min_nodes {
             self.desired_nodes = Some(self.min_nodes)
-        // desired nodes can't be higher than max nodes
+            // desired nodes can't be higher than max nodes
         } else if desired_nodes > self.max_nodes {
             self.desired_nodes = Some(self.max_nodes)
         } else {
@@ -1540,6 +1569,34 @@ pub async fn kube_does_secret_exists(kube: &kube::Client, name: &str, namespace:
     }
 }
 
+pub async fn kube_create_namespace_if_not_exists(
+    kube: &kube::Client,
+    namespace_name: &str,
+    labels: Option<std::collections::BTreeMap<String, String>>,
+) -> Result<(), kube::Error> {
+    let namespace = Api::all(kube.clone());
+    let namespace_labels = Namespace {
+        metadata: ObjectMeta {
+            name: Some(namespace_name.to_string()),
+            labels,
+            ..Default::default()
+        },
+        spec: None,
+        status: None,
+    };
+
+    // create namespace
+    if let Err(e) = namespace.create(&PostParams::default(), &namespace_labels).await {
+        match e {
+            // namespace already exists
+            Error::Api(api_err) if api_err.code == 409 => {}
+            _ => return Err(e),
+        }
+    };
+
+    Ok(())
+}
+
 pub async fn kube_copy_secret_to_another_namespace(
     kube: &kube::Client,
     name: &str,
@@ -1556,9 +1613,13 @@ pub async fn kube_copy_secret_to_another_namespace(
     secret_content.metadata.creation_timestamp = None;
 
     let secret_dest: Api<Secret> = Api::namespaced(kube.clone(), namespace_dest);
-    secret_dest.create(&post_param, &secret_content).await?;
-
-    Ok(())
+    match secret_dest.create(&post_param, &secret_content).await {
+        Ok(_) => Ok(()),
+        Err(kube_err) => match kube_err {
+            Error::Api(e) if e.code == 409 => Ok(()),
+            _ => Err(kube_err),
+        },
+    }
 }
 
 #[cfg(test)]
@@ -1568,7 +1629,8 @@ mod tests {
 
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, convert_k8s_cpu_value_to_f32,
-        kube_does_secret_exists, validate_k8s_required_cpu_and_burstable, KubernetesNodesType,
+        kube_create_namespace_if_not_exists, kube_does_secret_exists, validate_k8s_required_cpu_and_burstable,
+        KubernetesNodesType,
     };
     use crate::cloud_provider::models::CpuLimits;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
@@ -1581,10 +1643,22 @@ mod tests {
     use std::str::FromStr;
 
     use super::kube_copy_secret_to_another_namespace;
-    pub const KUBECONFIG_PATH: &str = "/home/qovery/kubeconfig";
+    pub const KUBECONFIG_PATH: &str = "/home/pmavro/kubeconfig";
 
     #[ignore]
     #[allow(dead_code)]
+    #[test]
+    pub fn k8s_create_namespace() {
+        let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
+        assert_eq!(
+            block_on(kube_create_namespace_if_not_exists(&kube_client, "qovery-test-ns", None)).unwrap(),
+            ()
+        );
+    }
+
+    #[ignore]
+    #[allow(dead_code)]
+    #[test]
     pub fn k8s_does_secret_exists_test() {
         let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
         let res = block_on(kube_does_secret_exists(&kube_client, "awsecr-cred", "default")).unwrap();
@@ -1593,6 +1667,7 @@ mod tests {
 
     #[ignore]
     #[allow(dead_code)]
+    #[test]
     pub fn k8s_copy_secret_test() {
         let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
         block_on(kube_copy_secret_to_another_namespace(

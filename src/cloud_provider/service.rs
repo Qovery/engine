@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::net::TcpStream;
@@ -22,7 +23,7 @@ use crate::cmd::kubectl::{
     kubectl_exec_delete_pod, kubectl_exec_delete_secret, kubectl_exec_get_pods,
     kubectl_exec_scale_replicas_by_selector, ScalingKind,
 };
-use crate::cmd::structs::{KubernetesPodStatusPhase, LabelsContent};
+use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
 use crate::io_models::ProgressLevel::Info;
@@ -34,6 +35,8 @@ use crate::logger::Logger;
 
 use crate::models::types::VersionsNumber;
 use crate::runtime::block_on;
+
+use super::kubernetes::kube_create_namespace_if_not_exists;
 
 // todo: delete this useless trait
 pub trait Service: ToTransmitter {
@@ -411,20 +414,23 @@ where
     let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
 
     // define labels to add to namespace
-    let namespace_labels = service.context().resource_expiration_in_seconds().map(|_| {
-        vec![
-            (LabelsContent {
-                name: "ttl".to_string(),
-                value: format! {"{}", service.context().resource_expiration_in_seconds().unwrap()},
-            }),
-        ]
-    });
+    let mut namespace_labels: Option<BTreeMap<String, String>> = None;
+    if service.context().resource_expiration_in_seconds().is_some() {
+        namespace_labels = Some(BTreeMap::from([(
+            "ttl".to_string(),
+            format!(
+                "{}",
+                service
+                    .context()
+                    .resource_expiration_in_seconds()
+                    .expect("expected to have resource expiration in seconds")
+            ),
+        )]));
+    };
 
     prepare_namespace(
-        kubernetes_config_file_path.clone(),
         environment,
         namespace_labels,
-        kubernetes.cloud_provider().credentials_environment_variables(),
         event_details.clone(),
         kubernetes.kind(),
         &target.kube,
@@ -619,23 +625,28 @@ pub fn get_database_terraform_config(
 }
 
 pub fn prepare_namespace(
-    kubernetes_config_file_path: String,
     environment: &Environment,
-    namespace_labels: Option<Vec<LabelsContent>>,
-    envs: Vec<(&str, &str)>,
+    namespace_labels: Option<BTreeMap<String, String>>,
     event_details: EventDetails,
     kubernetes_kind: Kind,
     kube: &kube::Client,
 ) -> Result<(), EngineError> {
     // create a namespace with labels if it does not exist
-    cmd::kubectl::kubectl_exec_create_namespace(
-        &kubernetes_config_file_path,
+    block_on(kube_create_namespace_if_not_exists(
+        kube,
         environment.namespace(),
         namespace_labels,
-        envs,
-    )
+    ))
     .map_err(|e| {
-        EngineError::new_k8s_create_namespace(event_details.clone(), environment.namespace().to_string(), e)
+        EngineError::new_k8s_create_namespace(
+            event_details.clone(),
+            environment.namespace().to_string(),
+            CommandError::new(
+                format!("Can't create namespace {}", environment.namespace()),
+                Some(e.to_string()),
+                None,
+            ),
+        )
     })?;
 
     // upmc-enterprises/registry-creds sometimes is too long to copy the secret to the namespace
@@ -643,7 +654,7 @@ pub fn prepare_namespace(
     if kubernetes_kind == Kind::Ec2 {
         let from_namespace = "default";
         match block_on(kube_does_secret_exists(kube, "awsecr-cred", "default")) {
-            Ok(x) if !x => {
+            Ok(x) if x => {
                 block_on(kube_copy_secret_to_another_namespace(
                     kube,
                     "awsecr-cred",
@@ -683,14 +694,27 @@ where
     let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
 
     // define labels to add to namespace
-    let namespace_labels = service.context().resource_expiration_in_seconds().map(|_| {
-        vec![
-            (LabelsContent {
-                name: "ttl".into(),
-                value: format!("{}", service.context().resource_expiration_in_seconds().unwrap()),
-            }),
-        ]
-    });
+    let mut namespace_labels: Option<BTreeMap<String, String>> = None;
+    if service.context().resource_expiration_in_seconds().is_some() {
+        namespace_labels = Some(BTreeMap::from([(
+            "ttl".to_string(),
+            format!(
+                "{}",
+                service
+                    .context()
+                    .resource_expiration_in_seconds()
+                    .expect("expected to have resource expiration in seconds")
+            ),
+        )]));
+    };
+
+    prepare_namespace(
+        environment,
+        namespace_labels,
+        event_details.clone(),
+        kubernetes.kind(),
+        &target.kube,
+    )?;
 
     // do exec helm upgrade and return the last deployment status
     let helm = helm::Helm::new(
@@ -750,16 +774,6 @@ where
                 e,
             ));
         }
-
-        prepare_namespace(
-            kubernetes_config_file_path,
-            environment,
-            namespace_labels,
-            kubernetes.cloud_provider().credentials_environment_variables(),
-            event_details.clone(),
-            kubernetes.kind(),
-            &target.kube,
-        )?;
 
         cmd::terraform::terraform_init_validate_plan_apply(
             workspace_dir.as_str(),
@@ -824,18 +838,14 @@ where
                 helm.upgrade(&chart, &[])
                     .map_err(|e| helm::to_engine_error(&event_details, e))?;
             }
-            Err(e) => {
-                match e {
-                    DatabaseTerraformConfigError::FileDoesntExist(_) => {
-                        // Service External name for DB creation is supposed to be handled by Terraform
-                        // do nothing
-                    }
-                    DatabaseTerraformConfigError::FileCannotBeParsed(e) => {
-                        // Database config file is here but cannot be parsed, it's an issue
-                        return Err(EngineError::new_terraform_database_config_mismatch(event_details, e));
-                    }
+            Err(e) => match e {
+                DatabaseTerraformConfigError::FileDoesntExist(e) => {
+                    return Err(EngineError::new_terraform_database_config_mismatch(event_details, e));
                 }
-            }
+                DatabaseTerraformConfigError::FileCannotBeParsed(e) => {
+                    return Err(EngineError::new_terraform_database_config_mismatch(event_details, e));
+                }
+            },
         }
     } else {
         // use helm
@@ -878,26 +888,6 @@ where
                 e,
             ));
         };
-
-        // define labels to add to namespace
-        let namespace_labels = service.context().resource_expiration_in_seconds().map(|_| {
-            vec![
-                (LabelsContent {
-                    name: "ttl".into(),
-                    value: format!("{}", service.context().resource_expiration_in_seconds().unwrap()),
-                }),
-            ]
-        });
-
-        prepare_namespace(
-            kubernetes_config_file_path.clone(),
-            environment,
-            namespace_labels,
-            kubernetes.cloud_provider().credentials_environment_variables(),
-            event_details.clone(),
-            kubernetes.kind(),
-            &target.kube,
-        )?;
 
         // do exec helm upgrade and return the last deployment status
         let helm = helm::Helm::new(
