@@ -42,13 +42,19 @@ resource "aws_eks_cluster" "eks_cluster" {
   vpc_config {
     security_group_ids = [aws_security_group.eks_cluster.id]
     subnet_ids = flatten([
+      {% if user_provided_network -%}
+      data.aws_subnet.eks_zone_a[*].id,
+      data.aws_subnet.eks_zone_b[*].id,
+      data.aws_subnet.eks_zone_c[*].id,
+      {%- else -%}
       aws_subnet.eks_zone_a[*].id,
       aws_subnet.eks_zone_b[*].id,
       aws_subnet.eks_zone_c[*].id,
+      {%- endif %}
       {% if vpc_qovery_network_mode == "WithNatGateways" %}
       aws_subnet.eks_zone_a_public[*].id,
       aws_subnet.eks_zone_b_public[*].id,
-      aws_subnet.eks_zone_c_public[*].id
+      aws_subnet.eks_zone_c_public[*].id,
       {% endif %}
     ])
   }

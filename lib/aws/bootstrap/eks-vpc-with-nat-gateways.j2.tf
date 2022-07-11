@@ -1,4 +1,42 @@
-{% if vpc_qovery_network_mode == "WithNatGateways" %}
+{% if vpc_qovery_network_mode == "WithNatGateways" and not user_provided_network %}
+
+variable "eks_subnets_zone_a_private" {
+  description = "EKS private subnets Zone A"
+  default = {{ eks_zone_a_subnet_blocks_private }}
+  type = list(string)
+}
+
+variable "eks_subnets_zone_b_private" {
+  description = "EKS private subnets Zone B"
+  default = {{ eks_zone_b_subnet_blocks_private }}
+  type = list(string)
+}
+
+variable "eks_subnets_zone_c_private" {
+  description = "EKS private subnets Zone C"
+  default = {{eks_zone_c_subnet_blocks_private}}
+  type = list(string)
+}
+
+
+variable "eks_subnets_zone_a_public" {
+  description = "EKS public subnets Zone A"
+  default = {{ eks_zone_a_subnet_blocks_public }}
+  type = list(string)
+}
+
+variable "eks_subnets_zone_b_public" {
+  description = "EKS public subnets Zone B"
+  default = {{ eks_zone_b_subnet_blocks_public }}
+  type = list(string)
+}
+
+variable "eks_subnets_zone_c_public" {
+  description = "EKS public subnets Zone C"
+  default = {{ eks_zone_c_subnet_blocks_public }}
+  type = list(string)
+}
+
 # External IPs
 resource "aws_eip" "eip_zone_a" {
   vpc = true

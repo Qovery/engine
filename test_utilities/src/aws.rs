@@ -260,6 +260,7 @@ impl Cluster<AWS, Options> for AWS {
             qovery_grpc_url: secrets.QOVERY_GRPC_URL.unwrap(),
             jwt_token: secrets.QOVERY_CLUSTER_JWT_TOKEN.unwrap(),
             user_ssh_keys: vec![],
+            user_network_config: None,
         }
     }
 }

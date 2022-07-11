@@ -130,6 +130,35 @@ pub struct Options {
     pub user_ssh_keys: Vec<String>,
     // Others
     pub tls_email_report: String,
+    #[serde(default)]
+    pub user_network_config: Option<UserNetworkConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserNetworkConfig {
+    pub documentdb_subnets_zone_a_ids: Vec<String>,
+    pub documentdb_subnets_zone_b_ids: Vec<String>,
+    pub documentdb_subnets_zone_c_ids: Vec<String>,
+
+    pub elasticache_subnets_zone_a_ids: Vec<String>,
+    pub elasticache_subnets_zone_b_ids: Vec<String>,
+    pub elasticache_subnets_zone_c_ids: Vec<String>,
+
+    pub elasticsearch_subnets_zone_a_ids: Vec<String>,
+    pub elasticsearch_subnets_zone_b_ids: Vec<String>,
+    pub elasticsearch_subnets_zone_c_ids: Vec<String>,
+
+    pub rds_subnets_zone_a_ids: Vec<String>,
+    pub rds_subnets_zone_b_ids: Vec<String>,
+    pub rds_subnets_zone_c_ids: Vec<String>,
+
+    // must have enable_dns_hostnames = true
+    pub aws_vpc_eks_id: String,
+
+    // must have map_public_ip_on_launch = true
+    pub eks_subnets_zone_a_ids: Vec<String>,
+    pub eks_subnets_zone_b_ids: Vec<String>,
+    pub eks_subnets_zone_c_ids: Vec<String>,
 }
 
 impl ProviderOptions for Options {}
@@ -232,6 +261,51 @@ fn tera_context(
 ) -> Result<TeraContext, EngineError> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
     let mut context = TeraContext::new();
+
+    context.insert("user_provided_network", &false);
+    if let Some(user_network_cfg) = &options.user_network_config {
+        context.insert("user_provided_network", &true);
+
+        context.insert("documentdb_subnets_zone_a_ids", &user_network_cfg.documentdb_subnets_zone_a_ids);
+        context.insert("documentdb_subnets_zone_b_ids", &user_network_cfg.documentdb_subnets_zone_b_ids);
+        context.insert("documentdb_subnets_zone_c_ids", &user_network_cfg.documentdb_subnets_zone_c_ids);
+
+        context.insert(
+            "elasticache_subnets_zone_a_ids",
+            &user_network_cfg.elasticache_subnets_zone_a_ids,
+        );
+        context.insert(
+            "elasticache_subnets_zone_b_ids",
+            &user_network_cfg.elasticache_subnets_zone_b_ids,
+        );
+        context.insert(
+            "elasticache_subnets_zone_c_ids",
+            &user_network_cfg.elasticache_subnets_zone_c_ids,
+        );
+
+        context.insert(
+            "elasticsearch_subnets_zone_a_ids",
+            &user_network_cfg.elasticsearch_subnets_zone_a_ids,
+        );
+        context.insert(
+            "elasticsearch_subnets_zone_b_ids",
+            &user_network_cfg.elasticsearch_subnets_zone_b_ids,
+        );
+        context.insert(
+            "elasticsearch_subnets_zone_c_ids",
+            &user_network_cfg.elasticsearch_subnets_zone_c_ids,
+        );
+
+        context.insert("rds_subnets_zone_a_ids", &user_network_cfg.rds_subnets_zone_a_ids);
+        context.insert("rds_subnets_zone_b_ids", &user_network_cfg.rds_subnets_zone_b_ids);
+        context.insert("rds_subnets_zone_c_ids", &user_network_cfg.rds_subnets_zone_c_ids);
+
+        context.insert("aws_vpc_eks_id", &user_network_cfg.aws_vpc_eks_id);
+
+        context.insert("eks_subnets_zone_a_ids", &user_network_cfg.eks_subnets_zone_a_ids);
+        context.insert("eks_subnets_zone_b_ids", &user_network_cfg.eks_subnets_zone_b_ids);
+        context.insert("eks_subnets_zone_c_ids", &user_network_cfg.eks_subnets_zone_c_ids);
+    }
 
     let format_ips =
         |ips: &Vec<String>| -> Vec<String> { ips.iter().map(|ip| format!("\"{}\"", ip)).collect::<Vec<_>>() };
