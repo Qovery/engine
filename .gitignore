@@ -20,3 +20,4 @@ bin_versions
 /dist/
 /engine_*/
 .internal/
+.vscode/
