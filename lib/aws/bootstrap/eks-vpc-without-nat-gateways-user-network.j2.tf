@@ -47,7 +47,12 @@ data "aws_subnet" "eks_zone_c" {
 resource "aws_route_table" "eks_cluster" {
   vpc_id = data.aws_vpc.eks.id
 
-  // todo(pmavro): add tests for it when it will be available in the SDK
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = data.aws_internet_gateway.eks_cluster.id
+  }
+
+// todo(pmavro): add tests for it when it will be available in the SDK
   {% for route in vpc_custom_routing_table %}
   route {
     cidr_block = "{{ route.destination }}"
