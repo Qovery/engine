@@ -341,21 +341,6 @@ where
         }
         Ok(())
     }
-
-    #[named]
-    fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
-        Ok(())
-    }
 }
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Pause for Database<C, M, T>
@@ -382,21 +367,6 @@ where
     fn on_pause_check(&self) -> Result<(), EngineError> {
         Ok(())
     }
-
-    #[named]
-    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
-        Ok(())
-    }
 }
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Delete for Database<C, M, T>
@@ -421,21 +391,6 @@ where
     }
 
     fn on_delete_check(&self) -> Result<(), EngineError> {
-        Ok(())
-    }
-
-    #[named]
-    fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
         Ok(())
     }
 }

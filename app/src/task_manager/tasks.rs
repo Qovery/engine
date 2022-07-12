@@ -92,8 +92,8 @@ impl InfrastructureTask {
                 let action_context = self.action_context(ProgressLevel::Info);
                 self.send_infrastructure_progress(logger.clone(), action_context, None, None);
             }
-            TransactionResult::Rollback(engine_error) => {
-                let action_context = self.action_context(ProgressLevel::Warn);
+            TransactionResult::Error(engine_error) => {
+                let action_context = self.action_context(ProgressLevel::Error);
                 self.send_infrastructure_progress(
                     logger.clone(),
                     action_context,
@@ -102,20 +102,7 @@ impl InfrastructureTask {
                         None,
                         ErrorMessageVerbosity::FullDetailsWithoutEnvVars,
                     )),
-                    Some(engine_error),
-                );
-            }
-            TransactionResult::UnrecoverableError(engine_error, rollback_err) => {
-                let action_context = self.action_context(ProgressLevel::Error);
-                self.send_infrastructure_progress(
-                    logger.clone(),
-                    action_context,
-                    Some(format_engine_error_output(
-                        engine_error.to_legacy_engine_error(),
-                        Some(rollback_err),
-                        ErrorMessageVerbosity::FullDetailsWithoutEnvVars,
-                    )),
-                    Some(engine_error),
+                    Some(*engine_error),
                 );
             }
             TransactionResult::Canceled => {
@@ -709,24 +696,7 @@ fn handle_transaction_result(
 
             send_progress(task, request, action_context, None, false, true, false);
         }
-        TransactionResult::Rollback(engine_error) => {
-            action_context.level = ProgressLevel::Warn;
-
-            send_progress(
-                task,
-                request,
-                action_context,
-                Some(format_engine_error_output(
-                    engine_error.to_legacy_engine_error(),
-                    None,
-                    ErrorMessageVerbosity::FullDetailsWithoutEnvVars,
-                )),
-                true,
-                false,
-                false,
-            );
-        }
-        TransactionResult::UnrecoverableError(engine_error, rollback_err) => {
+        TransactionResult::Error(engine_error) => {
             action_context.level = ProgressLevel::Error;
 
             send_progress(
@@ -735,7 +705,7 @@ fn handle_transaction_result(
                 action_context,
                 Some(format_engine_error_output(
                     engine_error.to_legacy_engine_error(),
-                    Some(rollback_err),
+                    None,
                     ErrorMessageVerbosity::FullDetailsWithoutEnvVars,
                 )),
                 true,

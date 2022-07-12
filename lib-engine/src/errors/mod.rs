@@ -891,6 +891,26 @@ impl EngineError {
         )
     }
 
+    /// Creates new from an engine error. Only change the use log message and hint
+    ///
+    /// Arguments:
+    ///
+    /// * `engine_error`: Source engine error
+    /// * `user_log_message`: Error log message targeting Qovery user, avoiding any extending pointless details.
+    /// * `underlying_error`: raw error message such as command input / output.
+    pub fn new_engine_error(
+        mut engine_error: EngineError,
+        user_log_message: String,
+        hint_message: Option<String>,
+    ) -> EngineError {
+        engine_error.user_log_message = user_log_message;
+        engine_error.hint_message = hint_message;
+        engine_error.underlying_error = None;
+        engine_error.link = None;
+
+        engine_error
+    }
+
     /// Creates new error for missing required env variable.
     ///
     ///

@@ -101,14 +101,6 @@ pub trait Service: ToTransmitter {
     // used to retrieve logs by using Kubernetes labels (selector)
     fn logger(&self) -> &dyn Logger;
     fn selector(&self) -> Option<String>;
-    fn debug_logs(
-        &self,
-        deployment_target: &DeploymentTarget,
-        event_details: EventDetails,
-        logger: &dyn Logger,
-    ) -> Vec<String> {
-        debug_logs(self, deployment_target, event_details, logger)
-    }
     fn is_listening(&self, ip: &str) -> bool {
         let private_port = match self.private_port() {
             Some(private_port) => private_port,
@@ -220,19 +212,16 @@ pub trait DatabaseService: Service + Create + Pause + Delete + Listen {
 pub trait Create {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
     fn on_create_check(&self) -> Result<(), EngineError>;
-    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
 }
 
 pub trait Pause {
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
     fn on_pause_check(&self) -> Result<(), EngineError>;
-    fn on_pause_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
 }
 
 pub trait Delete {
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
     fn on_delete_check(&self) -> Result<(), EngineError>;
-    fn on_delete_error(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
 }
 
 pub trait Terraform {
@@ -248,7 +237,7 @@ pub trait Helm {
     fn helm_chart_external_name_service_dir(&self) -> String;
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Action {
     Create,
     Pause,
@@ -310,34 +299,6 @@ impl ServiceType {
 impl ToString for ServiceType {
     fn to_string(&self) -> String {
         self.name()
-    }
-}
-
-pub fn debug_logs<T>(
-    service: &T,
-    deployment_target: &DeploymentTarget,
-    event_details: EventDetails,
-    logger: &dyn Logger,
-) -> Vec<String>
-where
-    T: Service + ?Sized,
-{
-    let kubernetes = deployment_target.kubernetes;
-    let environment = deployment_target.environment;
-    match get_stateless_resource_information_for_user(kubernetes, environment, service, event_details) {
-        Ok(lines) => lines,
-        Err(err) => {
-            logger.log(EngineEvent::Error(
-                err,
-                Some(EventMessage::new_from_safe(format!(
-                    "error while retrieving debug logs from {} {}",
-                    service.service_type().name(),
-                    service.name_with_id(),
-                ))),
-            ));
-
-            Vec::new()
-        }
     }
 }
 
@@ -483,16 +444,6 @@ where
         )
     })?;
 
-    Ok(())
-}
-
-/// do specific operations on a stateless service deployment error
-pub fn deploy_stateless_service_error<T>(_target: &DeploymentTarget, _service: &T) -> Result<(), EngineError>
-where
-    T: Service + Helm,
-{
-    // Nothing to do as we sait --atomic on chart release that we do
-    // So helm rollback for us if a deployment fails
     Ok(())
 }
 
@@ -1176,239 +1127,6 @@ pub enum CheckAction {
     Deploy,
     Pause,
     Delete,
-}
-
-pub fn check_kubernetes_service_error<T>(
-    result: Result<(), EngineError>,
-    kubernetes: &dyn Kubernetes,
-    service: &T,
-    event_details: EventDetails,
-    logger: &dyn Logger,
-    deployment_target: &DeploymentTarget,
-    listeners_helper: &ListenersHelper,
-    action_verb: &str,
-    action: CheckAction,
-) -> Result<(), EngineError>
-where
-    T: Service + ?Sized,
-{
-    let message = format!(
-        "{} {} {}",
-        action_verb,
-        service.service_type().name().to_lowercase(),
-        service.name()
-    );
-
-    let progress_info = ProgressInfo::new(
-        service.progress_scope(),
-        Info,
-        Some(message.to_string()),
-        kubernetes.context().execution_id(),
-    );
-
-    match action {
-        CheckAction::Deploy => {
-            listeners_helper.deployment_in_progress(progress_info);
-            logger.log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
-        }
-        CheckAction::Pause => {
-            listeners_helper.pause_in_progress(progress_info);
-            logger.log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
-        }
-        CheckAction::Delete => {
-            listeners_helper.delete_in_progress(progress_info);
-            logger.log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
-        }
-    }
-
-    match result {
-        Err(err) => {
-            let progress_info = ProgressInfo::new(
-                service.progress_scope(),
-                ProgressLevel::Error,
-                Some(format!(
-                    "{} error {} {} : error => {:?}",
-                    action_verb,
-                    service.service_type().name().to_lowercase(),
-                    service.name(),
-                    // Note: env vars are not leaked to legacy listeners since it can holds sensitive data
-                    // such as secrets and such.
-                    err
-                )),
-                kubernetes.context().execution_id(),
-            );
-
-            logger.log(EngineEvent::Error(
-                err.clone(),
-                Some(EventMessage::new_from_safe(format!(
-                    "{} error with {} {} , id: {}",
-                    action_verb,
-                    service.service_type().name(),
-                    service.name(),
-                    service.id(),
-                ))),
-            ));
-
-            match action {
-                CheckAction::Deploy => listeners_helper.deployment_error(progress_info),
-                CheckAction::Pause => listeners_helper.pause_error(progress_info),
-                CheckAction::Delete => listeners_helper.delete_error(progress_info),
-            }
-
-            let debug_logs = service.debug_logs(deployment_target, event_details.clone(), logger);
-            let debug_logs_string = if !debug_logs.is_empty() {
-                debug_logs.join("\n")
-            } else {
-                String::from("<no debug logs>")
-            };
-
-            let progress_info = ProgressInfo::new(
-                service.progress_scope(),
-                ProgressLevel::Debug,
-                Some(debug_logs_string.to_string()),
-                kubernetes.context().execution_id(),
-            );
-
-            logger.log(EngineEvent::Debug(
-                event_details.clone(),
-                EventMessage::new_from_safe(debug_logs_string),
-            ));
-
-            match action {
-                CheckAction::Deploy => listeners_helper.deployment_error(progress_info),
-                CheckAction::Pause => listeners_helper.pause_error(progress_info),
-                CheckAction::Delete => listeners_helper.delete_error(progress_info),
-            }
-
-            Err(EngineError::new_k8s_service_issue(
-                event_details,
-                err.underlying_error().unwrap_or_default(),
-            ))
-        }
-        _ => {
-            let progress_info = ProgressInfo::new(
-                service.progress_scope(),
-                Info,
-                Some(format!(
-                    "{} succeeded for {} {}",
-                    action_verb,
-                    service.service_type().name().to_lowercase(),
-                    service.name()
-                )),
-                kubernetes.context().execution_id(),
-            );
-
-            match action {
-                CheckAction::Deploy => listeners_helper.deployment_in_progress(progress_info),
-                CheckAction::Pause => listeners_helper.pause_in_progress(progress_info),
-                CheckAction::Delete => listeners_helper.delete_in_progress(progress_info),
-            }
-
-            Ok(())
-        }
-    }
-}
-
-pub type Logs = String;
-pub type Describe = String;
-
-/// return debug information line by line to help the user to understand what's going on,
-/// and why its app does not start
-pub fn get_stateless_resource_information_for_user<T>(
-    kubernetes: &dyn Kubernetes,
-    environment: &Environment,
-    service: &T,
-    event_details: EventDetails,
-) -> Result<Vec<String>, EngineError>
-where
-    T: Service + ?Sized,
-{
-    let selector = service.selector().unwrap_or_default();
-    let mut result = Vec::with_capacity(50);
-    let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
-
-    // get logs
-    let logs = cmd::kubectl::kubectl_exec_logs(
-        &kubernetes_config_file_path,
-        environment.namespace(),
-        selector.as_str(),
-        kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| {
-        EngineError::new_k8s_get_logs_error(
-            event_details.clone(),
-            selector.to_string(),
-            environment.namespace().to_string(),
-            e,
-        )
-    })?;
-
-    result.extend(logs);
-
-    // get pod state
-    let pods = kubectl_exec_get_pods(
-        &kubernetes_config_file_path,
-        Some(environment.namespace()),
-        Some(selector.as_str()),
-        kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| EngineError::new_k8s_cannot_get_pods(event_details.clone(), e))?
-    .items;
-
-    for pod in pods {
-        for container_condition in pod.status.conditions {
-            if container_condition.status.to_ascii_lowercase() == "false" {
-                result.push(format!(
-                    "Condition not met to start the container: {} -> {:?}: {}",
-                    container_condition.typee,
-                    container_condition.reason,
-                    container_condition.message.unwrap_or_default()
-                ))
-            }
-        }
-        for container_status in pod.status.container_statuses.unwrap_or_default() {
-            if let Some(last_state) = container_status.last_state {
-                if let Some(terminated) = last_state.terminated {
-                    if let Some(message) = terminated.message {
-                        result.push(format!("terminated state message: {}", message));
-                    }
-
-                    result.push(format!("terminated state exit code: {}", terminated.exit_code));
-                }
-
-                if let Some(waiting) = last_state.waiting {
-                    if let Some(message) = waiting.message {
-                        result.push(format!("waiting state message: {}", message));
-                    }
-                }
-            }
-        }
-    }
-
-    // get pod events
-    let events = cmd::kubectl::kubectl_exec_get_json_events(
-        &kubernetes_config_file_path,
-        environment.namespace(),
-        kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| EngineError::new_k8s_get_json_events(event_details.clone(), environment.namespace().to_string(), e))?
-    .items;
-
-    for event in events {
-        if event.type_.to_lowercase() != "normal" {
-            if let Some(message) = event.message {
-                result.push(format!(
-                    "{} {} {}: {}",
-                    event.last_timestamp.unwrap_or_default(),
-                    event.type_,
-                    event.reason,
-                    message
-                ));
-            }
-        }
-    }
-
-    Ok(result)
 }
 
 pub fn helm_uninstall_release(
