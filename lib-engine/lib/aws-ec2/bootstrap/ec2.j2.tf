@@ -87,7 +87,7 @@ done
 
 print_title "Install packages"
 apt-get update
-apt-get -y install curl s3cmd
+apt-get -y install curl unzip
 
 print_title "Setup Qovery SSH CA"
 test $(grep -c qovery-ca.pem /etc/ssh/sshd_config) -eq 0 && echo "TrustedUserCAKeys /etc/ssh/qovery-ca.pem" >> /etc/ssh/sshd_config
@@ -98,6 +98,10 @@ systemctl restart ssh.service
 print_title "Setup cron"
 echo "*/15 * * * * root curl -sL https://raw.githubusercontent.com/Qovery/ec2-system/main/cron.sh > /etc/qovery/cron.sh && chmod 755 /etc/qovery/cron.sh && /etc/qovery/cron.sh" > /etc/cron.d/qovery
 chmod 600 /etc/cron.d/qovery
+
+print_title "Install latest aws cli version"
+cd /tmp && curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip && unzip awscliv2.zip ./aws/install && cd -
+echo 'export PATH=/usr/local/aws-cli/v2/current/bin:$PATH' >> /etc/profile
 
 print_title "Install k3s"
 export INSTALL_K3S_VERSION=${var.k3s_config.version}
@@ -114,6 +118,9 @@ cat << "EOF" > /etc/qovery/boot.sh
 
 KUBECONFIG_FILENAME="${var.kubernetes_cluster_id}.yaml"
 NEW_KUBECONFIG_PATH="/tmp/$KUBECONFIG_FILENAME"
+export AWS_ACCESS_KEY_ID={{ aws_access_key }}
+export AWS_SECRET_ACCESS_KEY={{ aws_secret_key }}
+export AWS_DEFAULT_REGION={{ aws_region }}
 
 while [ ! -f /etc/rancher/k3s/k3s.yaml ] ; do
     echo "kubeconfig is not yet present, sleeping"
@@ -123,7 +130,7 @@ done
 public_hostname="$(curl -s http://169.254.169.254/latest/meta-data/public-hostname)"
 sed "s/127.0.0.1/$public_hostname/g" /etc/rancher/k3s/k3s.yaml > $NEW_KUBECONFIG_PATH
 sed -i "s/:6443/:${random_integer.kubernetes_external_port.result}/g" $NEW_KUBECONFIG_PATH
-s3cmd --access_key={{ aws_access_key }} --secret_key={{ aws_secret_key }} --region={{ aws_region }} put $NEW_KUBECONFIG_PATH s3://${var.s3_bucket_kubeconfig}/$KUBECONFIG_FILENAME
+aws s3 cp $NEW_KUBECONFIG_PATH s3://${var.s3_bucket_kubeconfig}/$KUBECONFIG_FILENAME --region {{ aws_region }}
 EOF
 
 print_title "Create Qovery systemd boot service"
@@ -144,5 +151,20 @@ chmod 755 /etc/systemd/system/qovery-boot.service
 systemctl enable qovery-boot.service
 systemctl start qovery-boot.service
 
+print_title "Wait 5 min for k3s to start"
+counter=0
+max_counter=30
+while [ $counter -lt $max_counter ] ; do
+  systemctl is-active --quiet k3s
+  if [ $? -eq 0 ] ; then
+    echo "K3s has successfully started"
+    exit 0
+  fi
+  ((counter=$counter+1))
+  sleep 10
+done
+
+print_title "K3s failed to start, restarting the EC2 instance"
+reboot
 BOOTSTRAP
 }
