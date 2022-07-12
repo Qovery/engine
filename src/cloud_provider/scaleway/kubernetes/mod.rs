@@ -1824,21 +1824,7 @@ impl Kubernetes for Kapsule {
             event_details.clone(),
             self.logger(),
         );
-        kubernetes::deploy_environment(self, environment, event_details, self.logger())
-    }
-
-    #[named]
-    fn deploy_environment_error(&self, environment: &Environment) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-        kubernetes::deploy_environment_error(self, environment, event_details, self.logger())
+        kubernetes::deploy_environment(self, environment, event_details)
     }
 
     #[named]
@@ -1852,21 +1838,7 @@ impl Kubernetes for Kapsule {
             event_details.clone(),
             self.logger(),
         );
-        kubernetes::pause_environment(self, environment, event_details, self.logger())
-    }
-
-    #[named]
-    fn pause_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        Ok(())
+        kubernetes::pause_environment(self, environment, event_details)
     }
 
     #[named]
@@ -1880,21 +1852,7 @@ impl Kubernetes for Kapsule {
             event_details.clone(),
             self.logger(),
         );
-        kubernetes::delete_environment(self, environment, event_details, self.logger())
-    }
-
-    #[named]
-    fn delete_environment_error(&self, _environment: &Environment) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        Ok(())
+        kubernetes::delete_environment(self, environment, event_details)
     }
 }
 

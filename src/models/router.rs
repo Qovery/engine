@@ -1,8 +1,8 @@
 use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
 use crate::cloud_provider::service::{
-    default_tera_context, delete_stateless_service, deploy_stateless_service_error, Action, Create, Delete, Helm,
-    Pause, RouterService, Service, ServiceType, StatelessService,
+    default_tera_context, delete_stateless_service, Action, Create, Delete, Helm, Pause, RouterService, Service,
+    ServiceType, StatelessService,
 };
 use crate::cloud_provider::utilities::{check_cname_for, print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
@@ -485,23 +485,6 @@ where
 
         Ok(())
     }
-
-    #[named]
-    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            T::short_name(),
-            "router",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
-        execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Create), || {
-            deploy_stateless_service_error(target, self)
-        })
-    }
 }
 
 impl<T: CloudProvider> Pause for Router<T>
@@ -536,20 +519,6 @@ where
 
         Ok(())
     }
-
-    #[named]
-    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            T::short_name(),
-            "router",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        Ok(())
-    }
 }
 
 impl<T: CloudProvider> Delete for Router<T>
@@ -575,21 +544,6 @@ where
 
     #[named]
     fn on_delete_check(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            T::short_name(),
-            "router",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
-        Ok(())
-    }
-
-    #[named]
-    fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
             T::short_name(),

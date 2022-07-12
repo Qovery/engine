@@ -375,10 +375,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         }
 
         let result = environment_delete.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
-        assert!(matches!(
-            result,
-            TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
-        ));
+        assert!(matches!(result, TransactionResult::Ok | TransactionResult::Error(_)));
 
         // delete images created during test from registries
         if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {

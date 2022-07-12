@@ -178,14 +178,11 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
         let env_action_for_delete = environment_for_delete.clone();
 
         let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
-        assert!(matches!(result, TransactionResult::UnrecoverableError(_, _)));
+        assert!(matches!(result, TransactionResult::Error(_)));
 
         let result =
             environment_for_delete.delete_environment(&env_action_for_delete, logger, &engine_config_for_delete);
-        assert!(matches!(
-            result,
-            TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
-        ));
+        assert!(matches!(result, TransactionResult::Ok | TransactionResult::Error(_)));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
             warn!("cannot clean environments, error: {:?}", e);
@@ -771,7 +768,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
             logger.clone(),
             &engine_config_for_not_working,
         );
-        assert!(matches!(result, TransactionResult::UnrecoverableError(_, _)));
+        assert!(matches!(result, TransactionResult::Error(_)));
 
         let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
         assert!(matches!(result, TransactionResult::Ok));
@@ -868,10 +865,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
             logger.clone(),
             &engine_config_for_not_working_1,
         );
-        assert!(matches!(
-            result,
-            TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)
-        ));
+        assert!(matches!(result, TransactionResult::Error(_)));
 
         // FAIL and Rollback again
         let result = not_working_env_2.deploy_environment(
@@ -879,10 +873,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
             logger.clone(),
             &engine_config_for_not_working_2,
         );
-        assert!(matches!(
-            result,
-            TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)
-        ));
+        assert!(matches!(result, TransactionResult::Error(_)));
 
         // Should be working
         let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
@@ -944,7 +935,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
         let env_action_delete = delete_env.clone();
 
         let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
-        assert!(matches!(result, TransactionResult::UnrecoverableError(_, _)));
+        assert!(matches!(result, TransactionResult::Error(_)));
 
         let result = delete_env.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
