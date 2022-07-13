@@ -489,8 +489,24 @@ impl<'a> Transaction<'a> {
                     );
                 }
 
-                for service in environment.stateless_services() {
-                    send_progress(self.engine.kubernetes(), &environment.action, service, execution_id, true);
+                for service in &environment.applications {
+                    send_progress(
+                        self.engine.kubernetes(),
+                        &environment.action,
+                        service.as_service(),
+                        execution_id,
+                        true,
+                    );
+                }
+
+                for service in &environment.routers {
+                    send_progress(
+                        self.engine.kubernetes(),
+                        &environment.action,
+                        service.as_service(),
+                        execution_id,
+                        true,
+                    );
                 }
 
                 return rollback_result;
@@ -507,8 +523,24 @@ impl<'a> Transaction<'a> {
                     );
                 }
 
-                for service in environment.stateless_services() {
-                    send_progress(self.engine.kubernetes(), &environment.action, service, execution_id, false);
+                for service in &environment.applications {
+                    send_progress(
+                        self.engine.kubernetes(),
+                        &environment.action,
+                        service.as_service(),
+                        execution_id,
+                        false,
+                    );
+                }
+
+                for service in &environment.routers {
+                    send_progress(
+                        self.engine.kubernetes(),
+                        &environment.action,
+                        service.as_service(),
+                        execution_id,
+                        false,
+                    );
                 }
             }
         };

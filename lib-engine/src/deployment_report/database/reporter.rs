@@ -1,9 +1,10 @@
-use crate::cloud_provider::service::{Action, DatabaseService, DatabaseType};
+use crate::cloud_provider::service::{Action, DatabaseType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_report::database::renderer::render_database_deployment_report;
 use crate::deployment_report::logger::{get_loggers, Loggers};
 use crate::deployment_report::DeploymentReporter;
 use crate::errors::EngineError;
+use crate::models::database::DatabaseService;
 use crate::runtime::block_on;
 use crate::utilities::to_short_id;
 use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
