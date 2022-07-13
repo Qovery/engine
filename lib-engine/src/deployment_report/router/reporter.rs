@@ -53,7 +53,8 @@ impl DeploymentReporter for RouterDeploymentReporter {
 
         (self.send_error)(EngineError::new_engine_error(
             error.clone(),
-            "❌ Deployment of router failed !".to_string(),
+            "❌ Deployment of router failed ! Look at the report above and/or internal error below to understand why"
+                .to_string(),
             None,
         ));
         (self.send_error)(error);
