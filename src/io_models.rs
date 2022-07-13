@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 use crate::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::service::{DatabaseOptions, RouterService};
+use crate::cloud_provider::service::DatabaseOptions;
 use crate::cloud_provider::Kind as CPKind;
 use crate::cloud_provider::{kubernetes::Kind as KubernetesKind, service, CloudProvider};
 use crate::cmd::docker::Docker;
@@ -26,9 +26,9 @@ use crate::models;
 use crate::models::application::{ApplicationError, ApplicationService};
 use crate::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
 use crate::models::aws_ec2::{AwsEc2AppExtraSettings, AwsEc2RouterExtraSettings, AwsEc2StorageType};
-use crate::models::database::{Container, DatabaseError, Managed, MongoDB, MySQL, PostgresSQL, Redis};
+use crate::models::database::{Container, DatabaseError, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis};
 use crate::models::digital_ocean::{DoAppExtraSettings, DoRouterExtraSettings, DoStorageType};
-use crate::models::router::{RouterAdvancedSettings, RouterError};
+use crate::models::router::{RouterAdvancedSettings, RouterError, RouterService};
 use crate::models::scaleway::{ScwAppExtraSettings, ScwRouterExtraSettings, ScwStorageType};
 use crate::models::types::{AWSEc2, CloudProvider as CP, VersionsNumber, AWS, DO, SCW};
 use crate::utilities::to_short_id;
@@ -803,7 +803,7 @@ impl Database {
         context: &Context,
         cloud_provider: &dyn CloudProvider,
         logger: Box<dyn Logger>,
-    ) -> Result<Box<dyn service::DatabaseService>, DatabaseError> {
+    ) -> Result<Box<dyn DatabaseService>, DatabaseError> {
         let database_options = DatabaseOptions {
             mode: self.mode.clone(),
             login: self.username.clone(),

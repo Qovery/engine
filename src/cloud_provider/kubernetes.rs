@@ -185,7 +185,7 @@ pub trait Kubernetes: Listen {
                             err.into(),
                         );
 
-                        retry::OperationResult::Retry(error)
+                        OperationResult::Retry(error)
                     }
                 }
             }) {
@@ -551,8 +551,14 @@ pub fn deploy_environment(
         database.exec_check_action()?;
     }
 
-    // create all stateless services (router, application...)
-    for service in environment.stateless_services() {
+    // create all applications
+    for service in &environment.applications {
+        service.exec_action(&deployment_target)?;
+        service.exec_check_action()?;
+    }
+
+    // create all routers
+    for service in &environment.routers {
         service.exec_action(&deployment_target)?;
         service.exec_check_action()?;
     }
@@ -569,13 +575,16 @@ pub fn pause_environment(
     let deployment_target = DeploymentTarget::new(kubernetes, environment)
         .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
 
-    // create all stateless services (router, application...)
-    for service in environment.stateless_services() {
+    for service in &environment.routers {
         service.on_pause(&deployment_target)?;
         service.on_pause_check()?;
     }
 
-    // create all stateful services (database)
+    for service in &environment.applications {
+        service.on_pause(&deployment_target)?;
+        service.on_pause_check()?;
+    }
+
     for database in &environment.databases {
         database.on_pause(&deployment_target)?;
         database.on_pause_check()?;
@@ -607,7 +616,12 @@ pub fn delete_environment(
         .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
 
     // delete all stateless services (router, application...)
-    for service in environment.stateless_services() {
+    for service in &environment.routers {
+        let _ = service.on_delete(&deployment_target);
+        service.on_delete_check()?;
+    }
+
+    for service in &environment.applications {
         let _ = service.on_delete(&deployment_target);
         service.on_delete_check()?;
     }
@@ -1354,7 +1368,7 @@ pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, CommandError> 
     }
 }
 
-pub async fn kube_does_secret_exists(kube: &kube::Client, name: &str, namespace: &str) -> Result<bool, kube::Error> {
+pub async fn kube_does_secret_exists(kube: &kube::Client, name: &str, namespace: &str) -> Result<bool, Error> {
     let item: Api<Secret> = Api::namespaced(kube.clone(), namespace);
     match item.get(name).await {
         Ok(_) => Ok(true),
@@ -1369,7 +1383,7 @@ pub async fn kube_create_namespace_if_not_exists(
     kube: &kube::Client,
     namespace_name: &str,
     labels: Option<std::collections::BTreeMap<String, String>>,
-) -> Result<(), kube::Error> {
+) -> Result<(), Error> {
     let namespace = Api::all(kube.clone());
     let namespace_labels = Namespace {
         metadata: ObjectMeta {
@@ -1398,7 +1412,7 @@ pub async fn kube_copy_secret_to_another_namespace(
     name: &str,
     namespace_src: &str,
     namespace_dest: &str,
-) -> Result<(), kube::Error> {
+) -> Result<(), Error> {
     let post_param = PostParams::default();
 
     let secret_src: Api<Secret> = Api::namespaced(kube.clone(), namespace_src);

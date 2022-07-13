@@ -1,8 +1,9 @@
-use crate::cloud_provider::service::{Action, RouterService};
+use crate::cloud_provider::service::Action;
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_report::logger::{get_loggers, Loggers};
 use crate::deployment_report::DeploymentReporter;
 use crate::errors::EngineError;
+use crate::models::router::RouterService;
 use crate::utilities::to_short_id;
 use uuid::Uuid;
 
