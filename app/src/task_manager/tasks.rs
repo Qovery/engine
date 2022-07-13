@@ -767,6 +767,7 @@ fn format_engine_error_output(
 SCROLL UP - THE ERROR MESSAGE IS ABOVE
 --------------------------------------
 "#
+        .trim()
         .to_string(),
         EngineErrorCause::User(hint) => format!(
             r#"
@@ -775,12 +776,12 @@ SCROLL UP - THE ERROR MESSAGE IS ABOVE
 
 ℹ️ Hint: {}
 --------------------------------------
-        "#,
+"#,
             hint,
-        ),
-        EngineErrorCause::Canceled => {
-            todo!()
-        }
+        )
+        .trim()
+        .to_string(),
+        EngineErrorCause::Canceled => "Deployment has been canceled".to_string(),
     }
 }
 
