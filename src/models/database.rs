@@ -1,7 +1,7 @@
 use crate::cloud_provider::service::{
     check_service_version, default_tera_context, delete_stateful_service, deploy_database_service, get_tfstate_name,
-    get_tfstate_suffix, scale_down_database, Action, Create, DatabaseOptions, DatabaseService, Delete, Helm, Pause,
-    Service, ServiceType, ServiceVersionCheckResult, Terraform,
+    get_tfstate_suffix, scale_down_database, Action, Create, DatabaseOptions, Delete, Helm, Pause, Service,
+    ServiceType, ServiceVersionCheckResult, Terraform,
 };
 use crate::cloud_provider::utilities::{check_domain_for, managed_db_name_sanitizer, print_action};
 use crate::cloud_provider::{service, DeploymentTarget};
@@ -263,6 +263,10 @@ where
     fn selector(&self) -> Option<String> {
         Some(self.selector())
     }
+
+    fn as_service(&self) -> &dyn Service {
+        self
+    }
 }
 
 impl<Cloud: CloudProvider, M: DatabaseMode, DbType: DatabaseType<Cloud, M>> Helm for Database<Cloud, M, DbType> {
@@ -313,7 +317,7 @@ where
         );
 
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
-            deploy_database_service(target, self, event_details.clone(), self.logger())
+            deploy_database_service(target, self, event_details.clone())
         })
     }
 
@@ -339,21 +343,6 @@ where
                 self.logger(),
             )?;
         }
-        Ok(())
-    }
-
-    #[named]
-    fn on_create_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
         Ok(())
     }
 }
@@ -382,21 +371,6 @@ where
     fn on_pause_check(&self) -> Result<(), EngineError> {
         Ok(())
     }
-
-    #[named]
-    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
-        Ok(())
-    }
 }
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Delete for Database<C, M, T>
@@ -423,21 +397,50 @@ where
     fn on_delete_check(&self) -> Result<(), EngineError> {
         Ok(())
     }
+}
 
-    #[named]
-    fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
+pub trait DatabaseService: Service + Create + Pause + Delete + Listen {
+    fn check_domains(
+        &self,
+        listeners: Listeners,
+        domains: Vec<&str>,
+        event_details: EventDetails,
+        logger: &dyn Logger,
+    ) -> Result<(), EngineError> {
+        if self.publicly_accessible() {
+            check_domain_for(
+                ListenersHelper::new(&listeners),
+                domains,
+                self.id(),
+                self.context().execution_id(),
+                event_details,
+                logger,
+            )?;
+        }
         Ok(())
     }
+
+    fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), EngineError> {
+        match self.action() {
+            Action::Create => self.on_create(deployment_target),
+            Action::Delete => self.on_delete(deployment_target),
+            Action::Pause => self.on_pause(deployment_target),
+            Action::Nothing => Ok(()),
+        }
+    }
+
+    fn exec_check_action(&self) -> Result<(), EngineError> {
+        match self.action() {
+            Action::Create => self.on_create_check(),
+            Action::Delete => self.on_delete_check(),
+            Action::Pause => self.on_pause_check(),
+            Action::Nothing => Ok(()),
+        }
+    }
+
+    fn is_managed_service(&self) -> bool;
+
+    fn db_type(&self) -> service::DatabaseType;
 }
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> DatabaseService for Database<C, M, T>
@@ -450,10 +453,6 @@ where
 
     fn db_type(&self) -> service::DatabaseType {
         T::db_type()
-    }
-
-    fn as_service(&self) -> &dyn Service {
-        self
     }
 }
 

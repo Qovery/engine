@@ -42,7 +42,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
             ClusterTestType::Classic,
             SCW_KUBERNETES_MAJOR_VERSION,
             SCW_KUBERNETES_MINOR_VERSION,
-            &ClusterDomain::Custom(cluster_domain),
+            &ClusterDomain::Custom { domain: cluster_domain },
             None,
             Some(&env_action),
         )
@@ -85,7 +85,7 @@ fn create_pause_and_destroy_kapsule_cluster_with_env_in_par_2() {
             ClusterTestType::WithPause,
             SCW_KUBERNETES_MAJOR_VERSION,
             SCW_KUBERNETES_MINOR_VERSION,
-            &ClusterDomain::Custom(cluster_domain),
+            &ClusterDomain::Custom { domain: cluster_domain },
             None,
             Some(&env_action),
         )
@@ -128,7 +128,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_with_env_in_par_2() {
             ClusterTestType::WithUpgrade,
             SCW_KUBERNETES_MAJOR_VERSION,
             SCW_KUBERNETES_MINOR_VERSION,
-            &ClusterDomain::Custom(cluster_domain),
+            &ClusterDomain::Custom { domain: cluster_domain },
             None,
             Some(&env_action),
         )

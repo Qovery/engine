@@ -43,7 +43,7 @@ fn create_and_destroy_doks_cluster_with_env_in_ams_3() {
             ClusterTestType::Classic,
             DO_KUBERNETES_MAJOR_VERSION,
             DO_KUBERNETES_MINOR_VERSION,
-            &ClusterDomain::Custom(cluster_domain),
+            &ClusterDomain::Custom { domain: cluster_domain },
             None,
             Some(&env_action),
         )
@@ -88,7 +88,7 @@ fn create_pause_and_destroy_doks_cluster_with_env_in_ams_3() {
             ClusterTestType::WithPause,
             DO_KUBERNETES_MAJOR_VERSION,
             DO_KUBERNETES_MINOR_VERSION,
-            &ClusterDomain::Custom(cluster_domain),
+            &ClusterDomain::Custom { domain: cluster_domain },
             None,
             Some(&env_action),
         )
@@ -133,7 +133,7 @@ fn create_upgrade_and_destroy_doks_cluster_with_env_in_ams_3() {
             ClusterTestType::WithUpgrade,
             DO_KUBERNETES_MAJOR_VERSION,
             DO_KUBERNETES_MINOR_VERSION,
-            &ClusterDomain::Custom(cluster_domain),
+            &ClusterDomain::Custom { domain: cluster_domain },
             None,
             Some(&env_action),
         )

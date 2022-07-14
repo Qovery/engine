@@ -1,10 +1,10 @@
-use crate::cloud_provider::service::{Action, DatabaseService, DatabaseType};
+use crate::cloud_provider::service::{Action, DatabaseType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_report::database::renderer::render_database_deployment_report;
+use crate::deployment_report::logger::{get_loggers, Loggers};
 use crate::deployment_report::DeploymentReporter;
-use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
-use crate::io_models::ProgressLevel::Info;
-use crate::io_models::{ListenersHelper, ProgressInfo};
+use crate::errors::EngineError;
+use crate::models::database::DatabaseService;
 use crate::runtime::block_on;
 use crate::utilities::to_short_id;
 use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
@@ -92,6 +92,8 @@ pub struct DatabaseDeploymentReporter {
     last_report: String,
     kube_client: kube::Client,
     send_progress: Box<dyn Fn(String) + Send>,
+    send_success: Box<dyn Fn(String) + Send>,
+    send_error: Box<dyn Fn(EngineError) + Send>,
 }
 
 impl DatabaseDeploymentReporter {
@@ -100,33 +102,11 @@ impl DatabaseDeploymentReporter {
         deployment_target: &DeploymentTarget,
         action: Action,
     ) -> DatabaseDeploymentReporter {
-        // For the logger, lol ...
-        let log = {
-            let event_details = db.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-            let logger = db.logger().clone_dyn();
-            let execution_id = db.context().execution_id().to_string();
-            let scope = db.progress_scope();
-            let listeners = db.listeners().clone();
-            let step = match action {
-                Action::Create => EnvironmentStep::Deploy,
-                Action::Pause => EnvironmentStep::Pause,
-                Action::Delete => EnvironmentStep::Delete,
-                Action::Nothing => EnvironmentStep::Deploy, // should not happen
-            };
-            let event_details = EventDetails::clone_changing_stage(event_details, Stage::Environment(step));
-
-            move |msg: String| {
-                let listeners_helper = ListenersHelper::new(&listeners);
-                let info = ProgressInfo::new(scope.clone(), Info, Some(msg.clone()), execution_id.clone());
-                match action {
-                    Action::Create => listeners_helper.deployment_in_progress(info),
-                    Action::Pause => listeners_helper.pause_in_progress(info),
-                    Action::Delete => listeners_helper.delete_in_progress(info),
-                    Action::Nothing => listeners_helper.deployment_in_progress(info),
-                };
-                logger.log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
-            }
-        };
+        let Loggers {
+            send_progress,
+            send_success,
+            send_error,
+        } = get_loggers(db, action);
 
         DatabaseDeploymentReporter {
             long_id: *db.long_id(),
@@ -136,12 +116,16 @@ impl DatabaseDeploymentReporter {
             version: db.version(),
             last_report: "".to_string(),
             kube_client: deployment_target.kube.clone(),
-            send_progress: Box::new(log),
+            send_progress,
+            send_success,
+            send_error,
         }
     }
 }
 
 impl DeploymentReporter for DatabaseDeploymentReporter {
+    type DeploymentResult = Result<(), EngineError>;
+
     fn before_deployment_start(&mut self) {
         // managed db
         if self.is_managed {
@@ -207,5 +191,26 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         for line in self.last_report.trim_end().split('\n').map(str::to_string) {
             (self.send_progress)(line);
         }
+    }
+    fn deployment_terminated(&mut self, result: Self::DeploymentResult) {
+        let error = match result {
+            Ok(_) => {
+                if self.is_managed {
+                    (self.send_success)("✅ Deployment of managed database succeeded".to_string());
+                } else {
+                    (self.send_success)("✅ Deployment of container database succeeded".to_string());
+                }
+                return;
+            }
+            Err(err) => err,
+        };
+
+        (self.send_error)(EngineError::new_engine_error(
+            error.clone(),
+            "❌ Deployment of database failed ! Look at the report above and/or internal error below to understand why"
+                .to_string(),
+            None,
+        ));
+        (self.send_error)(error);
     }
 }

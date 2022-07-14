@@ -499,7 +499,7 @@ slave:
 service:
   ## MySQL Service type
   ##
-  type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
+  type: ClusterIP
   name: {{ service_name }}
 
   ## MySQL Service port
@@ -517,12 +517,7 @@ service:
   ## set the LoadBalancer service type to internal only.
   ## ref: https://kubernetes.io/docs/concepts/services-networking/service/#internal-load-balancer
   ##
-  {% if publicly_accessible -%}
-  annotations:
-    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
-    external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
-    external-dns.alpha.kubernetes.io/ttl: "300"
-  {% endif %}
+  annotations: {} # EC2 pointing directly to node
 
   ## loadBalancerIP for the PrestaShop Service (optional, cloud specific)
   ## ref: http://kubernetes.io/docs/user-guide/services/#type-loadbalancer

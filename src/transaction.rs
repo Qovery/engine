@@ -248,38 +248,13 @@ impl<'a> Transaction<'a> {
                 Step::BuildEnvironment(_environment_action, _option) => {
                     // revert build applications
                 }
-                Step::DeployEnvironment(environment_action) => {
-                    // revert environment deployment
-                    self.rollback_environment(&(environment_action.as_ref().borrow()))?;
-                }
-                Step::PauseEnvironment(environment_action) => {
-                    self.rollback_environment(&(environment_action.as_ref().borrow()))?;
-                }
-                Step::DeleteEnvironment(environment_action) => {
-                    self.rollback_environment(&(environment_action.as_ref().borrow()))?;
-                }
+                Step::DeployEnvironment(_) => {}
+                Step::PauseEnvironment(_) => {}
+                Step::DeleteEnvironment(_) => {}
             }
         }
 
         Ok(())
-    }
-
-    // Warning: This function function does not revert anything, it just there to grab info from kube and services if it fails
-    // FIXME: Cleanup this, qe_environment should not be rebuilt at this step
-    fn rollback_environment(&self, environment: &Environment) -> Result<(), RollbackError> {
-        let action = match environment.action {
-            Action::Create => self.engine.kubernetes().deploy_environment_error(environment),
-            Action::Pause => self.engine.kubernetes().pause_environment_error(environment),
-            Action::Delete => self.engine.kubernetes().delete_environment_error(environment),
-            Action::Nothing => Ok(()),
-        };
-
-        match action {
-            Ok(_) => {}
-            Err(err) => return Err(RollbackError::CommitError(Box::new(err))),
-        };
-
-        Err(RollbackError::NoFailoverEnvironment)
     }
 
     pub fn commit(mut self) -> TransactionResult {
@@ -337,7 +312,7 @@ impl<'a> Transaction<'a> {
                             return if engine_err.tag() == &Tag::TaskCancellationRequested {
                                 TransactionResult::Canceled
                             } else {
-                                TransactionResult::Rollback(engine_err)
+                                TransactionResult::Error(Box::new(engine_err))
                             };
                         }
                     };
@@ -436,13 +411,13 @@ impl<'a> Transaction<'a> {
                     Ok(_) => {
                         // an error occurred on infrastructure deployment BUT rolledback is OK
                         send_progress(&lh, action, execution_id, true);
-                        TransactionResult::Rollback(err)
+                        TransactionResult::Error(Box::new(err))
                     }
                     Err(e) => {
                         // an error occurred on infrastructure deployment AND rolledback is KO
                         error!("infrastructure ROLLBACK FAILED! fatal error: {:?}", e);
                         send_progress(&lh, action, execution_id, true);
-                        TransactionResult::UnrecoverableError(err, e)
+                        TransactionResult::Error(Box::new(err))
                     }
                 }
             }
@@ -495,10 +470,10 @@ impl<'a> Transaction<'a> {
         match action_fn(environment) {
             Err(err) => {
                 let rollback_result = match self.rollback() {
-                    Ok(_) => TransactionResult::Rollback(err),
+                    Ok(_) => TransactionResult::Error(Box::new(err)),
                     Err(rollback_err) => {
                         error!("ROLLBACK FAILED! fatal error: {:?}", rollback_err);
-                        TransactionResult::UnrecoverableError(err, rollback_err)
+                        TransactionResult::Error(Box::new(err))
                     }
                 };
 
@@ -514,8 +489,24 @@ impl<'a> Transaction<'a> {
                     );
                 }
 
-                for service in environment.stateless_services() {
-                    send_progress(self.engine.kubernetes(), &environment.action, service, execution_id, true);
+                for service in &environment.applications {
+                    send_progress(
+                        self.engine.kubernetes(),
+                        &environment.action,
+                        service.as_service(),
+                        execution_id,
+                        true,
+                    );
+                }
+
+                for service in &environment.routers {
+                    send_progress(
+                        self.engine.kubernetes(),
+                        &environment.action,
+                        service.as_service(),
+                        execution_id,
+                        true,
+                    );
                 }
 
                 return rollback_result;
@@ -532,8 +523,24 @@ impl<'a> Transaction<'a> {
                     );
                 }
 
-                for service in environment.stateless_services() {
-                    send_progress(self.engine.kubernetes(), &environment.action, service, execution_id, false);
+                for service in &environment.applications {
+                    send_progress(
+                        self.engine.kubernetes(),
+                        &environment.action,
+                        service.as_service(),
+                        execution_id,
+                        false,
+                    );
+                }
+
+                for service in &environment.routers {
+                    send_progress(
+                        self.engine.kubernetes(),
+                        &environment.action,
+                        service.as_service(),
+                        execution_id,
+                        false,
+                    );
                 }
             }
         };
@@ -625,6 +632,5 @@ pub enum RollbackError {
 pub enum TransactionResult {
     Ok,
     Canceled,
-    Rollback(EngineError),
-    UnrecoverableError(EngineError, RollbackError),
+    Error(Box<EngineError>),
 }

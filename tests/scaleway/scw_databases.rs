@@ -13,8 +13,8 @@ use test_utilities::utilities::{
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::utilities::to_short_id;
-use test_utilities::common::test_db;
 use test_utilities::common::{database_test_environment, Infrastructure};
+use test_utilities::common::{test_db, ClusterDomain};
 use test_utilities::scaleway::{
     clean_environments, scw_default_engine_config, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
     SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,
@@ -375,10 +375,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         }
 
         let result = environment_delete.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
-        assert!(matches!(
-            result,
-            TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
-        ));
+        assert!(matches!(result, TransactionResult::Ok | TransactionResult::Error(_)));
 
         // delete images created during test from registries
         if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
@@ -397,17 +394,18 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 #[allow(dead_code)]
 fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
     let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .SCALEWAY_TEST_CLUSTER_ID
+        .as_ref()
+        .expect("SCALEWAY_TEST_CLUSTER_ID")
+        .to_string();
     let context = context(
         secrets
             .SCALEWAY_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("SCALEWAY_TEST_ORGANIZATION_ID")
             .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
+        cluster_id.as_str(),
     );
     let environment = database_test_environment(&context);
 
@@ -423,6 +421,10 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
             KubernetesKind::ScwKapsule,
             database_mode,
             is_public,
+            ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
+            None,
         )
     })
 }
@@ -560,17 +562,18 @@ fn public_postgresql_v13_deploy_a_working_prod_environment() {
 #[allow(dead_code)]
 fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
     let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .SCALEWAY_TEST_CLUSTER_ID
+        .as_ref()
+        .expect("SCALEWAY_TEST_CLUSTER_ID")
+        .to_string();
     let context = context(
         secrets
             .SCALEWAY_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("SCALEWAY_TEST_ORGANIZATION_ID")
             .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
+        cluster_id.as_str(),
     );
     let environment = database_test_environment(&context);
 
@@ -586,6 +589,10 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
             KubernetesKind::ScwKapsule,
             database_mode,
             is_public,
+            ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
+            None,
         )
     })
 }
@@ -658,17 +665,18 @@ fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
 #[allow(dead_code)]
 fn test_mysql_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
     let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .SCALEWAY_TEST_CLUSTER_ID
+        .as_ref()
+        .expect("SCALEWAY_TEST_CLUSTER_ID")
+        .to_string();
     let context = context(
         secrets
             .SCALEWAY_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("SCALEWAY_TEST_ORGANIZATION_ID")
             .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
+        cluster_id.as_str(),
     );
     let environment = database_test_environment(&context);
 
@@ -684,6 +692,10 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
             KubernetesKind::ScwKapsule,
             database_mode,
             is_public,
+            ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
+            None,
         )
     })
 }
@@ -743,17 +755,18 @@ fn public_mysql_v8_deploy_a_working_prod_environment() {
 #[allow(dead_code)]
 fn test_redis_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
     let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .SCALEWAY_TEST_CLUSTER_ID
+        .as_ref()
+        .expect("SCALEWAY_TEST_CLUSTER_ID")
+        .to_string();
     let context = context(
         secrets
             .SCALEWAY_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("SCALEWAY_TEST_ORGANIZATION_ID")
             .as_str(),
-        secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID")
-            .as_str(),
+        cluster_id.as_str(),
     );
     let environment = database_test_environment(&context);
 
@@ -769,6 +782,10 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
             KubernetesKind::ScwKapsule,
             database_mode,
             is_public,
+            ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
+            None,
         )
     })
 }

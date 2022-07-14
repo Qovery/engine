@@ -336,13 +336,10 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         let ea_delete = environment_delete.clone();
 
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
-        assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
+        assert!(matches!(ret, TransactionResult::Error(_)));
 
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
-        assert!(matches!(
-            ret,
-            TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
-        ));
+        assert!(matches!(ret, TransactionResult::Ok | TransactionResult::Error(_)));
 
         test_name.to_string()
     })
@@ -865,7 +862,7 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
             logger.clone(),
             &engine_config_for_not_working,
         );
-        assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
+        assert!(matches!(ret, TransactionResult::Error(_)));
 
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -954,18 +951,12 @@ fn deploy_ok_fail_fail_ok_environment() {
         // FAIL and rollback
         let ret =
             not_working_env_1.deploy_environment(&ea_not_working_1, logger.clone(), &engine_config_for_not_working_1);
-        assert!(matches!(
-            ret,
-            TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)
-        ));
+        assert!(matches!(ret, TransactionResult::Error(_)));
 
         // FAIL and Rollback again
         let ret =
             not_working_env_2.deploy_environment(&ea_not_working_2, logger.clone(), &engine_config_for_not_working_2);
-        assert!(matches!(
-            ret,
-            TransactionResult::Rollback(_) | TransactionResult::UnrecoverableError(_, _)
-        ));
+        assert!(matches!(ret, TransactionResult::Error(_)));
 
         // Should be working
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
@@ -1021,7 +1012,7 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
         let ea_delete = delete_env.clone();
 
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
-        assert!(matches!(ret, TransactionResult::UnrecoverableError(_, _)));
+        assert!(matches!(ret, TransactionResult::Error(_)));
 
         let ret = delete_env.delete_environment(&ea_delete, logger, &engine_config_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));

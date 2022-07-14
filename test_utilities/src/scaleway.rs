@@ -79,6 +79,7 @@ pub fn scw_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> 
         None,
         KUBERNETES_MIN_NODES,
         KUBERNETES_MAX_NODES,
+        EngineLocation::ClientSide,
     )
 }
 
@@ -93,6 +94,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
         min_nodes: i32,
         max_nodes: i32,
+        engine_location: EngineLocation,
     ) -> EngineConfig {
         // use Scaleway CR
         let container_registry = Box::new(container_registry_scw(context));
@@ -114,6 +116,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             vpc_network_mode,
             min_nodes,
             max_nodes,
+            engine_location,
         );
 
         EngineConfig::new(
@@ -173,7 +176,11 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         ]
     }
 
-    fn kubernetes_cluster_options(secrets: FuncTestsSecrets, _cluster_name: Option<String>) -> KapsuleOptions {
+    fn kubernetes_cluster_options(
+        secrets: FuncTestsSecrets,
+        _cluster_id: Option<String>,
+        engine_location: EngineLocation,
+    ) -> KapsuleOptions {
         KapsuleOptions::new(
             secrets.QOVERY_API_URL.expect("QOVERY_API_URL is not set in secrets"),
             secrets.QOVERY_GRPC_URL.expect("QOVERY_GRPC_URL is not set in secrets"),
@@ -193,7 +200,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             secrets
                 .QOVERY_AGENT_CONTROLLER_TOKEN
                 .expect("QOVERY_AGENT_CONTROLLER_TOKEN is not set in secrets"),
-            EngineLocation::ClientSide,
+            engine_location,
             secrets
                 .QOVERY_ENGINE_CONTROLLER_TOKEN
                 .expect("QOVERY_ENGINE_CONTROLLER_TOKEN is not set in secrets"),

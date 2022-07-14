@@ -4,8 +4,7 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate, Storage};
 use crate::cloud_provider::service::{delete_stateless_service, scale_down_application};
 use crate::cloud_provider::service::{
-    deploy_stateless_service_error, deploy_user_stateless_service, Action, Create, Delete, Helm, Pause, Service,
-    ServiceType, StatelessService,
+    deploy_user_stateless_service, Action, Create, Delete, Helm, Pause, Service, ServiceType,
 };
 use crate::cloud_provider::utilities::{print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
@@ -391,10 +390,6 @@ where
         self.sanitized_name()
     }
 
-    fn name_with_id_and_version(&self) -> String {
-        format!("{} ({}) commit: {}", self.name(), self.id(), self.commit_id())
-    }
-
     fn application_advanced_settings(&self) -> Option<ApplicationAdvancedSettings> {
         Some(self.advanced_settings.clone())
     }
@@ -445,6 +440,10 @@ where
 
     fn selector(&self) -> Option<String> {
         self.selector()
+    }
+
+    fn as_service(&self) -> &dyn Service {
+        self
     }
 }
 
@@ -498,23 +497,6 @@ where
     fn on_create_check(&self) -> Result<(), EngineError> {
         Ok(())
     }
-
-    #[named]
-    fn on_create_error(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            T::short_name(),
-            "application",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
-        execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Create), || {
-            deploy_stateless_service_error(target, self)
-        })
-    }
 }
 
 impl<T: CloudProvider> Pause for Application<T>
@@ -539,21 +521,6 @@ where
     }
 
     fn on_pause_check(&self) -> Result<(), EngineError> {
-        Ok(())
-    }
-
-    #[named]
-    fn on_pause_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            T::short_name(),
-            "application",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
         Ok(())
     }
 }
@@ -582,35 +549,28 @@ where
     fn on_delete_check(&self) -> Result<(), EngineError> {
         Ok(())
     }
-
-    #[named]
-    fn on_delete_error(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            T::short_name(),
-            "application",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
-        Ok(())
-    }
 }
 
-impl<T: CloudProvider> StatelessService for Application<T>
-where
-    Application<T>: Service,
-{
-    fn as_stateless_service(&self) -> &dyn StatelessService {
-        self
-    }
-}
-
-pub trait ApplicationService: StatelessService + Listen {
+pub trait ApplicationService: Service + Create + Pause + Delete + Listen {
     fn get_build(&self) -> &Build;
     fn get_build_mut(&mut self) -> &mut Build;
+    fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), EngineError> {
+        match self.action() {
+            Action::Create => self.on_create(deployment_target),
+            Action::Delete => self.on_delete(deployment_target),
+            Action::Pause => self.on_pause(deployment_target),
+            Action::Nothing => Ok(()),
+        }
+    }
+
+    fn exec_check_action(&self) -> Result<(), EngineError> {
+        match self.action() {
+            Action::Create => self.on_create_check(),
+            Action::Delete => self.on_delete_check(),
+            Action::Pause => self.on_pause_check(),
+            Action::Nothing => Ok(()),
+        }
+    }
 }
 
 impl<T: CloudProvider> ApplicationService for Application<T>

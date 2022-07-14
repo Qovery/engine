@@ -1,5 +1,7 @@
-use crate::cloud_provider::service::{Action, DatabaseService, RouterService, StatelessService};
+use crate::cloud_provider::service::Action;
 use crate::models::application::ApplicationService;
+use crate::models::database::DatabaseService;
+use crate::models::router::RouterService;
 use crate::utilities::to_short_id;
 use uuid::Uuid;
 
@@ -44,27 +46,6 @@ impl Environment {
             routers,
             databases,
         }
-    }
-
-    pub fn stateless_services(&self) -> Vec<&dyn StatelessService> {
-        let mut stateless_services: Vec<&dyn StatelessService> =
-            Vec::with_capacity(self.applications.len() + self.routers.len());
-        stateless_services.extend_from_slice(
-            self.applications
-                .iter()
-                .map(|x| x.as_stateless_service())
-                .collect::<Vec<_>>()
-                .as_slice(),
-        );
-        stateless_services.extend_from_slice(
-            self.routers
-                .iter()
-                .map(|x| x.as_stateless_service())
-                .collect::<Vec<_>>()
-                .as_slice(),
-        );
-
-        stateless_services
     }
 
     pub fn namespace(&self) -> &str {

@@ -50,7 +50,7 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             ClusterTestType::Classic,
             AWS_KUBERNETES_MAJOR_VERSION,
             AWS_KUBERNETES_MINOR_VERSION,
-            &ClusterDomain::Custom(cluster_domain),
+            &ClusterDomain::Custom { domain: cluster_domain },
             Some(WithNatGateways),
             Some(&env_action),
         )
@@ -96,7 +96,7 @@ fn create_resize_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             ClusterTestType::WithNodesResize,
             AWS_KUBERNETES_MAJOR_VERSION,
             AWS_KUBERNETES_MINOR_VERSION,
-            &ClusterDomain::Custom(cluster_domain),
+            &ClusterDomain::Custom { domain: cluster_domain },
             None,
             None,
         )
@@ -143,7 +143,7 @@ fn create_pause_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             ClusterTestType::WithPause,
             AWS_KUBERNETES_MAJOR_VERSION,
             AWS_KUBERNETES_MINOR_VERSION,
-            &ClusterDomain::Custom(cluster_domain),
+            &ClusterDomain::Custom { domain: cluster_domain },
             Some(WithNatGateways),
             Some(&env_action),
         )
@@ -190,7 +190,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             ClusterTestType::WithUpgrade,
             AWS_KUBERNETES_MAJOR_VERSION,
             AWS_KUBERNETES_MINOR_VERSION,
-            &ClusterDomain::Custom(cluster_domain),
+            &ClusterDomain::Custom { domain: cluster_domain },
             Some(WithNatGateways),
             Some(&env_action),
         )

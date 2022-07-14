@@ -911,106 +911,116 @@ fn create(
         event_details.clone(),
     )?;
 
-    let kubeconfig_path = kubernetes.get_kubeconfig_file_path()?;
+    let kubeconfig_path = match kubernetes.kind() {
+        Kind::Eks => {
+            let current_kubeconfig_path = kubernetes.get_kubeconfig_file_path()?;
+            kubernetes.put_kubeconfig_file_to_object_storage(current_kubeconfig_path.as_str())?;
+            current_kubeconfig_path
+        }
+        Kind::Ec2 => {
+            let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
 
-    if kubernetes.kind() == Kind::Eks {
-        kubernetes.put_kubeconfig_file_to_object_storage(kubeconfig_path.as_str())?
-    };
+            // read config generated after terraform infra bootstrap/update
+            let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
+                .map_err(|e| EngineError::new_terraform_qovery_config_mismatch(event_details.clone(), e))?;
 
-    // wait for AWS EC2 K3S port is open to avoid later deployment issues (and kubeconfig not available on S3)
-    if kubernetes.kind() == Kind::Ec2 {
-        let qovery_terraform_config_file = format!("{}/qovery-tf-config.json", &temp_dir);
-
-        // read config generated after terraform infra bootstrap/update
-        let qovery_terraform_config = get_aws_ec2_qovery_terraform_config(qovery_terraform_config_file.as_str())
-            .map_err(|e| EngineError::new_terraform_qovery_config_mismatch(event_details.clone(), e))?;
-
-        // send cluster info to vault if info mismatch
-        // create vault connection (Vault connectivity should not be on the critical deployment path,
-        // if it temporarily fails, just ignore it, data will be pushed on the next sync)
-        let vault_conn = match QVaultClient::new(event_details.clone()) {
-            Ok(x) => Some(x),
-            Err(_) => None,
-        };
-        if let Some(vault) = vault_conn {
-            cluster_secrets.k8s_cluster_endpoint = Some(qovery_terraform_config.aws_ec2_public_hostname.clone());
-            // update info without taking care of the kubeconfig because we don't have it yet
-            let _ = cluster_secrets.create_or_update_secret(&vault, true, event_details.clone());
-        };
-
-        let port = match qovery_terraform_config.kubernetes_port_to_u16() {
-            Ok(p) => p,
-            Err(e) => {
-                return Err(EngineError::new_terraform_qovery_config_mismatch(
-                    event_details,
-                    CommandError::new_from_safe_message(e),
-                ))
-            }
-        };
-
-        // wait for k3s port to be open
-        wait_until_port_is_open(
-                &TcpCheckSource::DnsName(qovery_terraform_config.aws_ec2_public_hostname.as_str()),
-                port,
-                300,
-                kubernetes.logger(),
-                event_details.clone(),
-            )
-                .map_err(|e| {
-                    EngineError::new_terraform_qovery_config_mismatch(
-                        event_details.clone(),
-                        CommandError::new("Wasn't able to connect to Kubernetes API, can't continue. Did you manually performed changes AWS side?".to_string(), Some(format!("{:?}", e)), None),
-                    )
-                })?;
-
-        // during an instance replacement, the EC2 host dns will change and will require the kubeconfig to be updated
-        // we need to ensure the kubeconfig is the correct one by checking the current instance dns in the kubeconfig
-        // retry for 5 min
-        let result = retry::retry(Fixed::from_millis(5 * 1000).take(60), || {
-            // force s3 kubeconfig retrieve
-            if let Err(e) = kubernetes.delete_local_kubeconfig_object_storage_folder() {
-                return OperationResult::Err(e);
+            // send cluster info to vault if info mismatch
+            // create vault connection (Vault connectivity should not be on the critical deployment path,
+            // if it temporarily fails, just ignore it, data will be pushed on the next sync)
+            let vault_conn = match QVaultClient::new(event_details.clone()) {
+                Ok(x) => Some(x),
+                Err(_) => None,
             };
-            let mut kubeconfig_path = match kubernetes.get_kubeconfig_file() {
-                Ok((_, kubeconfig_filename)) => kubeconfig_filename,
-                Err(e) => return OperationResult::Retry(e),
+            if let Some(vault) = vault_conn {
+                cluster_secrets.k8s_cluster_endpoint = Some(qovery_terraform_config.aws_ec2_public_hostname.clone());
+                // update info without taking care of the kubeconfig because we don't have it yet
+                let _ = cluster_secrets.create_or_update_secret(&vault, true, event_details.clone());
             };
 
-            // ensure the kubeconfig content address match with the current instance dns
-            let mut buffer = String::new();
-            let _ = kubeconfig_path.read_to_string(&mut buffer);
-            match buffer.contains(&qovery_terraform_config.aws_ec2_public_hostname) {
-                true => {
-                    kubernetes.logger().log(EngineEvent::Info(
-                        event_details.clone(),
-                        EventMessage::new_from_safe(format!(
-                            "kubeconfig stored on s3 do correspond with the actual host {}",
-                            &qovery_terraform_config.aws_ec2_public_hostname
-                        )),
-                    ));
-                    OperationResult::Ok(())
+            let port = match qovery_terraform_config.kubernetes_port_to_u16() {
+                Ok(p) => p,
+                Err(e) => {
+                    return Err(EngineError::new_terraform_qovery_config_mismatch(
+                        event_details,
+                        CommandError::new_from_safe_message(e),
+                    ))
                 }
-                false => {
-                    kubernetes.logger().log(EngineEvent::Warning(
+            };
+
+            // wait for k3s port to be open
+            // retry for 10 min, a reboot will occur after 5 min if nothing happens (see EC2 Terraform user config)
+            wait_until_port_is_open(
+                    &TcpCheckSource::DnsName(qovery_terraform_config.aws_ec2_public_hostname.as_str()),
+                    port,
+                    600,
+                    kubernetes.logger(),
+                    event_details.clone(),
+                )
+                    .map_err(|e| {
+                        EngineError::new_terraform_qovery_config_mismatch(
+                            event_details.clone(),
+                            CommandError::new("Wasn't able to connect to Kubernetes API, can't continue. Did you manually performed changes AWS side?".to_string(), Some(format!("{:?}", e)), None),
+                        )
+                    })?;
+
+            // during an instance replacement, the EC2 host dns will change and will require the kubeconfig to be updated
+            // we need to ensure the kubeconfig is the correct one by checking the current instance dns in the kubeconfig
+            let result = retry::retry(Fixed::from_millis(5 * 1000).take(120), || {
+                // force s3 kubeconfig retrieve
+                if let Err(e) = kubernetes.delete_local_kubeconfig_object_storage_folder() {
+                    return OperationResult::Err(e);
+                };
+                let (current_kubeconfig_path, mut kubeconfig_file) = match kubernetes.get_kubeconfig_file() {
+                    Ok(x) => x,
+                    Err(e) => return OperationResult::Retry(e),
+                };
+
+                // ensure the kubeconfig content address match with the current instance dns
+                let mut buffer = String::new();
+                let _ = kubeconfig_file.read_to_string(&mut buffer);
+                match buffer.contains(&qovery_terraform_config.aws_ec2_public_hostname) {
+                    true => {
+                        kubernetes.logger().log(EngineEvent::Info(
                             event_details.clone(),
                             EventMessage::new_from_safe(format!(
-                                "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
+                                "kubeconfig stored on s3 do correspond with the actual host {}",
                                 &qovery_terraform_config.aws_ec2_public_hostname
                             )),
                         ));
-                    OperationResult::Retry(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
-                        event_details.clone(),
-                    ))
+                        OperationResult::Ok(current_kubeconfig_path)
+                    }
+                    false => {
+                        kubernetes.logger().log(EngineEvent::Warning(
+                                event_details.clone(),
+                                EventMessage::new_from_safe(format!(
+                                    "kubeconfig stored on s3 do not yet correspond with the actual host {}, retrying in 5 sec...",
+                                    &qovery_terraform_config.aws_ec2_public_hostname
+                                )),
+                            ));
+                        OperationResult::Retry(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(
+                            event_details.clone(),
+                        ))
+                    }
+                }
+            });
+
+            match result {
+                Ok(x) => x,
+                Err(Operation { error, .. }) => return Err(error),
+                Err(Error::Internal(_)) => {
+                    return Err(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(event_details))
                 }
             }
-        });
-
-        match result {
-            Ok(_) => {}
-            Err(Operation { error, .. }) => return Err(error),
-            Err(Error::Internal(_)) => {
-                return Err(EngineError::new_kubeconfig_file_do_not_match_the_current_cluster(event_details))
-            }
+        }
+        _ => {
+            return Err(EngineError::new_unsupported_cluster_kind(
+                event_details,
+                &kubernetes.kind().to_string(),
+                CommandError::new_from_safe_message(format!(
+                    "expected AWS provider here, while {} was found",
+                    kubernetes.kind()
+                )),
+            ))
         }
     };
 

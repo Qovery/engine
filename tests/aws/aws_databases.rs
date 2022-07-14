@@ -9,6 +9,7 @@ use tracing::{span, Level};
 use uuid::Uuid;
 
 use self::test_utilities::aws::{AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
+use self::test_utilities::common::ClusterDomain;
 use self::test_utilities::utilities::{
     context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
@@ -333,10 +334,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         }
 
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
-        assert!(matches!(
-            ret,
-            TransactionResult::Ok | TransactionResult::UnrecoverableError(_, _)
-        ));
+        assert!(matches!(ret, TransactionResult::Ok | TransactionResult::Error(_)));
 
         test_name.to_string()
     })
@@ -356,17 +354,18 @@ pub fn test_postgresql_configuration(
     is_public: bool,
 ) {
     let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .AWS_TEST_CLUSTER_ID
+        .as_ref()
+        .expect("AWS_TEST_CLUSTER_ID is not set")
+        .to_string();
     let context = context(
         secrets
             .AWS_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("AWS_TEST_ORGANIZATION_ID is not set")
             .as_str(),
-        secrets
-            .AWS_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("AWS_TEST_CLUSTER_ID is not set")
-            .as_str(),
+        cluster_id.as_str(),
     );
 
     let environment = test_utilities::common::database_test_environment(&context);
@@ -383,6 +382,10 @@ pub fn test_postgresql_configuration(
             kubernetes_kind,
             database_mode,
             is_public,
+            ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
+            None,
         )
     })
 }
@@ -518,17 +521,18 @@ pub fn test_mongodb_configuration(
     is_public: bool,
 ) {
     let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .AWS_TEST_CLUSTER_ID
+        .as_ref()
+        .expect("AWS_TEST_CLUSTER_ID is not set")
+        .to_string();
     let context = context(
         secrets
             .AWS_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("AWS_TEST_ORGANIZATION_ID is not set")
             .as_str(),
-        secrets
-            .AWS_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("AWS_TEST_CLUSTER_ID is not set")
-            .as_str(),
+        cluster_id.as_str(),
     );
     let environment = test_utilities::common::database_test_environment(&context);
 
@@ -544,6 +548,10 @@ pub fn test_mongodb_configuration(
             kubernetes_kind,
             database_mode,
             is_public,
+            ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
+            None,
         )
     })
 }
@@ -653,17 +661,18 @@ pub fn test_mysql_configuration(
     is_public: bool,
 ) {
     let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .AWS_TEST_CLUSTER_ID
+        .as_ref()
+        .expect("AWS_TEST_CLUSTER_ID is not set")
+        .to_string();
     let context = context(
         secrets
             .AWS_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("AWS_TEST_ORGANIZATION_ID is not set")
             .as_str(),
-        secrets
-            .AWS_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("AWS_TEST_CLUSTER_ID is not set")
-            .as_str(),
+        cluster_id.as_str(),
     );
     let environment = test_utilities::common::database_test_environment(&context);
 
@@ -679,6 +688,10 @@ pub fn test_mysql_configuration(
             kubernetes_kind,
             database_mode,
             is_public,
+            ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
+            None,
         )
     })
 }
@@ -756,17 +769,18 @@ pub fn test_redis_configuration(
     is_public: bool,
 ) {
     let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .AWS_TEST_CLUSTER_ID
+        .as_ref()
+        .expect("AWS_TEST_CLUSTER_ID is not set")
+        .to_string();
     let context = context(
         secrets
             .AWS_TEST_ORGANIZATION_ID
             .as_ref()
             .expect("AWS_TEST_ORGANIZATION_ID is not set")
             .as_str(),
-        secrets
-            .AWS_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("AWS_TEST_CLUSTER_ID is not set")
-            .as_str(),
+        cluster_id.as_str(),
     );
     let environment = test_utilities::common::database_test_environment(&context);
 
@@ -782,6 +796,10 @@ pub fn test_redis_configuration(
             kubernetes_kind,
             database_mode,
             is_public,
+            ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
+            None,
         )
     })
 }

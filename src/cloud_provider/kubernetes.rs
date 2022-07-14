@@ -19,9 +19,8 @@ use std::time::Duration;
 use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::models::{CpuLimits, InstanceEc2, NodeGroups};
-use crate::cloud_provider::service::CheckAction;
 use crate::cloud_provider::Kind as CloudProviderKind;
-use crate::cloud_provider::{service, CloudProvider, DeploymentTarget};
+use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl::{self, kubectl_delete_apiservice, kubectl_delete_completed_jobs};
 use crate::cmd::kubectl::{
     kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_delete_pod,
@@ -186,7 +185,7 @@ pub trait Kubernetes: Listen {
                             err.into(),
                         );
 
-                        retry::OperationResult::Retry(error)
+                        OperationResult::Retry(error)
                     }
                 }
             }) {
@@ -401,11 +400,8 @@ pub trait Kubernetes: Listen {
     fn on_delete(&self) -> Result<(), EngineError>;
     fn on_delete_error(&self) -> Result<(), EngineError>;
     fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError>;
-    fn deploy_environment_error(&self, environment: &Environment) -> Result<(), EngineError>;
     fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError>;
-    fn pause_environment_error(&self, environment: &Environment) -> Result<(), EngineError>;
     fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError>;
-    fn delete_environment_error(&self, environment: &Environment) -> Result<(), EngineError>;
 
     fn send_to_customer(&self, message: &str, listeners_helper: &ListenersHelper) {
         listeners_helper.upgrade_in_progress(ProgressInfo::new(
@@ -545,120 +541,26 @@ pub fn deploy_environment(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
     event_details: EventDetails,
-    logger: &dyn Logger,
 ) -> Result<(), EngineError> {
-    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
-
     let deployment_target = DeploymentTarget::new(kubernetes, environment)
         .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
 
     // create all stateful services (database)
     for database in &environment.databases {
-        service::check_kubernetes_service_error(
-            database.exec_action(&deployment_target),
-            kubernetes,
-            database.as_service(),
-            event_details.clone(),
-            logger,
-            &deployment_target,
-            &listeners_helper,
-            "deployment",
-            CheckAction::Deploy,
-        )?;
-
-        // check all deployed services
-        service::check_kubernetes_service_error(
-            database.exec_check_action(),
-            kubernetes,
-            database.as_service(),
-            event_details.clone(),
-            logger,
-            &deployment_target,
-            &listeners_helper,
-            "check deployment",
-            CheckAction::Deploy,
-        )?;
+        database.exec_action(&deployment_target)?;
+        database.exec_check_action()?;
     }
 
-    // create all stateless services (router, application...)
-    for service in environment.stateless_services() {
-        service::check_kubernetes_service_error(
-            service.exec_action(&deployment_target),
-            kubernetes,
-            service,
-            event_details.clone(),
-            logger,
-            &deployment_target,
-            &listeners_helper,
-            "deployment",
-            CheckAction::Deploy,
-        )?;
-
-        service::check_kubernetes_service_error(
-            service.exec_check_action(),
-            kubernetes,
-            service,
-            event_details.clone(),
-            logger,
-            &deployment_target,
-            &listeners_helper,
-            "check deployment",
-            CheckAction::Deploy,
-        )?;
+    // create all applications
+    for service in &environment.applications {
+        service.exec_action(&deployment_target)?;
+        service.exec_check_action()?;
     }
 
-    Ok(())
-}
-
-/// common function to react to an error when a environment deployment goes wrong
-pub fn deploy_environment_error(
-    kubernetes: &dyn Kubernetes,
-    environment: &Environment,
-    event_details: EventDetails,
-    logger: &dyn Logger,
-) -> Result<(), EngineError> {
-    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
-
-    listeners_helper.deployment_in_progress(ProgressInfo::new(
-        ProgressScope::Environment {
-            id: kubernetes.context().execution_id().to_string(),
-        },
-        ProgressLevel::Warn,
-        Some("An error occurred while trying to deploy the environment, so let's revert changes"),
-        kubernetes.context().execution_id(),
-    ));
-
-    let deployment_target = DeploymentTarget::new(kubernetes, environment)
-        .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
-
-    // clean up all stateful services (database)
-    for service in &environment.databases {
-        service::check_kubernetes_service_error(
-            service.on_create_error(&deployment_target),
-            kubernetes,
-            service.as_service(),
-            event_details.clone(),
-            logger,
-            &deployment_target,
-            &listeners_helper,
-            "revert deployment",
-            CheckAction::Deploy,
-        )?;
-    }
-
-    // clean up all stateless services (router, application...)
-    for service in environment.stateless_services() {
-        service::check_kubernetes_service_error(
-            service.on_create_error(&deployment_target),
-            kubernetes,
-            service,
-            event_details.clone(),
-            logger,
-            &deployment_target,
-            &listeners_helper,
-            "revert deployment",
-            CheckAction::Deploy,
-        )?;
+    // create all routers
+    for service in &environment.routers {
+        service.exec_action(&deployment_target)?;
+        service.exec_check_action()?;
     }
 
     Ok(())
@@ -669,70 +571,23 @@ pub fn pause_environment(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
     event_details: EventDetails,
-    logger: &dyn Logger,
 ) -> Result<(), EngineError> {
-    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
-
     let deployment_target = DeploymentTarget::new(kubernetes, environment)
         .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
 
-    // create all stateless services (router, application...)
-    for service in environment.stateless_services() {
-        service::check_kubernetes_service_error(
-            service.on_pause(&deployment_target),
-            kubernetes,
-            service,
-            event_details.clone(),
-            logger,
-            &deployment_target,
-            &listeners_helper,
-            "pause",
-            CheckAction::Pause,
-        )?;
+    for service in &environment.routers {
+        service.on_pause(&deployment_target)?;
+        service.on_pause_check()?;
     }
 
-    // create all stateful services (database)
+    for service in &environment.applications {
+        service.on_pause(&deployment_target)?;
+        service.on_pause_check()?;
+    }
+
     for database in &environment.databases {
-        service::check_kubernetes_service_error(
-            database.on_pause(&deployment_target),
-            kubernetes,
-            database.as_service(),
-            event_details.clone(),
-            logger,
-            &deployment_target,
-            &listeners_helper,
-            "pause",
-            CheckAction::Pause,
-        )?;
-    }
-
-    for service in environment.stateless_services() {
-        service::check_kubernetes_service_error(
-            service.on_pause_check(),
-            kubernetes,
-            service,
-            event_details.clone(),
-            logger,
-            &deployment_target,
-            &listeners_helper,
-            "check pause",
-            CheckAction::Pause,
-        )?;
-    }
-
-    // check all deployed services
-    for database in &environment.databases {
-        service::check_kubernetes_service_error(
-            database.on_pause_check(),
-            kubernetes,
-            database.as_service(),
-            event_details.clone(),
-            logger,
-            &deployment_target,
-            &listeners_helper,
-            "check pause",
-            CheckAction::Pause,
-        )?;
+        database.on_pause(&deployment_target)?;
+        database.on_pause_check()?;
     }
 
     Ok(())
@@ -743,10 +598,7 @@ pub fn delete_environment(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
     event_details: EventDetails,
-    logger: &dyn Logger,
 ) -> Result<(), EngineError> {
-    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
-
     let kubeconfig = kubernetes.get_kubeconfig_file_path()?;
 
     // check if environment is not already deleted
@@ -764,62 +616,20 @@ pub fn delete_environment(
         .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
 
     // delete all stateless services (router, application...)
-    for service in environment.stateless_services() {
-        let _ = service::check_kubernetes_service_error(
-            service.on_delete(&deployment_target),
-            kubernetes,
-            service,
-            event_details.clone(),
-            logger,
-            &deployment_target,
-            &listeners_helper,
-            "delete",
-            CheckAction::Delete,
-        );
+    for service in &environment.routers {
+        let _ = service.on_delete(&deployment_target);
+        service.on_delete_check()?;
+    }
+
+    for service in &environment.applications {
+        let _ = service.on_delete(&deployment_target);
+        service.on_delete_check()?;
     }
 
     // delete all stateful services (database)
     for database in &environment.databases {
-        service::check_kubernetes_service_error(
-            database.on_delete(&deployment_target),
-            kubernetes,
-            database.as_service(),
-            event_details.clone(),
-            logger,
-            &deployment_target,
-            &listeners_helper,
-            "delete",
-            CheckAction::Delete,
-        )?;
-    }
-
-    for service in environment.stateless_services() {
-        service::check_kubernetes_service_error(
-            service.on_delete_check(),
-            kubernetes,
-            service,
-            event_details.clone(),
-            logger,
-            &deployment_target,
-            &listeners_helper,
-            "delete check",
-            CheckAction::Delete,
-        )?;
-    }
-
-    // check all deployed services
-    for database in &environment.databases {
-        service::check_kubernetes_service_error(
-            database.on_delete_check(),
-            kubernetes,
-            database.as_service(),
-            event_details.clone(),
-            logger,
-            &deployment_target,
-            &listeners_helper,
-            "delete check",
-            CheckAction::Delete,
-        )?;
+        database.on_delete(&deployment_target)?;
+        database.on_delete_check()?;
     }
 
     // do not catch potential error - to confirm
@@ -1558,7 +1368,7 @@ pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, CommandError> 
     }
 }
 
-pub async fn kube_does_secret_exists(kube: &kube::Client, name: &str, namespace: &str) -> Result<bool, kube::Error> {
+pub async fn kube_does_secret_exists(kube: &kube::Client, name: &str, namespace: &str) -> Result<bool, Error> {
     let item: Api<Secret> = Api::namespaced(kube.clone(), namespace);
     match item.get(name).await {
         Ok(_) => Ok(true),
@@ -1573,7 +1383,7 @@ pub async fn kube_create_namespace_if_not_exists(
     kube: &kube::Client,
     namespace_name: &str,
     labels: Option<std::collections::BTreeMap<String, String>>,
-) -> Result<(), kube::Error> {
+) -> Result<(), Error> {
     let namespace = Api::all(kube.clone());
     let namespace_labels = Namespace {
         metadata: ObjectMeta {
@@ -1602,7 +1412,7 @@ pub async fn kube_copy_secret_to_another_namespace(
     name: &str,
     namespace_src: &str,
     namespace_dest: &str,
-) -> Result<(), kube::Error> {
+) -> Result<(), Error> {
     let post_param = PostParams::default();
 
     let secret_src: Api<Secret> = Api::namespaced(kube.clone(), namespace_src);
