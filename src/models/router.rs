@@ -411,13 +411,10 @@ where
 
             let chart = ChartInfo::new_from_custom_namespace(
                 helm_release_name,
-                workspace_dir.clone(),
+                workspace_dir,
                 environment.namespace().to_string(),
                 600_i64,
-                match self.service_type() {
-                    ServiceType::Database(_) => vec![format!("{}/q-values.yaml", &workspace_dir)],
-                    _ => vec![],
-                },
+                vec![],
                 vec![],
                 vec![],
                 false,
