@@ -191,7 +191,7 @@ pub struct KubernetesPodMetadata {
 #[serde(rename_all = "camelCase")]
 pub struct KubernetesPodStatus {
     pub container_statuses: Option<Vec<KubernetesPodContainerStatus>>,
-    pub conditions: Vec<KubernetesPodCondition>,
+    pub conditions: Option<Vec<KubernetesPodCondition>>,
     // read the doc: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/
     // phase can be Pending, Running, Succeeded, Failed, Unknown
     pub phase: KubernetesPodStatusPhase,
@@ -1135,9 +1135,9 @@ mod tests {
         let pod_status = serde_json::from_str::<KubernetesList<KubernetesPod>>(payload);
         assert_eq!(pod_status.is_ok(), true);
         let pod_status = pod_status.unwrap();
-        assert_eq!(pod_status.items[0].status.conditions[0].status, "False");
+        assert_eq!(pod_status.items[0].status.conditions.as_ref().unwrap()[0].status, "False");
         assert_eq!(
-            pod_status.items[0].status.conditions[0].reason,
+            pod_status.items[0].status.conditions.as_ref().unwrap()[0].reason,
             KubernetesPodStatusReason::Unknown(Some("Unschedulable".to_string()))
         );
 
@@ -1368,9 +1368,9 @@ mod tests {
         let pod_status = serde_json::from_str::<KubernetesList<KubernetesPod>>(payload);
         assert_eq!(pod_status.is_ok(), true);
         let pod_status = pod_status.unwrap();
-        assert_eq!(pod_status.items[0].status.conditions[0].status, "False");
+        assert_eq!(pod_status.items[0].status.conditions.as_ref().unwrap()[0].status, "False");
         assert_eq!(
-            pod_status.items[0].status.conditions[0].reason,
+            pod_status.items[0].status.conditions.as_ref().unwrap()[0].reason,
             KubernetesPodStatusReason::CrashLoopBackOff
         );
 
@@ -1646,9 +1646,906 @@ mod tests {
 
         assert!(pod_status.is_ok());
         assert_eq!(
-            pod_status.unwrap().items[0].status.conditions[0].reason,
+            pod_status.unwrap().items[0].status.conditions.as_ref().unwrap()[0].reason,
             KubernetesPodStatusReason::Unknown(None)
         );
+
+        let pod_status = r#"
+{
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+        "annotations": {
+            "appCommitId": "9b1baf132923531777268e9f0335d9dc8a1a9fb5",
+            "checksum/config": "67a36e7db6bafd338ae37c69332e24be7096944df98a1685b92ab4269c5d3536",
+            "kubernetes.io/psp": "eks.privileged"
+        },
+        "creationTimestamp": "2022-07-13T14:33:21Z",
+        "generateName": "app-z064fc389-55c7689767-",
+        "labels": {
+            "app": "app-z064fc389",
+            "appId": "z064fc389",
+            "appLongId": "064fc389-e9cc-4957-b071-6b040dbe3b8b",
+            "envId": "zdf4a84bc",
+            "envLongId": "df4a84bc-e80f-4be3-9279-aa6ffb30a9a0",
+            "ownerId": "FAKE",
+            "pod-template-hash": "55c7689767",
+            "projectLongId": "801e6dcb-ab22-41ea-86d1-8daf31624202"
+        },
+        "name": "app-z064fc389-55c7689767-9bchb",
+        "namespace": "z801e6dcb-zdf4a84bc",
+        "ownerReferences": [
+            {
+                "apiVersion": "apps/v1",
+                "blockOwnerDeletion": true,
+                "controller": true,
+                "kind": "ReplicaSet",
+                "name": "app-z064fc389-55c7689767",
+                "uid": "283106ed-b459-444e-b13d-45a6fc9955ff"
+            }
+        ],
+        "resourceVersion": "6023822",
+        "uid": "216693e7-9179-40b7-b5ec-41ecabbec634"
+    },
+    "spec": {
+        "affinity": {
+            "podAntiAffinity": {
+                "requiredDuringSchedulingIgnoredDuringExecution": [
+                    {
+                        "labelSelector": {
+                            "matchExpressions": [
+                                {
+                                    "key": "app",
+                                    "operator": "In",
+                                    "values": [
+                                        "app-z064fc389"
+                                    ]
+                                }
+                            ]
+                        },
+                        "topologyKey": "kubernetes.io/hostname"
+                    }
+                ]
+            }
+        },
+        "automountServiceAccountToken": false,
+        "containers": [
+            {
+                "env": [
+                    {
+                        "name": "ALGOLIA_ID",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "ALGOLIA_ID",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "ALGOLIA_KEY",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "ALGOLIA_KEY",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "AWS_ACCESS_KEY_ID",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "AWS_ACCESS_KEY_ID",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "AWS_REGION",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "AWS_REGION",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "AWS_SECRET_ACCESS_KEY",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "AWS_SECRET_ACCESS_KEY",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "BUDGET_INSIGHT_API_URL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "BUDGET_INSIGHT_API_URL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "BUDGET_INSIGHT_CLIENT_ID",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "BUDGET_INSIGHT_CLIENT_ID",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "BUDGET_INSIGHT_CLIENT_SECRET",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "BUDGET_INSIGHT_CLIENT_SECRET",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "CALENDLY_API_TOKEN",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "CALENDLY_API_TOKEN",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "CALENDLY_CALENDAR_URL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "CALENDLY_CALENDAR_URL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "CALENDLY_ORGANIZATION_URI",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "CALENDLY_ORGANIZATION_URI",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "CALENDLY_WEBHOOK_TOKEN",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "CALENDLY_WEBHOOK_TOKEN",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "ELASTIC_CLOUD_URL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "ELASTIC_CLOUD_URL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "FRONT_HOSTNAME",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "FRONT_HOSTNAME",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "GIT_SECRET",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "GIT_SECRET",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "GOOGLE_MAP_API_KEY",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "GOOGLE_MAP_API_KEY",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "HOSTNAME",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "HOSTNAME",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "HTTP_BASIC_AUTH_PASS",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "HTTP_BASIC_AUTH_PASS",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "HTTP_BASIC_AUTH_USER",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "HTTP_BASIC_AUTH_USER",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "IBAN_VALIDATOR_ID",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "IBAN_VALIDATOR_ID",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "IBAN_VALIDATOR_PWD",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "IBAN_VALIDATOR_PWD",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "IBAN_VALIDATOR_URL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "IBAN_VALIDATOR_URL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "KICKBOX_API_KEY",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "KICKBOX_API_KEY",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "MAILCHIMP_API_KEY",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "MAILCHIMP_API_KEY",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "MAILCHIMP_MAIN_LIST_ID",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "MAILCHIMP_MAIN_LIST_ID",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "MAILCHIMP_PROSPECT_LIST_ID",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "MAILCHIMP_PROSPECT_LIST_ID",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "MAILCHIMP_VERIFY",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "MAILCHIMP_VERIFY",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "MANDRILL_API_KEY",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "MANDRILL_API_KEY",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "NEXMO_API_KEY",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "NEXMO_API_KEY",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "NEXMO_API_SECRET",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "NEXMO_API_SECRET",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "PAPERTRAIL_API_TOKEN",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "PAPERTRAIL_API_TOKEN",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "POSTGRESQL_ENV_DATABASE",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "POSTGRESQL_ENV_DATABASE",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "POSTGRESQL_ENV_POSTGRES_HOST",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "POSTGRESQL_ENV_POSTGRES_HOST",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "POSTGRESQL_ENV_POSTGRES_PASSWORD",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "POSTGRESQL_ENV_POSTGRES_PASSWORD",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "POSTGRESQL_ENV_POSTGRES_USER",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "POSTGRESQL_ENV_POSTGRES_USER",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_APPLICATION_Z064FC389_ENVIRONMENT_NAME",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_APPLICATION_Z064FC389_ENVIRONMENT_NAME",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_APPLICATION_Z064FC389_GIT_BRANCH",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_APPLICATION_Z064FC389_GIT_BRANCH",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_APPLICATION_Z064FC389_GIT_COMMIT_ID",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_APPLICATION_Z064FC389_GIT_COMMIT_ID",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_APPLICATION_Z064FC389_HOST_EXTERNAL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_APPLICATION_Z064FC389_HOST_EXTERNAL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_APPLICATION_Z064FC389_HOST_INTERNAL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_APPLICATION_Z064FC389_HOST_INTERNAL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_APPLICATION_Z064FC389_NAME",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_APPLICATION_Z064FC389_NAME",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_APPLICATION_Z22E5806D_HOST_EXTERNAL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_APPLICATION_Z22E5806D_HOST_EXTERNAL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_APPLICATION_Z22E5806D_HOST_INTERNAL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_APPLICATION_Z22E5806D_HOST_INTERNAL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_APPLICATION_Z4BCC3D9A_HOST_EXTERNAL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_APPLICATION_Z4BCC3D9A_HOST_EXTERNAL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_APPLICATION_Z4BCC3D9A_HOST_INTERNAL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_APPLICATION_Z4BCC3D9A_HOST_INTERNAL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_APPLICATION_ZC1096A84_HOST_INTERNAL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_APPLICATION_ZC1096A84_HOST_INTERNAL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_ENVIRONMENT_ID",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_ENVIRONMENT_ID",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_POSTGRESQL_Z909E13C8_DATABASE_URL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_POSTGRESQL_Z909E13C8_DATABASE_URL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_POSTGRESQL_Z909E13C8_DATABASE_URL_INTERNAL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_POSTGRESQL_Z909E13C8_DATABASE_URL_INTERNAL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_POSTGRESQL_Z909E13C8_DEFAULT_DATABASE_NAME",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_POSTGRESQL_Z909E13C8_DEFAULT_DATABASE_NAME",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_POSTGRESQL_Z909E13C8_HOST",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_POSTGRESQL_Z909E13C8_HOST",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_POSTGRESQL_Z909E13C8_HOST_INTERNAL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_POSTGRESQL_Z909E13C8_HOST_INTERNAL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_POSTGRESQL_Z909E13C8_LOGIN",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_POSTGRESQL_Z909E13C8_LOGIN",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_POSTGRESQL_Z909E13C8_PASSWORD",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_POSTGRESQL_Z909E13C8_PASSWORD",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_POSTGRESQL_Z909E13C8_PORT",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_POSTGRESQL_Z909E13C8_PORT",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_PROJECT_ID",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_PROJECT_ID",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_REDIS_ZCDDA3D69_DATABASE_URL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_REDIS_ZCDDA3D69_DATABASE_URL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_REDIS_ZCDDA3D69_DATABASE_URL_INTERNAL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_REDIS_ZCDDA3D69_DATABASE_URL_INTERNAL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_REDIS_ZCDDA3D69_DEFAULT_DATABASE_NAME",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_REDIS_ZCDDA3D69_DEFAULT_DATABASE_NAME",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_REDIS_ZCDDA3D69_HOST",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_REDIS_ZCDDA3D69_HOST",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_REDIS_ZCDDA3D69_HOST_INTERNAL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_REDIS_ZCDDA3D69_HOST_INTERNAL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_REDIS_ZCDDA3D69_LOGIN",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_REDIS_ZCDDA3D69_LOGIN",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_REDIS_ZCDDA3D69_PASSWORD",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_REDIS_ZCDDA3D69_PASSWORD",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "QOVERY_REDIS_ZCDDA3D69_PORT",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "QOVERY_REDIS_ZCDDA3D69_PORT",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "RACK_ALLOW_ORIGIN",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "RACK_ALLOW_ORIGIN",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "RAILS_ENV",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "RAILS_ENV",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "REDIS_HOST",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "REDIS_HOST",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "REDIS_PASSWORD",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "REDIS_PASSWORD",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "SALESFORCE_ACCOUNT_ID",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "SALESFORCE_ACCOUNT_ID",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "SALESFORCE_API_VERSION",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "SALESFORCE_API_VERSION",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "SALESFORCE_CLIENT_ID",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "SALESFORCE_CLIENT_ID",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "SALESFORCE_CLIENT_SECRET",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "SALESFORCE_CLIENT_SECRET",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "SALESFORCE_HOST",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "SALESFORCE_HOST",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "SALESFORCE_PASSWORD",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "SALESFORCE_PASSWORD",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "SALESFORCE_SECURITY_TOKEN",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "SALESFORCE_SECURITY_TOKEN",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "SALESFORCE_USERNAME",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "SALESFORCE_USERNAME",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "SECRET_KEY_BASE",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "SECRET_KEY_BASE",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "SETUP_DATABASE",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "SETUP_DATABASE",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "SIDEKIQ_CLIENT_SIZE",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "SIDEKIQ_CLIENT_SIZE",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "SIDEKIQ_SERVER_SIZE",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "SIDEKIQ_SERVER_SIZE",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "TACOGUESS_PASSWORD",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "TACOGUESS_PASSWORD",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "TACOGUESS_URL",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "TACOGUESS_URL",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    },
+                    {
+                        "name": "TACOGUESS_USERNAME",
+                        "valueFrom": {
+                            "secretKeyRef": {
+                                "key": "TACOGUESS_USERNAME",
+                                "name": "app-z064fc389"
+                            }
+                        }
+                    }
+                ],
+                "image": "335433052139.dkr.ecr.eu-west-3.amazonaws.com/z064fc389:17791480101993828140-9b1baf132923531777268e9f0335d9dc8a1a9fb5",
+                "imagePullPolicy": "IfNotPresent",
+                "livenessProbe": {
+                    "failureThreshold": 3,
+                    "initialDelaySeconds": 30,
+                    "periodSeconds": 10,
+                    "successThreshold": 1,
+                    "tcpSocket": {
+                        "port": 3000
+                    },
+                    "timeoutSeconds": 5
+                },
+                "name": "app-z064fc389",
+                "ports": [
+                    {
+                        "containerPort": 3000,
+                        "name": "p3000",
+                        "protocol": "TCP"
+                    }
+                ],
+                "readinessProbe": {
+                    "failureThreshold": 3,
+                    "initialDelaySeconds": 30,
+                    "periodSeconds": 10,
+                    "successThreshold": 1,
+                    "tcpSocket": {
+                        "port": 3000
+                    },
+                    "timeoutSeconds": 1
+                },
+                "resources": {
+                    "limits": {
+                        "cpu": "500m",
+                        "memory": "1Gi"
+                    },
+                    "requests": {
+                        "cpu": "500m",
+                        "memory": "1Gi"
+                    }
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "terminationMessagePolicy": "File"
+            }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "imagePullSecrets": [
+            {
+                "name": "335433052139.dkr.ecr.eu-west-3.amazonaws.com"
+            }
+        ],
+        "nodeName": "ip-10-0-21-229.eu-west-3.compute.internal",
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {},
+        "serviceAccount": "default",
+        "serviceAccountName": "default",
+        "terminationGracePeriodSeconds": 60,
+        "tolerations": [
+            {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/not-ready",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+            },
+            {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/unreachable",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+            }
+        ]
+    },
+    "status": {
+        "message": "The node was low on resource: ephemeral-storage. Container app-z064fc389 was using 56Ki, which exceeds its request of 0. ",
+        "phase": "Failed",
+        "reason": "Evicted",
+        "startTime": "2022-07-13T14:34:59Z"
+    }
+}
+        "#;
+
+        let pod_status = serde_json::from_str::<KubernetesPod>(pod_status);
+        assert!(pod_status.is_ok());
     }
 
     #[test]
