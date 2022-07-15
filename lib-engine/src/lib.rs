@@ -12,6 +12,7 @@ pub mod constants;
 pub mod container_registry;
 mod crypto;
 mod deletion_utilities;
+mod deployment_action;
 mod deployment_report;
 pub mod dns_provider;
 pub mod engine;
