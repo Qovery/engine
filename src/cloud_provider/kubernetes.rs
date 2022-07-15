@@ -547,20 +547,20 @@ pub fn deploy_environment(
 
     // create all stateful services (database)
     for database in &environment.databases {
-        database.exec_action(&deployment_target)?;
-        database.exec_check_action()?;
+        database.exec_action(&deployment_target, *database.action())?;
+        database.exec_check_action(*database.action())?;
     }
 
     // create all applications
     for service in &environment.applications {
-        service.exec_action(&deployment_target)?;
-        service.exec_check_action()?;
+        service.exec_action(&deployment_target, *service.action())?;
+        service.exec_check_action(*service.action())?;
     }
 
     // create all routers
     for service in &environment.routers {
-        service.exec_action(&deployment_target)?;
-        service.exec_check_action()?;
+        service.exec_action(&deployment_target, *service.action())?;
+        service.exec_check_action(*service.action())?;
     }
 
     Ok(())
