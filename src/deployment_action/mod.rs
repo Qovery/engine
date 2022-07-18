@@ -2,6 +2,9 @@ use crate::cloud_provider::service::Action;
 use crate::cloud_provider::DeploymentTarget;
 use crate::errors::EngineError;
 
+mod deploy_application;
+mod deploy_database;
+mod deploy_router;
 pub mod pause_service;
 #[cfg(test)]
 mod test_utils;

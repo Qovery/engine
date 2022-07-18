@@ -1,13 +1,10 @@
 use crate::cloud_provider::service::{
-    check_service_version, default_tera_context, delete_stateful_service, deploy_database_service, get_tfstate_name,
-    get_tfstate_suffix, Action, DatabaseOptions, Helm, Service, ServiceType, ServiceVersionCheckResult, Terraform,
+    check_service_version, default_tera_context, get_tfstate_name, get_tfstate_suffix, Action, DatabaseOptions, Helm,
+    Service, ServiceType, ServiceVersionCheckResult, Terraform,
 };
-use crate::cloud_provider::utilities::{check_domain_for, managed_db_name_sanitizer, print_action};
+use crate::cloud_provider::utilities::{check_domain_for, managed_db_name_sanitizer};
 use crate::cloud_provider::{service, DeploymentTarget};
-use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
-use crate::deployment_report::database::reporter::DatabaseDeploymentReporter;
-use crate::deployment_report::execute_long_deployment;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
 use crate::io_models::{ApplicationAdvancedSettings, Context, Listen, Listener, Listeners, ListenersHelper};
@@ -18,10 +15,8 @@ use crate::models::database_utils::{
 };
 use crate::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
 use crate::utilities::to_short_id;
-use function_name::named;
 use std::borrow::Borrow;
 use std::marker::PhantomData;
-use std::time::Duration;
 use tera::Context as TeraContext;
 use uuid::Uuid;
 
@@ -84,22 +79,22 @@ pub enum DatabaseError {
 
 pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     _marker: PhantomData<(C, M, T)>,
-    pub(super) context: Context,
-    pub(super) id: String,
-    pub(super) long_id: Uuid,
-    pub(super) action: Action,
-    pub(super) name: String,
-    pub(super) version: VersionsNumber,
-    pub(super) fqdn: String,
-    pub(super) fqdn_id: String,
-    pub(super) total_cpus: String,
-    pub(super) total_ram_in_mib: u32,
-    pub(super) database_instance_type: String,
-    pub(super) publicly_accessible: bool,
-    pub(super) private_port: u16,
-    pub(super) options: T::DatabaseOptions,
-    pub(super) listeners: Listeners,
-    pub(super) logger: Box<dyn Logger>,
+    pub(crate) context: Context,
+    pub(crate) id: String,
+    pub(crate) long_id: Uuid,
+    pub(crate) action: Action,
+    pub(crate) name: String,
+    pub(crate) version: VersionsNumber,
+    pub(crate) fqdn: String,
+    pub(crate) fqdn_id: String,
+    pub(crate) total_cpus: String,
+    pub(crate) total_ram_in_mib: u32,
+    pub(crate) database_instance_type: String,
+    pub(crate) publicly_accessible: bool,
+    pub(crate) private_port: u16,
+    pub(crate) options: T::DatabaseOptions,
+    pub(crate) listeners: Listeners,
+    pub(crate) logger: Box<dyn Logger>,
 }
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T> {
@@ -143,7 +138,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
         })
     }
 
-    fn selector(&self) -> String {
+    pub fn selector(&self) -> String {
         format!("databaseId={}", self.id)
     }
 }
@@ -326,94 +321,6 @@ pub trait DatabaseService: Service + DeploymentAction + Listen {
     fn is_managed_service(&self) -> bool;
 
     fn db_type(&self) -> service::DatabaseType;
-}
-
-impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> DeploymentAction for Database<C, M, T>
-where
-    Database<C, M, T>: ToTeraContext,
-{
-    #[named]
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-
-        execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
-            deploy_database_service(target, self, event_details.clone())
-        })
-    }
-
-    #[named]
-    fn on_create_check(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-
-        if self.publicly_accessible {
-            check_domain_for(
-                ListenersHelper::new(&self.listeners),
-                vec![&self.fqdn],
-                self.context.execution_id(),
-                self.context.execution_id(),
-                event_details,
-                self.logger(),
-            )?;
-        }
-
-        Ok(())
-    }
-
-    #[named]
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
-        execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Pause), || {
-            let pause_service = PauseServiceAction::new(
-                self.selector(),
-                true,
-                Duration::from_secs(5 * 60),
-                self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
-            );
-            pause_service.on_pause(target)
-        })
-    }
-
-    #[named]
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-
-        execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Delete), || {
-            delete_stateful_service(target, self, event_details.clone(), self.logger())
-        })
-    }
 }
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> DatabaseService for Database<C, M, T>
