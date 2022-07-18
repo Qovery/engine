@@ -1,5 +1,3 @@
-data "aws_caller_identity" "current" {}
-
 locals {
   database_tf_config = <<TF_CONFIG
 {
