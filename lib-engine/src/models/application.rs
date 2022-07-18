@@ -2,16 +2,12 @@ use crate::build_platform::Build;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate, Storage};
-use crate::cloud_provider::service::delete_stateless_service;
-use crate::cloud_provider::service::{deploy_user_stateless_service, Action, Helm, Service, ServiceType};
-use crate::cloud_provider::utilities::{print_action, sanitize_name};
+use crate::cloud_provider::service::{Action, Helm, Service, ServiceType};
+use crate::cloud_provider::utilities::sanitize_name;
 use crate::cloud_provider::DeploymentTarget;
-use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
-use crate::deployment_report::application::reporter::ApplicationDeploymentReporter;
-use crate::deployment_report::execute_long_deployment;
 use crate::errors::EngineError;
-use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
+use crate::events::{EventDetails, Stage, ToTransmitter, Transmitter};
 use crate::io_models::{
     ApplicationAdvancedSettings, ApplicationAdvancedSettingsProbeType, Context, Listen, Listener, Listeners, Port,
     QoveryIdentifier,
@@ -19,9 +15,7 @@ use crate::io_models::{
 use crate::logger::Logger;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::utilities::to_short_id;
-use function_name::named;
 use std::marker::PhantomData;
-use std::time::Duration;
 use tera::Context as TeraContext;
 use uuid::Uuid;
 
@@ -476,68 +470,6 @@ impl<T: CloudProvider> Helm for Application<T> {
 pub trait ApplicationService: Service + DeploymentAction + Listen {
     fn get_build(&self) -> &Build;
     fn get_build_mut(&mut self) -> &mut Build;
-}
-
-impl<T: CloudProvider> DeploymentAction for Application<T>
-where
-    Application<T>: Service,
-{
-    #[named]
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            T::short_name(),
-            "application",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
-        execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Create), || {
-            deploy_user_stateless_service(target, self)
-        })
-    }
-
-    #[named]
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            T::short_name(),
-            "application",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
-        execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Pause), || {
-            let pause_service = PauseServiceAction::new(
-                self.selector(),
-                self.is_stateful(),
-                Duration::from_secs(5 * 60),
-                self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
-            );
-            pause_service.on_pause(target)
-        })
-    }
-
-    #[named]
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            T::short_name(),
-            "application",
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-
-        execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Delete), || {
-            delete_stateless_service(target, self, event_details.clone())
-        })
-    }
 }
 
 impl<T: CloudProvider> ApplicationService for Application<T>
