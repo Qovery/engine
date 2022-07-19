@@ -703,7 +703,7 @@ pub fn kubectl_exec_get_statefulsets<P>(
 where
     P: AsRef<Path>,
 {
-    let mut cmd_args = vec!["get", "statfulset", "-o", "json"];
+    let mut cmd_args = vec!["get", "statefulset", "-o", "json"];
 
     match namespace {
         Some(n) => {

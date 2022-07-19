@@ -17,11 +17,7 @@ use crate::cloud_provider::kubernetes::{
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd;
 use crate::cmd::helm;
-use crate::cmd::kubectl::ScalingKind::Statefulset;
-use crate::cmd::kubectl::{
-    kubectl_exec_delete_pod, kubectl_exec_delete_secret, kubectl_exec_get_pods,
-    kubectl_exec_scale_replicas_by_selector, ScalingKind,
-};
+use crate::cmd::kubectl::{kubectl_exec_delete_pod, kubectl_exec_delete_secret, kubectl_exec_get_pods};
 use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
@@ -115,21 +111,6 @@ pub trait Service: ToTransmitter {
     }
 
     fn as_service(&self) -> &dyn Service;
-}
-
-pub trait Create {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_create_check(&self) -> Result<(), EngineError>;
-}
-
-pub trait Pause {
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_pause_check(&self) -> Result<(), EngineError>;
-}
-
-pub trait Delete {
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_delete_check(&self) -> Result<(), EngineError>;
 }
 
 pub trait Terraform {
@@ -353,71 +334,6 @@ where
     })?;
 
     Ok(())
-}
-
-pub fn scale_down_database(
-    target: &DeploymentTarget,
-    service: &impl DatabaseService,
-    replicas_count: usize,
-) -> Result<(), EngineError> {
-    if service.is_managed_service() {
-        // Doing nothing for pause database as it is a managed service
-        return Ok(());
-    }
-
-    let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::ScaleDown));
-    let kubernetes = target.kubernetes;
-    let environment = target.environment;
-    let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
-
-    let selector = format!("databaseId={}", service.id());
-    kubectl_exec_scale_replicas_by_selector(
-        kubernetes_config_file_path,
-        kubernetes.cloud_provider().credentials_environment_variables(),
-        environment.namespace(),
-        Statefulset,
-        selector.as_str(),
-        replicas_count as u32,
-    )
-    .map_err(|e| {
-        EngineError::new_k8s_scale_replicas(
-            event_details.clone(),
-            selector.to_string(),
-            environment.namespace().to_string(),
-            replicas_count as u32,
-            e,
-        )
-    })
-}
-
-pub fn scale_down_application(
-    target: &DeploymentTarget,
-    service: &impl Service,
-    replicas_count: usize,
-    scaling_kind: ScalingKind,
-) -> Result<(), EngineError> {
-    let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::ScaleDown));
-    let kubernetes = target.kubernetes;
-    let environment = target.environment;
-    let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
-
-    kubectl_exec_scale_replicas_by_selector(
-        kubernetes_config_file_path,
-        kubernetes.cloud_provider().credentials_environment_variables(),
-        environment.namespace(),
-        scaling_kind,
-        service.selector().unwrap_or_default().as_str(),
-        replicas_count as u32,
-    )
-    .map_err(|e| {
-        EngineError::new_k8s_scale_replicas(
-            event_details.clone(),
-            service.selector().unwrap_or_default(),
-            environment.namespace().to_string(),
-            replicas_count as u32,
-            e,
-        )
-    })
 }
 
 pub fn delete_stateless_service<T>(

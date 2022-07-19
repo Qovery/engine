@@ -2,13 +2,12 @@ use crate::build_platform::Build;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate, Storage};
-use crate::cloud_provider::service::{delete_stateless_service, scale_down_application};
-use crate::cloud_provider::service::{
-    deploy_user_stateless_service, Action, Create, Delete, Helm, Pause, Service, ServiceType,
-};
+use crate::cloud_provider::service::delete_stateless_service;
+use crate::cloud_provider::service::{deploy_user_stateless_service, Action, Helm, Service, ServiceType};
 use crate::cloud_provider::utilities::{print_action, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd::kubectl::ScalingKind::{Deployment, Statefulset};
+use crate::deployment_action::pause_service::PauseServiceAction;
+use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::application::reporter::ApplicationDeploymentReporter;
 use crate::deployment_report::execute_long_deployment;
 use crate::errors::EngineError;
@@ -22,6 +21,7 @@ use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::utilities::to_short_id;
 use function_name::named;
 use std::marker::PhantomData;
+use std::time::Duration;
 use tera::Context as TeraContext;
 use uuid::Uuid;
 
@@ -315,8 +315,8 @@ impl<T: CloudProvider> Application<T> {
         &*self.logger
     }
 
-    pub fn selector(&self) -> Option<String> {
-        Some(format!("appId={}", self.id()))
+    pub fn selector(&self) -> String {
+        format!("appId={}", self.id())
     }
 
     pub fn build(&self) -> &Build {
@@ -439,7 +439,7 @@ where
     }
 
     fn selector(&self) -> Option<String> {
-        self.selector()
+        Some(self.selector())
     }
 
     fn as_service(&self) -> &dyn Service {
@@ -449,7 +449,7 @@ where
 
 impl<T: CloudProvider> Helm for Application<T> {
     fn helm_selector(&self) -> Option<String> {
-        self.selector()
+        Some(self.selector())
     }
 
     fn helm_release_name(&self) -> String {
@@ -473,7 +473,12 @@ impl<T: CloudProvider> Helm for Application<T> {
     }
 }
 
-impl<T: CloudProvider> Create for Application<T>
+pub trait ApplicationService: Service + DeploymentAction + Listen {
+    fn get_build(&self) -> &Build;
+    fn get_build_mut(&mut self) -> &mut Build;
+}
+
+impl<T: CloudProvider> DeploymentAction for Application<T>
 where
     Application<T>: Service,
 {
@@ -494,15 +499,6 @@ where
         })
     }
 
-    fn on_create_check(&self) -> Result<(), EngineError> {
-        Ok(())
-    }
-}
-
-impl<T: CloudProvider> Pause for Application<T>
-where
-    Application<T>: Service,
-{
     #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
@@ -516,19 +512,16 @@ where
         );
 
         execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Pause), || {
-            scale_down_application(target, self, 0, if self.is_stateful() { Statefulset } else { Deployment })
+            let pause_service = PauseServiceAction::new(
+                self.selector(),
+                self.is_stateful(),
+                Duration::from_secs(5 * 60),
+                self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
+            );
+            pause_service.on_pause(target)
         })
     }
 
-    fn on_pause_check(&self) -> Result<(), EngineError> {
-        Ok(())
-    }
-}
-
-impl<T: CloudProvider> Delete for Application<T>
-where
-    Application<T>: Service,
-{
     #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
@@ -544,32 +537,6 @@ where
         execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Delete), || {
             delete_stateless_service(target, self, event_details.clone())
         })
-    }
-
-    fn on_delete_check(&self) -> Result<(), EngineError> {
-        Ok(())
-    }
-}
-
-pub trait ApplicationService: Service + Create + Pause + Delete + Listen {
-    fn get_build(&self) -> &Build;
-    fn get_build_mut(&mut self) -> &mut Build;
-    fn exec_action(&self, deployment_target: &DeploymentTarget) -> Result<(), EngineError> {
-        match self.action() {
-            Action::Create => self.on_create(deployment_target),
-            Action::Delete => self.on_delete(deployment_target),
-            Action::Pause => self.on_pause(deployment_target),
-            Action::Nothing => Ok(()),
-        }
-    }
-
-    fn exec_check_action(&self) -> Result<(), EngineError> {
-        match self.action() {
-            Action::Create => self.on_create_check(),
-            Action::Delete => self.on_delete_check(),
-            Action::Pause => self.on_pause_check(),
-            Action::Nothing => Ok(()),
-        }
     }
 }
 
