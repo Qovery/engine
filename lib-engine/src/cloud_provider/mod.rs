@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cmd::helm::{to_engine_error, Helm};
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, ToTransmitter};
 use crate::io_models::{Context, Listen};
@@ -89,13 +90,15 @@ pub struct DeploymentTarget<'a> {
     pub kubernetes: &'a dyn Kubernetes,
     pub environment: &'a Environment,
     pub kube: kube::Client,
+    pub helm: Helm,
 }
 
 impl<'a> DeploymentTarget<'a> {
     pub fn new(
         kubernetes: &'a dyn Kubernetes,
         environment: &'a Environment,
-    ) -> Result<DeploymentTarget<'a>, kube::Error> {
+        event_details: &EventDetails,
+    ) -> Result<DeploymentTarget<'a>, EngineError> {
         let kubeconfig_path = kubernetes.get_kubeconfig_file_path().unwrap_or_default();
         let kube_credentials: Vec<(String, String)> = kubernetes
             .cloud_provider()
@@ -103,11 +106,21 @@ impl<'a> DeploymentTarget<'a> {
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
-        let kube_client = block_on(get_kube_client(kubeconfig_path, kube_credentials.as_slice()))?;
+
+        let kube_client = block_on(get_kube_client(kubeconfig_path.clone(), kube_credentials.as_slice()))
+            .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
+
+        let helm = Helm::new(
+            &kubeconfig_path,
+            &kubernetes.cloud_provider().credentials_environment_variables(),
+        )
+        .map_err(|e| to_engine_error(event_details, e))?;
+
         Ok(DeploymentTarget {
             kubernetes,
             environment,
             kube: kube_client,
+            helm,
         })
     }
 }

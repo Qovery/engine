@@ -1,6 +1,6 @@
 use crate::cloud_provider::service::{
-    check_service_version, default_tera_context, get_tfstate_name, get_tfstate_suffix, Action, DatabaseOptions, Helm,
-    Service, ServiceType, ServiceVersionCheckResult, Terraform,
+    check_service_version, default_tera_context, Action, DatabaseOptions, Helm, Service, ServiceType,
+    ServiceVersionCheckResult, Terraform,
 };
 use crate::cloud_provider::utilities::{check_domain_for, managed_db_name_sanitizer};
 use crate::cloud_provider::{service, DeploymentTarget};
@@ -297,7 +297,7 @@ impl<Cloud: CloudProvider, M: DatabaseMode, DbType: DatabaseType<Cloud, M>> Helm
     }
 }
 
-pub trait DatabaseService: Service + DeploymentAction + Listen {
+pub trait DatabaseService: Service + DeploymentAction + ToTeraContext + Listen {
     fn check_domains(
         &self,
         listeners: Listeners,
@@ -325,7 +325,7 @@ pub trait DatabaseService: Service + DeploymentAction + Listen {
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> DatabaseService for Database<C, M, T>
 where
-    Database<C, M, T>: ToTeraContext,
+    Database<C, M, T>: Service + DeploymentAction + ToTeraContext + Listen,
 {
     fn is_managed_service(&self) -> bool {
         M::is_managed()
@@ -391,8 +391,6 @@ where
         context.insert("database_total_cpus_burst", &T::cpu_burst_value(self.total_cpus.clone()));
         context.insert("database_fqdn", &options.host.as_str());
         context.insert("database_id", &self.id());
-        context.insert("tfstate_suffix_name", &get_tfstate_suffix(self));
-        context.insert("tfstate_name", &get_tfstate_name(self));
         context.insert("publicly_accessible", &self.publicly_accessible);
 
         if self.context.resource_expiration_in_seconds().is_some() {

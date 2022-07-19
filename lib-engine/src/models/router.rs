@@ -248,7 +248,11 @@ impl<T: CloudProvider> Helm for Router<T> {
     }
 
     fn helm_chart_dir(&self) -> String {
-        format!("{}/common/charts/ingress-nginx", self.context.lib_root_dir())
+        format!(
+            "{}/{}/charts/q-ingress-tls",
+            self.context.lib_root_dir(),
+            T::lib_directory_name()
+        )
     }
 
     fn helm_chart_values_dir(&self) -> String {
