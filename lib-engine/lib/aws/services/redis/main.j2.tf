@@ -34,66 +34,6 @@ locals {
   final_snapshot_name = "${var.final_snapshot_name}-${local.final_snap_timestamp}"
 }
 
-resource "helm_release" "elasticache_instance_external_name" {
-  chart = "external-name-svc"
-  namespace = "{{namespace}}"
-  atomic = true
-  max_history = 50
-
-{%- if database_elasticache_parameter_group_name == 'default.redis5.0' or database_login == 'qoveryadmin' %}
-  name = "${aws_elasticache_cluster.elasticache_cluster.id}-externalname"
-
-  set {
-    name = "target_hostname"
-    value = aws_elasticache_cluster.elasticache_cluster.cache_nodes.0.address
-  }
-
-  depends_on = [
-    aws_elasticache_cluster.elasticache_cluster
-  ]
-{%- else %}
-  name = "${aws_elasticache_replication_group.elasticache_cluster.id}-externalname"
-
-  {%- if database_elasticache_instances_number > 1 %}
-  set {
-    name = "target_hostname"
-    value = aws_elasticache_replication_group.elasticache_cluster.configuration_endpoint_address
-  }
-  {%- else %}
-  set {
-    name = "target_hostname"
-    value = aws_elasticache_replication_group.elasticache_cluster.primary_endpoint_address
-  }
-  {%- endif %}
-
-  depends_on = [
-    aws_elasticache_replication_group.elasticache_cluster
-  ]
-{%- endif %}
-
-  set {
-    name = "source_fqdn"
-    value = "{{database_fqdn}}"
-  }
-
-  set {
-    name = "app_id"
-    value = "{{database_id}}"
-  }
-
-  set {
-    name = "service_name"
-    value = "{{service_name}}"
-  }
-
-  set {
-    name = "publicly_accessible"
-    value = var.publicly_accessible
-  }
-
-
-}
-
 {%- if database_elasticache_parameter_group_name == 'default.redis5.0' or database_login == 'qoveryadmin'%}
 resource "aws_elasticache_cluster" "elasticache_cluster" {
   cluster_id = var.elasticache_identifier

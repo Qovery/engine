@@ -1382,7 +1382,7 @@ pub fn test_pause_managed_db(
 
     let provider_kind = kubernetes_kind.get_cloud_provider_kind();
     let database_username = "superuser".to_string();
-    let database_password = generate_password(provider_kind.clone(), database_mode.clone());
+    let database_password = generate_password();
     let db_kind_str = db_kind.name().to_string();
     let db_id = generate_id();
     let database_host = format!("{}-{}", db_id, db_kind_str);
