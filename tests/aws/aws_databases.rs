@@ -506,6 +506,7 @@ fn private_postgresql_v10_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v10_deploy_a_working_prod_environment() {
     test_postgresql_configuration("10", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -520,6 +521,7 @@ fn private_postgresql_v11_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v11_deploy_a_working_prod_environment() {
     test_postgresql_configuration("11", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -534,6 +536,7 @@ fn private_postgresql_v12_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v12_deploy_a_working_prod_environment() {
     test_postgresql_configuration("12", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -789,6 +792,7 @@ fn private_mysql_v5_7_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn public_mysql_v5_7_deploy_a_working_prod_environment() {
     test_mysql_configuration("5.7", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
