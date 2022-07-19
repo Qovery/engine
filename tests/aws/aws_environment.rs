@@ -192,44 +192,6 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         assert_eq!(ret.unwrap().items.is_empty(), true);
 
         let kubernetes_config = kubernetes_config_path(context.clone(), Kind::Aws, "/tmp", secrets.clone());
-        let mut pdbs = kubernetes_get_all_pdbs(
-            kubernetes_config.as_ref().expect("Unable to get kubeconfig").clone(),
-            vec![
-                (
-                    "AWS_ACCESS_KEY_ID",
-                    secrets
-                        .AWS_ACCESS_KEY_ID
-                        .as_ref()
-                        .expect("AWS_ACCESS_KEY_ID is not set")
-                        .as_str(),
-                ),
-                (
-                    "AWS_SECRET_ACCESS_KEY",
-                    secrets
-                        .AWS_SECRET_ACCESS_KEY
-                        .as_ref()
-                        .expect("AWS_SECRET_ACCESS_KEY is not set")
-                        .as_str(),
-                ),
-                (
-                    "AWS_DEFAULT_REGION",
-                    secrets
-                        .AWS_DEFAULT_REGION
-                        .as_ref()
-                        .expect("AWS_DEFAULT_REGION is not set")
-                        .as_str(),
-                ),
-            ],
-            None,
-        );
-        for pdb in pdbs.expect("Unable to get pdbs").items.expect("Unable to get pdbs") {
-            assert_eq!(
-                pdb.metadata
-                    .name
-                    .contains(&to_short_id(&environment.applications[0].long_id)),
-                false
-            )
-        }
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
@@ -240,49 +202,6 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ret = get_pods(context, Kind::Aws, environment.clone(), selector.as_str(), secrets.clone());
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
-
-        pdbs = kubernetes_get_all_pdbs(
-            kubernetes_config.as_ref().expect("Unable to get kubeconfig").clone(),
-            vec![
-                (
-                    "AWS_ACCESS_KEY_ID",
-                    secrets
-                        .AWS_ACCESS_KEY_ID
-                        .as_ref()
-                        .expect("AWS_ACCESS_KEY_ID is not set")
-                        .as_str(),
-                ),
-                (
-                    "AWS_SECRET_ACCESS_KEY",
-                    secrets
-                        .AWS_SECRET_ACCESS_KEY
-                        .as_ref()
-                        .expect("AWS_SECRET_ACCESS_KEY is not set")
-                        .as_str(),
-                ),
-                (
-                    "AWS_DEFAULT_REGION",
-                    secrets
-                        .AWS_DEFAULT_REGION
-                        .as_ref()
-                        .expect("AWS_DEFAULT_REGION is not set")
-                        .as_str(),
-                ),
-            ],
-            None,
-        );
-        let mut filtered_pdb = false;
-        for pdb in pdbs.expect("Unable to get pdbs").items.expect("Unable to get pdbs") {
-            if pdb
-                .metadata
-                .name
-                .contains(&to_short_id(&environment.applications[0].long_id))
-            {
-                filtered_pdb = true;
-                break;
-            }
-        }
-        assert!(filtered_pdb);
 
         // Cleanup
         let ret = environment.delete_environment(&ea, logger, &engine_config_for_delete);

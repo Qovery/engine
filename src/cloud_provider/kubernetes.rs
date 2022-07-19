@@ -542,8 +542,7 @@ pub fn deploy_environment(
     environment: &Environment,
     event_details: EventDetails,
 ) -> Result<(), EngineError> {
-    let deployment_target = DeploymentTarget::new(kubernetes, environment)
-        .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
+    let deployment_target = DeploymentTarget::new(kubernetes, environment, &event_details)?;
 
     // create all stateful services (database)
     for database in &environment.databases {
@@ -572,8 +571,7 @@ pub fn pause_environment(
     environment: &Environment,
     event_details: EventDetails,
 ) -> Result<(), EngineError> {
-    let deployment_target = DeploymentTarget::new(kubernetes, environment)
-        .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
+    let deployment_target = DeploymentTarget::new(kubernetes, environment, &event_details)?;
 
     for service in &environment.routers {
         service.on_pause(&deployment_target)?;
@@ -612,8 +610,7 @@ pub fn delete_environment(
         return Ok(());
     };
 
-    let deployment_target = DeploymentTarget::new(kubernetes, environment)
-        .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
+    let deployment_target = DeploymentTarget::new(kubernetes, environment, &event_details)?;
 
     // delete all stateless services (router, application...)
     for service in &environment.routers {

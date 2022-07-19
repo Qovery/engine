@@ -1,9 +1,7 @@
-use crate::cloud_provider::helm::ChartInfo;
-use crate::cloud_provider::service::{delete_stateless_service, Action, Helm, Service};
+use crate::cloud_provider::service::{Action, Helm, Service};
 use crate::cloud_provider::utilities::{check_cname_for, print_action};
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd::helm;
-use crate::cmd::helm::to_engine_error;
+use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::execute_long_deployment;
 use crate::deployment_report::router::reporter::RouterDeploymentReporter;
@@ -13,10 +11,11 @@ use crate::io_models::Listen;
 use crate::models::router::{Router, RouterService};
 use crate::models::types::CloudProvider;
 use function_name::named;
+use std::path::PathBuf;
 
 impl<T: CloudProvider> DeploymentAction for Router<T>
 where
-    Router<T>: Service,
+    Router<T>: RouterService,
 {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -31,56 +30,16 @@ where
         );
 
         execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Create), || {
-            let kubernetes = target.kubernetes;
-            let environment = target.environment;
-            let workspace_dir = self.workspace_directory();
-            let helm_release_name = self.helm_release_name();
-
-            let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
-
-            // respect order - getting the context here and not before is mandatory
-            // the nginx-ingress must be available to get the external dns target if necessary
-            let context = self.tera_context(target)?;
-
-            let from_dir = format!(
-                "{}/{}/charts/q-ingress-tls",
-                self.context.lib_root_dir(),
-                T::lib_directory_name()
-            );
-            if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-                from_dir.as_str(),
-                workspace_dir.as_str(),
-                context,
-            ) {
-                return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                    event_details.clone(),
-                    from_dir,
-                    workspace_dir,
-                    e,
-                ));
-            }
-
-            // do exec helm upgrade and return the last deployment status
-            let helm = helm::Helm::new(
-                &kubernetes_config_file_path,
-                &kubernetes.cloud_provider().credentials_environment_variables(),
-            )
-            .map_err(|e| to_engine_error(&event_details, e))?;
-
-            let chart = ChartInfo::new_from_custom_namespace(
-                helm_release_name,
-                workspace_dir,
-                environment.namespace().to_string(),
-                600_i64,
-                vec![],
-                vec![],
-                vec![],
-                false,
-                self.selector(),
+            let helm = HelmDeployment::new(
+                self.helm_release_name(),
+                self.tera_context(target)?,
+                PathBuf::from(self.helm_chart_dir()),
+                PathBuf::from(self.workspace_directory()),
+                event_details.clone(),
+                None,
             );
 
-            helm.upgrade(&chart, &[])
-                .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))
+            helm.on_create(target)
         })
     }
 
@@ -155,21 +114,6 @@ where
     }
 
     #[named]
-    fn on_pause_check(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            T::short_name(),
-            "router",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
-        Ok(())
-    }
-
-    #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
@@ -182,22 +126,17 @@ where
         );
 
         execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Delete), || {
-            delete_stateless_service(target, self, event_details.clone())
+            let helm = HelmDeployment::new(
+                self.helm_release_name(),
+                self.tera_context(target)?,
+                PathBuf::from(self.helm_chart_dir()),
+                PathBuf::from(self.workspace_directory()),
+                event_details.clone(),
+                None,
+            );
+
+            helm.on_delete(target)
+            // FIXME: Delete also certificates
         })
-    }
-
-    #[named]
-    fn on_delete_check(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            T::short_name(),
-            "router",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
-        Ok(())
     }
 }
