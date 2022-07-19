@@ -491,8 +491,23 @@ fn private_postgresql_v13_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v13_deploy_a_working_dev_environment() {
     test_postgresql_configuration("13", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v14_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("14", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn public_postgresql_v14_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("14", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 // Postgres production environment
@@ -886,8 +901,23 @@ fn private_redis_v6_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_redis_v6_deploy_a_working_dev_environment() {
     test_redis_configuration("6", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_redis_v7_deploy_a_working_dev_environment() {
+    test_redis_configuration("7", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn public_redis_v7_deploy_a_working_dev_environment() {
+    test_redis_configuration("7", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 // Redis production environment (Elasticache)
