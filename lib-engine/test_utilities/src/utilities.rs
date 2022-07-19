@@ -1013,7 +1013,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "61c7a9b55a085229583b6a394dd168a4159dfd09".to_string(),
+                app_commit: "f86286892f044d731332a1f613300bd850476f3f".to_string(),
                 app_env_vars: btreemap! {
                      "PG_DBNAME".to_string() => base64::encode(database_db_name),
                      "PG_HOST".to_string() => base64::encode(db_fqdn),
@@ -1029,7 +1029,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name,
-                app_commit: "eae8095b3a840d6f3878aec639bd64cfb6d33f0b".to_string(),
+                app_commit: "476c6ead94a3a5365eabf4daa6d79b10d159a0d0".to_string(),
                 app_env_vars: btreemap! {
                 "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED).to_string()),
                 "REDIS_HOST".to_string()      => base64::encode(db_fqdn),
