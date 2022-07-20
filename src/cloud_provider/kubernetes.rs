@@ -6,6 +6,7 @@ use retry::Error::Operation;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::os::unix::fs::PermissionsExt;
@@ -15,6 +16,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::TryRecvError;
 use std::thread;
 use std::time::Duration;
+use uuid::Uuid;
 
 use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
@@ -399,9 +401,9 @@ pub trait Kubernetes: Listen {
     fn on_pause_error(&self) -> Result<(), EngineError>;
     fn on_delete(&self) -> Result<(), EngineError>;
     fn on_delete_error(&self) -> Result<(), EngineError>;
-    fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError>;
-    fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError>;
-    fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError>;
+    fn deploy_environment(&self, environment: &Environment) -> Result<(), (HashSet<Uuid>, EngineError)>;
+    fn pause_environment(&self, environment: &Environment) -> Result<(), (HashSet<Uuid>, EngineError)>;
+    fn delete_environment(&self, environment: &Environment) -> Result<(), (HashSet<Uuid>, EngineError)>;
 
     fn send_to_customer(&self, message: &str, listeners_helper: &ListenersHelper) {
         listeners_helper.upgrade_in_progress(ProgressInfo::new(
@@ -541,25 +543,44 @@ pub fn deploy_environment(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
     event_details: EventDetails,
-) -> Result<(), EngineError> {
-    let deployment_target = DeploymentTarget::new(kubernetes, environment, &event_details)?;
+) -> Result<(), (HashSet<Uuid>, EngineError)> {
+    let mut deployed_services: HashSet<Uuid> = HashSet::with_capacity(
+        environment.routers.len() + environment.databases.len() + environment.applications.len(),
+    );
+    let deployment_target = DeploymentTarget::new(kubernetes, environment, &event_details)
+        .map_err(|err| (deployed_services.clone(), err))?;
 
     // create all stateful services (database)
-    for database in &environment.databases {
-        database.exec_action(&deployment_target, *database.action())?;
-        database.exec_check_action(*database.action())?;
+    for service in &environment.databases {
+        deployed_services.insert(*service.long_id());
+        service
+            .exec_action(&deployment_target, *service.action())
+            .map_err(|err| (deployed_services.clone(), err))?;
+        service
+            .exec_check_action(*service.action())
+            .map_err(|err| (deployed_services.clone(), err))?;
     }
 
     // create all applications
     for service in &environment.applications {
-        service.exec_action(&deployment_target, *service.action())?;
-        service.exec_check_action(*service.action())?;
+        deployed_services.insert(*service.long_id());
+        service
+            .exec_action(&deployment_target, *service.action())
+            .map_err(|err| (deployed_services.clone(), err))?;
+        service
+            .exec_check_action(*service.action())
+            .map_err(|err| (deployed_services.clone(), err))?;
     }
 
     // create all routers
     for service in &environment.routers {
-        service.exec_action(&deployment_target, *service.action())?;
-        service.exec_check_action(*service.action())?;
+        deployed_services.insert(*service.long_id());
+        service
+            .exec_action(&deployment_target, *service.action())
+            .map_err(|err| (deployed_services.clone(), err))?;
+        service
+            .exec_check_action(*service.action())
+            .map_err(|err| (deployed_services.clone(), err))?;
     }
 
     Ok(())
@@ -570,22 +591,41 @@ pub fn pause_environment(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
     event_details: EventDetails,
-) -> Result<(), EngineError> {
-    let deployment_target = DeploymentTarget::new(kubernetes, environment, &event_details)?;
+) -> Result<(), (HashSet<Uuid>, EngineError)> {
+    let mut deployed_services: HashSet<Uuid> = HashSet::with_capacity(
+        environment.routers.len() + environment.databases.len() + environment.applications.len(),
+    );
+    let deployment_target = DeploymentTarget::new(kubernetes, environment, &event_details)
+        .map_err(|err| (deployed_services.clone(), err))?;
 
     for service in &environment.routers {
-        service.on_pause(&deployment_target)?;
-        service.on_pause_check()?;
+        deployed_services.insert(*service.long_id());
+        service
+            .on_pause(&deployment_target)
+            .map_err(|err| (deployed_services.clone(), err))?;
+        service
+            .on_pause_check()
+            .map_err(|err| (deployed_services.clone(), err))?;
     }
 
     for service in &environment.applications {
-        service.on_pause(&deployment_target)?;
-        service.on_pause_check()?;
+        deployed_services.insert(*service.long_id());
+        service
+            .on_pause(&deployment_target)
+            .map_err(|err| (deployed_services.clone(), err))?;
+        service
+            .on_pause_check()
+            .map_err(|err| (deployed_services.clone(), err))?;
     }
 
-    for database in &environment.databases {
-        database.on_pause(&deployment_target)?;
-        database.on_pause_check()?;
+    for service in &environment.databases {
+        deployed_services.insert(*service.long_id());
+        service
+            .on_pause(&deployment_target)
+            .map_err(|err| (deployed_services.clone(), err))?;
+        service
+            .on_pause_check()
+            .map_err(|err| (deployed_services.clone(), err))?;
     }
 
     Ok(())
@@ -596,8 +636,13 @@ pub fn delete_environment(
     kubernetes: &dyn Kubernetes,
     environment: &Environment,
     event_details: EventDetails,
-) -> Result<(), EngineError> {
-    let kubeconfig = kubernetes.get_kubeconfig_file_path()?;
+) -> Result<(), (HashSet<Uuid>, EngineError)> {
+    let mut deployed_services: HashSet<Uuid> = HashSet::with_capacity(
+        environment.routers.len() + environment.databases.len() + environment.applications.len(),
+    );
+    let kubeconfig = kubernetes
+        .get_kubeconfig_file_path()
+        .map_err(|err| (deployed_services.clone(), err))?;
 
     // check if environment is not already deleted
     // speed up delete env because of terraform requiring apply + destroy
@@ -610,23 +655,39 @@ pub fn delete_environment(
         return Ok(());
     };
 
-    let deployment_target = DeploymentTarget::new(kubernetes, environment, &event_details)?;
+    let deployment_target = DeploymentTarget::new(kubernetes, environment, &event_details)
+        .map_err(|err| (deployed_services.clone(), err))?;
 
     // delete all stateless services (router, application...)
     for service in &environment.routers {
-        let _ = service.on_delete(&deployment_target);
-        service.on_delete_check()?;
+        deployed_services.insert(*service.long_id());
+        service
+            .on_delete(&deployment_target)
+            .map_err(|err| (deployed_services.clone(), err))?;
+        service
+            .on_delete_check()
+            .map_err(|err| (deployed_services.clone(), err))?;
     }
 
     for service in &environment.applications {
-        let _ = service.on_delete(&deployment_target);
-        service.on_delete_check()?;
+        deployed_services.insert(*service.long_id());
+        service
+            .on_delete(&deployment_target)
+            .map_err(|err| (deployed_services.clone(), err))?;
+        service
+            .on_delete_check()
+            .map_err(|err| (deployed_services.clone(), err))?;
     }
 
     // delete all stateful services (database)
-    for database in &environment.databases {
-        database.on_delete(&deployment_target)?;
-        database.on_delete_check()?;
+    for service in &environment.databases {
+        deployed_services.insert(*service.long_id());
+        service
+            .on_delete(&deployment_target)
+            .map_err(|err| (deployed_services.clone(), err))?;
+        service
+            .on_delete_check()
+            .map_err(|err| (deployed_services.clone(), err))?;
     }
 
     // do not catch potential error - to confirm

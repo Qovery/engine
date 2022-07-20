@@ -654,6 +654,8 @@ pub enum Tag {
     HelmChartUninstallError,
     /// HelmHistoryError: represents an error while trying to execute helm history on a helm chart.
     HelmHistoryError,
+    /// HelmDeployTimeout: represent a failure to run the helm command in the given time frame
+    HelmDeployTimeout,
     /// CannotGetAnyAvailableVPC: represents an error while trying to get any available VPC.
     CannotGetAnyAvailableVPC,
     /// UnsupportedVersion: represents an error where product doesn't support the given version.
@@ -2374,14 +2376,12 @@ impl EngineError {
             _ => None,
         };
 
-        EngineError::new(
-            event_details,
-            Tag::HelmChartUninstallError,
-            error.to_string(),
-            cmd_error,
-            None,
-            None,
-        )
+        let tag = match &error {
+            HelmError::Timeout(_, _, _) => Tag::HelmDeployTimeout,
+            _ => Tag::HelmChartsDeployError,
+        };
+
+        EngineError::new(event_details, tag, error.to_string(), cmd_error, None, None)
     }
 
     /// Creates new error while uninstalling Helm chart.

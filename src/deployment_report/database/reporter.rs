@@ -205,12 +205,12 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             Err(err) => err,
         };
 
+        (self.send_error)(error.clone());
         (self.send_error)(EngineError::new_engine_error(
-            error.clone(),
-            "❌ Deployment of database failed ! Look at the report above and/or internal error below to understand why"
+            error,
+            "❌ Deployment of database failed ! Look at the report and internal error above to understand why"
                 .to_string(),
             None,
         ));
-        (self.send_error)(error);
     }
 }
