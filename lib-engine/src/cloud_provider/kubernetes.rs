@@ -23,13 +23,15 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::models::{CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::Kind as CloudProviderKind;
 use crate::cloud_provider::{CloudProvider, DeploymentTarget};
-use crate::cmd::kubectl::{self, kubectl_delete_apiservice, kubectl_delete_completed_jobs};
+use crate::cmd::kubectl::{kubectl_delete_apiservice, kubectl_delete_completed_jobs};
 use crate::cmd::kubectl::{
     kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_delete_pod,
     kubectl_exec_get_node, kubectl_exec_is_namespace_present, kubectl_exec_version, kubectl_get_crash_looping_pods,
     kubernetes_get_all_pdbs,
 };
 use crate::cmd::structs::KubernetesNodeCondition;
+use crate::deployment_action::deploy_namespace::NamespaceDeployment;
+use crate::deployment_action::DeploymentAction;
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
@@ -550,6 +552,17 @@ pub fn deploy_environment(
     let deployment_target = DeploymentTarget::new(kubernetes, environment, &event_details)
         .map_err(|err| (deployed_services.clone(), err))?;
 
+    // deploy namespace first
+    let ns = NamespaceDeployment {
+        resource_expiration: kubernetes
+            .context()
+            .resource_expiration_in_seconds()
+            .map(|ttl| Duration::from_secs(ttl as u64)),
+        event_details: event_details.clone(),
+    };
+    ns.exec_action(&deployment_target, environment.action)
+        .map_err(|err| (deployed_services.clone(), err))?;
+
     // create all stateful services (database)
     for service in &environment.databases {
         deployed_services.insert(*service.long_id());
@@ -628,6 +641,16 @@ pub fn pause_environment(
             .map_err(|err| (deployed_services.clone(), err))?;
     }
 
+    let ns = NamespaceDeployment {
+        resource_expiration: kubernetes
+            .context()
+            .resource_expiration_in_seconds()
+            .map(|ttl| Duration::from_secs(ttl as u64)),
+        event_details: event_details.clone(),
+    };
+    ns.on_pause(&deployment_target)
+        .map_err(|err| (deployed_services.clone(), err))?;
+
     Ok(())
 }
 
@@ -647,7 +670,7 @@ pub fn delete_environment(
     // check if environment is not already deleted
     // speed up delete env because of terraform requiring apply + destroy
     if !kubectl_exec_is_namespace_present(
-        kubeconfig.clone(),
+        kubeconfig,
         environment.namespace(),
         kubernetes.cloud_provider().credentials_environment_variables(),
     ) {
@@ -690,12 +713,15 @@ pub fn delete_environment(
             .map_err(|err| (deployed_services.clone(), err))?;
     }
 
-    // do not catch potential error - to confirm
-    let _ = kubectl::kubectl_exec_delete_namespace(
-        kubeconfig,
-        environment.namespace(),
-        kubernetes.cloud_provider().credentials_environment_variables(),
-    );
+    let ns = NamespaceDeployment {
+        resource_expiration: kubernetes
+            .context()
+            .resource_expiration_in_seconds()
+            .map(|ttl| Duration::from_secs(ttl as u64)),
+        event_details: event_details.clone(),
+    };
+    ns.on_delete(&deployment_target)
+        .map_err(|err| (deployed_services.clone(), err))?;
 
     Ok(())
 }
