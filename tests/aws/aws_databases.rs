@@ -581,6 +581,7 @@ fn private_postgresql_v13_deploy_and_pause() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "Database not handle with terraform ATM"]
 fn private_postgresql_v14_deploy_a_working_prod_environment() {
     test_postgresql_configuration("14", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
@@ -588,6 +589,7 @@ fn private_postgresql_v14_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "Database not handle with terraform ATM"]
 fn public_postgresql_v14_deploy_a_working_prod_environment() {
     test_postgresql_configuration("14", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
