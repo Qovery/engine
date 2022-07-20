@@ -7,6 +7,7 @@ use bstr::ByteSlice;
 use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
+use dotenv::dotenv;
 use gethostname;
 use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind, Write};
@@ -395,6 +396,7 @@ pub fn build_platform_local_docker(context: &Context, logger: Box<dyn Logger>) -
 pub fn init() -> Instant {
     let ci_var = "CI";
 
+    dotenv().ok();
     let _ = match env::var_os(ci_var) {
         Some(_) => tracing_subscriber::fmt()
             .json()
