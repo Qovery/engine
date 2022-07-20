@@ -6,7 +6,6 @@ use self::test_utilities::utilities::{
 };
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::cmd::kubectl::kubernetes_get_all_pdbs;
 use qovery_engine::io_models::{Action, CloneForTest, CustomDomain, Port, Protocol, Storage, StorageType};
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
@@ -190,8 +189,6 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         );
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), true);
-
-        let kubernetes_config = kubernetes_config_path(context.clone(), Kind::Aws, "/tmp", secrets.clone());
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
