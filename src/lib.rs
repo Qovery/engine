@@ -1,5 +1,6 @@
 #![allow(deprecated)]
 
+extern crate bitflags;
 extern crate tera;
 #[macro_use]
 extern crate tracing;

@@ -42,8 +42,8 @@ fn test_ec2_database(database_mode: DatabaseMode, is_public: bool, db_versions_t
             .expect("DEFAULT_TEST_DOMAIN must be set")
             .to_string();
         let cluster_domain = ClusterDomain::QoveryOwnedDomain {
-            cluster_id: cluster_id.to_string(),
-            domain: attributed_domain.to_string(),
+            cluster_id,
+            domain: attributed_domain,
         };
 
         let engine_config = AWS::docker_cr_engine(

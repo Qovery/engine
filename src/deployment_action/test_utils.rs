@@ -1,4 +1,5 @@
 use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
+use k8s_openapi::api::autoscaling::v1::HorizontalPodAutoscaler;
 use k8s_openapi::api::core::v1::Namespace;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::api::{DeleteParams, PostParams};
@@ -77,6 +78,30 @@ pub fn get_simple_statefulset() -> StatefulSet {
         }
       }
     }))
+    .unwrap()
+}
+
+pub fn get_simple_hpa() -> HorizontalPodAutoscaler {
+    serde_json::from_value(serde_json::json!({
+    "apiVersion": "autoscaling/v1",
+    "kind": "HorizontalPodAutoscaler",
+    "metadata": {
+      "name": "pause-hpa",
+      "labels": {
+        "app": "pause"
+      }
+    },
+    "spec": {
+      "scaleTargetRef": {
+        "apiVersion": "apps/v1",
+        "kind": "Deployment",
+        "name": "pause"
+      },
+      "minReplicas": 1,
+      "maxReplicas": 5,
+      "targetCPUUtilizationPercentage": 80
+    }
+      }))
     .unwrap()
 }
 

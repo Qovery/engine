@@ -4,10 +4,11 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 use crate::runtime::block_on;
 use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
-use k8s_openapi::api::autoscaling::v1::{Scale, ScaleSpec};
-use kube::api::{ListParams, Patch, PatchParams};
+use k8s_openapi::api::autoscaling::v1::{HorizontalPodAutoscaler, Scale, ScaleSpec};
+use k8s_openapi::api::core::v1::Pod;
+use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
 use kube::runtime::wait::{await_condition, Condition};
-use kube::Api;
+use kube::{Api, ResourceExt};
 use std::time::Duration;
 
 fn has_deployment_ready_replicas(nb_ready_replicas: usize) -> impl Condition<Deployment> {
@@ -30,11 +31,11 @@ fn has_statefulset_ready_replicas(nb_ready_replicas: usize) -> impl Condition<St
     }
 }
 
-async fn scale_service(
+async fn pause_service(
     kube: &kube::Client,
     namespace: &str,
     selector: &str,
-    desired_size: usize,
+    desired_size: usize, // only for test, normal behavior assume 0
     is_statefulset: bool,
 ) -> Result<(), kube::Error> {
     let list_params = ListParams::default().labels(selector);
@@ -47,6 +48,12 @@ async fn scale_service(
         status: None,
     };
     let patch = Patch::Merge(new_scale);
+
+    // First we need to delete any horizontal pod autoscaler, that may mess with us
+    let hpas: Api<HorizontalPodAutoscaler> = Api::namespaced(kube.clone(), namespace);
+    for hpa in hpas.list(&list_params).await?.items {
+        hpas.delete(&hpa.name(), &DeleteParams::background()).await?;
+    }
 
     if is_statefulset {
         let statefulsets: Api<StatefulSet> = Api::namespaced(kube.clone(), namespace);
@@ -65,6 +72,17 @@ async fn scale_service(
             }
         }
     };
+
+    // Wait for pod to be destroyed/correctly scaled
+    // Checking for readyness is not enough, as when downscaling pods in terminating are not listed in (ready_)replicas
+    let pods: Api<Pod> = Api::namespaced(kube.clone(), namespace);
+    while let Ok(pod) = pods.list(&list_params).await {
+        if pod.items.len() == desired_size {
+            break;
+        }
+
+        tokio::time::sleep(Duration::from_secs(10)).await;
+    }
 
     Ok(())
 }
@@ -98,7 +116,7 @@ impl DeploymentAction for PauseServiceAction {
     }
 
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let fut = scale_service(
+        let fut = pause_service(
             &target.kube,
             target.environment.namespace(),
             &self.selector,
@@ -153,11 +171,14 @@ impl DeploymentAction for PauseServiceAction {
 #[cfg(test)]
 mod tests {
     use crate::deployment_action::pause_service::{
-        has_deployment_ready_replicas, has_statefulset_ready_replicas, scale_service,
+        has_deployment_ready_replicas, has_statefulset_ready_replicas, pause_service,
     };
-    use crate::deployment_action::test_utils::{get_simple_deployment, get_simple_statefulset, NamespaceForTest};
+    use crate::deployment_action::test_utils::{
+        get_simple_deployment, get_simple_hpa, get_simple_statefulset, NamespaceForTest,
+    };
     use function_name::named;
     use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
+    use k8s_openapi::api::autoscaling::v1::HorizontalPodAutoscaler;
     use kube::api::PostParams;
     use kube::runtime::wait::await_condition;
     use kube::Api;
@@ -175,12 +196,16 @@ mod tests {
         let timeout = Duration::from_secs(30);
         let deployments: Api<Deployment> = Api::namespaced(kube_client.clone(), &namespace);
         let deployment: Deployment = get_simple_deployment();
+        let hpas: Api<HorizontalPodAutoscaler> = Api::namespaced(kube_client.clone(), &namespace);
+        let hpa = get_simple_hpa();
+
         let app_name = deployment.metadata.name.clone().unwrap_or_default();
         let selector = format!("app={}", app_name);
 
         // create simple deployment and wait for it to be ready
         let _ns = NamespaceForTest::new(kube_client.clone(), namespace.to_string()).await?;
 
+        hpas.create(&PostParams::default(), &hpa).await.unwrap();
         deployments.create(&PostParams::default(), &deployment).await.unwrap();
         tokio::time::timeout(
             timeout,
@@ -189,10 +214,10 @@ mod tests {
         .await??;
 
         // Scaling a service that does not exist should not fail
-        tokio::time::timeout(timeout, scale_service(&kube_client, &namespace, "app=totototo", 0, false)).await??;
+        tokio::time::timeout(timeout, pause_service(&kube_client, &namespace, "app=totototo", 0, false)).await??;
 
         // Try to scale down our deployment
-        tokio::time::timeout(timeout, scale_service(&kube_client, &namespace, &selector, 0, false)).await??;
+        tokio::time::timeout(timeout, pause_service(&kube_client, &namespace, &selector, 0, false)).await??;
         tokio::time::timeout(
             timeout,
             await_condition(deployments.clone(), &app_name, has_deployment_ready_replicas(0)),
@@ -200,7 +225,7 @@ mod tests {
         .await??;
 
         // Try to scale up our deployment
-        tokio::time::timeout(timeout, scale_service(&kube_client, &namespace, &selector, 1, false)).await??;
+        tokio::time::timeout(timeout, pause_service(&kube_client, &namespace, &selector, 1, false)).await??;
         tokio::time::timeout(
             timeout,
             await_condition(deployments.clone(), &app_name, has_deployment_ready_replicas(1)),
@@ -237,10 +262,10 @@ mod tests {
         .await??;
 
         // Scaling a service that does not exist should not fail
-        tokio::time::timeout(timeout, scale_service(&kube_client, &namespace, "app=totototo", 0, true)).await??;
+        tokio::time::timeout(timeout, pause_service(&kube_client, &namespace, "app=totototo", 0, true)).await??;
 
         // Try to scale down our deployment
-        tokio::time::timeout(timeout, scale_service(&kube_client, &namespace, &selector, 0, true)).await??;
+        tokio::time::timeout(timeout, pause_service(&kube_client, &namespace, &selector, 0, true)).await??;
         tokio::time::timeout(
             timeout,
             await_condition(statefulsets.clone(), &app_name, has_statefulset_ready_replicas(0)),
@@ -248,7 +273,7 @@ mod tests {
         .await??;
 
         // Try to scale up our deployment
-        tokio::time::timeout(timeout, scale_service(&kube_client, &namespace, &selector, 1, true)).await??;
+        tokio::time::timeout(timeout, pause_service(&kube_client, &namespace, &selector, 1, true)).await??;
         tokio::time::timeout(
             timeout,
             await_condition(statefulsets.clone(), &app_name, has_statefulset_ready_replicas(1)),

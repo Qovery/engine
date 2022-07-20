@@ -70,6 +70,7 @@ pub enum HelmCommand {
     UNINSTALL,
     LIST,
     DIFF,
+    TEMPLATE,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -593,6 +594,88 @@ impl Helm {
         }
 
         Ok(())
+    }
+
+    pub fn template_validate(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
+        let mut args_string: Vec<String> = vec![
+            "template".to_string(),
+            "--validate".to_string(),
+            "--debug".to_string(),
+            "--kubeconfig".to_string(),
+            self.kubernetes_config.to_str().unwrap_or_default().to_string(),
+            "--namespace".to_string(),
+            chart.get_namespace_string(),
+        ];
+
+        for value in &chart.values {
+            args_string.push("--set".to_string());
+            args_string.push(format!("{}={}", value.key, value.value));
+        }
+
+        for value_file in &chart.values_files {
+            args_string.push("-f".to_string());
+            args_string.push(value_file.clone());
+        }
+
+        for value_file in &chart.yaml_files_content {
+            let file_path = format!("{}/{}", chart.path, &value_file.filename);
+            let file_create = || -> Result<(), Error> {
+                let mut file = File::create(&file_path)?;
+                file.write_all(value_file.yaml_content.as_bytes())?;
+                Ok(())
+            };
+
+            // no need to validate yaml as it will be done by helm
+            if let Err(e) = file_create() {
+                let cmd_err = CommandError::new(
+                    format!("Error while writing yaml content to file `{}`", &file_path),
+                    Some(format!("Content\n{}\nError: {}", value_file.yaml_content, e)),
+                    Some(
+                        envs.iter()
+                            .map(|(k, v)| (k.to_string(), v.to_string()))
+                            .collect::<Vec<(String, String)>>(),
+                    ),
+                );
+                return Err(CmdError(chart.name.clone(), UPGRADE, cmd_err));
+            };
+
+            args_string.push("-f".to_string());
+            args_string.push(file_path);
+        }
+
+        // add last elements
+        args_string.push(chart.name.clone());
+        args_string.push(chart.path.clone());
+
+        let mut stderr_msg = String::new();
+        let helm_ret = helm_exec_with_output(
+            &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
+            &self.get_all_envs(envs),
+            &mut |line| {
+                debug!("{}", line);
+            },
+            &mut |line| {
+                stderr_msg.push_str(&line);
+                warn!("chart {}: {}", chart.name, line);
+            },
+        );
+
+        match helm_ret {
+            // Ok is ok
+            Ok(_) => Ok(()),
+            Err(err) => {
+                error!("Helm error: {:?}", err);
+                Err(CmdError(
+                    chart.name.clone(),
+                    HelmCommand::TEMPLATE,
+                    CommandError::new(
+                        "Helm error".to_string(),
+                        Some(stderr_msg),
+                        Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+                    ),
+                ))
+            }
+        }
     }
 }
 

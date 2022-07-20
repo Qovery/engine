@@ -1247,7 +1247,7 @@ pub fn test_db(
                 Err(_) => panic!(),
             };
 
-            match get_svc(context.clone(), provider_kind.clone(), environment, secrets) {
+            match get_svc(context, provider_kind, environment, secrets) {
                 Ok(svc) => assert_eq!(
                     svc.items
                         .expect("No items in svc")
@@ -1263,7 +1263,7 @@ pub fn test_db(
             };
         }
         DatabaseMode::MANAGED => {
-            match get_svc(context.clone(), provider_kind.clone(), environment, secrets) {
+            match get_svc(context, provider_kind, environment, secrets) {
                 Ok(svc) => {
                     let service = svc
                         .items
@@ -1296,7 +1296,7 @@ pub fn test_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::Eks,
-                    kubernetes_version.clone(),
+                    kubernetes_version,
                     &cluster_domain,
                     None,
                     KUBERNETES_MIN_NODES,
@@ -1308,7 +1308,7 @@ pub fn test_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::Ec2,
-                    kubernetes_version.clone(),
+                    kubernetes_version,
                     &cluster_domain,
                     None,
                     1,
@@ -1320,7 +1320,7 @@ pub fn test_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::Doks,
-                    kubernetes_version.clone(),
+                    kubernetes_version,
                     &cluster_domain,
                     None,
                     KUBERNETES_MIN_NODES,
@@ -1332,7 +1332,7 @@ pub fn test_db(
                     logger.clone(),
                     localisation.as_str(),
                     KubernetesKind::ScwKapsule,
-                    kubernetes_version.clone(),
+                    kubernetes_version,
                     &cluster_domain,
                     None,
                     KUBERNETES_MIN_NODES,
@@ -1344,7 +1344,7 @@ pub fn test_db(
         }
     };
 
-    let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
+    let ret = environment_delete.delete_environment(&ea_delete, logger, engine_config_for_delete);
     assert!(matches!(ret, TransactionResult::Ok));
 
     test_name.to_string()

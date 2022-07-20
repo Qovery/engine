@@ -19,8 +19,9 @@ use crate::cmd;
 use crate::cmd::helm;
 use crate::cmd::kubectl::{kubectl_exec_delete_pod, kubectl_exec_delete_secret, kubectl_exec_get_pods};
 use crate::cmd::structs::KubernetesPodStatusPhase;
+use crate::cmd::terraform::TerraformError;
 use crate::errors::{CommandError, EngineError};
-use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter};
+use crate::events::{EngineEvent, EventDetails, EventMessage, Stage, ToTransmitter};
 use crate::io_models::ProgressLevel::Info;
 use crate::io_models::{
     ApplicationAdvancedSettings, Context, DatabaseMode, Listen, ListenersHelper, ProgressInfo, ProgressLevel,
@@ -227,133 +228,6 @@ pub fn default_tera_context(
     context
 }
 
-/// deploy a stateless service created by the user (E.g: App or External Service)
-/// the difference with `deploy_service(..)` is that this function provides the thrown error in case of failure
-pub fn deploy_user_stateless_service<T>(target: &DeploymentTarget, service: &T) -> Result<(), EngineError>
-where
-    T: Service + Helm,
-{
-    deploy_stateless_service(target, service)
-}
-
-/// deploy a stateless service (app, router, database...) on Kubernetes
-pub fn deploy_stateless_service<T>(target: &DeploymentTarget, service: &T) -> Result<(), EngineError>
-where
-    T: Service + Helm,
-{
-    let kubernetes = target.kubernetes;
-    let environment = target.environment;
-    let workspace_dir = service.workspace_directory();
-    let tera_context = service.tera_context(target)?;
-    let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        service.helm_chart_dir(),
-        workspace_dir.as_str(),
-        tera_context,
-    ) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            service.helm_chart_dir(),
-            workspace_dir,
-            e,
-        ));
-    }
-
-    let helm_release_name = service.helm_release_name();
-    let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
-
-    // define labels to add to namespace
-    let mut namespace_labels: Option<BTreeMap<String, String>> = None;
-    if service.context().resource_expiration_in_seconds().is_some() {
-        namespace_labels = Some(BTreeMap::from([(
-            "ttl".to_string(),
-            format!(
-                "{}",
-                service
-                    .context()
-                    .resource_expiration_in_seconds()
-                    .expect("expected to have resource expiration in seconds")
-            ),
-        )]));
-    };
-
-    prepare_namespace(
-        environment,
-        namespace_labels,
-        event_details.clone(),
-        kubernetes.kind(),
-        &target.kube,
-    )?;
-
-    // do exec helm upgrade and return the last deployment status
-    let helm = helm::Helm::new(
-        &kubernetes_config_file_path,
-        &kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| helm::to_engine_error(&event_details, e))?;
-    let chart = ChartInfo::new_from_custom_namespace(
-        helm_release_name,
-        workspace_dir.clone(),
-        environment.namespace().to_string(),
-        600_i64,
-        match service.service_type() {
-            ServiceType::Database(_) => vec![format!("{}/q-values.yaml", &workspace_dir)],
-            _ => vec![],
-        },
-        vec![],
-        vec![],
-        false,
-        service.selector(),
-    );
-
-    helm.upgrade(&chart, &[])
-        .map_err(|e| helm::to_engine_error(&event_details, e))?;
-
-    delete_pending_service(
-        kubernetes_config_file_path.as_str(),
-        environment.namespace(),
-        service.selector().unwrap_or_default().as_str(),
-        kubernetes.cloud_provider().credentials_environment_variables(),
-        event_details.clone(),
-    )?;
-
-    cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
-        kubernetes_config_file_path.as_str(),
-        environment.namespace(),
-        service.selector().unwrap_or_default().as_str(),
-        kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| {
-        EngineError::new_k8s_pod_not_ready(
-            event_details.clone(),
-            service.selector().unwrap_or_default(),
-            environment.namespace().to_string(),
-            e,
-        )
-    })?;
-
-    Ok(())
-}
-
-pub fn delete_stateless_service<T>(
-    target: &DeploymentTarget,
-    service: &T,
-    event_details: EventDetails,
-) -> Result<(), EngineError>
-where
-    T: Service + Helm,
-{
-    let kubernetes = target.kubernetes;
-    let environment = target.environment;
-    let helm_release_name = service.helm_release_name();
-
-    // clean the resource
-    helm_uninstall_release(kubernetes, environment, helm_release_name.as_str(), event_details)?;
-
-    Ok(())
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatabaseTerraformConfig {
     #[serde(rename = "database_target_id")]
@@ -366,36 +240,26 @@ pub struct DatabaseTerraformConfig {
     pub target_fqdn: String,
 }
 
-pub enum DatabaseTerraformConfigError {
-    FileDoesntExist(CommandError),
-    FileCannotBeParsed(CommandError),
-}
-
 pub fn get_database_terraform_config(
     database_terraform_config_file: &str,
-) -> Result<DatabaseTerraformConfig, DatabaseTerraformConfigError> {
+) -> Result<DatabaseTerraformConfig, TerraformError> {
     let file_content = match File::open(&database_terraform_config_file) {
         Ok(f) => f,
         Err(e) => {
-            return Err(DatabaseTerraformConfigError::FileDoesntExist(CommandError::new(
-                format!("Cannot open database config file: {}", database_terraform_config_file),
-                Some(e.to_string()),
-                None,
-            )));
+            return Err(TerraformError::ConfigFileNotFound {
+                path: database_terraform_config_file.to_string(),
+                raw_message: format!("Terraform config error, database config cannot be found.\n{}", e),
+            });
         }
     };
 
     let reader = BufReader::new(file_content);
     match serde_json::from_reader(reader) {
         Ok(config) => Ok(config),
-        Err(e) => Err(DatabaseTerraformConfigError::FileCannotBeParsed(CommandError::new(
-            format!(
-                "Error while parsing database terraform config file {}",
-                database_terraform_config_file
-            ),
-            Some(e.to_string()),
-            None,
-        ))),
+        Err(e) => Err(TerraformError::ConfigFileInvalidContent {
+            path: database_terraform_config_file.to_string(),
+            raw_message: format!("Terraform config error, database config cannot be parsed.\n{}", e),
+        }),
     }
 }
 
@@ -452,7 +316,7 @@ pub fn prepare_namespace(
     Ok(())
 }
 
-pub fn deploy_database_service<T>(
+pub fn deploy_managed_database_service<T>(
     target: &DeploymentTarget,
     service: &T,
     event_details: EventDetails,
@@ -497,211 +361,115 @@ where
     )
     .map_err(|e| helm::to_engine_error(&event_details, e))?;
 
-    if service.is_managed_service() {
-        let context = service.tera_context(target)?;
+    let context = service.tera_context(target)?;
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            service.terraform_common_resource_dir_path(),
-            &workspace_dir,
-            context.clone(),
-        ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                service.terraform_common_resource_dir_path(),
-                workspace_dir,
-                e,
-            ));
-        }
-
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            service.terraform_resource_dir_path(),
-            &workspace_dir,
-            context.clone(),
-        ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                service.terraform_resource_dir_path(),
-                workspace_dir,
-                e,
-            ));
-        }
-
-        let external_svc_dir = format!("{}/{}", workspace_dir, "external-name-svc");
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            service.helm_chart_external_name_service_dir(),
-            external_svc_dir.as_str(),
-            context,
-        ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                service.helm_chart_external_name_service_dir(),
-                external_svc_dir,
-                e,
-            ));
-        }
-
-        cmd::terraform::terraform_init_validate_plan_apply(
-            workspace_dir.as_str(),
-            service.context().is_dry_run_deploy(),
-        )
-        .map_err(|e| EngineError::new_terraform_error_while_executing_pipeline(event_details.clone(), e))?;
-
-        // Gather database TF generated JSON config if any
-        // if configuration exists, it means that HELM will be used to deploy managed DB service external name chart instead on Terraform
-        match get_database_terraform_config(format!("{}/database-tf-config.json", workspace_dir).as_str()) {
-            Ok(database_config) => {
-                // Deploying helm chart
-                let chart = ChartInfo::new_from_custom_namespace(
-                    format!("{}-externalname", database_config.target_id),
-                    external_svc_dir,
-                    environment.namespace().to_string(),
-                    600_i64,
-                    vec![],
-                    vec![
-                        ChartSetValue {
-                            key: "target_hostname".to_string(),
-                            value: database_config.target_hostname,
-                        },
-                        ChartSetValue {
-                            key: "source_fqdn".to_string(),
-                            value: database_config.target_fqdn,
-                        },
-                        ChartSetValue {
-                            key: "database_id".to_string(),
-                            value: service.id().to_string(),
-                        },
-                        ChartSetValue {
-                            key: "database_long_id".to_string(),
-                            value: service.long_id().to_string(),
-                        },
-                        ChartSetValue {
-                            key: "environment_id".to_string(),
-                            value: environment.id.to_string(),
-                        },
-                        ChartSetValue {
-                            key: "environment_long_id".to_string(),
-                            value: environment.long_id.to_string(),
-                        },
-                        ChartSetValue {
-                            key: "project_long_id".to_string(),
-                            value: environment.project_long_id.to_string(),
-                        },
-                        ChartSetValue {
-                            key: "service_name".to_string(),
-                            value: database_config.target_fqdn_id,
-                        },
-                        ChartSetValue {
-                            key: "publicly_accessible".to_string(),
-                            value: service.publicly_accessible().to_string(),
-                        },
-                    ],
-                    vec![],
-                    false,
-                    service.selector(),
-                );
-
-                helm.upgrade(&chart, &[])
-                    .map_err(|e| helm::to_engine_error(&event_details, e))?;
-            }
-            Err(e) => match e {
-                DatabaseTerraformConfigError::FileDoesntExist(e) => {
-                    return Err(EngineError::new_terraform_database_config_mismatch(event_details, e));
-                }
-                DatabaseTerraformConfigError::FileCannotBeParsed(e) => {
-                    return Err(EngineError::new_terraform_database_config_mismatch(event_details, e));
-                }
-            },
-        }
-    } else {
-        let context = service.tera_context(target)?;
-        let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
-
-        // default chart
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            service.helm_chart_dir(),
-            workspace_dir.as_str(),
-            context.clone(),
-        ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                service.helm_chart_dir(),
-                workspace_dir,
-                e,
-            ));
-        };
-
-        // overwrite with our chart values
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-            service.helm_chart_values_dir(),
-            workspace_dir.as_str(),
-            context,
-        ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                service.helm_chart_values_dir(),
-                workspace_dir,
-                e,
-            ));
-        };
-
-        // do exec helm upgrade and return the last deployment status
-        let helm = helm::Helm::new(
-            &kubernetes_config_file_path,
-            &kubernetes.cloud_provider().credentials_environment_variables(),
-        )
-        .map_err(|e| helm::to_engine_error(&event_details, e))?;
-        let chart = ChartInfo::new_from_custom_namespace(
-            service.helm_release_name(),
-            workspace_dir.clone(),
-            environment.namespace().to_string(),
-            600_i64,
-            match service.service_type() {
-                ServiceType::Database(_) => vec![format!("{}/q-values.yaml", &workspace_dir)],
-                _ => vec![],
-            },
-            vec![],
-            vec![],
-            false,
-            service.selector(),
-        );
-
-        helm.upgrade(&chart, &[])
-            .map_err(|e| helm::to_engine_error(&event_details, e))?;
-
-        delete_pending_service(
-            kubernetes_config_file_path.as_str(),
-            environment.namespace(),
-            service.selector().unwrap_or_default().as_str(),
-            kubernetes.cloud_provider().credentials_environment_variables(),
-            event_details.clone(),
-        )?;
-
-        // check app status
-        let is_pod_ready = cmd::kubectl::kubectl_exec_is_pod_ready_with_retry(
-            &kubernetes_config_file_path,
-            environment.namespace(),
-            service.selector().unwrap_or_default().as_str(),
-            kubernetes.cloud_provider().credentials_environment_variables(),
-        );
-        if let Ok(Some(true)) = is_pod_ready {
-            return Ok(());
-        }
-
-        return Err(EngineError::new_database_failed_to_start_after_several_retries(
+    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+        service.terraform_common_resource_dir_path(),
+        &workspace_dir,
+        context.clone(),
+    ) {
+        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
             event_details,
-            service.id().to_string(),
-            service.service_type().name(),
-            match is_pod_ready {
-                Err(e) => Some(e),
-                _ => None,
-            },
+            service.terraform_common_resource_dir_path(),
+            workspace_dir,
+            e,
         ));
+    }
+
+    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+        service.terraform_resource_dir_path(),
+        &workspace_dir,
+        context.clone(),
+    ) {
+        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            event_details,
+            service.terraform_resource_dir_path(),
+            workspace_dir,
+            e,
+        ));
+    }
+
+    let external_svc_dir = format!("{}/{}", workspace_dir, "external-name-svc");
+    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+        service.helm_chart_external_name_service_dir(),
+        external_svc_dir.as_str(),
+        context,
+    ) {
+        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            event_details,
+            service.helm_chart_external_name_service_dir(),
+            external_svc_dir,
+            e,
+        ));
+    }
+
+    cmd::terraform::terraform_init_validate_plan_apply(workspace_dir.as_str(), service.context().is_dry_run_deploy())
+        .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
+
+    // Gather database TF generated JSON config if any
+    // if configuration exists, it means that HELM will be used to deploy managed DB service external name chart instead on Terraform
+    match get_database_terraform_config(format!("{}/database-tf-config.json", workspace_dir).as_str()) {
+        Ok(database_config) => {
+            // Deploying helm chart
+            let chart = ChartInfo::new_from_custom_namespace(
+                format!("{}-externalname", database_config.target_id),
+                external_svc_dir,
+                environment.namespace().to_string(),
+                600_i64,
+                vec![],
+                vec![
+                    ChartSetValue {
+                        key: "target_hostname".to_string(),
+                        value: database_config.target_hostname,
+                    },
+                    ChartSetValue {
+                        key: "source_fqdn".to_string(),
+                        value: database_config.target_fqdn,
+                    },
+                    ChartSetValue {
+                        key: "database_id".to_string(),
+                        value: service.id().to_string(),
+                    },
+                    ChartSetValue {
+                        key: "database_long_id".to_string(),
+                        value: service.long_id().to_string(),
+                    },
+                    ChartSetValue {
+                        key: "environment_id".to_string(),
+                        value: environment.id.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "environment_long_id".to_string(),
+                        value: environment.long_id.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "project_long_id".to_string(),
+                        value: environment.project_long_id.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "service_name".to_string(),
+                        value: database_config.target_fqdn_id,
+                    },
+                    ChartSetValue {
+                        key: "publicly_accessible".to_string(),
+                        value: service.publicly_accessible().to_string(),
+                    },
+                ],
+                vec![],
+                false,
+                service.selector(),
+            );
+
+            helm.upgrade(&chart, &[])
+                .map_err(|e| helm::to_engine_error(&event_details, e))?;
+        }
+        Err(e) => return Err(EngineError::new_terraform_error(event_details, e)),
     }
 
     Ok(())
 }
 
-pub fn delete_stateful_service<T>(
+pub fn delete_managed_stateful_service<T>(
     target: &DeploymentTarget,
     service: &T,
     event_details: EventDetails,
@@ -710,87 +478,84 @@ pub fn delete_stateful_service<T>(
 where
     T: DatabaseService + Helm + Terraform,
 {
+    assert!(
+        service.is_managed_service(),
+        "trying to deploy a service that is not managed as a managed one"
+    );
+
     let kubernetes = target.kubernetes;
     let environment = target.environment;
-    if service.is_managed_service() {
-        let workspace_dir = service.workspace_directory();
-        let tera_context = service.tera_context(target)?;
+    let workspace_dir = service.workspace_directory();
+    let tera_context = service.tera_context(target)?;
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+        service.terraform_common_resource_dir_path(),
+        workspace_dir.as_str(),
+        tera_context.clone(),
+    ) {
+        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            event_details,
             service.terraform_common_resource_dir_path(),
-            workspace_dir.as_str(),
-            tera_context.clone(),
-        ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                service.terraform_common_resource_dir_path(),
-                workspace_dir,
-                e,
-            ));
-        }
+            workspace_dir,
+            e,
+        ));
+    }
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+        service.terraform_resource_dir_path(),
+        workspace_dir.as_str(),
+        tera_context.clone(),
+    ) {
+        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            event_details,
             service.terraform_resource_dir_path(),
-            workspace_dir.as_str(),
-            tera_context.clone(),
-        ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                service.terraform_resource_dir_path(),
-                workspace_dir,
-                e,
-            ));
-        }
+            workspace_dir,
+            e,
+        ));
+    }
 
-        let external_svc_dir = format!("{}/{}", workspace_dir, "external-name-svc");
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+    let external_svc_dir = format!("{}/{}", workspace_dir, "external-name-svc");
+    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+        service.helm_chart_external_name_service_dir(),
+        &external_svc_dir,
+        tera_context.clone(),
+    ) {
+        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            event_details,
             service.helm_chart_external_name_service_dir(),
-            &external_svc_dir,
-            tera_context.clone(),
-        ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                service.helm_chart_external_name_service_dir(),
-                external_svc_dir,
-                e,
-            ));
-        }
+            external_svc_dir,
+            e,
+        ));
+    }
 
-        if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
+        service.helm_chart_external_name_service_dir(),
+        workspace_dir.as_str(),
+        tera_context,
+    ) {
+        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            event_details,
             service.helm_chart_external_name_service_dir(),
-            workspace_dir.as_str(),
-            tera_context,
-        ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            workspace_dir,
+            e,
+        ));
+    }
+
+    match cmd::terraform::terraform_init_validate_destroy(workspace_dir.as_str(), true) {
+        Ok(_) => {
+            logger.log(EngineEvent::Info(
                 event_details,
-                service.helm_chart_external_name_service_dir(),
-                workspace_dir,
-                e,
+                EventMessage::new_from_safe("Deleting secret containing tfstates".to_string()),
             ));
+            let _ = delete_terraform_tfstate_secret(kubernetes, environment.namespace(), &get_tfstate_name(service));
         }
+        Err(e) => {
+            let engine_err = EngineError::new_terraform_error(event_details, e);
 
-        match cmd::terraform::terraform_init_validate_destroy(workspace_dir.as_str(), true) {
-            Ok(_) => {
-                logger.log(EngineEvent::Info(
-                    event_details,
-                    EventMessage::new_from_safe("Deleting secret containing tfstates".to_string()),
-                ));
-                let _ =
-                    delete_terraform_tfstate_secret(kubernetes, environment.namespace(), &get_tfstate_name(service));
-            }
-            Err(e) => {
-                let engine_err = EngineError::new_terraform_error_while_executing_destroy_pipeline(event_details, e);
+            logger.log(EngineEvent::Error(engine_err.clone(), None));
 
-                logger.log(EngineEvent::Error(engine_err.clone(), None));
-
-                return Err(engine_err);
-            }
+            return Err(engine_err);
         }
-    } else {
-        // If not managed, we use helm to deploy
-        let helm_release_name = service.helm_release_name();
-        // clean the resource
-        helm_uninstall_release(kubernetes, environment, helm_release_name.as_str(), event_details)?;
     }
 
     Ok(())
@@ -963,7 +728,7 @@ pub fn get_tfstate_name(service: &dyn Service) -> String {
     format!("tfstate-default-{}", service.id())
 }
 
-fn delete_pending_service<P>(
+pub fn delete_pending_service<P>(
     kubernetes_config: P,
     namespace: &str,
     selector: &str,

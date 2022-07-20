@@ -18,7 +18,10 @@ use crate::cmd;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
-use crate::cmd::terraform::{terraform_exec, terraform_init_validate_plan_apply, terraform_init_validate_state_list};
+use crate::cmd::terraform::{
+    terraform_apply_with_tf_workers_resources, terraform_init_validate_plan_apply, terraform_init_validate_state_list,
+    TerraformError,
+};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
@@ -694,7 +697,7 @@ impl Kapsule {
 
         // terraform deployment dedicated to cloud resources
         if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
-            return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
+            return Err(EngineError::new_terraform_error(event_details, e));
         }
 
         // push config file to object storage
@@ -1075,7 +1078,7 @@ impl Kapsule {
                 tf_workers_resources_name
             }
             Err(e) => {
-                let error = EngineError::new_terraform_state_does_not_exist(event_details, e);
+                let error = EngineError::new_terraform_error(event_details, e);
                 self.logger().log(EngineEvent::Error(error.clone(), None));
                 return Err(error);
             }
@@ -1148,12 +1151,6 @@ impl Kapsule {
             }
         }
 
-        let mut terraform_args_string = vec!["apply".to_string(), "-auto-approve".to_string()];
-        for x in tf_workers_resources {
-            terraform_args_string.push(format!("-target={}", x));
-        }
-        let terraform_args = terraform_args_string.iter().map(|x| &**x).collect();
-
         self.send_to_customer(
             format!("Pausing SCW {} cluster deployment with id {}", self.name(), self.id()).as_str(),
             &listeners_helper,
@@ -1163,8 +1160,8 @@ impl Kapsule {
             EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
         ));
 
-        if let Err(e) = terraform_exec(temp_dir.as_str(), terraform_args) {
-            return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
+        if let Err(e) = terraform_apply_with_tf_workers_resources(temp_dir.as_str(), tf_workers_resources) {
+            return Err(EngineError::new_terraform_error(event_details, e));
         }
 
         if let Err(e) = self.check_workers_on_pause() {
@@ -1248,10 +1245,11 @@ impl Kapsule {
             event_details.clone(),
             EventMessage::new_from_safe("Running Terraform apply before running a delete.".to_string()),
         ));
+
         if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), false) {
             // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
             self.logger().log(EngineEvent::Error(
-                EngineError::new_terraform_error_while_executing_pipeline(event_details.clone(), e),
+                EngineError::new_terraform_error(event_details.clone(), e),
                 None,
             ));
         };
@@ -1470,13 +1468,10 @@ impl Kapsule {
                 ));
                 Ok(())
             }
-            Err(Operation { error, .. }) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
+            Err(Operation { error, .. }) => Err(EngineError::new_terraform_error(event_details, error)),
+            Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error(
                 event_details,
-                error,
-            )),
-            Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error_while_executing_destroy_pipeline(
-                event_details,
-                CommandError::new("Error while performing Terraform destroy.".to_string(), Some(msg), None),
+                TerraformError::Destroy { raw_message: msg },
             )),
         }
     }
@@ -1694,7 +1689,7 @@ impl Kubernetes for Kapsule {
                 }
             },
             Err(e) => {
-                return Err(EngineError::new_terraform_error_while_executing_pipeline(event_details, e));
+                return Err(EngineError::new_terraform_error(event_details, e));
             }
         }
 

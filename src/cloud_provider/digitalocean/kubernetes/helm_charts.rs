@@ -291,11 +291,11 @@ pub fn do_helm_charts(
                 // resources limits
                 ChartSetValue {
                     key: "resources.limits.cpu".to_string(),
-                    value: "100m".to_string(),
+                    value: "1".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
+                    value: "300m".to_string(),
                 },
                 ChartSetValue {
                     key: "resources.limits.memory".to_string(),
