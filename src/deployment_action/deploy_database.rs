@@ -1,6 +1,5 @@
 use crate::cloud_provider::service::{
-    delete_managed_stateful_service, delete_pending_service, deploy_managed_database_service, prepare_namespace,
-    Action, Helm, Service,
+    delete_managed_stateful_service, delete_pending_service, deploy_managed_database_service, Action, Helm, Service,
 };
 use crate::cloud_provider::utilities::{check_domain_for, print_action};
 use crate::cloud_provider::DeploymentTarget;
@@ -15,7 +14,6 @@ use crate::io_models::ListenersHelper;
 use crate::models::database::{Container, Database, DatabaseType, Managed};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -118,30 +116,6 @@ where
         );
 
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
-            // FIXME: Move namespace creation an upper layer instead of doing it for every application
-            // define labels to add to namespace
-            let mut namespace_labels: Option<BTreeMap<String, String>> = None;
-            if self.context().resource_expiration_in_seconds().is_some() {
-                namespace_labels = Some(BTreeMap::from([(
-                    "ttl".to_string(),
-                    format!(
-                        "{}",
-                        self.context()
-                            .resource_expiration_in_seconds()
-                            .expect("expected to have resource expiration in seconds")
-                    ),
-                )]));
-            };
-
-            prepare_namespace(
-                target.environment,
-                namespace_labels,
-                event_details.clone(),
-                target.kubernetes.kind(),
-                &target.kube,
-            )?;
-            // END FIXME
-
             let helm = HelmDeployment::new_with_values_override(
                 self.helm_release_name(),
                 self.to_tera_context(target)?,
