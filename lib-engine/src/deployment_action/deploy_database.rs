@@ -144,7 +144,7 @@ where
 
             let helm = HelmDeployment::new_with_values_override(
                 self.helm_release_name(),
-                self.tera_context(target)?,
+                self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
                 PathBuf::from(self.workspace_directory()),
                 PathBuf::from(self.helm_chart_values_dir()),
@@ -230,7 +230,7 @@ where
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Delete), || {
             let helm = HelmDeployment::new_with_values_override(
                 self.helm_release_name(),
-                self.tera_context(target)?,
+                self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
                 PathBuf::from(self.workspace_directory()),
                 PathBuf::from(self.helm_chart_values_dir()),
