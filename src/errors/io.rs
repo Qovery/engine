@@ -153,6 +153,8 @@ pub enum Tag {
     TerraformApplyError,
     TerraformStatelistError,
     TerraformDestroyError,
+    TerraformCloudProviderQuotasReached,
+    TerraformCloudProviderActivationRequired,
 }
 
 impl From<errors::Tag> for Tag {
@@ -304,6 +306,8 @@ impl From<errors::Tag> for Tag {
             errors::Tag::TerraformDestroyError => Tag::TerraformDestroyError,
             errors::Tag::HelmDeployTimeout => Tag::HelmDeployTimeout,
             errors::Tag::CannotPauseManagedDatabase => Tag::CannotPauseManagedDatabase,
+            errors::Tag::TerraformCloudProviderQuotasReached => Tag::TerraformCloudProviderQuotasReached,
+            errors::Tag::TerraformCloudProviderActivationRequired => Tag::TerraformCloudProviderActivationRequired,
         }
     }
 }
