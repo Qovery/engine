@@ -765,6 +765,7 @@ fn format_engine_error_output(
         EngineErrorCause::Internal => r#"
 --------------------------------------
 SCROLL UP - THE ERROR MESSAGE IS ABOVE
+⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
 --------------------------------------
 "#
         .trim()
@@ -773,6 +774,7 @@ SCROLL UP - THE ERROR MESSAGE IS ABOVE
             r#"
 --------------------------------------
 SCROLL UP - THE ERROR MESSAGE IS ABOVE
+⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
 
 ℹ️ Hint: {}
 --------------------------------------
