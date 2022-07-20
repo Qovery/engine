@@ -21,3 +21,4 @@ bin_versions
 /engine_*/
 .internal/
 .vscode/
+.env

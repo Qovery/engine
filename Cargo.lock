@@ -4277,6 +4277,7 @@ dependencies = [
  "curl",
  "digitalocean",
  "dirs",
+ "dotenv",
  "gethostname",
  "hashicorp_vault",
  "maplit",
