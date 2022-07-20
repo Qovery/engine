@@ -88,7 +88,6 @@ pub trait Service: ToTransmitter {
             },
         }
     }
-    fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError>;
     // used to retrieve logs by using Kubernetes labels (selector)
     fn logger(&self) -> &dyn Logger;
     fn selector(&self) -> Option<String>;
@@ -328,7 +327,7 @@ where
     let kubernetes = target.kubernetes;
     let environment = target.environment;
 
-    let _context = service.tera_context(target)?;
+    let _context = service.to_tera_context(target)?;
     let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
 
     // define labels to add to namespace
@@ -361,7 +360,7 @@ where
     )
     .map_err(|e| helm::to_engine_error(&event_details, e))?;
 
-    let context = service.tera_context(target)?;
+    let context = service.to_tera_context(target)?;
 
     if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
         service.terraform_common_resource_dir_path(),
@@ -486,7 +485,7 @@ where
     let kubernetes = target.kubernetes;
     let environment = target.environment;
     let workspace_dir = service.workspace_directory();
-    let tera_context = service.tera_context(target)?;
+    let tera_context = service.to_tera_context(target)?;
 
     if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
         service.terraform_common_resource_dir_path(),

@@ -4,9 +4,7 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate, Storage};
 use crate::cloud_provider::service::{Action, Helm, Service, ServiceType};
 use crate::cloud_provider::utilities::sanitize_name;
-use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
-use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, ToTransmitter, Transmitter};
 use crate::io_models::{
     ApplicationAdvancedSettings, ApplicationAdvancedSettingsProbeType, Context, Listen, Listener, Listeners, Port,
@@ -356,10 +354,7 @@ impl<T: CloudProvider> Listen for Application<T> {
     }
 }
 
-impl<T: CloudProvider> Service for Application<T>
-where
-    Application<T>: ToTeraContext,
-{
+impl<T: CloudProvider> Service for Application<T> {
     fn context(&self) -> &Context {
         self.context()
     }
@@ -424,10 +419,6 @@ where
         self.publicly_accessible()
     }
 
-    fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        self.to_tera_context(target)
-    }
-
     fn logger(&self) -> &dyn Logger {
         self.logger()
     }
@@ -467,14 +458,14 @@ impl<T: CloudProvider> Helm for Application<T> {
     }
 }
 
-pub trait ApplicationService: Service + DeploymentAction + Listen {
+pub trait ApplicationService: Service + DeploymentAction + Listen + ToTeraContext {
     fn get_build(&self) -> &Build;
     fn get_build_mut(&mut self) -> &mut Build;
 }
 
 impl<T: CloudProvider> ApplicationService for Application<T>
 where
-    Application<T>: Service,
+    Application<T>: Service + ToTeraContext,
 {
     fn get_build(&self) -> &Build {
         self.build()

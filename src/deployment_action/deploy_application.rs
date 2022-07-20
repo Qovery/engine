@@ -9,7 +9,7 @@ use crate::deployment_report::execute_long_deployment;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
 use crate::models::application::{Application, ApplicationService};
-use crate::models::types::CloudProvider;
+use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -59,7 +59,7 @@ where
 
             let helm = HelmDeployment::new(
                 self.helm_release_name(),
-                self.tera_context(target)?,
+                self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
                 PathBuf::from(self.workspace_directory()),
                 event_details.clone(),

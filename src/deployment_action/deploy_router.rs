@@ -9,7 +9,7 @@ use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage};
 use crate::io_models::Listen;
 use crate::models::router::{Router, RouterService};
-use crate::models::types::CloudProvider;
+use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;
 use std::path::PathBuf;
 
@@ -32,7 +32,7 @@ where
         execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Create), || {
             let helm = HelmDeployment::new(
                 self.helm_release_name(),
-                self.tera_context(target)?,
+                self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
                 PathBuf::from(self.workspace_directory()),
                 event_details.clone(),
@@ -128,7 +128,7 @@ where
         execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Delete), || {
             let helm = HelmDeployment::new(
                 self.helm_release_name(),
-                self.tera_context(target)?,
+                self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
                 PathBuf::from(self.workspace_directory()),
                 event_details.clone(),
