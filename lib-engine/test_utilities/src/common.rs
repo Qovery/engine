@@ -1350,6 +1350,282 @@ pub fn test_db(
     test_name.to_string()
 }
 
+pub fn test_pause_managed_db(
+    context: Context,
+    logger: Box<dyn Logger>,
+    mut environment: EnvironmentRequest,
+    secrets: FuncTestsSecrets,
+    version: &str,
+    test_name: &str,
+    db_kind: DatabaseKind,
+    kubernetes_kind: KubernetesKind,
+    database_mode: DatabaseMode,
+    is_public: bool,
+    cluster_domain: ClusterDomain,
+    existing_engine_config: Option<&EngineConfig>,
+) -> String {
+    init();
+
+    let span = span!(Level::INFO, "test", name = test_name);
+    let _enter = span.enter();
+    let context_for_delete = context.clone_not_same_execution_id();
+
+    let provider_kind = kubernetes_kind.get_cloud_provider_kind();
+    let database_username = "superuser".to_string();
+    let database_password = generate_password(provider_kind.clone(), database_mode.clone());
+    let db_kind_str = db_kind.name().to_string();
+    let db_id = generate_id();
+    let database_host = format!("{}-{}", db_id, db_kind_str);
+    let database_fqdn = format!(
+        "{}.{}",
+        database_host,
+        compute_test_cluster_endpoint(
+            &cluster_domain,
+            match kubernetes_kind {
+                KubernetesKind::Ec2 => secrets
+                    .AWS_EC2_TEST_CLUSTER_DOMAIN
+                    .as_ref()
+                    .expect("AWS_EC2_TEST_CLUSTER_DOMAIN must be set")
+                    .to_string(),
+                _ => secrets
+                    .DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("DEFAULT_TEST_DOMAIN must be set")
+                    .to_string(),
+            }
+        )
+    );
+
+    let db_infos = db_infos(
+        db_kind.clone(),
+        db_id.clone(),
+        database_mode.clone(),
+        database_username.clone(),
+        database_password.clone(),
+        if is_public {
+            database_fqdn.clone()
+        } else {
+            database_host.clone()
+        },
+    );
+    let database_port = db_infos.db_port;
+    let storage_size = 10;
+    let db_disk_type = db_disk_type(provider_kind.clone(), database_mode.clone());
+    let db_instance_type = db_instance_type(provider_kind.clone(), db_kind.clone(), database_mode.clone());
+    let db = Database {
+        kind: db_kind,
+        action: Action::Create,
+        long_id: Uuid::new_v4(),
+        name: db_id,
+        version: version.to_string(),
+        fqdn_id: database_host.clone(),
+        fqdn: database_fqdn.clone(),
+        port: database_port,
+        username: database_username,
+        password: database_password,
+        total_cpus: "250m".to_string(),
+        total_ram_in_mib: 512, // MySQL requires at least 512Mo in order to boot
+        disk_size_in_gib: storage_size,
+        database_instance_type: db_instance_type,
+        database_disk_type: db_disk_type,
+        encrypt_disk: true,
+        activate_high_availability: false,
+        activate_backups: false,
+        publicly_accessible: is_public,
+        mode: database_mode.clone(),
+    };
+
+    environment.databases = vec![db];
+    environment.applications = vec![];
+
+    let mut environment_delete = environment.clone();
+    environment_delete.action = Action::Delete;
+    let mut environment_pause = environment.clone();
+    environment_pause.action = Action::Pause;
+
+    let (localisation, kubernetes_version) = match provider_kind {
+        Kind::Aws => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
+        Kind::Do => (DO_TEST_REGION.to_string(), DO_KUBERNETES_VERSION.to_string()),
+        Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
+    };
+
+    let computed_engine_config: EngineConfig;
+    let engine_config = match existing_engine_config {
+        Some(c) => c,
+        None => {
+            computed_engine_config = match kubernetes_kind {
+                KubernetesKind::Eks => AWS::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Eks,
+                    kubernetes_version.clone(),
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    EngineLocation::ClientSide,
+                ),
+                KubernetesKind::Ec2 => AWS::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Ec2,
+                    kubernetes_version.clone(),
+                    &cluster_domain,
+                    None,
+                    1,
+                    1,
+                    EngineLocation::QoverySide, // EC2 is not meant to run Engine
+                ),
+                KubernetesKind::Doks => DO::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Doks,
+                    kubernetes_version.clone(),
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    EngineLocation::ClientSide,
+                ),
+                KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::ScwKapsule,
+                    kubernetes_version.clone(),
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    EngineLocation::ClientSide,
+                ),
+            };
+            &computed_engine_config
+        }
+    };
+
+    let ret = environment.deploy_environment(&environment, logger.clone(), engine_config);
+    assert!(matches!(ret, TransactionResult::Ok));
+
+    match database_mode {
+        CONTAINER => {
+            match get_pvc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
+                Ok(pvc) => assert_eq!(
+                    pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
+                    format!("{}Gi", storage_size)
+                ),
+                Err(_) => panic!(),
+            };
+
+            match get_svc(context, provider_kind, environment, secrets) {
+                Ok(svc) => assert_eq!(
+                    svc.items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name == database_host && &svc.spec.svc_type == "LoadBalancer")
+                        .count(),
+                    match is_public {
+                        true => 1,
+                        false => 0,
+                    }
+                ),
+                Err(_) => panic!(),
+            };
+        }
+        DatabaseMode::MANAGED => {
+            match get_svc(context, provider_kind, environment, secrets) {
+                Ok(svc) => {
+                    let service = svc
+                        .items
+                        .expect("No items in svc")
+                        .into_iter()
+                        .filter(|svc| svc.metadata.name == database_host && svc.spec.svc_type == "ExternalName")
+                        .collect::<Vec<SVCItem>>();
+                    let annotations = &service[0].metadata.annotations;
+                    assert_eq!(service.len(), 1);
+                    match is_public {
+                        true => {
+                            assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
+                            assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_fqdn);
+                        }
+                        false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
+                    }
+                }
+                Err(_) => panic!(),
+            };
+        }
+    }
+
+    let computed_engine_config_for_delete: EngineConfig;
+    let engine_config_for_delete = match existing_engine_config {
+        Some(c) => c,
+        None => {
+            computed_engine_config_for_delete = match kubernetes_kind {
+                KubernetesKind::Eks => AWS::docker_cr_engine(
+                    &context_for_delete,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Eks,
+                    kubernetes_version,
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    EngineLocation::ClientSide,
+                ),
+                KubernetesKind::Ec2 => AWS::docker_cr_engine(
+                    &context_for_delete,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Ec2,
+                    kubernetes_version,
+                    &cluster_domain,
+                    None,
+                    1,
+                    1,
+                    EngineLocation::QoverySide, // EC2 is not meant to run Engine
+                ),
+                KubernetesKind::Doks => DO::docker_cr_engine(
+                    &context_for_delete,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Doks,
+                    kubernetes_version,
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    EngineLocation::ClientSide,
+                ),
+                KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
+                    &context_for_delete,
+                    logger.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::ScwKapsule,
+                    kubernetes_version,
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    EngineLocation::ClientSide,
+                ),
+            };
+            &computed_engine_config_for_delete
+        }
+    };
+
+    let ret = environment_pause.pause_environment(&environment_pause, logger.clone(), engine_config);
+    assert!(matches!(ret, TransactionResult::Ok));
+
+    let ret = environment_delete.delete_environment(&environment_delete, logger, engine_config_for_delete);
+    assert!(matches!(ret, TransactionResult::Ok));
+
+    test_name.to_string()
+}
+
 pub fn get_environment_test_kubernetes(
     context: &Context,
     cloud_provider: Arc<Box<dyn CloudProvider>>,
