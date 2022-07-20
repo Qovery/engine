@@ -16,7 +16,7 @@ use self::test_utilities::utilities::{
 use qovery_engine::io_models::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
-use test_utilities::common::{test_db, Infrastructure};
+use test_utilities::common::{test_db, test_pause_managed_db, Infrastructure};
 
 /**
 **
@@ -390,6 +390,51 @@ pub fn test_postgresql_configuration(
     })
 }
 
+#[allow(dead_code)]
+pub fn test_postgresql_pause(
+    version: &str,
+    test_name: &str,
+    database_mode: DatabaseMode,
+    kubernetes_kind: KubernetesKind,
+    is_public: bool,
+) {
+    let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .AWS_TEST_CLUSTER_ID
+        .as_ref()
+        .expect("AWS_TEST_CLUSTER_ID is not set")
+        .to_string();
+    let context = context(
+        secrets
+            .AWS_TEST_ORGANIZATION_ID
+            .as_ref()
+            .expect("AWS_TEST_ORGANIZATION_ID is not set")
+            .as_str(),
+        cluster_id.as_str(),
+    );
+
+    let environment = test_utilities::common::database_test_environment(&context);
+
+    engine_run_test(|| {
+        test_pause_managed_db(
+            context.clone(),
+            logger(),
+            environment,
+            secrets.clone(),
+            version,
+            test_name,
+            DatabaseKind::Postgresql,
+            kubernetes_kind.clone(),
+            database_mode.clone(),
+            is_public,
+            ClusterDomain::Default {
+                cluster_id: cluster_id.to_string(),
+            },
+            None,
+        )
+    })
+}
+
 // Postgres environment environment
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
@@ -505,6 +550,13 @@ fn private_postgresql_v13_deploy_a_working_prod_environment() {
 #[test]
 fn public_postgresql_v13_deploy_a_working_prod_environment() {
     test_postgresql_configuration("13", function_name!(), MANAGED, KubernetesKind::Eks, true);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn private_postgresql_v13_deploy_and_pause() {
+    test_postgresql_pause("13", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
 
 /**

@@ -171,6 +171,7 @@ impl Default for FuncTestsSecrets {
 
 impl FuncTestsSecrets {
     pub fn new() -> Self {
+        dotenv().ok();
         Self::get_all_secrets()
     }
 

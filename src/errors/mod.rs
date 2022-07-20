@@ -558,6 +558,8 @@ pub enum Tag {
     NumberOfRequestedMaxNodesIsBelowThanCurrentUsage,
     /// CannotDetermineK8sKubeProxyVersion: represents an error when trying to determine kube proxy version which cannot be retrieved.
     CannotDetermineK8sKubeProxyVersion,
+    /// CannotPauseManagedDatabase: as the title says
+    CannotPauseManagedDatabase,
     /// CannotConnectK8sCluster: represents an error when trying to connect to the kubernetes cluster
     CannotConnectK8sCluster,
     /// CannotExecuteK8sApiCustomMetrics: represents an error when trying to get K8s API custom metrics.
@@ -1537,6 +1539,19 @@ impl EngineError {
             Tag::CannotDetermineK8sKubeProxyVersion,
             message,
             None,
+            None,
+            None,
+        )
+    }
+
+    pub fn new_cannot_pause_managed_database(event_details: EventDetails, command_error: CommandError) -> EngineError {
+        let message = format!("Unable to pause managed database: {}", command_error.message_safe);
+
+        EngineError::new(
+            event_details,
+            Tag::CannotPauseManagedDatabase,
+            message,
+            Some(command_error),
             None,
             None,
         )
