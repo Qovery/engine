@@ -566,6 +566,7 @@ fn private_postgresql_v13_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v13_deploy_a_working_prod_environment() {
     test_postgresql_configuration("13", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -575,6 +576,20 @@ fn public_postgresql_v13_deploy_a_working_prod_environment() {
 #[test]
 fn private_postgresql_v13_deploy_and_pause() {
     test_postgresql_pause("13", function_name!(), MANAGED, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn private_postgresql_v14_deploy_a_working_prod_environment() {
+    test_postgresql_configuration("14", function_name!(), MANAGED, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn public_postgresql_v14_deploy_a_working_prod_environment() {
+    test_postgresql_configuration("14", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
 /**
