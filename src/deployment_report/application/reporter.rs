@@ -122,7 +122,10 @@ Look at the report from above to understand why, and check your applications log
             (self.send_error)(error.clone());
             (self.send_error)(EngineError::new_engine_error(
                 error,
-                "❌ Deployment of application failed ! Look at the report above and to understand why".to_string(),
+                r#"
+❌ Deployment of application failed ! Look at the report above and to understand why.
+⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
+                "#.trim().to_string(),
                 None,
             ));
         }

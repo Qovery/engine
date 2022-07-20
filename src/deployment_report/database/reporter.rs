@@ -208,8 +208,10 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         (self.send_error)(error.clone());
         (self.send_error)(EngineError::new_engine_error(
             error,
-            "❌ Deployment of database failed ! Look at the report and internal error above to understand why"
-                .to_string(),
+            r#"
+❌ Deployment of database failed ! Look at the report above and to understand why.
+⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
+                "#.trim().to_string(),
             None,
         ));
     }
