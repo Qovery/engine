@@ -1,4 +1,4 @@
-use crate::cloud_provider::service::{delete_pending_service, prepare_namespace, Action, Helm, Service};
+use crate::cloud_provider::service::{delete_pending_service, Action, Helm, Service};
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::deploy_helm::HelmDeployment;
@@ -9,9 +9,8 @@ use crate::deployment_report::execute_long_deployment;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
 use crate::models::application::{Application, ApplicationService};
-use crate::models::types::CloudProvider;
+use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 use tera::Context;
@@ -33,33 +32,9 @@ where
         );
 
         execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Create), || {
-            // FIXME: Move namespace creation an upper layer instead of doing it for every application
-            // define labels to add to namespace
-            let mut namespace_labels: Option<BTreeMap<String, String>> = None;
-            if self.context().resource_expiration_in_seconds().is_some() {
-                namespace_labels = Some(BTreeMap::from([(
-                    "ttl".to_string(),
-                    format!(
-                        "{}",
-                        self.context()
-                            .resource_expiration_in_seconds()
-                            .expect("expected to have resource expiration in seconds")
-                    ),
-                )]));
-            };
-
-            prepare_namespace(
-                target.environment,
-                namespace_labels,
-                event_details.clone(),
-                target.kubernetes.kind(),
-                &target.kube,
-            )?;
-            // END FIXME
-
             let helm = HelmDeployment::new(
                 self.helm_release_name(),
-                self.tera_context(target)?,
+                self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
                 PathBuf::from(self.workspace_directory()),
                 event_details.clone(),

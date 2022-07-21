@@ -4,6 +4,7 @@ use crate::deployment_report::application::renderer::render_app_deployment_repor
 use crate::deployment_report::logger::{get_loggers, Loggers};
 use crate::deployment_report::DeploymentReporter;
 use crate::errors::EngineError;
+use crate::errors::Tag::HelmDeployTimeout;
 use crate::models::application::ApplicationService;
 use crate::runtime::block_on;
 use crate::utilities::to_short_id;
@@ -104,12 +105,30 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
             Err(err) => err,
         };
 
-        (self.send_error)(EngineError::new_engine_error(
-            error.clone(),
-            "❌ Deployment of application failed ! Look at the report above and/or internal error below to understand why".to_string(),
-            None,
-        ));
-        (self.send_error)(error);
+        // Special case for app, as if helm timeout this is most likely an issue coming from the user
+        if error.tag() == &HelmDeployTimeout {
+            (self.send_error)(EngineError::new_engine_error(
+                error,
+                r#"
+❌ Application failed to be deployed in the given time frame.
+This most likely an issue with its configuration or because the app failed to start correctly.
+Look at the report from above to understand why, and check your applications logs.
+
+⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
+                "#.trim().to_string(),
+                None,
+            ));
+        } else {
+            (self.send_error)(error.clone());
+            (self.send_error)(EngineError::new_engine_error(
+                error,
+                r#"
+❌ Deployment of application failed ! Look at the report above and to understand why.
+⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
+                "#.trim().to_string(),
+                None,
+            ));
+        }
     }
 }
 

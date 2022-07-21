@@ -174,10 +174,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> ToTransmitter for
     }
 }
 
-impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Database<C, M, T>
-where
-    Database<C, M, T>: ToTeraContext,
-{
+impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Database<C, M, T> {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -249,10 +246,6 @@ where
         self.publicly_accessible
     }
 
-    fn tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        self.to_tera_context(target)
-    }
-
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
     }
@@ -294,45 +287,6 @@ impl<Cloud: CloudProvider, M: DatabaseMode, DbType: DatabaseType<Cloud, M>> Helm
 
     fn helm_chart_external_name_service_dir(&self) -> String {
         format!("{}/common/charts/external-name-svc", self.context.lib_root_dir())
-    }
-}
-
-pub trait DatabaseService: Service + DeploymentAction + ToTeraContext + Listen {
-    fn check_domains(
-        &self,
-        listeners: Listeners,
-        domains: Vec<&str>,
-        event_details: EventDetails,
-        logger: &dyn Logger,
-    ) -> Result<(), EngineError> {
-        if self.publicly_accessible() {
-            check_domain_for(
-                ListenersHelper::new(&listeners),
-                domains,
-                self.id(),
-                self.context().execution_id(),
-                event_details,
-                logger,
-            )?;
-        }
-        Ok(())
-    }
-
-    fn is_managed_service(&self) -> bool;
-
-    fn db_type(&self) -> service::DatabaseType;
-}
-
-impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> DatabaseService for Database<C, M, T>
-where
-    Database<C, M, T>: Service + DeploymentAction + ToTeraContext + Listen,
-{
-    fn is_managed_service(&self) -> bool {
-        M::is_managed()
-    }
-
-    fn db_type(&self) -> service::DatabaseType {
-        T::db_type()
     }
 }
 
@@ -398,5 +352,44 @@ where
         }
 
         Ok(context)
+    }
+}
+
+pub trait DatabaseService: Service + DeploymentAction + ToTeraContext + Listen {
+    fn check_domains(
+        &self,
+        listeners: Listeners,
+        domains: Vec<&str>,
+        event_details: EventDetails,
+        logger: &dyn Logger,
+    ) -> Result<(), EngineError> {
+        if self.publicly_accessible() {
+            check_domain_for(
+                ListenersHelper::new(&listeners),
+                domains,
+                self.id(),
+                self.context().execution_id(),
+                event_details,
+                logger,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn is_managed_service(&self) -> bool;
+
+    fn db_type(&self) -> service::DatabaseType;
+}
+
+impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> DatabaseService for Database<C, M, T>
+where
+    Database<C, M, T>: Service + DeploymentAction + ToTeraContext + Listen,
+{
+    fn is_managed_service(&self) -> bool {
+        M::is_managed()
+    }
+
+    fn db_type(&self) -> service::DatabaseType {
+        T::db_type()
     }
 }

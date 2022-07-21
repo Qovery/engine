@@ -45,11 +45,13 @@ use scaleway_api_rs::apis::Error;
 use scaleway_api_rs::models::ScalewayK8sV1Cluster;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
+use std::collections::HashSet;
 use std::env;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use tera::Context as TeraContext;
+use uuid::Uuid;
 
 #[derive(PartialEq)]
 pub enum ScwNodeGroupErrors {
@@ -1809,7 +1811,7 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn deploy_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+    fn deploy_environment(&self, environment: &Environment) -> Result<(), (HashSet<Uuid>, EngineError)> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
         print_action(
             self.cloud_provider_name(),
@@ -1823,7 +1825,7 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn pause_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+    fn pause_environment(&self, environment: &Environment) -> Result<(), (HashSet<Uuid>, EngineError)> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
         print_action(
             self.cloud_provider_name(),
@@ -1837,7 +1839,7 @@ impl Kubernetes for Kapsule {
     }
 
     #[named]
-    fn delete_environment(&self, environment: &Environment) -> Result<(), EngineError> {
+    fn delete_environment(&self, environment: &Environment) -> Result<(), (HashSet<Uuid>, EngineError)> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         print_action(
             self.cloud_provider_name(),

@@ -1,7 +1,9 @@
 use crate::build_platform::BuildError;
 use crate::cloud_provider::environment::Environment;
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
+use uuid::Uuid;
 
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{Action, Service};
@@ -431,7 +433,7 @@ impl<'a> Transaction<'a> {
 
     fn commit_environment<F>(&self, environment: &Environment, action_fn: F) -> TransactionResult
     where
-        F: Fn(&Environment) -> Result<(), EngineError>,
+        F: Fn(&Environment) -> Result<(), (HashSet<Uuid>, EngineError)>,
     {
         let execution_id = self.engine.context().execution_id();
 
@@ -467,82 +469,60 @@ impl<'a> Transaction<'a> {
             };
         }
 
-        match action_fn(environment) {
-            Err(err) => {
-                let rollback_result = match self.rollback() {
-                    Ok(_) => TransactionResult::Error(Box::new(err)),
-                    Err(rollback_err) => {
-                        error!("ROLLBACK FAILED! fatal error: {:?}", rollback_err);
-                        TransactionResult::Error(Box::new(err))
-                    }
-                };
+        if let Err((deployed_services, err)) = action_fn(environment) {
+            let rollback_result = match self.rollback() {
+                Ok(_) => TransactionResult::Error(Box::new(err)),
+                Err(rollback_err) => {
+                    error!("ROLLBACK FAILED! fatal error: {:?}", rollback_err);
+                    TransactionResult::Error(Box::new(err))
+                }
+            };
 
-                // !!! don't change the order
-                // terminal update
-                for database in &environment.databases {
-                    send_progress(
-                        self.engine.kubernetes(),
-                        &environment.action,
-                        database.as_service(),
-                        execution_id,
-                        true,
-                    );
+            // !!! don't change the order
+            // terminal update
+            for service in &environment.databases {
+                if deployed_services.contains(service.long_id()) {
+                    continue;
                 }
 
-                for service in &environment.applications {
-                    send_progress(
-                        self.engine.kubernetes(),
-                        &environment.action,
-                        service.as_service(),
-                        execution_id,
-                        true,
-                    );
-                }
-
-                for service in &environment.routers {
-                    send_progress(
-                        self.engine.kubernetes(),
-                        &environment.action,
-                        service.as_service(),
-                        execution_id,
-                        true,
-                    );
-                }
-
-                return rollback_result;
+                send_progress(
+                    self.engine.kubernetes(),
+                    &environment.action,
+                    service.as_service(),
+                    execution_id,
+                    true,
+                );
             }
-            _ => {
-                // terminal update
-                for database in &environment.databases {
-                    send_progress(
-                        self.engine.kubernetes(),
-                        &environment.action,
-                        database.as_service(),
-                        execution_id,
-                        false,
-                    );
+
+            for service in &environment.applications {
+                if deployed_services.contains(service.long_id()) {
+                    continue;
                 }
 
-                for service in &environment.applications {
-                    send_progress(
-                        self.engine.kubernetes(),
-                        &environment.action,
-                        service.as_service(),
-                        execution_id,
-                        false,
-                    );
-                }
-
-                for service in &environment.routers {
-                    send_progress(
-                        self.engine.kubernetes(),
-                        &environment.action,
-                        service.as_service(),
-                        execution_id,
-                        false,
-                    );
-                }
+                send_progress(
+                    self.engine.kubernetes(),
+                    &environment.action,
+                    service.as_service(),
+                    execution_id,
+                    true,
+                );
             }
+
+            for service in &environment.routers {
+                if deployed_services.contains(service.long_id()) {
+                    continue;
+                }
+
+                send_progress(
+                    self.engine.kubernetes(),
+                    &environment.action,
+                    service.as_service(),
+                    execution_id,
+                    true,
+                );
+            }
+
+            return rollback_result;
         };
 
         TransactionResult::Ok

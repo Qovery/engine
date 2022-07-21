@@ -7,6 +7,7 @@ use bstr::ByteSlice;
 use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
+use dotenv::dotenv;
 use gethostname;
 use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind, Write};
@@ -55,6 +56,7 @@ use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::runtime::block_on;
 use qovery_engine::utilities::to_short_id;
 use time::Instant;
+use tracing_subscriber::EnvFilter;
 use url::Url;
 
 pub fn context(organization_id: &str, cluster_id: &str) -> Context {
@@ -169,6 +171,7 @@ impl Default for FuncTestsSecrets {
 
 impl FuncTestsSecrets {
     pub fn new() -> Self {
+        dotenv().ok();
         Self::get_all_secrets()
     }
 
@@ -395,13 +398,21 @@ pub fn build_platform_local_docker(context: &Context, logger: Box<dyn Logger>) -
 pub fn init() -> Instant {
     let ci_var = "CI";
 
+    dotenv().ok();
     let _ = match env::var_os(ci_var) {
         Some(_) => tracing_subscriber::fmt()
             .json()
             .with_max_level(tracing::Level::INFO)
             .with_current_span(true)
             .try_init(),
-        None => tracing_subscriber::fmt().try_init(),
+        None => {
+            if env::var_os("RUST_LOG").is_none() {
+                env::set_var("RUST_LOG", "INFO")
+            }
+            tracing_subscriber::fmt()
+                .with_env_filter(EnvFilter::try_from_env("RUST_LOG").unwrap())
+                .try_init()
+        }
     };
 
     info!(

@@ -66,6 +66,7 @@ pub enum Tag {
     CannotGetOrCreateIamRole,
     CannotCopyFilesFromDirectoryToDirectory,
     CannotPauseClusterTasksAreRunning,
+    CannotPauseManagedDatabase,
     TerraformCannotRemoveEntryOut,
     TerraformNoStateFileExists,
     TerraformErrorWhileExecutingPipeline,
@@ -74,6 +75,7 @@ pub enum Tag {
     HelmChartsDeployError,
     HelmChartsUpgradeError,
     HelmChartUninstallError,
+    HelmDeployTimeout,
     HelmHistoryError,
     CannotGetAnyAvailableVPC,
     UnsupportedVersion,
@@ -300,6 +302,8 @@ impl From<errors::Tag> for Tag {
             errors::Tag::TerraformApplyError => Tag::TerraformApplyError,
             errors::Tag::TerraformStatelistError => Tag::TerraformStatelistError,
             errors::Tag::TerraformDestroyError => Tag::TerraformDestroyError,
+            errors::Tag::HelmDeployTimeout => Tag::HelmDeployTimeout,
+            errors::Tag::CannotPauseManagedDatabase => Tag::CannotPauseManagedDatabase,
         }
     }
 }

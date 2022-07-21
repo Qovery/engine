@@ -5,6 +5,7 @@ use crate::errors::EngineError;
 mod deploy_application;
 mod deploy_database;
 mod deploy_helm;
+pub mod deploy_namespace;
 mod deploy_router;
 mod pause_service;
 #[cfg(test)]

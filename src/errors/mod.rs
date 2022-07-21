@@ -558,6 +558,8 @@ pub enum Tag {
     NumberOfRequestedMaxNodesIsBelowThanCurrentUsage,
     /// CannotDetermineK8sKubeProxyVersion: represents an error when trying to determine kube proxy version which cannot be retrieved.
     CannotDetermineK8sKubeProxyVersion,
+    /// CannotPauseManagedDatabase: as the title says
+    CannotPauseManagedDatabase,
     /// CannotConnectK8sCluster: represents an error when trying to connect to the kubernetes cluster
     CannotConnectK8sCluster,
     /// CannotExecuteK8sApiCustomMetrics: represents an error when trying to get K8s API custom metrics.
@@ -654,6 +656,8 @@ pub enum Tag {
     HelmChartUninstallError,
     /// HelmHistoryError: represents an error while trying to execute helm history on a helm chart.
     HelmHistoryError,
+    /// HelmDeployTimeout: represent a failure to run the helm command in the given time frame
+    HelmDeployTimeout,
     /// CannotGetAnyAvailableVPC: represents an error while trying to get any available VPC.
     CannotGetAnyAvailableVPC,
     /// UnsupportedVersion: represents an error where product doesn't support the given version.
@@ -1540,6 +1544,19 @@ impl EngineError {
         )
     }
 
+    pub fn new_cannot_pause_managed_database(event_details: EventDetails, command_error: CommandError) -> EngineError {
+        let message = format!("Unable to pause managed database: {}", command_error.message_safe);
+
+        EngineError::new(
+            event_details,
+            Tag::CannotPauseManagedDatabase,
+            message,
+            Some(command_error),
+            None,
+            None,
+        )
+    }
+
     pub fn new_cannot_connect_to_k8s_cluster(event_details: EventDetails, kube_error: kube::Error) -> EngineError {
         let message = format!("Unable to connect to target k8s cluster: `{}`", kube_error);
 
@@ -2374,14 +2391,12 @@ impl EngineError {
             _ => None,
         };
 
-        EngineError::new(
-            event_details,
-            Tag::HelmChartUninstallError,
-            error.to_string(),
-            cmd_error,
-            None,
-            None,
-        )
+        let tag = match &error {
+            HelmError::Timeout(_, _, _) => Tag::HelmDeployTimeout,
+            _ => Tag::HelmChartsDeployError,
+        };
+
+        EngineError::new(event_details, tag, error.to_string(), cmd_error, None, None)
     }
 
     /// Creates new error while uninstalling Helm chart.
