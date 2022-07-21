@@ -4,6 +4,7 @@ extern crate derivative;
 extern crate url;
 
 use crate::build_platform::BuildError;
+use crate::cloud_provider::Kind;
 use crate::cmd;
 use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
@@ -2209,27 +2210,43 @@ impl EngineError {
             TerraformError::QuotasExceeded {
                 raw_message: ref _raw_message,
                 ref sub_type,
-            } =>
-                match sub_type {
-                    QuotaExceededError::ResourceLimitExceeded { .. } => EngineError::new(
-                        event_details,
-                        Tag::TerraformCloudProviderQuotasReached,
-                        terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                        Some(terraform_error.into()),
-                        None,
-                        None,
-                    ),
+            } => {
+                let terraform_error_string = terraform_error.to_string();
+                match sub_type.clone() {
+                    QuotaExceededError::ResourceLimitExceeded { resource_type, max_resource_count } => {
+                        if let Some(Kind::Aws) = event_details.provider_kind() {
+                            return EngineError::new(
+                                event_details,
+                                Tag::TerraformCloudProviderQuotasReached,
+                                terraform_error_string, // Note: Terraform error message are supposed to be safe
+                                Some(terraform_error.into()),
+                                Some(Url::parse("https://hub.qovery.com/docs/using-qovery/troubleshoot/").expect("Error while trying to parse error link helper for `QuotaExceededError::ResourceLimitExceeded`, URL is not valid.")),
+                                Some(format!("Request AWS to increase your `{}` limit (current max = {}) via this page http://aws.amazon.com/contact-us/ec2-request.", resource_type, max_resource_count)),
+                            );
+                        }
+
+                        // No cloud provider specifics
+                        EngineError::new(
+                            event_details,
+                            Tag::TerraformCloudProviderQuotasReached,
+                            terraform_error_string, // Note: Terraform error message are supposed to be safe
+                            Some(terraform_error.into()),
+                            Some(Url::parse("https://hub.qovery.com/docs/using-qovery/troubleshoot/").expect("Error while trying to parse error link helper for `QuotaExceededError::ResourceLimitExceeded`, URL is not valid.")),
+                            Some(format!("Request your cloud provider to increase your `{}` limit (current max = {})", resource_type, max_resource_count)),
+                        )
+                    },
 
                     // SCW specifics
                     QuotaExceededError::ScwNewAccountNeedsValidation => EngineError::new(
                         event_details,
                         Tag::TerraformCloudProviderActivationRequired,
-                        terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                        terraform_error_string, // Note: Terraform error message are supposed to be safe
                         Some(terraform_error.into()),
                         Some(Url::parse("https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/scaleway/#connect-your-scaleway-account").expect("Error while trying to parse error link helper for `QuotaExceededError::ScwNewAccountNeedsValidation`, URL is not valid.")),
                         Some("If you have a new Scaleway account, your quota must be unlocked by the Scaleway support teams. To do this, open a ticket with their support with the following message: 'Hello, I would like to deploy my applications on Scaleway with Qovery. Can you increase my quota for the current Kubernetes node type to 10 please? '".to_string()),
                     ),
                 }
+            }
         }
     }
 

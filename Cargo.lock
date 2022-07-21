@@ -2903,6 +2903,7 @@ dependencies = [
  "lazy_static",
  "maplit",
  "rand 0.8.5",
+ "regex",
  "reqwest 0.11.10",
  "retry",
  "rusoto_core",
