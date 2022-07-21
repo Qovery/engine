@@ -5,6 +5,7 @@ use crate::cloud_provider::utilities::{check_domain_for, print_action};
 use crate::cloud_provider::Kind::Aws;
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::cmd::command::QoveryCommand;
+use crate::constants::AWS_DEFAULT_REGION;
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
@@ -87,13 +88,19 @@ where
 
             let mut output_stdout: Vec<String> = vec![];
             let mut output_stderr: Vec<String> = vec![];
+            let region = target.kubernetes.region();
+            let credentials = {
+                let mut credentials = target.kubernetes.cloud_provider().credentials_environment_variables();
+                credentials.push((AWS_DEFAULT_REGION, &region));
+                credentials
+            };
             let ret = match self.db_type() {
                 service::DatabaseType::PostgreSQL | service::DatabaseType::MySQL => {
                     // We use the fqdn_id as db identifier, why not id or name like everything else ¯\_(ツ)_/¯
                     let mut cmd = QoveryCommand::new(
                         "aws",
                         &["rds", "stop-db-instance", "--db-instance-identifier", &self.fqdn_id],
-                        &target.kubernetes.cloud_provider().credentials_environment_variables(),
+                        &credentials,
                     );
                     cmd.exec_with_output(&mut |line| output_stdout.push(line), &mut |line| output_stderr.push(line))
                 }
@@ -102,7 +109,7 @@ where
                     let mut cmd = QoveryCommand::new(
                         "aws",
                         &["docdb", "stop-db-cluster", "--db-cluster-identifier", &self.fqdn_id],
-                        &target.kubernetes.cloud_provider().credentials_environment_variables(),
+                        &credentials,
                     );
                     cmd.exec_with_output(&mut |line| output_stdout.push(line), &mut |line| output_stderr.push(line))
                 }
