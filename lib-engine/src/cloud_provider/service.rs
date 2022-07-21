@@ -10,12 +10,11 @@ use tera::Context as TeraContext;
 use uuid::Uuid;
 
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::helm::{ChartInfo, ChartSetValue};
+use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::kubernetes::{
     kube_copy_secret_to_another_namespace, kube_does_secret_exists, Kind, Kubernetes,
 };
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd;
 use crate::cmd::helm;
 use crate::cmd::kubectl::{kubectl_exec_delete_pod, kubectl_exec_delete_secret, kubectl_exec_get_pods};
 use crate::cmd::structs::KubernetesPodStatusPhase;
@@ -28,7 +27,6 @@ use crate::io_models::{
     ProgressScope, QoveryIdentifier,
 };
 use crate::logger::Logger;
-use crate::models::database::DatabaseService;
 
 use crate::models::types::VersionsNumber;
 use crate::runtime::block_on;
@@ -315,251 +313,6 @@ pub fn prepare_namespace(
     Ok(())
 }
 
-pub fn deploy_managed_database_service<T>(
-    target: &DeploymentTarget,
-    service: &T,
-    event_details: EventDetails,
-) -> Result<(), EngineError>
-where
-    T: DatabaseService + Helm + Terraform,
-{
-    let workspace_dir = service.workspace_directory();
-    let kubernetes = target.kubernetes;
-    let environment = target.environment;
-
-    let _context = service.to_tera_context(target)?;
-    let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
-
-    // define labels to add to namespace
-    let mut namespace_labels: Option<BTreeMap<String, String>> = None;
-    if service.context().resource_expiration_in_seconds().is_some() {
-        namespace_labels = Some(BTreeMap::from([(
-            "ttl".to_string(),
-            format!(
-                "{}",
-                service
-                    .context()
-                    .resource_expiration_in_seconds()
-                    .expect("expected to have resource expiration in seconds")
-            ),
-        )]));
-    };
-
-    prepare_namespace(
-        environment,
-        namespace_labels,
-        event_details.clone(),
-        kubernetes.kind(),
-        &target.kube,
-    )?;
-
-    // do exec helm upgrade and return the last deployment status
-    let helm = helm::Helm::new(
-        &kubernetes_config_file_path,
-        &kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| helm::to_engine_error(&event_details, e))?;
-
-    let context = service.to_tera_context(target)?;
-
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        service.terraform_common_resource_dir_path(),
-        &workspace_dir,
-        context.clone(),
-    ) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            service.terraform_common_resource_dir_path(),
-            workspace_dir,
-            e,
-        ));
-    }
-
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        service.terraform_resource_dir_path(),
-        &workspace_dir,
-        context.clone(),
-    ) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            service.terraform_resource_dir_path(),
-            workspace_dir,
-            e,
-        ));
-    }
-
-    let external_svc_dir = format!("{}/{}", workspace_dir, "external-name-svc");
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        service.helm_chart_external_name_service_dir(),
-        external_svc_dir.as_str(),
-        context,
-    ) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            service.helm_chart_external_name_service_dir(),
-            external_svc_dir,
-            e,
-        ));
-    }
-
-    cmd::terraform::terraform_init_validate_plan_apply(workspace_dir.as_str(), service.context().is_dry_run_deploy())
-        .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
-
-    // Gather database TF generated JSON config if any
-    // if configuration exists, it means that HELM will be used to deploy managed DB service external name chart instead on Terraform
-    match get_database_terraform_config(format!("{}/database-tf-config.json", workspace_dir).as_str()) {
-        Ok(database_config) => {
-            // Deploying helm chart
-            let chart = ChartInfo::new_from_custom_namespace(
-                format!("{}-externalname", database_config.target_id),
-                external_svc_dir,
-                environment.namespace().to_string(),
-                600_i64,
-                vec![],
-                vec![
-                    ChartSetValue {
-                        key: "target_hostname".to_string(),
-                        value: database_config.target_hostname,
-                    },
-                    ChartSetValue {
-                        key: "source_fqdn".to_string(),
-                        value: database_config.target_fqdn,
-                    },
-                    ChartSetValue {
-                        key: "database_id".to_string(),
-                        value: service.id().to_string(),
-                    },
-                    ChartSetValue {
-                        key: "database_long_id".to_string(),
-                        value: service.long_id().to_string(),
-                    },
-                    ChartSetValue {
-                        key: "environment_id".to_string(),
-                        value: environment.id.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "environment_long_id".to_string(),
-                        value: environment.long_id.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "project_long_id".to_string(),
-                        value: environment.project_long_id.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "service_name".to_string(),
-                        value: database_config.target_fqdn_id,
-                    },
-                    ChartSetValue {
-                        key: "publicly_accessible".to_string(),
-                        value: service.publicly_accessible().to_string(),
-                    },
-                ],
-                vec![],
-                false,
-                service.selector(),
-            );
-
-            helm.upgrade(&chart, &[])
-                .map_err(|e| helm::to_engine_error(&event_details, e))?;
-        }
-        Err(e) => return Err(EngineError::new_terraform_error(event_details, e)),
-    }
-
-    Ok(())
-}
-
-pub fn delete_managed_stateful_service<T>(
-    target: &DeploymentTarget,
-    service: &T,
-    event_details: EventDetails,
-    logger: &dyn Logger,
-) -> Result<(), EngineError>
-where
-    T: DatabaseService + Helm + Terraform,
-{
-    assert!(
-        service.is_managed_service(),
-        "trying to deploy a service that is not managed as a managed one"
-    );
-
-    let kubernetes = target.kubernetes;
-    let environment = target.environment;
-    let workspace_dir = service.workspace_directory();
-    let tera_context = service.to_tera_context(target)?;
-
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        service.terraform_common_resource_dir_path(),
-        workspace_dir.as_str(),
-        tera_context.clone(),
-    ) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            service.terraform_common_resource_dir_path(),
-            workspace_dir,
-            e,
-        ));
-    }
-
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        service.terraform_resource_dir_path(),
-        workspace_dir.as_str(),
-        tera_context.clone(),
-    ) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            service.terraform_resource_dir_path(),
-            workspace_dir,
-            e,
-        ));
-    }
-
-    let external_svc_dir = format!("{}/{}", workspace_dir, "external-name-svc");
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        service.helm_chart_external_name_service_dir(),
-        &external_svc_dir,
-        tera_context.clone(),
-    ) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            service.helm_chart_external_name_service_dir(),
-            external_svc_dir,
-            e,
-        ));
-    }
-
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        service.helm_chart_external_name_service_dir(),
-        workspace_dir.as_str(),
-        tera_context,
-    ) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            service.helm_chart_external_name_service_dir(),
-            workspace_dir,
-            e,
-        ));
-    }
-
-    match cmd::terraform::terraform_init_validate_destroy(workspace_dir.as_str(), true) {
-        Ok(_) => {
-            logger.log(EngineEvent::Info(
-                event_details,
-                EventMessage::new_from_safe("Deleting secret containing tfstates".to_string()),
-            ));
-            let _ = delete_terraform_tfstate_secret(kubernetes, environment.namespace(), &get_tfstate_name(service));
-        }
-        Err(e) => {
-            let engine_err = EngineError::new_terraform_error(event_details, e);
-
-            logger.log(EngineEvent::Error(engine_err.clone(), None));
-
-            return Err(engine_err);
-        }
-    }
-
-    Ok(())
-}
-
 pub struct ServiceVersionCheckResult {
     requested_version: VersionsNumber,
     matched_version: VersionsNumber,
@@ -673,7 +426,7 @@ where
     }
 }
 
-fn delete_terraform_tfstate_secret(
+pub fn delete_terraform_tfstate_secret(
     kubernetes: &dyn Kubernetes,
     namespace: &str,
     secret_name: &str,

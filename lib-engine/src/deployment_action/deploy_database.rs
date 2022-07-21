@@ -1,5 +1,6 @@
+use crate::cloud_provider::helm::ChartSetValue;
 use crate::cloud_provider::service::{
-    delete_managed_stateful_service, delete_pending_service, deploy_managed_database_service, Action, Helm, Service,
+    delete_pending_service, get_database_terraform_config, Action, Helm, Service, Terraform,
 };
 use crate::cloud_provider::utilities::{check_domain_for, print_action};
 use crate::cloud_provider::Kind::Aws;
@@ -8,6 +9,7 @@ use crate::cmd;
 use crate::cmd::command::QoveryCommand;
 use crate::constants::AWS_DEFAULT_REGION;
 use crate::deployment_action::deploy_helm::HelmDeployment;
+use crate::deployment_action::deploy_terraform::TerraformDeployment;
 use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::database::reporter::DatabaseDeploymentReporter;
@@ -19,7 +21,7 @@ use crate::models::database::{Container, Database, DatabaseService, DatabaseType
 use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -211,7 +213,76 @@ where
         );
 
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
-            deploy_managed_database_service(target, self, event_details.clone())?;
+            let workspace_dir = self.workspace_directory();
+            let tera_context = self.to_tera_context(target)?;
+
+            // Execute terraform to provision database on cloud provider side
+            let terraform_deploy = TerraformDeployment::new(
+                tera_context.clone(),
+                PathBuf::from(self.terraform_common_resource_dir_path()),
+                PathBuf::from(self.terraform_resource_dir_path()),
+                PathBuf::from(&workspace_dir),
+                event_details.clone(),
+                self.context.is_dry_run_deploy(),
+            );
+            terraform_deploy.on_create(target)?;
+
+            // Our terrraform give us back a file with all the info we need to deploy the remaining stuff
+            let database_config =
+                get_database_terraform_config(format!("{}/database-tf-config.json", &workspace_dir,).as_str())
+                    .map_err(|err| EngineError::new_terraform_error(event_details.clone(), err))?;
+
+            // Deploy the external service name
+            let values = vec![
+                ChartSetValue {
+                    key: "target_hostname".to_string(),
+                    value: database_config.target_hostname,
+                },
+                ChartSetValue {
+                    key: "source_fqdn".to_string(),
+                    value: database_config.target_fqdn,
+                },
+                ChartSetValue {
+                    key: "database_id".to_string(), // here we use the id and not the fqdn_id ¯\_(ツ)_/¯
+                    value: self.id().to_string(),
+                },
+                ChartSetValue {
+                    key: "database_long_id".to_string(),
+                    value: self.long_id().to_string(),
+                },
+                ChartSetValue {
+                    key: "environment_id".to_string(),
+                    value: target.environment.id.to_string(),
+                },
+                ChartSetValue {
+                    key: "environment_long_id".to_string(),
+                    value: target.environment.long_id.to_string(),
+                },
+                ChartSetValue {
+                    key: "project_long_id".to_string(),
+                    value: target.environment.project_long_id.to_string(),
+                },
+                ChartSetValue {
+                    key: "service_name".to_string(),
+                    value: database_config.target_fqdn_id,
+                },
+                ChartSetValue {
+                    key: "publicly_accessible".to_string(),
+                    value: self.publicly_accessible().to_string(),
+                },
+            ];
+
+            let helm_deploy = HelmDeployment::new_with_values(
+                format!("{}-externalname", self.fqdn_id), // here it is the fqdn id :O
+                tera_context,
+                PathBuf::from(self.helm_chart_external_name_service_dir()),
+                Path::new(&workspace_dir).join("service-chart"),
+                values,
+                event_details.clone(),
+                None,
+            );
+
+            helm_deploy.on_create(target)?;
 
             // We don't manage START/PAUSE for managed database elsewhere than for AWS
             if target.kubernetes.cloud_provider().kind() != Aws {
@@ -371,7 +442,35 @@ where
         );
 
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Delete), || {
-            delete_managed_stateful_service(target, self, event_details.clone(), self.logger())
+            // First we must ensure the DB is created and in a ready state
+            // because if not, the deletion is going to fail (i.e: cannot snapshot paused db)
+            self.on_create(target)?;
+
+            let workspace_dir = self.workspace_directory();
+
+            // Ok now delete it
+            let terraform_deploy = TerraformDeployment::new(
+                self.to_tera_context(target)?,
+                PathBuf::from(self.terraform_common_resource_dir_path()),
+                PathBuf::from(self.terraform_resource_dir_path()),
+                PathBuf::from(&workspace_dir),
+                event_details.clone(),
+                self.context.is_dry_run_deploy(),
+            );
+            terraform_deploy.on_delete(target)?;
+
+            // Delete the service attached
+            let helm_deploy = HelmDeployment::new_with_values(
+                format!("{}-externalname", self.fqdn_id), // here it is the fqdn id :O
+                tera::Context::default(),
+                PathBuf::from(self.helm_chart_external_name_service_dir()),
+                Path::new(&workspace_dir).join("service-chart"),
+                vec![],
+                event_details.clone(),
+                None,
+            );
+
+            helm_deploy.on_delete(target)
         })
     }
 }
@@ -394,7 +493,7 @@ where
         );
 
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
-            let helm = HelmDeployment::new_with_values_override(
+            let helm = HelmDeployment::new_with_values_file_override(
                 self.helm_release_name(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
@@ -480,7 +579,7 @@ where
         );
 
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Delete), || {
-            let helm = HelmDeployment::new_with_values_override(
+            let helm = HelmDeployment::new_with_values_file_override(
                 self.helm_release_name(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
