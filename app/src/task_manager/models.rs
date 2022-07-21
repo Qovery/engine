@@ -284,6 +284,7 @@ pub struct Kubernetes {
     pub region: String,
     pub options: Value,
     pub nodes_groups: Vec<NodeGroups>,
+    pub cluster_advanced_settings: Option<ClusterAdvancedSettings>,
 }
 
 impl Kubernetes {

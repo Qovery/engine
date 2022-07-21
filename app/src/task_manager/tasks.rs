@@ -72,6 +72,7 @@ impl InfrastructureTask {
             self.request.features.clone(),
             self.request.metadata.clone(),
             self.docker.clone(),
+            self.request.cluster_advanced_setting.clone(),
         )
     }
 
@@ -344,6 +345,7 @@ impl EnvironmentTask {
             self.request.features.clone(),
             self.request.metadata.clone(),
             self.docker.clone(),
+            self.request.cluster_advanced_setting.clone(),
         )
     }
 
@@ -482,7 +484,7 @@ impl Task for EnvironmentTask {
                     &self.request,
                     self.action_context(ProgressLevel::Error),
                     Some(format!(
-                        "Failed to create environment domain, please check your configuration: {}",
+                        "Failed to create environment domain, please check your configuration: {:?}",
                         err
                     )),
                     true,
@@ -819,6 +821,10 @@ fn upload_s3_file(
     );
 
     // I am using this s3 object directly to avoid reinventing the wheel.
+    let bucket_ttl = match context.cluster_advanced_settings().pleco_resources_ttl {
+        0 => None,
+        _ => Some(context.cluster_advanced_settings().pleco_resources_ttl),
+    };
     let s3 = qovery_engine::object_storage::s3::S3::new(
         context.clone(),
         "archive-123abc".to_string(),
@@ -827,7 +833,7 @@ fn upload_s3_file(
         archive.secret_access_key.to_string(),
         region,
         true,
-        context.resource_expiration_in_seconds(),
+        bucket_ttl,
     );
 
     match s3.put(archive.bucket_name.as_str(), object_key.as_str(), file_path) {

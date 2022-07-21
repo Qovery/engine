@@ -27,7 +27,7 @@ fn test_delete_bucket() {
         aws_secret_key,
         aws_region.clone(),
         false,
-        context.resource_expiration_in_seconds(),
+        Some(context.cluster_advanced_settings().pleco_resources_ttl),
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -70,7 +70,7 @@ fn test_create_bucket() {
         aws_secret_key,
         aws_region.clone(),
         false,
-        context.resource_expiration_in_seconds(),
+        Some(context.cluster_advanced_settings().pleco_resources_ttl),
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -114,7 +114,7 @@ fn test_recreate_bucket() {
         aws_secret_key,
         aws_region,
         false,
-        context.resource_expiration_in_seconds(),
+        Some(context.cluster_advanced_settings().pleco_resources_ttl),
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -159,7 +159,7 @@ fn test_put_file() {
         aws_secret_key,
         aws_region,
         false,
-        context.resource_expiration_in_seconds(),
+        Some(context.cluster_advanced_settings().pleco_resources_ttl),
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -210,7 +210,7 @@ fn test_get_file() {
         aws_secret_key,
         aws_region,
         false,
-        context.resource_expiration_in_seconds(),
+        Some(context.cluster_advanced_settings().pleco_resources_ttl),
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
