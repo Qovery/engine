@@ -32,7 +32,7 @@ use super::{get_rusoto_eks_client, should_update_desired_nodes};
 pub struct EKS {
     context: Context,
     id: String,
-    long_id: uuid::Uuid,
+    long_id: Uuid,
     name: String,
     version: String,
     region: AwsRegion,
@@ -51,7 +51,7 @@ impl EKS {
     pub fn new(
         context: Context,
         id: &str,
-        long_id: uuid::Uuid,
+        long_id: Uuid,
         name: &str,
         version: &str,
         region: AwsRegion,
@@ -77,6 +77,7 @@ impl EKS {
 
         // copy listeners from CloudProvider
         let listeners = cloud_provider.listeners().clone();
+
         Ok(EKS {
             context,
             id: id.to_string(),
@@ -254,7 +255,7 @@ impl Kubernetes for EKS {
 
     #[named]
     fn on_create(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -277,7 +278,7 @@ impl Kubernetes for EKS {
 
     #[named]
     fn on_create_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -546,7 +547,7 @@ impl Kubernetes for EKS {
 
     #[named]
     fn on_upgrade(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -560,7 +561,7 @@ impl Kubernetes for EKS {
 
     #[named]
     fn on_upgrade_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -574,7 +575,7 @@ impl Kubernetes for EKS {
 
     #[named]
     fn on_downgrade(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Downgrade));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -588,7 +589,7 @@ impl Kubernetes for EKS {
 
     #[named]
     fn on_downgrade_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Downgrade));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -602,7 +603,7 @@ impl Kubernetes for EKS {
 
     #[named]
     fn on_pause(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -624,7 +625,7 @@ impl Kubernetes for EKS {
 
     #[named]
     fn on_pause_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -638,7 +639,7 @@ impl Kubernetes for EKS {
 
     #[named]
     fn on_delete(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -660,7 +661,7 @@ impl Kubernetes for EKS {
 
     #[named]
     fn on_delete_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),

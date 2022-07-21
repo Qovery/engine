@@ -256,10 +256,11 @@ impl ECR {
         };
 
         // apply retention policy
-        let retention_policy_in_days = match self.context.is_test_cluster() {
-            true => 1,
-            false => 365,
-        };
+        let retention_policy_in_days =
+            match self.context().cluster_advanced_settings().registry_image_retention_time / 86400 {
+                0..=1 => 1,
+                _ => self.context().cluster_advanced_settings().registry_image_retention_time / 86400,
+            };
         let lifecycle_policy_text = json!({
           "rules": [
             {
