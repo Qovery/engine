@@ -27,7 +27,7 @@ bitflags! {
 pub enum QuotaExceededError {
     ResourceLimitExceeded {
         resource_type: String,
-        max_resource_count: u32,
+        max_resource_count: Option<u32>,
     },
 
     // Cloud provider specifics
@@ -85,6 +85,7 @@ impl TerraformError {
         // identifying those errors (trait implementation) on cloud provider side next to their kubernetes implementation.
 
         // Quotas issues
+        // SCW
         if raw_terraform_output.contains("<Code>QuotaExceeded</Code>") {
             // SCW bucket quotas issues example:
             // Request ID: None Body: <?xml version='1.0' encoding='UTF-8'?>\n<Error><Code>QuotaExceeded</Code><Message>Quota exceeded. Please contact support to upgrade your quotas.</Message><RequestId>tx111117bad3a44d56bd120-0062d1515d</RequestId></Error>
@@ -93,6 +94,8 @@ impl TerraformError {
                 raw_message: raw_terraform_output,
             };
         }
+
+        // AWS
         if let Ok(aws_quotas_exceeded_re) = Regex::new(
             r"You have exceeded the limit of (?P<resource_type>\w+) allowed on your AWS account \((?P<max_resource_count>\d+) by default\)",
         ) {
@@ -105,12 +108,21 @@ impl TerraformError {
                     return TerraformError::QuotasExceeded {
                         sub_type: QuotaExceededError::ResourceLimitExceeded {
                             resource_type: resource_type.to_string(),
-                            max_resource_count,
+                            max_resource_count: Some(max_resource_count),
                         },
                         raw_message: raw_terraform_output.to_string(),
                     };
                 }
             }
+        }
+        if raw_terraform_output.contains("AddressLimitExceeded: The maximum number of addresses has been reached") {
+            return TerraformError::QuotasExceeded {
+                sub_type: QuotaExceededError::ResourceLimitExceeded {
+                    resource_type: "EIP".to_string(),
+                    max_resource_count: None,
+                },
+                raw_message: raw_terraform_output,
+            };
         }
 
         // This kind of error should be triggered as little as possible, ideally, there is no unknown errors
@@ -181,7 +193,14 @@ impl Display for TerraformError {
                         QuotaExceededError::ResourceLimitExceeded {
                             resource_type,
                             max_resource_count,
-                        } => format!("`{}` has reached its quotas of {}.", resource_type, max_resource_count),
+                        } => format!(
+                            "`{}` has reached its quotas{}.",
+                            resource_type,
+                            match max_resource_count {
+                                None => "".to_string(),
+                                Some(count) => format!(" of {}", count),
+                            }
+                        ),
                     },
                     raw_message
                 )
@@ -632,18 +651,32 @@ terraform {
             expected_terraform_error: TerraformError,
         }
 
-        let test_cases = vec![TestCase {
-            // AWS quotas issues
-            input_raw_message: "You have exceeded the limit of vCPUs allowed on your AWS account (32 by default).",
-            expected_terraform_error: TerraformError::QuotasExceeded {
-                sub_type: QuotaExceededError::ResourceLimitExceeded {
-                    resource_type: "vCPUs".to_string(),
-                    max_resource_count: 32,
+        let test_cases = vec![
+            TestCase {
+                input_raw_message: "You have exceeded the limit of vCPUs allowed on your AWS account (32 by default).",
+                expected_terraform_error: TerraformError::QuotasExceeded {
+                    sub_type: QuotaExceededError::ResourceLimitExceeded {
+                        resource_type: "vCPUs".to_string(),
+                        max_resource_count: Some(32),
+                    },
+                    raw_message: "You have exceeded the limit of vCPUs allowed on your AWS account (32 by default)."
+                        .to_string(),
                 },
-                raw_message: "You have exceeded the limit of vCPUs allowed on your AWS account (32 by default)."
-                    .to_string(),
             },
-        }];
+            TestCase {
+                input_raw_message:
+                    "Error creating EIP: AddressLimitExceeded: The maximum number of addresses has been reached.",
+                expected_terraform_error: TerraformError::QuotasExceeded {
+                    sub_type: QuotaExceededError::ResourceLimitExceeded {
+                        resource_type: "EIP".to_string(),
+                        max_resource_count: None,
+                    },
+                    raw_message:
+                        "Error creating EIP: AddressLimitExceeded: The maximum number of addresses has been reached."
+                            .to_string(),
+                },
+            },
+        ];
 
         for tc in test_cases {
             // execute:
