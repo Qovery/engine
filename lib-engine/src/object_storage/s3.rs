@@ -59,7 +59,7 @@ impl S3 {
     }
 
     fn get_s3_client(&self) -> S3Client {
-        let region = RusotoRegion::from_str(&self.region.to_aws_format())
+        let region = RusotoRegion::from_str(self.region.to_aws_format())
             .unwrap_or_else(|_| panic!("S3 region `{}` doesn't seems to be valid.", self.region.to_aws_format()));
         let client = Client::new_with(
             self.get_credentials(),
@@ -174,7 +174,7 @@ impl ObjectStorage for S3 {
         if let Err(e) = block_on(s3_client.create_bucket(CreateBucketRequest {
             bucket: bucket_name.to_string(),
             create_bucket_configuration: Some(CreateBucketConfiguration {
-                location_constraint: Some(self.region.to_aws_format()),
+                location_constraint: Some(self.region.to_aws_format().to_string()),
             }),
             ..Default::default()
         })) {

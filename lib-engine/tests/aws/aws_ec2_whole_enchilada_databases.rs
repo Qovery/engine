@@ -49,7 +49,7 @@ fn test_ec2_database(database_mode: DatabaseMode, is_public: bool, db_versions_t
         let engine_config = AWS::docker_cr_engine(
             &context,
             logger.clone(),
-            AWS_TEST_REGION.to_aws_format().as_str(),
+            AWS_TEST_REGION.to_aws_format(),
             KubernetesKind::Ec2,
             AWS_K3S_VERSION.to_string(),
             &cluster_domain,

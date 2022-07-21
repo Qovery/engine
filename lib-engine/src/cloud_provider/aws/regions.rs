@@ -171,7 +171,7 @@ impl AwsRegion {
         self
     }
 
-    pub fn to_aws_format(&self) -> String {
+    pub fn to_aws_format(&self) -> &str {
         match self {
             AwsRegion::UsEast1 => "us-east-1",
             AwsRegion::UsEast2 => "us-east-2",
@@ -196,7 +196,6 @@ impl AwsRegion {
             AwsRegion::MeSouth1 => "me-south-1",
             AwsRegion::SaEast1 => "sa-east-1",
         }
-        .to_string()
     }
 
     pub fn get_zones_to_string(&self) -> Vec<String> {
