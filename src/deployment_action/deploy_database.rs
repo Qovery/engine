@@ -21,7 +21,10 @@ use function_name::named;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+const DB_READY_STATE: &str = "available";
+const DB_STOPPED_STATE: &str = "stopped";
 
 #[derive(Deserialize, Default)]
 struct CacheCluster {
@@ -168,6 +171,28 @@ fn start_stop_managed_database(
     }
 }
 
+fn await_db_state(
+    timeout: Duration,
+    db_type: service::DatabaseType,
+    db_id: &str,
+    credentials: &[(&str, &str)],
+    state: &str,
+) -> Result<(), Option<(cmd::command::CommandError, String)>> {
+    // Wait for the database to be in given state
+    let now = Instant::now();
+    loop {
+        if now.elapsed() >= timeout {
+            break Err(None);
+        }
+
+        match get_managed_database_status(db_type, db_id, credentials) {
+            Ok(status) if status == state => break Ok(()),
+            Ok(_) => thread::sleep(Duration::from_secs(30)),
+            Err(err) => break Err(Some(err)),
+        }
+    }
+}
+
 // For Managed database
 impl<C: CloudProvider, T: DatabaseType<C, Managed>> DeploymentAction for Database<C, Managed, T>
 where
@@ -203,13 +228,40 @@ where
 
             // If the database is not in the available state, try to start it
             match get_managed_database_status(self.db_type(), &self.fqdn_id, &credentials) {
-                Ok(status) if status == "available" => {}
+                Ok(status) if status == DB_READY_STATE => {}
                 Ok(_) | Err(_) => {
                     let _ = start_stop_managed_database(self.db_type(), &self.fqdn_id, &credentials, false);
                 }
             }
 
-            Ok(())
+            let ret = await_db_state(
+                Duration::from_secs(60 * 30),
+                self.db_type(),
+                &self.fqdn_id,
+                &credentials,
+                DB_READY_STATE,
+            );
+
+            match ret {
+                Ok(_) => Ok(()),
+                // timeout
+                Err(None) => Err(EngineError::new_database_failed_to_start_after_several_retries(
+                    event_details.clone(),
+                    self.id.to_string(),
+                    self.db_type().to_string(),
+                    Some(CommandError::new_from_safe_message(format!(
+                        "Timeout reached waiting for the database to be in {} state",
+                        DB_READY_STATE
+                    ))),
+                )),
+                // Error ;'(
+                Err(Some((cmd_err, msg))) => Err(EngineError::new_database_failed_to_start_after_several_retries(
+                    event_details.clone(),
+                    self.id.to_string(),
+                    self.db_type().to_string(),
+                    Some(CommandError::new_from_legacy_command_error(cmd_err, Some(msg))),
+                )),
+            }
         })
     }
 
@@ -279,18 +331,29 @@ where
                 },
             )?;
 
-            // Wait for the database to be in stopped state
-            loop {
-                match get_managed_database_status(self.db_type(), &self.fqdn_id, &credentials) {
-                    Ok(status) if status == "stopped" => break Ok(()),
-                    Ok(_) => thread::sleep(Duration::from_secs(30)),
-                    Err((cmd_err, msg)) => {
-                        break Err(EngineError::new_cannot_pause_managed_database(
-                            event_details.clone(),
-                            CommandError::new_from_legacy_command_error(cmd_err, Some(msg)),
-                        ))
-                    }
-                }
+            let ret = await_db_state(
+                Duration::from_secs(60 * 30),
+                self.db_type(),
+                &self.fqdn_id,
+                &credentials,
+                DB_STOPPED_STATE,
+            );
+
+            match ret {
+                Ok(_) => Ok(()),
+                // timeout
+                Err(None) => Err(EngineError::new_cannot_pause_managed_database(
+                    event_details.clone(),
+                    CommandError::new_from_safe_message(format!(
+                        "Timeout reached waiting for the database to be in {} state",
+                        DB_STOPPED_STATE
+                    )),
+                )),
+                // Error ;'(
+                Err(Some((cmd_err, msg))) => Err(EngineError::new_cannot_pause_managed_database(
+                    event_details.clone(),
+                    CommandError::new_from_legacy_command_error(cmd_err, Some(msg)),
+                )),
             }
         })
     }
