@@ -4,6 +4,7 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::utilities::{check_domain_for, print_action};
 use crate::cloud_provider::Kind::Aws;
 use crate::cloud_provider::{service, DeploymentTarget};
+use crate::cmd;
 use crate::cmd::command::QoveryCommand;
 use crate::constants::AWS_DEFAULT_REGION;
 use crate::deployment_action::deploy_helm::HelmDeployment;
@@ -19,6 +20,57 @@ use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;
 use std::path::PathBuf;
 use std::time::Duration;
+
+fn start_stop_managed_database(
+    db_type: service::DatabaseType,
+    db_id: &str,
+    credentials: &[(&str, &str)],
+    should_stop: bool,
+) -> Result<(), (cmd::command::CommandError, String)> {
+    let action = if should_stop { "stop" } else { "start" };
+
+    let mut output_stdout: Vec<String> = vec![];
+    let mut output_stderr: Vec<String> = vec![];
+    let ret = match db_type {
+        service::DatabaseType::PostgreSQL | service::DatabaseType::MySQL => {
+            let mut cmd = QoveryCommand::new(
+                "aws",
+                &[
+                    "rds",
+                    &format!("{}-db-instance", action),
+                    "--db-instance-identifier",
+                    db_id,
+                ],
+                credentials,
+            );
+            cmd.exec_with_output(&mut |line| output_stdout.push(line), &mut |line| output_stderr.push(line))
+        }
+        service::DatabaseType::MongoDB => {
+            let mut cmd = QoveryCommand::new(
+                "aws",
+                &[
+                    "docdb",
+                    &format!("{}-db-cluster", action),
+                    "--db-cluster-identifier",
+                    db_id,
+                ],
+                credentials,
+            );
+            cmd.exec_with_output(&mut |line| output_stdout.push(line), &mut |line| output_stderr.push(line))
+        }
+        service::DatabaseType::Redis => {
+            // can't pause elasticache
+            Ok(())
+        }
+    };
+
+    if let Err(cmd_error) = ret {
+        output_stdout.extend(output_stderr);
+        Err((cmd_error, output_stdout.join("\n").trim().to_string()))
+    } else {
+        Ok(())
+    }
+}
 
 // For Managed database
 impl<C: CloudProvider, T: DatabaseType<C, Managed>> DeploymentAction for Database<C, Managed, T>
@@ -38,7 +90,23 @@ where
         );
 
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
-            deploy_managed_database_service(target, self, event_details.clone())
+            deploy_managed_database_service(target, self, event_details.clone())?;
+
+            // We don't manage START/PAUSE for managed database elsewhere than for AWS
+            if target.kubernetes.cloud_provider().kind() != Aws {
+                return Ok(());
+            }
+
+            // Terraform does not ensure that the database is correctly started
+            // So we must force it ourselves in case
+            let credentials = {
+                let mut credentials = target.kubernetes.cloud_provider().credentials_environment_variables();
+                credentials.push((AWS_DEFAULT_REGION, target.kubernetes.region()));
+                credentials
+            };
+            // We use the fqdn_id as db identifier, why not id or name like everything else ¯\_(ツ)_/¯
+            let _ = start_stop_managed_database(self.db_type(), &self.fqdn_id, &credentials, false);
+            Ok(())
         })
     }
 
@@ -86,51 +154,22 @@ where
                 return Ok(());
             }
 
-            let mut output_stdout: Vec<String> = vec![];
-            let mut output_stderr: Vec<String> = vec![];
-            let region = target.kubernetes.region();
+            // Terraform does not ensure that the database is correctly started
+            // So we must force it ourselves in case
             let credentials = {
                 let mut credentials = target.kubernetes.cloud_provider().credentials_environment_variables();
-                credentials.push((AWS_DEFAULT_REGION, &region));
+                credentials.push((AWS_DEFAULT_REGION, target.kubernetes.region()));
                 credentials
             };
-            let ret = match self.db_type() {
-                service::DatabaseType::PostgreSQL | service::DatabaseType::MySQL => {
-                    // We use the fqdn_id as db identifier, why not id or name like everything else ¯\_(ツ)_/¯
-                    let mut cmd = QoveryCommand::new(
-                        "aws",
-                        &["rds", "stop-db-instance", "--db-instance-identifier", &self.fqdn_id],
-                        &credentials,
-                    );
-                    cmd.exec_with_output(&mut |line| output_stdout.push(line), &mut |line| output_stderr.push(line))
-                }
-                service::DatabaseType::MongoDB => {
-                    // We use the fqdn_id as db identifier, why not id or name like everything else ¯\_(ツ)_/¯
-                    let mut cmd = QoveryCommand::new(
-                        "aws",
-                        &["docdb", "stop-db-cluster", "--db-cluster-identifier", &self.fqdn_id],
-                        &credentials,
-                    );
-                    cmd.exec_with_output(&mut |line| output_stdout.push(line), &mut |line| output_stderr.push(line))
-                }
-                service::DatabaseType::Redis => {
-                    // can't pause elasticache
-                    Ok(())
-                }
-            };
-
-            output_stdout.extend(output_stderr);
-            if let Err(cmd_error) = ret {
-                Err(EngineError::new_cannot_pause_managed_database(
-                    event_details.clone(),
-                    CommandError::new_from_legacy_command_error(
-                        cmd_error,
-                        Some(output_stdout.join("\n").trim().to_string()),
-                    ),
-                ))
-            } else {
-                Ok(())
-            }
+            // We use the fqdn_id as db identifier, why not id or name like everything else ¯\_(ツ)_/¯
+            start_stop_managed_database(self.db_type(), &self.fqdn_id, &credentials, true).map_err(
+                |(cmd_error, msg)| {
+                    EngineError::new_cannot_pause_managed_database(
+                        event_details.clone(),
+                        CommandError::new_from_legacy_command_error(cmd_error, Some(msg)),
+                    )
+                },
+            )
         })
     }
 

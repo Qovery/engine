@@ -671,12 +671,12 @@ fn should_update_desired_nodes(
 /// Returns a rusoto eks client using the current configuration.
 fn get_rusoto_eks_client(event_details: EventDetails, kubernetes: &dyn Kubernetes) -> Result<EksClient, EngineError> {
     let cloud_provider = kubernetes.cloud_provider();
-    let region = match RusotoRegion::from_str(&kubernetes.region()) {
+    let region = match RusotoRegion::from_str(kubernetes.region()) {
         Ok(value) => value,
         Err(error) => {
             return Err(EngineError::new_unsupported_region(
                 event_details,
-                kubernetes.region(),
+                kubernetes.region().to_string(),
                 CommandError::new_from_safe_message(error.to_string()),
             ));
         }
@@ -899,7 +899,7 @@ fn create(
     let mut cluster_secrets = ClusterSecretsAws::new_from_cluster_secrets_io(
         ClusterSecretsIoAws::new(
             kubernetes.cloud_provider().access_key_id(),
-            kubernetes.region(),
+            kubernetes.region().to_string(),
             kubernetes.cloud_provider().secret_access_key(),
             None,
             None,
@@ -1066,7 +1066,7 @@ fn create(
                 infra_options: options.clone(),
                 cluster_id: kubernetes.id().to_string(),
                 cluster_long_id: kubernetes_long_id,
-                region: kubernetes.region(),
+                region: kubernetes.region().to_string(),
                 cluster_name: kubernetes.cluster_name(),
                 cloud_provider: "aws".to_string(),
                 test_cluster: kubernetes.context().is_test_cluster(),
@@ -1103,7 +1103,7 @@ fn create(
                 infra_options: options.clone(),
                 cluster_id: kubernetes.id().to_string(),
                 cluster_long_id: kubernetes_long_id,
-                region: kubernetes.region(),
+                region: kubernetes.region().to_string(),
                 cluster_name: kubernetes.cluster_name(),
                 cloud_provider: "aws".to_string(),
                 test_cluster: kubernetes.context().is_test_cluster(),

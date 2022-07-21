@@ -65,7 +65,7 @@ pub trait Kubernetes: Listen {
     }
 
     fn version(&self) -> &str;
-    fn region(&self) -> String;
+    fn region(&self) -> &str;
     fn zone(&self) -> &str;
     fn aws_zones(&self) -> Option<Vec<AwsZones>>;
     fn cloud_provider(&self) -> &dyn CloudProvider;
@@ -81,7 +81,7 @@ pub trait Kubernetes: Listen {
             QoveryIdentifier::from(context.organization_id().to_string()),
             QoveryIdentifier::from(context.cluster_id().to_string()),
             QoveryIdentifier::from(context.execution_id().to_string()),
-            Some(self.region()),
+            Some(self.region().to_string()),
             stage,
             Transmitter::Kubernetes(self.id().to_string(), self.name().to_string()),
         )

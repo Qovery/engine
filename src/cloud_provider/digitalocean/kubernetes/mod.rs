@@ -623,7 +623,7 @@ impl DOKS {
             cluster_id: self.id.clone(),
             cluster_long_id: self.long_id,
             do_cluster_id: doks_id,
-            region: self.region(),
+            region: self.region().to_string(),
             cluster_name: self.cluster_name(),
             cloud_provider: "digitalocean".to_string(),
             test_cluster: self.context.is_test_cluster(),
@@ -1125,8 +1125,8 @@ impl Kubernetes for DOKS {
         self.version.as_str()
     }
 
-    fn region(&self) -> String {
-        self.region.to_string()
+    fn region(&self) -> &str {
+        self.region.as_str()
     }
 
     fn zone(&self) -> &str {

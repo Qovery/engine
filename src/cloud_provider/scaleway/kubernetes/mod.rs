@@ -174,7 +174,7 @@ impl Kapsule {
                         QoveryIdentifier::new_from_long_id(context.organization_id().to_string()),
                         QoveryIdentifier::new_from_long_id(context.cluster_id().to_string()),
                         QoveryIdentifier::new_from_long_id(context.execution_id().to_string()),
-                        Some(zone.region_str()),
+                        Some(zone.region_str().to_string()),
                         Infrastructure(InfrastructureStep::LoadConfiguration),
                         Transmitter::Kubernetes(id, name),
                     ),
@@ -235,7 +235,7 @@ impl Kapsule {
         // get cluster info
         let cluster_info = match block_on(scaleway_api_rs::apis::clusters_api::list_clusters(
             &self.get_configuration(),
-            self.region().as_str(),
+            self.region(),
             None,
             Some(self.options.scaleway_project_id.as_str()),
             None,
@@ -291,7 +291,7 @@ impl Kapsule {
 
         let pools = match block_on(scaleway_api_rs::apis::pools_api::list_pools(
             &self.get_configuration(),
-            self.region().as_str(),
+            self.region(),
             cluster_id.as_str(),
             None,
             None,
@@ -342,7 +342,7 @@ impl Kapsule {
         let pool =
             match block_on(scaleway_api_rs::apis::pools_api::get_pool(
                 &self.get_configuration(),
-                self.region().as_str(),
+                self.region(),
                 pool_id,
             )) {
                 Ok(x) => x,
@@ -1517,7 +1517,7 @@ impl Kubernetes for Kapsule {
         self.version.as_str()
     }
 
-    fn region(&self) -> String {
+    fn region(&self) -> &str {
         self.zone.region_str()
     }
 
