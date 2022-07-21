@@ -18,8 +18,104 @@ use crate::io_models::ListenersHelper;
 use crate::models::database::{Container, Database, DatabaseService, DatabaseType, Managed};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;
+use serde::Deserialize;
 use std::path::PathBuf;
+use std::thread;
 use std::time::Duration;
+
+#[derive(Deserialize, Default)]
+struct CacheCluster {
+    #[serde(alias = "CacheClusterStatus")]
+    pub cache_cluster_status: String,
+}
+
+#[derive(Deserialize, Default)]
+struct CacheClustersResponse {
+    #[serde(alias = "CacheClusters")]
+    pub cache_clusters: Vec<CacheCluster>,
+}
+
+#[derive(Deserialize, Default)]
+struct DbInstance {
+    #[serde(alias = "DBInstanceStatus")]
+    pub db_instance_status: String,
+}
+#[derive(Deserialize, Default)]
+struct DbInstancesResponse {
+    #[serde(alias = "DBInstances")]
+    pub db_instances: Vec<DbInstance>,
+}
+
+#[derive(Deserialize, Default)]
+struct DocDbCluster {
+    #[serde(alias = "Status")]
+    pub status: String,
+}
+
+#[derive(Deserialize, Default)]
+struct DocDbClustersResponse {
+    #[serde(alias = "DBClusters")]
+    pub db_cluster: Vec<DocDbCluster>,
+}
+
+fn get_managed_database_status(
+    db_type: service::DatabaseType,
+    db_id: &str,
+    credentials: &[(&str, &str)],
+) -> Result<String, (cmd::command::CommandError, String)> {
+    let mut cmd = match db_type {
+        service::DatabaseType::PostgreSQL | service::DatabaseType::MySQL => QoveryCommand::new(
+            "aws",
+            &["rds", "describe-db-instances", "--db-instance-identifier", db_id],
+            credentials,
+        ),
+        service::DatabaseType::MongoDB => QoveryCommand::new(
+            "aws",
+            &["docdb", "describe-db-clusters", "--db-cluster-identifier", db_id],
+            credentials,
+        ),
+        service::DatabaseType::Redis => QoveryCommand::new(
+            "aws",
+            &["elasticache", "describe-cache-clusters", "--cache-cluster-id", db_id],
+            credentials,
+        ),
+    };
+
+    let mut output_stdout: Vec<String> = vec![];
+    let mut output_stderr: Vec<String> = vec![];
+    let cmd_ret = cmd.exec_with_output(&mut |line| output_stdout.push(line), &mut |line| output_stderr.push(line));
+
+    if let Err(cmd_error) = cmd_ret {
+        output_stdout.extend(output_stderr);
+        return Err((cmd_error, output_stdout.join("\n").trim().to_string()));
+    }
+
+    match db_type {
+        service::DatabaseType::PostgreSQL | service::DatabaseType::MySQL => {
+            let payload: DbInstancesResponse =
+                serde_json::from_str(output_stdout.join("").as_str()).unwrap_or_default();
+            Ok(payload
+                .db_instances
+                .first()
+                .map(|c| c.db_instance_status.clone())
+                .unwrap_or_default())
+        }
+        service::DatabaseType::MongoDB => {
+            let payload: DocDbClustersResponse =
+                serde_json::from_str(output_stdout.join("").as_str()).unwrap_or_default();
+            Ok(payload.db_cluster.first().map(|c| c.status.clone()).unwrap_or_default())
+        }
+        service::DatabaseType::Redis => {
+            let payload: CacheClustersResponse =
+                serde_json::from_str(output_stdout.join("").as_str()).unwrap_or_default();
+            Ok(payload
+                .cache_clusters
+                .first()
+                .map(|c| c.cache_cluster_status.clone())
+                .unwrap_or_default())
+        }
+    }
+}
 
 fn start_stop_managed_database(
     db_type: service::DatabaseType,
@@ -104,8 +200,15 @@ where
                 credentials.push((AWS_DEFAULT_REGION, target.kubernetes.region()));
                 credentials
             };
-            // We use the fqdn_id as db identifier, why not id or name like everything else ¯\_(ツ)_/¯
-            let _ = start_stop_managed_database(self.db_type(), &self.fqdn_id, &credentials, false);
+
+            // If the database is not in the available state, try to start it
+            match get_managed_database_status(self.db_type(), &self.fqdn_id, &credentials) {
+                Ok(status) if status == "available" => {}
+                Ok(_) | Err(_) => {
+                    let _ = start_stop_managed_database(self.db_type(), &self.fqdn_id, &credentials, false);
+                }
+            }
+
             Ok(())
         })
     }
@@ -154,6 +257,11 @@ where
                 return Ok(());
             }
 
+            // Elasticache does not support being stopped/paused
+            if self.db_type() == service::DatabaseType::Redis {
+                return Ok(());
+            }
+
             // Terraform does not ensure that the database is correctly started
             // So we must force it ourselves in case
             let credentials = {
@@ -169,7 +277,21 @@ where
                         CommandError::new_from_legacy_command_error(cmd_error, Some(msg)),
                     )
                 },
-            )
+            )?;
+
+            // Wait for the database to be in stopped state
+            loop {
+                match get_managed_database_status(self.db_type(), &self.fqdn_id, &credentials) {
+                    Ok(status) if status == "stopped" => break Ok(()),
+                    Ok(_) => thread::sleep(Duration::from_secs(30)),
+                    Err((cmd_err, msg)) => {
+                        break Err(EngineError::new_cannot_pause_managed_database(
+                            event_details.clone(),
+                            CommandError::new_from_legacy_command_error(cmd_err, Some(msg)),
+                        ))
+                    }
+                }
+            }
         })
     }
 
