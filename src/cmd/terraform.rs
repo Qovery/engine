@@ -6,6 +6,7 @@ use retry::OperationResult;
 use crate::cmd::command::QoveryCommand;
 use crate::constants::TF_PLUGIN_CACHE_DIR;
 use rand::Rng;
+use regex::Regex;
 use retry::Error::Operation;
 use std::fmt::{Display, Formatter};
 use std::{env, fs, thread, time};
@@ -22,7 +23,7 @@ bitflags! {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum QuotaExceededError {
     ResourceLimitExceeded {
         resource_type: String,
@@ -91,6 +92,25 @@ impl TerraformError {
                 sub_type: QuotaExceededError::ScwNewAccountNeedsValidation,
                 raw_message: raw_terraform_output,
             };
+        }
+        if let Ok(aws_quotas_exceeded_re) = Regex::new(
+            r"You have exceeded the limit of (?P<resource_type>\w+) allowed on your AWS account \((?P<max_resource_count>\d+) by default\)",
+        ) {
+            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_output.as_str()) {
+                if let (Some(resource_type), Some(max_resource_count)) = (
+                    cap.name("resource_type").map(|e| e.as_str()),
+                    cap.name("max_resource_count")
+                        .map(|e| e.as_str().parse::<u32>().unwrap_or(0)),
+                ) {
+                    return TerraformError::QuotasExceeded {
+                        sub_type: QuotaExceededError::ResourceLimitExceeded {
+                            resource_type: resource_type.to_string(),
+                            max_resource_count,
+                        },
+                        raw_message: raw_terraform_output.to_string(),
+                    };
+                }
+            }
         }
 
         // This kind of error should be triggered as little as possible, ideally, there is no unknown errors
@@ -602,5 +622,35 @@ terraform {
             },
             result
         );
+    }
+
+    #[test]
+    fn test_terraform_error_aws_quotas_issue() {
+        // setup:
+        struct TestCase<'a> {
+            input_raw_message: &'a str,
+            expected_terraform_error: TerraformError,
+        }
+
+        let test_cases = vec![TestCase {
+            // AWS quotas issues
+            input_raw_message: "You have exceeded the limit of vCPUs allowed on your AWS account (32 by default).",
+            expected_terraform_error: TerraformError::QuotasExceeded {
+                sub_type: QuotaExceededError::ResourceLimitExceeded {
+                    resource_type: "vCPUs".to_string(),
+                    max_resource_count: 32,
+                },
+                raw_message: "You have exceeded the limit of vCPUs allowed on your AWS account (32 by default)."
+                    .to_string(),
+            },
+        }];
+
+        for tc in test_cases {
+            // execute:
+            let result = TerraformError::new(vec!["apply".to_string()], tc.input_raw_message.to_string());
+
+            // validate:
+            assert_eq!(tc.expected_terraform_error, result);
+        }
     }
 }
