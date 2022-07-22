@@ -155,6 +155,7 @@ pub enum Tag {
     TerraformDestroyError,
     TerraformCloudProviderQuotasReached,
     TerraformCloudProviderActivationRequired,
+    TerraformInvalidCredentials,
 }
 
 impl From<errors::Tag> for Tag {
@@ -308,6 +309,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CannotPauseManagedDatabase => Tag::CannotPauseManagedDatabase,
             errors::Tag::TerraformCloudProviderQuotasReached => Tag::TerraformCloudProviderQuotasReached,
             errors::Tag::TerraformCloudProviderActivationRequired => Tag::TerraformCloudProviderActivationRequired,
+            errors::Tag::TerraformInvalidCredentials => Tag::TerraformInvalidCredentials,
         }
     }
 }

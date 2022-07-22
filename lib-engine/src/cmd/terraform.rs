@@ -44,6 +44,10 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    InvalidCredentials {
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
     QuotasExceeded {
         sub_type: QuotaExceededError,
         /// raw_message: raw Terraform error message with all details.
@@ -130,6 +134,11 @@ impl TerraformError {
                 }
             }
         }
+        if raw_terraform_output.contains("error calling sts:GetCallerIdentity: operation error STS: GetCallerIdentity, https response error StatusCode: 403") {
+            return TerraformError::InvalidCredentials {
+                raw_message: raw_terraform_output,
+            };
+        }
 
         // This kind of error should be triggered as little as possible, ideally, there is no unknown errors
         // (uncatched) so we can act / report properly to the user.
@@ -151,6 +160,7 @@ impl Display for TerraformError {
                 terraform_args.join(" "),
                 raw_message
             ),
+            TerraformError::InvalidCredentials { raw_message } => format!("Invalid credentials. \n{}", raw_message),
             TerraformError::CannotDeleteLockFile {
                 terraform_provider_lock,
                 raw_message,
@@ -678,6 +688,15 @@ terraform {
                     },
                     raw_message:
                         "Error creating EIP: AddressLimitExceeded: The maximum number of addresses has been reached."
+                            .to_string(),
+                },
+            },
+            TestCase {
+                input_raw_message:
+                    "Error: error configuring Terraform AWS Provider: error validating provider credentials: error calling sts:GetCallerIdentity: operation error STS: GetCallerIdentity, https response error StatusCode: 403",
+                expected_terraform_error: TerraformError::InvalidCredentials {
+                    raw_message:
+                        "Error: error configuring Terraform AWS Provider: error validating provider credentials: error calling sts:GetCallerIdentity: operation error STS: GetCallerIdentity, https response error StatusCode: 403"
                             .to_string(),
                 },
             },
