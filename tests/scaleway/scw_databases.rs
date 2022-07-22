@@ -281,7 +281,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_password(Kind::Scw, database_mode.clone());
+        let database_password = generate_password();
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
@@ -485,8 +485,23 @@ fn private_postgresql_v13_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v13_deploy_a_working_dev_environment() {
     test_postgresql_configuration("13", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v14_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("14", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn public_postgresql_v14_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("14", function_name!(), CONTAINER, true);
 }
 
 // Postgres production environment
@@ -816,6 +831,21 @@ fn private_redis_v6_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_redis_v6_deploy_a_working_dev_environment() {
     test_redis_configuration("6", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn private_redis_v7_deploy_a_working_dev_environment() {
+    test_redis_configuration("7", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn public_redis_v7_deploy_a_working_dev_environment() {
+    test_redis_configuration("7", function_name!(), CONTAINER, true);
 }

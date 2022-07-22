@@ -121,7 +121,7 @@ impl ScwZone {
     }
 
     // TODO(benjaminch): improve / refactor this!
-    pub fn region_str(&self) -> String {
+    pub fn region_str(&self) -> &str {
         match self {
             ScwZone::Paris1 => "fr-par",
             ScwZone::Paris2 => "fr-par",
@@ -129,7 +129,6 @@ impl ScwZone {
             ScwZone::Amsterdam1 => "nl-ams",
             ScwZone::Warsaw1 => "pl-waw",
         }
-        .to_string()
     }
 }
 

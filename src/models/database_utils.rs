@@ -24,6 +24,10 @@ pub fn get_self_hosted_postgres_version(requested_version: String) -> Result<Str
     let v13 = generate_supported_version(13, 1, 4, Some(0), Some(0), None);
     supported_postgres_versions.extend(v13);
 
+    // v14
+    let v14 = generate_supported_version(14, 4, 0, Some(0), Some(0), None);
+    supported_postgres_versions.extend(v14);
+
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
 }
 
@@ -67,9 +71,11 @@ pub fn get_self_hosted_mongodb_version(requested_version: String) -> Result<Stri
 }
 
 pub fn get_self_hosted_redis_version(requested_version: String) -> Result<String, CommandError> {
-    let mut supported_redis_versions = HashMap::with_capacity(4);
+    let mut supported_redis_versions = HashMap::with_capacity(6);
     // https://hub.docker.com/r/bitnami/redis/tags?page=1&ordering=last_updated
 
+    supported_redis_versions.insert("7".to_string(), "7.0.4".to_string());
+    supported_redis_versions.insert("7.0".to_string(), "7.0.4".to_string());
     supported_redis_versions.insert("6".to_string(), "6.0.9".to_string());
     supported_redis_versions.insert("6.0".to_string(), "6.0.9".to_string());
     supported_redis_versions.insert("5".to_string(), "5.0.10".to_string());

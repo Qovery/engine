@@ -20,7 +20,7 @@ variable "parameter_group_name" {
 
 variable "elasticache_instances_number" {
   description = "Elasticache instance numbers"
-  default = 1
+  default = {{ database_elasticache_instances_number }}
   type = number
 }
 
@@ -30,8 +30,14 @@ variable "port" {
   type = number
 }
 
+variable "password" {
+  description = "Admin password for the master DB user"
+  default = "{{ database_password }}"
+  type = string
+}
+
 variable "instance_class" {
   description = "Type of instance: https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/CacheNodes.SupportedTypes.html"
-  default = "{{database_instance_type}}"
+  default = "{{ database_instance_type }}"
   type = string
 }

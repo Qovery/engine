@@ -4,10 +4,11 @@ extern crate derivative;
 extern crate url;
 
 use crate::build_platform::BuildError;
+use crate::cloud_provider::Kind;
 use crate::cmd;
 use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
-use crate::cmd::terraform::TerraformError;
+use crate::cmd::terraform::{QuotaExceededError, TerraformError};
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
 use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
@@ -469,39 +470,7 @@ impl From<TerraformError> for CommandError {
         // Terraform errors are 99% safe and carry useful data to be sent to end-users.
         // Hence, for the time being, everything is sent back to end-users.
         // TODO(benjaminch): Terraform errors should be parsed properly extracting useful data from it.
-        match terraform_error {
-            TerraformError::Unknown { message, raw_message } => {
-                CommandError::new(format!("{} {}", message, raw_message), None, None)
-            }
-            TerraformError::CannotDeleteLockFile {
-                terraform_provider_lock: _terraform_provider_lock,
-                raw_message,
-            } => CommandError::new(raw_message, None, None),
-            TerraformError::Initialize { raw_message } => CommandError::new(raw_message, None, None),
-            TerraformError::Validate { raw_message } => CommandError::new(raw_message, None, None),
-            TerraformError::StateList { raw_message } => CommandError::new(raw_message, None, None),
-            TerraformError::Plan { raw_message } => CommandError::new(raw_message, None, None),
-            TerraformError::Apply { raw_message } => CommandError::new(raw_message, None, None),
-            TerraformError::Destroy { raw_message } => CommandError::new(raw_message, None, None),
-            TerraformError::ConfigFileNotFound {
-                path: _path,
-                raw_message,
-            } => CommandError::new(raw_message, None, None),
-            TerraformError::ConfigFileInvalidContent {
-                path: _path,
-                raw_message,
-            } => CommandError::new(raw_message, None, None),
-            TerraformError::CannotRemoveEntryOutOfStateList {
-                entry_to_be_removed: _entry_to_be_removed,
-                raw_message,
-            } => CommandError::new(raw_message, None, None),
-            TerraformError::ContextUnsupportedParameterValue {
-                service_type: _service_type,
-                parameter_name: _parameter_name,
-                parameter_value: _parameter_value,
-                raw_message,
-            } => CommandError::new(raw_message, None, None),
-        }
+        CommandError::new(terraform_error.to_string(), None, None)
     }
 }
 
@@ -646,6 +615,10 @@ pub enum Tag {
     TerraformErrorWhileExecutingDestroyPipeline,
     /// TerraformContextUnsupportedParameterValue: represents an error while trying to render terraform context because of unsupported parameter value.
     TerraformContextUnsupportedParameterValue,
+    /// TerraformCloudProviderQuotasReached: represents an error due to cloud provider quotas exceeded.
+    TerraformCloudProviderQuotasReached,
+    /// TerraformCloudProviderActivationRequired: represents an error due to cloud provider requiring account to be validated first.
+    TerraformCloudProviderActivationRequired,
     /// HelmChartsSetupError: represents an error while trying to setup helm charts.
     HelmChartsSetupError,
     /// HelmChartsDeployError: represents an error while trying to deploy helm charts.
@@ -2226,54 +2199,6 @@ impl EngineError {
                 None,
                 None,
             ),
-            TerraformError::Initialize { .. } => EngineError::new(
-                event_details,
-                Tag::TerraformInitError,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
-                None,
-                None,
-            ),
-            TerraformError::Validate { .. } => EngineError::new(
-                event_details,
-                Tag::TerraformValidateError,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
-                None,
-                None,
-            ),
-            TerraformError::StateList { .. } => EngineError::new(
-                event_details,
-                Tag::TerraformStatelistError,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
-                None,
-                None,
-            ),
-            TerraformError::Plan { .. } => EngineError::new(
-                event_details,
-                Tag::TerraformPlanError,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
-                None,
-                None,
-            ),
-            TerraformError::Apply { .. } => EngineError::new(
-                event_details,
-                Tag::TerraformApplyError,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
-                None,
-                None,
-            ),
-            TerraformError::Destroy { .. } => EngineError::new(
-                event_details,
-                Tag::TerraformDestroyError,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
-                None,
-                None,
-            ),
             TerraformError::ContextUnsupportedParameterValue { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformContextUnsupportedParameterValue,
@@ -2282,6 +2207,52 @@ impl EngineError {
                 None,
                 None,
             ),
+            TerraformError::QuotasExceeded {
+                raw_message: ref _raw_message,
+                ref sub_type,
+            } => {
+                let terraform_error_string = terraform_error.to_string();
+                match sub_type.clone() {
+                    QuotaExceededError::ResourceLimitExceeded { resource_type, max_resource_count } => {
+                        if let Some(Kind::Aws) = event_details.provider_kind() {
+                            return EngineError::new(
+                                event_details,
+                                Tag::TerraformCloudProviderQuotasReached,
+                                terraform_error_string, // Note: Terraform error message are supposed to be safe
+                                Some(terraform_error.into()),
+                                Some(Url::parse("https://hub.qovery.com/docs/using-qovery/troubleshoot/").expect("Error while trying to parse error link helper for `QuotaExceededError::ResourceLimitExceeded`, URL is not valid.")),
+                                Some(format!("Request AWS to increase your `{}` limit (current max = {}) via this page http://aws.amazon.com/contact-us/ec2-request.", resource_type, match max_resource_count {
+                                    None => "".to_string(),
+                                    Some(count) => format!("(current max = {}", count),
+                                })),
+                            );
+                        }
+
+                        // No cloud provider specifics
+                        EngineError::new(
+                            event_details,
+                            Tag::TerraformCloudProviderQuotasReached,
+                            terraform_error_string, // Note: Terraform error message are supposed to be safe
+                            Some(terraform_error.into()),
+                            Some(Url::parse("https://hub.qovery.com/docs/using-qovery/troubleshoot/").expect("Error while trying to parse error link helper for `QuotaExceededError::ResourceLimitExceeded`, URL is not valid.")),
+                            Some(format!("Request your cloud provider to increase your `{}` limit{}", resource_type, match max_resource_count {
+                                None => "".to_string(),
+                                Some(count) => format!("(current max = {}", count),
+                            })),
+                        )
+                    },
+
+                    // SCW specifics
+                    QuotaExceededError::ScwNewAccountNeedsValidation => EngineError::new(
+                        event_details,
+                        Tag::TerraformCloudProviderActivationRequired,
+                        terraform_error_string, // Note: Terraform error message are supposed to be safe
+                        Some(terraform_error.into()),
+                        Some(Url::parse("https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/scaleway/#connect-your-scaleway-account").expect("Error while trying to parse error link helper for `QuotaExceededError::ScwNewAccountNeedsValidation`, URL is not valid.")),
+                        Some("If you have a new Scaleway account, your quota must be unlocked by the Scaleway support teams. To do this, open a ticket with their support with the following message: 'Hello, I would like to deploy my applications on Scaleway with Qovery. Can you increase my quota for the current Kubernetes node type to 10 please? '".to_string()),
+                    ),
+                }
+            }
         }
     }
 

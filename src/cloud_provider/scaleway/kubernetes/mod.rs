@@ -20,7 +20,6 @@ use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::cmd::terraform::{
     terraform_apply_with_tf_workers_resources, terraform_init_validate_plan_apply, terraform_init_validate_state_list,
-    TerraformError,
 };
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
@@ -38,7 +37,7 @@ use crate::runtime::block_on;
 use crate::string::terraform_list_format;
 use ::function_name::named;
 use reqwest::StatusCode;
-use retry::delay::{Fibonacci, Fixed};
+use retry::delay::Fixed;
 use retry::Error::Operation;
 use retry::OperationResult;
 use scaleway_api_rs::apis::Error;
@@ -174,7 +173,7 @@ impl Kapsule {
                         QoveryIdentifier::new_from_long_id(context.organization_id().to_string()),
                         QoveryIdentifier::new_from_long_id(context.cluster_id().to_string()),
                         QoveryIdentifier::new_from_long_id(context.execution_id().to_string()),
-                        Some(zone.region_str()),
+                        Some(zone.region_str().to_string()),
                         Infrastructure(InfrastructureStep::LoadConfiguration),
                         Transmitter::Kubernetes(id, name),
                     ),
@@ -235,7 +234,7 @@ impl Kapsule {
         // get cluster info
         let cluster_info = match block_on(scaleway_api_rs::apis::clusters_api::list_clusters(
             &self.get_configuration(),
-            self.region().as_str(),
+            self.region(),
             None,
             Some(self.options.scaleway_project_id.as_str()),
             None,
@@ -291,7 +290,7 @@ impl Kapsule {
 
         let pools = match block_on(scaleway_api_rs::apis::pools_api::list_pools(
             &self.get_configuration(),
-            self.region().as_str(),
+            self.region(),
             cluster_id.as_str(),
             None,
             None,
@@ -342,7 +341,7 @@ impl Kapsule {
         let pool =
             match block_on(scaleway_api_rs::apis::pools_api::get_pool(
                 &self.get_configuration(),
-                self.region().as_str(),
+                self.region(),
                 pool_id,
             )) {
                 Ok(x) => x,
@@ -1453,12 +1452,7 @@ impl Kapsule {
             EventMessage::new_from_safe("Running Terraform destroy".to_string()),
         ));
 
-        match retry::retry(Fibonacci::from_millis(60000).take(3), || {
-            match cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
-                Ok(_) => OperationResult::Ok(()),
-                Err(e) => OperationResult::Retry(e),
-            }
-        }) {
+        match cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
             Ok(_) => {
                 self.send_to_customer(
                     format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id()).as_str(),
@@ -1470,11 +1464,7 @@ impl Kapsule {
                 ));
                 Ok(())
             }
-            Err(Operation { error, .. }) => Err(EngineError::new_terraform_error(event_details, error)),
-            Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error(
-                event_details,
-                TerraformError::Destroy { raw_message: msg },
-            )),
+            Err(err) => Err(EngineError::new_terraform_error(event_details, err)),
         }
     }
 
@@ -1517,7 +1507,7 @@ impl Kubernetes for Kapsule {
         self.version.as_str()
     }
 
-    fn region(&self) -> String {
+    fn region(&self) -> &str {
         self.zone.region_str()
     }
 

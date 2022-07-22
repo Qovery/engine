@@ -209,7 +209,7 @@ impl Kubernetes for EKS {
         self.version.as_str()
     }
 
-    fn region(&self) -> String {
+    fn region(&self) -> &str {
         self.region.to_aws_format()
     }
 

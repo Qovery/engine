@@ -130,7 +130,7 @@ impl Kubernetes for EC2 {
         self.version.as_str()
     }
 
-    fn region(&self) -> String {
+    fn region(&self) -> &str {
         self.region.to_aws_format()
     }
 

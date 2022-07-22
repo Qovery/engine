@@ -32,7 +32,7 @@ fn create_and_destroy_eks_cluster(
             KKind::Eks,
             context(generate_id().as_str(), cluster_id.as_str()),
             logger(),
-            region.to_aws_format().as_str(),
+            region.to_aws_format(),
             Some(zones),
             test_type,
             major_boot_version,

@@ -242,7 +242,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     let database_port_mongo = 27017;
     let database_db_name_mongo = "my-mongodb".to_string();
     let database_username_mongo = "superuser".to_string();
-    let database_password_mongo = generate_password(provider_kind.clone(), CONTAINER);
+    let database_password_mongo = generate_password();
     let database_uri_mongo = format!(
         "mongodb://{}:{}@{}:{}/{}",
         database_username_mongo,
@@ -257,7 +257,7 @@ pub fn environment_3_apps_3_routers_3_databases(
     let fqdn = get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()).to_string();
     let database_port = 5432;
     let database_username = "superuser".to_string();
-    let database_password = generate_password(provider_kind.clone(), CONTAINER);
+    let database_password = generate_password();
     let database_name = "postgres".to_string();
 
     // pSQL 2 management part
@@ -681,7 +681,7 @@ pub fn environnement_2_app_2_routers_1_psql(
 
     let database_port = 5432;
     let database_username = "superuser".to_string();
-    let database_password = generate_password(provider_kind, CONTAINER);
+    let database_password = generate_password();
     let database_name = "postgres".to_string();
 
     let suffix = generate_id();
@@ -1075,8 +1075,14 @@ pub fn test_db(
 
     let provider_kind = kubernetes_kind.get_cloud_provider_kind();
     let app_id = Uuid::new_v4();
-    let database_username = "superuser".to_string();
-    let database_password = generate_password(provider_kind.clone(), database_mode.clone());
+    let database_username = match db_kind {
+        DatabaseKind::Redis => match database_mode {
+            DatabaseMode::MANAGED => "default".to_string(),
+            CONTAINER => "".to_string(),
+        },
+        _ => "superuser".to_string(),
+    };
+    let database_password = generate_password();
     let db_kind_str = db_kind.name().to_string();
     let db_id = generate_id();
     let database_host = format!("{}-{}", db_id, db_kind_str);
@@ -1139,7 +1145,7 @@ pub fn test_db(
         mode: database_mode.clone(),
     };
 
-    environment.databases = vec![db];
+    environment.databases = vec![db.clone()];
 
     let app_name = format!("{}-app-{}", db_kind_str, generate_id());
     environment.applications = environment
@@ -1275,8 +1281,12 @@ pub fn test_db(
                     assert_eq!(service.len(), 1);
                     match is_public {
                         true => {
-                            assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
-                            assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_fqdn);
+                            if db.clone().kind == DatabaseKind::Postgresql && db.kind == DatabaseKind::Mysql {
+                                assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
+                                assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_fqdn);
+                            } else {
+                                assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
+                            }
                         }
                         false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
                     }
@@ -1372,7 +1382,7 @@ pub fn test_pause_managed_db(
 
     let provider_kind = kubernetes_kind.get_cloud_provider_kind();
     let database_username = "superuser".to_string();
-    let database_password = generate_password(provider_kind.clone(), database_mode.clone());
+    let database_password = generate_password();
     let db_kind_str = db_kind.name().to_string();
     let db_id = generate_id();
     let database_host = format!("{}-{}", db_id, db_kind_str);

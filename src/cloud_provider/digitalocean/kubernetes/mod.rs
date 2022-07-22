@@ -35,7 +35,7 @@ use crate::cmd::kubectl::{
 };
 use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::cmd::terraform::{
-    terraform_init_validate_plan_apply, terraform_init_validate_state_list, terraform_state_rm_entry, TerraformError,
+    terraform_init_validate_plan_apply, terraform_init_validate_state_list, terraform_state_rm_entry,
 };
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
@@ -56,9 +56,6 @@ use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
 use crate::string::terraform_list_format;
 use ::function_name::named;
-use retry::delay::Fibonacci;
-use retry::Error::Operation;
-use retry::OperationResult;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -623,7 +620,7 @@ impl DOKS {
             cluster_id: self.id.clone(),
             cluster_long_id: self.long_id,
             do_cluster_id: doks_id,
-            region: self.region(),
+            region: self.region().to_string(),
             cluster_name: self.cluster_name(),
             cloud_provider: "digitalocean".to_string(),
             test_cluster: self.context.is_test_cluster(),
@@ -1061,12 +1058,7 @@ impl DOKS {
             EventMessage::new_from_safe("Running Terraform destroy".to_string()),
         ));
 
-        match retry::retry(Fibonacci::from_millis(60000).take(3), || {
-            match cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
-                Ok(_) => OperationResult::Ok(()),
-                Err(e) => OperationResult::Retry(e),
-            }
-        }) {
+        match cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
             Ok(_) => {
                 self.send_to_customer(
                     format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id()).as_str(),
@@ -1078,11 +1070,7 @@ impl DOKS {
                 ));
                 Ok(())
             }
-            Err(Operation { error, .. }) => Err(EngineError::new_terraform_error(event_details, error)),
-            Err(retry::Error::Internal(msg)) => Err(EngineError::new_terraform_error(
-                event_details,
-                TerraformError::Destroy { raw_message: msg },
-            )),
+            Err(err) => Err(EngineError::new_terraform_error(event_details, err)),
         }
     }
 
@@ -1125,8 +1113,8 @@ impl Kubernetes for DOKS {
         self.version.as_str()
     }
 
-    fn region(&self) -> String {
-        self.region.to_string()
+    fn region(&self) -> &str {
+        self.region.as_str()
     }
 
     fn zone(&self) -> &str {

@@ -455,34 +455,28 @@ pub fn generate_id() -> String {
     uuid
 }
 
-pub fn generate_password(provider_kind: Kind, db_mode: DatabaseMode) -> String {
+pub fn generate_password() -> String {
     // core special chars set: !#$%&*+-=?_
     // we will keep only those and exclude others
     let forbidden_chars = vec![
-        '"', '\'', '(', ')', ',', '.', '/', ':', ';', '<', '>', '@', '[', '\\', ']', '^', '`', '{', '|', '}', '~',
+        '"', '\'', '(', ')', ',', '.', '/', ':', ';', '<', '>', '@', '[', '\\', ']', '^', '`', '{', '|', '}', '~', '%',
+        '*',
     ];
-
-    let allow_using_symbols = provider_kind == Kind::Scw && db_mode == MANAGED;
-    if !allow_using_symbols {
-        return generate_id();
-    };
 
     let pg = PasswordGenerator::new()
         .length(32)
         .numbers(true)
         .lowercase_letters(true)
         .uppercase_letters(true)
-        .symbols(allow_using_symbols)
+        .symbols(true)
         .spaces(false)
         .exclude_similar_characters(true)
         .strict(true);
 
     let mut password = pg.generate_one().expect("error while trying to generate a password");
 
-    if allow_using_symbols {
-        for forbidden_char in forbidden_chars {
-            password = password.replace(forbidden_char, "%");
-        }
+    for forbidden_char in forbidden_chars {
+        password = password.replace(forbidden_char, "-");
     }
 
     password
@@ -1019,7 +1013,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "61c7a9b55a085229583b6a394dd168a4159dfd09".to_string(),
+                app_commit: "f86286892f044d731332a1f613300bd850476f3f".to_string(),
                 app_env_vars: btreemap! {
                      "PG_DBNAME".to_string() => base64::encode(database_db_name),
                      "PG_HOST".to_string() => base64::encode(db_fqdn),
@@ -1035,7 +1029,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name,
-                app_commit: "e4b1162741ce162b834b68498e43bf60f0f58cbe".to_string(),
+                app_commit: "476c6ead94a3a5365eabf4daa6d79b10d159a0d0".to_string(),
                 app_env_vars: btreemap! {
                 "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED).to_string()),
                 "REDIS_HOST".to_string()      => base64::encode(db_fqdn),

@@ -893,7 +893,10 @@ mod tests {
     #[test]
     fn test_upgrade_with_lock_during_install() {
         // We want to check that we manage to install a chart even if a lock is present while it was the first installation
-        let HelmTestCtx { ref helm, ref charts } = HelmTestCtx::new("test-upgrade-with-lock-install");
+        let HelmTestCtx {
+            ref helm,
+            ref mut charts,
+        } = HelmTestCtx::new("test-upgrade-with-lock-install");
 
         // check release does not exist yet
         let ret = helm.check_release_exist(&charts[0], &[]);
@@ -906,13 +909,17 @@ mod tests {
             let chart_name = charts[0].name.clone();
             move || {
                 barrier.wait();
-                thread::sleep(Duration::from_millis(3000));
+                thread::sleep(Duration::from_millis(5000));
                 let mut cmd = QoveryCommand::new("pkill", &["-9", "-f", &format!("helm.*{}", chart_name)], &[]);
                 let _ = cmd.exec();
             }
         });
 
         // install it
+        charts[0].values = vec![ChartSetValue {
+            key: "initialDelaySeconds".to_string(),
+            value: "10".to_string(),
+        }];
         barrier.wait();
         let ret = helm.upgrade(&charts[0], &[]);
         assert!(matches!(ret, Err(_)));
@@ -953,7 +960,7 @@ mod tests {
             let chart_name = charts[0].name.clone();
             move || {
                 barrier.wait();
-                thread::sleep(Duration::from_millis(3000));
+                thread::sleep(Duration::from_millis(5000));
                 let mut cmd = QoveryCommand::new("pkill", &["-9", "-f", &format!("helm.*{}", chart_name)], &[]);
                 let _ = cmd.exec();
             }
@@ -961,7 +968,7 @@ mod tests {
 
         charts[0].values = vec![ChartSetValue {
             key: "initialDelaySeconds".to_string(),
-            value: "6".to_string(),
+            value: "10".to_string(),
         }];
         barrier.wait();
         let ret = helm.upgrade(&charts[0], &[]);

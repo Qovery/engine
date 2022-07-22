@@ -491,8 +491,23 @@ fn private_postgresql_v13_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v13_deploy_a_working_dev_environment() {
     test_postgresql_configuration("13", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v14_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("14", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn public_postgresql_v14_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("14", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 // Postgres production environment
@@ -506,6 +521,7 @@ fn private_postgresql_v10_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v10_deploy_a_working_prod_environment() {
     test_postgresql_configuration("10", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -520,6 +536,7 @@ fn private_postgresql_v11_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v11_deploy_a_working_prod_environment() {
     test_postgresql_configuration("11", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -534,6 +551,7 @@ fn private_postgresql_v12_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v12_deploy_a_working_prod_environment() {
     test_postgresql_configuration("12", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -548,6 +566,7 @@ fn private_postgresql_v13_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v13_deploy_a_working_prod_environment() {
     test_postgresql_configuration("13", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -557,6 +576,22 @@ fn public_postgresql_v13_deploy_a_working_prod_environment() {
 #[test]
 fn private_postgresql_v13_deploy_and_pause() {
     test_postgresql_pause("13", function_name!(), MANAGED, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+#[ignore = "Database not handle with terraform ATM"]
+fn private_postgresql_v14_deploy_a_working_prod_environment() {
+    test_postgresql_configuration("14", function_name!(), MANAGED, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+#[ignore = "Database not handle with terraform ATM"]
+fn public_postgresql_v14_deploy_a_working_prod_environment() {
+    test_postgresql_configuration("14", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
 /**
@@ -789,6 +824,7 @@ fn private_mysql_v5_7_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn public_mysql_v5_7_deploy_a_working_prod_environment() {
     test_mysql_configuration("5.7", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -882,8 +918,23 @@ fn private_redis_v6_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_redis_v6_deploy_a_working_dev_environment() {
     test_redis_configuration("6", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_redis_v7_deploy_a_working_dev_environment() {
+    test_redis_configuration("7", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn public_redis_v7_deploy_a_working_dev_environment() {
+    test_redis_configuration("7", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 // Redis production environment (Elasticache)
@@ -897,7 +948,7 @@ fn private_redis_v5_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "managed redis cannot be public ATM"]
 fn public_redis_v5_deploy_a_working_prod_environment() {
     test_redis_configuration("5", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -912,7 +963,7 @@ fn private_redis_v6_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "managed redis cannot be public ATM"]
 fn public_redis_v6_deploy_a_working_prod_environment() {
     test_redis_configuration("6", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }

@@ -6,6 +6,7 @@ use retry::OperationResult;
 use crate::cmd::command::QoveryCommand;
 use crate::constants::TF_PLUGIN_CACHE_DIR;
 use rand::Rng;
+use regex::Regex;
 use retry::Error::Operation;
 use std::fmt::{Display, Formatter};
 use std::{env, fs, thread, time};
@@ -22,10 +23,29 @@ bitflags! {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum QuotaExceededError {
+    ResourceLimitExceeded {
+        resource_type: String,
+        max_resource_count: Option<u32>,
+    },
+
+    // Cloud provider specifics
+    // TODO(benjaminch): variant below this comment might probably not live here on the long run.
+    // There is some cloud providers specific errors and it would make more sense to delegate logic
+    // identifying those errors (trait implementation) on cloud provider side next to their kubernetes implementation.
+    ScwNewAccountNeedsValidation,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum TerraformError {
     Unknown {
-        /// message: Safe message.
-        message: String,
+        terraform_args: Vec<String>,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
+    QuotasExceeded {
+        sub_type: QuotaExceededError,
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
@@ -56,36 +76,75 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
-    Initialize {
-        /// raw_message: raw Terraform error message with all details.
-        raw_message: String,
-    },
-    Validate {
-        /// raw_message: raw Terraform error message with all details.
-        raw_message: String,
-    },
-    StateList {
-        /// raw_message: raw Terraform error message with all details.
-        raw_message: String,
-    },
-    Plan {
-        /// raw_message: raw Terraform error message with all details.
-        raw_message: String,
-    },
-    Apply {
-        /// raw_message: raw Terraform error message with all details.
-        raw_message: String,
-    },
-    Destroy {
-        /// raw_message: raw Terraform error message with all details.
-        raw_message: String,
-    },
+}
+
+impl TerraformError {
+    fn new(terraform_args: Vec<String>, raw_terraform_output: String) -> Self {
+        // TODO(benjaminch): this logic might probably not live here on the long run.
+        // There is some cloud providers specific errors and it would make more sense to delegate logic
+        // identifying those errors (trait implementation) on cloud provider side next to their kubernetes implementation.
+
+        // Quotas issues
+        // SCW
+        if raw_terraform_output.contains("<Code>QuotaExceeded</Code>") {
+            // SCW bucket quotas issues example:
+            // Request ID: None Body: <?xml version='1.0' encoding='UTF-8'?>\n<Error><Code>QuotaExceeded</Code><Message>Quota exceeded. Please contact support to upgrade your quotas.</Message><RequestId>tx111117bad3a44d56bd120-0062d1515d</RequestId></Error>
+            return TerraformError::QuotasExceeded {
+                sub_type: QuotaExceededError::ScwNewAccountNeedsValidation,
+                raw_message: raw_terraform_output,
+            };
+        }
+
+        // AWS
+        if let Ok(aws_quotas_exceeded_re) = Regex::new(
+            r"You have exceeded the limit of (?P<resource_type>\w+) allowed on your AWS account \((?P<max_resource_count>\d+) by default\)",
+        ) {
+            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_output.as_str()) {
+                if let (Some(resource_type), Some(max_resource_count)) = (
+                    cap.name("resource_type").map(|e| e.as_str()),
+                    cap.name("max_resource_count")
+                        .map(|e| e.as_str().parse::<u32>().unwrap_or(0)),
+                ) {
+                    return TerraformError::QuotasExceeded {
+                        sub_type: QuotaExceededError::ResourceLimitExceeded {
+                            resource_type: resource_type.to_string(),
+                            max_resource_count: Some(max_resource_count),
+                        },
+                        raw_message: raw_terraform_output.to_string(),
+                    };
+                }
+            }
+        }
+        if raw_terraform_output.contains("AddressLimitExceeded: The maximum number of addresses has been reached") {
+            return TerraformError::QuotasExceeded {
+                sub_type: QuotaExceededError::ResourceLimitExceeded {
+                    resource_type: "EIP".to_string(),
+                    max_resource_count: None,
+                },
+                raw_message: raw_terraform_output,
+            };
+        }
+
+        // This kind of error should be triggered as little as possible, ideally, there is no unknown errors
+        // (uncatched) so we can act / report properly to the user.
+        TerraformError::Unknown {
+            terraform_args,
+            raw_message: raw_terraform_output,
+        }
+    }
 }
 
 impl Display for TerraformError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let message: String = match self {
-            TerraformError::Unknown { message, raw_message } => format!("{}\n{}", message, raw_message),
+            TerraformError::Unknown {
+                terraform_args,
+                raw_message,
+            } => format!(
+                "Unknown error while performing `terraform {}`.\n{}",
+                terraform_args.join(" "),
+                raw_message
+            ),
             TerraformError::CannotDeleteLockFile {
                 terraform_provider_lock,
                 raw_message,
@@ -93,24 +152,6 @@ impl Display for TerraformError {
                 "Wasn't able to delete terraform lock file {}\n{}",
                 terraform_provider_lock, raw_message
             ),
-            TerraformError::Initialize { raw_message } => {
-                format!("Error while performing Terraform init\n{}", raw_message,)
-            }
-            TerraformError::Validate { raw_message } => {
-                format!("Error while performing Terraform validate\n{}", raw_message,)
-            }
-            TerraformError::StateList { raw_message } => {
-                format!("Error while performing Terraform statelist\n{}", raw_message,)
-            }
-            TerraformError::Plan { raw_message } => {
-                format!("Error while performing Terraform plan\n{}", raw_message,)
-            }
-            TerraformError::Apply { raw_message } => {
-                format!("Error while performing Terraform apply\n{}", raw_message,)
-            }
-            TerraformError::Destroy { raw_message } => {
-                format!("Error while performing Terraform destroy\n{}", raw_message,)
-            }
             TerraformError::ConfigFileNotFound { path, raw_message } => {
                 format!(
                     "Error while trying to get Terraform configuration file `{}`. \n{}",
@@ -139,8 +180,29 @@ impl Display for TerraformError {
                 raw_message,
             } => {
                 format!(
-                    "{} value `{}` not supported for parameter `{}`.\n{}",
+                    "Error {} value `{}` not supported for parameter `{}`.\n{}",
                     service_type, parameter_value, parameter_name, raw_message,
+                )
+            }
+            TerraformError::QuotasExceeded { raw_message, sub_type } => {
+                format!(
+                    "Error, cloud provider quotas exceeded. {}\n{}",
+                    match sub_type {
+                        QuotaExceededError::ScwNewAccountNeedsValidation =>
+                            "SCW new account requires cloud provider validation.".to_string(),
+                        QuotaExceededError::ResourceLimitExceeded {
+                            resource_type,
+                            max_resource_count,
+                        } => format!(
+                            "`{}` has reached its quotas{}.",
+                            resource_type,
+                            match max_resource_count {
+                                None => "".to_string(),
+                                Some(count) => format!(" of {}", count),
+                            }
+                        ),
+                    },
+                    raw_message
                 )
             }
         };
@@ -149,7 +211,11 @@ impl Display for TerraformError {
     }
 }
 
-fn manage_common_issues(terraform_provider_lock: &str, err: &TerraformError) -> Result<(), TerraformError> {
+fn manage_common_issues(
+    terraform_args: Vec<&str>,
+    terraform_provider_lock: &str,
+    err: &TerraformError,
+) -> Result<(), TerraformError> {
     // Error: Failed to install provider from shared cache
     // in order to avoid lock errors on parallel run, let's sleep a bit
     // https://github.com/hashicorp/terraform/issues/28041
@@ -178,20 +244,21 @@ fn manage_common_issues(terraform_provider_lock: &str, err: &TerraformError) -> 
     }
 
     Err(TerraformError::Unknown {
-        message: "Unknown Terraform error, no workaround to solve this issue automatically".to_string(),
+        terraform_args: terraform_args.iter().map(|e| e.to_string()).collect(),
         raw_message: error_string,
     })
 }
 
 fn terraform_init(root_dir: &str) -> Result<Vec<String>, TerraformError> {
+    let terraform_args = vec!["init", "-no-color"];
     let terraform_provider_lock = format!("{}/.terraform.lock.hcl", &root_dir);
 
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // terraform init
-        match terraform_exec(root_dir, vec!["init", "-no-color"]) {
+        match terraform_exec(root_dir, terraform_args.clone()) {
             Ok(output) => OperationResult::Ok(output),
             Err(err) => {
-                let _ = manage_common_issues(&terraform_provider_lock, &err);
+                let _ = manage_common_issues(terraform_args.clone(), &terraform_provider_lock, &err);
                 // Error while trying to run terraform init, retrying...
                 OperationResult::Retry(err)
             }
@@ -201,19 +268,22 @@ fn terraform_init(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(TerraformError::Initialize { raw_message: e }),
+        Err(retry::Error::Internal(e)) => {
+            Err(TerraformError::new(terraform_args.iter().map(|e| e.to_string()).collect(), e))
+        }
     }
 }
 
 fn terraform_validate(root_dir: &str) -> Result<Vec<String>, TerraformError> {
+    let terraform_args = vec!["validate", "-no-color"];
     let terraform_provider_lock = format!("{}/.terraform.lock.hcl", &root_dir);
 
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // validate config
-        match terraform_exec(root_dir, vec!["validate", "-no-color"]) {
+        match terraform_exec(root_dir, terraform_args.clone()) {
             Ok(output) => OperationResult::Ok(output),
             Err(err) => {
-                let _ = manage_common_issues(&terraform_provider_lock, &err);
+                let _ = manage_common_issues(terraform_args.clone(), &terraform_provider_lock, &err);
                 // error while trying to Terraform validate on the rendered templates
                 OperationResult::Retry(err)
             }
@@ -223,14 +293,17 @@ fn terraform_validate(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(TerraformError::Validate { raw_message: e }),
+        Err(retry::Error::Internal(e)) => {
+            Err(TerraformError::new(terraform_args.iter().map(|e| e.to_string()).collect(), e))
+        }
     }
 }
 
 pub fn terraform_state_list(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     // get terraform state list output
+    let terraform_args = vec!["state", "list"];
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
-        match terraform_exec(root_dir, vec!["state", "list"]) {
+        match terraform_exec(root_dir, terraform_args.clone()) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
                 // Error while trying to run terraform state list, retrying...
@@ -242,14 +315,17 @@ pub fn terraform_state_list(root_dir: &str) -> Result<Vec<String>, TerraformErro
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(TerraformError::StateList { raw_message: e }),
+        Err(retry::Error::Internal(e)) => {
+            Err(TerraformError::new(terraform_args.iter().map(|e| e.to_string()).collect(), e))
+        }
     }
 }
 
 pub fn terraform_plan(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     // plan
-    let result = retry::retry(Fixed::from_millis(3000).take(3), || {
-        match terraform_exec(root_dir, vec!["plan", "-no-color", "-out", "tf_plan"]) {
+    let terraform_args = vec!["plan", "-no-color", "-out", "tf_plan"];
+    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
+        match terraform_exec(root_dir, terraform_args.clone()) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
                 // Error while trying to Terraform plan the rendered templates
@@ -261,14 +337,17 @@ pub fn terraform_plan(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(TerraformError::Apply { raw_message: e }),
+        Err(retry::Error::Internal(e)) => {
+            Err(TerraformError::new(terraform_args.iter().map(|e| e.to_string()).collect(), e))
+        }
     }
 }
 
 fn terraform_apply(root_dir: &str) -> Result<Vec<String>, TerraformError> {
+    let terraform_args = vec!["apply", "-no-color", "-auto-approve", "tf_plan"];
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // apply
-        match terraform_exec(root_dir, vec!["apply", "-no-color", "-auto-approve", "tf_plan"]) {
+        match terraform_exec(root_dir, terraform_args.clone()) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
                 // Error while trying to run terraform apply on rendered templates, retrying...
@@ -280,7 +359,9 @@ fn terraform_apply(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(TerraformError::Apply { raw_message: e }),
+        Err(retry::Error::Internal(e)) => {
+            Err(TerraformError::new(terraform_args.iter().map(|e| e.to_string()).collect(), e))
+        }
     }
 }
 
@@ -295,7 +376,7 @@ pub fn terraform_apply_with_tf_workers_resources(
 
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // apply
-        match terraform_exec(root_dir, terraform_args_string.iter().map(|x| &**x).collect()) {
+        match terraform_exec(root_dir, terraform_args_string.iter().map(|e| e.as_str()).collect()) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
                 // Error while trying to run terraform apply on rendered templates, retrying...
@@ -307,7 +388,10 @@ pub fn terraform_apply_with_tf_workers_resources(
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(TerraformError::Apply { raw_message: e }),
+        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
+            terraform_args_string.iter().map(|e| e.to_string()).collect(),
+            e,
+        )),
     }
 }
 
@@ -326,8 +410,9 @@ pub fn terraform_state_rm_entry(root_dir: &str, entry: &str) -> Result<Vec<Strin
 
 pub fn terraform_destroy(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     // terraform destroy
+    let terraform_args = vec!["destroy", "-no-color", "-auto-approve"];
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
-        match terraform_exec(root_dir, vec!["destroy", "-no-color", "-auto-approve"]) {
+        match terraform_exec(root_dir, terraform_args.clone()) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
                 // Error while trying to run terraform destroy on rendered templates, retrying...
@@ -339,7 +424,9 @@ pub fn terraform_destroy(root_dir: &str) -> Result<Vec<String>, TerraformError> 
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => Err(TerraformError::Destroy { raw_message: e }),
+        Err(retry::Error::Internal(e)) => {
+            Err(TerraformError::new(terraform_args.iter().map(|e| e.to_string()).collect(), e))
+        }
     }
 }
 
@@ -444,7 +531,7 @@ fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Terraf
     match result {
         Ok(_) => Ok(stdout),
         Err(_) => Err(TerraformError::Unknown {
-            message: "Error while performing Terraform command.".to_string(),
+            terraform_args: args.iter().map(|e| e.to_string()).collect(),
             raw_message: format!(
                 "command: terraform {} failed\nSTDOUT:\n{}\n STDERR:\n{}",
                 args.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(" "),
@@ -457,7 +544,7 @@ fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Terraf
 
 #[cfg(test)]
 mod tests {
-    use crate::cmd::terraform::{manage_common_issues, terraform_init_validate, TerraformError};
+    use crate::cmd::terraform::{manage_common_issues, terraform_init_validate, QuotaExceededError, TerraformError};
     use std::fs;
     use tracing::{span, Level};
     use tracing_test::traced_test;
@@ -484,11 +571,13 @@ obtain schema: the cached package for registry.terraform.io/hashicorp/time
 in the dependency lock file
         "#;
 
+        let terraform_args = vec!["apply"];
+
         let could_not_load_plugin_error = TerraformError::Unknown {
-            message: "unknown error".to_string(),
+            terraform_args: terraform_args.iter().map(|e| e.to_string()).collect(),
             raw_message: could_not_load_plugin.to_string(),
         };
-        assert!(manage_common_issues("/tmp/do_not_exists", &could_not_load_plugin_error).is_ok());
+        assert!(manage_common_issues(terraform_args, "/tmp/do_not_exists", &could_not_load_plugin_error).is_ok());
     }
 
     #[test]
@@ -534,5 +623,67 @@ terraform {
         let res = terraform_init_validate(dest_dir);
 
         assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_terraform_error_scw_quotas_issue() {
+        // setup:
+        let raw_message = "Request ID: None Body: <?xml version='1.0' encoding='UTF-8'?>\n<Error><Code>QuotaExceeded</Code><Message>Quota exceeded. Please contact support to upgrade your quotas.</Message><RequestId>tx111117bad3a44d56bd120-0062d1515d</RequestId></Error>".to_string();
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], raw_message.to_string());
+
+        // validate:
+        assert_eq!(
+            TerraformError::QuotasExceeded {
+                sub_type: QuotaExceededError::ScwNewAccountNeedsValidation,
+                raw_message
+            },
+            result
+        );
+    }
+
+    #[test]
+    fn test_terraform_error_aws_quotas_issue() {
+        // setup:
+        struct TestCase<'a> {
+            input_raw_message: &'a str,
+            expected_terraform_error: TerraformError,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input_raw_message: "You have exceeded the limit of vCPUs allowed on your AWS account (32 by default).",
+                expected_terraform_error: TerraformError::QuotasExceeded {
+                    sub_type: QuotaExceededError::ResourceLimitExceeded {
+                        resource_type: "vCPUs".to_string(),
+                        max_resource_count: Some(32),
+                    },
+                    raw_message: "You have exceeded the limit of vCPUs allowed on your AWS account (32 by default)."
+                        .to_string(),
+                },
+            },
+            TestCase {
+                input_raw_message:
+                    "Error creating EIP: AddressLimitExceeded: The maximum number of addresses has been reached.",
+                expected_terraform_error: TerraformError::QuotasExceeded {
+                    sub_type: QuotaExceededError::ResourceLimitExceeded {
+                        resource_type: "EIP".to_string(),
+                        max_resource_count: None,
+                    },
+                    raw_message:
+                        "Error creating EIP: AddressLimitExceeded: The maximum number of addresses has been reached."
+                            .to_string(),
+                },
+            },
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let result = TerraformError::new(vec!["apply".to_string()], tc.input_raw_message.to_string());
+
+            // validate:
+            assert_eq!(tc.expected_terraform_error, result);
+        }
     }
 }

@@ -482,8 +482,23 @@ fn private_postgresql_v13_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-do-self-hosted")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v13_deploy_a_working_dev_environment() {
     test_postgresql_configuration("13", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v14_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("14", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-do-self-hosted")]
+#[named]
+#[test]
+fn public_postgresql_v14_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("14", function_name!(), CONTAINER, true);
 }
 
 /**
