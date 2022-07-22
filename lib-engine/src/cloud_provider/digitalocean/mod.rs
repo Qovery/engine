@@ -8,8 +8,8 @@ use uuid::Uuid;
 use crate::cloud_provider::{kubernetes::Kind as KubernetesKind, CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::errors::EngineError;
-use crate::events::{EventDetails, GeneralStep, Stage, ToTransmitter, Transmitter};
-use crate::io_models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
+use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
+use crate::io_models::{Context, Listener, Listeners, QoveryIdentifier};
 
 pub mod do_api_common;
 pub mod kubernetes;
@@ -142,9 +142,7 @@ impl CloudProvider for DO {
             self.to_transmitter(),
         )
     }
-}
 
-impl Listen for DO {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }
@@ -152,9 +150,7 @@ impl Listen for DO {
     fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
     }
-}
 
-impl ToTransmitter for DO {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::CloudProvider(self.id.to_string(), self.name.to_string())
     }

@@ -1,13 +1,13 @@
 use crate::cloud_provider::service::{
-    check_service_version, default_tera_context, Action, DatabaseOptions, Helm, Service, ServiceType,
-    ServiceVersionCheckResult, Terraform,
+    check_service_version, default_tera_context, Action, DatabaseOptions, Service, ServiceType,
+    ServiceVersionCheckResult,
 };
 use crate::cloud_provider::utilities::{check_domain_for, managed_db_name_sanitizer};
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
-use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter, Transmitter};
-use crate::io_models::{ApplicationAdvancedSettings, Context, Listen, Listener, Listeners, ListenersHelper};
+use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
+use crate::io_models::{ApplicationAdvancedSettings, Context, Listener, Listeners, ListenersHelper};
 use crate::logger::Logger;
 use crate::models::database_utils::{
     get_self_hosted_mongodb_version, get_self_hosted_mysql_version, get_self_hosted_postgres_version,
@@ -143,37 +143,6 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
     }
 }
 
-impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Terraform for Database<C, M, T> {
-    fn terraform_common_resource_dir_path(&self) -> String {
-        format!("{}/{}/services/common", self.context.lib_root_dir(), C::lib_directory_name())
-    }
-
-    fn terraform_resource_dir_path(&self) -> String {
-        format!(
-            "{}/{}/services/{}",
-            self.context.lib_root_dir(),
-            C::lib_directory_name(),
-            T::lib_directory_name()
-        )
-    }
-}
-
-impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Listen for Database<C, M, T> {
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
-}
-
-impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> ToTransmitter for Database<C, M, T> {
-    fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Database(self.id.to_string(), T::short_name().to_string(), self.name.to_string())
-    }
-}
-
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Database<C, M, T> {
     fn context(&self) -> &Context {
         &self.context
@@ -246,12 +215,24 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Datab
         self.publicly_accessible
     }
 
+    fn selector(&self) -> Option<String> {
+        Some(self.selector())
+    }
+
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
     }
 
-    fn selector(&self) -> Option<String> {
-        Some(self.selector())
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
+    }
+
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::Database(self.id.to_string(), T::short_name().to_string(), self.name.to_string())
     }
 
     fn as_service(&self) -> &dyn Service {
@@ -259,50 +240,23 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Datab
     }
 }
 
-impl<Cloud: CloudProvider, M: DatabaseMode, DbType: DatabaseType<Cloud, M>> Helm for Database<Cloud, M, DbType> {
-    fn helm_selector(&self) -> Option<String> {
-        Some(self.selector())
+// Mzthod Only For all container database
+impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> {
+    pub fn helm_release_name(&self) -> String {
+        format!("{}-{}", T::lib_directory_name(), self.id)
     }
 
-    fn helm_release_name(&self) -> String {
-        format!("{}-{}", DbType::lib_directory_name(), self.id)
+    pub fn helm_chart_dir(&self) -> String {
+        format!("{}/common/services/{}", self.context.lib_root_dir(), T::lib_directory_name())
     }
 
-    fn helm_chart_dir(&self) -> String {
-        format!(
-            "{}/common/services/{}",
-            self.context.lib_root_dir(),
-            DbType::lib_directory_name()
-        )
-    }
-
-    fn helm_chart_values_dir(&self) -> String {
+    pub fn helm_chart_values_dir(&self) -> String {
         format!(
             "{}/{}/chart_values/{}",
             self.context.lib_root_dir(),
-            Cloud::lib_directory_name(),
-            DbType::lib_directory_name()
+            C::lib_directory_name(),
+            T::lib_directory_name()
         )
-    }
-
-    fn helm_chart_external_name_service_dir(&self) -> String {
-        format!("{}/common/charts/external-name-svc", self.context.lib_root_dir())
-    }
-}
-
-impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
-where
-    Database<C, M, T>: Service,
-{
-    fn get_version(&self, event_details: EventDetails) -> Result<ServiceVersionCheckResult, EngineError> {
-        let fn_version = match T::db_type() {
-            service::DatabaseType::PostgreSQL => get_self_hosted_postgres_version,
-            service::DatabaseType::MongoDB => get_self_hosted_mongodb_version,
-            service::DatabaseType::MySQL => get_self_hosted_mysql_version,
-            service::DatabaseType::Redis => get_self_hosted_redis_version,
-        };
-
-        check_service_version(fn_version(self.version.to_string()), self, event_details, self.logger())
     }
 
     pub(super) fn to_tera_context_for_container(
@@ -331,7 +285,7 @@ where
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert("fqdn", self.fqdn(target, &self.fqdn, M::is_managed()).as_str());
+        context.insert("fqdn", self.fqdn(target, &self.fqdn, false).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
         context.insert("database_db_name", self.name());
         context.insert("database_login", options.login.as_str());
@@ -353,9 +307,40 @@ where
 
         Ok(context)
     }
+
+    fn get_version(&self, event_details: EventDetails) -> Result<ServiceVersionCheckResult, EngineError> {
+        let fn_version = match T::db_type() {
+            service::DatabaseType::PostgreSQL => get_self_hosted_postgres_version,
+            service::DatabaseType::MongoDB => get_self_hosted_mongodb_version,
+            service::DatabaseType::MySQL => get_self_hosted_mysql_version,
+            service::DatabaseType::Redis => get_self_hosted_redis_version,
+        };
+
+        check_service_version(fn_version(self.version.to_string()), self, event_details, self.logger())
+    }
 }
 
-pub trait DatabaseService: Service + DeploymentAction + ToTeraContext + Listen {
+// methods for all Managed databases
+impl<C: CloudProvider, T: DatabaseType<C, Managed>> Database<C, Managed, T> {
+    pub fn helm_chart_external_name_service_dir(&self) -> String {
+        format!("{}/common/charts/external-name-svc", self.context.lib_root_dir())
+    }
+
+    pub fn terraform_common_resource_dir_path(&self) -> String {
+        format!("{}/{}/services/common", self.context.lib_root_dir(), C::lib_directory_name())
+    }
+
+    pub fn terraform_resource_dir_path(&self) -> String {
+        format!(
+            "{}/{}/services/{}",
+            self.context.lib_root_dir(),
+            C::lib_directory_name(),
+            T::lib_directory_name()
+        )
+    }
+}
+
+pub trait DatabaseService: Service + DeploymentAction + ToTeraContext {
     fn check_domains(
         &self,
         listeners: Listeners,
@@ -383,7 +368,7 @@ pub trait DatabaseService: Service + DeploymentAction + ToTeraContext + Listen {
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> DatabaseService for Database<C, M, T>
 where
-    Database<C, M, T>: Service + DeploymentAction + ToTeraContext + Listen,
+    Database<C, M, T>: Service + DeploymentAction + ToTeraContext,
 {
     fn is_managed_service(&self) -> bool {
         M::is_managed()

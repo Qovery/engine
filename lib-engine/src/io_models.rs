@@ -1497,11 +1497,6 @@ impl ProgressListener for NoOpProgressListener {
     fn delete_error(&self, _info: ProgressInfo) {}
 }
 
-pub trait Listen {
-    fn listeners(&self) -> &Listeners;
-    fn add_listener(&mut self, listener: Listener);
-}
-
 pub type Listener = Arc<Box<dyn ProgressListener>>;
 pub type Listeners = Vec<Listener>;
 

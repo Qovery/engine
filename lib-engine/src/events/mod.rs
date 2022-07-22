@@ -361,10 +361,6 @@ impl Display for EnvironmentStep {
     }
 }
 
-pub trait ToTransmitter {
-    fn to_transmitter(&self) -> Transmitter;
-}
-
 /// TransmitterId: represents a transmitter unique identifier.
 type TransmitterId = String;
 /// TransmitterName: represents a transmitter name.

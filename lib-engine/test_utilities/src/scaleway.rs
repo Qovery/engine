@@ -16,7 +16,7 @@ use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::engine::EngineConfig;
-use qovery_engine::io_models::{Context, EnvironmentRequest, NoOpProgressListener};
+use qovery_engine::io_models::{Context, EnvironmentRequest};
 use qovery_engine::logger::Logger;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
@@ -61,7 +61,6 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
         scw_secret_key.as_str(),
         scw_default_project_id.as_str(),
         SCW_TEST_ZONE,
-        Arc::new(Box::new(NoOpProgressListener {})),
     )
     .unwrap()
 }
@@ -257,7 +256,6 @@ pub fn clean_environments(
         secret_token.as_str(),
         project_id.as_str(),
         zone,
-        Arc::new(Box::new(NoOpProgressListener {})),
     )?;
 
     // delete images created in registry

@@ -5,8 +5,8 @@ use crate::cloud_provider::{
     kubernetes::Kind as KubernetesKind, CloudProvider, EngineError, Kind, TerraformStateCredentials,
 };
 use crate::constants::{SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY};
-use crate::events::{EventDetails, Stage, ToTransmitter, Transmitter};
-use crate::io_models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
+use crate::events::{EventDetails, Stage, Transmitter};
+use crate::io_models::{Context, Listener, Listeners, QoveryIdentifier};
 
 pub mod kubernetes;
 
@@ -136,9 +136,7 @@ impl CloudProvider for Scaleway {
             self.to_transmitter(),
         )
     }
-}
 
-impl Listen for Scaleway {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }
@@ -146,9 +144,7 @@ impl Listen for Scaleway {
     fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
     }
-}
 
-impl ToTransmitter for Scaleway {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::CloudProvider(self.id.to_string(), self.name.to_string())
     }

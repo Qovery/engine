@@ -5,14 +5,14 @@ use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
-use crate::io_models::{Context, Listen, QoveryIdentifier};
+use crate::io_models::{Context, QoveryIdentifier};
 
 pub mod docr;
 pub mod ecr;
 pub mod errors;
 pub mod scaleway_container_registry;
 
-pub trait ContainerRegistry: Listen {
+pub trait ContainerRegistry {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;

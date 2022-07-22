@@ -440,7 +440,6 @@ impl ContainerRegistry {
                             self.options.region.as_deref().unwrap_or_default()
                         )
                     }),
-                    listener,
                 )
                 .ok()?,
             )),

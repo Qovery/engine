@@ -2,12 +2,12 @@ use crate::build_platform::Build;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{EnvironmentVariable, EnvironmentVariableDataTemplate, Storage};
-use crate::cloud_provider::service::{Action, Helm, Service, ServiceType};
+use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::cloud_provider::utilities::sanitize_name;
 use crate::deployment_action::DeploymentAction;
-use crate::events::{EventDetails, Stage, ToTransmitter, Transmitter};
+use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::{
-    ApplicationAdvancedSettings, ApplicationAdvancedSettingsProbeType, Context, Listen, Listener, Listeners, Port,
+    ApplicationAdvancedSettings, ApplicationAdvancedSettingsProbeType, Context, Listener, Listeners, Port,
     QoveryIdentifier,
 };
 use crate::logger::Logger;
@@ -89,6 +89,22 @@ impl<T: CloudProvider> Application<T> {
             advanced_settings,
             _extra_settings: extra_settings,
         })
+    }
+
+    pub fn helm_selector(&self) -> Option<String> {
+        Some(self.selector())
+    }
+
+    pub fn helm_release_name(&self) -> String {
+        crate::string::cut(format!("application-{}-{}", self.id(), self.id()), 50)
+    }
+
+    pub fn helm_chart_dir(&self) -> String {
+        format!(
+            "{}/{}/charts/q-application",
+            self.context.lib_root_dir(),
+            T::lib_directory_name(),
+        )
     }
 
     pub(super) fn default_tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
@@ -337,23 +353,6 @@ impl<T: CloudProvider> Application<T> {
     }
 }
 
-// Traits implementations
-impl<T: CloudProvider> ToTransmitter for Application<T> {
-    fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Application(self.id.to_string(), self.name.to_string(), self.commit_id())
-    }
-}
-
-impl<T: CloudProvider> Listen for Application<T> {
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
-}
-
 impl<T: CloudProvider> Service for Application<T> {
     fn context(&self) -> &Context {
         self.context()
@@ -419,12 +418,24 @@ impl<T: CloudProvider> Service for Application<T> {
         self.publicly_accessible()
     }
 
+    fn selector(&self) -> Option<String> {
+        Some(self.selector())
+    }
+
     fn logger(&self) -> &dyn Logger {
         self.logger()
     }
 
-    fn selector(&self) -> Option<String> {
-        Some(self.selector())
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
+    }
+
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::Application(self.id.to_string(), self.name.to_string(), self.commit_id())
     }
 
     fn as_service(&self) -> &dyn Service {
@@ -432,33 +443,7 @@ impl<T: CloudProvider> Service for Application<T> {
     }
 }
 
-impl<T: CloudProvider> Helm for Application<T> {
-    fn helm_selector(&self) -> Option<String> {
-        Some(self.selector())
-    }
-
-    fn helm_release_name(&self) -> String {
-        crate::string::cut(format!("application-{}-{}", self.id(), self.id()), 50)
-    }
-
-    fn helm_chart_dir(&self) -> String {
-        format!(
-            "{}/{}/charts/q-application",
-            self.context.lib_root_dir(),
-            T::lib_directory_name(),
-        )
-    }
-
-    fn helm_chart_values_dir(&self) -> String {
-        String::new()
-    }
-
-    fn helm_chart_external_name_service_dir(&self) -> String {
-        String::new()
-    }
-}
-
-pub trait ApplicationService: Service + DeploymentAction + Listen + ToTeraContext {
+pub trait ApplicationService: Service + DeploymentAction + ToTeraContext {
     fn get_build(&self) -> &Build;
     fn get_build_mut(&mut self) -> &mut Build;
 }

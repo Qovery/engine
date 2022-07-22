@@ -27,7 +27,7 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::{
-    Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, QoveryIdentifier, ToHelmString,
+    Action, Context, Features, Listener, Listeners, ListenersHelper, QoveryIdentifier, ToHelmString,
 };
 use crate::logger::Logger;
 use crate::models::scaleway::ScwZone;
@@ -1539,6 +1539,14 @@ impl Kubernetes for Kapsule {
         Ok(())
     }
 
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
+    }
+
     #[named]
     fn on_create(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
@@ -1840,15 +1848,5 @@ impl Kubernetes for Kapsule {
             self.logger(),
         );
         kubernetes::delete_environment(self, environment, event_details)
-    }
-}
-
-impl Listen for Kapsule {
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
     }
 }

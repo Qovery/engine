@@ -2,9 +2,7 @@ extern crate test_utilities;
 
 use self::test_utilities::utilities::{context, FuncTestsSecrets};
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
-use qovery_engine::io_models::NoOpProgressListener;
 use qovery_engine::models::scaleway::ScwZone;
-use std::sync::Arc;
 use tracing::debug;
 use uuid::Uuid;
 
@@ -46,7 +44,6 @@ fn test_get_registry_namespace() {
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
-            Arc::new(Box::new(NoOpProgressListener {})),
         )
         .unwrap();
 
@@ -93,7 +90,6 @@ fn test_create_registry_namespace() {
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
-            Arc::new(Box::new(NoOpProgressListener {})),
         )
         .unwrap();
 
@@ -137,7 +133,6 @@ fn test_delete_registry_namespace() {
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
-            Arc::new(Box::new(NoOpProgressListener {})),
         )
         .unwrap();
 
@@ -175,7 +170,6 @@ fn test_get_or_create_registry_namespace() {
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
             region,
-            Arc::new(Box::new(NoOpProgressListener {})),
         )
         .unwrap();
 

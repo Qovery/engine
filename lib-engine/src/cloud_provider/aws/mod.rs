@@ -8,8 +8,8 @@ use uuid::Uuid;
 use crate::cloud_provider::{kubernetes::Kind as KubernetesKind, CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::errors::EngineError;
-use crate::events::{EventDetails, GeneralStep, Stage, ToTransmitter, Transmitter};
-use crate::io_models::{Context, Listen, Listener, Listeners, QoveryIdentifier};
+use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
+use crate::io_models::{Context, Listener, Listeners, QoveryIdentifier};
 use crate::runtime::block_on;
 
 pub mod kubernetes;
@@ -156,9 +156,7 @@ impl CloudProvider for AWS {
             self.to_transmitter(),
         )
     }
-}
 
-impl Listen for AWS {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }
@@ -166,9 +164,7 @@ impl Listen for AWS {
     fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
     }
-}
 
-impl ToTransmitter for AWS {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::CloudProvider(self.id.to_string(), self.name.to_string())
     }

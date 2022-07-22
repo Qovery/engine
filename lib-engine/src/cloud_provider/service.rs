@@ -20,11 +20,9 @@ use crate::cmd::kubectl::{kubectl_exec_delete_pod, kubectl_exec_delete_secret, k
 use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::cmd::terraform::TerraformError;
 use crate::errors::{CommandError, EngineError};
-use crate::events::{EngineEvent, EventDetails, EventMessage, Stage, ToTransmitter};
-use crate::io_models::ProgressLevel::Info;
+use crate::events::{EngineEvent, EventDetails, EventMessage, Stage, Transmitter};
 use crate::io_models::{
-    ApplicationAdvancedSettings, Context, DatabaseMode, Listen, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope, QoveryIdentifier,
+    ApplicationAdvancedSettings, Context, DatabaseMode, Listener, Listeners, ProgressScope, QoveryIdentifier,
 };
 use crate::logger::Logger;
 
@@ -34,7 +32,7 @@ use crate::runtime::block_on;
 use super::kubernetes::kube_create_namespace_if_not_exists;
 
 // todo: delete this useless trait
-pub trait Service: ToTransmitter {
+pub trait Service {
     fn context(&self) -> &Context;
     fn service_type(&self) -> ServiceType;
     fn id(&self) -> &str;
@@ -87,8 +85,11 @@ pub trait Service: ToTransmitter {
         }
     }
     // used to retrieve logs by using Kubernetes labels (selector)
-    fn logger(&self) -> &dyn Logger;
     fn selector(&self) -> Option<String>;
+    fn logger(&self) -> &dyn Logger;
+    fn listeners(&self) -> &Listeners;
+    fn add_listener(&mut self, listener: Listener);
+    fn to_transmitter(&self) -> Transmitter;
     fn is_listening(&self, ip: &str) -> bool {
         let private_port = match self.private_port() {
             Some(private_port) => private_port,
@@ -109,19 +110,6 @@ pub trait Service: ToTransmitter {
     }
 
     fn as_service(&self) -> &dyn Service;
-}
-
-pub trait Terraform {
-    fn terraform_common_resource_dir_path(&self) -> String;
-    fn terraform_resource_dir_path(&self) -> String;
-}
-
-pub trait Helm {
-    fn helm_selector(&self) -> Option<String>;
-    fn helm_release_name(&self) -> String;
-    fn helm_chart_dir(&self) -> String;
-    fn helm_chart_values_dir(&self) -> String;
-    fn helm_chart_external_name_service_dir(&self) -> String;
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
@@ -348,10 +336,8 @@ pub fn check_service_version<T>(
     logger: &dyn Logger,
 ) -> Result<ServiceVersionCheckResult, EngineError>
 where
-    T: Service + Listen,
+    T: Service,
 {
-    let listeners_helper = ListenersHelper::new(service.listeners());
-
     match result {
         Ok(version) => {
             if service.version() != version.as_str() {
@@ -366,15 +352,6 @@ where
                     event_details.clone(),
                     EventMessage::new_from_safe(message.to_string()),
                 ));
-
-                let progress_info = ProgressInfo::new(
-                    service.progress_scope(),
-                    Info,
-                    Some(message.to_string()),
-                    service.context().execution_id(),
-                );
-
-                listeners_helper.deployment_in_progress(progress_info);
 
                 return Ok(ServiceVersionCheckResult::new(
                     VersionsNumber::from_str(&service.version()).map_err(|e| {
@@ -398,21 +375,6 @@ where
             ))
         }
         Err(_err) => {
-            let message = format!(
-                "{} version {} is not supported!",
-                service.service_type().name(),
-                service.version(),
-            );
-
-            let progress_info = ProgressInfo::new(
-                service.progress_scope(),
-                ProgressLevel::Error,
-                Some(message),
-                service.context().execution_id(),
-            );
-
-            listeners_helper.deployment_error(progress_info);
-
             let error = EngineError::new_unsupported_version_error(
                 event_details,
                 service.service_type().name(),
