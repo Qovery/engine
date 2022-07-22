@@ -345,13 +345,14 @@ pub fn ec2_aws_helm_charts(
                     value: "false".to_string(),
                 },
                 // Controller resources limits
+                // Memory is set to 256Mi to prevent random OOM on x64
                 ChartSetValue {
                     key: "controller.resources.limits.memory".to_string(),
-                    value: "192Mi".to_string(),
+                    value: "256Mi".to_string(),
                 },
                 ChartSetValue {
                     key: "controller.resources.requests.memory".to_string(),
-                    value: "192Mi".to_string(),
+                    value: "256Mi".to_string(),
                 },
                 // Default backend resources limits
                 ChartSetValue {
