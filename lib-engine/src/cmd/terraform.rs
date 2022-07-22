@@ -533,10 +533,9 @@ fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Terraf
         Err(_) => Err(TerraformError::Unknown {
             terraform_args: args.iter().map(|e| e.to_string()).collect(),
             raw_message: format!(
-                "command: terraform {} failed\nSTDOUT:\n{}\n STDERR:\n{}",
+                "Terraform command (terraform {}) failed, here is the error:\n{}",
                 args.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(" "),
-                stdout.join(" "),
-                stderr.join(" ")
+                stderr.join("\n")
             ),
         }),
     }
