@@ -1,13 +1,12 @@
 use crate::cloud_provider::service::{
-    check_service_version, default_tera_context, Action, DatabaseOptions, Service, ServiceType,
-    ServiceVersionCheckResult,
+    check_service_version, default_tera_context, Action, Service, ServiceType, ServiceVersionCheckResult,
 };
-use crate::cloud_provider::utilities::{check_domain_for, managed_db_name_sanitizer};
+use crate::cloud_provider::utilities::managed_db_name_sanitizer;
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
-use crate::io_models::{ApplicationAdvancedSettings, Context, Listener, Listeners, ListenersHelper};
+use crate::io_models::{Context, DatabaseOptions, Listener, Listeners};
 use crate::logger::Logger;
 use crate::models::database_utils::{
     get_self_hosted_mongodb_version, get_self_hosted_mysql_version, get_self_hosted_postgres_version,
@@ -141,6 +140,16 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
     pub fn selector(&self) -> String {
         format!("databaseId={}", self.id)
     }
+
+    pub(super) fn fqdn(&self, target: &DeploymentTarget, fqdn: &str) -> String {
+        match &self.publicly_accessible {
+            true => fqdn.to_string(),
+            false => match M::is_managed() {
+                true => format!("{}-dns.{}.svc.cluster.local", self.id(), target.environment.namespace()),
+                false => format!("{}.{}.svc.cluster.local", self.sanitized_name(), target.environment.namespace()),
+            },
+        }
+    }
 }
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Database<C, M, T> {
@@ -175,44 +184,12 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Datab
         }
     }
 
-    fn application_advanced_settings(&self) -> Option<ApplicationAdvancedSettings> {
-        None
-    }
-
     fn version(&self) -> String {
         self.version.to_string()
     }
 
     fn action(&self) -> &Action {
         &self.action
-    }
-
-    fn private_port(&self) -> Option<u16> {
-        Some(self.private_port)
-    }
-
-    fn total_cpus(&self) -> String {
-        self.total_cpus.to_string()
-    }
-
-    fn cpu_burst(&self) -> String {
-        self.total_cpus.to_string()
-    }
-
-    fn total_ram_in_mib(&self) -> u32 {
-        self.total_ram_in_mib
-    }
-
-    fn min_instances(&self) -> u32 {
-        1
-    }
-
-    fn max_instances(&self) -> u32 {
-        1
-    }
-
-    fn publicly_accessible(&self) -> bool {
-        self.publicly_accessible
     }
 
     fn selector(&self) -> Option<String> {
@@ -285,12 +262,12 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert("fqdn", self.fqdn(target, &self.fqdn, false).as_str());
+        context.insert("fqdn", self.fqdn(target, &self.fqdn).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
         context.insert("database_db_name", self.name());
         context.insert("database_login", options.login.as_str());
         context.insert("database_password", options.password.as_str());
-        context.insert("database_port", &self.private_port());
+        context.insert("database_port", &self.private_port);
         context.insert("database_disk_size_in_gib", &options.disk_size_in_gib);
         context.insert("database_instance_type", &self.database_instance_type);
         context.insert("database_disk_type", &options.database_disk_type);
@@ -341,26 +318,6 @@ impl<C: CloudProvider, T: DatabaseType<C, Managed>> Database<C, Managed, T> {
 }
 
 pub trait DatabaseService: Service + DeploymentAction + ToTeraContext {
-    fn check_domains(
-        &self,
-        listeners: Listeners,
-        domains: Vec<&str>,
-        event_details: EventDetails,
-        logger: &dyn Logger,
-    ) -> Result<(), EngineError> {
-        if self.publicly_accessible() {
-            check_domain_for(
-                ListenersHelper::new(&listeners),
-                domains,
-                self.id(),
-                self.context().execution_id(),
-                event_details,
-                logger,
-            )?;
-        }
-        Ok(())
-    }
-
     fn is_managed_service(&self) -> bool;
 
     fn db_type(&self) -> service::DatabaseType;

@@ -1,6 +1,7 @@
-use crate::cloud_provider::service::delete_terraform_tfstate_secret;
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd;
+use crate::cmd::kubectl::kubectl_exec_delete_secret;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
 use crate::events::EventDetails;
@@ -70,6 +71,24 @@ impl TerraformDeployment {
 
         Ok(())
     }
+
+    pub fn delete_tfstate_secret(
+        kubernetes: &dyn Kubernetes,
+        namespace: &str,
+        secret_name: &str,
+    ) -> Result<(), EngineError> {
+        let config_file_path = kubernetes.get_kubeconfig_file_path()?;
+
+        // create the namespace to insert the tfstate in secrets
+        let _ = kubectl_exec_delete_secret(
+            config_file_path,
+            namespace,
+            secret_name,
+            kubernetes.cloud_provider().credentials_environment_variables(),
+        );
+
+        Ok(())
+    }
 }
 
 impl DeploymentAction for TerraformDeployment {
@@ -95,7 +114,7 @@ impl DeploymentAction for TerraformDeployment {
         self.prepare_terraform_files()?;
         match cmd::terraform::terraform_init_validate_destroy(&self.destination_folder.to_string_lossy(), false) {
             Ok(_) => {
-                if let Err(err) = delete_terraform_tfstate_secret(
+                if let Err(err) = TerraformDeployment::delete_tfstate_secret(
                     target.kubernetes,
                     target.environment.namespace(),
                     self.tera_context.get("tfstate_name").and_then(Value::as_str).unwrap(),

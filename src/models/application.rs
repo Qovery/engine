@@ -107,6 +107,13 @@ impl<T: CloudProvider> Application<T> {
         )
     }
 
+    fn public_port(&self) -> Option<u16> {
+        self.ports
+            .iter()
+            .find(|port| port.publicly_accessible)
+            .map(|port| port.port as u16)
+    }
+
     pub(super) fn default_tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
         let mut context = TeraContext::new();
         context.insert("id", self.id());
@@ -288,13 +295,6 @@ impl<T: CloudProvider> Application<T> {
         &self.action
     }
 
-    pub fn public_port(&self) -> Option<u16> {
-        self.ports
-            .iter()
-            .find(|port| port.publicly_accessible)
-            .map(|port| port.port as u16)
-    }
-
     pub fn total_cpus(&self) -> String {
         self.total_cpus.to_string()
     }
@@ -378,44 +378,12 @@ impl<T: CloudProvider> Service for Application<T> {
         self.sanitized_name()
     }
 
-    fn application_advanced_settings(&self) -> Option<ApplicationAdvancedSettings> {
-        Some(self.advanced_settings.clone())
-    }
-
     fn version(&self) -> String {
         self.commit_id()
     }
 
     fn action(&self) -> &Action {
         self.action()
-    }
-
-    fn private_port(&self) -> Option<u16> {
-        self.public_port()
-    }
-
-    fn total_cpus(&self) -> String {
-        self.total_cpus()
-    }
-
-    fn cpu_burst(&self) -> String {
-        self.cpu_burst()
-    }
-
-    fn total_ram_in_mib(&self) -> u32 {
-        self.total_ram_in_mib()
-    }
-
-    fn min_instances(&self) -> u32 {
-        self.min_instances()
-    }
-
-    fn max_instances(&self) -> u32 {
-        self.max_instances()
-    }
-
-    fn publicly_accessible(&self) -> bool {
-        self.publicly_accessible()
     }
 
     fn selector(&self) -> Option<String> {
@@ -446,6 +414,8 @@ impl<T: CloudProvider> Service for Application<T> {
 pub trait ApplicationService: Service + DeploymentAction + ToTeraContext {
     fn get_build(&self) -> &Build;
     fn get_build_mut(&mut self) -> &mut Build;
+    fn public_port(&self) -> Option<u16>;
+    fn advanced_settings(&self) -> &ApplicationAdvancedSettings;
 }
 
 impl<T: CloudProvider> ApplicationService for Application<T>
@@ -458,5 +428,13 @@ where
 
     fn get_build_mut(&mut self) -> &mut Build {
         self.build_mut()
+    }
+
+    fn public_port(&self) -> Option<u16> {
+        self.public_port()
+    }
+
+    fn advanced_settings(&self) -> &ApplicationAdvancedSettings {
+        &self.advanced_settings
     }
 }

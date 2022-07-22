@@ -16,7 +16,6 @@ use uuid::Uuid;
 
 use crate::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::service::DatabaseOptions;
 use crate::cloud_provider::Kind as CPKind;
 use crate::cloud_provider::{kubernetes::Kind as KubernetesKind, service, CloudProvider};
 use crate::cmd::docker::Docker;
@@ -1810,6 +1809,21 @@ impl ToTerraformString for Ipv4Addr {
     fn to_terraform_format_string(&self) -> String {
         format!("{{{}}}", self)
     }
+}
+
+#[derive(Eq, PartialEq)]
+pub struct DatabaseOptions {
+    pub login: String,
+    pub password: String,
+    pub host: String,
+    pub port: u16,
+    pub mode: DatabaseMode,
+    pub disk_size_in_gib: u32,
+    pub database_disk_type: String,
+    pub encrypt_disk: bool,
+    pub activate_high_availability: bool,
+    pub activate_backups: bool,
+    pub publicly_accessible: bool,
 }
 
 #[cfg(test)]

@@ -256,7 +256,7 @@ where
         },
         ChartSetValue {
             key: "publicly_accessible".to_string(),
-            value: db.publicly_accessible().to_string(),
+            value: db.publicly_accessible.to_string(),
         },
     ];
 
@@ -357,7 +357,7 @@ where
             self.logger(),
         );
 
-        if self.publicly_accessible() {
+        if self.publicly_accessible {
             check_domain_for(
                 ListenersHelper::new(&self.listeners),
                 vec![&self.fqdn],
@@ -538,7 +538,7 @@ where
             self.logger(),
         );
 
-        if self.publicly_accessible() {
+        if self.publicly_accessible {
             check_domain_for(
                 ListenersHelper::new(&self.listeners),
                 vec![&self.fqdn],
