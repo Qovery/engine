@@ -76,8 +76,8 @@ volumePermissions:
   resources:
     limits: {}
     requests:
-      cpu: "{{ total_cpus }}"
-      memory: "{{ total_ram_in_mib }}Mi"
+      cpu: "{{ database_total_cpus }}"
+      memory: "{{ database_ram_size_in_mib }}Mi"
 
 ## Enable authentication
 ## ref: https://docs.mongodb.com/manual/tutorial/enable-authentication/
@@ -150,7 +150,7 @@ service:
 
   type: {% if publicly_accessible -%} LoadBalancer {% else -%} ClusterIP {% endif %}
   # clusterIP: None
-  port: {{ private_port }}
+  port: {{ database_port }}
   qovery_name: {{ service_name }}
 
   ## Specify the nodePort value for the LoadBalancer and NodePort service types.
