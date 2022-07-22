@@ -59,7 +59,10 @@ where
         let registry_info = target.container_registry.registry_info();
         target
             .container_registry
-            .create_repository(Self::QOVERY_MIRROR_REPOSITORY_NAME)
+            .create_repository(
+                Self::QOVERY_MIRROR_REPOSITORY_NAME,
+                target.kubernetes.get_advanced_settings().registry_image_retention_time,
+            )
             .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
 
         let source_image = ContainerImage::new(self.registry.url().clone(), self.image.clone(), vec![self.tag.clone()]);

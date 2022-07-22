@@ -282,7 +282,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
 
         context.insert(
             "resource_expiration_in_seconds",
-            &self.context.cluster_advanced_settings().pleco_resources_ttl,
+            &kubernetes.get_advanced_settings().pleco_resources_ttl,
         );
 
         Ok(context)

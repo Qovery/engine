@@ -211,10 +211,10 @@ fn aws_zones(
     Ok(aws_zones)
 }
 
-fn s3(context: &Context, region: &AwsRegion, cloud_provider: &dyn CloudProvider) -> S3 {
-    let bucket_ttl = match context.cluster_advanced_settings().pleco_resources_ttl {
+fn s3(context: &Context, region: &AwsRegion, cloud_provider: &dyn CloudProvider, ttl: u32) -> S3 {
+    let bucket_ttl = match ttl {
         0 => None,
-        _ => Some(context.cluster_advanced_settings().pleco_resources_ttl),
+        _ => Some(ttl),
     };
     S3::new(
         context.clone(),
@@ -596,14 +596,11 @@ fn tera_context(
     // Advanced settings
     context.insert(
         "registry_image_retention_time",
-        &kubernetes
-            .context()
-            .cluster_advanced_settings()
-            .registry_image_retention_time,
+        &kubernetes.get_advanced_settings().registry_image_retention_time,
     );
     context.insert(
         "resource_expiration_in_seconds",
-        &kubernetes.context().cluster_advanced_settings().pleco_resources_ttl,
+        &kubernetes.get_advanced_settings().pleco_resources_ttl,
     );
 
     Ok(context)
