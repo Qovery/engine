@@ -184,10 +184,20 @@ impl<T: CloudProvider> Router<T> {
 
         let router_default_domain_hash = crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
 
+        // TODO(benjaminch): remove this one once subdomain migration has been done, CF ENG-1302
+        // If domain contains cluster id in it, it means cluster has already declared wildcard and there is no need to declare app domain since it can use the cluster wildcard.
+        let router_should_declare_domain_to_external_dns = !self
+            .default_domain
+            .contains(format!(".{}.", self.context().cluster_id()).as_str());
+
         let tls_domain = kubernetes.dns_provider().domain().wildcarded();
         context.insert("router_tls_domain", tls_domain.to_string().as_str());
         context.insert("router_default_domain", self.default_domain.as_str());
         context.insert("router_default_domain_hash", router_default_domain_hash.as_str());
+        context.insert(
+            "router_should_declare_domain_to_external_dns",
+            &router_should_declare_domain_to_external_dns,
+        );
         context.insert("custom_domains", &custom_domain_data_templates);
         context.insert("routes", &route_data_templates);
         context.insert("spec_acme_email", "tls@qovery.com"); // TODO CHANGE ME

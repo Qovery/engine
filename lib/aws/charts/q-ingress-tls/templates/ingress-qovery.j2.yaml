@@ -13,8 +13,10 @@ metadata:
     projectLongId: {{ project_long_id }}
     fqdn: "{{ router_default_domain }}"
   annotations:
+    {%- if router_should_declare_domain_to_external_dns == true %}
     external-dns.alpha.kubernetes.io/hostname: {{ router_default_domain }}
     external-dns.alpha.kubernetes.io/ttl: "300"
+    {%- endif %}
     kubernetes.io/tls-acme: "true"
     {%- if custom_domains|length > 0 %}
     cert-manager.io/issuer: {{ id }}
