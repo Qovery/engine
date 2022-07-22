@@ -115,14 +115,20 @@ impl TerraformError {
                 }
             }
         }
-        if raw_terraform_output.contains("AddressLimitExceeded: The maximum number of addresses has been reached") {
-            return TerraformError::QuotasExceeded {
-                sub_type: QuotaExceededError::ResourceLimitExceeded {
-                    resource_type: "EIP".to_string(),
-                    max_resource_count: None,
-                },
-                raw_message: raw_terraform_output,
-            };
+        if let Ok(aws_quotas_exceeded_re) =
+            Regex::new(r"Error creating (?P<resource_type>\w+): \w+: The maximum number of \w+ has been reached")
+        {
+            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_output.as_str()) {
+                if let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str()) {
+                    return TerraformError::QuotasExceeded {
+                        sub_type: QuotaExceededError::ResourceLimitExceeded {
+                            resource_type: resource_type.to_string(),
+                            max_resource_count: None,
+                        },
+                        raw_message: raw_terraform_output.to_string(),
+                    };
+                }
+            }
         }
 
         // This kind of error should be triggered as little as possible, ideally, there is no unknown errors
@@ -673,6 +679,17 @@ terraform {
                     raw_message:
                         "Error creating EIP: AddressLimitExceeded: The maximum number of addresses has been reached."
                             .to_string(),
+                },
+            },
+            TestCase {
+                input_raw_message: "Error creating VPC: VpcLimitExceeded: The maximum number of VPCs has been reached.",
+                expected_terraform_error: TerraformError::QuotasExceeded {
+                    sub_type: QuotaExceededError::ResourceLimitExceeded {
+                        resource_type: "VPC".to_string(),
+                        max_resource_count: None,
+                    },
+                    raw_message: "Error creating VPC: VpcLimitExceeded: The maximum number of VPCs has been reached."
+                        .to_string(),
                 },
             },
         ];
