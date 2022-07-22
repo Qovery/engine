@@ -587,6 +587,8 @@ pub enum Tag {
     CannotPauseClusterTasksAreRunning,
     /// TerraformUnknownError: terraform unknown error
     TerraformUnknownError,
+    /// TerraformInvalidCredentials: terraform invalid cloud provider credentials
+    TerraformInvalidCredentials,
     /// TerraformConfigFileNotFound: terraform config file cannot be found
     TerraformConfigFileNotFound,
     /// TerraformConfigFileInvalidContent: terraform config file has invalid content
@@ -2162,6 +2164,14 @@ impl EngineError {
             TerraformError::Unknown { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformUnknownError,
+                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                Some(DEFAULT_HINT_MESSAGE.to_string()),
+            ),
+            TerraformError::InvalidCredentials { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformInvalidCredentials,
                 terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
                 Some(terraform_error.into()),
                 None,
