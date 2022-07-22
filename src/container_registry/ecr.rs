@@ -14,9 +14,7 @@ use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
 use crate::events::{EngineEvent, EventMessage, GeneralStep, Stage};
-use crate::io_models::{
-    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-};
+use crate::io_models::{Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
 use crate::logger::Logger;
 use crate::runtime::block_on;
 use retry::delay::Fixed;
@@ -341,16 +339,6 @@ impl ContainerRegistry for ECR {
 
     fn does_image_exists(&self, image: &Image) -> bool {
         self.get_image(image).is_some()
-    }
-}
-
-impl Listen for ECR {
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
     }
 }
 

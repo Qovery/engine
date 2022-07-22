@@ -5,8 +5,8 @@ use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cmd::command::CommandError;
 use crate::cmd::docker::{BuildResult, DockerError};
 use crate::errors::EngineError;
-use crate::events::{EnvironmentStep, EventDetails, Stage, ToTransmitter};
-use crate::io_models::{Context, Listen, QoveryIdentifier};
+use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
+use crate::io_models::{Context, Listener, Listeners, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::utilities::compute_image_tag;
 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -61,7 +61,7 @@ pub fn to_engine_error(event_details: EventDetails, err: BuildError) -> EngineEr
     }
 }
 
-pub trait BuildPlatform: ToTransmitter + Listen {
+pub trait BuildPlatform {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
@@ -71,6 +71,9 @@ pub trait BuildPlatform: ToTransmitter + Listen {
     }
     fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<BuildResult, BuildError>;
     fn logger(&self) -> Box<dyn Logger>;
+    fn listeners(&self) -> &Listeners;
+    fn add_listener(&mut self, listener: Listener);
+    fn to_transmitter(&self) -> Transmitter;
     fn get_event_details(&self) -> EventDetails {
         let context = self.context();
         EventDetails::new(

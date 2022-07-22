@@ -45,8 +45,8 @@ use crate::events::{
     EngineEvent, EnvironmentStep, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter,
 };
 use crate::io_models::{
-    Action, Context, Features, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope, QoveryIdentifier, StringPath, ToHelmString,
+    Action, Context, Features, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+    QoveryIdentifier, StringPath, ToHelmString,
 };
 use crate::logger::Logger;
 use crate::models::digital_ocean::DoRegion;
@@ -1145,6 +1145,14 @@ impl Kubernetes for DOKS {
         Ok(())
     }
 
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
+    }
+
     fn get_kubeconfig_file(&self) -> Result<(String, File), EngineError> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let bucket_name = format!("qovery-kubeconfigs-{}", self.id());
@@ -1595,15 +1603,5 @@ impl Kubernetes for DOKS {
             self.logger(),
         );
         kubernetes::delete_environment(self, environment, event_details)
-    }
-}
-
-impl Listen for DOKS {
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
     }
 }

@@ -1,7 +1,5 @@
 use crate::cloud_provider::helm::ChartSetValue;
-use crate::cloud_provider::service::{
-    delete_pending_service, get_database_terraform_config, Action, Helm, Service, Terraform,
-};
+use crate::cloud_provider::service::{delete_pending_service, get_database_terraform_config, Action, Service};
 use crate::cloud_provider::utilities::{check_domain_for, print_action};
 use crate::cloud_provider::Kind::Aws;
 use crate::cloud_provider::{service, DeploymentTarget};
@@ -201,7 +199,7 @@ fn on_create_managed_impl<C: CloudProvider, T: DatabaseType<C, Managed>>(
     target: &DeploymentTarget,
 ) -> Result<(), EngineError>
 where
-    Database<C, Managed, T>: ToTeraContext,
+    Database<C, Managed, T>: DatabaseService,
 {
     let workspace_dir = db.workspace_directory();
     let tera_context = db.to_tera_context(target)?;

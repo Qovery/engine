@@ -5,7 +5,7 @@ use crate::build_platform::Image;
 use crate::cmd::docker;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
-use crate::io_models::{Context, Listen, Listener, Listeners};
+use crate::io_models::Context;
 use crate::models::scaleway::ScwZone;
 use crate::runtime::block_on;
 use url::Url;
@@ -18,7 +18,6 @@ pub struct ScalewayCR {
     secret_token: String,
     zone: ScwZone,
     registry_info: ContainerRegistryInfo,
-    listeners: Listeners,
 }
 
 impl ScalewayCR {
@@ -29,7 +28,6 @@ impl ScalewayCR {
         secret_token: &str,
         default_project_id: &str,
         zone: ScwZone,
-        listener: Listener,
     ) -> Result<ScalewayCR, ContainerRegistryError> {
         // Be sure we are logged on the registry
         let login = "nologin".to_string();
@@ -63,7 +61,6 @@ impl ScalewayCR {
             secret_token,
             zone,
             registry_info,
-            listeners: vec![listener],
         };
 
         Ok(cr)
@@ -296,15 +293,5 @@ impl ContainerRegistry for ScalewayCR {
             Ok(false) => false,
             Err(_) => false,
         }
-    }
-}
-
-impl Listen for ScalewayCR {
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
     }
 }
