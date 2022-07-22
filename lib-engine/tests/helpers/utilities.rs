@@ -87,12 +87,6 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
         disable_pleco: Some(true),
         is_first_cluster_deployment: None,
     };
-
-    let advanced_settings = ClusterAdvancedSettings {
-        pleco_resources_ttl: 10800,
-        ..Default::default()
-    };
-
     let enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
 
     Context::new(
@@ -106,7 +100,6 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
         enabled_features,
         Option::from(metadata),
         docker,
-        Some(advanced_settings),
     )
 }
 

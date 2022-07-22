@@ -10,7 +10,7 @@ use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
-use qovery_engine::cloud_provider::models::NodeGroups;
+use qovery_engine::cloud_provider::models::{ClusterAdvancedSettingsModel, NodeGroups};
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::container_registry::docr::DOCR;
@@ -284,7 +284,7 @@ pub struct Kubernetes {
     pub region: String,
     pub options: Value,
     pub nodes_groups: Vec<NodeGroups>,
-    pub cluster_advanced_settings: Option<ClusterAdvancedSettings>,
+    pub cluster_advanced_settings: ClusterAdvancedSettingsModel,
 }
 
 impl Kubernetes {
@@ -310,6 +310,7 @@ impl Kubernetes {
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 self.nodes_groups.clone(),
                 logger,
+                self.cluster_advanced_settings.clone(),
             ) {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e.to_legacy_engine_error()),
@@ -329,6 +330,7 @@ impl Kubernetes {
                 )
                 .expect("What's wronnnnng -- JSON Options for digital ocean DOKS payload is not the expected one"),
                 logger,
+                self.cluster_advanced_settings.clone(),
             ) {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e.to_legacy_engine_error()),
@@ -353,6 +355,7 @@ impl Kubernetes {
                 )
                 .expect("What's wronnnnng -- JSON Options payload for Scaleway is not the expected one"),
                 logger,
+                self.cluster_advanced_settings.clone(),
             ) {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e.to_legacy_engine_error()),
@@ -385,6 +388,7 @@ impl Kubernetes {
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                     ec2_instance,
                     logger,
+                    self.cluster_advanced_settings.clone(),
                 ) {
                     Ok(res) => Ok(Box::new(res)),
                     Err(e) => Err(e.to_legacy_engine_error()),
