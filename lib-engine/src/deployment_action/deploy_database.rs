@@ -1,20 +1,21 @@
 use crate::cloud_provider::helm::ChartSetValue;
 use crate::cloud_provider::service::{delete_pending_service, get_database_terraform_config, Action, Service};
-use crate::cloud_provider::utilities::{check_domain_for, print_action};
+use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::Kind::Aws;
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::cmd;
 use crate::cmd::command::QoveryCommand;
 use crate::constants::AWS_DEFAULT_REGION;
+use crate::deployment_action::check_dns::CheckDnsForDomains;
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::deploy_terraform::TerraformDeployment;
 use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::database::reporter::DatabaseDeploymentReporter;
 use crate::deployment_report::execute_long_deployment;
+use crate::deployment_report::logger::get_loggers;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
-use crate::io_models::ListenersHelper;
 use crate::models::database::{Container, Database, DatabaseService, DatabaseType, Managed};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;
@@ -353,19 +354,19 @@ where
             T::db_type().to_string().as_str(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
 
         if self.publicly_accessible {
-            check_domain_for(
-                ListenersHelper::new(&self.listeners),
-                vec![&self.fqdn],
-                self.context.execution_id(),
-                self.context.execution_id(),
-                event_details,
-                self.logger(),
-            )?;
+            let logger = get_loggers(self, self.action);
+            let domain_checker = CheckDnsForDomains {
+                resolve_to_ip: vec![self.fqdn.to_string()],
+                resolve_to_cname: vec![],
+                log: logger.send_success,
+            };
+
+            let _ = domain_checker.on_create_check();
         }
 
         Ok(())
@@ -534,19 +535,19 @@ where
             T::db_type().to_string().as_str(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
 
         if self.publicly_accessible {
-            check_domain_for(
-                ListenersHelper::new(&self.listeners),
-                vec![&self.fqdn],
-                self.context.execution_id(),
-                self.context.execution_id(),
-                event_details,
-                self.logger(),
-            )?;
+            let logger = get_loggers(self, self.action);
+            let domain_checker = CheckDnsForDomains {
+                resolve_to_ip: vec![self.fqdn.to_string()],
+                resolve_to_cname: vec![],
+                log: logger.send_success,
+            };
+
+            let _ = domain_checker.on_create_check();
         }
 
         Ok(())

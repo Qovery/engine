@@ -5,7 +5,7 @@ use std::time::Duration;
 
 pub mod application;
 pub mod database;
-mod logger;
+pub mod logger;
 pub mod router;
 mod utils;
 
