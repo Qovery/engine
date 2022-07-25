@@ -1,3 +1,4 @@
+use crate::cloud_provider::models::CustomDomain;
 use crate::cloud_provider::utilities::{await_domain_resolve_cname, await_domain_resolve_ip};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
@@ -7,19 +8,19 @@ use std::time::Duration;
 
 pub struct CheckDnsForDomains {
     pub resolve_to_ip: Vec<String>,
-    pub resolve_to_cname: Vec<String>,
+    pub resolve_to_cname: Vec<CustomDomain>,
     pub log: Box<dyn Fn(String)>,
 }
 
 fn check_domain_resolve_ip(domain: &str, log: &impl Fn(String)) {
     // We use send_success because if on_check is called it means the DB is already correctly deployed
     (log)(format!(
-        "Let's check domain resolution for '{}'. Please wait, it can take some time...",
+        "🌍 Checking DNS Ip resolution for domain {}. Please wait, it can take some time...",
         domain
     ));
 
     let get_domain = || {
-        (log)(format!("🌍 Domain {} still does not resolve, waiting to retry...", domain));
+        (log)(format!("🌍 Waiting domain {} resolve to an Ip address...", domain));
         domain
     };
 
@@ -35,7 +36,7 @@ fn check_domain_resolve_ip(domain: &str, log: &impl Fn(String)) {
         }
         Err(_) => {
             let message = format!(
-                "🌍 Unable to check domain availability for '{}'. It can be due to a \
+                "💥 Unable to check domain availability for '{}'. It can be due to a \
                         too long domain propagation. Note: this is not critical.",
                 &domain
             );
@@ -44,31 +45,35 @@ fn check_domain_resolve_ip(domain: &str, log: &impl Fn(String)) {
     }
 }
 
-fn check_domain_resolve_cname(domain: &str, log: &impl Fn(String)) {
+fn check_domain_resolve_cname(custom_domain: &CustomDomain, log: &impl Fn(String)) {
     // We use send_success because if on_check is called it means the DB is already correctly deployed
     (log)(format!(
-        "🌍 Checking CNAME resolution of '{}'. Please wait, it can take some time...",
-        &domain
+        "🌍 Checking DNS CNAME resolution for domain {}. Please wait, it can take some time...",
+        &custom_domain.domain,
     ));
 
     let get_domain = || {
         (log)(format!(
-            "🌍 Domain {} still does not resolve to valid CNAME, waiting to retry...",
-            &domain
+            "🌍 Waiting domain {} to resolve to DNS CNAME {}",
+            &custom_domain.domain, &custom_domain.target_domain
         ));
-        domain
+        custom_domain.domain.as_str()
     };
 
     let does_resolve = await_domain_resolve_cname(get_domain, Duration::from_secs(60), Duration::from_secs(60 * 5));
 
     match does_resolve {
         Ok(cname) => {
-            (log)(format!("✨ Domain {} resolved to CNAME {}", domain, cname.to_utf8()));
+            (log)(format!(
+                "✨ Domain {} resolved to CNAME {}",
+                custom_domain.domain,
+                cname.to_utf8()
+            ));
         }
         Err(_) => {
             let message = format!(
-                "🌍 Resolution of CNAME for domain {} failed. Please check that you have correctly configured your CNAME. If you are using a CDN you can forget this message",
-                &domain
+                "💥 Resolution of CNAME for domain {} failed. Please check that you have correctly configured your CNAME. If you are using a CDN you can forget this message",
+                &custom_domain.domain
             );
             (log)(message);
         }
