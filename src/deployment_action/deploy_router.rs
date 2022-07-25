@@ -1,3 +1,4 @@
+use crate::cloud_provider::models::CustomDomain;
 use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::DeploymentTarget;
@@ -58,8 +59,8 @@ where
 
         // check non custom domains
         let logger = get_loggers(self, self.action);
-        let custom_domains_to_check: Vec<String> = if self.advanced_settings.custom_domain_check_enabled {
-            self.custom_domains.iter().map(|domain| domain.domain.clone()).collect()
+        let custom_domains_to_check: Vec<CustomDomain> = if self.advanced_settings.custom_domain_check_enabled {
+            self.custom_domains.clone()
         } else {
             vec![]
         };
