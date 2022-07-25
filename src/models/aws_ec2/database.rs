@@ -1,5 +1,5 @@
 use crate::cloud_provider::service::{
-    check_service_version, default_tera_context, get_tfstate_name, get_tfstate_suffix, DatabaseOptions, Service,
+    check_service_version, default_tera_context, get_tfstate_name, get_tfstate_suffix, Service,
     ServiceVersionCheckResult,
 };
 use crate::cloud_provider::{service, DeploymentTarget};
@@ -8,10 +8,9 @@ use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::models::aws_ec2::database_utils::{
     get_managed_mongodb_version, get_managed_mysql_version, get_managed_postgres_version, get_managed_redis_version,
 };
-use crate::models::database::{
-    Container, Database, DatabaseMode, DatabaseType, Managed, MongoDB, MySQL, PostgresSQL, Redis,
-};
+use crate::models::database::{Container, Database, DatabaseType, Managed, MongoDB, MySQL, PostgresSQL, Redis};
 
+use crate::io_models::DatabaseOptions;
 use crate::models::types::{AWSEc2, ToTeraContext};
 use crate::unit_conversion::cpu_string_to_float;
 use tera::Context as TeraContext;
@@ -295,13 +294,13 @@ where
         context.insert("kubernetes_cluster_id", kubernetes.id());
         context.insert("kubernetes_cluster_name", kubernetes.name());
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert("fqdn", self.fqdn(target, &self.fqdn, Managed::is_managed()).as_str());
+        context.insert("fqdn", self.fqdn(target, &self.fqdn).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
         context.insert("database_name", self.sanitized_name().as_str());
         context.insert("database_db_name", self.name());
         context.insert("database_login", options.login.as_str());
         context.insert("database_password", options.password.as_str());
-        context.insert("database_port", &self.private_port());
+        context.insert("database_port", &self.private_port);
         context.insert("database_disk_size_in_gib", &options.disk_size_in_gib);
         context.insert("database_instance_type", &self.database_instance_type);
         context.insert("database_disk_type", &options.database_disk_type);

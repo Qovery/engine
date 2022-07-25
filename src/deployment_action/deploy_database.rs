@@ -1,6 +1,5 @@
-use crate::cloud_provider::service::{
-    delete_managed_stateful_service, delete_pending_service, deploy_managed_database_service, Action, Helm, Service,
-};
+use crate::cloud_provider::helm::ChartSetValue;
+use crate::cloud_provider::service::{delete_pending_service, get_database_terraform_config, Action, Service};
 use crate::cloud_provider::utilities::{check_domain_for, print_action};
 use crate::cloud_provider::Kind::Aws;
 use crate::cloud_provider::{service, DeploymentTarget};
@@ -8,18 +7,19 @@ use crate::cmd;
 use crate::cmd::command::QoveryCommand;
 use crate::constants::AWS_DEFAULT_REGION;
 use crate::deployment_action::deploy_helm::HelmDeployment;
+use crate::deployment_action::deploy_terraform::TerraformDeployment;
 use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::database::reporter::DatabaseDeploymentReporter;
 use crate::deployment_report::execute_long_deployment;
 use crate::errors::{CommandError, EngineError};
-use crate::events::{EnvironmentStep, Stage};
+use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::io_models::ListenersHelper;
 use crate::models::database::{Container, Database, DatabaseService, DatabaseType, Managed};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -193,6 +193,136 @@ fn await_db_state(
     }
 }
 
+fn on_create_managed_impl<C: CloudProvider, T: DatabaseType<C, Managed>>(
+    db: &Database<C, Managed, T>,
+    event_details: EventDetails,
+    target: &DeploymentTarget,
+) -> Result<(), EngineError>
+where
+    Database<C, Managed, T>: DatabaseService,
+{
+    let workspace_dir = db.workspace_directory();
+    let tera_context = db.to_tera_context(target)?;
+
+    // Execute terraform to provision database on cloud provider side
+    let terraform_deploy = TerraformDeployment::new(
+        tera_context.clone(),
+        PathBuf::from(db.terraform_common_resource_dir_path()),
+        PathBuf::from(db.terraform_resource_dir_path()),
+        PathBuf::from(&workspace_dir),
+        event_details.clone(),
+        db.context.is_dry_run_deploy(),
+    );
+    terraform_deploy.on_create(target)?;
+
+    // Our terrraform give us back a file with all the info we need to deploy the remaining stuff
+    let database_config =
+        get_database_terraform_config(format!("{}/database-tf-config.json", &workspace_dir,).as_str())
+            .map_err(|err| EngineError::new_terraform_error(event_details.clone(), err))?;
+
+    // Deploy the external service name
+    let values = vec![
+        ChartSetValue {
+            key: "target_hostname".to_string(),
+            value: database_config.target_hostname,
+        },
+        ChartSetValue {
+            key: "source_fqdn".to_string(),
+            value: database_config.target_fqdn,
+        },
+        ChartSetValue {
+            key: "database_id".to_string(), // here we use the id and not the fqdn_id ¯\_(ツ)_/¯
+            value: db.id().to_string(),
+        },
+        ChartSetValue {
+            key: "database_long_id".to_string(),
+            value: db.long_id().to_string(),
+        },
+        ChartSetValue {
+            key: "environment_id".to_string(),
+            value: target.environment.id.to_string(),
+        },
+        ChartSetValue {
+            key: "environment_long_id".to_string(),
+            value: target.environment.long_id.to_string(),
+        },
+        ChartSetValue {
+            key: "project_long_id".to_string(),
+            value: target.environment.project_long_id.to_string(),
+        },
+        ChartSetValue {
+            key: "service_name".to_string(),
+            value: database_config.target_fqdn_id,
+        },
+        ChartSetValue {
+            key: "publicly_accessible".to_string(),
+            value: db.publicly_accessible.to_string(),
+        },
+    ];
+
+    let helm_deploy = HelmDeployment::new_with_values(
+        format!("{}-externalname", db.fqdn_id), // here it is the fqdn id :O
+        tera_context,
+        PathBuf::from(db.helm_chart_external_name_service_dir()),
+        Path::new(&workspace_dir).join("service-chart"),
+        values,
+        event_details.clone(),
+        None,
+    );
+
+    helm_deploy.on_create(target)?;
+
+    // We don't manage START/PAUSE for managed database elsewhere than for AWS
+    if target.kubernetes.cloud_provider().kind() != Aws {
+        return Ok(());
+    }
+
+    // Terraform does not ensure that the database is correctly started
+    // So we must force it ourselves in case
+    let credentials = {
+        let mut credentials = target.kubernetes.cloud_provider().credentials_environment_variables();
+        credentials.push((AWS_DEFAULT_REGION, target.kubernetes.region()));
+        credentials
+    };
+
+    // If the database is not in the available state, try to start it
+    match get_managed_database_status(db.db_type(), &db.fqdn_id, &credentials) {
+        Ok(status) if status == DB_READY_STATE => {}
+        Ok(_) | Err(_) => {
+            let _ = start_stop_managed_database(db.db_type(), &db.fqdn_id, &credentials, false);
+        }
+    }
+
+    let ret = await_db_state(
+        Duration::from_secs(60 * 30),
+        db.db_type(),
+        &db.fqdn_id,
+        &credentials,
+        DB_READY_STATE,
+    );
+
+    match ret {
+        Ok(_) => Ok(()),
+        // timeout
+        Err(None) => Err(EngineError::new_database_failed_to_start_after_several_retries(
+            event_details,
+            db.id.to_string(),
+            db.db_type().to_string(),
+            Some(CommandError::new_from_safe_message(format!(
+                "Timeout reached waiting for the database to be in {} state",
+                DB_READY_STATE
+            ))),
+        )),
+        // Error ;'(
+        Err(Some((cmd_err, msg))) => Err(EngineError::new_database_failed_to_start_after_several_retries(
+            event_details,
+            db.id.to_string(),
+            db.db_type().to_string(),
+            Some(CommandError::new_from_legacy_command_error(cmd_err, Some(msg))),
+        )),
+    }
+}
+
 // For Managed database
 impl<C: CloudProvider, T: DatabaseType<C, Managed>> DeploymentAction for Database<C, Managed, T>
 where
@@ -211,57 +341,7 @@ where
         );
 
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
-            deploy_managed_database_service(target, self, event_details.clone())?;
-
-            // We don't manage START/PAUSE for managed database elsewhere than for AWS
-            if target.kubernetes.cloud_provider().kind() != Aws {
-                return Ok(());
-            }
-
-            // Terraform does not ensure that the database is correctly started
-            // So we must force it ourselves in case
-            let credentials = {
-                let mut credentials = target.kubernetes.cloud_provider().credentials_environment_variables();
-                credentials.push((AWS_DEFAULT_REGION, target.kubernetes.region()));
-                credentials
-            };
-
-            // If the database is not in the available state, try to start it
-            match get_managed_database_status(self.db_type(), &self.fqdn_id, &credentials) {
-                Ok(status) if status == DB_READY_STATE => {}
-                Ok(_) | Err(_) => {
-                    let _ = start_stop_managed_database(self.db_type(), &self.fqdn_id, &credentials, false);
-                }
-            }
-
-            let ret = await_db_state(
-                Duration::from_secs(60 * 30),
-                self.db_type(),
-                &self.fqdn_id,
-                &credentials,
-                DB_READY_STATE,
-            );
-
-            match ret {
-                Ok(_) => Ok(()),
-                // timeout
-                Err(None) => Err(EngineError::new_database_failed_to_start_after_several_retries(
-                    event_details.clone(),
-                    self.id.to_string(),
-                    self.db_type().to_string(),
-                    Some(CommandError::new_from_safe_message(format!(
-                        "Timeout reached waiting for the database to be in {} state",
-                        DB_READY_STATE
-                    ))),
-                )),
-                // Error ;'(
-                Err(Some((cmd_err, msg))) => Err(EngineError::new_database_failed_to_start_after_several_retries(
-                    event_details.clone(),
-                    self.id.to_string(),
-                    self.db_type().to_string(),
-                    Some(CommandError::new_from_legacy_command_error(cmd_err, Some(msg))),
-                )),
-            }
+            on_create_managed_impl(self, event_details.clone(), target)
         })
     }
 
@@ -277,7 +357,7 @@ where
             self.logger(),
         );
 
-        if self.publicly_accessible() {
+        if self.publicly_accessible {
             check_domain_for(
                 ListenersHelper::new(&self.listeners),
                 vec![&self.fqdn],
@@ -371,7 +451,35 @@ where
         );
 
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Delete), || {
-            delete_managed_stateful_service(target, self, event_details.clone(), self.logger())
+            // First we must ensure the DB is created and in a ready state
+            // because if not, the deletion is going to fail (i.e: cannot snapshot paused db)
+            on_create_managed_impl(self, event_details.clone(), target)?;
+
+            let workspace_dir = self.workspace_directory();
+
+            // Ok now delete it
+            let terraform_deploy = TerraformDeployment::new(
+                self.to_tera_context(target)?,
+                PathBuf::from(self.terraform_common_resource_dir_path()),
+                PathBuf::from(self.terraform_resource_dir_path()),
+                PathBuf::from(&workspace_dir),
+                event_details.clone(),
+                self.context.is_dry_run_deploy(),
+            );
+            terraform_deploy.on_delete(target)?;
+
+            // Delete the service attached
+            let helm_deploy = HelmDeployment::new_with_values(
+                format!("{}-externalname", self.fqdn_id), // here it is the fqdn id :O
+                tera::Context::default(),
+                PathBuf::from(self.helm_chart_external_name_service_dir()),
+                Path::new(&workspace_dir).join("service-chart"),
+                vec![],
+                event_details.clone(),
+                None,
+            );
+
+            helm_deploy.on_delete(target)
         })
     }
 }
@@ -394,7 +502,7 @@ where
         );
 
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
-            let helm = HelmDeployment::new_with_values_override(
+            let helm = HelmDeployment::new_with_values_file_override(
                 self.helm_release_name(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
@@ -430,7 +538,7 @@ where
             self.logger(),
         );
 
-        if self.publicly_accessible() {
+        if self.publicly_accessible {
             check_domain_for(
                 ListenersHelper::new(&self.listeners),
                 vec![&self.fqdn],
@@ -480,7 +588,7 @@ where
         );
 
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Delete), || {
-            let helm = HelmDeployment::new_with_values_override(
+            let helm = HelmDeployment::new_with_values_file_override(
                 self.helm_release_name(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),

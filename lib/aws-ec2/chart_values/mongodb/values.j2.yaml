@@ -140,7 +140,7 @@ service:
 
   type: ClusterIP
   # clusterIP: None
-  port: {{ private_port }}
+  port: {{ database_port }}
   qovery_name: {{ service_name }}
 
   ## Specify the nodePort value for the LoadBalancer and NodePort service types.
@@ -227,11 +227,11 @@ podLabels:
 ##
 resources:
   requests:
-    cpu: {{ total_cpus }}
-    memory: {{ total_ram_in_mib }}Mi
+    cpu: {{ database_total_cpus }}
+    memory: {{ database_ram_size_in_mib }}Mi
   limits:
-    cpu: {{ total_cpus }}
-    memory: {{ total_ram_in_mib }}Mi
+    cpu: {{ database_total_cpus }}
+    memory: {{ database_ram_size_in_mib }}Mi
 # Define separate resources per arbiter, which are less then primary or secondary
 # used only when replica set is enabled
 resourcesArbiter: {}

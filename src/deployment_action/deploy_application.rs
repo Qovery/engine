@@ -1,4 +1,4 @@
-use crate::cloud_provider::service::{delete_pending_service, Action, Helm, Service};
+use crate::cloud_provider::service::{delete_pending_service, Action, Service};
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::deploy_helm::HelmDeployment;

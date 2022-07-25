@@ -1,4 +1,4 @@
-use crate::cloud_provider::service::{Action, Helm, Service};
+use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::utilities::{check_cname_for, print_action};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::deploy_helm::HelmDeployment;
@@ -7,7 +7,6 @@ use crate::deployment_report::execute_long_deployment;
 use crate::deployment_report::router::reporter::RouterDeploymentReporter;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage};
-use crate::io_models::Listen;
 use crate::models::router::{Router, RouterService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;

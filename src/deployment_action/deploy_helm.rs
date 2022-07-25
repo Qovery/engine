@@ -1,4 +1,4 @@
-use crate::cloud_provider::helm::ChartInfo;
+use crate::cloud_provider::helm::{ChartInfo, ChartSetValue};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
@@ -20,7 +20,8 @@ pub struct HelmDeployment {
     tera_context: TeraContext,
     chart_folder: PathBuf,
     destination_folder: PathBuf,
-    value_override: Option<PathBuf>,
+    value_file_override: Option<PathBuf>,
+    values: Vec<ChartSetValue>,
     event_details: EventDetails,
     pod_selector: Option<String>,
 }
@@ -39,13 +40,14 @@ impl HelmDeployment {
             tera_context,
             chart_folder,
             destination_folder,
-            value_override: None,
+            value_file_override: None,
+            values: vec![],
             event_details,
             pod_selector,
         }
     }
 
-    pub fn new_with_values_override(
+    pub fn new_with_values_file_override(
         release_name: String,
         tera_context: TeraContext,
         chart_folder: PathBuf,
@@ -59,7 +61,29 @@ impl HelmDeployment {
             tera_context,
             chart_folder,
             destination_folder,
-            value_override: Some(value_override),
+            value_file_override: Some(value_override),
+            values: vec![],
+            event_details,
+            pod_selector,
+        }
+    }
+
+    pub fn new_with_values(
+        release_name: String,
+        tera_context: TeraContext,
+        chart_folder: PathBuf,
+        destination_folder: PathBuf,
+        values: Vec<ChartSetValue>,
+        event_details: EventDetails,
+        pod_selector: Option<String>,
+    ) -> HelmDeployment {
+        HelmDeployment {
+            release_name,
+            tera_context,
+            chart_folder,
+            destination_folder,
+            value_file_override: None,
+            values,
             event_details,
             pod_selector,
         }
@@ -78,7 +102,7 @@ impl HelmDeployment {
         })?;
 
         // If we have some special value override, replace it also
-        if let Some(value_override) = &self.value_override {
+        if let Some(value_override) = &self.value_file_override {
             generate_and_copy_all_files_into_dir(value_override, &self.destination_folder, self.tera_context.clone())
                 .map_err(|e| {
                 EngineError::new_cannot_copy_files_from_one_directory_to_another(
@@ -105,7 +129,7 @@ impl DeploymentAction for HelmDeployment {
             target.environment.namespace().to_string(),
             DEFAULT_HELM_TIMEOUT.as_secs() as i64,
             vec![],
-            vec![],
+            self.values.clone(),
             vec![],
             false,
             None,

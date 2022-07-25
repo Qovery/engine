@@ -7,8 +7,8 @@ use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::errors::EngineError;
-use crate::events::{EventDetails, Stage, ToTransmitter};
-use crate::io_models::{Context, Listen};
+use crate::events::{EventDetails, Stage, Transmitter};
+use crate::io_models::{Context, Listener, Listeners};
 use crate::runtime::block_on;
 use crate::utilities::get_kube_client;
 
@@ -25,7 +25,7 @@ pub mod scaleway;
 pub mod service;
 pub mod utilities;
 
-pub trait CloudProvider: Listen + ToTransmitter {
+pub trait CloudProvider {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn kubernetes_kind(&self) -> kubernetes::Kind;
@@ -48,6 +48,9 @@ pub trait CloudProvider: Listen + ToTransmitter {
     fn terraform_state_credentials(&self) -> &TerraformStateCredentials;
     fn as_any(&self) -> &dyn Any;
     fn get_event_details(&self, stage: Stage) -> EventDetails;
+    fn listeners(&self) -> &Listeners;
+    fn add_listener(&mut self, listener: Listener);
+    fn to_transmitter(&self) -> Transmitter;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]

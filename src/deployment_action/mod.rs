@@ -7,6 +7,7 @@ mod deploy_database;
 mod deploy_helm;
 pub mod deploy_namespace;
 mod deploy_router;
+mod deploy_terraform;
 mod pause_service;
 #[cfg(test)]
 mod test_utils;

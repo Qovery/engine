@@ -16,7 +16,7 @@ use crate::dns_provider::DnsProvider;
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage};
-use crate::io_models::{Action, Context, Listen, Listener, Listeners, ListenersHelper};
+use crate::io_models::{Action, Context, Listener, Listeners, ListenersHelper};
 use crate::logger::Logger;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
@@ -239,6 +239,14 @@ impl Kubernetes for EKS {
 
     fn is_valid(&self) -> Result<(), EngineError> {
         Ok(())
+    }
+
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
     }
 
     #[named]
@@ -701,16 +709,6 @@ impl Kubernetes for EKS {
             self.logger(),
         );
         cloud_provider::kubernetes::delete_environment(self, environment, event_details)
-    }
-}
-
-impl Listen for EKS {
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
     }
 }
 

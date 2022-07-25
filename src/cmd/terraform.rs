@@ -44,6 +44,10 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    InvalidCredentials {
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
     QuotasExceeded {
         sub_type: QuotaExceededError,
         /// raw_message: raw Terraform error message with all details.
@@ -115,12 +119,23 @@ impl TerraformError {
                 }
             }
         }
-        if raw_terraform_output.contains("AddressLimitExceeded: The maximum number of addresses has been reached") {
-            return TerraformError::QuotasExceeded {
-                sub_type: QuotaExceededError::ResourceLimitExceeded {
-                    resource_type: "EIP".to_string(),
-                    max_resource_count: None,
-                },
+        if let Ok(aws_quotas_exceeded_re) =
+            Regex::new(r"Error creating (?P<resource_type>\w+): \w+: The maximum number of \w+ has been reached")
+        {
+            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_output.as_str()) {
+                if let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str()) {
+                    return TerraformError::QuotasExceeded {
+                        sub_type: QuotaExceededError::ResourceLimitExceeded {
+                            resource_type: resource_type.to_string(),
+                            max_resource_count: None,
+                        },
+                        raw_message: raw_terraform_output.to_string(),
+                    };
+                }
+            }
+        }
+        if raw_terraform_output.contains("error calling sts:GetCallerIdentity: operation error STS: GetCallerIdentity, https response error StatusCode: 403") {
+            return TerraformError::InvalidCredentials {
                 raw_message: raw_terraform_output,
             };
         }
@@ -145,6 +160,7 @@ impl Display for TerraformError {
                 terraform_args.join(" "),
                 raw_message
             ),
+            TerraformError::InvalidCredentials { raw_message } => format!("Invalid credentials. \n{}", raw_message),
             TerraformError::CannotDeleteLockFile {
                 terraform_provider_lock,
                 raw_message,
@@ -533,10 +549,9 @@ fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Terraf
         Err(_) => Err(TerraformError::Unknown {
             terraform_args: args.iter().map(|e| e.to_string()).collect(),
             raw_message: format!(
-                "command: terraform {} failed\nSTDOUT:\n{}\n STDERR:\n{}",
+                "Terraform command (terraform {}) failed, here is the error:\n{}",
                 args.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(" "),
-                stdout.join(" "),
-                stderr.join(" ")
+                stderr.join("\n")
             ),
         }),
     }
@@ -674,6 +689,26 @@ terraform {
                     raw_message:
                         "Error creating EIP: AddressLimitExceeded: The maximum number of addresses has been reached."
                             .to_string(),
+                },
+            },
+            TestCase {
+                input_raw_message:
+                    "Error: error configuring Terraform AWS Provider: error validating provider credentials: error calling sts:GetCallerIdentity: operation error STS: GetCallerIdentity, https response error StatusCode: 403",
+                expected_terraform_error: TerraformError::InvalidCredentials {
+                    raw_message:
+                        "Error: error configuring Terraform AWS Provider: error validating provider credentials: error calling sts:GetCallerIdentity: operation error STS: GetCallerIdentity, https response error StatusCode: 403"
+                            .to_string(),
+                },
+            },
+            TestCase {
+                input_raw_message: "Error creating VPC: VpcLimitExceeded: The maximum number of VPCs has been reached.",
+                expected_terraform_error: TerraformError::QuotasExceeded {
+                    sub_type: QuotaExceededError::ResourceLimitExceeded {
+                        resource_type: "VPC".to_string(),
+                        max_resource_count: None,
+                    },
+                    raw_message: "Error creating VPC: VpcLimitExceeded: The maximum number of VPCs has been reached."
+                        .to_string(),
                 },
             },
         ];

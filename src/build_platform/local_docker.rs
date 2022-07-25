@@ -14,12 +14,10 @@ use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, QoveryCommand};
 use crate::cmd::docker::{BuildResult, ContainerImage, DockerError};
-use crate::events::{EngineEvent, EventMessage, ToTransmitter, Transmitter};
+use crate::events::{EngineEvent, EventMessage, Transmitter};
 use crate::fs::workspace_directory;
 use crate::git;
-use crate::io_models::{
-    Context, Listen, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-};
+use crate::io_models::{Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
 use crate::logger::Logger;
 
 const BUILD_DURATION_TIMEOUT_SEC: u64 = 30 * 60;
@@ -570,9 +568,6 @@ impl BuildPlatform for LocalDocker {
     fn logger(&self) -> Box<dyn Logger> {
         self.logger.clone()
     }
-}
-
-impl Listen for LocalDocker {
     fn listeners(&self) -> &Listeners {
         &self.listeners
     }
@@ -580,9 +575,7 @@ impl Listen for LocalDocker {
     fn add_listener(&mut self, listener: Listener) {
         self.listeners.push(listener);
     }
-}
 
-impl ToTransmitter for LocalDocker {
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::BuildPlatform(self.id().to_string(), self.name().to_string())
     }

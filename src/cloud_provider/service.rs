@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::BufReader;
-use std::net::TcpStream;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -10,33 +8,19 @@ use tera::Context as TeraContext;
 use uuid::Uuid;
 
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::helm::{ChartInfo, ChartSetValue};
-use crate::cloud_provider::kubernetes::{
-    kube_copy_secret_to_another_namespace, kube_does_secret_exists, Kind, Kubernetes,
-};
-use crate::cloud_provider::DeploymentTarget;
-use crate::cmd;
-use crate::cmd::helm;
-use crate::cmd::kubectl::{kubectl_exec_delete_pod, kubectl_exec_delete_secret, kubectl_exec_get_pods};
+use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cmd::kubectl::{kubectl_exec_delete_pod, kubectl_exec_get_pods};
 use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::cmd::terraform::TerraformError;
 use crate::errors::{CommandError, EngineError};
-use crate::events::{EngineEvent, EventDetails, EventMessage, Stage, ToTransmitter};
-use crate::io_models::ProgressLevel::Info;
-use crate::io_models::{
-    ApplicationAdvancedSettings, Context, DatabaseMode, Listen, ListenersHelper, ProgressInfo, ProgressLevel,
-    ProgressScope, QoveryIdentifier,
-};
+use crate::events::{EngineEvent, EventDetails, EventMessage, Stage, Transmitter};
+use crate::io_models::{Context, Listener, Listeners, ProgressScope, QoveryIdentifier};
 use crate::logger::Logger;
-use crate::models::database::DatabaseService;
 
 use crate::models::types::VersionsNumber;
-use crate::runtime::block_on;
-
-use super::kubernetes::kube_create_namespace_if_not_exists;
 
 // todo: delete this useless trait
-pub trait Service: ToTransmitter {
+pub trait Service {
     fn context(&self) -> &Context;
     fn service_type(&self) -> ServiceType;
     fn id(&self) -> &str;
@@ -69,37 +53,14 @@ pub trait Service: ToTransmitter {
             self.to_transmitter(),
         )
     }
-    fn application_advanced_settings(&self) -> Option<ApplicationAdvancedSettings>;
     fn version(&self) -> String;
     fn action(&self) -> &Action;
-    fn private_port(&self) -> Option<u16>;
-    fn total_cpus(&self) -> String;
-    fn cpu_burst(&self) -> String;
-    fn total_ram_in_mib(&self) -> u32;
-    fn min_instances(&self) -> u32;
-    fn max_instances(&self) -> u32;
-    fn publicly_accessible(&self) -> bool;
-    fn fqdn(&self, target: &DeploymentTarget, fqdn: &str, is_managed: bool) -> String {
-        match &self.publicly_accessible() {
-            true => fqdn.to_string(),
-            false => match is_managed {
-                true => format!("{}-dns.{}.svc.cluster.local", self.id(), target.environment.namespace()),
-                false => format!("{}.{}.svc.cluster.local", self.sanitized_name(), target.environment.namespace()),
-            },
-        }
-    }
     // used to retrieve logs by using Kubernetes labels (selector)
-    fn logger(&self) -> &dyn Logger;
     fn selector(&self) -> Option<String>;
-    fn is_listening(&self, ip: &str) -> bool {
-        let private_port = match self.private_port() {
-            Some(private_port) => private_port,
-            _ => return false,
-        };
-
-        TcpStream::connect(format!("{}:{}", ip, private_port)).is_ok()
-    }
-
+    fn logger(&self) -> &dyn Logger;
+    fn listeners(&self) -> &Listeners;
+    fn add_listener(&mut self, listener: Listener);
+    fn to_transmitter(&self) -> Transmitter;
     fn progress_scope(&self) -> ProgressScope {
         let id = self.id().to_string();
 
@@ -113,40 +74,12 @@ pub trait Service: ToTransmitter {
     fn as_service(&self) -> &dyn Service;
 }
 
-pub trait Terraform {
-    fn terraform_common_resource_dir_path(&self) -> String;
-    fn terraform_resource_dir_path(&self) -> String;
-}
-
-pub trait Helm {
-    fn helm_selector(&self) -> Option<String>;
-    fn helm_release_name(&self) -> String;
-    fn helm_chart_dir(&self) -> String;
-    fn helm_chart_values_dir(&self) -> String;
-    fn helm_chart_external_name_service_dir(&self) -> String;
-}
-
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Action {
     Create,
     Pause,
     Delete,
     Nothing,
-}
-
-#[derive(Eq, PartialEq)]
-pub struct DatabaseOptions {
-    pub login: String,
-    pub password: String,
-    pub host: String,
-    pub port: u16,
-    pub mode: DatabaseMode,
-    pub disk_size_in_gib: u32,
-    pub database_disk_type: String,
-    pub encrypt_disk: bool,
-    pub activate_high_availability: bool,
-    pub activate_backups: bool,
-    pub publicly_accessible: bool,
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize)]
@@ -212,16 +145,6 @@ pub fn default_tera_context(
     context.insert("sanitized_name", &service.sanitized_name());
     context.insert("namespace", environment.namespace());
     context.insert("cluster_name", kubernetes.name());
-    context.insert("total_cpus", &service.total_cpus());
-    context.insert("total_ram_in_mib", &service.total_ram_in_mib());
-    context.insert("min_instances", &service.min_instances());
-    context.insert("max_instances", &service.max_instances());
-
-    context.insert("is_private_port", &service.private_port().is_some());
-    if let Some(private_port) = service.private_port() {
-        context.insert("private_port", &private_port);
-    }
-
     context.insert("version", &service.version());
 
     context
@@ -262,304 +185,6 @@ pub fn get_database_terraform_config(
     }
 }
 
-pub fn prepare_namespace(
-    environment: &Environment,
-    namespace_labels: Option<BTreeMap<String, String>>,
-    event_details: EventDetails,
-    kubernetes_kind: Kind,
-    kube: &kube::Client,
-) -> Result<(), EngineError> {
-    // create a namespace with labels if it does not exist
-    block_on(kube_create_namespace_if_not_exists(
-        kube,
-        environment.namespace(),
-        namespace_labels,
-    ))
-    .map_err(|e| {
-        EngineError::new_k8s_create_namespace(
-            event_details.clone(),
-            environment.namespace().to_string(),
-            CommandError::new(
-                format!("Can't create namespace {}", environment.namespace()),
-                Some(e.to_string()),
-                None,
-            ),
-        )
-    })?;
-
-    // upmc-enterprises/registry-creds sometimes is too long to copy the secret to the namespace
-    // this workaround speed up the process to avoid application fails with ImagePullError on the first deployment
-    if kubernetes_kind == Kind::Ec2 {
-        let from_namespace = "default";
-        match block_on(kube_does_secret_exists(kube, "awsecr-cred", "default")) {
-            Ok(x) if x => {
-                block_on(kube_copy_secret_to_another_namespace(
-                    kube,
-                    "awsecr-cred",
-                    from_namespace,
-                    environment.namespace(),
-                ))
-                .map_err(|e| {
-                    EngineError::new_copy_secrets_to_another_namespace_error(
-                        event_details.clone(),
-                        e,
-                        from_namespace,
-                        environment.namespace(),
-                    )
-                })?;
-            }
-            _ => {}
-        };
-    };
-
-    Ok(())
-}
-
-pub fn deploy_managed_database_service<T>(
-    target: &DeploymentTarget,
-    service: &T,
-    event_details: EventDetails,
-) -> Result<(), EngineError>
-where
-    T: DatabaseService + Helm + Terraform,
-{
-    let workspace_dir = service.workspace_directory();
-    let kubernetes = target.kubernetes;
-    let environment = target.environment;
-
-    let _context = service.to_tera_context(target)?;
-    let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
-
-    // define labels to add to namespace
-    let mut namespace_labels: Option<BTreeMap<String, String>> = None;
-    if service.context().resource_expiration_in_seconds().is_some() {
-        namespace_labels = Some(BTreeMap::from([(
-            "ttl".to_string(),
-            format!(
-                "{}",
-                service
-                    .context()
-                    .resource_expiration_in_seconds()
-                    .expect("expected to have resource expiration in seconds")
-            ),
-        )]));
-    };
-
-    prepare_namespace(
-        environment,
-        namespace_labels,
-        event_details.clone(),
-        kubernetes.kind(),
-        &target.kube,
-    )?;
-
-    // do exec helm upgrade and return the last deployment status
-    let helm = helm::Helm::new(
-        &kubernetes_config_file_path,
-        &kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| helm::to_engine_error(&event_details, e))?;
-
-    let context = service.to_tera_context(target)?;
-
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        service.terraform_common_resource_dir_path(),
-        &workspace_dir,
-        context.clone(),
-    ) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            service.terraform_common_resource_dir_path(),
-            workspace_dir,
-            e,
-        ));
-    }
-
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        service.terraform_resource_dir_path(),
-        &workspace_dir,
-        context.clone(),
-    ) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            service.terraform_resource_dir_path(),
-            workspace_dir,
-            e,
-        ));
-    }
-
-    let external_svc_dir = format!("{}/{}", workspace_dir, "external-name-svc");
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        service.helm_chart_external_name_service_dir(),
-        external_svc_dir.as_str(),
-        context,
-    ) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            service.helm_chart_external_name_service_dir(),
-            external_svc_dir,
-            e,
-        ));
-    }
-
-    cmd::terraform::terraform_init_validate_plan_apply(workspace_dir.as_str(), service.context().is_dry_run_deploy())
-        .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
-
-    // Gather database TF generated JSON config if any
-    // if configuration exists, it means that HELM will be used to deploy managed DB service external name chart instead on Terraform
-    match get_database_terraform_config(format!("{}/database-tf-config.json", workspace_dir).as_str()) {
-        Ok(database_config) => {
-            // Deploying helm chart
-            let chart = ChartInfo::new_from_custom_namespace(
-                format!("{}-externalname", database_config.target_id),
-                external_svc_dir,
-                environment.namespace().to_string(),
-                600_i64,
-                vec![],
-                vec![
-                    ChartSetValue {
-                        key: "target_hostname".to_string(),
-                        value: database_config.target_hostname,
-                    },
-                    ChartSetValue {
-                        key: "source_fqdn".to_string(),
-                        value: database_config.target_fqdn,
-                    },
-                    ChartSetValue {
-                        key: "database_id".to_string(),
-                        value: service.id().to_string(),
-                    },
-                    ChartSetValue {
-                        key: "database_long_id".to_string(),
-                        value: service.long_id().to_string(),
-                    },
-                    ChartSetValue {
-                        key: "environment_id".to_string(),
-                        value: environment.id.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "environment_long_id".to_string(),
-                        value: environment.long_id.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "project_long_id".to_string(),
-                        value: environment.project_long_id.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "service_name".to_string(),
-                        value: database_config.target_fqdn_id,
-                    },
-                    ChartSetValue {
-                        key: "publicly_accessible".to_string(),
-                        value: service.publicly_accessible().to_string(),
-                    },
-                ],
-                vec![],
-                false,
-                service.selector(),
-            );
-
-            helm.upgrade(&chart, &[])
-                .map_err(|e| helm::to_engine_error(&event_details, e))?;
-        }
-        Err(e) => return Err(EngineError::new_terraform_error(event_details, e)),
-    }
-
-    Ok(())
-}
-
-pub fn delete_managed_stateful_service<T>(
-    target: &DeploymentTarget,
-    service: &T,
-    event_details: EventDetails,
-    logger: &dyn Logger,
-) -> Result<(), EngineError>
-where
-    T: DatabaseService + Helm + Terraform,
-{
-    assert!(
-        service.is_managed_service(),
-        "trying to deploy a service that is not managed as a managed one"
-    );
-
-    let kubernetes = target.kubernetes;
-    let environment = target.environment;
-    let workspace_dir = service.workspace_directory();
-    let tera_context = service.to_tera_context(target)?;
-
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        service.terraform_common_resource_dir_path(),
-        workspace_dir.as_str(),
-        tera_context.clone(),
-    ) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            service.terraform_common_resource_dir_path(),
-            workspace_dir,
-            e,
-        ));
-    }
-
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        service.terraform_resource_dir_path(),
-        workspace_dir.as_str(),
-        tera_context.clone(),
-    ) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            service.terraform_resource_dir_path(),
-            workspace_dir,
-            e,
-        ));
-    }
-
-    let external_svc_dir = format!("{}/{}", workspace_dir, "external-name-svc");
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        service.helm_chart_external_name_service_dir(),
-        &external_svc_dir,
-        tera_context.clone(),
-    ) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            service.helm_chart_external_name_service_dir(),
-            external_svc_dir,
-            e,
-        ));
-    }
-
-    if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
-        service.helm_chart_external_name_service_dir(),
-        workspace_dir.as_str(),
-        tera_context,
-    ) {
-        return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-            event_details,
-            service.helm_chart_external_name_service_dir(),
-            workspace_dir,
-            e,
-        ));
-    }
-
-    match cmd::terraform::terraform_init_validate_destroy(workspace_dir.as_str(), true) {
-        Ok(_) => {
-            logger.log(EngineEvent::Info(
-                event_details,
-                EventMessage::new_from_safe("Deleting secret containing tfstates".to_string()),
-            ));
-            let _ = delete_terraform_tfstate_secret(kubernetes, environment.namespace(), &get_tfstate_name(service));
-        }
-        Err(e) => {
-            let engine_err = EngineError::new_terraform_error(event_details, e);
-
-            logger.log(EngineEvent::Error(engine_err.clone(), None));
-
-            return Err(engine_err);
-        }
-    }
-
-    Ok(())
-}
-
 pub struct ServiceVersionCheckResult {
     requested_version: VersionsNumber,
     matched_version: VersionsNumber,
@@ -595,10 +220,8 @@ pub fn check_service_version<T>(
     logger: &dyn Logger,
 ) -> Result<ServiceVersionCheckResult, EngineError>
 where
-    T: Service + Listen,
+    T: Service,
 {
-    let listeners_helper = ListenersHelper::new(service.listeners());
-
     match result {
         Ok(version) => {
             if service.version() != version.as_str() {
@@ -613,15 +236,6 @@ where
                     event_details.clone(),
                     EventMessage::new_from_safe(message.to_string()),
                 ));
-
-                let progress_info = ProgressInfo::new(
-                    service.progress_scope(),
-                    Info,
-                    Some(message.to_string()),
-                    service.context().execution_id(),
-                );
-
-                listeners_helper.deployment_in_progress(progress_info);
 
                 return Ok(ServiceVersionCheckResult::new(
                     VersionsNumber::from_str(&service.version()).map_err(|e| {
@@ -645,21 +259,6 @@ where
             ))
         }
         Err(_err) => {
-            let message = format!(
-                "{} version {} is not supported!",
-                service.service_type().name(),
-                service.version(),
-            );
-
-            let progress_info = ProgressInfo::new(
-                service.progress_scope(),
-                ProgressLevel::Error,
-                Some(message),
-                service.context().execution_id(),
-            );
-
-            listeners_helper.deployment_error(progress_info);
-
             let error = EngineError::new_unsupported_version_error(
                 event_details,
                 service.service_type().name(),
@@ -671,49 +270,6 @@ where
             Err(error)
         }
     }
-}
-
-fn delete_terraform_tfstate_secret(
-    kubernetes: &dyn Kubernetes,
-    namespace: &str,
-    secret_name: &str,
-) -> Result<(), EngineError> {
-    let config_file_path = kubernetes.get_kubeconfig_file_path()?;
-
-    // create the namespace to insert the tfstate in secrets
-    let _ = kubectl_exec_delete_secret(
-        config_file_path,
-        namespace,
-        secret_name,
-        kubernetes.cloud_provider().credentials_environment_variables(),
-    );
-
-    Ok(())
-}
-
-pub enum CheckAction {
-    Deploy,
-    Pause,
-    Delete,
-}
-
-pub fn helm_uninstall_release(
-    kubernetes: &dyn Kubernetes,
-    environment: &Environment,
-    helm_release_name: &str,
-    event_details: EventDetails,
-) -> Result<(), EngineError> {
-    let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
-
-    let helm = helm::Helm::new(
-        &kubernetes_config_file_path,
-        &kubernetes.cloud_provider().credentials_environment_variables(),
-    )
-    .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))?;
-
-    let chart = ChartInfo::new_from_release_name(helm_release_name, environment.namespace());
-    helm.uninstall(&chart, &[])
-        .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))
 }
 
 pub fn get_tfstate_suffix(service: &dyn Service) -> String {

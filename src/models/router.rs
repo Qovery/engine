@@ -1,11 +1,11 @@
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
-use crate::cloud_provider::service::{default_tera_context, Action, Helm, Service, ServiceType};
+use crate::cloud_provider::service::{default_tera_context, Action, Service, ServiceType};
 use crate::cloud_provider::utilities::{check_domain_for, sanitize_name};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
-use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, ToTransmitter, Transmitter};
-use crate::io_models::{ApplicationAdvancedSettings, Context, Listen, Listener, Listeners, ListenersHelper};
+use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, Transmitter};
+use crate::io_models::{Context, Listener, Listeners, ListenersHelper};
 use crate::logger::Logger;
 use crate::models::types::CloudProvider;
 use crate::models::types::ToTeraContext;
@@ -110,7 +110,7 @@ impl<T: CloudProvider> Router<T> {
                     .iter()
                     .find(|app| app.name() == r.application_name.as_str())
                 {
-                    Some(application) => application.private_port().map(|private_port| RouteDataTemplate {
+                    Some(application) => application.public_port().map(|private_port| RouteDataTemplate {
                         path: r.path.clone(),
                         application_name: application.sanitized_name(),
                         application_port: private_port,
@@ -192,79 +192,41 @@ impl<T: CloudProvider> Router<T> {
                     .iter()
                     .find(|app| app.name() == r.application_name.as_str())
                 {
-                    if application.application_advanced_settings().is_some() {
-                        let advanced_settings = application
-                            .application_advanced_settings()
-                            .expect("expected application advanced settings");
-                        context.insert(
-                            "ingress_proxy_body_size_mb",
-                            &advanced_settings.network_ingress_proxy_body_size_mb,
-                        );
-                        context.insert("ingress_cors_enable", &advanced_settings.network_ingress_cors_enable);
-                        context.insert(
-                            "ingress_cors_allow_origin",
-                            &advanced_settings.network_ingress_cors_allow_origin,
-                        );
-                        context.insert(
-                            "ingress_cors_allow_methods",
-                            &advanced_settings.network_ingress_cors_allow_methods,
-                        );
-                        context.insert(
-                            "ingress_cors_allow_headers",
-                            &advanced_settings.network_ingress_cors_allow_headers,
-                        );
-                    }
+                    let advanced_settings = application.advanced_settings();
+                    context.insert(
+                        "ingress_proxy_body_size_mb",
+                        &advanced_settings.network_ingress_proxy_body_size_mb,
+                    );
+                    context.insert("ingress_cors_enable", &advanced_settings.network_ingress_cors_enable);
+                    context.insert(
+                        "ingress_cors_allow_origin",
+                        &advanced_settings.network_ingress_cors_allow_origin,
+                    );
+                    context.insert(
+                        "ingress_cors_allow_methods",
+                        &advanced_settings.network_ingress_cors_allow_methods,
+                    );
+                    context.insert(
+                        "ingress_cors_allow_headers",
+                        &advanced_settings.network_ingress_cors_allow_headers,
+                    );
                 }
             })
             .collect::<Vec<()>>();
 
         Ok(context)
     }
-}
 
-impl<T: CloudProvider> ToTransmitter for Router<T> {
-    fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Router(self.id.to_string(), self.name.to_string())
-    }
-}
-
-impl<T: CloudProvider> Listen for Router<T> {
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
-}
-
-impl<T: CloudProvider> Helm for Router<T> {
-    fn helm_selector(&self) -> Option<String> {
-        self.selector()
-    }
-
-    fn helm_release_name(&self) -> String {
+    pub fn helm_release_name(&self) -> String {
         crate::string::cut(format!("router-{}", self.id), 50)
     }
 
-    fn helm_chart_dir(&self) -> String {
+    pub fn helm_chart_dir(&self) -> String {
         format!(
             "{}/{}/charts/q-ingress-tls",
             self.context.lib_root_dir(),
             T::lib_directory_name()
         )
-    }
-
-    fn helm_chart_values_dir(&self) -> String {
-        format!(
-            "{}/{}/chart_values/nginx-ingress",
-            self.context.lib_root_dir(),
-            T::lib_directory_name()
-        )
-    }
-
-    fn helm_chart_external_name_service_dir(&self) -> String {
-        String::new()
     }
 }
 
@@ -293,10 +255,6 @@ impl<T: CloudProvider> Service for Router<T> {
         sanitize_name("router", self.id())
     }
 
-    fn application_advanced_settings(&self) -> Option<ApplicationAdvancedSettings> {
-        None
-    }
-
     fn version(&self) -> String {
         "1.0".to_string()
     }
@@ -305,40 +263,24 @@ impl<T: CloudProvider> Service for Router<T> {
         &self.action
     }
 
-    fn private_port(&self) -> Option<u16> {
-        None
-    }
-
-    fn total_cpus(&self) -> String {
-        "1".to_string()
-    }
-
-    fn cpu_burst(&self) -> String {
-        "1".to_string()
-    }
-
-    fn total_ram_in_mib(&self) -> u32 {
-        1
-    }
-
-    fn min_instances(&self) -> u32 {
-        1
-    }
-
-    fn max_instances(&self) -> u32 {
-        1
-    }
-
-    fn publicly_accessible(&self) -> bool {
-        false
+    fn selector(&self) -> Option<String> {
+        self.selector()
     }
 
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
     }
 
-    fn selector(&self) -> Option<String> {
-        self.selector()
+    fn listeners(&self) -> &Listeners {
+        &self.listeners
+    }
+
+    fn add_listener(&mut self, listener: Listener) {
+        self.listeners.push(listener);
+    }
+
+    fn to_transmitter(&self) -> Transmitter {
+        Transmitter::Router(self.id.to_string(), self.name.to_string())
     }
 
     fn as_service(&self) -> &dyn Service {
@@ -346,7 +288,7 @@ impl<T: CloudProvider> Service for Router<T> {
     }
 }
 
-pub trait RouterService: Service + DeploymentAction + Listen + Helm + ToTeraContext {
+pub trait RouterService: Service + DeploymentAction + ToTeraContext {
     /// all domains (auto-generated by Qovery and user custom domains) associated to the router
     fn has_custom_domains(&self) -> bool;
     fn check_domains(

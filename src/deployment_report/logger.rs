@@ -2,7 +2,7 @@ use crate::cloud_provider::service::{Action, Service};
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::io_models::ProgressLevel::Info;
-use crate::io_models::{Listen, ListenersHelper, ProgressInfo, ProgressLevel};
+use crate::io_models::{ListenersHelper, ProgressInfo, ProgressLevel};
 
 pub struct Loggers {
     pub send_progress: Box<dyn Fn(String) + Send>,
@@ -13,7 +13,7 @@ pub struct Loggers {
 // All that for the logger, lol ...
 pub fn get_loggers<Srv>(service: &Srv, action: Action) -> Loggers
 where
-    Srv: Service + Listen,
+    Srv: Service,
 {
     let log_progress = {
         let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Deploy));

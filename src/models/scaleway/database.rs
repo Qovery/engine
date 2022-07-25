@@ -1,10 +1,11 @@
 use crate::cloud_provider::service::{
-    check_service_version, default_tera_context, get_tfstate_name, get_tfstate_suffix, DatabaseOptions, Service,
+    check_service_version, default_tera_context, get_tfstate_name, get_tfstate_suffix, Service,
     ServiceVersionCheckResult,
 };
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage};
+use crate::io_models::DatabaseOptions;
 use crate::models::database::{
     Container, Database, DatabaseMode, DatabaseType, Managed, MongoDB, MySQL, PostgresSQL, Redis,
 };
@@ -144,13 +145,13 @@ impl<M: DatabaseMode, T: DatabaseType<SCW, M>> Database<SCW, M, T> {
         context.insert("kubernetes_cluster_name", kubernetes.name());
 
         context.insert("fqdn_id", self.fqdn_id.as_str());
-        context.insert("fqdn", self.fqdn(target, &self.fqdn, M::is_managed()).as_str());
+        context.insert("fqdn", self.fqdn(target, &self.fqdn).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
         context.insert("database_name", self.sanitized_name().as_str());
         context.insert("database_db_name", self.name());
         context.insert("database_login", options.login.as_str());
         context.insert("database_password", options.password.as_str());
-        context.insert("database_port", &self.private_port());
+        context.insert("database_port", &self.private_port);
         context.insert("database_disk_size_in_gib", &options.disk_size_in_gib);
         context.insert("database_instance_type", &self.database_instance_type);
         context.insert("database_disk_type", &options.database_disk_type);

@@ -39,7 +39,8 @@ use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, Infras
 use crate::fs::{delete_file_if_exists, workspace_directory};
 use crate::io_models::ProgressLevel::Info;
 use crate::io_models::{
-    Action, Context, Listen, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier, StringPath,
+    Action, Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+    QoveryIdentifier, StringPath,
 };
 use crate::logger::Logger;
 use crate::models::types::VersionsNumber;
@@ -50,7 +51,7 @@ use super::models::NodeGroupsWithDesiredState;
 
 pub trait ProviderOptions {}
 
-pub trait Kubernetes: Listen {
+pub trait Kubernetes {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
@@ -73,6 +74,8 @@ pub trait Kubernetes: Listen {
     fn logger(&self) -> &dyn Logger;
     fn config_file_store(&self) -> &dyn ObjectStorage;
     fn is_valid(&self) -> Result<(), EngineError>;
+    fn listeners(&self) -> &Listeners;
+    fn add_listener(&mut self, listener: Listener);
 
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         let context = self.context();
@@ -1281,7 +1284,7 @@ impl InstanceEc2 {
 /// long blocking task is running.
 pub fn send_progress_on_long_task<K, R, F>(kubernetes: &K, action: Action, long_task: F) -> R
 where
-    K: Kubernetes + Listen,
+    K: Kubernetes,
     F: Fn() -> R,
 {
     let waiting_message = match action {
@@ -1313,7 +1316,7 @@ pub fn send_progress_on_long_task_with_message<K, R, F>(
     long_task: F,
 ) -> R
 where
-    K: Kubernetes + Listen,
+    K: Kubernetes,
     F: Fn() -> R,
 {
     let listeners = std::clone::Clone::clone(kubernetes.listeners());
