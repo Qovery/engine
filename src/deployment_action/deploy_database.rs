@@ -65,6 +65,7 @@ struct DocDbClustersResponse {
 fn get_managed_database_status(
     db_type: service::DatabaseType,
     db_id: &str,
+    db_version: &str,
     credentials: &[(&str, &str)],
 ) -> Result<String, (cmd::command::CommandError, String)> {
     let mut cmd = match db_type {
@@ -78,11 +79,23 @@ fn get_managed_database_status(
             &["docdb", "describe-db-clusters", "--db-cluster-identifier", db_id],
             credentials,
         ),
-        service::DatabaseType::Redis => QoveryCommand::new(
-            "aws",
-            &["elasticache", "describe-cache-clusters", "--cache-cluster-id", db_id],
-            credentials,
-        ),
+        service::DatabaseType::Redis => match db_version.to_string().starts_with('5') {
+            true => QoveryCommand::new(
+                "aws",
+                &["elasticache", "describe-cache-clusters", "--cache-cluster-id", db_id],
+                credentials,
+            ),
+            false => QoveryCommand::new(
+                "aws",
+                &[
+                    "elasticache",
+                    "describe-cache-clusters",
+                    "--cache-cluster-id",
+                    format!("{}{}", db_id, "-001").as_str(),
+                ],
+                credentials,
+            ),
+        },
     };
 
     let mut output_stdout: Vec<String> = vec![];
@@ -176,6 +189,7 @@ fn await_db_state(
     timeout: Duration,
     db_type: service::DatabaseType,
     db_id: &str,
+    db_version: &str,
     credentials: &[(&str, &str)],
     state: &str,
 ) -> Result<(), Option<(cmd::command::CommandError, String)>> {
@@ -186,7 +200,7 @@ fn await_db_state(
             break Err(None);
         }
 
-        match get_managed_database_status(db_type, db_id, credentials) {
+        match get_managed_database_status(db_type, db_id, db_version, credentials) {
             Ok(status) if status == state => break Ok(()),
             Ok(_) => thread::sleep(Duration::from_secs(30)),
             Err(err) => break Err(Some(err)),
@@ -287,7 +301,7 @@ where
     };
 
     // If the database is not in the available state, try to start it
-    match get_managed_database_status(db.db_type(), &db.fqdn_id, &credentials) {
+    match get_managed_database_status(db.db_type(), &db.fqdn_id, db.version().as_str(), &credentials) {
         Ok(status) if status == DB_READY_STATE => {}
         Ok(_) | Err(_) => {
             let _ = start_stop_managed_database(db.db_type(), &db.fqdn_id, &credentials, false);
@@ -298,6 +312,7 @@ where
         Duration::from_secs(60 * 30),
         db.db_type(),
         &db.fqdn_id,
+        db.version().as_str(),
         &credentials,
         DB_READY_STATE,
     );
@@ -416,6 +431,7 @@ where
                 Duration::from_secs(60 * 30),
                 self.db_type(),
                 &self.fqdn_id,
+                self.version().as_str(),
                 &credentials,
                 DB_STOPPED_STATE,
             );
