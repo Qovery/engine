@@ -1,21 +1,21 @@
 #![allow(clippy::field_reassign_with_default)]
 
-use crate::errors::EngineError;
 use crate::events::{EngineEvent, EventDetails, EventMessage};
-use crate::io_models::{Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
 use crate::logger::Logger;
-use chrono::Duration;
 use core::option::Option::{None, Some};
 use core::result::Result;
 use core::result::Result::{Err, Ok};
 use retry::delay::Fixed;
 use retry::{Error, OperationResult};
-use std::fmt;
 use std::net::ToSocketAddrs;
 use std::net::{SocketAddr, TcpStream as NetTcpStream};
+use std::time::{Duration, Instant};
+use std::{fmt, thread};
 use trust_dns_resolver::config::*;
+use trust_dns_resolver::error::ResolveError;
+use trust_dns_resolver::lookup_ip::LookupIp;
 use trust_dns_resolver::proto::rr::{RData, RecordType};
-use trust_dns_resolver::Resolver;
+use trust_dns_resolver::{Name, Resolver};
 
 fn dns_resolvers() -> Vec<Resolver> {
     let mut resolver_options = ResolverOpts::default();
@@ -42,196 +42,67 @@ fn dns_resolvers() -> Vec<Resolver> {
     ]
 }
 
-fn get_cname_record_value(resolver: &Resolver, cname: &str) -> Option<String> {
-    resolver
-        .lookup(cname, RecordType::CNAME)
-        .iter()
-        .flat_map(|lookup| lookup.record_iter())
-        .filter_map(|record| {
-            if let RData::CNAME(cname) = record.rdata() {
-                Some(cname.to_utf8())
-            } else {
-                None
-            }
-        })
-        .next() // Can only have one domain behind a CNAME
+pub fn await_domain_resolve_cname<'a>(
+    domain_to_check: impl Fn() -> &'a str,
+    check_frequency: Duration,
+    timeout: Duration,
+) -> Result<Name, ResolveError> {
+    await_resolve(
+        &|resolver| {
+            resolver
+                .lookup(domain_to_check(), RecordType::CNAME)
+                .into_iter()
+                .flat_map(|lookup| lookup.into_iter())
+                .filter_map(|rdata| {
+                    if let RData::CNAME(cname) = rdata {
+                        Some(cname)
+                    } else {
+                        None
+                    }
+                })
+                .next()
+                .ok_or_else(|| ResolveError::from("no CNAME record available for this domain"))
+        },
+        check_frequency,
+        timeout,
+    )
 }
 
-pub fn check_cname_for(
-    scope: ProgressScope,
-    listeners: &Listeners,
-    cname_to_check: &str,
-    execution_id: &str,
-) -> Result<String, String> {
+pub fn await_domain_resolve_ip<'a>(
+    domain_to_check: impl Fn() -> &'a str,
+    check_frequency: Duration,
+    timeout: Duration,
+) -> Result<LookupIp, ResolveError> {
+    await_resolve(&|resolver| resolver.lookup_ip(domain_to_check()), check_frequency, timeout)
+}
+
+fn await_resolve<R>(
+    with_resolver: &impl Fn(&Resolver) -> Result<R, ResolveError>,
+    check_frequency: Duration,
+    timeout: Duration,
+) -> Result<R, ResolveError> {
+    let now = Instant::now();
     let resolvers = dns_resolvers();
-    let listener_helper = ListenersHelper::new(listeners);
 
-    let send_deployment_progress = |msg: &str| {
-        listener_helper.deployment_in_progress(ProgressInfo::new(
-            scope.clone(),
-            ProgressLevel::Info,
-            Some(msg.to_string()),
-            execution_id,
-        ));
-    };
-
-    let send_deployment_progress_warn = |msg: &str| {
-        listener_helper.deployment_in_progress(ProgressInfo::new(
-            scope.clone(),
-            ProgressLevel::Warn,
-            Some(msg.to_string()),
-            execution_id,
-        ));
-    };
-
-    send_deployment_progress(
-        format!(
-            "Checking CNAME resolution of '{}'. Please wait, it can take some time...",
-            cname_to_check
-        )
-        .as_str(),
-    );
-
-    // Trying for 5 min to resolve CNAME
     let mut ix: usize = 0;
     let mut next_resolver = || {
         let resolver = &resolvers[ix % resolvers.len()];
         ix += 1;
         resolver
     };
-    let fixed_iterable = Fixed::from_millis(Duration::seconds(5).num_milliseconds() as u64).take(6 * 5);
-    let check_result = retry::retry(fixed_iterable, || {
-        match get_cname_record_value(next_resolver(), cname_to_check) {
-            Some(domain) => OperationResult::Ok(domain),
-            None => {
-                let msg = format!("Cannot find domain under CNAME {}. Retrying in 5 seconds...", cname_to_check);
-                send_deployment_progress(msg.as_str());
-                OperationResult::Retry(msg)
-            }
-        }
-    });
 
-    match check_result {
-        Ok(domain) => {
-            send_deployment_progress(format!("Resolution of CNAME {} found to {}", cname_to_check, domain).as_str());
-        }
-        Err(_) => {
-            let msg = format!(
-                "Resolution of CNAME {} failed. Please check that you have correctly configured your CNAME. If you are using a CDN you can forget this message",
-                cname_to_check
-            );
-            send_deployment_progress_warn(msg.as_str());
-        }
-    }
-
-    // do not exit / rollback if domain is not ready, simply warn the user about it
-    Ok(cname_to_check.to_string())
-}
-
-pub fn check_domain_for(
-    listener_helper: ListenersHelper,
-    domains_to_check: Vec<&str>,
-    execution_id: &str,
-    context_id: &str,
-    event_details: EventDetails,
-    logger: &dyn Logger,
-) -> Result<(), EngineError> {
-    let resolvers = dns_resolvers();
-
-    for domain in domains_to_check {
-        let message = format!(
-            "Let's check domain resolution for '{}'. Please wait, it can take some time...",
-            domain
-        );
-
-        listener_helper.deployment_in_progress(ProgressInfo::new(
-            ProgressScope::Environment {
-                id: execution_id.to_string(),
-            },
-            ProgressLevel::Info,
-            Some(message.to_string()),
-            execution_id,
-        ));
-
-        let mut ix: usize = 0;
-        let mut next_resolver = || {
-            let resolver = &resolvers[ix % resolvers.len()];
-            ix += 1;
-            resolver
-        };
-
-        logger.log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe(message.to_string()),
-        ));
-
-        let fixed_iterable = Fixed::from_millis(3000).take(100);
-        let check_result = retry::retry(fixed_iterable, || match next_resolver().lookup_ip(domain) {
-            Ok(lookup_ip) => OperationResult::Ok(lookup_ip),
+    loop {
+        match with_resolver(next_resolver()) {
+            Ok(ip) => break Ok(ip),
             Err(err) => {
-                let x = format!("Domain resolution check for '{}' is still in progress...", domain);
+                if now.elapsed() >= timeout {
+                    break Err(err);
+                }
 
-                logger.log(EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(x.to_string()),
-                ));
-
-                listener_helper.deployment_in_progress(ProgressInfo::new(
-                    ProgressScope::Environment {
-                        id: execution_id.to_string(),
-                    },
-                    ProgressLevel::Info,
-                    Some(x),
-                    execution_id.to_string(),
-                ));
-
-                OperationResult::Retry(err)
-            }
-        });
-
-        match check_result {
-            Ok(_) => {
-                let x = format!("Domain {} is ready! ⚡️", domain);
-
-                logger.log(EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(message.to_string()),
-                ));
-
-                listener_helper.deployment_in_progress(ProgressInfo::new(
-                    ProgressScope::Environment {
-                        id: execution_id.to_string(),
-                    },
-                    ProgressLevel::Info,
-                    Some(x),
-                    context_id,
-                ));
-            }
-            Err(_) => {
-                let message = format!(
-                    "Unable to check domain availability for '{}'. It can be due to a \
-                        too long domain propagation. Note: this is not critical.",
-                    domain
-                );
-
-                logger.log(EngineEvent::Warning(
-                    event_details.clone(),
-                    EventMessage::new_from_safe(message.to_string()),
-                ));
-
-                listener_helper.deployment_in_progress(ProgressInfo::new(
-                    ProgressScope::Environment {
-                        id: execution_id.to_string(),
-                    },
-                    ProgressLevel::Warn,
-                    Some(message),
-                    context_id,
-                ));
+                thread::sleep(check_frequency)
             }
         }
     }
-
-    Ok(())
 }
 
 pub fn sanitize_name(prefix: &str, name: &str) -> String {
@@ -337,11 +208,12 @@ pub fn print_action(
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::utilities::{
-        check_tcp_port_is_open, dns_resolvers, get_cname_record_value, TcpCheckErrors, TcpCheckSource,
+        await_domain_resolve_cname, check_tcp_port_is_open, TcpCheckErrors, TcpCheckSource,
     };
     use crate::errors::CommandError;
     use crate::models::types::VersionsNumber;
     use std::str::FromStr;
+    use std::time::Duration;
 
     #[test]
     pub fn test_port_open() {
@@ -363,10 +235,13 @@ mod tests {
 
     #[test]
     pub fn test_cname_resolution() {
-        let resolvers = dns_resolvers();
-        let cname = get_cname_record_value(&resolvers[0], "ci-test-no-delete.qovery.io");
+        let cname = await_domain_resolve_cname(
+            || "ci-test-no-delete.qovery.io",
+            Duration::from_secs(10),
+            Duration::from_secs(30),
+        );
 
-        assert_eq!(cname, Some(String::from("qovery.io.")));
+        assert_eq!(cname.unwrap().to_utf8(), String::from("qovery.io."));
     }
 
     #[test]
