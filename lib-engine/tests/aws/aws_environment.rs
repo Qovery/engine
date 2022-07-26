@@ -1,22 +1,20 @@
 extern crate test_utilities;
 
 use self::test_utilities::common::{session_is_sticky, Infrastructure};
-use self::test_utilities::utilities::{
-    engine_run_test, generate_id, get_pods, get_pvc, is_pod_restarted_env, logger, FuncTestsSecrets,
-};
+use self::test_utilities::utilities::{engine_run_test, get_pods, logger, FuncTestsSecrets};
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::io_models::{Action, CloneForTest, CustomDomain, Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::context::CloneForTest;
+use qovery_engine::io_models::router::CustomDomain;
+use qovery_engine::io_models::Action;
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
 use retry::delay::Fibonacci;
 use std::borrow::BorrowMut;
-use std::collections::BTreeMap;
 use test_utilities::aws::aws_default_engine_config;
 use test_utilities::utilities::{context, init, kubernetes_config_path};
 use tracing::{span, Level};
 use url::Url;
-use uuid::Uuid;
 
 #[cfg(feature = "test-aws-minimal")]
 #[named]
@@ -314,7 +312,7 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
                 app.dockerfile_path = None;
                 app
             })
-            .collect::<Vec<qovery_engine::io_models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::application::Application>>();
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -385,7 +383,7 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
                 app.dockerfile_path = None;
                 app
             })
-            .collect::<Vec<qovery_engine::io_models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::application::Application>>();
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -586,7 +584,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
                 }];
                 app
             })
-            .collect::<Vec<qovery_engine::io_models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::application::Application>>();
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -669,7 +667,7 @@ fn redeploy_same_app_with_ebs() {
                 }];
                 app
             })
-            .collect::<Vec<qovery_engine::io_models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::application::Application>>();
         let environment_redeploy = environment.clone();
         let environment_check1 = environment.clone();
         let environment_check2 = environment.clone();
@@ -764,7 +762,7 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
                 app.environment_vars = BTreeMap::default();
                 app
             })
-            .collect::<Vec<qovery_engine::io_models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::application::Application>>();
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
 
@@ -842,7 +840,7 @@ fn deploy_ok_fail_fail_ok_environment() {
                 app.environment_vars = BTreeMap::default();
                 app
             })
-            .collect::<Vec<qovery_engine::io_models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::application::Application>>();
 
         // not working 2
         let context_for_not_working_2 = context.clone_not_same_execution_id();

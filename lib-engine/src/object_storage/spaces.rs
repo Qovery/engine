@@ -11,7 +11,8 @@ use rusoto_s3::{
 };
 use tokio::io;
 
-use crate::io_models::{Context, StringPath};
+use crate::io_models::context::Context;
+use crate::io_models::domain::StringPath;
 use crate::models::digital_ocean::DoRegion;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::{Kind, ObjectStorage};

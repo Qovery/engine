@@ -5,7 +5,8 @@ use url::Url;
 use crate::dns_provider::errors::DnsProviderError;
 use crate::dns_provider::Kind;
 use crate::dns_provider::{DnsProvider, DnsProviderConfiguration};
-use crate::io_models::{Context, Domain};
+use crate::io_models::context::Context;
+use crate::io_models::domain::Domain;
 
 #[derive(Clone)]
 pub struct QoveryDnsConfig {

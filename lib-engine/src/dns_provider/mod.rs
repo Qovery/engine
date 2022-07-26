@@ -5,7 +5,8 @@ use crate::dns_provider::errors::DnsProviderError;
 use crate::dns_provider::qoverydns::QoveryDnsConfig;
 use tera::Context as TeraContext;
 
-use crate::io_models::{Context, Domain};
+use crate::io_models::context::Context;
+use crate::io_models::domain::Domain;
 
 pub mod cloudflare;
 pub mod errors;

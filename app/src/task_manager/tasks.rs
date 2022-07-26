@@ -18,9 +18,9 @@ use qovery_engine::errors;
 use qovery_engine::errors::ErrorMessageVerbosity;
 use qovery_engine::events::Stage::Infrastructure;
 use qovery_engine::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
-use qovery_engine::io_models::{
-    Context, ProgressInfo, ProgressLevel, ProgressListener, ProgressScope, QoveryIdentifier,
-};
+use qovery_engine::io_models::context::Context;
+use qovery_engine::io_models::progress_listener::{ProgressInfo, ProgressLevel, ProgressListener, ProgressScope};
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::Logger;
 use qovery_engine::object_storage::errors::ObjectStorageError;
 use qovery_engine::transaction::{RollbackError, StepName, Transaction, TransactionResult};

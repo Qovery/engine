@@ -5,7 +5,7 @@ use crate::cloud_provider::service::{
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage};
-use crate::io_models::DatabaseOptions;
+use crate::io_models::database::DatabaseOptions;
 use crate::models::database::{
     Container, Database, DatabaseMode, DatabaseType, Managed, MongoDB, MySQL, PostgresSQL, Redis,
 };

@@ -12,7 +12,7 @@ use crate::utils::LogErrorOnDrop;
 use core::fmt;
 use core::fmt::Formatter;
 use prometheus::{self, IntGauge};
-use qovery_engine::io_models::{ProgressLevel, ProgressScope};
+use qovery_engine::io_models::progress_listener::{ProgressLevel, ProgressScope};
 use qovery_engine::logger::Logger;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
@@ -302,7 +302,7 @@ mod tests {
     use crate::task_manager::scheduler::{ActionContext, State, Status, Task, TaskManager};
     use chrono::{DateTime, NaiveDateTime, Utc};
     use crossbeam_channel::Sender;
-    use qovery_engine::io_models::{ProgressLevel, ProgressScope};
+    use qovery_engine::io_models::progress_listener::{ProgressLevel, ProgressScope};
     use qovery_engine::logger::{Logger, StdIoLogger};
     use std::sync::atomic::Ordering::Acquire;
     use std::sync::atomic::{AtomicBool, Ordering};

@@ -14,7 +14,9 @@ use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::cmd::terraform::TerraformError;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventDetails, EventMessage, Stage, Transmitter};
-use crate::io_models::{Context, Listener, Listeners, ProgressScope, QoveryIdentifier};
+use crate::io_models::context::Context;
+use crate::io_models::progress_listener::{Listener, Listeners, ProgressScope};
+use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 
 use crate::models::types::VersionsNumber;
