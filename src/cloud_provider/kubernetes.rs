@@ -57,6 +57,7 @@ pub trait Kubernetes {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
+    fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
 
     fn name_with_id(&self) -> String {
@@ -579,6 +580,16 @@ pub fn deploy_environment(
             .map_err(|err| (deployed_services.clone(), err))?;
     }
 
+    for service in &environment.containers {
+        deployed_services.insert(*service.long_id());
+        service
+            .exec_action(&deployment_target, *service.action())
+            .map_err(|err| (deployed_services.clone(), err))?;
+        service
+            .exec_check_action(*service.action())
+            .map_err(|err| (deployed_services.clone(), err))?;
+    }
+
     // create all applications
     for service in &environment.applications {
         deployed_services.insert(*service.long_id());
@@ -627,6 +638,16 @@ pub fn pause_environment(
     }
 
     for service in &environment.applications {
+        deployed_services.insert(*service.long_id());
+        service
+            .on_pause(&deployment_target)
+            .map_err(|err| (deployed_services.clone(), err))?;
+        service
+            .on_pause_check()
+            .map_err(|err| (deployed_services.clone(), err))?;
+    }
+
+    for service in &environment.containers {
         deployed_services.insert(*service.long_id());
         service
             .on_pause(&deployment_target)
@@ -698,6 +719,16 @@ pub fn delete_environment(
     }
 
     for service in &environment.applications {
+        deployed_services.insert(*service.long_id());
+        service
+            .on_delete(&deployment_target)
+            .map_err(|err| (deployed_services.clone(), err))?;
+        service
+            .on_delete_check()
+            .map_err(|err| (deployed_services.clone(), err))?;
+    }
+
+    for service in &environment.containers {
         deployed_services.insert(*service.long_id());
         service
             .on_delete(&deployment_target)

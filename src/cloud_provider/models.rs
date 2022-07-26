@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct EnvironmentVariable {
     pub key: String,
     pub value: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EnvironmentVariableDataTemplate {
     pub key: String,
     pub value: String,
@@ -22,7 +22,7 @@ pub struct Storage<T> {
     pub snapshot_retention_in_days: u16,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StorageDataTemplate {
     pub id: String,
     pub name: String,

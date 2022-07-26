@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct ProgressInfo {
@@ -35,6 +36,7 @@ pub enum ProgressScope {
     Infrastructure { execution_id: String },
     Database { id: String },
     Application { id: String },
+    Container { id: Uuid },
     Router { id: String },
     Environment { id: String },
 }

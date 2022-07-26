@@ -1,5 +1,6 @@
 use crate::cloud_provider::service::Action;
 use crate::models::application::ApplicationService;
+use crate::models::container::ContainerService;
 use crate::models::database::DatabaseService;
 use crate::models::router::RouterService;
 use crate::utilities::to_short_id;
@@ -16,6 +17,7 @@ pub struct Environment {
     pub organization_long_id: Uuid,
     pub action: Action,
     pub applications: Vec<Box<dyn ApplicationService>>,
+    pub containers: Vec<Box<dyn ContainerService>>,
     pub routers: Vec<Box<dyn RouterService>>,
     pub databases: Vec<Box<dyn DatabaseService>>,
 }
@@ -27,6 +29,7 @@ impl Environment {
         organization_long_id: Uuid,
         action: Action,
         applications: Vec<Box<dyn ApplicationService>>,
+        containers: Vec<Box<dyn ContainerService>>,
         routers: Vec<Box<dyn RouterService>>,
         databases: Vec<Box<dyn DatabaseService>>,
     ) -> Self {
@@ -43,6 +46,7 @@ impl Environment {
             organization_long_id,
             action,
             applications,
+            containers,
             routers,
             databases,
         }

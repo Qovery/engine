@@ -253,6 +253,11 @@ pub enum Transmitter {
         name: TransmitterName,
         commit: TransmitterVersion,
     },
+    Container {
+        id: TransmitterId,
+        name: TransmitterName,
+        image: TransmitterVersion,
+    },
     Router {
         id: TransmitterId,
         name: TransmitterName,
@@ -276,6 +281,11 @@ impl From<events::Transmitter> for Transmitter {
             events::Transmitter::Application(id, name, commit) => Transmitter::Application { id, name, commit },
             events::Transmitter::Router(id, name) => Transmitter::Router { id, name },
             events::Transmitter::SecretManager(name) => Transmitter::SecretManager { name },
+            events::Transmitter::Container(id, name, version) => Transmitter::Container {
+                id,
+                name,
+                image: version,
+            },
         }
     }
 }

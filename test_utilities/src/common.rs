@@ -403,6 +403,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 advanced_settings: Default::default(),
             },
         ],
+        containers: vec![],
         routers: vec![
             Router {
                 long_id: Uuid::new_v4(),
@@ -560,6 +561,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
             cpu_burst: "100m".to_string(),
             advanced_settings: Default::default(),
         }],
+        containers: vec![],
         routers: vec![Router {
             long_id: Uuid::new_v4(),
             name: router_name,
@@ -613,6 +615,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             cpu_burst: "100m".to_string(),
             advanced_settings: Default::default(),
         }],
+        containers: vec![],
         routers: vec![],
         databases: vec![],
         clone_from_environment_id: None,
@@ -654,6 +657,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             cpu_burst: "100m".to_string(),
             advanced_settings: Default::default(),
         }],
+        containers: vec![],
         routers: vec![],
         databases: vec![],
         clone_from_environment_id: None,
@@ -799,6 +803,7 @@ pub fn environnement_2_app_2_routers_1_psql(
                 advanced_settings: Default::default(),
             },
         ],
+        containers: vec![],
         routers: vec![
             Router {
                 long_id: Uuid::new_v4(),
@@ -894,6 +899,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             cpu_burst: "100m".to_string(),
             advanced_settings: Default::default(),
         }],
+        containers: vec![],
         routers: vec![Router {
             long_id: Uuid::new_v4(),
             name: "main".to_string(),
@@ -954,6 +960,7 @@ pub fn environment_only_http_server(context: &Context) -> EnvironmentRequest {
             cpu_burst: "100m".to_string(),
             advanced_settings: Default::default(),
         }],
+        containers: vec![],
         routers: vec![],
         databases: vec![],
         clone_from_environment_id: None,
@@ -1003,6 +1010,7 @@ pub fn environment_only_http_server_router(context: &Context, test_domain: &str)
             cpu_burst: "100m".to_string(),
             advanced_settings: Default::default(),
         }],
+        containers: vec![],
         routers: vec![Router {
             long_id: Uuid::new_v4(),
             name: "main".to_string(),

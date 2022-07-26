@@ -6,7 +6,7 @@ use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::cloud_provider::utilities::sanitize_name;
 use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
-use crate::io_models::application::{ApplicationAdvancedSettings, ApplicationAdvancedSettingsProbeType, Port};
+use crate::io_models::application::{AdvancedSettingsProbeType, ApplicationAdvancedSettings, Port};
 use crate::io_models::context::Context;
 use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::io_models::QoveryIdentifier;
@@ -211,17 +211,17 @@ impl<T: CloudProvider> Application<T> {
         );
 
         match self.advanced_settings.readiness_probe_type {
-            ApplicationAdvancedSettingsProbeType::None => {
+            AdvancedSettingsProbeType::None => {
                 context.insert("readiness_probe_enabled", &false);
                 context.insert("readiness_probe_tcp_enabled", &false);
                 context.insert("readiness_probe_http_enabled", &false);
             }
-            ApplicationAdvancedSettingsProbeType::Tcp => {
+            AdvancedSettingsProbeType::Tcp => {
                 context.insert("readiness_probe_enabled", &true);
                 context.insert("readiness_probe_tcp_enabled", &true);
                 context.insert("readiness_probe_http_enabled", &false);
             }
-            ApplicationAdvancedSettingsProbeType::Http => {
+            AdvancedSettingsProbeType::Http => {
                 context.insert("readiness_probe_enabled", &true);
                 context.insert("readiness_probe_tcp_enabled", &false);
                 context.insert("readiness_probe_http_enabled", &true);
@@ -229,17 +229,17 @@ impl<T: CloudProvider> Application<T> {
         };
 
         match self.advanced_settings.liveness_probe_type {
-            ApplicationAdvancedSettingsProbeType::None => {
+            AdvancedSettingsProbeType::None => {
                 context.insert("liveness_probe_enabled", &false);
                 context.insert("liveness_probe_tcp_enabled", &false);
                 context.insert("liveness_probe_http_enabled", &false);
             }
-            ApplicationAdvancedSettingsProbeType::Tcp => {
+            AdvancedSettingsProbeType::Tcp => {
                 context.insert("liveness_probe_enabled", &true);
                 context.insert("liveness_probe_tcp_enabled", &true);
                 context.insert("liveness_probe_http_enabled", &false);
             }
-            ApplicationAdvancedSettingsProbeType::Http => {
+            AdvancedSettingsProbeType::Http => {
                 context.insert("liveness_probe_enabled", &true);
                 context.insert("liveness_probe_tcp_enabled", &false);
                 context.insert("liveness_probe_http_enabled", &true);
