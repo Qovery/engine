@@ -104,12 +104,7 @@ pub trait Kubernetes {
             file_path,
         ) {
             let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-            return Err(EngineError::new_object_storage_cannot_put_file_into_bucket_error(
-                event_details,
-                self.get_bucket_name(),
-                self.get_kubeconfig_filename(),
-                e,
-            ));
+            return Err(EngineError::new_object_storage_error(event_details, e));
         };
         Ok(())
     }
@@ -120,12 +115,7 @@ pub trait Kubernetes {
             .ensure_file_is_absent(self.get_bucket_name().as_str(), self.get_kubeconfig_filename().as_str())
         {
             let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-            return Err(EngineError::new_object_storage_cannot_delete_file_into_bucket_error(
-                event_details,
-                self.get_bucket_name(),
-                self.get_kubeconfig_filename(),
-                e,
-            ));
+            return Err(EngineError::new_object_storage_error(event_details, e));
         };
         Ok(())
     }

@@ -193,13 +193,15 @@ impl Spaces {
                 match file {
                     Ok(mut created_file) => match io::copy(&mut body, &mut created_file).await {
                         Ok(_) => Ok(File::open(download_into_file_path.as_ref()).unwrap()),
-                        Err(e) => Err(ObjectStorageError::CannotReadFile {
+                        Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
                             bucket_name: bucket_name.to_string(),
+                            file_name: object_key.to_string(),
                             raw_error_message: e.to_string(),
                         }),
                     },
-                    Err(e) => Err(ObjectStorageError::CannotOpenFile {
+                    Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
                         bucket_name: bucket_name.to_string(),
+                        file_name: object_key.to_string(),
                         raw_error_message: e.to_string(),
                     }),
                 }
@@ -299,8 +301,9 @@ impl ObjectStorage for Spaces {
             self.context().execution_id(),
             format!("object-storage/spaces/{}", self.name()),
         )
-        .map_err(|err| ObjectStorageError::CannotGetWorkspace {
+        .map_err(|err| ObjectStorageError::CannotGetObjectFile {
             bucket_name: bucket_name.to_string(),
+            file_name: object_key.to_string(),
             raw_error_message: err.to_string(),
         })?;
 
@@ -337,8 +340,9 @@ impl ObjectStorage for Spaces {
 
         match file {
             Ok(file) => Ok((file_path, file)),
-            Err(err) => Err(ObjectStorageError::CannotOpenFile {
+            Err(err) => Err(ObjectStorageError::CannotGetObjectFile {
                 bucket_name: bucket_name.to_string(),
+                file_name: object_key.to_string(),
                 raw_error_message: err.to_string(),
             }),
         }
@@ -356,8 +360,9 @@ impl ObjectStorage for Spaces {
             body: Some(StreamingBody::from(match std::fs::read(file_path) {
                 Ok(x) => x,
                 Err(e) => {
-                    return Err(ObjectStorageError::CannotReadFile {
+                    return Err(ObjectStorageError::CannotUploadFile {
                         bucket_name: bucket_name.to_string(),
+                        file_name: object_key.to_string(),
                         raw_error_message: e.to_string(),
                     })
                 }
@@ -367,6 +372,7 @@ impl ObjectStorage for Spaces {
             Ok(_) => Ok(()),
             Err(e) => Err(ObjectStorageError::CannotUploadFile {
                 bucket_name: bucket_name.to_string(),
+                file_name: object_key.to_string(),
                 raw_error_message: e.to_string(),
             }),
         }
@@ -393,6 +399,7 @@ impl ObjectStorage for Spaces {
             Ok(_) => Ok(()),
             Err(e) => Err(ObjectStorageError::CannotDeleteFile {
                 bucket_name: bucket_name.to_string(),
+                file_name: object_key.to_string(),
                 raw_error_message: e.to_string(),
             }),
         }
