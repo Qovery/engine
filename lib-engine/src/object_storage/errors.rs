@@ -1,7 +1,12 @@
 use thiserror::Error;
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Clone, Error, Debug, PartialEq)]
 pub enum ObjectStorageError {
+    #[error("Quotas exceeded while performing action on `{bucket_name:?}`: {raw_error_message:?}.")]
+    QuotasExceeded {
+        bucket_name: String,
+        raw_error_message: String,
+    },
     #[error("Invalid bucket name error for `{bucket_name:?}`: {raw_error_message:?}.")]
     InvalidBucketName {
         bucket_name: String,
@@ -27,23 +32,8 @@ pub enum ObjectStorageError {
         bucket_name: String,
         raw_error_message: String,
     },
-    #[error("Cannot get workspace error for `{bucket_name:?}`: {raw_error_message:?}.")]
-    CannotGetWorkspace {
-        bucket_name: String,
-        raw_error_message: String,
-    },
-    #[error("Cannot create file error for `{bucket_name:?}`: {raw_error_message:?}.")]
-    CannotCreateFile {
-        bucket_name: String,
-        raw_error_message: String,
-    },
-    #[error("Cannot open file error for `{bucket_name:?}`: {raw_error_message:?}.")]
-    CannotOpenFile {
-        bucket_name: String,
-        raw_error_message: String,
-    },
-    #[error("Cannot read file error for `{bucket_name:?}`: {raw_error_message:?}.")]
-    CannotReadFile {
+    #[error("Cannot activate bucket versioning on bucket `{bucket_name:?}`: {raw_error_message:?}.")]
+    CannotActivateBucketVersioning {
         bucket_name: String,
         raw_error_message: String,
     },
@@ -56,11 +46,13 @@ pub enum ObjectStorageError {
     #[error("Cannot upload file error for `{bucket_name:?}`: {raw_error_message:?}.")]
     CannotUploadFile {
         bucket_name: String,
+        file_name: String,
         raw_error_message: String,
     },
     #[error("Cannot delete file error for `{bucket_name:?}`: {raw_error_message:?}.")]
     CannotDeleteFile {
         bucket_name: String,
+        file_name: String,
         raw_error_message: String,
     },
 }

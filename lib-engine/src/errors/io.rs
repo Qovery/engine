@@ -83,9 +83,7 @@ pub enum Tag {
     CannotGetSupportedVersions,
     CannotGetCluster,
     ContainerRegistryError,
-    ObjectStorageCannotCreateBucket,
-    ObjectStorageCannotPutFileIntoBucket,
-    ObjectStorageCannotDeleteFileIntoBucket,
+
     NoClusterFound,
     OnlyOneClusterExpected,
     CloudProviderApiMissingInfo,
@@ -125,6 +123,12 @@ pub enum Tag {
     ObjectStorageCannotEmptyBucket,
     ObjectStorageCannotTagBucket,
     ObjectStorageCannotActivateBucketVersioning,
+    ObjectStorageCannotDeleteBucket,
+    ObjectStorageQuotaExceeded,
+    ObjectStorageCannotGetObjectFile,
+    ObjectStorageCannotCreateBucket,
+    ObjectStorageCannotPutFileIntoBucket,
+    ObjectStorageCannotDeleteFileIntoBucket,
     KubeconfigFileDoNotPermitToConnectToK8sCluster,
     KubeconfigSecurityCheckError,
     DeleteLocalKubeconfigFileError,
@@ -306,6 +310,9 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CannotPauseManagedDatabase => Tag::CannotPauseManagedDatabase,
             errors::Tag::TerraformCloudProviderQuotasReached => Tag::TerraformCloudProviderQuotasReached,
             errors::Tag::TerraformCloudProviderActivationRequired => Tag::TerraformCloudProviderActivationRequired,
+            errors::Tag::ObjectStorageCannotDeleteBucket => Tag::ObjectStorageCannotDeleteBucket,
+            errors::Tag::ObjectStorageQuotaExceeded => Tag::ObjectStorageQuotaExceeded,
+            errors::Tag::ObjectStorageCannotGetObjectFile => Tag::ObjectStorageCannotGetObjectFile,
             errors::Tag::TerraformInvalidCredentials => Tag::TerraformInvalidCredentials,
         }
     }
