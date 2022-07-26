@@ -2,7 +2,7 @@ extern crate test_utilities;
 
 use qovery_engine::cloud_provider::aws::AWS;
 
-use qovery_engine::io_models::{DatabaseKind, DatabaseMode};
+use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 
 use self::test_utilities::utilities::{
     context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets,
