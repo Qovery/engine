@@ -881,6 +881,7 @@ impl EngineError {
                     EngineErrorScope::Application(id, name, commit) => Transmitter::Application(id, name, commit),
                     EngineErrorScope::Router(id, name) => Transmitter::Router(id, name),
                     EngineErrorScope::SecretManager(id) => Transmitter::SecretManager(id),
+                    EngineErrorScope::Container(id, name, version) => Transmitter::Container(id, name, version),
                 },
             ),
             user_log_message: message,

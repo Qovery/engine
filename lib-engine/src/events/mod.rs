@@ -391,6 +391,8 @@ pub enum Transmitter {
     Database(TransmitterId, TransmitterType, TransmitterName),
     /// Application: application engine part.
     Application(TransmitterId, TransmitterName, TransmitterVersion),
+    /// Application: application engine part.
+    Container(TransmitterId, TransmitterName, TransmitterVersion),
     /// Router: router engine part.
     Router(TransmitterId, TransmitterName),
     /// SecretManager: secret manager part
@@ -415,6 +417,8 @@ impl Display for Transmitter {
                     format!("application({}, {}, commit: {})", id, name, version),
                 Transmitter::Router(id, name) => format!("router({}, {})", id, name),
                 Transmitter::SecretManager(name) => format!("secret_manager({})", name),
+                Transmitter::Container(id, name, version) =>
+                    format!("container({}, {}, version: {})", id, name, version),
             }
         )
     }

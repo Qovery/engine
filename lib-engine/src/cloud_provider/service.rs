@@ -34,6 +34,7 @@ pub trait Service {
             ServiceType::Application => "applications",
             ServiceType::Database(_) => "databases",
             ServiceType::Router => "routers",
+            ServiceType::Container => "containers",
         };
 
         crate::fs::workspace_directory(
@@ -70,6 +71,7 @@ pub trait Service {
             ServiceType::Application => ProgressScope::Application { id },
             ServiceType::Database(_) => ProgressScope::Database { id },
             ServiceType::Router => ProgressScope::Router { id },
+            ServiceType::Container => ProgressScope::Container { id: *self.long_id() },
         }
     }
 
@@ -108,6 +110,7 @@ pub enum ServiceType {
     Application,
     Database(DatabaseType),
     Router,
+    Container,
 }
 
 impl ServiceType {
@@ -116,6 +119,7 @@ impl ServiceType {
             ServiceType::Application => "Application".to_string(),
             ServiceType::Database(db_type) => format!("{} database", db_type.to_string()),
             ServiceType::Router => "Router".to_string(),
+            ServiceType::Container => "Container".to_string(),
         }
     }
 }
