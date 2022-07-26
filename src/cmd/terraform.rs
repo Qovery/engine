@@ -175,7 +175,7 @@ impl Display for TerraformError {
                 terraform_args,
                 raw_message,
             } => format!(
-                "Unknown error while performing `terraform {}`.\n{}",
+                "Unknown error while performing Terraform command (terraform {}), here is the error:\n{}",
                 terraform_args.join(" "),
                 raw_message
             ),
@@ -579,14 +579,10 @@ fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Terraf
 
     match result {
         Ok(_) => Ok(stdout),
-        Err(_) => Err(TerraformError::Unknown {
-            terraform_args: args.iter().map(|e| e.to_string()).collect(),
-            raw_message: format!(
-                "Terraform command (terraform {}) failed, here is the error:\n{}",
-                args.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(" "),
-                stderr.join("\n")
-            ),
-        }),
+        Err(_) => Err(TerraformError::new(
+            args.iter().map(|e| e.to_string()).collect(),
+            stderr.join("\n"),
+        )),
     }
 }
 
