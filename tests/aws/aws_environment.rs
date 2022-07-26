@@ -4,6 +4,7 @@ use self::test_utilities::common::{session_is_sticky, Infrastructure};
 use self::test_utilities::utilities::{engine_run_test, get_pods, logger, FuncTestsSecrets};
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::router::CustomDomain;
 use qovery_engine::io_models::Action;
@@ -11,10 +12,12 @@ use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
 use retry::delay::Fibonacci;
 use std::borrow::BorrowMut;
+use std::collections::BTreeMap;
 use test_utilities::aws::aws_default_engine_config;
-use test_utilities::utilities::{context, init, kubernetes_config_path};
+use test_utilities::utilities::{context, generate_id, get_pvc, init, is_pod_restarted_env, kubernetes_config_path};
 use tracing::{span, Level};
 use url::Url;
+use uuid::Uuid;
 
 #[cfg(feature = "test-aws-minimal")]
 #[named]

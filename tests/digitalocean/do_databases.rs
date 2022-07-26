@@ -1,18 +1,23 @@
 use ::function_name::named;
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
-use qovery_engine::io_models::{DatabaseKind, DatabaseMode};
+use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use qovery_engine::transaction::TransactionResult;
-use test_utilities::utilities::{context, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
+use test_utilities::utilities::{
+    context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, logger, FuncTestsSecrets,
+};
 use tracing::{span, warn, Level};
+use uuid::Uuid;
 
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
+use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::context::CloneForTest;
+use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::Action;
-use qovery_engine::io_models::DatabaseMode::CONTAINER;
+use qovery_engine::utilities::to_short_id;
 use test_utilities::common::{database_test_environment, test_db, ClusterDomain, Infrastructure};
 use test_utilities::digitalocean::{
-    clean_environments, do_default_engine_config, DO_SELF_HOSTED_DATABASE_DISK_TYPE,
-    DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE, DO_TEST_REGION,
+    clean_environments, do_default_engine_config, DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE,
+    DO_SELF_HOSTED_DATABASE_DISK_TYPE, DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE, DO_TEST_REGION,
 };
 
 /**
