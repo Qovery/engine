@@ -1,20 +1,21 @@
 use crate::cloud_provider::helm::ChartSetValue;
 use crate::cloud_provider::service::{delete_pending_service, get_database_terraform_config, Action, Service};
-use crate::cloud_provider::utilities::{check_domain_for, print_action};
+use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::Kind::Aws;
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::cmd;
 use crate::cmd::command::QoveryCommand;
 use crate::constants::AWS_DEFAULT_REGION;
+use crate::deployment_action::check_dns::CheckDnsForDomains;
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::deploy_terraform::TerraformDeployment;
 use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::database::reporter::DatabaseDeploymentReporter;
 use crate::deployment_report::execute_long_deployment;
+use crate::deployment_report::logger::get_loggers;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
-use crate::io_models::ListenersHelper;
 use crate::models::database::{Container, Database, DatabaseService, DatabaseType, Managed};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;
@@ -64,6 +65,7 @@ struct DocDbClustersResponse {
 fn get_managed_database_status(
     db_type: service::DatabaseType,
     db_id: &str,
+    db_version: &str,
     credentials: &[(&str, &str)],
 ) -> Result<String, (cmd::command::CommandError, String)> {
     let mut cmd = match db_type {
@@ -77,11 +79,23 @@ fn get_managed_database_status(
             &["docdb", "describe-db-clusters", "--db-cluster-identifier", db_id],
             credentials,
         ),
-        service::DatabaseType::Redis => QoveryCommand::new(
-            "aws",
-            &["elasticache", "describe-cache-clusters", "--cache-cluster-id", db_id],
-            credentials,
-        ),
+        service::DatabaseType::Redis => match db_version.to_string().starts_with('5') {
+            true => QoveryCommand::new(
+                "aws",
+                &["elasticache", "describe-cache-clusters", "--cache-cluster-id", db_id],
+                credentials,
+            ),
+            false => QoveryCommand::new(
+                "aws",
+                &[
+                    "elasticache",
+                    "describe-cache-clusters",
+                    "--cache-cluster-id",
+                    format!("{}{}", db_id, "-001").as_str(),
+                ],
+                credentials,
+            ),
+        },
     };
 
     let mut output_stdout: Vec<String> = vec![];
@@ -175,6 +189,7 @@ fn await_db_state(
     timeout: Duration,
     db_type: service::DatabaseType,
     db_id: &str,
+    db_version: &str,
     credentials: &[(&str, &str)],
     state: &str,
 ) -> Result<(), Option<(cmd::command::CommandError, String)>> {
@@ -185,7 +200,7 @@ fn await_db_state(
             break Err(None);
         }
 
-        match get_managed_database_status(db_type, db_id, credentials) {
+        match get_managed_database_status(db_type, db_id, db_version, credentials) {
             Ok(status) if status == state => break Ok(()),
             Ok(_) => thread::sleep(Duration::from_secs(30)),
             Err(err) => break Err(Some(err)),
@@ -286,7 +301,7 @@ where
     };
 
     // If the database is not in the available state, try to start it
-    match get_managed_database_status(db.db_type(), &db.fqdn_id, &credentials) {
+    match get_managed_database_status(db.db_type(), &db.fqdn_id, db.version().as_str(), &credentials) {
         Ok(status) if status == DB_READY_STATE => {}
         Ok(_) | Err(_) => {
             let _ = start_stop_managed_database(db.db_type(), &db.fqdn_id, &credentials, false);
@@ -297,6 +312,7 @@ where
         Duration::from_secs(60 * 30),
         db.db_type(),
         &db.fqdn_id,
+        db.version().as_str(),
         &credentials,
         DB_READY_STATE,
     );
@@ -353,19 +369,19 @@ where
             T::db_type().to_string().as_str(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
 
         if self.publicly_accessible {
-            check_domain_for(
-                ListenersHelper::new(&self.listeners),
-                vec![&self.fqdn],
-                self.context.execution_id(),
-                self.context.execution_id(),
-                event_details,
-                self.logger(),
-            )?;
+            let logger = get_loggers(self, self.action);
+            let domain_checker = CheckDnsForDomains {
+                resolve_to_ip: vec![self.fqdn.to_string()],
+                resolve_to_cname: vec![],
+                log: logger.send_success,
+            };
+
+            let _ = domain_checker.on_create_check();
         }
 
         Ok(())
@@ -415,6 +431,7 @@ where
                 Duration::from_secs(60 * 30),
                 self.db_type(),
                 &self.fqdn_id,
+                self.version().as_str(),
                 &credentials,
                 DB_STOPPED_STATE,
             );
@@ -534,19 +551,19 @@ where
             T::db_type().to_string().as_str(),
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
 
         if self.publicly_accessible {
-            check_domain_for(
-                ListenersHelper::new(&self.listeners),
-                vec![&self.fqdn],
-                self.context.execution_id(),
-                self.context.execution_id(),
-                event_details,
-                self.logger(),
-            )?;
+            let logger = get_loggers(self, self.action);
+            let domain_checker = CheckDnsForDomains {
+                resolve_to_ip: vec![self.fqdn.to_string()],
+                resolve_to_cname: vec![],
+                log: logger.send_success,
+            };
+
+            let _ = domain_checker.on_create_check();
         }
 
         Ok(())

@@ -2,6 +2,7 @@ use crate::cloud_provider::service::Action;
 use crate::cloud_provider::DeploymentTarget;
 use crate::errors::EngineError;
 
+mod check_dns;
 mod deploy_application;
 mod deploy_database;
 mod deploy_helm;

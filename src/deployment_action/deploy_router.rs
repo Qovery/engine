@@ -1,12 +1,15 @@
+use crate::cloud_provider::models::CustomDomain;
 use crate::cloud_provider::service::{Action, Service};
-use crate::cloud_provider::utilities::{check_cname_for, print_action};
+use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::DeploymentTarget;
+use crate::deployment_action::check_dns::CheckDnsForDomains;
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::execute_long_deployment;
+use crate::deployment_report::logger::get_loggers;
 use crate::deployment_report::router::reporter::RouterDeploymentReporter;
 use crate::errors::EngineError;
-use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage};
+use crate::events::{EnvironmentStep, Stage};
 use crate::models::router::{Router, RouterService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;
@@ -50,51 +53,25 @@ where
             "router",
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
 
         // check non custom domains
-        self.check_domains(vec![self.default_domain.as_str()], event_details.clone(), self.logger())?;
-
-        let custom_domains_to_check = if self.advanced_settings.custom_domain_check_enabled {
-            self.custom_domains.iter().collect::<Vec<_>>()
+        let logger = get_loggers(self, self.action);
+        let custom_domains_to_check: Vec<CustomDomain> = if self.advanced_settings.custom_domain_check_enabled {
+            self.custom_domains.clone()
         } else {
-            self.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new("Custom domain check is disabled.".to_string(), None),
-            ));
-
             vec![]
         };
 
-        // Wait/Check that custom domain is a CNAME targeting qovery
-        for domain_to_check in custom_domains_to_check {
-            match check_cname_for(
-                self.progress_scope(),
-                self.listeners(),
-                &domain_to_check.domain,
-                self.context.execution_id(),
-            ) {
-                Ok(cname) if cname.trim_end_matches('.') == domain_to_check.target_domain.trim_end_matches('.') => {
-                    continue;
-                }
-                Ok(err) | Err(err) => {
-                    // TODO(benjaminch): Handle better this one via a proper error eventually
-                    self.logger().log(EngineEvent::Warning(
-                        event_details.clone(),
-                        EventMessage::new(
-                            format!(
-                                "Invalid CNAME for {}. It might not be an issue if user is using a CDN.",
-                                domain_to_check.domain,
-                            ),
-                            Some(err.to_string()),
-                        ),
-                    ));
-                }
-            }
-        }
+        let domain_checker = CheckDnsForDomains {
+            resolve_to_ip: vec![self.default_domain.clone()],
+            resolve_to_cname: custom_domains_to_check,
+            log: logger.send_success,
+        };
 
+        let _ = domain_checker.on_create_check();
         Ok(())
     }
 

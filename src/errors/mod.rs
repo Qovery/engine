@@ -2578,13 +2578,18 @@ impl EngineError {
             service_type, service_id
         );
 
+        let hint = match service_type.eq("Redis") {
+            true => Some("If you are redeploying a managed Redis v6 created before 2022-21-07, it means you're using a deprecated version. The database is running but we recommend to create a fresh new one to replace the actual.".to_string()),
+            false => None
+        };
+
         EngineError::new(
             event_details,
             Tag::DatabaseFailedToStartAfterSeveralRetries,
             message,
             raw_error,
             None,
-            None,
+            hint,
         )
     }
 
@@ -3733,7 +3738,7 @@ mod tests {
         );
 
         // execute:
-        let res = format!("{:?}", command_err);
+        let res = format!("{}", command_err);
 
         // verify:
         assert!(!res.contains("my_secret"));

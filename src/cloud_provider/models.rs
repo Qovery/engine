@@ -32,6 +32,7 @@ pub struct StorageDataTemplate {
     pub snapshot_retention_in_days: u16,
 }
 
+#[derive(Clone, Debug)]
 pub struct CustomDomain {
     pub domain: String,
     pub target_domain: String,

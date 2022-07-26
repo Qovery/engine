@@ -1031,7 +1031,7 @@ pub fn db_infos(
                 db_name: database_db_name,
                 app_commit: "476c6ead94a3a5365eabf4daa6d79b10d159a0d0".to_string(),
                 app_env_vars: btreemap! {
-                "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED).to_string()),
+                "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED && database_username == "default").to_string()),
                 "REDIS_HOST".to_string()      => base64::encode(db_fqdn),
                 "REDIS_PORT".to_string()      => base64::encode(database_port.to_string()),
                 "REDIS_USERNAME".to_string()  => base64::encode(database_username),

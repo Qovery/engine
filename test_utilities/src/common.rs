@@ -1077,7 +1077,10 @@ pub fn test_db(
     let app_id = Uuid::new_v4();
     let database_username = match db_kind {
         DatabaseKind::Redis => match database_mode {
-            DatabaseMode::MANAGED => "default".to_string(),
+            DatabaseMode::MANAGED => match version {
+                "6" => "default".to_string(),
+                _ => "superuser".to_string(),
+            },
             CONTAINER => "".to_string(),
         },
         _ => "superuser".to_string(),
