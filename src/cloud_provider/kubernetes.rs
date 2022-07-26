@@ -37,11 +37,13 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter};
 use crate::fs::{delete_file_if_exists, workspace_directory};
-use crate::io_models::ProgressLevel::Info;
-use crate::io_models::{
-    Action, Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-    QoveryIdentifier, StringPath,
+use crate::io_models::context::Context;
+use crate::io_models::domain::StringPath;
+use crate::io_models::progress_listener::ProgressLevel::Info;
+use crate::io_models::progress_listener::{
+    Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
+use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::models::types::VersionsNumber;
 use crate::object_storage::ObjectStorage;
@@ -1532,7 +1534,8 @@ mod tests {
     use crate::cloud_provider::models::CpuLimits;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
-    use crate::io_models::{ListenersHelper, QoveryIdentifier};
+    use crate::io_models::progress_listener::ListenersHelper;
+    use crate::io_models::QoveryIdentifier;
     use crate::logger::StdIoLogger;
     use crate::models::types::VersionsNumber;
     use crate::runtime::block_on;

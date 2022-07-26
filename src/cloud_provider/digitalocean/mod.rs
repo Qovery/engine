@@ -9,7 +9,9 @@ use crate::cloud_provider::{kubernetes::Kind as KubernetesKind, CloudProvider, K
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
-use crate::io_models::{Context, Listener, Listeners, QoveryIdentifier};
+use crate::io_models::context::Context;
+use crate::io_models::progress_listener::{Listener, Listeners};
+use crate::io_models::QoveryIdentifier;
 
 pub mod do_api_common;
 pub mod kubernetes;

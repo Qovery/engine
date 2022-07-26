@@ -12,9 +12,8 @@ use crate::container_registry::to_engine_error;
 use crate::engine::{EngineConfig, EngineConfigError};
 use crate::errors::{EngineError, Tag};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, Transmitter};
-use crate::io_models::{
-    EnvironmentError, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope, QoveryIdentifier,
-};
+use crate::io_models::progress_listener::{ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
+use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::application::ApplicationService;
 
@@ -614,3 +613,6 @@ pub enum TransactionResult {
     Canceled,
     Error(Box<EngineError>),
 }
+
+#[derive(Debug, Clone)]
+pub enum EnvironmentError {}

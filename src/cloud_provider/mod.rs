@@ -8,7 +8,8 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
-use crate::io_models::{Context, Listener, Listeners};
+use crate::io_models::context::Context;
+use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::runtime::block_on;
 use crate::utilities::get_kube_client;
 

@@ -3,7 +3,8 @@ use tera::Context as TeraContext;
 
 use crate::dns_provider::errors::DnsProviderError;
 use crate::dns_provider::{DnsProvider, DnsProviderConfiguration, Kind};
-use crate::io_models::{Context, Domain};
+use crate::io_models::context::Context;
+use crate::io_models::domain::Domain;
 
 pub struct CloudflareDnsConfig {
     pub cloudflare_email: String,

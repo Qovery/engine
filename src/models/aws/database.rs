@@ -10,7 +10,7 @@ use crate::models::aws::database_utils::{
 };
 use crate::models::database::{Container, Database, DatabaseType, Managed, MongoDB, MySQL, PostgresSQL, Redis};
 
-use crate::io_models::DatabaseOptions;
+use crate::io_models::database::DatabaseOptions;
 use crate::models::types::{ToTeraContext, AWS};
 use crate::unit_conversion::cpu_string_to_float;
 use tera::Context as TeraContext;
