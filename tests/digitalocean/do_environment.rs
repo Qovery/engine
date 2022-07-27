@@ -3,23 +3,23 @@ extern crate test_utilities;
 use self::test_utilities::common::session_is_sticky;
 use self::test_utilities::digitalocean::{clean_environments, DO_TEST_REGION};
 use self::test_utilities::utilities::{
-    engine_run_test, generate_id, get_pods, get_pvc, init, is_pod_restarted_env, kubernetes_config_path, logger,
-    FuncTestsSecrets,
+    engine_run_test, get_pods, init, kubernetes_config_path, logger, FuncTestsSecrets,
 };
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::io_models::{Action, CloneForTest, Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::context::CloneForTest;
+use qovery_engine::io_models::Action;
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
 use retry::delay::Fibonacci;
 use std::collections::BTreeMap;
 use test_utilities::common::Infrastructure;
 use test_utilities::digitalocean::do_default_engine_config;
-use test_utilities::utilities::context;
+use test_utilities::utilities::{context, generate_id, get_pvc, is_pod_restarted_env};
 use tracing::{span, warn, Level};
 use url::Url;
 use uuid::Uuid;
-
 // Note: All those tests relies on a test cluster running on DigitalOcean infrastructure.
 // This cluster should be live in order to have those tests passing properly.
 
@@ -333,7 +333,7 @@ fn digitalocean_doks_build_with_buildpacks_and_deploy_a_working_environment() {
                 app.dockerfile_path = None;
                 app
             })
-            .collect::<Vec<qovery_engine::io_models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::application::Application>>();
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
@@ -462,7 +462,7 @@ fn digitalocean_doks_deploy_a_working_environment_with_storage() {
                 }];
                 app
             })
-            .collect::<Vec<qovery_engine::io_models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::application::Application>>();
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -546,7 +546,7 @@ fn digitalocean_doks_redeploy_same_app() {
                 }];
                 app
             })
-            .collect::<Vec<qovery_engine::io_models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::application::Application>>();
 
         let environment_redeploy = environment.clone();
         let environment_check1 = environment.clone();
@@ -653,7 +653,7 @@ fn digitalocean_doks_deploy_a_not_working_environment_and_then_working_environme
                 app.environment_vars = BTreeMap::new();
                 app
             })
-            .collect::<Vec<qovery_engine::io_models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::application::Application>>();
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
@@ -732,7 +732,7 @@ fn digitalocean_doks_deploy_ok_fail_fail_ok_environment() {
                 app.environment_vars = BTreeMap::new();
                 app
             })
-            .collect::<Vec<qovery_engine::io_models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::application::Application>>();
 
         // not working 2
         let context_for_not_working_2 = context.clone_not_same_execution_id();

@@ -1,8 +1,8 @@
 use crate::cloud_provider::service::{Action, Service};
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
-use crate::io_models::ProgressLevel::Info;
-use crate::io_models::{ListenersHelper, ProgressInfo, ProgressLevel};
+use crate::io_models::progress_listener::ProgressLevel::Info;
+use crate::io_models::progress_listener::{ListenersHelper, ProgressInfo, ProgressLevel};
 
 pub struct Loggers {
     pub send_progress: Box<dyn Fn(String) + Send>,

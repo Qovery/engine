@@ -6,7 +6,9 @@ use crate::cloud_provider::{
 };
 use crate::constants::{SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY};
 use crate::events::{EventDetails, Stage, Transmitter};
-use crate::io_models::{Context, Listener, Listeners, QoveryIdentifier};
+use crate::io_models::context::Context;
+use crate::io_models::progress_listener::{Listener, Listeners};
+use crate::io_models::QoveryIdentifier;
 
 pub mod kubernetes;
 

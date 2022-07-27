@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::io_models::{Context, StringPath};
+use crate::io_models::context::Context;
+use crate::io_models::domain::StringPath;
 use crate::object_storage::errors::ObjectStorageError;
 use std::fs::File;
 

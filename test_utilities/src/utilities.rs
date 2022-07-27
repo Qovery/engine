@@ -36,7 +36,7 @@ use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DIGITAL_OCEAN_SPACES_ACCESS_ID, DIGITAL_OCEAN_SPACES_SECRET_ID,
     DIGITAL_OCEAN_TOKEN, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
-use qovery_engine::io_models::{Context, Database, DatabaseKind, DatabaseMode, EnvironmentRequest, Features, Metadata};
+use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use retry::Error::Operation;
 use serde::{Deserialize, Serialize};
 
@@ -50,7 +50,9 @@ use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::errors::CommandError;
-use qovery_engine::io_models::DatabaseMode::MANAGED;
+use qovery_engine::io_models::context::{Context, Features, Metadata};
+use qovery_engine::io_models::database::DatabaseMode::MANAGED;
+use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::runtime::block_on;

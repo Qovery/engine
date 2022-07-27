@@ -2,9 +2,10 @@ use chrono::{DateTime, Utc};
 use std::fs::File;
 use std::path::Path;
 
-use crate::io_models::{Context, StringPath};
+use crate::io_models::domain::StringPath;
 use crate::object_storage::{Kind, ObjectStorage};
 
+use crate::io_models::context::Context;
 use crate::models::scaleway::ScwZone;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::runtime::block_on;

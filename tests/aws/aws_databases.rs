@@ -1,22 +1,23 @@
 extern crate test_utilities;
 
+use self::test_utilities::aws::{AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
+use self::test_utilities::common::ClusterDomain;
+use self::test_utilities::utilities::{context, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
 use ::function_name::named;
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::io_models::{Action, CloneForTest, Database, DatabaseKind, DatabaseMode, Port, Protocol};
-use test_utilities::aws::aws_default_engine_config;
-use tracing::{span, Level};
-use uuid::Uuid;
-
-use self::test_utilities::aws::{AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
-use self::test_utilities::common::ClusterDomain;
-use self::test_utilities::utilities::{
-    context, engine_run_test, generate_id, get_pods, get_svc_name, init, is_pod_restarted_env, logger, FuncTestsSecrets,
-};
-use qovery_engine::io_models::DatabaseMode::{CONTAINER, MANAGED};
+use qovery_engine::io_models::application::{Port, Protocol};
+use qovery_engine::io_models::context::CloneForTest;
+use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
+use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
+use qovery_engine::io_models::Action;
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
+use test_utilities::aws::aws_default_engine_config;
 use test_utilities::common::{test_db, test_pause_managed_db, Infrastructure};
+use test_utilities::utilities::{generate_id, get_svc_name, is_pod_restarted_env};
+use tracing::{span, Level};
+use uuid::Uuid;
 
 /**
 **
@@ -308,7 +309,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 };
                 app
             })
-            .collect::<Vec<qovery_engine::io_models::Application>>();
+            .collect::<Vec<qovery_engine::io_models::application::Application>>();
         environment.routers[0].routes[0].application_name = app_name;
 
         let environment_to_redeploy = environment.clone();

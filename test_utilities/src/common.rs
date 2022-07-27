@@ -6,10 +6,7 @@ use std::cell::RefCell;
 
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::dns_provider::DnsProvider;
-use qovery_engine::io_models::{
-    Action, Application, CloneForTest, Context, Database, DatabaseKind, DatabaseMode, EnvironmentRequest,
-    GitCredentials, Port, Protocol, Route, Router, Storage, StorageType,
-};
+use qovery_engine::io_models::context::CloneForTest;
 
 use crate::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
 use crate::aws_ec2::ec2_kubernetes_instance;
@@ -37,7 +34,13 @@ use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
 use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::engine::EngineConfig;
-use qovery_engine::io_models::DatabaseMode::CONTAINER;
+use qovery_engine::io_models::application::{Application, GitCredentials, Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::context::Context;
+use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
+use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
+use qovery_engine::io_models::environment::EnvironmentRequest;
+use qovery_engine::io_models::router::{Route, Router};
+use qovery_engine::io_models::Action;
 use qovery_engine::logger::Logger;
 use qovery_engine::models::digital_ocean::DoRegion;
 use qovery_engine::models::scaleway::ScwZone;

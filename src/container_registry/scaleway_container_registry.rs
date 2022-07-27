@@ -5,7 +5,7 @@ use crate::build_platform::Image;
 use crate::cmd::docker;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
-use crate::io_models::Context;
+use crate::io_models::context::Context;
 use crate::models::scaleway::ScwZone;
 use crate::runtime::block_on;
 use url::Url;

@@ -7,7 +7,8 @@ use crate::build_platform::Image;
 use crate::cmd::command::QoveryCommand;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
-use crate::io_models::{Context, Listener, Listeners};
+use crate::io_models::context::Context;
+use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::utilities;
 use url::Url;
 

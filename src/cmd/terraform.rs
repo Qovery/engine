@@ -119,6 +119,25 @@ impl TerraformError {
                 }
             }
         }
+        if let Ok(aws_quotas_exceeded_re) = Regex::new(
+            r"You have requested more (?P<resource_type>\w+) capacity than your current \w+ limit of (?P<max_resource_count>\d+)",
+        ) {
+            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_output.as_str()) {
+                if let (Some(resource_type), Some(max_resource_count)) = (
+                    cap.name("resource_type").map(|e| e.as_str()),
+                    cap.name("max_resource_count")
+                        .map(|e| e.as_str().parse::<u32>().unwrap_or(0)),
+                ) {
+                    return TerraformError::QuotasExceeded {
+                        sub_type: QuotaExceededError::ResourceLimitExceeded {
+                            resource_type: resource_type.to_string(),
+                            max_resource_count: Some(max_resource_count),
+                        },
+                        raw_message: raw_terraform_output.to_string(),
+                    };
+                }
+            }
+        }
         if let Ok(aws_quotas_exceeded_re) =
             Regex::new(r"Error creating (?P<resource_type>\w+): \w+: The maximum number of \w+ has been reached")
         {
@@ -156,7 +175,7 @@ impl Display for TerraformError {
                 terraform_args,
                 raw_message,
             } => format!(
-                "Unknown error while performing `terraform {}`.\n{}",
+                "Unknown error while performing Terraform command (terraform {}), here is the error:\n{}",
                 terraform_args.join(" "),
                 raw_message
             ),
@@ -560,14 +579,10 @@ fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Terraf
 
     match result {
         Ok(_) => Ok(stdout),
-        Err(_) => Err(TerraformError::Unknown {
-            terraform_args: args.iter().map(|e| e.to_string()).collect(),
-            raw_message: format!(
-                "Terraform command (terraform {}) failed, here is the error:\n{}",
-                args.iter().map(|e| e.to_string()).collect::<Vec<String>>().join(" "),
-                stderr.join("\n")
-            ),
-        }),
+        Err(_) => Err(TerraformError::new(
+            args.iter().map(|e| e.to_string()).collect(),
+            stderr.join("\n"),
+        )),
     }
 }
 
@@ -723,6 +738,16 @@ terraform {
                     },
                     raw_message: "Error creating VPC: VpcLimitExceeded: The maximum number of VPCs has been reached."
                         .to_string(),
+                },
+            },
+            TestCase {
+                input_raw_message: "AsgInstanceLaunchFailures: Could not launch On-Demand Instances. VcpuLimitExceeded - You have requested more vCPU capacity than your current vCPU limit of 32 allows for the instance bucket that the specified instance type belongs to. Please visit http://aws.amazon.com/contact-us/ec2-request to request an adjustment to this limit. Launching EC2 instance failed.",
+                expected_terraform_error: TerraformError::QuotasExceeded {
+                    sub_type: QuotaExceededError::ResourceLimitExceeded {
+                        resource_type: "vCPU".to_string(),
+                        max_resource_count: Some(32),
+                    },
+                    raw_message: "AsgInstanceLaunchFailures: Could not launch On-Demand Instances. VcpuLimitExceeded - You have requested more vCPU capacity than your current vCPU limit of 32 allows for the instance bucket that the specified instance type belongs to. Please visit http://aws.amazon.com/contact-us/ec2-request to request an adjustment to this limit. Launching EC2 instance failed.".to_string(),
                 },
             },
         ];

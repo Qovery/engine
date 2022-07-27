@@ -14,7 +14,10 @@ use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
 use crate::events::{EngineEvent, EventMessage, GeneralStep, Stage};
-use crate::io_models::{Context, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
+use crate::io_models::context::Context;
+use crate::io_models::progress_listener::{
+    Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
+};
 use crate::logger::Logger;
 use crate::runtime::block_on;
 use retry::delay::Fixed;

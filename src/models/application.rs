@@ -6,10 +6,10 @@ use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::cloud_provider::utilities::sanitize_name;
 use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
-use crate::io_models::{
-    ApplicationAdvancedSettings, ApplicationAdvancedSettingsProbeType, Context, Listener, Listeners, Port,
-    QoveryIdentifier,
-};
+use crate::io_models::application::{ApplicationAdvancedSettings, ApplicationAdvancedSettingsProbeType, Port};
+use crate::io_models::context::Context;
+use crate::io_models::progress_listener::{Listener, Listeners};
+use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::utilities::to_short_id;

@@ -26,9 +26,10 @@ use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
-use crate::io_models::{
-    Action, Context, Features, Listener, Listeners, ListenersHelper, QoveryIdentifier, ToHelmString,
-};
+use crate::io_models::context::{Context, Features};
+use crate::io_models::domain::ToHelmString;
+use crate::io_models::progress_listener::{Listener, Listeners, ListenersHelper};
+use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::models::scaleway::ScwZone;
 use crate::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};

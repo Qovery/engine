@@ -3,7 +3,7 @@ use crate::cloud_provider::models::StorageDataTemplate;
 use crate::cloud_provider::DeploymentTarget;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
-use crate::io_models::ListenersHelper;
+use crate::io_models::progress_listener::ListenersHelper;
 use crate::models::application::Application;
 use crate::models::aws::AwsStorageType;
 use crate::models::types::{ToTeraContext, AWS};

@@ -44,10 +44,12 @@ use crate::events::Stage::Infrastructure;
 use crate::events::{
     EngineEvent, EnvironmentStep, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter,
 };
-use crate::io_models::{
-    Action, Context, Features, Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-    QoveryIdentifier, StringPath, ToHelmString,
+use crate::io_models::context::{Context, Features};
+use crate::io_models::domain::{StringPath, ToHelmString};
+use crate::io_models::progress_listener::{
+    Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
+use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::models::digital_ocean::DoRegion;
 use crate::models::types::VersionsNumber;
