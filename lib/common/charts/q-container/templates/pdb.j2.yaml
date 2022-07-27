@@ -1,0 +1,19 @@
+{%- if service.storages | length == 0  %}
+---
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ service.name }}
+  namespace: {{ namespace }}
+  labels:
+    envId: {{ environment_short_id }}
+    qovery.com/service-id: {{ service.long_id }}
+    qovery.com/service-type: container
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+spec:
+  maxUnavailable: 10%
+  selector:
+    matchLabels:
+      qovery.com/service-id: {{ service.long_id }}
+{%- endif %}

@@ -5,6 +5,7 @@ use self::test_utilities::utilities::{engine_run_test, get_pods, logger, FuncTes
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::router::CustomDomain;
 use qovery_engine::io_models::Action;
@@ -1038,5 +1039,106 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[test]
+fn deploy_container_with_no_router_on_aws_eks() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = "deploy_container_with_no_router_on_aws_eks");
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context(
+            secrets
+                .AWS_TEST_ORGANIZATION_ID
+                .as_ref()
+                .expect("AWS_TEST_ORGANIZATION_ID is not set")
+                .as_str(),
+            secrets
+                .AWS_TEST_CLUSTER_ID
+                .as_ref()
+                .expect("AWS_TEST_CLUSTER_ID is not set")
+                .as_str(),
+        );
+        let engine_config = aws_default_engine_config(&context, logger.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
+
+        let mut environment = test_utilities::common::working_minimal_environment(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
+
+        let mut environment_for_delete = environment.clone();
+        environment.routers = vec![];
+        environment.applications = vec![];
+        environment.containers = vec![Container {
+            long_id: Default::default(),
+            name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
+            action: Action::Create,
+            registry: Registry::DockerHub {
+                url: Url::parse("https://docker.io").unwrap(),
+                username: "toto".to_string(),
+                password: "tata".to_string(),
+            },
+            image: "debian".to_string(),
+            tag: "bullseye".to_string(),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "apt-get update; apt-get install -y netcat; echo listening on port $PORT; env ; nc -l 8080".to_string(),
+            ],
+            entrypoint: None,
+            cpu_request_in_mili: 250,
+            cpu_limit_in_mili: 250,
+            ram_request_in_mib: 250,
+            ram_limit_in_mib: 250,
+            min_instances: 1,
+            max_instances: 1,
+            ports: vec![
+                Port {
+                    long_id: Uuid::new_v4(),
+                    id: Uuid::new_v4().to_string(),
+                    port: 8080,
+                    public_port: Some(443),
+                    name: Some("http".to_string()),
+                    publicly_accessible: true,
+                    protocol: Protocol::HTTP,
+                },
+                Port {
+                    long_id: Uuid::new_v4(),
+                    id: Uuid::new_v4().to_string(),
+                    port: 8081,
+                    public_port: Some(443),
+                    name: Some("grpc".to_string()),
+                    publicly_accessible: false,
+                    protocol: Protocol::HTTP,
+                },
+            ],
+            storages: vec![],
+            environment_vars: btreemap! { "MY_VAR".to_string() => base64::encode("my_value") },
+            advanced_settings: Default::default(),
+        }];
+
+        environment_for_delete.routers = vec![];
+        environment_for_delete.action = Action::Delete;
+
+        let ea = environment.clone();
+        let ea_delete = environment_for_delete.clone();
+
+        let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let ret = environment_for_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
     })
 }

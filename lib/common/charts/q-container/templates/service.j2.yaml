@@ -1,0 +1,24 @@
+{%- if service.default_port %}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ service.name }}
+  namespace: {{ namespace }}
+  labels:
+    envId: {{ environment_short_id }}
+    qovery.com/service-id: {{ service.long_id }}
+    qovery.com/service-type: container
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+spec:
+  type: ClusterIP
+  ports:
+    {%- for port in service.ports %}
+    - protocol: TCP
+      name: "p{{ port.port }}"
+      port: {{ port.port }}
+      targetPort: {{ port.port }}
+    {%- endfor %}
+  selector:
+    qovery.com/service-id: {{ service.long_id }}
+{%- endif %}
