@@ -6,6 +6,7 @@ use crate::deployment_report::DeploymentReporter;
 use crate::errors::EngineError;
 use crate::errors::Tag::HelmDeployTimeout;
 use crate::models::application::ApplicationService;
+use crate::models::container::ContainerService;
 use crate::runtime::block_on;
 use crate::utilities::to_short_id;
 use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
@@ -39,6 +40,29 @@ impl ApplicationDeploymentReporter {
         ApplicationDeploymentReporter {
             long_id: *app.long_id(),
             commit: app.get_build().git_repository.commit_id.clone(),
+            namespace: deployment_target.environment.namespace().to_string(),
+            kube_client: deployment_target.kube.clone(),
+            last_report: "".to_string(),
+            send_progress,
+            send_success,
+            send_error,
+        }
+    }
+
+    pub fn new_for_container(
+        container: &impl ContainerService,
+        deployment_target: &DeploymentTarget,
+        action: Action,
+    ) -> ApplicationDeploymentReporter {
+        let Loggers {
+            send_progress,
+            send_success,
+            send_error,
+        } = get_loggers(container, action);
+
+        ApplicationDeploymentReporter {
+            long_id: *container.long_id(),
+            commit: container.image_full(),
             namespace: deployment_target.environment.namespace().to_string(),
             kube_client: deployment_target.kube.clone(),
             last_report: "".to_string(),

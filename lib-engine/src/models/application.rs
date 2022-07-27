@@ -420,7 +420,7 @@ pub trait ApplicationService: Service + DeploymentAction + ToTeraContext {
 
 impl<T: CloudProvider> ApplicationService for Application<T>
 where
-    Application<T>: Service + ToTeraContext,
+    Application<T>: Service + ToTeraContext + DeploymentAction,
 {
     fn get_build(&self) -> &Build {
         self.build()

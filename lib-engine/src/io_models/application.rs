@@ -415,6 +415,7 @@ impl Storage {
     pub fn to_aws_storage(&self) -> crate::cloud_provider::models::Storage<AwsStorageType> {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
+            long_id: self.long_id,
             name: self.name.clone(),
             storage_type: match self.storage_type {
                 StorageType::SlowHdd => AwsStorageType::SC1,
@@ -431,6 +432,7 @@ impl Storage {
     pub fn to_aws_ec2_storage(&self) -> crate::cloud_provider::models::Storage<AwsEc2StorageType> {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
+            long_id: self.long_id,
             name: self.name.clone(),
             storage_type: match self.storage_type {
                 StorageType::SlowHdd => AwsEc2StorageType::SC1,
@@ -447,6 +449,7 @@ impl Storage {
     pub fn to_do_storage(&self) -> crate::cloud_provider::models::Storage<DoStorageType> {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
+            long_id: self.long_id,
             name: self.name.clone(),
             storage_type: DoStorageType::Standard,
             size_in_gib: self.size_in_gib,
@@ -458,6 +461,7 @@ impl Storage {
     pub fn to_scw_storage(&self) -> crate::cloud_provider::models::Storage<ScwStorageType> {
         crate::cloud_provider::models::Storage {
             id: self.id.clone(),
+            long_id: self.long_id,
             name: self.name.clone(),
             storage_type: ScwStorageType::BlockSsd,
             size_in_gib: self.size_in_gib,

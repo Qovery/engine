@@ -8,7 +8,7 @@ use crate::deployment_report::application::reporter::ApplicationDeploymentReport
 use crate::deployment_report::execute_long_deployment;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
-use crate::models::application::{Application, ApplicationService};
+use crate::models::application::Application;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;
 use std::path::PathBuf;
@@ -17,7 +17,7 @@ use tera::Context;
 
 impl<T: CloudProvider> DeploymentAction for Application<T>
 where
-    Application<T>: ApplicationService,
+    Application<T>: ToTeraContext,
 {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {

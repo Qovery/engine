@@ -54,6 +54,7 @@ impl ToTeraContext for Application<SCW> {
             .iter()
             .map(|s| StorageDataTemplate {
                 id: s.id.clone(),
+                long_id: self.long_id,
                 name: s.name.clone(),
                 storage_type: match s.storage_type {
                     // TODO(benjaminch): Switch to proper storage class

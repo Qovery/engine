@@ -14,6 +14,7 @@ impl ToTeraContext for Container<AWSEc2> {
             .iter()
             .map(|s| StorageDataTemplate {
                 id: s.id.clone(),
+                long_id: self.long_id,
                 name: s.name.clone(),
                 storage_type: match s.storage_type {
                     AwsEc2StorageType::SC1 => "sc1",

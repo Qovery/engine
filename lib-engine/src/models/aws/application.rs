@@ -40,6 +40,7 @@ impl ToTeraContext for Application<AWS> {
             .iter()
             .map(|s| StorageDataTemplate {
                 id: s.id.clone(),
+                long_id: s.long_id,
                 name: s.name.clone(),
                 storage_type: match s.storage_type {
                     AwsStorageType::SC1 => "sc1",

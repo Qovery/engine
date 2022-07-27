@@ -12,6 +12,7 @@ use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::utilities::to_short_id;
+use itertools::Itertools;
 use serde::Serialize;
 use std::marker::PhantomData;
 use uuid::Uuid;
@@ -148,7 +149,7 @@ impl<T: CloudProvider> Container<T> {
     }
 
     pub fn helm_chart_dir(&self) -> String {
-        format!("{}/{}/charts/q-container", self.context.lib_root_dir(), T::lib_directory_name(),)
+        format!("{}/common/charts/q-container", self.context.lib_root_dir())
     }
 
     fn public_port(&self) -> Option<u16> {
@@ -166,6 +167,7 @@ impl<T: CloudProvider> Container<T> {
         let ctx = ContainerTeraContext {
             organization_long_id: environment.organization_long_id,
             project_long_id: environment.project_long_id,
+            environment_short_id: to_short_id(&environment.long_id),
             environment_long_id: environment.long_id,
             cluster: ClusterTeraContext {
                 long_id: *kubernetes.long_id(),
@@ -177,18 +179,25 @@ impl<T: CloudProvider> Container<T> {
             service: ServiceTeraContext {
                 short_id: to_short_id(&self.long_id),
                 long_id: self.long_id,
-                name: self.name.clone(),
-                image_full: format!("{}/{}:{}", self.registry.url(), self.image, self.tag),
+                name: format!("container-{}", self.long_id),
+                user_unsafe_name: self.name.clone(),
+                image_full: format!(
+                    "{}{}:{}",
+                    self.registry.url().to_string().trim_start_matches("https://"),
+                    self.image,
+                    self.tag
+                ),
                 image_tag: self.tag.clone(),
-                commands: self.command_args.clone(),
+                command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
-                cpu_request_in_mili: format!("{}m", self.cpu_request_in_mili),
-                cpu_limit_in_mili: format!("{}m", self.cpu_limit_in_mili),
-                ram_request_in_mib: format!("{}Mi", self.ram_request_in_mib),
-                ram_limit_in_mib: format!("{}Mi", self.ram_limit_in_mib),
+                cpu_request: format!("{}m", self.cpu_request_in_mili),
+                cpu_limit: format!("{}m", self.cpu_limit_in_mili),
+                ram_request: format!("{}Mi", self.ram_request_in_mib),
+                ram_limit: format!("{}Mi", self.ram_limit_in_mib),
                 min_instances: self.min_instances,
                 max_instances: self.max_instances,
                 ports: self.ports.clone(),
+                default_port: self.ports.iter().find_or_first(|p| p.publicly_accessible).cloned(),
                 storages: vec![],
                 advanced_settings: self.advanced_settings.clone(),
             },
@@ -315,6 +324,7 @@ impl<T: CloudProvider> Service for Container<T> {
 pub trait ContainerService: Service + DeploymentAction + ToTeraContext {
     fn public_port(&self) -> Option<u16>;
     fn advanced_settings(&self) -> &ContainerAdvancedSettings;
+    fn image_full(&self) -> String;
 }
 
 impl<T: CloudProvider> ContainerService for Container<T>
@@ -327,6 +337,10 @@ where
 
     fn advanced_settings(&self) -> &ContainerAdvancedSettings {
         &self.advanced_settings
+    }
+
+    fn image_full(&self) -> String {
+        format!("{}/{}:{}", self.registry.url(), self.image, self.tag)
     }
 }
 
@@ -343,17 +357,19 @@ pub(super) struct ServiceTeraContext {
     pub(super) short_id: String,
     pub(super) long_id: Uuid,
     pub(super) name: String,
+    pub(super) user_unsafe_name: String,
     pub(super) image_full: String,
     pub(super) image_tag: String,
-    pub(super) commands: Vec<String>,
+    pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
-    pub(super) cpu_request_in_mili: String,
-    pub(super) cpu_limit_in_mili: String,
-    pub(super) ram_request_in_mib: String,
-    pub(super) ram_limit_in_mib: String,
+    pub(super) cpu_request: String,
+    pub(super) cpu_limit: String,
+    pub(super) ram_request: String,
+    pub(super) ram_limit: String,
     pub(super) min_instances: u32,
     pub(super) max_instances: u32,
     pub(super) ports: Vec<Port>,
+    pub(super) default_port: Option<Port>,
     pub(super) storages: Vec<StorageDataTemplate>,
     pub(super) advanced_settings: ContainerAdvancedSettings,
 }
@@ -368,6 +384,7 @@ pub(super) struct RegistryTeraContext {
 pub(super) struct ContainerTeraContext {
     pub(super) organization_long_id: Uuid,
     pub(super) project_long_id: Uuid,
+    pub(super) environment_short_id: String,
     pub(super) environment_long_id: Uuid,
     pub(super) cluster: ClusterTeraContext,
     pub(super) namespace: String,
