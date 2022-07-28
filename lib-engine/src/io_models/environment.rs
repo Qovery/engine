@@ -78,7 +78,7 @@ impl EnvironmentRequest {
             for app in &self.applications {
                 if !app.advanced_settings.deployment_custom_domain_check_enabled {
                     for route in &router.routes {
-                        if route.application_name.as_str() == app.name.as_str() {
+                        if route.service_long_id == app.long_id {
                             // disable custom domain check for this router
                             custom_domain_check_enabled = false;
                             break;

@@ -50,7 +50,7 @@ pub struct CustomDomainDataTemplate {
 
 pub struct Route {
     pub path: String,
-    pub application_name: String,
+    pub service_long_id: Uuid,
 }
 
 #[derive(Serialize, Deserialize)]

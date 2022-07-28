@@ -338,7 +338,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 app
             })
             .collect::<Vec<qovery_engine::io_models::application::Application>>();
-        environment.routers[0].routes[0].application_name = app_name;
+        environment.routers[0].routes[0].service_long_id = environment.applications[0].long_id;
 
         let environment_to_redeploy = environment.clone();
         let environment_check = environment.clone();
