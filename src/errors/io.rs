@@ -68,7 +68,6 @@ pub enum Tag {
     CannotPauseClusterTasksAreRunning,
     CannotPauseManagedDatabase,
     TerraformCannotRemoveEntryOut,
-    TerraformNoStateFileExists,
     TerraformErrorWhileExecutingPipeline,
     TerraformErrorWhileExecutingDestroyPipeline,
     HelmChartsSetupError,
@@ -203,7 +202,6 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CannotCopyFilesFromDirectoryToDirectory => Tag::CannotCopyFilesFromDirectoryToDirectory,
             errors::Tag::CannotPauseClusterTasksAreRunning => Tag::CannotPauseClusterTasksAreRunning,
             errors::Tag::TerraformCannotRemoveEntryOut => Tag::TerraformCannotRemoveEntryOut,
-            errors::Tag::TerraformNoStateFileExists => Tag::TerraformNoStateFileExists,
             errors::Tag::TerraformErrorWhileExecutingPipeline => Tag::TerraformErrorWhileExecutingPipeline,
             errors::Tag::TerraformErrorWhileExecutingDestroyPipeline => {
                 Tag::TerraformErrorWhileExecutingDestroyPipeline
@@ -303,7 +301,6 @@ impl From<errors::Tag> for Tag {
             errors::Tag::TerraformValidateError => Tag::TerraformValidateError,
             errors::Tag::TerraformPlanError => Tag::TerraformPlanError,
             errors::Tag::TerraformApplyError => Tag::TerraformApplyError,
-            errors::Tag::TerraformStatelistError => Tag::TerraformStatelistError,
             errors::Tag::TerraformDestroyError => Tag::TerraformDestroyError,
             errors::Tag::HelmDeployTimeout => Tag::HelmDeployTimeout,
             errors::Tag::CannotPauseManagedDatabase => Tag::CannotPauseManagedDatabase,
