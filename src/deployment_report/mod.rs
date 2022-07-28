@@ -36,8 +36,12 @@ where
     let th_handle = thread::Builder::new().name("deployment-monitor".to_string()).spawn({
         let deployment_start = deployment_start.clone();
         let report_frequency = deployment_reporter.report_frequency();
+        // Propagate the current span into the thread. This span is only used by tests
+        let current_span = tracing::Span::current();
 
         move || {
+            let _span = current_span.enter();
+
             // Before the launch of the deployment
             deployment_reporter.before_deployment_start();
 
