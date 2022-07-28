@@ -603,14 +603,10 @@ pub enum Tag {
     TerraformPlanError,
     /// TerraformApplyError: terraform error while applying apply command.
     TerraformApplyError,
-    /// TerraformStateListError: terraform error while applying state list command.
-    TerraformStatelistError,
     /// TerraformDestroyError: terraform error while applying apply destroy command.
     TerraformDestroyError,
     /// TerraformCannotRemoveEntryOut: represents an error where we cannot remove an entry out of Terraform.
     TerraformCannotRemoveEntryOut,
-    /// TerraformNoStateFileExists: represents an error where there is no Terraform state file.
-    TerraformNoStateFileExists,
     /// TerraformErrorWhileExecutingPipeline: represents an error while executing Terraform pipeline.
     TerraformErrorWhileExecutingPipeline,
     /// TerraformErrorWhileExecutingDestroyPipeline: represents an error while executing Terraform destroying pipeline.
