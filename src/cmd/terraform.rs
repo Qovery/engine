@@ -53,6 +53,11 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    ServiceNotActivatedOptInRequired {
+        service_type: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
     ConfigFileNotFound {
         path: String,
         /// raw_message: raw Terraform error message with all details.
@@ -115,6 +120,18 @@ impl TerraformError {
                 }
             }
         }
+        if let Ok(aws_service_not_activated_re) = Regex::new(
+            r"Error fetching (?P<service_type>[\w?\s]+): OptInRequired: You are not subscribed to this service",
+        ) {
+            if let Some(cap) = aws_service_not_activated_re.captures(raw_terraform_output.as_str()) {
+                if let Some(service_type) = cap.name("service_type").map(|e| e.as_str()) {
+                    return TerraformError::ServiceNotActivatedOptInRequired {
+                        service_type: service_type.to_string(),
+                        raw_message: raw_terraform_output.to_string(),
+                    };
+                }
+            }
+        }
         if let Ok(aws_quotas_exceeded_re) = Regex::new(
             r"You have exceeded the limit of (?P<resource_type>[\w?\s]+) allowed on your AWS account \((?P<max_resource_count>\d+) by default\)",
         ) {
@@ -167,6 +184,11 @@ impl TerraformError {
                     };
                 }
             }
+        }
+        if raw_terraform_output.contains("error calling sts:GetCallerIdentity: operation error STS: GetCallerIdentity, https response error StatusCode: 403") {
+            return TerraformError::InvalidCredentials {
+                raw_message: raw_terraform_output,
+            };
         }
         if raw_terraform_output.contains("error calling sts:GetCallerIdentity: operation error STS: GetCallerIdentity, https response error StatusCode: 403") {
             return TerraformError::InvalidCredentials {
@@ -255,6 +277,13 @@ impl Display for TerraformError {
                     raw_message
                 )
             }
+            TerraformError::ServiceNotActivatedOptInRequired {
+                raw_message,
+                service_type,
+            } => format!(
+                "Error, service `{}` requiring an opt-in is not activated.\n{}",
+                service_type, raw_message
+            ),
         };
 
         f.write_str(&message)
@@ -763,6 +792,13 @@ terraform {
                         max_resource_count: Some(32),
                     },
                     raw_message: "AsgInstanceLaunchFailures: Could not launch On-Demand Instances. VcpuLimitExceeded - You have requested more vCPU capacity than your current vCPU limit of 32 allows for the instance bucket that the specified instance type belongs to. Please visit http://aws.amazon.com/contact-us/ec2-request to request an adjustment to this limit. Launching EC2 instance failed.".to_string(),
+                },
+            },
+            TestCase {
+                input_raw_message: "Releasing state lock. This may take a few moments...  Error: Error fetching Availability Zones: OptInRequired: You are not subscribed to this service. Please go to http://aws.amazon.com to subscribe. \tstatus code: 401, request id: e34e6aa4-bb37-44fe-a68c-b4859f3f6de9",
+                expected_terraform_error: TerraformError::ServiceNotActivatedOptInRequired {
+                    raw_message: "Releasing state lock. This may take a few moments...  Error: Error fetching Availability Zones: OptInRequired: You are not subscribed to this service. Please go to http://aws.amazon.com to subscribe. \tstatus code: 401, request id: e34e6aa4-bb37-44fe-a68c-b4859f3f6de9".to_string(),
+                    service_type: "Availability Zones".to_string(),
                 },
             },
             TestCase {
