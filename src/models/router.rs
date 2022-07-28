@@ -109,7 +109,7 @@ impl<T: CloudProvider> Router<T> {
                 match &environment
                     .applications
                     .iter()
-                    .find(|app| app.name() == r.application_name.as_str())
+                    .find(|app| app.long_id() == &r.service_long_id)
                 {
                     Some(application) => application.public_port().map(|private_port| RouteDataTemplate {
                         path: r.path.clone(),
@@ -191,7 +191,7 @@ impl<T: CloudProvider> Router<T> {
                 if let Some(application) = &environment
                     .applications
                     .iter()
-                    .find(|app| app.name() == r.application_name.as_str())
+                    .find(|app| app.long_id() == &r.service_long_id)
                 {
                     let advanced_settings = application.advanced_settings();
                     context.insert(
