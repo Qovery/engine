@@ -1043,11 +1043,12 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
 }
 
 #[cfg(feature = "test-aws-minimal")]
+#[named]
 #[test]
 fn deploy_container_with_no_router_on_aws_eks() {
     engine_run_test(|| {
         init();
-        let span = span!(Level::INFO, "test", name = "deploy_container_with_no_router_on_aws_eks");
+        let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
         let logger = logger();
@@ -1142,12 +1143,14 @@ fn deploy_container_with_no_router_on_aws_eks() {
         "".to_string()
     })
 }
+
 #[cfg(feature = "test-aws-minimal")]
+#[named]
 #[test]
 fn deploy_container_with_router_on_aws_eks() {
     engine_run_test(|| {
         init();
-        let span = span!(Level::INFO, "test", name = "deploy_container_with_no_router_on_aws_eks");
+        let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
         let logger = logger();

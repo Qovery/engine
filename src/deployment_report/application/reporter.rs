@@ -1,4 +1,4 @@
-use crate::cloud_provider::service::Action;
+use crate::cloud_provider::service::{Action, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_report::application::renderer::render_app_deployment_report;
 use crate::deployment_report::logger::{get_loggers, Loggers};
@@ -16,9 +16,11 @@ use uuid::Uuid;
 
 pub struct ApplicationDeploymentReporter {
     long_id: Uuid,
-    commit: String,
+    service_type: ServiceType,
+    tag: String,
     namespace: String,
     kube_client: kube::Client,
+    selector: String,
     last_report: String,
     send_progress: Box<dyn Fn(String) + Send>,
     send_success: Box<dyn Fn(String) + Send>,
@@ -39,9 +41,11 @@ impl ApplicationDeploymentReporter {
 
         ApplicationDeploymentReporter {
             long_id: *app.long_id(),
-            commit: app.get_build().git_repository.commit_id.clone(),
+            service_type: ServiceType::Application,
+            tag: app.get_build().git_repository.commit_id.clone(),
             namespace: deployment_target.environment.namespace().to_string(),
             kube_client: deployment_target.kube.clone(),
+            selector: app.selector().unwrap_or_default(),
             last_report: "".to_string(),
             send_progress,
             send_success,
@@ -62,9 +66,11 @@ impl ApplicationDeploymentReporter {
 
         ApplicationDeploymentReporter {
             long_id: *container.long_id(),
-            commit: container.image_full(),
+            service_type: ServiceType::Container,
+            tag: container.image_full(),
             namespace: deployment_target.environment.namespace().to_string(),
             kube_client: deployment_target.kube.clone(),
+            selector: container.selector().unwrap_or_default(),
             last_report: "".to_string(),
             send_progress,
             send_success,
@@ -77,13 +83,17 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
     type DeploymentResult = Result<(), EngineError>;
 
     fn before_deployment_start(&mut self) {
-        if let Ok(deployment_info) =
-            block_on(fetch_app_deployment_report(&self.kube_client, &self.long_id, &self.namespace))
-        {
+        if let Ok(deployment_info) = block_on(fetch_app_deployment_report(
+            &self.kube_client,
+            &self.long_id,
+            &self.selector,
+            &self.namespace,
+        )) {
             (self.send_progress)(format!(
-                "🚀 Deployment of application `{}` at commit {} is starting: You have {} pod(s) running, {} service(s) running, {} network volume(s)",
+                "🚀 Deployment of {} `{}` at tag/commit {} is starting: You have {} pod(s) running, {} service(s) running, {} network volume(s)",
+                self.service_type.to_string(),
                 to_short_id(&self.long_id),
-                self.commit,
+                self.tag,
                 deployment_info.pods.len(),
                 deployment_info.services.len(),
                 deployment_info.pvcs.len()
@@ -93,7 +103,12 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
 
     fn deployment_in_progress(&mut self) {
         // Fetch deployment information from kube api
-        let report = match block_on(fetch_app_deployment_report(&self.kube_client, &self.long_id, &self.namespace)) {
+        let report = match block_on(fetch_app_deployment_report(
+            &self.kube_client,
+            &self.long_id,
+            &self.selector,
+            &self.namespace,
+        )) {
             Ok(deployment_info) => deployment_info,
             Err(err) => {
                 (self.send_progress)(format!("Error while retrieving deployment information: {}", err));
@@ -102,7 +117,7 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
         };
 
         // Format the deployment information and send to it to user
-        let rendered_report = match render_app_deployment_report(&self.commit, &report) {
+        let rendered_report = match render_app_deployment_report(self.service_type, &self.tag, &report) {
             Ok(deployment_status_report) => deployment_status_report,
             Err(err) => {
                 (self.send_progress)(format!("Cannot render deployment status report. Please contact us: {}", err));
@@ -123,7 +138,7 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
     fn deployment_terminated(&mut self, result: Self::DeploymentResult) {
         let error = match result {
             Ok(_) => {
-                (self.send_success)("✅ Deployment of application succeeded".to_string());
+                (self.send_success)(format!("✅ Deployment of {} succeeded", self.service_type.to_string()));
                 return;
             }
             Err(err) => err,
@@ -133,23 +148,23 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
         if error.tag() == &HelmDeployTimeout {
             (self.send_error)(EngineError::new_engine_error(
                 error,
-                r#"
-❌ Application failed to be deployed in the given time frame.
+                format!(r#"
+❌ {} failed to be deployed in the given time frame.
 This most likely an issue with its configuration or because the app failed to start correctly.
 Look at the report from above to understand why, and check your applications logs.
 
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
-                "#.trim().to_string(),
+                "#, self.service_type.to_string()).trim().to_string(),
                 None,
             ));
         } else {
             (self.send_error)(error.clone());
             (self.send_error)(EngineError::new_engine_error(
                 error,
-                r#"
-❌ Deployment of application failed ! Look at the report above and to understand why.
+                format!(r#"
+❌ Deployment of {} failed ! Look at the report above and to understand why.
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
-                "#.trim().to_string(),
+                "#, self.service_type.to_string()).trim().to_string(),
                 None,
             ));
         }
@@ -167,16 +182,16 @@ pub(super) struct AppDeploymentReport {
 
 async fn fetch_app_deployment_report(
     kube: &kube::Client,
-    app_id: &Uuid,
+    service_id: &Uuid,
+    selector: &str,
     namespace: &str,
 ) -> Result<AppDeploymentReport, kube::Error> {
-    let selector = format!("appId={}", to_short_id(app_id));
     let pods_api: Api<Pod> = Api::namespaced(kube.clone(), namespace);
     let svc_api: Api<Service> = Api::namespaced(kube.clone(), namespace);
     let pvc_api: Api<PersistentVolumeClaim> = Api::namespaced(kube.clone(), namespace);
     let event_api: Api<Event> = Api::namespaced(kube.clone(), namespace);
 
-    let list_params = ListParams::default().labels(&selector).timeout(15);
+    let list_params = ListParams::default().labels(selector).timeout(15);
     let pods = pods_api.list(&list_params);
     let services = svc_api.list(&list_params);
     let pvcs = pvc_api.list(&list_params);
@@ -185,7 +200,7 @@ async fn fetch_app_deployment_report(
     let (pods, services, pvcs, events) = futures::future::try_join4(pods, services, pvcs, events).await?;
 
     Ok(AppDeploymentReport {
-        id: *app_id,
+        id: *service_id,
         pods: pods.items,
         services: services.items,
         pvcs: pvcs.items,

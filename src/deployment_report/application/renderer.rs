@@ -1,3 +1,4 @@
+use crate::cloud_provider::service::ServiceType;
 use crate::deployment_report::application::reporter::AppDeploymentReport;
 use crate::deployment_report::utils::{
     get_tera_instance, to_pods_render_context, to_pvc_render_context, to_services_render_context, PodRenderContext,
@@ -9,7 +10,9 @@ use serde::Serialize;
 #[derive(Debug, Serialize)]
 pub struct AppDeploymentRenderContext {
     pub name: String,
-    pub commit: String,
+    pub service_type: String,
+    pub tag_name: String,
+    pub tag: String,
     pub services: Vec<ServiceRenderContext>,
     pub nb_pods: usize,
     pub pods_failing: Vec<PodRenderContext>,
@@ -20,7 +23,7 @@ pub struct AppDeploymentRenderContext {
 
 const REPORT_TEMPLATE: &str = r#"
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-┃ Application at commit {{ commit }} deployment is in progress ⏳, below the current status:
+┃ {{ service_type }} at {{ tag_name }} {{ tag }} deployment is in progress ⏳, below the current status:
 {%- for service in services %}
 ┃ 🔀 {{ service.type_ | capitalize }} {{ service.name }} is {{ service.state | upper }} {{ service.message }}
 {%- for event in service.events %}
@@ -29,7 +32,7 @@ const REPORT_TEMPLATE: &str = r#"
 {%- endfor %}
 ┃
 {% set all_pods = pods_failing | concat(with=pods_starting) -%}
-┃ 🛰 Application has {{ nb_pods }} pods. {{ pods_starting | length }} starting, {{ pods_terminating | length }} terminating and {{ pods_failing | length }} in error
+┃ 🛰 {{ service_type }} has {{ nb_pods }} pods. {{ pods_starting | length }} starting, {{ pods_terminating | length }} terminating and {{ pods_failing | length }} in error
 {%- for pod in all_pods %}
 ┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }} {{ pod.message }}{%- if pod.restart_count > 0 %}
 ┃     |__ 💢 Pod crashed {{ pod.restart_count }} times
@@ -50,7 +53,8 @@ const REPORT_TEMPLATE: &str = r#"
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
 pub(super) fn render_app_deployment_report(
-    app_commit_id: &str,
+    service_type: ServiceType,
+    service_tag: &str,
     deployment_info: &AppDeploymentReport,
 ) -> Result<String, tera::Error> {
     let services_ctx = to_services_render_context(&deployment_info.services, &deployment_info.events);
@@ -59,7 +63,14 @@ pub(super) fn render_app_deployment_report(
     let pvcs_ctx = to_pvc_render_context(&deployment_info.pvcs, &deployment_info.events);
     let render_ctx = AppDeploymentRenderContext {
         name: to_short_id(&deployment_info.id),
-        commit: app_commit_id.to_string(),
+        service_type: service_type.to_string(),
+        tag_name: if service_type == ServiceType::Application {
+            "commit"
+        } else {
+            "tag"
+        }
+        .to_string(),
+        tag: service_tag.to_string(),
         services: services_ctx,
         nb_pods: deployment_info.pods.len(),
         pods_failing,
@@ -73,6 +84,7 @@ pub(super) fn render_app_deployment_report(
 
 #[cfg(test)]
 mod test {
+    use crate::cloud_provider::service::ServiceType;
     use crate::deployment_report::application::renderer::{
         AppDeploymentRenderContext, ServiceRenderContext, REPORT_TEMPLATE,
     };
@@ -88,7 +100,9 @@ mod test {
         let app_id = Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap();
         let render_ctx = AppDeploymentRenderContext {
             name: to_short_id(&app_id),
-            commit: "34645524c3221a596fb59e8dbad4381f10f93933".to_string(),
+            service_type: ServiceType::Application.to_string(),
+            tag_name: "commit".to_string(),
+            tag: "34645524c3221a596fb59e8dbad4381f10f93933".to_string(),
             services: vec![ServiceRenderContext {
                 name: "app-z85ba6759".to_string(),
                 type_: "Cloud load balancer".to_string(),
