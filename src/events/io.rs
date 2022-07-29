@@ -108,6 +108,7 @@ pub enum GeneralStep {
     RetrieveClusterResources,
     ValidateSystemRequirements,
     UnderMigration,
+    ValidateApiInput,
 }
 
 impl From<events::GeneralStep> for GeneralStep {
@@ -117,6 +118,7 @@ impl From<events::GeneralStep> for GeneralStep {
             events::GeneralStep::RetrieveClusterResources => GeneralStep::RetrieveClusterResources,
             events::GeneralStep::ValidateSystemRequirements => GeneralStep::ValidateSystemRequirements,
             events::GeneralStep::UnderMigration => GeneralStep::UnderMigration,
+            events::GeneralStep::ValidateApiInput => GeneralStep::ValidateApiInput,
         }
     }
 }
@@ -215,6 +217,7 @@ type TransmitterVersion = String;
 #[serde(rename_all = "lowercase")]
 #[serde(tag = "type")]
 pub enum Transmitter {
+    TaskManager,
     BuildPlatform {
         id: TransmitterId,
         name: TransmitterName,
@@ -270,6 +273,7 @@ pub enum Transmitter {
 impl From<events::Transmitter> for Transmitter {
     fn from(transmitter: events::Transmitter) -> Self {
         match transmitter {
+            events::Transmitter::TaskManager => Transmitter::TaskManager,
             events::Transmitter::BuildPlatform(id, name) => Transmitter::BuildPlatform { id, name },
             events::Transmitter::ContainerRegistry(id, name) => Transmitter::ContainerRegistry { id, name },
             events::Transmitter::CloudProvider(id, name) => Transmitter::CloudProvider { id, name },

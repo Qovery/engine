@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 
 use aws_config::SdkConfig;
 use serde::{Deserialize, Serialize};
@@ -67,6 +68,19 @@ pub enum Kind {
     Aws,
     Do,
     Scw,
+}
+
+impl FromStr for Kind {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_lowercase().as_str() {
+            "aws" | "amazon" => Ok(Kind::Aws),
+            "do" | "digitalocean" => Ok(Kind::Do),
+            "scw" | "scaleway" => Ok(Kind::Scw),
+            _ => Err(()),
+        }
+    }
 }
 
 impl Display for Kind {
@@ -142,5 +156,48 @@ impl<'a> DeploymentTarget<'a> {
             kube: kube_client,
             helm,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::Kind;
+
+    #[test]
+    fn test_provider_kind_from_str() {
+        // setup:
+        let test_cases = vec![
+            ("", Err(())),
+            (" ", Err(())),
+            ("aws", Ok(Kind::Aws)),
+            ("amazon", Ok(Kind::Aws)),
+            (" aws ", Ok(Kind::Aws)),
+            (" amazon ", Ok(Kind::Aws)),
+            ("AWS ", Ok(Kind::Aws)),
+            ("amaZon", Ok(Kind::Aws)),
+            ("amazon_blabla", Err(())),
+            ("do", Ok(Kind::Do)),
+            ("digitalocean", Ok(Kind::Do)),
+            (" do ", Ok(Kind::Do)),
+            (" digitalocean ", Ok(Kind::Do)),
+            ("DO ", Ok(Kind::Do)),
+            ("Do", Ok(Kind::Do)),
+            ("do_blabla", Err(())),
+            ("scw", Ok(Kind::Scw)),
+            ("scaleway", Ok(Kind::Scw)),
+            (" scw ", Ok(Kind::Scw)),
+            (" scaleway ", Ok(Kind::Scw)),
+            ("SCW ", Ok(Kind::Scw)),
+            ("Scw", Ok(Kind::Scw)),
+            ("scw_blabla", Err(())),
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let result: Result<Kind, ()> = tc.0.parse();
+
+            // verify:
+            assert_eq!(tc.1, result);
+        }
     }
 }

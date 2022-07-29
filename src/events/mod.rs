@@ -211,6 +211,8 @@ impl Display for Stage {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// GeneralStep: represents an engine general step usually shared across all engine stages
 pub enum GeneralStep {
+    /// ValidateApiInput: validating Engine's API input
+    ValidateApiInput,
     /// ValidateSystemRequirements: validating system requirements
     ValidateSystemRequirements,
     /// RetrieveClusterConfig: retrieving cluster configuration
@@ -227,6 +229,7 @@ impl Display for GeneralStep {
             f,
             "{}",
             match &self {
+                GeneralStep::ValidateApiInput => "validate-api-input",
                 GeneralStep::RetrieveClusterConfig => "retrieve-cluster-config",
                 GeneralStep::RetrieveClusterResources => "retrieve-cluster-resources",
                 GeneralStep::ValidateSystemRequirements => "validate-system-requirements",
@@ -373,6 +376,8 @@ type TransmitterVersion = String;
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Transmitter: represents the event's source caller (transmitter).
 pub enum Transmitter {
+    /// TaskManager: engine main task manager.
+    TaskManager,
     /// BuildPlatform: platform aiming to build applications images.
     BuildPlatform(TransmitterId, TransmitterName),
     /// ContainerRegistry: container registry engine part.
@@ -405,6 +410,7 @@ impl Display for Transmitter {
             f,
             "{}",
             match &self {
+                Transmitter::TaskManager => "engine_task_manager".to_string(),
                 Transmitter::BuildPlatform(id, name) => format!("build_platform({}, {})", id, name),
                 Transmitter::ContainerRegistry(id, name) => format!("container_registry({}, {})", id, name),
                 Transmitter::CloudProvider(id, name) => format!("cloud_provider({}, {})", id, name),
