@@ -105,7 +105,7 @@ impl ToString for DatabaseType {
     }
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ServiceType {
     Application,
     Database(DatabaseType),

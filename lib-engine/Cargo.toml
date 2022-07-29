@@ -100,7 +100,7 @@ test-aws-minimal = []
 test-aws-ec2-minimal = []
 test-do-minimal = []
 test-scw-minimal = []
-test-all-minimal = ["test-aws-ec2-minimal", "test-do-minimal", "test-scw-minimal"]
+test-all-minimal = ["test-aws-minimal", "test-aws-ec2-minimal", "test-do-minimal", "test-scw-minimal"]
 
 # functionnal tests by type
 test-aws-self-hosted = []

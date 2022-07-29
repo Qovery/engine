@@ -345,7 +345,12 @@ where
     }
 
     fn image_full(&self) -> String {
-        format!("{}/{}:{}", self.registry.url(), self.image, self.tag)
+        format!(
+            "{}{}:{}",
+            self.registry.url().to_string().trim_start_matches("https://"),
+            self.image,
+            self.tag
+        )
     }
 
     fn kube_service_name(&self) -> String {
