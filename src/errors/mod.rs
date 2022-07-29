@@ -204,38 +204,6 @@ impl From<ObjectStorageError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
-            ObjectStorageError::CannotGetWorkspace {
-                bucket_name,
-                raw_error_message,
-            } => CommandError::new(
-                format!("Object storage error, cannot get workspace for bucket: `{}`", bucket_name),
-                Some(raw_error_message),
-                None,
-            ),
-            ObjectStorageError::CannotCreateFile {
-                bucket_name,
-                raw_error_message,
-            } => CommandError::new(
-                format!("Object storage error, cannot create file for bucket: `{}`", bucket_name),
-                Some(raw_error_message),
-                None,
-            ),
-            ObjectStorageError::CannotOpenFile {
-                bucket_name,
-                raw_error_message,
-            } => CommandError::new(
-                format!("Object storage error, cannot open file for bucket: `{}`", bucket_name),
-                Some(raw_error_message),
-                None,
-            ),
-            ObjectStorageError::CannotReadFile {
-                bucket_name,
-                raw_error_message,
-            } => CommandError::new(
-                format!("Object storage error, cannot read file for bucket: `{}`", bucket_name),
-                Some(raw_error_message),
-                None,
-            ),
             ObjectStorageError::CannotGetObjectFile {
                 bucket_name,
                 file_name,
@@ -248,19 +216,43 @@ impl From<ObjectStorageError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
-            ObjectStorageError::CannotUploadFile {
+            ObjectStorageError::CannotDeleteFile {
                 bucket_name,
+                file_name,
                 raw_error_message,
             } => CommandError::new(
-                format!("Object storage error, cannot upload file in bucket: `{}`", bucket_name),
+                format!(
+                    "Object storage error, cannot delete file `{}` from bucket: `{}`",
+                    file_name, bucket_name
+                ),
                 Some(raw_error_message),
                 None,
             ),
-            ObjectStorageError::CannotDeleteFile {
+            ObjectStorageError::QuotasExceeded {
                 bucket_name,
                 raw_error_message,
             } => CommandError::new(
-                format!("Object storage error, cannot delete file in bucket: `{}`", bucket_name),
+                format!("Object storage error, quotas exceeded: `{}`", bucket_name),
+                Some(raw_error_message),
+                None,
+            ),
+            ObjectStorageError::CannotActivateBucketVersioning {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot activate bucket versioning for: `{}`", bucket_name),
+                Some(raw_error_message),
+                None,
+            ),
+            ObjectStorageError::CannotUploadFile {
+                bucket_name,
+                file_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!(
+                    "Object storage error, cannot upload file `{}` into bucket: `{}`",
+                    file_name, bucket_name
+                ),
                 Some(raw_error_message),
                 None,
             ),
@@ -603,14 +595,10 @@ pub enum Tag {
     TerraformPlanError,
     /// TerraformApplyError: terraform error while applying apply command.
     TerraformApplyError,
-    /// TerraformStateListError: terraform error while applying state list command.
-    TerraformStatelistError,
     /// TerraformDestroyError: terraform error while applying apply destroy command.
     TerraformDestroyError,
     /// TerraformCannotRemoveEntryOut: represents an error where we cannot remove an entry out of Terraform.
     TerraformCannotRemoveEntryOut,
-    /// TerraformNoStateFileExists: represents an error where there is no Terraform state file.
-    TerraformNoStateFileExists,
     /// TerraformErrorWhileExecutingPipeline: represents an error while executing Terraform pipeline.
     TerraformErrorWhileExecutingPipeline,
     /// TerraformErrorWhileExecutingDestroyPipeline: represents an error while executing Terraform destroying pipeline.
@@ -643,12 +631,6 @@ pub enum Tag {
     CannotGetCluster,
     /// OnlyOneClusterExpected: represents an error where only one cluster was expected but several where found
     OnlyOneClusterExpected,
-    /// ObjectStorageCannotCreateBucket: represents an error while trying to create a new object storage bucket.
-    ObjectStorageCannotCreateBucket,
-    /// ObjectStorageCannotPutFileIntoBucket: represents an error while trying to put a file into an object storage bucket.
-    ObjectStorageCannotPutFileIntoBucket,
-    /// ObjectStorageCannotDeleteFileIntoBucket: represents an error while trying to delete a file into an object storage bucket.
-    ObjectStorageCannotDeleteFileIntoBucket,
     /// ClientServiceFailedToStart: represent an error while trying to start a client's service.
     ClientServiceFailedToStart,
     /// ClientServiceFailedToDeployBeforeStart: represents an error while trying to deploy a client's service before start.
@@ -715,20 +697,12 @@ pub enum Tag {
     ContainerRegistryDeleteRepositoryError,
     /// ContainerRegistryInformationError: represents an error on container registry information provided.
     ContainerRegistryInformationError,
-    /// ObjectStorageInvalidBucketName: represents an error, bucket name is not valid.
-    ObjectStorageInvalidBucketName,
-    /// ObjectStorageCannotEmptyBucket: represents an error while trying to empty an object storage bucket.
-    ObjectStorageCannotEmptyBucket,
-    /// ObjectStorageCannotTagBucket: represents an error while trying to tag an object storage bucket.
-    ObjectStorageCannotTagBucket,
     /// KubeconfigFileDoNotPermitToConnectToK8sCluster: represent a kubeconfig mismatch, not permitting to connect to k8s cluster
     KubeconfigFileDoNotPermitToConnectToK8sCluster,
     /// KubeconfigSecurityCheckError: represent an error because of a security concern/doubt on the kubeconfig file
     KubeconfigSecurityCheckError,
     /// DeleteLocalKubeconfigFileError: represent an error when trying to delete Kubeconfig
     DeleteLocalKubeconfigFileError,
-    /// ObjectStorageCannotActivateBucketVersioning: represents an error while trying to activate bucket versioning for bucket.
-    ObjectStorageCannotActivateBucketVersioning,
     /// VaultConnectionError: represents an error while trying to connect ot Vault service
     VaultConnectionError,
     /// VaultSecretCouldNotBeRetrieved: represents an error to get the desired secret
@@ -747,6 +721,26 @@ pub enum Tag {
     DnsProviderInvalidCredentials,
     /// DnsProviderInvalidApiUrl: represent an error on invalid DNS provider api url.
     DnsProviderInvalidApiUrl,
+    /// ObjectStorageCannotCreateBucket: represents an error while trying to create a new object storage bucket.
+    ObjectStorageCannotCreateBucket,
+    /// ObjectStorageCannotPutFileIntoBucket: represents an error while trying to put a file into an object storage bucket.
+    ObjectStorageCannotPutFileIntoBucket,
+    /// ObjectStorageCannotDeleteFileIntoBucket: represents an error while trying to delete a file into an object storage bucket.
+    ObjectStorageCannotDeleteFileIntoBucket,
+    /// ObjectStorageCannotDeleteBucket: represents an error while trying to delete a bucket.
+    ObjectStorageCannotDeleteBucket,
+    /// ObjectStorageCannotActivateBucketVersioning: represents an error while trying to activate bucket versioning for bucket.
+    ObjectStorageCannotActivateBucketVersioning,
+    /// ObjectStorageQuotaExceeded: represents an error, quotas has been exceeded.
+    ObjectStorageQuotaExceeded,
+    /// ObjectStorageInvalidBucketName: represents an error, bucket name is not valid.
+    ObjectStorageInvalidBucketName,
+    /// ObjectStorageCannotEmptyBucket: represents an error while trying to empty an object storage bucket.
+    ObjectStorageCannotEmptyBucket,
+    /// ObjectStorageCannotTagBucket: represents an error while trying to tag an object storage bucket.
+    ObjectStorageCannotTagBucket,
+    /// ObjectStorageCannotGetObjectFile: represents an error while trying to get a file from object storage bucket.
+    ObjectStorageCannotGetObjectFile,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -881,6 +875,7 @@ impl EngineError {
                     EngineErrorScope::Application(id, name, commit) => Transmitter::Application(id, name, commit),
                     EngineErrorScope::Router(id, name) => Transmitter::Router(id, name),
                     EngineErrorScope::SecretManager(id) => Transmitter::SecretManager(id),
+                    EngineErrorScope::Container(id, name, version) => Transmitter::Container(id, name, version),
                 },
             ),
             user_log_message: message,
@@ -1187,7 +1182,7 @@ impl EngineError {
 
     /// Creates new error: cannot get workspace directory.
     ///
-    /// Error occured while trying to get workspace directory.
+    /// Error occurred while trying to get workspace directory.
     ///
     /// Arguments:
     ///
@@ -3234,182 +3229,137 @@ impl EngineError {
         )
     }
 
-    /// Creates new error, object storage bucket name is not valid.
+    /// Creates new object storage error.
     ///
     /// Arguments:
     ///
     /// * `event_details`: Error linked event details.
-    /// * `bucket_name`: Errored bucket name.
-    pub fn new_object_storage_bucket_name_is_invalid(event_details: EventDetails, bucket_name: String) -> EngineError {
-        let message = format!("Error: bucket name `{}` is not valid.", bucket_name);
-
-        EngineError::new(
-            event_details,
-            Tag::ObjectStorageInvalidBucketName,
-            message,
-            None,
-            None,
-            Some("Check your cloud provider documentation to know bucket naming rules.".to_string()),
-        )
-    }
-
-    /// Creates new object storage cannot create bucket.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `bucket_name`: Object storage bucket name.
-    /// * `raw_error`: Raw error message.
-    pub fn new_object_storage_cannot_create_bucket_error(
+    /// * `object_storage_error`: Object storage error.
+    pub fn new_object_storage_error(
         event_details: EventDetails,
-        bucket_name: String,
-        raw_error: ObjectStorageError,
+        object_storage_error: ObjectStorageError,
     ) -> EngineError {
-        let message = format!("Error, cannot create object storage bucket `{}`.", bucket_name,);
+        match object_storage_error {
+            ObjectStorageError::QuotasExceeded { .. } => {
+                if event_details.provider_kind() == Some(Kind::Scw) {
+                    // Scaleway specifics
+                    return EngineError::new(
+                        event_details,
+                        Tag::ObjectStorageQuotaExceeded,
+                        "Error: quotas exceeded while trying to perform operation on object storage.".to_string(),
+                        Some(object_storage_error.into()),
+                        Some(Url::parse("https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/scaleway/#connect-your-scaleway-account").expect("Error while trying to parse error link helper for SCW `ObjectStorageError::QuotasExceeded`, URL is not valid.")),
+                        Some("If you have a new Scaleway account, your quota must be unlocked by the Scaleway support teams. To do this, open a ticket with their support with the following message: 'Hello, I would like to deploy my applications on Scaleway with Qovery. Can you increase my quota for the current Kubernetes node type to 10 please?'".to_string()),
+                    );
+                }
 
-        EngineError::new(
-            event_details,
-            Tag::ObjectStorageCannotCreateBucket,
-            message,
-            Some(raw_error.into()),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new object storage cannot put file into bucket.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `bucket_name`: Object storage bucket name.
-    /// * `file_name`: File name to be added into the bucket.
-    /// * `raw_error`: Raw error message.
-    pub fn new_object_storage_cannot_put_file_into_bucket_error(
-        event_details: EventDetails,
-        bucket_name: String,
-        file_name: String,
-        raw_error: ObjectStorageError,
-    ) -> EngineError {
-        let message = format!(
-            "Error, cannot put file `{}` into object storage bucket `{}`.",
-            file_name, bucket_name,
-        );
-
-        EngineError::new(
-            event_details,
-            Tag::ObjectStorageCannotPutFileIntoBucket,
-            message,
-            Some(raw_error.into()),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new object storage cannot delete file into bucket.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `bucket_name`: Object storage bucket name.
-    /// * `file_name`: File name to be added into the bucket.
-    /// * `raw_error`: Raw error message.
-    pub fn new_object_storage_cannot_delete_file_into_bucket_error(
-        event_details: EventDetails,
-        bucket_name: String,
-        file_name: String,
-        raw_error: ObjectStorageError,
-    ) -> EngineError {
-        let message = format!(
-            "Error, cannot delete file `{}` into object storage bucket `{}`.",
-            file_name, bucket_name,
-        );
-
-        let error = CommandError::new(message.clone(), Some(format!("{:?}", raw_error)), None);
-
-        EngineError::new(
-            event_details,
-            Tag::ObjectStorageCannotDeleteFileIntoBucket,
-            message,
-            Some(error),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new object storage cannot empty object storage bucket.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `bucket_name`: Object storage bucket name.
-    /// * `raw_error`: Raw error message.
-    pub fn new_object_storage_cannot_empty_bucket(
-        event_details: EventDetails,
-        bucket_name: String,
-        raw_error: CommandError,
-    ) -> EngineError {
-        let message = format!("Error while trying to empty object storage bucket `{}`.", bucket_name,);
-
-        EngineError::new(
-            event_details,
-            Tag::ObjectStorageCannotEmptyBucket,
-            message,
-            Some(raw_error),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new object storage cannot tag bucket error.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `bucket_name`: Object storage bucket name.
-    /// * `raw_error`: Raw error message.
-    pub fn new_object_storage_cannot_tag_bucket_error(
-        event_details: EventDetails,
-        bucket_name: String,
-        raw_error: CommandError,
-    ) -> EngineError {
-        let message = format!("Error while trying to tag object storage bucket `{}`.", bucket_name,);
-
-        EngineError::new(
-            event_details,
-            Tag::ObjectStorageCannotTagBucket,
-            message,
-            Some(raw_error),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new object storage cannot activate bucket versioning error.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `bucket_name`: Object storage bucket name.
-    /// * `raw_error`: Raw error message.
-    pub fn new_object_storage_cannot_activate_bucket_versioning_error(
-        event_details: EventDetails,
-        bucket_name: String,
-        raw_error: CommandError,
-    ) -> EngineError {
-        let message = format!(
-            "Error while trying to activate versioning for object storage bucket `{}`.",
-            bucket_name,
-        );
-
-        EngineError::new(
-            event_details,
-            Tag::ObjectStorageCannotActivateBucketVersioning,
-            message,
-            Some(raw_error),
-            None,
-            None,
-        )
+                // Default error, no cloud provider specifics
+                EngineError::new(
+                    event_details,
+                    Tag::ObjectStorageQuotaExceeded,
+                    "Error: quotas exceeded while trying to perform operation on object storage.".to_string(),
+                    Some(object_storage_error.into()),
+                    None,
+                    Some("Contact your cloud provider support to increase your quotas.".to_string()),
+                )
+            }
+            ObjectStorageError::InvalidBucketName { ref bucket_name, .. } => EngineError::new(
+                event_details,
+                Tag::ObjectStorageInvalidBucketName,
+                format!("Error: bucket name `{}` is not valid.", bucket_name),
+                Some(object_storage_error.into()),
+                None,
+                Some("Check your cloud provider documentation to know bucket naming rules.".to_string()),
+            ),
+            ObjectStorageError::CannotCreateBucket { ref bucket_name, .. } => EngineError::new(
+                event_details,
+                Tag::ObjectStorageCannotCreateBucket,
+                format!("Error, cannot create object storage bucket `{}`.", bucket_name,),
+                Some(object_storage_error.into()),
+                None,
+                None,
+            ),
+            ObjectStorageError::CannotDeleteBucket { ref bucket_name, .. } => EngineError::new(
+                event_details,
+                Tag::ObjectStorageCannotDeleteBucket,
+                format!("Error, cannot delete object storage bucket `{}`.", bucket_name,),
+                Some(object_storage_error.into()),
+                None,
+                None,
+            ),
+            ObjectStorageError::CannotEmptyBucket { ref bucket_name, .. } => EngineError::new(
+                event_details,
+                Tag::ObjectStorageCannotEmptyBucket,
+                format!("Error while trying to empty object storage bucket `{}`.", bucket_name,),
+                Some(object_storage_error.into()),
+                None,
+                None,
+            ),
+            ObjectStorageError::CannotTagBucket { ref bucket_name, .. } => EngineError::new(
+                event_details,
+                Tag::ObjectStorageCannotTagBucket,
+                format!("Error while trying to tag object storage bucket `{}`.", bucket_name,),
+                Some(object_storage_error.into()),
+                None,
+                None,
+            ),
+            ObjectStorageError::CannotActivateBucketVersioning { ref bucket_name, .. } => EngineError::new(
+                event_details,
+                Tag::ObjectStorageCannotActivateBucketVersioning,
+                format!(
+                    "Error while trying to activate versioning for object storage bucket `{}`.",
+                    bucket_name,
+                ),
+                Some(object_storage_error.into()),
+                None,
+                None,
+            ),
+            ObjectStorageError::CannotGetObjectFile {
+                ref bucket_name,
+                ref file_name,
+                ..
+            } => EngineError::new(
+                event_details,
+                Tag::ObjectStorageCannotGetObjectFile,
+                format!(
+                    "Error, cannot get file `{}` from object storage bucket `{}`.",
+                    file_name, bucket_name,
+                ),
+                Some(object_storage_error.into()),
+                None,
+                None,
+            ),
+            ObjectStorageError::CannotUploadFile {
+                ref bucket_name,
+                ref file_name,
+                ..
+            } => EngineError::new(
+                event_details,
+                Tag::ObjectStorageCannotPutFileIntoBucket,
+                format!(
+                    "Error, cannot put file `{}` into object storage bucket `{}`.",
+                    file_name, bucket_name,
+                ),
+                Some(object_storage_error.into()),
+                None,
+                None,
+            ),
+            ObjectStorageError::CannotDeleteFile {
+                ref bucket_name,
+                ref file_name,
+                ..
+            } => EngineError::new(
+                event_details,
+                Tag::ObjectStorageCannotDeleteFileIntoBucket,
+                format!(
+                    "Error, cannot delete file `{}` into object storage bucket `{}`.",
+                    file_name, bucket_name,
+                ),
+                Some(object_storage_error.into()),
+                None,
+                None,
+            ),
+        }
     }
 
     /// Creates new error when trying to connect to vault endpoint

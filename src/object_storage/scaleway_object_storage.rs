@@ -199,10 +199,14 @@ impl ObjectStorage for ScalewayOS {
             }),
             ..Default::default()
         })) {
-            return Err(ObjectStorageError::CannotCreateBucket {
+            return Err(ScalewayObjectStorageErrorManager::try_extract_fully_qualified_error(
+                e.to_string().as_str(),
+                Some(bucket_name),
+            )
+            .unwrap_or_else(|| ObjectStorageError::CannotCreateBucket {
                 bucket_name: bucket_name.to_string(),
                 raw_error_message: e.to_string(),
-            });
+            }));
         }
 
         let creation_date: DateTime<Utc> = Utc::now();
@@ -287,8 +291,9 @@ impl ObjectStorage for ScalewayOS {
             self.context().execution_id(),
             format!("object-storage/scaleway_os/{}", self.name()),
         )
-        .map_err(|err| ObjectStorageError::CannotGetWorkspace {
+        .map_err(|err| ObjectStorageError::CannotGetObjectFile {
             bucket_name: bucket_name.to_string(),
+            file_name: object_key.to_string(),
             raw_error_message: err.to_string(),
         })?;
 
@@ -330,13 +335,15 @@ impl ObjectStorage for ScalewayOS {
                             let file = File::open(path).unwrap();
                             Ok((file_path, file))
                         }
-                        Err(e) => Err(ObjectStorageError::CannotReadFile {
+                        Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
                             bucket_name: bucket_name.to_string(),
+                            file_name: object_key.to_string(),
                             raw_error_message: e.to_string(),
                         }),
                     },
-                    Err(e) => Err(ObjectStorageError::CannotOpenFile {
+                    Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
                         bucket_name: bucket_name.to_string(),
+                        file_name: object_key.to_string(),
                         raw_error_message: e.to_string(),
                     }),
                 }
@@ -361,8 +368,9 @@ impl ObjectStorage for ScalewayOS {
             body: Some(StreamingBody::from(match std::fs::read(file_path) {
                 Ok(x) => x,
                 Err(e) => {
-                    return Err(ObjectStorageError::CannotReadFile {
+                    return Err(ObjectStorageError::CannotUploadFile {
                         bucket_name: bucket_name.to_string(),
+                        file_name: object_key.to_string(),
                         raw_error_message: e.to_string(),
                     })
                 }
@@ -372,6 +380,7 @@ impl ObjectStorage for ScalewayOS {
             Ok(_) => Ok(()),
             Err(e) => Err(ObjectStorageError::CannotUploadFile {
                 bucket_name: bucket_name.to_string(),
+                file_name: object_key.to_string(),
                 raw_error_message: e.to_string(),
             }),
         }
@@ -398,9 +407,29 @@ impl ObjectStorage for ScalewayOS {
             Ok(_) => Ok(()),
             Err(e) => Err(ObjectStorageError::CannotDeleteFile {
                 bucket_name: bucket_name.to_string(),
+                file_name: object_key.to_string(),
                 raw_error_message: e.to_string(),
             }),
         }
+    }
+}
+
+struct ScalewayObjectStorageErrorManager {}
+
+impl ScalewayObjectStorageErrorManager {
+    /// Try to find a more qualified specific error from an Object Storage error
+    fn try_extract_fully_qualified_error(
+        raw_error_message: &str,
+        bucket_name: Option<&str>,
+    ) -> Option<ObjectStorageError> {
+        if raw_error_message.contains("<Code>QuotaExceeded</Code>") {
+            return Some(ObjectStorageError::QuotasExceeded {
+                raw_error_message: raw_error_message.to_string(),
+                bucket_name: bucket_name.unwrap_or_default().to_string(),
+            });
+        }
+
+        None
     }
 }
 
@@ -408,14 +437,14 @@ impl ObjectStorage for ScalewayOS {
 mod tests {
     use super::*;
 
-    struct TestCase<'a> {
-        bucket_name_input: &'a str,
-        expected_output: Result<(), ObjectStorageError>,
-        description: &'a str,
-    }
-
     #[test]
     fn test_is_bucket_name_valid() {
+        struct TestCase<'a> {
+            bucket_name_input: &'a str,
+            expected_output: Result<(), ObjectStorageError>,
+            description: &'a str,
+        }
+
         // setup:
         let test_cases: Vec<TestCase> = vec![
             TestCase {
@@ -445,6 +474,45 @@ mod tests {
         for tc in test_cases {
             // execute:
             let result = ScalewayOS::is_bucket_name_valid(tc.bucket_name_input);
+
+            // verify:
+            assert_eq!(tc.expected_output, result, "{}", tc.description);
+        }
+    }
+
+    #[test]
+    fn test_object_storage_error_manager_quota_exceeded() {
+        // setup:
+        struct TestCase<'a> {
+            raw_error_message: &'a str,
+            bucket_name: Option<&'a str>,
+            expected_output: Option<ObjectStorageError>,
+            description: &'a str,
+        }
+
+        let test_cases = vec![
+            TestCase{
+            bucket_name: Some("test-bucket"),
+            raw_error_message: "Request ID: None Body: <?xml version='1.0' encoding='UTF-8'?>\n<Error><Code>QuotaExceeded</Code><Message>Quota exceeded. Please contact support to upgrade your quotas.</Message><RequestId>txbdb89084fcb04c36a2b49-0062d9937c</RequestId></Error>",
+            expected_output: Some(ObjectStorageError::QuotasExceeded {
+                bucket_name: "test-bucket".to_string(),
+                raw_error_message: "Request ID: None Body: <?xml version='1.0' encoding='UTF-8'?>\n<Error><Code>QuotaExceeded</Code><Message>Quota exceeded. Please contact support to upgrade your quotas.</Message><RequestId>txbdb89084fcb04c36a2b49-0062d9937c</RequestId></Error>".to_string()
+            }),
+            description: "Case 1 - Nominal case, there is a quotas issue",
+        },
+                              TestCase{
+                                  bucket_name: Some("test-bucket"),
+                                      raw_error_message: "Request ID: None Body: <?xml version='1.0' encoding='UTF-8'?>\n<Error><Code>RandomIssue</Code><Message>Random issue message description.</Message><RequestId>txbdb89084fcb04c36a2b49-0062d9937c</RequestId></Error>",
+                                  expected_output: None,
+                                  description: "Case 2 - Nominal case, there is no quotas issue",
+                              }];
+
+        for tc in test_cases {
+            // execute:
+            let result = ScalewayObjectStorageErrorManager::try_extract_fully_qualified_error(
+                tc.raw_error_message,
+                tc.bucket_name,
+            );
 
             // verify:
             assert_eq!(tc.expected_output, result, "{}", tc.description);

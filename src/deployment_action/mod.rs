@@ -4,6 +4,7 @@ use crate::errors::EngineError;
 
 mod check_dns;
 mod deploy_application;
+mod deploy_container;
 mod deploy_database;
 mod deploy_helm;
 pub mod deploy_namespace;

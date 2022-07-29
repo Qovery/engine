@@ -572,8 +572,7 @@ impl DOKS {
 
         // Logs bucket
         if let Err(e) = self.spaces.create_bucket(self.logs_bucket_name().as_str()) {
-            let error =
-                EngineError::new_object_storage_cannot_create_bucket_error(event_details, self.logs_bucket_name(), e);
+            let error = EngineError::new_object_storage_error(event_details, e);
             self.logger().log(EngineEvent::Error(error.clone(), None));
             return Err(error);
         }
@@ -1105,6 +1104,10 @@ impl Kubernetes for DOKS {
 
     fn id(&self) -> &str {
         self.id.as_str()
+    }
+
+    fn long_id(&self) -> &Uuid {
+        &self.long_id
     }
 
     fn name(&self) -> &str {

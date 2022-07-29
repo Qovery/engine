@@ -57,6 +57,7 @@ pub trait Kubernetes {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
+    fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
 
     fn name_with_id(&self) -> String {
@@ -103,12 +104,7 @@ pub trait Kubernetes {
             file_path,
         ) {
             let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-            return Err(EngineError::new_object_storage_cannot_put_file_into_bucket_error(
-                event_details,
-                self.get_bucket_name(),
-                self.get_kubeconfig_filename(),
-                e,
-            ));
+            return Err(EngineError::new_object_storage_error(event_details, e));
         };
         Ok(())
     }
@@ -119,12 +115,7 @@ pub trait Kubernetes {
             .ensure_file_is_absent(self.get_bucket_name().as_str(), self.get_kubeconfig_filename().as_str())
         {
             let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-            return Err(EngineError::new_object_storage_cannot_delete_file_into_bucket_error(
-                event_details,
-                self.get_bucket_name(),
-                self.get_kubeconfig_filename(),
-                e,
-            ));
+            return Err(EngineError::new_object_storage_error(event_details, e));
         };
         Ok(())
     }
@@ -579,6 +570,16 @@ pub fn deploy_environment(
             .map_err(|err| (deployed_services.clone(), err))?;
     }
 
+    for service in &environment.containers {
+        deployed_services.insert(*service.long_id());
+        service
+            .exec_action(&deployment_target, *service.action())
+            .map_err(|err| (deployed_services.clone(), err))?;
+        service
+            .exec_check_action(*service.action())
+            .map_err(|err| (deployed_services.clone(), err))?;
+    }
+
     // create all applications
     for service in &environment.applications {
         deployed_services.insert(*service.long_id());
@@ -627,6 +628,16 @@ pub fn pause_environment(
     }
 
     for service in &environment.applications {
+        deployed_services.insert(*service.long_id());
+        service
+            .on_pause(&deployment_target)
+            .map_err(|err| (deployed_services.clone(), err))?;
+        service
+            .on_pause_check()
+            .map_err(|err| (deployed_services.clone(), err))?;
+    }
+
+    for service in &environment.containers {
         deployed_services.insert(*service.long_id());
         service
             .on_pause(&deployment_target)
@@ -698,6 +709,16 @@ pub fn delete_environment(
     }
 
     for service in &environment.applications {
+        deployed_services.insert(*service.long_id());
+        service
+            .on_delete(&deployment_target)
+            .map_err(|err| (deployed_services.clone(), err))?;
+        service
+            .on_delete_check()
+            .map_err(|err| (deployed_services.clone(), err))?;
+    }
+
+    for service in &environment.containers {
         deployed_services.insert(*service.long_id());
         service
             .on_delete(&deployment_target)

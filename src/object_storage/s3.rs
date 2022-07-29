@@ -255,8 +255,9 @@ impl ObjectStorage for S3 {
             self.context().execution_id(),
             self.workspace_dir_relative_path(),
         )
-        .map_err(|err| ObjectStorageError::CannotGetWorkspace {
+        .map_err(|err| ObjectStorageError::CannotGetObjectFile {
             bucket_name: bucket_name.to_string(),
+            file_name: object_key.to_string(),
             raw_error_message: err.to_string(),
         })?;
 
@@ -299,13 +300,15 @@ impl ObjectStorage for S3 {
                             let file = File::open(path).unwrap();
                             Ok((file_path, file))
                         }
-                        Err(e) => Err(ObjectStorageError::CannotCreateFile {
+                        Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
                             bucket_name: bucket_name.to_string(),
+                            file_name: object_key.to_string(),
                             raw_error_message: e.to_string(),
                         }),
                     },
-                    Err(e) => Err(ObjectStorageError::CannotOpenFile {
+                    Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
                         bucket_name: bucket_name.to_string(),
+                        file_name: object_key.to_string(),
                         raw_error_message: e.to_string(),
                     }),
                 }
@@ -329,8 +332,9 @@ impl ObjectStorage for S3 {
             body: Some(StreamingBody::from(match std::fs::read(file_path) {
                 Ok(x) => x,
                 Err(e) => {
-                    return Err(ObjectStorageError::CannotReadFile {
+                    return Err(ObjectStorageError::CannotUploadFile {
                         bucket_name: bucket_name.to_string(),
+                        file_name: object_key.to_string(),
                         raw_error_message: e.to_string(),
                     })
                 }
@@ -341,6 +345,7 @@ impl ObjectStorage for S3 {
             Ok(_) => Ok(()),
             Err(e) => Err(ObjectStorageError::CannotUploadFile {
                 bucket_name: bucket_name.to_string(),
+                file_name: object_key.to_string(),
                 raw_error_message: e.to_string(),
             }),
         }
@@ -367,6 +372,7 @@ impl ObjectStorage for S3 {
             Ok(_) => Ok(()),
             Err(e) => Err(ObjectStorageError::CannotDeleteFile {
                 bucket_name: bucket_name.to_string(),
+                file_name: object_key.to_string(),
                 raw_error_message: e.to_string(),
             }),
         }

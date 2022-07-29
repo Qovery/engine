@@ -27,7 +27,7 @@ futures = "0.3.21"
 timeout-readwrite = "0.3.1"
 lazy_static = "1.4.0"
 uuid = { version = "1.0.0", features = ["v4", "serde"] }
-url = "2.2.2"
+url = { version = "2.2.2", features = ["serde"] }
 function_name = "0.3.0"
 thiserror = "1.0.31"
 strum = "0.24.0"

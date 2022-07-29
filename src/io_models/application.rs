@@ -1,5 +1,6 @@
 use crate::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
+use crate::cloud_provider::models::EnvironmentVariable;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ContainerRegistryInfo;
 use crate::io_models::context::Context;
@@ -20,14 +21,14 @@ use std::path::{Path, PathBuf};
 use url::Url;
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Protocol {
     HTTP,
     TCP,
     UDP,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Port {
     pub id: String,
     pub long_id: Uuid,
@@ -38,20 +39,18 @@ pub struct Port {
     pub protocol: Protocol,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ApplicationAdvancedSettingsProbeType {
+pub enum AdvancedSettingsProbeType {
     None,
     Tcp,
     Http,
 }
 
-fn to_environment_variable(
-    env_vars: &BTreeMap<String, String>,
-) -> Vec<crate::cloud_provider::models::EnvironmentVariable> {
+pub fn to_environment_variable(env_vars: &BTreeMap<String, String>) -> Vec<EnvironmentVariable> {
     env_vars
         .iter()
-        .map(|(k, v)| crate::cloud_provider::models::EnvironmentVariable {
+        .map(|(k, v)| EnvironmentVariable {
             key: k.clone(),
             value: v.clone(),
         })
@@ -88,7 +87,7 @@ pub struct ApplicationAdvancedSettings {
     #[serde(alias = "network.ingress.cors_allowed_headers")]
     pub network_ingress_cors_allow_headers: String,
     #[serde(alias = "readiness_probe.type")]
-    pub readiness_probe_type: ApplicationAdvancedSettingsProbeType,
+    pub readiness_probe_type: AdvancedSettingsProbeType,
     #[serde(alias = "readiness_probe.http_get.path")]
     pub readiness_probe_http_get_path: String,
     #[serde(alias = "readiness_probe.initial_delay_seconds")]
@@ -102,7 +101,7 @@ pub struct ApplicationAdvancedSettings {
     #[serde(alias = "readiness_probe.failure_threshold")]
     pub readiness_probe_failure_threshold: u32,
     #[serde(alias = "liveness_probe.type")]
-    pub liveness_probe_type: ApplicationAdvancedSettingsProbeType,
+    pub liveness_probe_type: AdvancedSettingsProbeType,
     #[serde(alias = "liveness_probe.http_get.path")]
     pub liveness_probe_http_get_path: String,
     #[serde(alias = "liveness_probe.initial_delay_seconds")]
@@ -130,14 +129,14 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_cors_allow_origin: "*".to_string(),
             network_ingress_cors_allow_methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS".to_string(),
             network_ingress_cors_allow_headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization".to_string(),
-            readiness_probe_type: ApplicationAdvancedSettingsProbeType::Tcp,
+            readiness_probe_type: AdvancedSettingsProbeType::Tcp,
             readiness_probe_http_get_path: "/".to_string(),
             readiness_probe_initial_delay_seconds: 30,
             readiness_probe_period_seconds: 10,
             readiness_probe_timeout_seconds: 1,
             readiness_probe_success_threshold: 1,
             readiness_probe_failure_threshold: 3,
-            liveness_probe_type: ApplicationAdvancedSettingsProbeType::Tcp,
+            liveness_probe_type: AdvancedSettingsProbeType::Tcp,
             liveness_probe_http_get_path: "/".to_string(),
             liveness_probe_initial_delay_seconds: 30,
             liveness_probe_period_seconds: 10,

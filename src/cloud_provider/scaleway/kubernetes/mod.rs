@@ -680,19 +680,14 @@ impl Kapsule {
             .object_storage
             .create_bucket(self.kubeconfig_bucket_name().as_str())
         {
-            let error = EngineError::new_object_storage_cannot_create_bucket_error(
-                event_details,
-                self.kubeconfig_bucket_name(),
-                e,
-            );
+            let error = EngineError::new_object_storage_error(event_details, e);
             self.logger().log(EngineEvent::Error(error.clone(), None));
             return Err(error);
         }
 
         // Logs bucket
         if let Err(e) = self.object_storage.create_bucket(self.logs_bucket_name().as_str()) {
-            let error =
-                EngineError::new_object_storage_cannot_create_bucket_error(event_details, self.logs_bucket_name(), e);
+            let error = EngineError::new_object_storage_error(event_details, e);
             self.logger().log(EngineEvent::Error(error.clone(), None));
             return Err(error);
         }
@@ -711,12 +706,7 @@ impl Kapsule {
             kubeconfig_name.as_str(),
             kubeconfig_path.to_str().expect("No path for Kubeconfig"),
         ) {
-            let error = EngineError::new_object_storage_cannot_put_file_into_bucket_error(
-                event_details,
-                self.logs_bucket_name(),
-                kubeconfig_name.to_string(),
-                e,
-            );
+            let error = EngineError::new_object_storage_error(event_details, e);
             self.logger().log(EngineEvent::Error(error.clone(), None));
             return Err(error);
         }
@@ -1498,6 +1488,10 @@ impl Kubernetes for Kapsule {
 
     fn id(&self) -> &str {
         self.id.as_str()
+    }
+
+    fn long_id(&self) -> &Uuid {
+        &self.long_id
     }
 
     fn name(&self) -> &str {

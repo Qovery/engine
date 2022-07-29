@@ -124,6 +124,10 @@ impl Kubernetes for EC2 {
         self.id.as_str()
     }
 
+    fn long_id(&self) -> &Uuid {
+        &self.long_id
+    }
+
     fn name(&self) -> &str {
         self.name.as_str()
     }
