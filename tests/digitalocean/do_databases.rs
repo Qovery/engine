@@ -14,7 +14,8 @@ use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::Action;
 use qovery_engine::utilities::to_short_id;
-use test_utilities::common::{database_test_environment, test_db, ClusterDomain, Infrastructure};
+use test_utilities::common::{ClusterDomain, Infrastructure};
+use test_utilities::database::{database_test_environment, environment_3_apps_3_databases, test_db};
 use test_utilities::digitalocean::{
     clean_environments, do_default_engine_config, DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE,
     DO_SELF_HOSTED_DATABASE_DISK_TYPE, DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE, DO_TEST_REGION,
@@ -53,13 +54,8 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let engine_config = do_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = do_default_engine_config(&context_for_deletion, logger.clone());
-        let environment = test_utilities::common::environment_3_apps_3_routers_3_databases(
+        let environment = environment_3_apps_3_databases(
             &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .as_ref()
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             DO_SELF_HOSTED_DATABASE_DISK_TYPE,
             Kind::Do,
@@ -111,7 +107,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let engine_config = do_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = do_default_engine_config(&context_for_deletion, logger.clone());
-        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let environment = test_utilities::environment::environment_2_app_2_routers_1_psql(
             &context,
             secrets
                 .clone()
@@ -190,7 +186,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let environment = test_utilities::environment::environment_2_app_2_routers_1_psql(
             &context,
             test_domain.as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
@@ -198,7 +194,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             Kind::Do,
         );
         //let env_to_check = environment.clone();
-        let mut environment_delete = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let mut environment_delete = test_utilities::environment::environment_2_app_2_routers_1_psql(
             &context_for_deletion,
             test_domain.as_str(),
             DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
@@ -265,14 +261,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = do_default_engine_config(&context_for_delete, logger.clone());
 
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .clone()
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let mut environment = test_utilities::environment::working_minimal_environment(&context);
         let database_mode = CONTAINER;
 
         let app_name = format!("postgresql-app-{}", generate_id());

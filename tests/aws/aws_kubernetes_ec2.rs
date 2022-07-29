@@ -10,7 +10,8 @@ use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::Kind;
 use std::str::FromStr;
 use test_utilities::aws::{K3S_KUBERNETES_MAJOR_VERSION, K3S_KUBERNETES_MINOR_VERSION};
-use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
+use test_utilities::common::ClusterDomain;
+use test_utilities::kubernetes::{cluster_test, ClusterTestType};
 use test_utilities::utilities::generate_cluster_id;
 
 fn create_and_destroy_aws_ec2_k3s_cluster(
