@@ -47,6 +47,12 @@ impl QoveryIdentifier {
     }
 }
 
+impl Default for QoveryIdentifier {
+    fn default() -> Self {
+        QoveryIdentifier::new_from_long_id(Uuid::default().to_string())
+    }
+}
+
 impl From<String> for QoveryIdentifier {
     fn from(s: String) -> Self {
         QoveryIdentifier::new_from_long_id(s)

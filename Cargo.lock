@@ -69,6 +69,7 @@ dependencies = [
  "openssl-sys",
  "prometheus",
  "qovery-engine",
+ "regex",
  "reqwest 0.11.10",
  "retry",
  "serde",

@@ -14,6 +14,7 @@ use std::io::{BufRead, BufReader, Error};
 use std::path::Path;
 use std::sync::Arc;
 
+use chrono::Utc;
 use std::borrow::Borrow;
 use std::thread::sleep;
 use std::time::Duration;
@@ -29,6 +30,10 @@ use url::Url;
 use uuid::Uuid;
 
 use qovery_engine::cmd;
+use qovery_engine::errors::EngineError;
+use qovery_engine::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, Stage, Transmitter};
+use qovery_engine::io_models::progress_listener::{ProgressLevel, ProgressScope};
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use utils::Mode;
 
@@ -39,10 +44,11 @@ use crate::logger::composite_logger::CompositeLogger;
 use crate::logger::nats_logger::NatsLogger;
 
 use crate::models::{StatusResponse, TaskSelector};
+use crate::nats::subjects::SubjectInfo;
 use crate::nats::{subjects, Connection, Message};
 use crate::subjects::Subject;
 use crate::task_manager::models::EngineRequest;
-use crate::task_manager::scheduler::{Status, Task, TaskManager};
+use crate::task_manager::scheduler::{ActionContext, State, Status, Task, TaskManager};
 use crate::task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 use crate::utils::{log_no_spam_builder, LogErrorOnDrop};
 
@@ -62,13 +68,52 @@ fn to_engine_task(
     docker_tcp_socket: &Option<Url>,
     task_selector: &TaskSelector,
     status_sender: Sender<Status>,
-) -> Result<Box<dyn Task>, serde_json::Error> {
+) -> Result<Box<dyn Task>, EngineError> {
     let request = match serde_json::from_slice::<EngineRequest>(&msg.data) {
         Ok(req) => req,
         Err(err) => {
             error!("{}", msg);
             error!("receiving request but JSON decoding error occurred: {:?}", err);
-            return Err(err);
+            let subject_info = SubjectInfo::try_parse(msg.subject);
+
+            return Err(EngineError::new_invalid_engine_api_input_cannot_be_deserialized(
+                match subject_info {
+                    Some(info) => EventDetails::new(
+                        match info.cloud_provider {
+                            Some(provider) => match provider.parse() {
+                                Ok(p) => Some(p),
+                                Err(_) => None,
+                            },
+                            None => None,
+                        },
+                        match info.organization_id {
+                            Some(id) => QoveryIdentifier::new_from_long_id(id),
+                            None => QoveryIdentifier::default(),
+                        },
+                        match info.cluster_id {
+                            Some(id) => QoveryIdentifier::new_from_long_id(id),
+                            None => QoveryIdentifier::default(),
+                        },
+                        match info.execution_id {
+                            Some(id) => QoveryIdentifier::new_from_long_id(id),
+                            None => QoveryIdentifier::default(),
+                        },
+                        info.region,
+                        Stage::General(GeneralStep::ValidateApiInput),
+                        Transmitter::TaskManager,
+                    ),
+                    None => EventDetails::new(
+                        None,
+                        QoveryIdentifier::default(),
+                        QoveryIdentifier::default(),
+                        QoveryIdentifier::default(),
+                        None,
+                        Stage::General(GeneralStep::ValidateApiInput),
+                        Transmitter::TaskManager,
+                    ),
+                },
+                err,
+            ));
         }
     };
 
@@ -409,7 +454,7 @@ fn using_nats_server(
 
     let mut tm = TaskManager::new();
     let status_rx = tm.get_task_status_rx().clone();
-    tm.run(logger).unwrap();
+    tm.run(logger.clone()).expect("cannot run task manager");
     let task_manager = Arc::new(tm);
 
     let _ = {
@@ -471,6 +516,7 @@ fn using_nats_server(
             lib_root_dir.clone(),
             engine_name.clone(),
             sig_term_tx.clone(),
+            logger.clone(),
         );
     }
 
@@ -486,6 +532,7 @@ fn using_nats_server(
             lib_root_dir,
             engine_name,
             sig_term_tx.clone(),
+            logger.clone(),
         );
     }
 
@@ -519,6 +566,7 @@ fn spawn_task_poller(
     lib_root_dir: String,
     engine_name: String,
     sig_term_tx: Sender<bool>,
+    logger: Box<dyn Logger>,
 ) {
     let task_name = match task_selector {
         TaskSelector::Infrastructure(name) => name,
@@ -564,7 +612,7 @@ fn spawn_task_poller(
 
             // Convert our nats message into an engine task
             let engine_task = match to_engine_task(
-                msg,
+                msg.clone(),
                 &workspace_root_dir,
                 &lib_root_dir,
                 &docker_host,
@@ -573,7 +621,41 @@ fn spawn_task_poller(
             ) {
                 Ok(task) => task,
                 Err(err) => {
-                    error!("Cannot converts Nats message payload to an engine task: {}", err);
+                    let err_message = "Cannot converts Nats message payload to an engine task";
+                    error!("{}: {}", err_message, err.to_string());
+                    logger.log(EngineEvent::Error(
+                        err.clone(),
+                        Some(EventMessage::new_from_safe(format!("{}.", err_message))),
+                    ));
+
+                    let nats_subject = Subject::new_from_string(msg.subject.to_string());
+                    if nats_subject.is_legacy_topic() {
+                        // ... send it via old logger as well if coming from old NATS
+                        // TODO(benjaminch): To be removed once old logger to be removed
+                        let execution_id = err.event_details().execution_id().to_string();
+                        let action_context = ActionContext::new(
+                            ProgressScope::Queued,
+                            ProgressLevel::Error,
+                            execution_id.to_string(),
+                            Utc::now(),
+                        );
+                        let status_response = StatusResponse::new(
+                            execution_id.to_string(),
+                            Status::new(State::Error, Some(err.to_string()), action_context),
+                        );
+                        match serde_json::to_string(&status_response) {
+                            Err(e) => error!("Error while trying to send error to old NATS topic, cannot serialize status response to JSON: {}", e),
+                            Ok(json_encoded_payload) => {
+                                if let Err(e) = nats.publish(
+                                    &nats_subject,
+                                    json_encoded_payload.as_bytes(),
+                                ) {
+                                    error!("Error while trying to send error to old NATS topic: {}", e);
+                                };
+                            }
+                        }
+                    }
+
                     continue;
                 }
             };

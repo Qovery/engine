@@ -54,6 +54,7 @@ pub enum EngineErrorScope {
 impl From<Transmitter> for EngineErrorScope {
     fn from(transmitter: Transmitter) -> Self {
         match transmitter {
+            Transmitter::TaskManager => EngineErrorScope::Engine,
             Transmitter::BuildPlatform(id, name) => EngineErrorScope::BuildPlatform(id, name),
             Transmitter::ContainerRegistry(id, name) => EngineErrorScope::ContainerRegistry(id, name),
             Transmitter::CloudProvider(id, name) => EngineErrorScope::CloudProvider(id, name),
