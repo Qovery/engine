@@ -100,47 +100,62 @@ impl TerraformError {
         }
 
         // AWS
-        if let Ok(aws_quotas_exceeded_re) = Regex::new(
-            r"You have exceeded the limit of (?P<resource_type>\w+) allowed on your AWS account \((?P<max_resource_count>\d+) by default\)",
-        ) {
-            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_output.as_str()) {
-                if let (Some(resource_type), Some(max_resource_count)) = (
-                    cap.name("resource_type").map(|e| e.as_str()),
-                    cap.name("max_resource_count")
-                        .map(|e| e.as_str().parse::<u32>().unwrap_or(0)),
-                ) {
-                    return TerraformError::QuotasExceeded {
-                        sub_type: QuotaExceededError::ResourceLimitExceeded {
-                            resource_type: resource_type.to_string(),
-                            max_resource_count: Some(max_resource_count),
-                        },
-                        raw_message: raw_terraform_output.to_string(),
-                    };
-                }
-            }
-        }
-        if let Ok(aws_quotas_exceeded_re) = Regex::new(
-            r"You have requested more (?P<resource_type>\w+) capacity than your current \w+ limit of (?P<max_resource_count>\d+)",
-        ) {
-            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_output.as_str()) {
-                if let (Some(resource_type), Some(max_resource_count)) = (
-                    cap.name("resource_type").map(|e| e.as_str()),
-                    cap.name("max_resource_count")
-                        .map(|e| e.as_str().parse::<u32>().unwrap_or(0)),
-                ) {
-                    return TerraformError::QuotasExceeded {
-                        sub_type: QuotaExceededError::ResourceLimitExceeded {
-                            resource_type: resource_type.to_string(),
-                            max_resource_count: Some(max_resource_count),
-                        },
-                        raw_message: raw_terraform_output.to_string(),
-                    };
-                }
-            }
-        }
         if let Ok(aws_quotas_exceeded_re) =
-            Regex::new(r"Error creating (?P<resource_type>\w+): \w+: The maximum number of \w+ has been reached")
+            Regex::new(r"You've reached your quota for maximum (?P<resource_type>[\w?\s]+) for this account")
         {
+            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_output.as_str()) {
+                if let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str()) {
+                    return TerraformError::QuotasExceeded {
+                        sub_type: QuotaExceededError::ResourceLimitExceeded {
+                            resource_type: resource_type.to_string(),
+                            max_resource_count: None,
+                        },
+                        raw_message: raw_terraform_output.to_string(),
+                    };
+                }
+            }
+        }
+        if let Ok(aws_quotas_exceeded_re) = Regex::new(
+            r"You have exceeded the limit of (?P<resource_type>[\w?\s]+) allowed on your AWS account \((?P<max_resource_count>\d+) by default\)",
+        ) {
+            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_output.as_str()) {
+                if let (Some(resource_type), Some(max_resource_count)) = (
+                    cap.name("resource_type").map(|e| e.as_str()),
+                    cap.name("max_resource_count")
+                        .map(|e| e.as_str().parse::<u32>().unwrap_or(0)),
+                ) {
+                    return TerraformError::QuotasExceeded {
+                        sub_type: QuotaExceededError::ResourceLimitExceeded {
+                            resource_type: resource_type.to_string(),
+                            max_resource_count: Some(max_resource_count),
+                        },
+                        raw_message: raw_terraform_output.to_string(),
+                    };
+                }
+            }
+        }
+        if let Ok(aws_quotas_exceeded_re) = Regex::new(
+            r"You have requested more (?P<resource_type>[\w?\s]+) capacity than your current [\w?\s]+ limit of (?P<max_resource_count>\d+)",
+        ) {
+            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_output.as_str()) {
+                if let (Some(resource_type), Some(max_resource_count)) = (
+                    cap.name("resource_type").map(|e| e.as_str()),
+                    cap.name("max_resource_count")
+                        .map(|e| e.as_str().parse::<u32>().unwrap_or(0)),
+                ) {
+                    return TerraformError::QuotasExceeded {
+                        sub_type: QuotaExceededError::ResourceLimitExceeded {
+                            resource_type: resource_type.to_string(),
+                            max_resource_count: Some(max_resource_count),
+                        },
+                        raw_message: raw_terraform_output.to_string(),
+                    };
+                }
+            }
+        }
+        if let Ok(aws_quotas_exceeded_re) = Regex::new(
+            r"Error creating (?P<resource_type>[\w?\s]+): \w+: The maximum number of [\w?\s]+ has been reached",
+        ) {
             if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_output.as_str()) {
                 if let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str()) {
                     return TerraformError::QuotasExceeded {
@@ -160,7 +175,7 @@ impl TerraformError {
         }
 
         // This kind of error should be triggered as little as possible, ideally, there is no unknown errors
-        // (uncatched) so we can act / report properly to the user.
+        // (un-catched) so we can act / report properly to the user.
         TerraformError::Unknown {
             terraform_args,
             raw_message: raw_terraform_output,
@@ -748,6 +763,16 @@ terraform {
                         max_resource_count: Some(32),
                     },
                     raw_message: "AsgInstanceLaunchFailures: Could not launch On-Demand Instances. VcpuLimitExceeded - You have requested more vCPU capacity than your current vCPU limit of 32 allows for the instance bucket that the specified instance type belongs to. Please visit http://aws.amazon.com/contact-us/ec2-request to request an adjustment to this limit. Launching EC2 instance failed.".to_string(),
+                },
+            },
+            TestCase {
+                input_raw_message: "AsgInstanceLaunchFailures: You've reached your quota for maximum Fleet Requests for this account. Launching EC2 instance failed.",
+                expected_terraform_error: TerraformError::QuotasExceeded {
+                    sub_type: QuotaExceededError::ResourceLimitExceeded {
+                        resource_type: "Fleet Requests".to_string(),
+                        max_resource_count: None,
+                    },
+                    raw_message: "AsgInstanceLaunchFailures: You've reached your quota for maximum Fleet Requests for this account. Launching EC2 instance failed.".to_string(),
                 },
             },
         ];
