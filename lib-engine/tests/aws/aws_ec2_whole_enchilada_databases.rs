@@ -107,7 +107,7 @@ fn test_ec2_database(database_mode: DatabaseMode, is_public: bool, db_versions_t
 
         // MongoDB
         let mongodb_versions_to_be_tested = match &db_versions_to_test {
-            DbVersionsToTest::AllSupported => vec!["4.4", "4.2", "4.0", "3.6"],
+            DbVersionsToTest::AllSupported => vec!["4.4", "4.2", "4.0"],
             DbVersionsToTest::LatestPublicManaged => vec![],
             DbVersionsToTest::LatestPrivateManaged => vec!["4.0"],
         };
@@ -134,7 +134,7 @@ fn test_ec2_database(database_mode: DatabaseMode, is_public: bool, db_versions_t
 
         // MySQL
         let mysql_versions_to_be_tested = match &db_versions_to_test {
-            DbVersionsToTest::AllSupported => vec!["8.0", "5.7"],
+            DbVersionsToTest::AllSupported => vec!["8.0"],
             DbVersionsToTest::LatestPublicManaged => vec!["8.0"],
             DbVersionsToTest::LatestPrivateManaged => vec!["8.0"],
         };

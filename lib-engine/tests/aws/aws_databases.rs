@@ -426,6 +426,7 @@ pub fn test_postgresql_pause(
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore = "No database deployed in this version"]
 fn private_postgresql_v10_deploy_a_working_dev_environment() {
     test_postgresql_configuration("10", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
@@ -433,7 +434,7 @@ fn private_postgresql_v10_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "No database deployed in this version"]
 fn public_postgresql_v10_deploy_a_working_dev_environment() {
     test_postgresql_configuration("10", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -633,7 +634,7 @@ pub fn test_mongodb_configuration(
 // development environment
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
-#[test]
+#[ignore = "No database deployed in this version"]
 fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
     test_mongodb_configuration("3.6", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
@@ -641,7 +642,7 @@ fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "No database deployed in this version"]
 fn public_mongodb_v3_6_deploy_a_working_dev_environment() {
     test_mongodb_configuration("3.6", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -759,7 +760,7 @@ pub fn test_mysql_configuration(
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore = "Only one managed db in this version"]
+#[ignore = "Only 1 deployed in this version"]
 fn private_mysql_v5_7_deploy_a_working_dev_environment() {
     test_mysql_configuration("5.7", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
@@ -767,7 +768,7 @@ fn private_mysql_v5_7_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "Only 1 deployed in this version"]
 fn public_mysql_v5_7_deploy_a_working_dev_environment() {
     test_mysql_configuration("5.7", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -789,7 +790,7 @@ fn public_mysql_v8_deploy_a_working_dev_environment() {
 // MySQL production environment (RDS)
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
-#[test]
+#[ignore = "No database deployed in this version"]
 fn private_mysql_v5_7_deploy_a_working_prod_environment() {
     test_mysql_configuration("5.7", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
@@ -797,7 +798,7 @@ fn private_mysql_v5_7_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "No database deployed in this version"]
 fn public_mysql_v5_7_deploy_a_working_prod_environment() {
     test_mysql_configuration("5.7", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }

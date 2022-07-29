@@ -16,7 +16,7 @@ resource "scaleway_k8s_pool" "kubernetes_cluster_workers_{{ loop.index }}" {
   wait_for_pool_ready = true
 
   timeouts {
-    create = "60m"
+    create = "30m"
     update = "60m"
   }
 
