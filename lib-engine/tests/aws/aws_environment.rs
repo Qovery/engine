@@ -1,6 +1,6 @@
 extern crate test_utilities;
 
-use self::test_utilities::common::{session_is_sticky, Infrastructure};
+use self::test_utilities::common::Infrastructure;
 use self::test_utilities::utilities::{engine_run_test, get_pods, logger, FuncTestsSecrets};
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
@@ -15,6 +15,10 @@ use retry::delay::Fibonacci;
 use std::borrow::BorrowMut;
 use std::collections::BTreeMap;
 use test_utilities::aws::aws_default_engine_config;
+use test_utilities::environment::{
+    environment_only_http_server_router_with_sticky_session, non_working_environment, session_is_sticky,
+    working_minimal_environment, working_minimal_environment_with_router,
+};
 use test_utilities::utilities::{context, generate_id, get_pvc, init, is_pod_restarted_env, kubernetes_config_path};
 use tracing::{span, Level};
 use url::Url;
@@ -47,15 +51,8 @@ fn aws_test_build_phase() {
                 .as_str(),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let environment = working_minimal_environment(&context);
 
-        environment.routers = vec![];
         let ea = environment.clone();
 
         let (env, ret) = environment.build_environment(&ea, logger.clone(), &engine_config);
@@ -99,17 +96,9 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
 
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let environment = working_minimal_environment(&context);
 
         let mut environment_for_delete = environment.clone();
-        environment.routers = vec![];
-        environment_for_delete.routers = vec![];
         environment_for_delete.action = Action::Delete;
 
         let ea = environment.clone();
@@ -153,14 +142,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
 
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .as_ref()
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let environment = working_minimal_environment(&context);
 
         let ea = environment.clone();
         let selector = format!("appId={}", to_short_id(&environment.applications[0].long_id));
@@ -238,14 +220,7 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
 
-        let mut environment = test_utilities::common::non_working_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
-        environment.routers = vec![];
+        let environment = non_working_environment(&context);
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -291,13 +266,7 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let mut environment = working_minimal_environment(&context);
         environment.applications = environment
             .applications
             .into_iter()
@@ -362,13 +331,8 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let mut environment = working_minimal_environment(&context);
+
         environment.applications = environment
             .applications
             .into_iter()
@@ -433,7 +397,7 @@ fn deploy_a_working_environment_with_domain() {
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
-        let environment = test_utilities::common::working_minimal_environment(
+        let environment = working_minimal_environment_with_router(
             &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
@@ -485,7 +449,7 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
-        let mut environment = test_utilities::common::working_minimal_environment(
+        let mut environment = working_minimal_environment_with_router(
             &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
@@ -563,14 +527,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
 
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .as_ref()
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let mut environment = working_minimal_environment(&context);
 
         let storage_size: u16 = 10;
         environment.applications = environment
@@ -646,14 +603,7 @@ fn redeploy_same_app_with_ebs() {
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
 
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .as_ref()
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let mut environment = working_minimal_environment(&context);
 
         let storage_size: u16 = 10;
         environment.applications = environment
@@ -747,13 +697,7 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
 
         // env part generation
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let environment = working_minimal_environment(&context);
         let mut environment_for_not_working = environment.clone();
         // this environment is broken by container exit
         environment_for_not_working.applications = environment_for_not_working
@@ -822,13 +766,7 @@ fn deploy_ok_fail_fail_ok_environment() {
                 .as_str(),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
-        let environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let environment = working_minimal_environment(&context);
 
         // not working 1
         let context_for_not_working_1 = context.clone_not_same_execution_id();
@@ -913,13 +851,7 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
                 .as_str(),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
-        let environment = test_utilities::common::non_working_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let environment = non_working_environment(&context);
 
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
@@ -967,7 +899,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
-        let environment = test_utilities::common::environment_only_http_server_router_with_sticky_session(
+        let environment = environment_only_http_server_router_with_sticky_session(
             &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
@@ -1067,15 +999,8 @@ fn deploy_container_with_no_router_on_aws_eks() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
 
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let mut environment = working_minimal_environment(&context);
 
-        environment.routers = vec![];
         environment.applications = vec![];
         environment.containers = vec![Container {
             long_id: Uuid::new_v4(),
@@ -1164,7 +1089,7 @@ fn deploy_container_with_router_on_aws_eks() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
 
-        let mut environment = test_utilities::common::working_minimal_environment(
+        let mut environment = working_minimal_environment_with_router(
             &context,
             secrets
                 .DEFAULT_TEST_DOMAIN

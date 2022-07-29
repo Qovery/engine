@@ -322,10 +322,11 @@ fn manage_common_issues(
         let sleep_time = time::Duration::from_secs(sleep_time_int);
 
         // failed to install provider from shared cache, cleaning and sleeping before retrying...",
-        thread::sleep(sleep_time);
-
         return match fs::remove_file(&terraform_provider_lock) {
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                thread::sleep(sleep_time);
+                Ok(())
+            }
             Err(e) => Err(TerraformError::CannotDeleteLockFile {
                 terraform_provider_lock: terraform_provider_lock.to_string(),
                 raw_message: e.to_string(),
@@ -377,7 +378,9 @@ fn terraform_validate(root_dir: &str) -> Result<Vec<String>, TerraformError> {
         match terraform_exec(root_dir, terraform_args.clone()) {
             Ok(output) => OperationResult::Ok(output),
             Err(err) => {
-                let _ = manage_common_issues(terraform_args.clone(), &terraform_provider_lock, &err);
+                if manage_common_issues(terraform_args.clone(), &terraform_provider_lock, &err).is_ok() {
+                    let _ = terraform_init(root_dir);
+                };
                 // error while trying to Terraform validate on the rendered templates
                 OperationResult::Retry(err)
             }

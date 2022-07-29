@@ -8,7 +8,7 @@ use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::digital_ocean::DoRegion;
-use test_utilities::common::{cluster_test, ClusterTestType};
+use test_utilities::kubernetes::{cluster_test, ClusterTestType};
 
 #[cfg(feature = "test-do-infra")]
 fn create_and_destroy_doks_cluster(

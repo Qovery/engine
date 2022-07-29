@@ -8,7 +8,8 @@ use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::scaleway::ScwZone;
-use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
+use test_utilities::common::ClusterDomain;
+use test_utilities::kubernetes::{cluster_test, ClusterTestType};
 
 #[cfg(feature = "test-scw-infra")]
 fn create_and_destroy_kapsule_cluster(

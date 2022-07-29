@@ -1,4 +1,4 @@
-image: public.ecr.aws/r3m4q3r9/qovery-ci:11bd7a9
+image: public.ecr.aws/r3m4q3r9/qovery-ci:7a92c30
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
@@ -256,7 +256,7 @@ aws-ec2-managed-services:
 
 aws-self-hosted:
   stage: tests
-  retry: 0
+  retry: 1
   timeout: 3 hours
   script:
     - ./helper.sh aws_self_hosted
@@ -282,7 +282,7 @@ aws-self-hosted:
 
 aws-ec2-self-hosted:
   stage: tests
-  retry: 0
+  retry: 1
   timeout: 3 hours
   script:
     - ./helper.sh aws_ec2_self_hosted
@@ -308,7 +308,7 @@ aws-ec2-self-hosted:
 
 aws-whole-enchilada:
   stage: tests
-  retry: 0
+  retry: 1
   timeout: 4 hours
   script:
     - ./helper.sh aws_whole_enchilada
@@ -386,7 +386,7 @@ scw-infra:
 
 scw-managed-services:
   stage: tests
-  retry: 0
+  retry: 1
   timeout: 3 hours
   script:
     - ./helper.sh scw_managed_services
@@ -412,7 +412,7 @@ scw-managed-services:
 
 scw-self-hosted:
   stage: tests
-  retry: 0
+  retry: 1
   timeout: 3 hours
   script:
     - ./helper.sh scw_self_hosted
@@ -438,7 +438,7 @@ scw-self-hosted:
 
 scw-whole-enchilada:
   stage: tests
-  retry: 0
+  retry: 1
   timeout: 4 hours
   script:
     - ./helper.sh scw_whole_enchilada

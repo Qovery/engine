@@ -5,7 +5,8 @@ use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::Kind;
 use std::str::FromStr;
 use test_utilities::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
-use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
+use test_utilities::common::ClusterDomain;
+use test_utilities::kubernetes::{cluster_test, ClusterTestType};
 use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets};
 
 #[cfg(feature = "test-aws-whole-enchilada")]
@@ -35,7 +36,7 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             .as_str()
     );
 
-    let environment = test_utilities::common::working_minimal_environment(&context, cluster_domain.as_str());
+    let environment = test_utilities::environment::working_minimal_environment(&context);
     let env_action = environment;
 
     engine_run_test(|| {
@@ -128,7 +129,8 @@ fn create_pause_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             .as_str()
     );
 
-    let environment = test_utilities::common::working_minimal_environment(&context, cluster_domain.as_str());
+    let environment =
+        test_utilities::environment::working_minimal_environment_with_router(&context, cluster_domain.as_str());
     let env_action = environment;
 
     engine_run_test(|| {
@@ -175,7 +177,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             .as_str()
     );
 
-    let environment = test_utilities::common::working_minimal_environment(&context, cluster_domain.as_str());
+    let environment = test_utilities::environment::working_minimal_environment(&context);
     let env_action = environment;
 
     engine_run_test(|| {

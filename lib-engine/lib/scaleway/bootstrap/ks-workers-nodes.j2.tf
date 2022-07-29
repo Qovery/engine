@@ -15,12 +15,10 @@ resource "scaleway_k8s_pool" "kubernetes_cluster_workers_{{ loop.index }}" {
   max_size            = "{{ scw_ks_worker_node.max_nodes }}"
   wait_for_pool_ready = true
 
-  # Not yet available: https://github.com/scaleway/terraform-provider-scaleway/issues/998
-  #timeouts {
-  #  create = "60m"
-  #  delete = "60m"
-  #  update = "60m"
-  #}
+  timeouts {
+    create = "60m"
+    update = "60m"
+  }
 
   depends_on    = [
     scaleway_k8s_cluster.kubernetes_cluster,
