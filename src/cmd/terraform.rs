@@ -92,10 +92,22 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    AlreadyExistingResource {
+        resource_type: String,
+        resource_identifier: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
+    WaitingTimeoutResource {
+        resource_type: String,
+        resource_identifier: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
 }
 
 impl TerraformError {
-    fn new(terraform_args: Vec<String>, raw_terraform_output: String) -> Self {
+    fn new(root_dir: &str, terraform_args: Vec<String>, raw_terraform_output: String) -> Self {
         // TODO(benjaminch): this logic might probably not live here on the long run.
         // There is some cloud providers specific errors and it would make more sense to delegate logic
         // identifying those errors (trait implementation) on cloud provider side next to their kubernetes implementation.
@@ -221,6 +233,51 @@ impl TerraformError {
             }
         }
 
+        if raw_terraform_output.contains("Error: scaleway-sdk-go: waiting for")
+            && raw_terraform_output.contains("failed: timeout after")
+        {
+            if let Ok(scw_resource_issue) =
+                Regex::new(r"(?P<resource_type>[\w?\s]+)  Refreshing state... \[id=(?P<resource_identifier>[\w?\s]+)\]")
+            {
+                if let Some(cap) = scw_resource_issue.captures(raw_terraform_output.as_str()) {
+                    if let (Some(resource_type), Some(resource_identifier)) = (
+                        cap.name("resource_type").map(|e| e.as_str()),
+                        cap.name("resource_identifier")
+                            .map(|e| e.as_str().parse::<u32>().unwrap_or(0)),
+                    ) {
+                        return TerraformError::WaitingTimeoutResource {
+                            resource_type: resource_type.to_string(),
+                            resource_identifier: resource_identifier.to_string(),
+                            raw_message: raw_terraform_output,
+                        };
+                    }
+                }
+            }
+        }
+
+        if raw_terraform_output.contains("Error: scaleway-sdk-go: invalid argument(s):")
+            && raw_terraform_output.contains("must be unique across the project")
+        {
+            return match terraform_plan(root_dir).err().unwrap_or(TerraformError::Unknown {
+                terraform_args: terraform_args.clone(),
+                raw_message: raw_terraform_output.clone(),
+            }) {
+                TerraformError::WaitingTimeoutResource {
+                    resource_type,
+                    resource_identifier,
+                    ..
+                } => TerraformError::AlreadyExistingResource {
+                    resource_type,
+                    resource_identifier,
+                    raw_message: raw_terraform_output,
+                },
+                _ => TerraformError::Unknown {
+                    terraform_args,
+                    raw_message: raw_terraform_output,
+                },
+            };
+        }
+
         // This kind of error should be triggered as little as possible, ideally, there is no unknown errors
         // (un-catched) so we can act / report properly to the user.
         TerraformError::Unknown {
@@ -298,6 +355,20 @@ impl TerraformError {
             TerraformError::ServiceNotActivatedOptInRequired { service_type, .. } => {
                 format!("Error, service `{}` requiring an opt-in is not activated.", service_type,)
             }
+            TerraformError::AlreadyExistingResource {
+                resource_type,
+                resource_identifier,
+                ..
+            } => {
+                format!("Error, resource {}:{} already exists.", resource_type, resource_identifier)
+            }
+            TerraformError::WaitingTimeoutResource {
+                resource_type,
+                resource_identifier,
+                ..
+            } => {
+                format!("Error, waiting for resource {}:{} timeout.", resource_type, resource_identifier)
+            }
         }
     }
 }
@@ -335,6 +406,12 @@ impl Display for TerraformError {
             TerraformError::ServiceNotActivatedOptInRequired { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
+            TerraformError::AlreadyExistingResource { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::WaitingTimeoutResource { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
         };
 
         f.write_str(&message)
@@ -342,42 +419,66 @@ impl Display for TerraformError {
 }
 
 fn manage_common_issues(
+    root_dir: &str,
     terraform_args: Vec<&str>,
     terraform_provider_lock: &str,
     err: &TerraformError,
 ) -> Result<(), TerraformError> {
+    terraform_already_existing_resource(root_dir, err)?;
+    terraform_plugins_failed_load(root_dir, err, terraform_provider_lock)?;
+
+    Err(TerraformError::Unknown {
+        terraform_args: terraform_args.iter().map(|e| e.to_string()).collect(),
+        raw_message: err.to_string(),
+    })
+}
+
+fn terraform_already_existing_resource(root_dir: &str, error: &TerraformError) -> Result<Vec<String>, TerraformError> {
+    match error {
+        TerraformError::AlreadyExistingResource {
+            resource_type,
+            resource_identifier,
+            ..
+        } => terraform_import(root_dir, resource_type, resource_identifier),
+        TerraformError::WaitingTimeoutResource {
+            resource_type,
+            resource_identifier,
+            ..
+        } => terraform_import(root_dir, resource_type, resource_identifier),
+        _ => Ok(vec![]),
+    }
+}
+
+fn terraform_plugins_failed_load(
+    root_dir: &str,
+    error: &TerraformError,
+    terraform_provider_lock: &str,
+) -> Result<Vec<String>, TerraformError> {
     // Error: Failed to install provider from shared cache
     // in order to avoid lock errors on parallel run, let's sleep a bit
     // https://github.com/hashicorp/terraform/issues/28041
-
-    let error_string = err.to_string();
+    let error_string = error.to_string();
+    let sleep_time_int = rand::thread_rng().gen_range(20..45);
+    let sleep_time = time::Duration::from_secs(sleep_time_int);
 
     if error_string.contains("Failed to install provider from shared cache")
         || error_string.contains("Failed to install provider")
     {
-        let sleep_time_int = rand::thread_rng().gen_range(20..45);
-        let sleep_time = time::Duration::from_secs(sleep_time_int);
-
-        // failed to install provider from shared cache, cleaning and sleeping before retrying...",
-        return match fs::remove_file(&terraform_provider_lock) {
-            Ok(_) => {
-                thread::sleep(sleep_time);
-                Ok(())
-            }
-            Err(e) => Err(TerraformError::CannotDeleteLockFile {
+        if let Err(e) = fs::remove_file(&terraform_provider_lock) {
+            return Err(TerraformError::CannotDeleteLockFile {
                 terraform_provider_lock: terraform_provider_lock.to_string(),
                 raw_message: e.to_string(),
-            }),
+            });
         };
-    } else if error_string.contains("Plugin reinitialization required") {
-        // terraform init is required
-        return Ok(());
+        thread::sleep(sleep_time);
+        return terraform_init(root_dir);
     }
 
-    Err(TerraformError::Unknown {
-        terraform_args: terraform_args.iter().map(|e| e.to_string()).collect(),
-        raw_message: error_string,
-    })
+    if error_string.contains("Plugin reinitialization required") {
+        return terraform_init(root_dir);
+    }
+
+    Ok(vec![])
 }
 
 fn terraform_init(root_dir: &str) -> Result<Vec<String>, TerraformError> {
@@ -389,7 +490,7 @@ fn terraform_init(root_dir: &str) -> Result<Vec<String>, TerraformError> {
         match terraform_exec(root_dir, terraform_args.clone()) {
             Ok(output) => OperationResult::Ok(output),
             Err(err) => {
-                let _ = manage_common_issues(terraform_args.clone(), &terraform_provider_lock, &err);
+                let _ = manage_common_issues(root_dir, terraform_args.clone(), &terraform_provider_lock, &err);
                 // Error while trying to run terraform init, retrying...
                 OperationResult::Retry(err)
             }
@@ -399,9 +500,11 @@ fn terraform_init(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => {
-            Err(TerraformError::new(terraform_args.iter().map(|e| e.to_string()).collect(), e))
-        }
+        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
+            root_dir,
+            terraform_args.iter().map(|e| e.to_string()).collect(),
+            e,
+        )),
     }
 }
 
@@ -415,9 +518,7 @@ fn terraform_validate(root_dir: &str) -> Result<Vec<String>, TerraformError> {
         match terraform_exec(root_dir, terraform_args.clone()) {
             Ok(output) => OperationResult::Ok(output),
             Err(err) => {
-                if manage_common_issues(terraform_args.clone(), &terraform_provider_lock, &err).is_ok() {
-                    let _ = terraform_init(root_dir);
-                };
+                let _ = manage_common_issues(root_dir, terraform_args.clone(), &terraform_provider_lock, &err);
                 // error while trying to Terraform validate on the rendered templates
                 OperationResult::Retry(err)
             }
@@ -427,9 +528,11 @@ fn terraform_validate(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => {
-            Err(TerraformError::new(terraform_args.iter().map(|e| e.to_string()).collect(), e))
-        }
+        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
+            root_dir,
+            terraform_args.iter().map(|e| e.to_string()).collect(),
+            e,
+        )),
     }
 }
 
@@ -449,9 +552,11 @@ pub fn terraform_state_list(root_dir: &str) -> Result<Vec<String>, TerraformErro
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => {
-            Err(TerraformError::new(terraform_args.iter().map(|e| e.to_string()).collect(), e))
-        }
+        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
+            root_dir,
+            terraform_args.iter().map(|e| e.to_string()).collect(),
+            e,
+        )),
     }
 }
 
@@ -472,26 +577,23 @@ pub fn terraform_plan(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => {
-            Err(TerraformError::new(terraform_args.iter().map(|e| e.to_string()).collect(), e))
-        }
+        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
+            root_dir,
+            terraform_args.iter().map(|e| e.to_string()).collect(),
+            e,
+        )),
     }
 }
 
 fn terraform_apply(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     let terraform_args = vec!["apply", "-no-color", "-auto-approve", "tf_plan"];
-    // Retry is not needed, fixing it to 1 only for the time being
-    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
-        // terraform plan first
-        if let Err(err) = terraform_plan(root_dir) {
-            return OperationResult::Retry(err);
-        }
-
+    let result = retry::retry(Fixed::from_millis(3000).take(3), || {
         // terraform apply
         match terraform_exec(root_dir, terraform_args.clone()) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
-                // Error while trying to run terraform apply on rendered templates, retrying...
+                let _ = manage_common_issues(root_dir, terraform_args.clone(), "", &err);
+                // error while trying to Terraform validate on the rendered templates
                 OperationResult::Retry(err)
             }
         }
@@ -500,9 +602,11 @@ fn terraform_apply(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => {
-            Err(TerraformError::new(terraform_args.iter().map(|e| e.to_string()).collect(), e))
-        }
+        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
+            root_dir,
+            terraform_args.iter().map(|e| e.to_string()).collect(),
+            e,
+        )),
     }
 }
 
@@ -535,6 +639,7 @@ pub fn terraform_apply_with_tf_workers_resources(
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
         Err(retry::Error::Internal(e)) => Err(TerraformError::new(
+            root_dir,
             terraform_args_string.iter().map(|e| e.to_string()).collect(),
             e,
         )),
@@ -576,9 +681,36 @@ pub fn terraform_destroy(root_dir: &str) -> Result<Vec<String>, TerraformError> 
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
-        Err(retry::Error::Internal(e)) => {
-            Err(TerraformError::new(terraform_args.iter().map(|e| e.to_string()).collect(), e))
+        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
+            root_dir,
+            terraform_args.iter().map(|e| e.to_string()).collect(),
+            e,
+        )),
+    }
+}
+
+fn terraform_import(root_dir: &str, resource: &str, resource_identifier: &str) -> Result<Vec<String>, TerraformError> {
+    let terraform_args = vec!["import", resource, resource_identifier];
+
+    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
+        // terraform init
+        match terraform_exec(root_dir, terraform_args.clone()) {
+            Ok(output) => OperationResult::Ok(output),
+            Err(err) => {
+                // Error while trying to run terraform init, retrying...
+                OperationResult::Retry(err)
+            }
         }
+    });
+
+    match result {
+        Ok(output) => Ok(output),
+        Err(Operation { error, .. }) => Err(error),
+        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
+            root_dir,
+            terraform_args.iter().map(|e| e.to_string()).collect(),
+            e,
+        )),
     }
 }
 
@@ -598,6 +730,7 @@ fn terraform_run(actions: TerraformAction, root_dir: &str, dry_run: bool) -> Res
     }
 
     if actions.contains(TerraformAction::APPLY) && !dry_run {
+        output.extend(terraform_plan(root_dir)?);
         output.extend(terraform_apply(root_dir)?);
     }
 
@@ -678,6 +811,7 @@ fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Terraf
     match result {
         Ok(_) => Ok(stdout),
         Err(_) => Err(TerraformError::new(
+            root_dir,
             args.iter().map(|e| e.to_string()).collect(),
             stderr.join("\n"),
         )),
@@ -719,7 +853,7 @@ in the dependency lock file
             terraform_args: terraform_args.iter().map(|e| e.to_string()).collect(),
             raw_message: could_not_load_plugin.to_string(),
         };
-        assert!(manage_common_issues(terraform_args, "/tmp/do_not_exists", &could_not_load_plugin_error).is_ok());
+        assert!(manage_common_issues("", terraform_args, "/tmp/do_not_exists", &could_not_load_plugin_error).is_ok());
     }
 
     #[test]
@@ -773,7 +907,7 @@ terraform {
         let raw_message = "Request ID: None Body: <?xml version='1.0' encoding='UTF-8'?>\n<Error><Code>QuotaExceeded</Code><Message>Quota exceeded. Please contact support to upgrade your quotas.</Message><RequestId>tx111117bad3a44d56bd120-0062d1515d</RequestId></Error>".to_string();
 
         // execute:
-        let result = TerraformError::new(vec!["apply".to_string()], raw_message.to_string());
+        let result = TerraformError::new("", vec!["apply".to_string()], raw_message.to_string());
 
         // validate:
         assert_eq!(
@@ -869,7 +1003,7 @@ terraform {
 
         for tc in test_cases {
             // execute:
-            let result = TerraformError::new(vec!["apply".to_string()], tc.input_raw_message.to_string());
+            let result = TerraformError::new("", vec!["apply".to_string()], tc.input_raw_message.to_string());
 
             // validate:
             assert_eq!(tc.expected_terraform_error, result);

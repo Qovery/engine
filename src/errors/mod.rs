@@ -614,6 +614,10 @@ pub enum Tag {
     /// TerraformServiceNotActivatedOptInRequired: represents an error due to service not being
     /// activated on cloud account.
     TerraformServiceNotActivatedOptInRequired,
+    /// TerraformWaitingTimeoutResource: represents an error due to resource being in flaky state in tf state.
+    TerraformWaitingTimeoutResource,
+    /// TerraformAlreadyExistingResource: represents an error due to resource already present in tf state while trying to create it.
+    TerraformAlreadyExistingResource,
     /// HelmChartsSetupError: represents an error while trying to setup helm charts.
     HelmChartsSetupError,
     /// HelmChartsDeployError: represents an error while trying to deploy helm charts.
@@ -2274,6 +2278,22 @@ impl EngineError {
             TerraformError::ServiceNotActivatedOptInRequired { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformServiceNotActivatedOptInRequired,
+                terraform_error.to_safe_message(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                None,
+            ),
+            TerraformError::AlreadyExistingResource { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformAlreadyExistingResource,
+                terraform_error.to_safe_message(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                None,
+            ),
+            TerraformError::WaitingTimeoutResource { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformWaitingTimeoutResource,
                 terraform_error.to_safe_message(), // Note: Terraform error message are supposed to be safe
                 Some(terraform_error.into()),
                 None,
