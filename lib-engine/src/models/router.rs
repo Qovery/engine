@@ -102,22 +102,42 @@ impl<T: CloudProvider> Router<T> {
             })
             .collect::<Vec<_>>();
 
+        // FIXME: For now we only support one public port per application
+        // it should be possible add more if we prefix port_name in front of the fqdn
+        // (i.e: p4242.zxxxx-zzzzz.cluster.mydomain.com)
         let route_data_templates = self
             .routes
             .iter()
             .filter_map(|r| {
-                match &environment
+                if let Some(application) = &environment
                     .applications
                     .iter()
                     .find(|app| app.long_id() == &r.service_long_id)
                 {
-                    Some(application) => application.public_port().map(|private_port| RouteDataTemplate {
-                        path: r.path.clone(),
-                        application_name: application.sanitized_name(),
-                        application_port: private_port,
-                    }),
-                    _ => None,
+                    if let Some(public_port) = application.public_port() {
+                        return Some(RouteDataTemplate {
+                            path: r.path.clone(),
+                            application_name: application.sanitized_name(),
+                            application_port: public_port,
+                        });
+                    }
                 }
+
+                if let Some(container) = &environment
+                    .containers
+                    .iter()
+                    .find(|container| container.long_id() == &r.service_long_id)
+                {
+                    if let Some(public_port) = container.public_port() {
+                        return Some(RouteDataTemplate {
+                            path: r.path.clone(),
+                            application_name: container.kube_service_name(),
+                            application_port: public_port,
+                        });
+                    }
+                }
+
+                None
             })
             .collect::<Vec<_>>();
 
@@ -184,36 +204,25 @@ impl<T: CloudProvider> Router<T> {
 
         // ingress advanced settings
         // 1 app == 1 ingress, we filter only on the app to retrieve advanced settings
-        let _ = self
-            .routes
-            .iter()
-            .map(|r| {
-                if let Some(application) = &environment
-                    .applications
-                    .iter()
-                    .find(|app| app.long_id() == &r.service_long_id)
-                {
-                    let advanced_settings = application.advanced_settings();
-                    context.insert(
-                        "ingress_proxy_body_size_mb",
-                        &advanced_settings.network_ingress_proxy_body_size_mb,
-                    );
-                    context.insert("ingress_cors_enable", &advanced_settings.network_ingress_cors_enable);
-                    context.insert(
-                        "ingress_cors_allow_origin",
-                        &advanced_settings.network_ingress_cors_allow_origin,
-                    );
-                    context.insert(
-                        "ingress_cors_allow_methods",
-                        &advanced_settings.network_ingress_cors_allow_methods,
-                    );
-                    context.insert(
-                        "ingress_cors_allow_headers",
-                        &advanced_settings.network_ingress_cors_allow_headers,
-                    );
-                }
-            })
-            .collect::<Vec<()>>();
+        if let Some(route) = self.routes.first() {
+            if let Some(advanced_settings) = environment
+                .applications
+                .iter()
+                .find(|app| app.long_id() == &route.service_long_id)
+                .map(|app| app.advanced_settings())
+            {
+                context.insert("advanced_settings", &advanced_settings);
+            }
+
+            if let Some(advanced_settings) = environment
+                .containers
+                .iter()
+                .find(|app| app.long_id() == &route.service_long_id)
+                .map(|app| app.advanced_settings())
+            {
+                context.insert("advanced_settings", &advanced_settings);
+            }
+        };
 
         Ok(context)
     }

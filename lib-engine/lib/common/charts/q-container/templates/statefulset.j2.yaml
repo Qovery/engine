@@ -112,11 +112,11 @@ spec:
           {%- endif %}
           resources:
             limits:
-              cpu: {{ service.cpu_limit }}
-              memory: {{ service.ram_limit }}
+              cpu: {{ service.cpu_limit_in_mili }}
+              memory: {{ service.ram_limit_in_mib }}
             requests:
-              cpu: {{ service.cpu_request }}
-              memory: {{ service.ram_request }}
+              cpu: {{ service.cpu_request_in_mili }}
+              memory: {{ service.ram_request_in_mib }}
           volumeMounts:
 {%- for s in service.storages %}
             - name: {{ s.long_id }}

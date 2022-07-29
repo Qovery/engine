@@ -152,6 +152,10 @@ impl<T: CloudProvider> Container<T> {
         format!("{}/common/charts/q-container", self.context.lib_root_dir())
     }
 
+    fn kube_service_name(&self) -> String {
+        format!("container-{}", self.long_id)
+    }
+
     fn public_port(&self) -> Option<u16> {
         self.ports
             .iter()
@@ -179,7 +183,7 @@ impl<T: CloudProvider> Container<T> {
             service: ServiceTeraContext {
                 short_id: to_short_id(&self.long_id),
                 long_id: self.long_id,
-                name: format!("container-{}", self.long_id),
+                name: self.kube_service_name(),
                 user_unsafe_name: self.name.clone(),
                 image_full: format!(
                     "{}{}:{}",
@@ -190,10 +194,10 @@ impl<T: CloudProvider> Container<T> {
                 image_tag: self.tag.clone(),
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
-                cpu_request: format!("{}m", self.cpu_request_in_mili),
-                cpu_limit: format!("{}m", self.cpu_limit_in_mili),
-                ram_request: format!("{}Mi", self.ram_request_in_mib),
-                ram_limit: format!("{}Mi", self.ram_limit_in_mib),
+                cpu_request_in_mili: format!("{}m", self.cpu_request_in_mili),
+                cpu_limit_in_mili: format!("{}m", self.cpu_limit_in_mili),
+                ram_request_in_mib: format!("{}Mi", self.ram_request_in_mib),
+                ram_limit_in_mib: format!("{}Mi", self.ram_limit_in_mib),
                 min_instances: self.min_instances,
                 max_instances: self.max_instances,
                 ports: self.ports.clone(),
@@ -325,6 +329,7 @@ pub trait ContainerService: Service + DeploymentAction + ToTeraContext {
     fn public_port(&self) -> Option<u16>;
     fn advanced_settings(&self) -> &ContainerAdvancedSettings;
     fn image_full(&self) -> String;
+    fn kube_service_name(&self) -> String;
 }
 
 impl<T: CloudProvider> ContainerService for Container<T>
@@ -341,6 +346,10 @@ where
 
     fn image_full(&self) -> String {
         format!("{}/{}:{}", self.registry.url(), self.image, self.tag)
+    }
+
+    fn kube_service_name(&self) -> String {
+        self.kube_service_name()
     }
 }
 
@@ -362,10 +371,10 @@ pub(super) struct ServiceTeraContext {
     pub(super) image_tag: String,
     pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
-    pub(super) cpu_request: String,
-    pub(super) cpu_limit: String,
-    pub(super) ram_request: String,
-    pub(super) ram_limit: String,
+    pub(super) cpu_request_in_mili: String,
+    pub(super) cpu_limit_in_mili: String,
+    pub(super) ram_request_in_mib: String,
+    pub(super) ram_limit_in_mib: String,
     pub(super) min_instances: u32,
     pub(super) max_instances: u32,
     pub(super) ports: Vec<Port>,
