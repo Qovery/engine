@@ -559,6 +559,46 @@ impl Docker {
         docker_exec(&args, &self.get_all_envs(&[]), stdout_output, stderr_output, should_abort)
     }
 
+    pub fn tag<Stdout, Stderr>(
+        &self,
+        source_image: &ContainerImage,
+        dest_image: &ContainerImage,
+        stdout_output: &mut Stdout,
+        stderr_output: &mut Stderr,
+        should_abort: &CommandKiller,
+    ) -> Result<(), DockerError>
+    where
+        Stdout: FnMut(String),
+        Stderr: FnMut(String),
+    {
+        info!("Docker tag {:?} {:?}", source_image, dest_image);
+        let mut args = vec!["tag"];
+        let source_image = source_image.image_name();
+        let dest_image = dest_image.image_name();
+        args.push(source_image.as_str());
+        args.push(dest_image.as_str());
+
+        docker_exec(&args, &self.get_all_envs(&[]), stdout_output, stderr_output, should_abort)
+    }
+
+    pub fn mirror<Stdout, Stderr>(
+        &self,
+        source_image: &ContainerImage,
+        dest_image: &ContainerImage,
+        stdout_output: &mut Stdout,
+        stderr_output: &mut Stderr,
+        should_abort: &CommandKiller,
+    ) -> Result<(), DockerError>
+    where
+        Stdout: FnMut(String),
+        Stderr: FnMut(String),
+    {
+        info!("Docker mirror {:?} {:?}", source_image, dest_image);
+        self.pull(source_image, stdout_output, stderr_output, should_abort)?;
+        self.tag(source_image, dest_image, stdout_output, stderr_output, should_abort)?;
+        self.push(dest_image, stdout_output, stderr_output, should_abort)
+    }
+
     pub fn prune_images(&self) -> Result<(), DockerError> {
         info!("Docker prune images");
 
@@ -617,7 +657,7 @@ where
 
 // start a local registry to run this test
 // docker run --rm -ti -p 5000:5000 --name registry registry:2
-#[cfg(feature = "test-with-docker")]
+#[cfg(feature = "test-local-docker")]
 #[cfg(test)]
 mod tests {
     use crate::cmd::command::CommandKiller;
@@ -670,7 +710,7 @@ mod tests {
             &mut |msg| eprintln!("{}", msg),
             &CommandKiller::from_timeout(Duration::from_secs(1)),
         );
-        assert!(matches!(ret, Err(DockerError::Timeout(_))));
+        assert!(matches!(ret, Err(DockerError::Timeout { .. })));
     }
 
     #[test]
@@ -811,6 +851,41 @@ mod tests {
 
         let ret = docker.pull(
             &image_to_build,
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
+            &CommandKiller::never(),
+        );
+        assert!(matches!(ret, Ok(_)));
+    }
+
+    #[test]
+    fn test_mirror() {
+        // start a local registry to run this test
+        // docker run --rm -d -p 5000:5000 --name registry registry:2
+        let docker = Docker::new_with_options(true, None).unwrap();
+        let image_source = ContainerImage {
+            registry: Url::parse("https://docker.io").unwrap(),
+            name: "alpine".to_string(),
+            tags: vec!["3.15".to_string()],
+        };
+        let image_dest = ContainerImage {
+            registry: private_registry_url(),
+            name: "erebe/alpine".to_string(),
+            tags: vec!["mirror".to_string()],
+        };
+
+        // It should work
+        let ret = docker.mirror(
+            &image_source,
+            &image_dest,
+            &mut |msg| println!("{}", msg),
+            &mut |msg| eprintln!("{}", msg),
+            &CommandKiller::never(),
+        );
+        assert!(matches!(ret, Ok(_)));
+
+        let ret = docker.pull(
+            &image_dest,
             &mut |msg| println!("{}", msg),
             &mut |msg| eprintln!("{}", msg),
             &CommandKiller::never(),
