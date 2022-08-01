@@ -1077,7 +1077,6 @@ fn deploy_container_with_no_router_on_aws_eks() {
                 .as_str(),
         );
 
-        let mut environment_for_delete = environment.clone();
         environment.routers = vec![];
         environment.applications = vec![];
         environment.containers = vec![Container {
@@ -1086,8 +1085,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
             action: Action::Create,
             registry: Registry::DockerHub {
                 url: Url::parse("https://docker.io").unwrap(),
-                username: "toto".to_string(),
-                password: "tata".to_string(),
+                credentials: None,
             },
             image: "debian".to_string(),
             tag: "bullseye".to_string(),
@@ -1128,16 +1126,13 @@ fn deploy_container_with_no_router_on_aws_eks() {
             advanced_settings: Default::default(),
         }];
 
-        environment_for_delete.routers = vec![];
+        let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
 
-        let ea = environment.clone();
-        let ea_delete = environment_for_delete.clone();
-
-        let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
+        let ret = environment.deploy_environment(&environment, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment_for_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, logger, &engine_config_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
 
         "".to_string()
@@ -1179,19 +1174,26 @@ fn deploy_container_with_router_on_aws_eks() {
                 .as_str(),
         );
 
-        let mut environment_for_delete = environment.clone();
         environment.applications = vec![];
         environment.containers = vec![Container {
             long_id: Default::default(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
             action: Action::Create,
-            registry: Registry::DockerHub {
-                url: Url::parse("https://docker.io").unwrap(),
-                username: "toto".to_string(),
-                password: "tata".to_string(),
+            registry: Registry::PrivateEcr {
+                url: Url::parse("https://843237546537.dkr.ecr.eu-west-3.amazonaws.com/").unwrap(),
+                region: engine_config.kubernetes().region().to_string(),
+                access_key_id: secrets
+                    .AWS_ACCESS_KEY_ID
+                    .expect("AWS_TEST_ACCESS_KEY_ID is not set in secrets")
+                    .to_string(),
+
+                secret_access_key: secrets
+                    .AWS_SECRET_ACCESS_KEY
+                    .expect("AWS_TEST_SECRET_ACCESS_KEY is not set in secrets")
+                    .to_string(),
             },
-            image: "httpd".to_string(),
-            tag: "alpine3.16".to_string(),
+            image: "mini-http-bhw9k344z7e4qmj".to_string(),
+            tag: "16051326618033803529-a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
             command_args: vec![],
             entrypoint: None,
             cpu_request_in_mili: 250,
@@ -1239,16 +1241,13 @@ fn deploy_container_with_router_on_aws_eks() {
             }],
         }];
 
-        environment_for_delete.routers = vec![];
+        let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
 
-        let ea = environment.clone();
-        let ea_delete = environment_for_delete.clone();
-
-        let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
+        let ret = environment.deploy_environment(&environment, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment_for_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, logger, &engine_config_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
 
         "".to_string()

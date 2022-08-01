@@ -137,7 +137,7 @@ spec:
     spec:
       accessModes:
         - ReadWriteOnce
-      storageClassName: aws-ebs-{{ s.storage_type }}-0
+      storageClassName: {{ s.storage_type }}
       resources:
         requests:
           storage: {{ s.size_in_gib }}Gi
