@@ -6,7 +6,6 @@ use retry::Error::Operation;
 use retry::OperationResult;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
-use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::os::unix::fs::PermissionsExt;
@@ -21,17 +20,14 @@ use uuid::Uuid;
 use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::models::{CpuLimits, InstanceEc2, NodeGroups};
+use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CloudProviderKind;
-use crate::cloud_provider::{CloudProvider, DeploymentTarget};
 use crate::cmd::kubectl::{kubectl_delete_apiservice, kubectl_delete_completed_jobs};
 use crate::cmd::kubectl::{
     kubectl_delete_objects_in_all_namespaces, kubectl_exec_count_all_objects, kubectl_exec_delete_pod,
-    kubectl_exec_get_node, kubectl_exec_is_namespace_present, kubectl_exec_version, kubectl_get_crash_looping_pods,
-    kubernetes_get_all_pdbs,
+    kubectl_exec_get_node, kubectl_exec_version, kubectl_get_crash_looping_pods, kubernetes_get_all_pdbs,
 };
 use crate::cmd::structs::KubernetesNodeCondition;
-use crate::deployment_action::deploy_namespace::NamespaceDeployment;
-use crate::deployment_action::DeploymentAction;
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
@@ -399,10 +395,6 @@ pub trait Kubernetes {
     fn on_pause_error(&self) -> Result<(), EngineError>;
     fn on_delete(&self) -> Result<(), EngineError>;
     fn on_delete_error(&self) -> Result<(), EngineError>;
-    fn deploy_environment(&self, environment: &Environment) -> Result<(), (HashSet<Uuid>, EngineError)>;
-    fn pause_environment(&self, environment: &Environment) -> Result<(), (HashSet<Uuid>, EngineError)>;
-    fn delete_environment(&self, environment: &Environment) -> Result<(), (HashSet<Uuid>, EngineError)>;
-
     fn send_to_customer(&self, message: &str, listeners_helper: &ListenersHelper) {
         listeners_helper.upgrade_in_progress(ProgressInfo::new(
             ProgressScope::Infrastructure {
@@ -533,223 +525,6 @@ pub struct Resources {
     pub free_pods: u32,
     pub max_pods: u32,
     pub running_nodes: u32,
-}
-
-/// common function to deploy a complete environment through Kubernetes and the different
-/// managed services.
-pub fn deploy_environment(
-    kubernetes: &dyn Kubernetes,
-    environment: &Environment,
-    event_details: EventDetails,
-) -> Result<(), (HashSet<Uuid>, EngineError)> {
-    let mut deployed_services: HashSet<Uuid> = HashSet::with_capacity(
-        environment.routers.len() + environment.databases.len() + environment.applications.len(),
-    );
-    let deployment_target = DeploymentTarget::new(kubernetes, environment, &event_details)
-        .map_err(|err| (deployed_services.clone(), err))?;
-
-    // deploy namespace first
-    let ns = NamespaceDeployment {
-        resource_expiration: kubernetes
-            .context()
-            .resource_expiration_in_seconds()
-            .map(|ttl| Duration::from_secs(ttl as u64)),
-        event_details: event_details.clone(),
-    };
-    ns.exec_action(&deployment_target, environment.action)
-        .map_err(|err| (deployed_services.clone(), err))?;
-
-    // create all stateful services (database)
-    for service in &environment.databases {
-        deployed_services.insert(*service.long_id());
-        service
-            .exec_action(&deployment_target, *service.action())
-            .map_err(|err| (deployed_services.clone(), err))?;
-        service
-            .exec_check_action(*service.action())
-            .map_err(|err| (deployed_services.clone(), err))?;
-    }
-
-    for service in &environment.containers {
-        deployed_services.insert(*service.long_id());
-        service
-            .exec_action(&deployment_target, *service.action())
-            .map_err(|err| (deployed_services.clone(), err))?;
-        service
-            .exec_check_action(*service.action())
-            .map_err(|err| (deployed_services.clone(), err))?;
-    }
-
-    // create all applications
-    for service in &environment.applications {
-        deployed_services.insert(*service.long_id());
-        service
-            .exec_action(&deployment_target, *service.action())
-            .map_err(|err| (deployed_services.clone(), err))?;
-        service
-            .exec_check_action(*service.action())
-            .map_err(|err| (deployed_services.clone(), err))?;
-    }
-
-    // create all routers
-    for service in &environment.routers {
-        deployed_services.insert(*service.long_id());
-        service
-            .exec_action(&deployment_target, *service.action())
-            .map_err(|err| (deployed_services.clone(), err))?;
-        service
-            .exec_check_action(*service.action())
-            .map_err(|err| (deployed_services.clone(), err))?;
-    }
-
-    Ok(())
-}
-
-/// common kubernetes function to pause a complete environment
-pub fn pause_environment(
-    kubernetes: &dyn Kubernetes,
-    environment: &Environment,
-    event_details: EventDetails,
-) -> Result<(), (HashSet<Uuid>, EngineError)> {
-    let mut deployed_services: HashSet<Uuid> = HashSet::with_capacity(
-        environment.routers.len() + environment.databases.len() + environment.applications.len(),
-    );
-    let deployment_target = DeploymentTarget::new(kubernetes, environment, &event_details)
-        .map_err(|err| (deployed_services.clone(), err))?;
-
-    for service in &environment.routers {
-        deployed_services.insert(*service.long_id());
-        service
-            .on_pause(&deployment_target)
-            .map_err(|err| (deployed_services.clone(), err))?;
-        service
-            .on_pause_check()
-            .map_err(|err| (deployed_services.clone(), err))?;
-    }
-
-    for service in &environment.applications {
-        deployed_services.insert(*service.long_id());
-        service
-            .on_pause(&deployment_target)
-            .map_err(|err| (deployed_services.clone(), err))?;
-        service
-            .on_pause_check()
-            .map_err(|err| (deployed_services.clone(), err))?;
-    }
-
-    for service in &environment.containers {
-        deployed_services.insert(*service.long_id());
-        service
-            .on_pause(&deployment_target)
-            .map_err(|err| (deployed_services.clone(), err))?;
-        service
-            .on_pause_check()
-            .map_err(|err| (deployed_services.clone(), err))?;
-    }
-
-    for service in &environment.databases {
-        deployed_services.insert(*service.long_id());
-        service
-            .on_pause(&deployment_target)
-            .map_err(|err| (deployed_services.clone(), err))?;
-        service
-            .on_pause_check()
-            .map_err(|err| (deployed_services.clone(), err))?;
-    }
-
-    let ns = NamespaceDeployment {
-        resource_expiration: kubernetes
-            .context()
-            .resource_expiration_in_seconds()
-            .map(|ttl| Duration::from_secs(ttl as u64)),
-        event_details: event_details.clone(),
-    };
-    ns.on_pause(&deployment_target)
-        .map_err(|err| (deployed_services.clone(), err))?;
-
-    Ok(())
-}
-
-/// common kubernetes function to delete a complete environment
-pub fn delete_environment(
-    kubernetes: &dyn Kubernetes,
-    environment: &Environment,
-    event_details: EventDetails,
-) -> Result<(), (HashSet<Uuid>, EngineError)> {
-    let mut deployed_services: HashSet<Uuid> = HashSet::with_capacity(
-        environment.routers.len() + environment.databases.len() + environment.applications.len(),
-    );
-    let kubeconfig = kubernetes
-        .get_kubeconfig_file_path()
-        .map_err(|err| (deployed_services.clone(), err))?;
-
-    // check if environment is not already deleted
-    // speed up delete env because of terraform requiring apply + destroy
-    if !kubectl_exec_is_namespace_present(
-        kubeconfig,
-        environment.namespace(),
-        kubernetes.cloud_provider().credentials_environment_variables(),
-    ) {
-        info!("no need to delete environment {}, already absent", environment.namespace());
-        return Ok(());
-    };
-
-    let deployment_target = DeploymentTarget::new(kubernetes, environment, &event_details)
-        .map_err(|err| (deployed_services.clone(), err))?;
-
-    // delete all stateless services (router, application...)
-    for service in &environment.routers {
-        deployed_services.insert(*service.long_id());
-        service
-            .on_delete(&deployment_target)
-            .map_err(|err| (deployed_services.clone(), err))?;
-        service
-            .on_delete_check()
-            .map_err(|err| (deployed_services.clone(), err))?;
-    }
-
-    for service in &environment.applications {
-        deployed_services.insert(*service.long_id());
-        service
-            .on_delete(&deployment_target)
-            .map_err(|err| (deployed_services.clone(), err))?;
-        service
-            .on_delete_check()
-            .map_err(|err| (deployed_services.clone(), err))?;
-    }
-
-    for service in &environment.containers {
-        deployed_services.insert(*service.long_id());
-        service
-            .on_delete(&deployment_target)
-            .map_err(|err| (deployed_services.clone(), err))?;
-        service
-            .on_delete_check()
-            .map_err(|err| (deployed_services.clone(), err))?;
-    }
-
-    // delete all stateful services (database)
-    for service in &environment.databases {
-        deployed_services.insert(*service.long_id());
-        service
-            .on_delete(&deployment_target)
-            .map_err(|err| (deployed_services.clone(), err))?;
-        service
-            .on_delete_check()
-            .map_err(|err| (deployed_services.clone(), err))?;
-    }
-
-    let ns = NamespaceDeployment {
-        resource_expiration: kubernetes
-            .context()
-            .resource_expiration_in_seconds()
-            .map(|ttl| Duration::from_secs(ttl as u64)),
-        event_details: event_details.clone(),
-    };
-    ns.on_delete(&deployment_target)
-        .map_err(|err| (deployed_services.clone(), err))?;
-
-    Ok(())
 }
 
 pub fn uninstall_cert_manager<P>(

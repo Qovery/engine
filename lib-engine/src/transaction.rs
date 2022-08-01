@@ -9,6 +9,7 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::service::{Action, Service};
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::to_engine_error;
+use crate::deployment_action::deploy_environment::EnvironmentDeployment;
 use crate::engine::{EngineConfig, EngineConfigError};
 use crate::errors::{EngineError, Tag};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, Transmitter};
@@ -325,7 +326,21 @@ impl<'a> Transaction<'a> {
 
                     // deploy complete environment
                     match self.commit_environment(&(environment_action.as_ref().borrow()), |qe_env| {
-                        self.engine.kubernetes().deploy_environment(qe_env)
+                        let event_details = self
+                            .engine
+                            .kubernetes()
+                            .get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+
+                        let mut env_deployment = EnvironmentDeployment::new(self.engine, qe_env, event_details)
+                            .map_err(|err| {
+                                error!("Error while creating environment: {:?}", err);
+                                (HashSet::new(), err)
+                            })?;
+
+                        env_deployment.on_create().map_err(|err| {
+                            error!("Error while deploying environment: {:?}", err);
+                            (env_deployment.deployed_services, err)
+                        })
                     }) {
                         TransactionResult::Ok => {}
                         err => {
@@ -341,7 +356,21 @@ impl<'a> Transaction<'a> {
 
                     // pause complete environment
                     match self.commit_environment(&(environment_action.as_ref().borrow()), |qe_env| {
-                        self.engine.kubernetes().pause_environment(qe_env)
+                        let event_details = self
+                            .engine
+                            .kubernetes()
+                            .get_event_details(Stage::Environment(EnvironmentStep::Pause));
+
+                        let mut env_deployment = EnvironmentDeployment::new(self.engine, qe_env, event_details)
+                            .map_err(|err| {
+                                error!("Error while creating environment: {:?}", err);
+                                (HashSet::new(), err)
+                            })?;
+
+                        env_deployment.on_pause().map_err(|err| {
+                            error!("Error while pausing environment: {:?}", err);
+                            (env_deployment.deployed_services, err)
+                        })
                     }) {
                         TransactionResult::Ok => {}
                         err => {
@@ -357,7 +386,21 @@ impl<'a> Transaction<'a> {
 
                     // delete complete environment
                     match self.commit_environment(&(environment_action.as_ref().borrow()), |qe_env| {
-                        self.engine.kubernetes().delete_environment(qe_env)
+                        let event_details = self
+                            .engine
+                            .kubernetes()
+                            .get_event_details(Stage::Environment(EnvironmentStep::Delete));
+
+                        let mut env_deployment = EnvironmentDeployment::new(self.engine, qe_env, event_details)
+                            .map_err(|err| {
+                                error!("Error while creating environment: {:?}", err);
+                                (HashSet::new(), err)
+                            })?;
+
+                        env_deployment.on_delete().map_err(|err| {
+                            error!("Error while deleting environment: {:?}", err);
+                            (env_deployment.deployed_services, err)
+                        })
                     }) {
                         TransactionResult::Ok => {}
                         err => {

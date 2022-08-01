@@ -5,7 +5,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cmd::docker::Docker;
 use crate::cmd::helm::{to_engine_error, Helm};
+use crate::container_registry::ContainerRegistry;
+use crate::dns_provider::DnsProvider;
+use crate::engine::EngineConfig;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
@@ -92,17 +96,22 @@ impl TerraformStateCredentials {
 
 pub struct DeploymentTarget<'a> {
     pub kubernetes: &'a dyn Kubernetes,
+    pub container_registry: &'a dyn ContainerRegistry,
+    pub cloud_provider: &'a dyn CloudProvider,
+    pub dns_provider: &'a dyn DnsProvider,
     pub environment: &'a Environment,
+    pub docker: &'a Docker,
     pub kube: kube::Client,
     pub helm: Helm,
 }
 
 impl<'a> DeploymentTarget<'a> {
     pub fn new(
-        kubernetes: &'a dyn Kubernetes,
+        engine_config: &'a EngineConfig,
         environment: &'a Environment,
         event_details: &EventDetails,
     ) -> Result<DeploymentTarget<'a>, EngineError> {
+        let kubernetes = engine_config.kubernetes();
         let kubeconfig_path = kubernetes.get_kubeconfig_file_path().unwrap_or_default();
         let kube_credentials: Vec<(String, String)> = kubernetes
             .cloud_provider()
@@ -122,7 +131,11 @@ impl<'a> DeploymentTarget<'a> {
 
         Ok(DeploymentTarget {
             kubernetes,
+            container_registry: engine_config.container_registry(),
+            cloud_provider: engine_config.cloud_provider(),
+            dns_provider: engine_config.dns_provider(),
             environment,
+            docker: &engine_config.context().docker,
             kube: kube_client,
             helm,
         })
