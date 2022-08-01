@@ -1094,7 +1094,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "apt-get update; apt-get install -y netcat; echo listening on port $PORT; env ; nc -l 8080".to_string(),
+                "apt-get update; apt-get install -y netcat; echo listening on port $PORT; env ; while true; do nc -l 8080; done".to_string(),
             ],
             entrypoint: None,
             cpu_request_in_mili: 250,
