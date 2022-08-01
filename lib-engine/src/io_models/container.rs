@@ -1,3 +1,4 @@
+use crate::build_platform::Credentials;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::io_models::application::{to_environment_variable, AdvancedSettingsProbeType, Port, Storage};
@@ -20,8 +21,7 @@ use uuid::Uuid;
 pub enum Registry {
     DockerHub {
         url: Url,
-        username: String,
-        password: String,
+        credentials: Option<Credentials>,
     },
 
     DoCr {
