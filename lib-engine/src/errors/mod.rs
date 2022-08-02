@@ -2162,56 +2162,56 @@ impl EngineError {
             TerraformError::Unknown { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformUnknownError,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
+                terraform_error.to_string(), // Note: end-game goal is to have 0 Unknown Terraform issues. Showing everything in this case is just more convenient for both user and Qovery team.
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                 None,
                 Some(DEFAULT_HINT_MESSAGE.to_string()),
             ),
             TerraformError::InvalidCredentials { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformInvalidCredentials,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                 None,
                 Some(DEFAULT_HINT_MESSAGE.to_string()),
             ),
             TerraformError::ConfigFileNotFound { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformConfigFileNotFound,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                 None,
                 Some("This is normal if it's a newly created cluster".to_string()),
             ),
             TerraformError::ConfigFileInvalidContent { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformConfigFileInvalidContent,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                 None,
                 Some("Did you manually performed changes AWS side?".to_string()),
             ),
             TerraformError::CannotDeleteLockFile { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformCannotDeleteLockFile,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                 None,
                 None,
             ),
             TerraformError::CannotRemoveEntryOutOfStateList { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformCannotRemoveEntryOut,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                 None,
                 None,
             ),
             TerraformError::ContextUnsupportedParameterValue { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformContextUnsupportedParameterValue,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                 None,
                 None,
             ),
@@ -2219,15 +2219,15 @@ impl EngineError {
                 raw_message: ref _raw_message,
                 ref sub_type,
             } => {
-                let terraform_error_string = terraform_error.to_string();
+                let terraform_error_string = terraform_error.to_safe_message();
                 match sub_type.clone() {
                     QuotaExceededError::ResourceLimitExceeded { resource_type, max_resource_count } => {
                         if let Some(Kind::Aws) = event_details.provider_kind() {
                             return EngineError::new(
                                 event_details,
                                 Tag::TerraformCloudProviderQuotasReached,
-                                terraform_error_string, // Note: Terraform error message are supposed to be safe
-                                Some(terraform_error.into()),
+                                terraform_error_string,
+                                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                                 Some(Url::parse("https://hub.qovery.com/docs/using-qovery/troubleshoot/").expect("Error while trying to parse error link helper for `QuotaExceededError::ResourceLimitExceeded`, URL is not valid.")),
                                 Some(format!("Request AWS to increase your `{}` limit{} via this page http://aws.amazon.com/contact-us/ec2-request.", resource_type, match max_resource_count {
                                     None => "".to_string(),
@@ -2264,7 +2264,7 @@ impl EngineError {
             TerraformError::ServiceNotActivatedOptInRequired { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformServiceNotActivatedOptInRequired,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                terraform_error.to_safe_message(), // Note: Terraform error message are supposed to be safe
                 Some(terraform_error.into()),
                 None,
                 None,

@@ -203,62 +203,47 @@ impl TerraformError {
             raw_message: raw_terraform_output,
         }
     }
-}
 
-impl Display for TerraformError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let message: String = match self {
-            TerraformError::Unknown {
-                terraform_args,
-                raw_message,
-            } => format!(
-                "Unknown error while performing Terraform command (terraform {}), here is the error:\n{}",
+    /// Returns safe Terraform error message part (not full error message).
+    pub fn to_safe_message(&self) -> String {
+        match self {
+            TerraformError::Unknown { terraform_args, .. } => format!(
+                "Unknown error while performing Terraform command (`terraform {}`)",
                 terraform_args.join(" "),
-                raw_message
             ),
-            TerraformError::InvalidCredentials { raw_message } => format!("Invalid credentials. \n{}", raw_message),
+            TerraformError::InvalidCredentials { .. } => "Invalid credentials.".to_string(),
             TerraformError::CannotDeleteLockFile {
                 terraform_provider_lock,
-                raw_message,
-            } => format!(
-                "Wasn't able to delete terraform lock file {}\n{}",
-                terraform_provider_lock, raw_message
-            ),
-            TerraformError::ConfigFileNotFound { path, raw_message } => {
-                format!(
-                    "Error while trying to get Terraform configuration file `{}`. \n{}",
-                    path, raw_message,
-                )
+                ..
+            } => format!("Wasn't able to delete terraform lock file `{}`.", terraform_provider_lock,),
+            TerraformError::ConfigFileNotFound { path, .. } => {
+                format!("Error while trying to get Terraform configuration file `{}`.", path,)
             }
-            TerraformError::ConfigFileInvalidContent { path, raw_message } => {
+            TerraformError::ConfigFileInvalidContent { path, .. } => {
                 format!(
-                    "Error while trying to read Terraform configuration file, content is invalid `{}`.\n{}",
-                    path, raw_message,
+                    "Error while trying to read Terraform configuration file, content is invalid `{}`.",
+                    path,
                 )
             }
             TerraformError::CannotRemoveEntryOutOfStateList {
-                entry_to_be_removed,
-                raw_message,
+                entry_to_be_removed, ..
             } => {
-                format!(
-                    "Error while trying to remove entry `{}` from state list.\n{}",
-                    entry_to_be_removed, raw_message,
-                )
+                format!("Error while trying to remove entry `{}` from state list.", entry_to_be_removed,)
             }
             TerraformError::ContextUnsupportedParameterValue {
                 service_type,
                 parameter_name,
                 parameter_value,
-                raw_message,
+                ..
             } => {
                 format!(
-                    "Error {} value `{}` not supported for parameter `{}`.\n{}",
-                    service_type, parameter_value, parameter_name, raw_message,
+                    "Error {} value `{}` not supported for parameter `{}`.",
+                    service_type, parameter_value, parameter_name,
                 )
             }
-            TerraformError::QuotasExceeded { raw_message, sub_type } => {
+            TerraformError::QuotasExceeded { sub_type, .. } => {
                 format!(
-                    "Error, cloud provider quotas exceeded. {}\n{}",
+                    "Error, cloud provider quotas exceeded. {}",
                     match sub_type {
                         QuotaExceededError::ScwNewAccountNeedsValidation =>
                             "SCW new account requires cloud provider validation.".to_string(),
@@ -274,16 +259,45 @@ impl Display for TerraformError {
                             }
                         ),
                     },
-                    raw_message
                 )
             }
-            TerraformError::ServiceNotActivatedOptInRequired {
-                raw_message,
-                service_type,
-            } => format!(
-                "Error, service `{}` requiring an opt-in is not activated.\n{}",
-                service_type, raw_message
-            ),
+            TerraformError::ServiceNotActivatedOptInRequired { service_type, .. } => {
+                format!("Error, service `{}` requiring an opt-in is not activated.", service_type,)
+            }
+        }
+    }
+}
+
+impl Display for TerraformError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let message: String = match self {
+            TerraformError::Unknown { raw_message, .. } => {
+                format!("{}, here is the error:\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::InvalidCredentials { raw_message } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::CannotDeleteLockFile { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::ConfigFileNotFound { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::ConfigFileInvalidContent { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::CannotRemoveEntryOutOfStateList { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::ContextUnsupportedParameterValue { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::QuotasExceeded { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::ServiceNotActivatedOptInRequired { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
         };
 
         f.write_str(&message)
