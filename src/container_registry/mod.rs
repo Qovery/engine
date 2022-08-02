@@ -34,6 +34,7 @@ pub trait ContainerRegistry {
     // All providers requires action for that
     // The convention for us is that we create one per application
     fn create_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError>;
+    fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError>;
 
     fn delete_image(&self, image_name: &Image) -> Result<(), ContainerRegistryError>;
 

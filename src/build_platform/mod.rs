@@ -114,7 +114,7 @@ pub struct EnvironmentVariable {
     pub value: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Credentials {
     pub login: String,
     pub password: String,

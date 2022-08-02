@@ -5,9 +5,9 @@ use std::str::FromStr;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
-    BatchDeleteImageRequest, CreateRepositoryRequest, DescribeImagesRequest, DescribeRepositoriesError,
-    DescribeRepositoriesRequest, Ecr, EcrClient, GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier,
-    PutLifecyclePolicyRequest, Repository,
+    BatchDeleteImageRequest, CreateRepositoryRequest, DeleteRepositoryError, DeleteRepositoryRequest,
+    DescribeImagesRequest, DescribeRepositoriesError, DescribeRepositoriesRequest, Ecr, EcrClient,
+    GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier, PutLifecyclePolicyRequest, Repository,
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
@@ -128,6 +128,24 @@ impl ECR {
                 Some(repositories) => repositories.into_iter().next(),
                 _ => None,
             },
+        }
+    }
+
+    fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError> {
+        let drr = DeleteRepositoryRequest {
+            force: Some(true),
+            registry_id: None,
+            repository_name: repository_name.to_string(),
+        };
+
+        match block_on(self.ecr_client().delete_repository(drr)) {
+            Ok(_) => Ok(()),
+            Err(RusotoError::Service(DeleteRepositoryError::RepositoryNotFound(_))) => Ok(()),
+            Err(err) => Err(ContainerRegistryError::CannotDeleteRepository {
+                registry_name: self.registry_info().registry_name.clone(),
+                repository_name: repository_name.to_string(),
+                raw_error_message: err.to_string(),
+            }),
         }
     }
 
@@ -357,6 +375,10 @@ impl ContainerRegistry for ECR {
     fn create_repository(&self, name: &str) -> Result<(), ContainerRegistryError> {
         let _ = self.get_or_create_repository(name)?;
         Ok(())
+    }
+
+    fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError> {
+        self.delete_repository(repository_name)
     }
 
     fn delete_image(&self, image: &Image) -> Result<(), ContainerRegistryError> {

@@ -203,6 +203,10 @@ impl ContainerRegistry for DOCR {
         Ok(())
     }
 
+    fn delete_repository(&self, _repository_name: &str) -> Result<(), ContainerRegistryError> {
+        Ok(())
+    }
+
     fn delete_image(&self, _image: &Image) -> Result<(), ContainerRegistryError> {
         Ok(())
     }

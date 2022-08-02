@@ -13,7 +13,7 @@ use crate::deployment_report::logger::get_loggers;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
 use crate::io_models::container::Registry;
-use crate::models::container::{Container};
+use crate::models::container::Container;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
@@ -55,9 +55,8 @@ where
 
         // Once we are logged to the registry, we mirror the user image into our cluster private registry
         // This is required only to avoid to manage rotating credentials
-        (loggers.send_progress)(format!(
-            "🪞 Mirroring image to private cluster registry to ensure reproducibility"
-        ));
+        (loggers.send_progress)("🪞 Mirroring image to private cluster registry to ensure reproducibility".to_string());
+        let registry_info = target.container_registry.registry_info();
         target
             .container_registry
             .create_repository(Self::QOVERY_MIRROR_REPOSITORY_NAME)
@@ -66,7 +65,7 @@ where
         let source_image = ContainerImage::new(self.registry.url().clone(), self.image.clone(), vec![self.tag.clone()]);
         let dest_image = ContainerImage::new(
             target.container_registry.registry_info().endpoint.clone(),
-            Self::QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
+            (registry_info.get_image_name)(Self::QOVERY_MIRROR_REPOSITORY_NAME),
             vec![self.tag_for_mirror()],
         );
         if let Err(err) = target.docker.mirror(

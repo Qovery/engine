@@ -10,6 +10,7 @@ use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::types::{CloudProvider, ToTeraContext};
+use crate::string::cut;
 use crate::utilities::to_short_id;
 use itertools::Itertools;
 use serde::Serialize;
@@ -171,6 +172,7 @@ impl<T: CloudProvider> Container<T> {
     pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> ContainerTeraContext {
         let environment = &target.environment;
         let kubernetes = &target.kubernetes;
+        let registry_info = target.container_registry.registry_info();
 
         let ctx = ContainerTeraContext {
             organization_long_id: environment.organization_long_id,
@@ -192,16 +194,11 @@ impl<T: CloudProvider> Container<T> {
                 // FIXME: We mirror images to cluster private registry
                 image_full: format!(
                     "{}/{}:{}",
-                    target
-                        .container_registry
-                        .registry_info()
-                        .endpoint
-                        .host_str()
-                        .unwrap_or_default(),
-                    Self::QOVERY_MIRROR_REPOSITORY_NAME,
+                    registry_info.endpoint.host_str().unwrap_or_default(),
+                    (registry_info.get_image_name)(Self::QOVERY_MIRROR_REPOSITORY_NAME),
                     self.tag_for_mirror()
                 ),
-                image_tag: self.kube_service_name(),
+                image_tag: self.tag_for_mirror(),
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
                 cpu_request_in_mili: format!("{}m", self.cpu_request_in_mili),
@@ -215,7 +212,13 @@ impl<T: CloudProvider> Container<T> {
                 storages: vec![],
                 advanced_settings: self.advanced_settings.clone(),
             },
-            registry: None,
+            registry: registry_info
+                .registry_docker_json_config
+                .as_ref()
+                .map(|docker_json| RegistryTeraContext {
+                    secret_name: format!("{}-registry", self.kube_service_name()),
+                    docker_json_config: docker_json.to_string(),
+                }),
             environment_variables: self.environment_variables.clone(),
             resource_expiration_in_seconds: self.context.resource_expiration_in_seconds(),
         };
@@ -256,7 +259,9 @@ impl<T: CloudProvider> Container<T> {
     }
 
     pub fn tag_for_mirror(&self) -> String {
-        format!("{}--{}", self.image, self.tag)
+        // A tag name must be valid ASCII and may contain lowercase and uppercase letters, digits, underscores, periods and dashes.
+        // A tag name may not start with a period or a dash and may contain a maximum of 128 characters.
+        cut(format!("{}.{}.{}", self.image.replace('/', "."), self.tag, self.long_id), 128)
     }
 
     pub fn logger(&self) -> &dyn Logger {
