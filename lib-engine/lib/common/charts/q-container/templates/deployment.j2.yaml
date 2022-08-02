@@ -49,9 +49,9 @@ spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
       securityContext: {}
-      {%- if is_registry_secret %}
+      {%- if registry %}
       imagePullSecrets:
-        - name: {{ registry_secret }}
+        - name: {{ registry.secret_name }}
       {%- endif %}
       containers:
         - name: {{ service.name }}

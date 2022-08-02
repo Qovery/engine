@@ -198,7 +198,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config_resume);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = get_pods(context, Kind::Aws, environment.clone(), selector.as_str(), secrets.clone());
+        let ret = get_pods(context, Kind::Aws, environment.clone(), selector.as_str(), secrets);
         assert_eq!(ret.is_ok(), true);
         assert_eq!(ret.unwrap().items.is_empty(), false);
 
@@ -1057,13 +1057,11 @@ fn deploy_container_with_no_router_on_aws_eks() {
             secrets
                 .AWS_TEST_ORGANIZATION_ID
                 .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
+                .expect("AWS_TEST_ORGANIZATION_ID is not set"),
             secrets
                 .AWS_TEST_CLUSTER_ID
                 .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .expect("AWS_TEST_CLUSTER_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
@@ -1080,7 +1078,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
         environment.routers = vec![];
         environment.applications = vec![];
         environment.containers = vec![Container {
-            long_id: Default::default(),
+            long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
             action: Action::Create,
             registry: Registry::DockerHub {
@@ -1176,24 +1174,15 @@ fn deploy_container_with_router_on_aws_eks() {
 
         environment.applications = vec![];
         environment.containers = vec![Container {
-            long_id: Default::default(),
+            long_id: Uuid::new_v4(),
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
             action: Action::Create,
-            registry: Registry::PrivateEcr {
-                url: Url::parse("https://843237546537.dkr.ecr.eu-west-3.amazonaws.com/").unwrap(),
-                region: engine_config.kubernetes().region().to_string(),
-                access_key_id: secrets
-                    .AWS_ACCESS_KEY_ID
-                    .expect("AWS_TEST_ACCESS_KEY_ID is not set in secrets")
-                    .to_string(),
-
-                secret_access_key: secrets
-                    .AWS_SECRET_ACCESS_KEY
-                    .expect("AWS_TEST_SECRET_ACCESS_KEY is not set in secrets")
-                    .to_string(),
+            registry: Registry::DockerHub {
+                url: Url::parse("https://docker.io").unwrap(),
+                credentials: None,
             },
-            image: "mini-http-bhw9k344z7e4qmj".to_string(),
-            tag: "16051326618033803529-a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
+            image: "httpd".to_string(),
+            tag: "alpine3.16".to_string(),
             command_args: vec![],
             entrypoint: None,
             cpu_request_in_mili: 250,

@@ -1,4 +1,3 @@
-use crate::build_platform::Credentials;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::io_models::application::{to_environment_variable, AdvancedSettingsProbeType, Port, Storage};
@@ -16,6 +15,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use url::Url;
 use uuid::Uuid;
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct Credentials {
+    pub login: String,
+    pub password: String,
+}
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum Registry {
