@@ -8,18 +8,19 @@ use tera::Context as TeraContext;
 
 impl ToTeraContext for Container<AWSEc2> {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let mut context = self.default_tera_context(target.kubernetes, target.environment);
+        let mut context = self.default_tera_context(target);
         let storages = self
             .storages
             .iter()
             .map(|s| StorageDataTemplate {
                 id: s.id.clone(),
+                long_id: self.long_id,
                 name: s.name.clone(),
                 storage_type: match s.storage_type {
-                    AwsEc2StorageType::SC1 => "sc1",
-                    AwsEc2StorageType::ST1 => "st1",
-                    AwsEc2StorageType::GP2 => "gp2",
-                    AwsEc2StorageType::IO1 => "io1",
+                    AwsEc2StorageType::SC1 => "aws-ebs-sc1-0",
+                    AwsEc2StorageType::ST1 => "aws-ebs-st1-0",
+                    AwsEc2StorageType::GP2 => "aws-ebs-gp2-0",
+                    AwsEc2StorageType::IO1 => "aws-ebs-io1-0",
                 }
                 .to_string(),
                 size_in_gib: s.size_in_gib,

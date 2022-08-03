@@ -6,10 +6,12 @@ use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::application::reporter::ApplicationDeploymentReporter;
 use crate::deployment_report::execute_long_deployment;
+use crate::deployment_report::logger::get_loggers;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
-use crate::models::application::{Application, ApplicationService};
+use crate::models::application::Application;
 use crate::models::types::{CloudProvider, ToTeraContext};
+use cmd_lib::log::log;
 use function_name::named;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -17,7 +19,7 @@ use tera::Context;
 
 impl<T: CloudProvider> DeploymentAction for Application<T>
 where
-    Application<T>: ApplicationService,
+    Application<T>: ToTeraContext,
 {
     #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -78,18 +80,8 @@ where
         })
     }
 
-    #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            T::short_name(),
-            "application",
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-
         execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Delete), || {
             let helm = HelmDeployment::new(
                 self.helm_release_name(),
@@ -100,8 +92,33 @@ where
                 Some(self.selector()),
             );
 
-            helm.on_delete(target)
+            helm.on_delete(target)?;
             // FIXME: Delete pvc
+
+            // Delete container repository created for this application
+            let logger = get_loggers(self, Action::Delete);
+            (logger.send_progress)(format!("🪓 Terminating container registry of the application"));
+            if let Err(err) = target
+                .container_registry
+                .delete_repository(self.build().image.repository_name())
+            {
+                let engine_err = EngineError::new_container_registry_delete_repository_error(
+                    event_details.clone(),
+                    self.build().image.repository_name().to_string(),
+                    None,
+                );
+
+                let user_error = EngineError::new_engine_error(
+                    engine_err.clone(),
+                    format!("❌ Failed to delete container registry of the application: {}", err),
+                    None,
+                );
+                (logger.send_error)(user_error);
+
+                return Err(engine_err);
+            }
+
+            Ok(())
         })
     }
 }

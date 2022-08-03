@@ -2,7 +2,6 @@ mod helm_charts;
 pub mod node;
 
 use crate::cloud_provider::aws::regions::AwsZones;
-use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
@@ -13,7 +12,7 @@ use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::scaleway::kubernetes::node::{ScwInstancesType, ScwNodeGroup};
 use crate::cloud_provider::utilities::print_action;
-use crate::cloud_provider::{kubernetes, CloudProvider};
+use crate::cloud_provider::CloudProvider;
 use crate::cmd;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{kubectl_exec_api_custom_metrics, kubectl_exec_get_all_namespaces, kubectl_exec_get_events};
@@ -25,7 +24,7 @@ use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_mana
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::{Context, Features};
 use crate::io_models::domain::ToHelmString;
 use crate::io_models::progress_listener::{Listener, Listeners, ListenersHelper};
@@ -45,7 +44,6 @@ use scaleway_api_rs::apis::Error;
 use scaleway_api_rs::models::ScalewayK8sV1Cluster;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
-use std::collections::HashSet;
 use std::env;
 use std::path::Path;
 use std::str::FromStr;
@@ -1801,47 +1799,5 @@ impl Kubernetes for Kapsule {
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
-    }
-
-    #[named]
-    fn deploy_environment(&self, environment: &Environment) -> Result<(), (HashSet<Uuid>, EngineError)> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-        kubernetes::deploy_environment(self, environment, event_details)
-    }
-
-    #[named]
-    fn pause_environment(&self, environment: &Environment) -> Result<(), (HashSet<Uuid>, EngineError)> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-        kubernetes::pause_environment(self, environment, event_details)
-    }
-
-    #[named]
-    fn delete_environment(&self, environment: &Environment) -> Result<(), (HashSet<Uuid>, EngineError)> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-        kubernetes::delete_environment(self, environment, event_details)
     }
 }

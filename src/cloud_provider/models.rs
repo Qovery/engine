@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Serialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct EnvironmentVariable {
@@ -15,6 +16,7 @@ pub struct EnvironmentVariableDataTemplate {
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Storage<T> {
     pub id: String,
+    pub long_id: Uuid,
     pub name: String,
     pub storage_type: T,
     pub size_in_gib: u16,
@@ -25,6 +27,7 @@ pub struct Storage<T> {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StorageDataTemplate {
     pub id: String,
+    pub long_id: Uuid,
     pub name: String,
     pub storage_type: String,
     pub size_in_gib: u16,
@@ -47,7 +50,7 @@ pub struct CustomDomainDataTemplate {
 
 pub struct Route {
     pub path: String,
-    pub application_name: String,
+    pub service_long_id: Uuid,
 }
 
 #[derive(Serialize, Deserialize)]

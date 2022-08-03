@@ -1,0 +1,21 @@
+{%- if service.storages | length == 0 and service.min_instances != service.max_instances and service.advanced_settings.hpa_cpu_average_utilization_percent >= 0 %}
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ service.name }}
+  namespace: {{ namespace }}
+  labels:
+    envId: {{ environment_short_id }}
+    qovery.com/service-id: {{ service.long_id }}
+    qovery.com/service-type: container
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ service.name }}
+  minReplicas: {{ service.min_instances }}
+  maxReplicas: {{ service.max_instances }}
+  targetCPUUtilizationPercentage: {{ service.advanced_settings.hpa_cpu_average_utilization_percent }}
+{%- endif %}

@@ -203,6 +203,14 @@ impl ContainerRegistry for DOCR {
         Ok(())
     }
 
+    fn delete_repository(&self, _repository_name: &str) -> Result<(), ContainerRegistryError> {
+        Ok(())
+    }
+
+    fn delete_image(&self, _image: &Image) -> Result<(), ContainerRegistryError> {
+        Ok(())
+    }
+
     fn does_image_exists(&self, image: &Image) -> bool {
         let headers = utilities::get_header_with_bearer(self.api_key.as_str());
         let url = format!(

@@ -159,6 +159,7 @@ pub enum Tag {
     TerraformCloudProviderQuotasReached,
     TerraformCloudProviderActivationRequired,
     TerraformInvalidCredentials,
+    TerraformServiceNotActivatedOptInRequired,
 }
 
 impl From<errors::Tag> for Tag {
@@ -314,6 +315,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::ObjectStorageQuotaExceeded => Tag::ObjectStorageQuotaExceeded,
             errors::Tag::ObjectStorageCannotGetObjectFile => Tag::ObjectStorageCannotGetObjectFile,
             errors::Tag::TerraformInvalidCredentials => Tag::TerraformInvalidCredentials,
+            errors::Tag::TerraformServiceNotActivatedOptInRequired => Tag::TerraformServiceNotActivatedOptInRequired,
         }
     }
 }

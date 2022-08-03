@@ -1,16 +1,14 @@
-use crate::cloud_provider;
 use crate::cloud_provider::aws::kubernetes;
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
-use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::{send_progress_on_long_task, Kind, Kubernetes, KubernetesUpgradeStatus};
 use crate::cloud_provider::models::{InstanceEc2, NodeGroups};
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
 use crate::dns_provider::DnsProvider;
 use crate::errors::EngineError;
-use crate::events::{EngineEvent, EnvironmentStep, InfrastructureStep, Stage};
+use crate::events::{EngineEvent, InfrastructureStep, Stage};
 use crate::io_models::context::Context;
 use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::io_models::Action;
@@ -19,7 +17,6 @@ use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
 use function_name::named;
 use std::borrow::Borrow;
-use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -338,47 +335,5 @@ impl Kubernetes for EC2 {
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || kubernetes::delete_error(self))
-    }
-
-    #[named]
-    fn deploy_environment(&self, environment: &Environment) -> Result<(), (HashSet<Uuid>, EngineError)> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-        cloud_provider::kubernetes::deploy_environment(self, environment, event_details)
-    }
-
-    #[named]
-    fn pause_environment(&self, environment: &Environment) -> Result<(), (HashSet<Uuid>, EngineError)> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-        cloud_provider::kubernetes::pause_environment(self, environment, event_details)
-    }
-
-    #[named]
-    fn delete_environment(&self, environment: &Environment) -> Result<(), (HashSet<Uuid>, EngineError)> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-        cloud_provider::kubernetes::delete_environment(self, environment, event_details)
     }
 }

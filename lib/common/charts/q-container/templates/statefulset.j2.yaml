@@ -1,0 +1,145 @@
+{%- if service.storages | length > 0  %}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ service.name }}
+  namespace: {{ namespace }}
+  labels:
+    envId: {{ environment_short_id }}
+    qovery.com/service-id: {{ service.long_id }}
+    qovery.com/service-type: container
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+  annotations:
+    releaseTime: {% raw %}{{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}{% endraw %}
+spec:
+  replicas: {{ service.min_instances }}
+  serviceName: {{ service.name }}
+  selector:
+    matchLabels:
+      qovery.com/service-id: {{ service.long_id }}
+  template:
+    metadata:
+      labels:
+        envId: {{ environment_short_id }}
+        qovery.com/service-id: {{ service.long_id }}
+        qovery.com/service-type: container
+        qovery.com/environment-id: {{ environment_long_id }}
+        qovery.com/project-id: {{ project_long_id }}
+      annotations:
+        checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: "qovery.com/service-id"
+                    operator: In
+                    values:
+                    - {{ service.long_id }}
+              topologyKey: "kubernetes.io/hostname"
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext: {}
+      {%- if is_registry_secret %}
+      imagePullSecrets:
+        - name: {{ registry_secret }}
+      {%- endif %}
+      containers:
+        - name: {{ service.name }}
+          image: "{{ service.image_full }}"
+          {%- if service.entrypoint %}
+          command:
+            - |-
+              {{ service.entrypoint }}
+          {%- endif %}
+          args:
+            {%- for arg in service.command_args %}
+            - |-
+              {{ arg }}
+            {%- endfor %}
+          env:
+            {%- for ev in environment_variables %}
+            - name: "{{ ev.key }}"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ service.name }}
+                  key: {{ ev.key }}
+            {%- endfor %}
+          ports:
+            {%- for port in service.ports %}
+            - containerPort: {{ port.port }}
+              name: "p{{ port.port }}"
+              protocol: TCP
+            {%- endfor %}
+          {%- if service.default_port %}
+          {%- if service.advanced_settings.readiness_probe_type != "NONE" %}
+          readinessProbe:
+            {%- if service.advanced_settings.readiness_probe_type == "TCP" %}
+            tcpSocket:
+              port: {{ service.default_port.port }}
+            {%- endif %}
+            {%- if service.advanced_settings.readiness_probe_type == "HTTP" %}
+            httpGet:
+              port: {{ service.default_port.port }}
+              path: {{ service.advanced_settings.readiness_probe_http_get_path }}
+            {%- endif %}
+            initialDelaySeconds: {{ service.advanced_settings.readiness_probe_initial_delay_seconds }}
+            periodSeconds: {{ service.advanced_settings.readiness_probe_period_seconds }}
+            timeoutSeconds: {{ service.advanced_settings.readiness_probe_timeout_seconds }}
+            successThreshold: {{ service.advanced_settings.readiness_probe_success_threshold }}
+            failureThreshold: {{ service.advanced_settings.readiness_probe_failure_threshold }}
+          {%- if service.advanced_settings.liveness_probe_type != "NONE" %}
+          livenessProbe:
+            {%- if service.advanced_settings.liveness_probe_type == "TCP" %}
+            tcpSocket:
+              port: {{ service.default_port.port }}
+            {%- endif %}
+            {%- if service.advanced_settings.liveness_probe_type == "HTTP" %}
+            httpGet:
+              port: {{ service.default_port.port }}
+              path: {{ service.advanced_settings.liveness_probe_http_get_path }}
+            {%- endif %}
+            initialDelaySeconds: {{ service.advanced_settings.liveness_probe_initial_delay_seconds }}
+            periodSeconds: {{ service.advanced_settings.liveness_probe_period_seconds }}
+            timeoutSeconds: {{ service.advanced_settings.liveness_probe_timeout_seconds }}
+            successThreshold: {{ service.advanced_settings.liveness_probe_success_threshold }}
+            failureThreshold: {{ service.advanced_settings.liveness_probe_failure_threshold }}
+          {%- endif %}
+          {%- endif %}
+          {%- endif %}
+          resources:
+            limits:
+              cpu: {{ service.cpu_limit_in_mili }}
+              memory: {{ service.ram_limit_in_mib }}
+            requests:
+              cpu: {{ service.cpu_request_in_mili }}
+              memory: {{ service.ram_request_in_mib }}
+          volumeMounts:
+{%- for s in service.storages %}
+            - name: {{ s.long_id }}
+              mountPath: {{ s.mount_point }}
+{%- endfor %}
+  volumeClaimTemplates:
+{%- for s in service.storages %}
+  - metadata:
+      name: {{ s.long_id }}
+      labels:
+        envId: {{ environment_long_id }}
+        qovery.com/service-id: {{ service.long_id }}
+        qovery.com/service-type: container
+        qovery.com/environment-id: {{ environment_long_id }}
+        qovery.com/project-id: {{ project_long_id }}
+        qovery.com/disk-id: {{ s.long_id }}
+        qovery.com/disk-type: {{ s.storage_type }}
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: {{ s.storage_type }}
+      resources:
+        requests:
+          storage: {{ s.size_in_gib }}Gi
+{%- endfor %}
+{%- endif %}

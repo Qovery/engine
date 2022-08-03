@@ -40,7 +40,7 @@ pub trait Service {
         crate::fs::workspace_directory(
             self.context().workspace_root_dir(),
             self.context().execution_id(),
-            format!("{}/{}", dir_root, self.name()),
+            format!("{}/{}", dir_root, self.long_id()),
         )
         .unwrap()
     }
@@ -105,7 +105,7 @@ impl ToString for DatabaseType {
     }
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ServiceType {
     Application,
     Database(DatabaseType),

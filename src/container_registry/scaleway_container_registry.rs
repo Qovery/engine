@@ -282,6 +282,23 @@ impl ContainerRegistry for ScalewayCR {
         Ok(())
     }
 
+    fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError> {
+        if self.get_registry_namespace(repository_name).is_none() {
+            return Ok(());
+        }
+
+        let _ = self.delete_registry_namespace(repository_name)?;
+        Ok(())
+    }
+
+    fn delete_image(&self, image: &Image) -> Result<(), ContainerRegistryError> {
+        match self.delete_image(image) {
+            Ok(_) => Ok(()),
+            Err(ContainerRegistryError::ImageDoesntExistInRegistry { .. }) => Ok(()),
+            Err(err) => Err(err),
+        }
+    }
+
     fn does_image_exists(&self, image: &Image) -> bool {
         let image = docker::ContainerImage {
             registry: self.registry_info.endpoint.clone(),

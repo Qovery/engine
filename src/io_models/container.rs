@@ -16,12 +16,17 @@ use std::collections::BTreeMap;
 use url::Url;
 use uuid::Uuid;
 
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct Credentials {
+    pub login: String,
+    pub password: String,
+}
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum Registry {
     DockerHub {
         url: Url,
-        username: String,
-        password: String,
+        credentials: Option<Credentials>,
     },
 
     DoCr {

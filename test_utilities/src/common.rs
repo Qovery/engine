@@ -237,8 +237,11 @@ pub fn environment_3_apps_3_routers_3_databases(
     provider_kind: Kind,
 ) -> EnvironmentRequest {
     let app_name_1 = format!("{}-{}", "simple-app-1", generate_id());
+    let app_id_1 = Uuid::new_v4();
     let app_name_2 = format!("{}-{}", "simple-app-2", generate_id());
+    let app_id_2 = Uuid::new_v4();
     let app_name_3 = format!("{}-{}", "simple-app-3", generate_id());
+    let app_id_3 = Uuid::new_v4();
 
     // mongoDB management part
     let database_host_mongo = get_svc_name(DatabaseKind::Mongodb, provider_kind.clone()).to_string();
@@ -276,7 +279,7 @@ pub fn environment_3_apps_3_routers_3_databases(
         action: Action::Create,
         applications: vec![
             Application {
-                long_id: Uuid::new_v4(),
+                long_id: app_id_1,
                 name: app_name_1.clone(),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "5990752647af11ef21c3d46a51abbde3da1ab351".to_string(),
@@ -323,7 +326,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 advanced_settings: Default::default(),
             },
             Application {
-                long_id: Uuid::new_v4(),
+                long_id: app_id_2,
                 name: app_name_2.clone(),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "5990752647af11ef21c3d46a51abbde3da1ab351".to_string(),
@@ -362,7 +365,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 advanced_settings: Default::default(),
             },
             Application {
-                long_id: Uuid::new_v4(),
+                long_id: app_id_3,
                 name: app_name_3.clone(),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "158ea8ebc9897c50a7c56b910db33ce837ac1e61".to_string(),
@@ -414,7 +417,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/app1".to_string(),
-                    application_name: app_name_1,
+                    service_long_id: app_id_1,
                 }],
                 sticky_sessions_enabled: false,
             },
@@ -427,7 +430,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/app2".to_string(),
-                    application_name: app_name_2,
+                    service_long_id: app_id_2,
                 }],
                 sticky_sessions_enabled: false,
             },
@@ -440,7 +443,7 @@ pub fn environment_3_apps_3_routers_3_databases(
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/app3".to_string(),
-                    application_name: app_name_3,
+                    service_long_id: app_id_3,
                 }],
                 sticky_sessions_enabled: false,
             },
@@ -571,7 +574,7 @@ pub fn working_minimal_environment(context: &Context, test_domain: &str) -> Envi
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
-                application_name,
+                service_long_id: application_id,
             }],
             sticky_sessions_enabled: false,
         }],
@@ -693,7 +696,9 @@ pub fn environnement_2_app_2_routers_1_psql(
 
     let suffix = generate_id();
     let application_name1 = sanitize_name("postgresql", &format!("{}-{}", "postgresql-app1", &suffix));
+    let application_id1 = Uuid::new_v4();
     let application_name2 = sanitize_name("postgresql", &format!("{}-{}", "postgresql-app2", &suffix));
+    let application_id2 = Uuid::new_v4();
 
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
@@ -725,7 +730,7 @@ pub fn environnement_2_app_2_routers_1_psql(
         }],
         applications: vec![
             Application {
-                long_id: Uuid::new_v4(),
+                long_id: application_id1,
                 name: application_name1.to_string(),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
@@ -764,7 +769,7 @@ pub fn environnement_2_app_2_routers_1_psql(
                 advanced_settings: Default::default(),
             },
             Application {
-                long_id: Uuid::new_v4(),
+                long_id: application_id2,
                 name: application_name2.to_string(),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
@@ -814,7 +819,7 @@ pub fn environnement_2_app_2_routers_1_psql(
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/".to_string(),
-                    application_name: application_name1,
+                    service_long_id: application_id1,
                 }],
                 sticky_sessions_enabled: false,
             },
@@ -827,7 +832,7 @@ pub fn environnement_2_app_2_routers_1_psql(
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/coco".to_string(),
-                    application_name: application_name2,
+                    service_long_id: application_id2,
                 }],
                 sticky_sessions_enabled: false,
             },
@@ -857,6 +862,7 @@ pub fn non_working_environment(context: &Context, test_domain: &str) -> Environm
 // ECHO_TEXT var will be the content of the application root path
 pub fn echo_app_environment(context: &Context, test_domain: &str) -> EnvironmentRequest {
     let suffix = generate_id();
+    let app_id = Uuid::new_v4();
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         long_id: Uuid::new_v4(),
@@ -864,7 +870,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![Application {
-            long_id: Uuid::new_v4(),
+            long_id: app_id,
             name: format!("{}-{}", "echo-app", &suffix),
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
@@ -909,7 +915,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
-                application_name: format!("{}-{}", "echo-app", &suffix),
+                service_long_id: app_id,
             }],
             sticky_sessions_enabled: false,
         }],
@@ -1020,7 +1026,7 @@ pub fn environment_only_http_server_router(context: &Context, test_domain: &str)
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
-                application_name: format!("{}-{}", "mini-http", &suffix),
+                service_long_id: id,
             }],
             sticky_sessions_enabled: false,
         }],

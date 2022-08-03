@@ -609,6 +609,9 @@ pub enum Tag {
     TerraformCloudProviderQuotasReached,
     /// TerraformCloudProviderActivationRequired: represents an error due to cloud provider requiring account to be validated first.
     TerraformCloudProviderActivationRequired,
+    /// TerraformServiceNotActivatedOptInRequired: represents an error due to service not being
+    /// activated on cloud account.
+    TerraformServiceNotActivatedOptInRequired,
     /// HelmChartsSetupError: represents an error while trying to setup helm charts.
     HelmChartsSetupError,
     /// HelmChartsDeployError: represents an error while trying to deploy helm charts.
@@ -2258,6 +2261,14 @@ impl EngineError {
                     ),
                 }
             }
+            TerraformError::ServiceNotActivatedOptInRequired { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformServiceNotActivatedOptInRequired,
+                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                None,
+                None,
+            ),
         }
     }
 

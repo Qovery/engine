@@ -37,7 +37,7 @@ pub struct CustomDomain {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Route {
     pub path: String,
-    pub application_name: String,
+    pub service_long_id: Uuid,
 }
 
 impl Router {
@@ -62,7 +62,7 @@ impl Router {
             .iter()
             .map(|x| crate::cloud_provider::models::Route {
                 path: x.path.clone(),
-                application_name: x.application_name.clone(),
+                service_long_id: x.service_long_id,
             })
             .collect::<Vec<_>>();
 

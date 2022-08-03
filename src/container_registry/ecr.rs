@@ -5,8 +5,9 @@ use std::str::FromStr;
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
-    CreateRepositoryRequest, DescribeImagesRequest, DescribeRepositoriesError, DescribeRepositoriesRequest, Ecr,
-    EcrClient, GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier, PutLifecyclePolicyRequest, Repository,
+    BatchDeleteImageRequest, CreateRepositoryRequest, DeleteRepositoryError, DeleteRepositoryRequest,
+    DescribeImagesRequest, DescribeRepositoriesError, DescribeRepositoriesRequest, Ecr, EcrClient,
+    GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier, PutLifecyclePolicyRequest, Repository,
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
@@ -61,7 +62,7 @@ impl ECR {
             logger,
         };
 
-        let credentials = cr.get_credentials()?;
+        let credentials = Self::get_credentials(&cr.ecr_client())?;
         let mut registry_url = Url::parse(credentials.endpoint_url.as_str()).unwrap();
         let _ = registry_url.set_username(&credentials.access_token);
         let _ = registry_url.set_password(Some(&credentials.password));
@@ -130,6 +131,24 @@ impl ECR {
         }
     }
 
+    fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError> {
+        let drr = DeleteRepositoryRequest {
+            force: Some(true),
+            registry_id: None,
+            repository_name: repository_name.to_string(),
+        };
+
+        match block_on(self.ecr_client().delete_repository(drr)) {
+            Ok(_) => Ok(()),
+            Err(RusotoError::Service(DeleteRepositoryError::RepositoryNotFound(_))) => Ok(()),
+            Err(err) => Err(ContainerRegistryError::CannotDeleteRepository {
+                registry_name: self.registry_info().registry_name.clone(),
+                repository_name: repository_name.to_string(),
+                raw_error_message: err.to_string(),
+            }),
+        }
+    }
+
     fn get_image(&self, image: &Image) -> Option<ImageDetail> {
         let mut dir = DescribeImagesRequest::default();
         dir.repository_name = image.name();
@@ -147,6 +166,27 @@ impl ECR {
                 Some(image_details) => image_details.into_iter().next(),
                 _ => None,
             },
+        }
+    }
+
+    fn delete_image(&self, imge: &Image) -> Result<(), ContainerRegistryError> {
+        let ret = block_on(self.ecr_client().batch_delete_image(BatchDeleteImageRequest {
+            registry_id: None,
+            repository_name: imge.repository_name.clone(),
+            image_ids: vec![ImageIdentifier {
+                image_digest: None,
+                image_tag: Some(imge.tag.to_string()),
+            }],
+        }));
+
+        match ret {
+            Ok(_) => Ok(()),
+            Err(e) => Err(ContainerRegistryError::CannotDeleteImage {
+                registry_name: imge.registry_name.clone(),
+                repository_name: imge.registry_name.clone(),
+                image_name: imge.name(),
+                raw_error_message: format!("{}", e),
+            }),
         }
     }
 
@@ -262,11 +302,8 @@ impl ECR {
         self.create_repository(repository_name)
     }
 
-    fn get_credentials(&self) -> Result<ECRCredentials, ContainerRegistryError> {
-        let r = block_on(
-            self.ecr_client()
-                .get_authorization_token(GetAuthorizationTokenRequest::default()),
-        );
+    pub fn get_credentials(ecr_client: &EcrClient) -> Result<ECRCredentials, ContainerRegistryError> {
+        let r = block_on(ecr_client.get_authorization_token(GetAuthorizationTokenRequest::default()));
 
         let (access_token, password, endpoint_url) = match r {
             Ok(t) => match t.authorization_data {
@@ -340,15 +377,23 @@ impl ContainerRegistry for ECR {
         Ok(())
     }
 
+    fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError> {
+        self.delete_repository(repository_name)
+    }
+
+    fn delete_image(&self, image: &Image) -> Result<(), ContainerRegistryError> {
+        self.delete_image(image)
+    }
+
     fn does_image_exists(&self, image: &Image) -> bool {
         self.get_image(image).is_some()
     }
 }
 
-struct ECRCredentials {
-    access_token: String,
-    password: String,
-    endpoint_url: String,
+pub struct ECRCredentials {
+    pub access_token: String,
+    pub password: String,
+    pub endpoint_url: String,
 }
 
 impl ECRCredentials {

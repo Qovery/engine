@@ -6,6 +6,7 @@ mod check_dns;
 mod deploy_application;
 mod deploy_container;
 mod deploy_database;
+pub mod deploy_environment;
 mod deploy_helm;
 pub mod deploy_namespace;
 mod deploy_router;

@@ -1,7 +1,6 @@
-use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{EnvironmentVariable, Storage, StorageDataTemplate};
 use crate::cloud_provider::service::{Action, Service, ServiceType};
+use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::application::Port;
@@ -11,7 +10,9 @@ use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::types::{CloudProvider, ToTeraContext};
+use crate::string::cut;
 use crate::utilities::to_short_id;
+use itertools::Itertools;
 use serde::Serialize;
 use std::marker::PhantomData;
 use uuid::Uuid;
@@ -29,9 +30,9 @@ pub struct Container<T: CloudProvider> {
     pub(super) long_id: Uuid,
     pub(super) name: String,
     pub(super) action: Action,
-    pub(super) registry: Registry,
-    pub(super) image: String,
-    pub(super) tag: String,
+    pub registry: Registry,
+    pub image: String,
+    pub tag: String,
     pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
     pub(super) cpu_request_in_mili: u32,
@@ -51,6 +52,8 @@ pub struct Container<T: CloudProvider> {
 
 // Here we define the common behavior among all providers
 impl<T: CloudProvider> Container<T> {
+    pub const QOVERY_MIRROR_REPOSITORY_NAME: &'static str = "qovery-mirror";
+
     pub fn new(
         context: Context,
         long_id: Uuid,
@@ -148,7 +151,15 @@ impl<T: CloudProvider> Container<T> {
     }
 
     pub fn helm_chart_dir(&self) -> String {
-        format!("{}/{}/charts/q-container", self.context.lib_root_dir(), T::lib_directory_name(),)
+        format!("{}/common/charts/q-container", self.context.lib_root_dir())
+    }
+
+    fn kube_service_name(&self) -> String {
+        format!("container-{}", self.long_id)
+    }
+
+    pub fn registry(&self) -> &Registry {
+        &self.registry
     }
 
     fn public_port(&self) -> Option<u16> {
@@ -158,14 +169,15 @@ impl<T: CloudProvider> Container<T> {
             .map(|port| port.port as u16)
     }
 
-    pub(super) fn default_tera_context(
-        &self,
-        kubernetes: &dyn Kubernetes,
-        environment: &Environment,
-    ) -> ContainerTeraContext {
+    pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> ContainerTeraContext {
+        let environment = &target.environment;
+        let kubernetes = &target.kubernetes;
+        let registry_info = target.container_registry.registry_info();
+
         let ctx = ContainerTeraContext {
             organization_long_id: environment.organization_long_id,
             project_long_id: environment.project_long_id,
+            environment_short_id: to_short_id(&environment.long_id),
             environment_long_id: environment.long_id,
             cluster: ClusterTeraContext {
                 long_id: *kubernetes.long_id(),
@@ -177,10 +189,17 @@ impl<T: CloudProvider> Container<T> {
             service: ServiceTeraContext {
                 short_id: to_short_id(&self.long_id),
                 long_id: self.long_id,
-                name: self.name.clone(),
-                image_full: format!("{}/{}:{}", self.registry.url(), self.image, self.tag),
-                image_tag: self.tag.clone(),
-                commands: self.command_args.clone(),
+                name: self.kube_service_name(),
+                user_unsafe_name: self.name.clone(),
+                // FIXME: We mirror images to cluster private registry
+                image_full: format!(
+                    "{}/{}:{}",
+                    registry_info.endpoint.host_str().unwrap_or_default(),
+                    (registry_info.get_image_name)(Self::QOVERY_MIRROR_REPOSITORY_NAME),
+                    self.tag_for_mirror()
+                ),
+                image_tag: self.tag_for_mirror(),
+                command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
                 cpu_request_in_mili: format!("{}m", self.cpu_request_in_mili),
                 cpu_limit_in_mili: format!("{}m", self.cpu_limit_in_mili),
@@ -189,10 +208,17 @@ impl<T: CloudProvider> Container<T> {
                 min_instances: self.min_instances,
                 max_instances: self.max_instances,
                 ports: self.ports.clone(),
+                default_port: self.ports.iter().find_or_first(|p| p.publicly_accessible).cloned(),
                 storages: vec![],
                 advanced_settings: self.advanced_settings.clone(),
             },
-            registry: None,
+            registry: registry_info
+                .registry_docker_json_config
+                .as_ref()
+                .map(|docker_json| RegistryTeraContext {
+                    secret_name: format!("{}-registry", self.kube_service_name()),
+                    docker_json_config: docker_json.to_string(),
+                }),
             environment_variables: self.environment_variables.clone(),
             resource_expiration_in_seconds: self.context.resource_expiration_in_seconds(),
         };
@@ -230,6 +256,12 @@ impl<T: CloudProvider> Container<T> {
 
     pub fn image_with_tag(&self) -> String {
         format!("{}:{}", self.image, self.tag)
+    }
+
+    pub fn tag_for_mirror(&self) -> String {
+        // A tag name must be valid ASCII and may contain lowercase and uppercase letters, digits, underscores, periods and dashes.
+        // A tag name may not start with a period or a dash and may contain a maximum of 128 characters.
+        cut(format!("{}.{}.{}", self.image.replace('/', "."), self.tag, self.long_id), 128)
     }
 
     pub fn logger(&self) -> &dyn Logger {
@@ -315,6 +347,8 @@ impl<T: CloudProvider> Service for Container<T> {
 pub trait ContainerService: Service + DeploymentAction + ToTeraContext {
     fn public_port(&self) -> Option<u16>;
     fn advanced_settings(&self) -> &ContainerAdvancedSettings;
+    fn image_full(&self) -> String;
+    fn kube_service_name(&self) -> String;
 }
 
 impl<T: CloudProvider> ContainerService for Container<T>
@@ -327,6 +361,19 @@ where
 
     fn advanced_settings(&self) -> &ContainerAdvancedSettings {
         &self.advanced_settings
+    }
+
+    fn image_full(&self) -> String {
+        format!(
+            "{}{}:{}",
+            self.registry.url().to_string().trim_start_matches("https://"),
+            self.image,
+            self.tag
+        )
+    }
+
+    fn kube_service_name(&self) -> String {
+        self.kube_service_name()
     }
 }
 
@@ -343,9 +390,10 @@ pub(super) struct ServiceTeraContext {
     pub(super) short_id: String,
     pub(super) long_id: Uuid,
     pub(super) name: String,
+    pub(super) user_unsafe_name: String,
     pub(super) image_full: String,
     pub(super) image_tag: String,
-    pub(super) commands: Vec<String>,
+    pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
     pub(super) cpu_request_in_mili: String,
     pub(super) cpu_limit_in_mili: String,
@@ -354,6 +402,7 @@ pub(super) struct ServiceTeraContext {
     pub(super) min_instances: u32,
     pub(super) max_instances: u32,
     pub(super) ports: Vec<Port>,
+    pub(super) default_port: Option<Port>,
     pub(super) storages: Vec<StorageDataTemplate>,
     pub(super) advanced_settings: ContainerAdvancedSettings,
 }
@@ -368,6 +417,7 @@ pub(super) struct RegistryTeraContext {
 pub(super) struct ContainerTeraContext {
     pub(super) organization_long_id: Uuid,
     pub(super) project_long_id: Uuid,
+    pub(super) environment_short_id: String,
     pub(super) environment_long_id: Uuid,
     pub(super) cluster: ClusterTeraContext,
     pub(super) namespace: String,
