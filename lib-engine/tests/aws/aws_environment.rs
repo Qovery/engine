@@ -157,8 +157,8 @@ fn deploy_a_working_environment_and_pause_it_eks() {
             selector.as_str(),
             secrets.clone(),
         );
-        assert_eq!(ret.is_ok(), true);
-        assert_eq!(ret.unwrap().items.is_empty(), false);
+        assert!(ret.is_ok());
+        assert!(!ret.unwrap().items.is_empty());
 
         let ret = environment.pause_environment(&ea, logger.clone(), &engine_config_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -171,8 +171,8 @@ fn deploy_a_working_environment_and_pause_it_eks() {
             selector.as_str(),
             secrets.clone(),
         );
-        assert_eq!(ret.is_ok(), true);
-        assert_eq!(ret.unwrap().items.is_empty(), true);
+        assert!(ret.is_ok());
+        assert!(ret.unwrap().items.is_empty());
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
@@ -181,8 +181,8 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         let ret = get_pods(context, Kind::Aws, environment.clone(), selector.as_str(), secrets);
-        assert_eq!(ret.is_ok(), true);
-        assert_eq!(ret.unwrap().items.is_empty(), false);
+        assert!(ret.is_ok());
+        assert!(!ret.unwrap().items.is_empty());
 
         // Cleanup
         let ret = environment.delete_environment(&ea, logger, &engine_config_for_delete);
@@ -561,7 +561,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
             ),
-            Err(_) => assert!(false),
+            Err(_) => panic!(),
         };
 
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
@@ -640,7 +640,7 @@ fn redeploy_same_app_with_ebs() {
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
             ),
-            Err(_) => assert!(false),
+            Err(_) => panic!(),
         };
 
         let app_name = format!("{}-0", &environment_check1.applications[0].name);

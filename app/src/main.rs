@@ -497,7 +497,7 @@ fn using_nats_server(
     .expect("Error setting Ctrl-C (SIGTERM) handler");
 
     info!("server started and listening for incoming requests");
-    task_manager.wait_shutdown();
+    let _ = task_manager.wait_shutdown();
     info!("TaskManager stopped");
 
     info!("Unsubscribed from all nats subjects");

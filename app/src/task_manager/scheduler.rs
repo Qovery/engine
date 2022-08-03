@@ -104,13 +104,19 @@ impl TaskManager {
         self.task_executor_rx.len() + self.running_tasks.get().max(0) as usize
     }
 
-    pub fn wait_shutdown(&self) {
+    pub fn wait_shutdown(&self) -> Result<(), ()> {
         while let Some((thread_name, handle)) = self.threads_handle.lock().unwrap().pop() {
             info!("Waiting for {} to shutdown", thread_name);
-            let _ = handle
-                .join()
-                .map_err(|err| error!("Cannot join thread {}: {:?}", thread_name, err));
+            match handle.join() {
+                Ok(_) => {}
+                Err(err) => {
+                    error!("Cannot join thread {}: {:?}", thread_name, err);
+                    return Err(());
+                }
+            }
         }
+
+        Ok(())
     }
     pub fn cancel_current_task(&self) -> bool {
         let lock = self.current_task.read().unwrap();
@@ -391,19 +397,19 @@ mod tests {
         let task = WaitingTask::new(tm.task_status_tx.clone());
 
         assert_eq!(tm.running_tasks.get(), 0);
-        assert_eq!(task.have_been_run.load(Acquire), false);
+        assert!(!task.have_been_run.load(Acquire));
         tm.add_task(Box::new(task.clone()));
 
         let task_status_rx = tm.task_status_rx.clone();
         tm.run(Box::new(logger)).expect("Impossible to run task Manager");
-        assert_eq!(task_status_rx.recv_timeout(Duration::from_secs(10)).is_ok(), true);
+        assert!(task_status_rx.recv_timeout(Duration::from_secs(10)).is_ok());
 
         task.barrier_begin.wait();
         assert_eq!(tm.running_tasks.get(), 1);
         task.barrier_end.wait();
 
         tm.stop();
-        assert_eq!(tm.should_stop.load(Acquire), true);
+        assert!(tm.should_stop.load(Acquire));
         // Wait for task to be completed
         let mut nb_iter = 0;
         while tm.remaining_tasks_to_run() > 0 {
@@ -411,7 +417,7 @@ mod tests {
             nb_iter += 1;
             assert_ne!(nb_iter, 5);
         }
-        assert_eq!(task.have_been_run.load(Acquire), true);
+        assert!(task.have_been_run.load(Acquire));
         assert_eq!(tm.running_tasks.get(), 0);
 
         // Test that we clean the Internal Hashmap
@@ -446,7 +452,7 @@ mod tests {
         assert_eq!(task_status_rx.recv().unwrap().status, State::Deleted);
 
         tm.stop();
-        assert_eq!(tm.wait_shutdown(), ());
+        assert!(tm.wait_shutdown().is_ok());
     }
 
     #[test]
@@ -466,7 +472,7 @@ mod tests {
         tm.stop();
         tm.run(Box::new(logger)).expect("Impossible to run task Manager");
 
-        assert_eq!(tm.wait_shutdown(), ());
+        assert!(tm.wait_shutdown().is_ok());
         assert_eq!(tm.remaining_tasks_to_run(), 0);
     }
 }

@@ -144,8 +144,8 @@ fn deploy_an_environment_with_db_and_pause_it() {
             app_name.as_str(),
             secrets.clone(),
         );
-        assert_eq!(ret.is_ok(), true);
-        assert_eq!(ret.unwrap().items.is_empty(), true);
+        assert!(ret.is_ok());
+        assert!(ret.unwrap().items.is_empty());
 
         let result =
             environment_delete.delete_environment(&env_action_delete, logger.clone(), &engine_config_for_deletion);
@@ -361,16 +361,14 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let database_name = format!("postgresql-{}-0", to_short_id(&environment_check.databases[0].long_id));
-        match is_pod_restarted_env(
+        let (ret, _) = is_pod_restarted_env(
             context.clone(),
             ProviderKind::Scw,
             environment_check,
             database_name.as_str(),
             secrets.clone(),
-        ) {
-            (true, _) => assert!(true),
-            (false, _) => assert!(false),
-        }
+        );
+        assert!(ret);
 
         let result = environment_delete.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok | TransactionResult::Error(_)));

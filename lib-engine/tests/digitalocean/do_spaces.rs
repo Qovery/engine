@@ -35,7 +35,7 @@ fn test_delete_bucket_hard_delete_strategy() {
 
     // validate:
     assert!(result.is_ok());
-    assert_eq!(false, spaces.bucket_exists(bucket_name.as_str()))
+    assert!(!spaces.bucket_exists(bucket_name.as_str()))
 }
 
 #[cfg(feature = "test-do-infra")]
@@ -131,7 +131,7 @@ fn test_recreate_bucket() {
 
     let delete_result = spaces.delete_bucket(bucket_name.as_str());
     assert!(delete_result.is_ok());
-    assert_eq!(false, spaces.bucket_exists(bucket_name.as_str()));
+    assert!(!spaces.bucket_exists(bucket_name.as_str()));
 
     let recreate_result = spaces.create_bucket(bucket_name.as_str());
     assert!(recreate_result.is_ok());
@@ -178,7 +178,7 @@ fn test_put_file() {
 
     // validate:
     assert!(result.is_ok());
-    assert_eq!(true, spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok());
+    assert!(spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok());
 
     // clean-up:
     spaces
@@ -223,7 +223,7 @@ fn test_get_file() {
 
     // validate:
     assert!(result.is_ok());
-    assert_eq!(true, spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok());
+    assert!(spaces.get(bucket_name.as_str(), object_key.as_str(), false).is_ok());
 
     // clean-up:
     spaces

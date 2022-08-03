@@ -451,7 +451,7 @@ function lint() { ## run linter
 
   export RUSTC_WRAPPER=""
   export RUSTC_WORKSPACE_WRAPPER="sccache"
-  cargo clippy  --all --all-features --exclude test-utilities --locked -- -D warnings || (echo "Solve your clippy errors to succeed"; exit 1)
+  cargo clippy --all --all-features --exclude test-utilities --locked -- -D warnings || (echo "Solve your clippy errors to succeed"; exit 1)
 }
 
 function await_docker() {
