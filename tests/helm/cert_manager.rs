@@ -6,7 +6,7 @@ use serde_derive::Serialize;
 
 use std::path::PathBuf;
 
-use test_utilities::utilities::FuncTestsSecrets;
+use crate::helpers::utilities::FuncTestsSecrets;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

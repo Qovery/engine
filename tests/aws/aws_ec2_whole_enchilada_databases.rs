@@ -1,22 +1,20 @@
-extern crate test_utilities;
-
 use qovery_engine::cloud_provider::aws::AWS;
 
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 
-use self::test_utilities::utilities::{
-    context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets,
-};
+use crate::helpers::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets};
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::constants::AWS_DEFAULT_REGION;
 use qovery_engine::transaction::Transaction;
 
-use self::test_utilities::aws::AWS_TEST_REGION;
-use self::test_utilities::aws_ec2::AWS_K3S_VERSION;
-use self::test_utilities::common::{Cluster, ClusterDomain};
+use crate::helpers;
+use crate::helpers::aws::AWS_TEST_REGION;
+use crate::helpers::aws_ec2::AWS_K3S_VERSION;
+use crate::helpers::common::test_db;
+use crate::helpers::common::{Cluster, ClusterDomain};
+use crate::helpers::database::{database_test_environment, test_db};
 use qovery_engine::transaction::TransactionResult;
-use test_utilities::database::{database_test_environment, test_db};
 
 // By design, there is only one node instance for EC2 preventing to run in parallel database tests because of port clash.
 // This file aims to create a dedicated EC2 cluster for publicly exposed managed DB tests.
@@ -71,7 +69,7 @@ fn test_ec2_database(database_mode: DatabaseMode, is_public: bool, db_versions_t
         }
         assert!(matches!(deploy_tx.commit(), TransactionResult::Ok));
 
-        let environment = database_test_environment(&context);
+        let environment = helpers::common::database_test_environment(&context);
 
         let test_name_accessibility = match is_public {
             true => "public",

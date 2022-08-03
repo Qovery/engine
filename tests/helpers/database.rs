@@ -1,9 +1,9 @@
-use crate::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
-use crate::common::{compute_test_cluster_endpoint, Cluster, ClusterDomain, Infrastructure};
-use crate::digitalocean::{DO_KUBERNETES_VERSION, DO_TEST_REGION};
-use crate::kubernetes::{KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
-use crate::scaleway::{SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
-use crate::utilities::{
+use crate::helpers::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
+use crate::helpers::common::{compute_test_cluster_endpoint, Cluster, ClusterDomain, Infrastructure};
+use crate::helpers::digitalocean::{DO_KUBERNETES_VERSION, DO_TEST_REGION};
+use crate::helpers::kubernetes::{KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
+use crate::helpers::scaleway::{SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
+use crate::helpers::utilities::{
     db_disk_type, db_infos, db_instance_type, generate_id, generate_password, get_pvc, get_svc, get_svc_name, init,
     FuncTestsSecrets,
 };

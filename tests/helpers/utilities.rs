@@ -24,7 +24,7 @@ use std::fs;
 use std::str::FromStr;
 use tracing::{info, warn};
 
-use crate::scaleway::{
+use crate::helpers::scaleway::{
     SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
     SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
 };
@@ -41,7 +41,7 @@ use retry::Error::Operation;
 use serde::{Deserialize, Serialize};
 
 extern crate time;
-use crate::digitalocean::{
+use crate::helpers::digitalocean::{
     DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_SELF_HOSTED_DATABASE_DISK_TYPE,
     DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
 };
@@ -935,7 +935,7 @@ pub fn get_svc(
     }
 }
 
-pub fn db_fqnd(db: Database) -> String {
+pub fn _db_fqnd(db: Database) -> String {
     match db.publicly_accessible {
         true => db.fqdn,
         false => match db.mode == MANAGED {

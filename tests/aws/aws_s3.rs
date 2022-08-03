@@ -1,9 +1,9 @@
+use crate::helpers::utilities::{context, generate_id, FuncTestsSecrets};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::object_storage::s3::S3;
 use qovery_engine::object_storage::ObjectStorage;
 use std::str::FromStr;
 use tempfile::NamedTempFile;
-use test_utilities::utilities::{context, generate_id, FuncTestsSecrets};
 
 #[cfg(feature = "test-aws-infra")]
 #[test]

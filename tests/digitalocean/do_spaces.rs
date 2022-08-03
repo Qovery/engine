@@ -1,8 +1,8 @@
+use crate::helpers::utilities::{context, generate_id, FuncTestsSecrets};
 use qovery_engine::models::digital_ocean::DoRegion;
 use qovery_engine::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use qovery_engine::object_storage::ObjectStorage;
 use tempfile::NamedTempFile;
-use test_utilities::utilities::{context, generate_id, FuncTestsSecrets};
 
 #[allow(dead_code)]
 const TEST_REGION: DoRegion = DoRegion::Amsterdam3;

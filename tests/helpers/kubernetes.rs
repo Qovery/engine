@@ -1,6 +1,6 @@
-use crate::aws_ec2::ec2_kubernetes_instance;
-use crate::common::{Cluster, ClusterDomain};
-use crate::utilities::{init, FuncTestsSecrets};
+use crate::helpers::aws_ec2::ec2_kubernetes_instance;
+use crate::helpers::common::{Cluster, ClusterDomain};
+use crate::helpers::utilities::{init, FuncTestsSecrets};
 
 use core::cell::RefCell;
 use core::option::Option;

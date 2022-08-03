@@ -1,5 +1,5 @@
-use crate::common::ClusterDomain;
-use crate::utilities::FuncTestsSecrets;
+use crate::helpers::common::ClusterDomain;
+use crate::helpers::utilities::FuncTestsSecrets;
 use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::dns_provider::qoverydns::QoveryDns;
 use qovery_engine::dns_provider::DnsProvider;
