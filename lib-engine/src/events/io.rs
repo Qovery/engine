@@ -351,10 +351,10 @@ mod test {
         match serde_json::to_string(&event_io) {
             Ok(json) => {
                 // validate:
-                assert_eq!(true, json.contains("{\"infrastructure\":\"CreateError\"}"))
+                assert!(json.contains("{\"infrastructure\":\"CreateError\"}"))
             }
-            Err(_) => {
-                assert_eq!(0, 1)
+            Err(e) => {
+                panic!("Panic ! Error: {}", e)
             }
         }
     }

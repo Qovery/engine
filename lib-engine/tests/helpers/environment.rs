@@ -1,4 +1,4 @@
-use crate::utilities::{generate_id, generate_password, get_svc_name};
+use crate::helpers::utilities::{generate_id, generate_password, get_svc_name};
 use chrono::Utc;
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::cloud_provider::Kind;

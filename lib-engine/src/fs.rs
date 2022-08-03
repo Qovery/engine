@@ -442,7 +442,7 @@ mod tests {
             ("dir-2/dir-1/.terraform.lock.hcl", "content"),
             ("dir-2/dir-1/file-2.txt", "content"),
         ]
-        .iter()
+        .into_iter()
         .map(|(p, c)| {
             let mut file = File::create(root_dir_path.join(p)).expect("error creating file");
             file.write_all(c.as_bytes()).expect("error writing into file");
@@ -456,7 +456,7 @@ mod tests {
             archive_workspace_directory(tmp_dir.path().to_str().expect("error getting file path string"), execution_id);
 
         // verify:
-        assert_eq!(true, result.is_ok());
+        assert!(result.is_ok());
 
         let expected_files_in_tar: HashSet<String> =
             vec![String::from("file-1.txt"), String::from("dir-2/dir-1/file-2.txt")]
@@ -483,14 +483,14 @@ mod tests {
 
         assert_eq!(expected_files_in_tar.len(), files_in_tar.len());
         for e in expected_files_in_tar.iter() {
-            assert_eq!(true, files_in_tar.contains(e));
+            assert!(files_in_tar.contains(e));
         }
         for e in files_in_tar.iter() {
-            assert_eq!(true, expected_files_in_tar.contains(e));
+            assert!(expected_files_in_tar.contains(e));
         }
 
         // clean:
-        tmp_files.into_iter().for_each(drop);
+        tmp_files.iter().for_each(drop);
         tmp_dir.close().expect("error closing temporary directory");
     }
 

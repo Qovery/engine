@@ -1,18 +1,15 @@
-extern crate test_utilities;
-
 use std::str::FromStr;
 
+use crate::helpers::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
+use crate::helpers::common::{cluster_test, ClusterDomain, ClusterTestType};
+use crate::helpers::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 use ::function_name::named;
-use test_utilities::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
-use test_utilities::common::ClusterDomain;
-use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::Kind;
-use test_utilities::kubernetes::{cluster_test, ClusterTestType};
 
 #[cfg(feature = "test-aws-infra")]
 fn create_and_destroy_eks_cluster(

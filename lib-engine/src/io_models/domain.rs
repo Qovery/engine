@@ -127,7 +127,7 @@ mod tests {
             TestCase {
                 input: "test.co.uk".to_string(),
                 expected_root_domain_output: "co.uk".to_string(), // TODO(benjamin) => Should be test.co.uk in the future
-                expected_wildcarded_output: "*.co.uk".to_string(),
+                expected_wildcarded_output: "*.test.co.uk".to_string(),
                 description: "broken edge case domain with special tld input",
             },
             TestCase {
@@ -159,12 +159,18 @@ mod tests {
         for tc in test_cases {
             // execute:
             let result = Domain::new(tc.input.clone());
-            tc.expected_wildcarded_output; // to avoid warning
 
             // verify:
             assert_eq!(
                 tc.expected_root_domain_output,
                 result.root_domain().to_string(),
+                "case {} : '{}'",
+                tc.description,
+                tc.input
+            );
+            assert_eq!(
+                tc.expected_wildcarded_output,
+                result.wildcarded().to_string(),
                 "case {} : '{}'",
                 tc.description,
                 tc.input

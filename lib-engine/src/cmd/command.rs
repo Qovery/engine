@@ -330,22 +330,22 @@ mod tests {
 
     #[test]
     fn test_binary_exist() {
-        assert_eq!(does_binary_exist("sdfsdf"), false);
-        assert_eq!(does_binary_exist("ls"), true);
-        assert_eq!(does_binary_exist("/bin/sh"), true);
+        assert!(!does_binary_exist("sdfsdf"));
+        assert!(does_binary_exist("ls"));
+        assert!(does_binary_exist("/bin/sh"));
     }
 
     #[test]
     fn test_run_version_for_command() {
         let ret = run_version_command_for("ls");
-        assert_eq!(ret.is_empty(), false);
+        assert!(!ret.is_empty());
         assert!(ret.contains("GNU"))
     }
 
     #[test]
     fn test_error() {
         let mut cmd = QoveryCommand::new("false", &[], &[]);
-        assert_eq!(cmd.exec().is_err(), true);
+        assert!(cmd.exec().is_err());
         assert!(matches!(cmd.exec(), Err(CommandError::ExitStatusError(_))));
     }
 

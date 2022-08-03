@@ -1,27 +1,28 @@
+use crate::helpers::utilities::{
+    context, engine_run_test, generate_id, generate_password, get_pods, get_svc_name, init, is_pod_restarted_env,
+    logger, FuncTestsSecrets,
+};
 use ::function_name::named;
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use qovery_engine::transaction::TransactionResult;
-use test_utilities::utilities::{
-    context, engine_run_test, generate_id, generate_password, get_pods, get_svc_name, init, is_pod_restarted_env,
-    logger, FuncTestsSecrets,
-};
 use tracing::{span, warn, Level};
 use uuid::Uuid;
 
+use crate::helpers;
+use crate::helpers::common::{database_test_environment, Infrastructure};
+use crate::helpers::common::{test_db, ClusterDomain};
+use crate::helpers::scaleway::{
+    clean_environments, scw_default_engine_config, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
+    SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,
+};
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::Action;
 use qovery_engine::utilities::to_short_id;
-use test_utilities::common::ClusterDomain;
-use test_utilities::common::Infrastructure;
-use test_utilities::database::{database_test_environment, environment_3_apps_3_databases, test_db};
-use test_utilities::scaleway::{
-    clean_environments, scw_default_engine_config, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
-    SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,
-};
+
 /**
 **
 ** Global database tests
@@ -57,7 +58,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = scw_default_engine_config(&context_for_deletion, logger.clone());
-        let environment = environment_3_apps_3_databases(
+        let environment = helpers::common::environment_3_apps_3_routers_3_databases(
             &context,
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
@@ -112,7 +113,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = scw_default_engine_config(&context_for_deletion, logger.clone());
-        let environment = test_utilities::environment::environment_2_app_2_routers_1_psql(
+        let environment = helpers::common::environnement_2_app_2_routers_1_psql(
             &context,
             secrets
                 .clone()
@@ -194,14 +195,14 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment = test_utilities::environment::environment_2_app_2_routers_1_psql(
+        let environment = helpers::common::environnement_2_app_2_routers_1_psql(
             &context,
             test_domain.as_str(),
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
             Kind::Scw,
         );
-        let mut environment_delete = test_utilities::environment::environment_2_app_2_routers_1_psql(
+        let mut environment_delete = helpers::common::environnement_2_app_2_routers_1_psql(
             &context_for_deletion,
             test_domain.as_str(),
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
@@ -264,7 +265,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
 
-        let mut environment = test_utilities::environment::working_minimal_environment_with_router(
+        let mut environment = helpers::common::working_minimal_environment(
             &context,
             secrets
                 .clone()

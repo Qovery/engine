@@ -1,6 +1,4 @@
-extern crate test_utilities;
-
-use self::test_utilities::utilities::{context, FuncTestsSecrets};
+use crate::helpers::utilities::{context, FuncTestsSecrets};
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::models::scaleway::ScwZone;
 use tracing::debug;

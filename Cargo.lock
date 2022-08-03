@@ -427,9 +427,9 @@ checksum = "9d6f2aa4d0537bcc1c74df8755072bd31c1ef1a3a1b85a68e8404a8c353b7b8b"
 
 [[package]]
 name = "const_format"
-version = "0.2.23"
+version = "0.2.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0936ffe6d0c8d6a51b3b0a73b2acbe925d786f346cf45bfddc8341d79fb7dc8a"
+checksum = "939dc9e2eb9077e0679d2ce32de1ded8531779360b003b4a972a7a39ec263495"
 dependencies = [
  "const_format_proc_macros",
 ]
@@ -632,9 +632,9 @@ dependencies = [
 
 [[package]]
 name = "curl"
-version = "0.4.43"
+version = "0.4.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37d855aeef205b43f65a5001e0997d81f8efca7badad4fad7d897aa7f0d0651f"
+checksum = "509bd11746c7ac09ebd19f0b17782eae80aadee26237658a6b4808afb5c11a22"
 dependencies = [
  "curl-sys",
  "libc",
@@ -647,9 +647,9 @@ dependencies = [
 
 [[package]]
 name = "curl-sys"
-version = "0.4.54+curl-7.83.0"
+version = "0.4.56+curl-7.83.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25debbc3365c3e7ee79e30918df5759e84dbd4485807a18829188abf1786ec4e"
+checksum = "6093e169dd4de29e468fa649fbae11cdcd5551c81fe5bf1b0677adad7ef3d26f"
 dependencies = [
  "cc",
  "libc",
@@ -2887,21 +2887,27 @@ version = "0.1.0"
 dependencies = [
  "base64 0.13.0",
  "bitflags",
+ "bstr",
  "chrono",
  "cmd_lib",
+ "const_format",
+ "curl",
  "derivative",
  "digitalocean",
  "dirs",
+ "dotenv",
  "flate2",
  "function_name",
  "futures 0.3.21",
  "gethostname",
  "git2",
+ "hashicorp_vault",
  "itertools",
  "k8s-openapi",
  "kube",
  "lazy_static",
  "maplit",
+ "passwords",
  "rand 0.8.5",
  "regex",
  "reqwest 0.11.10",
@@ -2928,8 +2934,8 @@ dependencies = [
  "tempdir",
  "tempfile",
  "tera",
- "test-utilities",
  "thiserror",
+ "time 0.3.9",
  "timeout-readwrite",
  "tokio 1.18.2",
  "tracing",
@@ -4265,38 +4271,6 @@ dependencies = [
  "serde_json",
  "slug",
  "unic-segment",
-]
-
-[[package]]
-name = "test-utilities"
-version = "0.1.0"
-dependencies = [
- "base64 0.13.0",
- "bstr",
- "chrono",
- "const_format",
- "curl",
- "digitalocean",
- "dirs",
- "dotenv",
- "gethostname",
- "hashicorp_vault",
- "maplit",
- "passwords",
- "qovery-engine",
- "rand 0.8.5",
- "reqwest 0.11.10",
- "retry",
- "scaleway_api_rs",
- "serde",
- "serde_derive",
- "serde_json",
- "time 0.3.9",
- "tokio 1.18.2",
- "tracing",
- "tracing-subscriber 0.3.11",
- "url 2.2.2",
- "uuid 1.0.0",
 ]
 
 [[package]]

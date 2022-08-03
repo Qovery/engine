@@ -1,24 +1,14 @@
 extern crate serde;
 extern crate serde_derive;
 
-use chrono::Utc;
-use std::cell::RefCell;
-
-use qovery_engine::cloud_provider::utilities::sanitize_name;
-use qovery_engine::dns_provider::DnsProvider;
-use qovery_engine::io_models::context::CloneForTest;
-
-use crate::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
-use crate::aws_ec2::ec2_kubernetes_instance;
-use crate::digitalocean::{DO_KUBERNETES_VERSION, DO_TEST_REGION};
-use crate::scaleway::{SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
-use crate::utilities::{
+use crate::helpers::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
+use crate::helpers::digitalocean::{DO_KUBERNETES_VERSION, DO_TEST_REGION};
+use crate::helpers::scaleway::{SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
+use crate::helpers::utilities::{
     db_disk_type, db_infos, db_instance_type, generate_id, generate_password, get_pvc, get_svc, get_svc_name, init,
     FuncTestsSecrets,
 };
-use base64;
-use qovery_engine::cloud_provider::aws::kubernetes::ec2::EC2;
-use qovery_engine::cloud_provider::aws::kubernetes::eks::EKS;
+
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use qovery_engine::cloud_provider::aws::AWS;
