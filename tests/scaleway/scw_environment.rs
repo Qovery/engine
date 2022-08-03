@@ -216,8 +216,8 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
             selector.as_str(),
             secrets.clone(),
         );
-        assert_eq!(ret.is_ok(), true);
-        assert_eq!(ret.unwrap().items.is_empty(), false);
+        assert!(ret.is_ok());
+        assert!(!ret.unwrap().items.is_empty());
 
         let result = environment.pause_environment(&env_action, logger.clone(), &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
@@ -230,8 +230,8 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
             selector.as_str(),
             secrets.clone(),
         );
-        assert_eq!(ret.is_ok(), true);
-        assert_eq!(ret.unwrap().items.is_empty(), true);
+        assert!(ret.is_ok());
+        assert!(ret.unwrap().items.is_empty());
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
@@ -246,8 +246,8 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
             selector.as_str(),
             secrets.clone(),
         );
-        assert_eq!(ret.is_ok(), true);
-        assert_eq!(ret.unwrap().items.is_empty(), false);
+        assert!(ret.is_ok());
+        assert!(!ret.unwrap().items.is_empty());
 
         // Cleanup
         let result = environment.delete_environment(&env_action, logger, &engine_config_for_delete);
@@ -450,7 +450,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
             ),
-            Err(_) => assert!(false),
+            Err(_) => panic!(),
         };
 
         let result = environment_delete.delete_environment(&env_action_delete, logger, &engine_config_for_deletion);
@@ -506,8 +506,8 @@ fn deploy_a_working_environment_and_pause_it() {
             selector.as_str(),
             secrets.clone(),
         );
-        assert_eq!(ret.is_ok(), true);
-        assert_eq!(ret.unwrap().items.is_empty(), false);
+        assert!(ret.is_ok());
+        assert!(!ret.unwrap().items.is_empty());
 
         let result = environment.pause_environment(&ea, logger.clone(), &engine_config_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
@@ -520,8 +520,8 @@ fn deploy_a_working_environment_and_pause_it() {
             selector.as_str(),
             secrets.clone(),
         );
-        assert_eq!(ret.is_ok(), true);
-        assert_eq!(ret.unwrap().items.is_empty(), true);
+        assert!(ret.is_ok());
+        assert!(ret.unwrap().items.is_empty());
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
@@ -530,8 +530,8 @@ fn deploy_a_working_environment_and_pause_it() {
         assert!(matches!(result, TransactionResult::Ok));
 
         let ret = get_pods(context, Kind::Scw, environment.clone(), selector.as_str(), secrets);
-        assert_eq!(ret.is_ok(), true);
-        assert_eq!(ret.unwrap().items.is_empty(), false);
+        assert!(ret.is_ok());
+        assert!(!ret.unwrap().items.is_empty());
 
         // Cleanup
         let result = environment.delete_environment(&ea, logger, &engine_config_for_delete);
@@ -609,7 +609,7 @@ fn scaleway_kapsule_redeploy_same_app() {
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
             ),
-            Err(_) => assert!(false),
+            Err(_) => panic!(),
         };
 
         let app_name = format!("{}-0", &environment_check1.applications[0].name);

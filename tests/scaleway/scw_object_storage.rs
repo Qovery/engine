@@ -13,8 +13,8 @@ fn test_delete_bucket_hard_delete_strategy() {
     // setup:
     let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
-    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
+    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
         context,
@@ -39,7 +39,7 @@ fn test_delete_bucket_hard_delete_strategy() {
 
     // validate:
     assert!(result.is_ok());
-    assert_eq!(false, scaleway_os.bucket_exists(bucket_name.as_str()))
+    assert!(!scaleway_os.bucket_exists(bucket_name.as_str()))
 }
 
 #[cfg(feature = "test-scw-infra")]
@@ -48,8 +48,8 @@ fn test_delete_bucket_empty_strategy() {
     // setup:
     let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
-    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
+    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
         context,
@@ -88,8 +88,8 @@ fn test_create_bucket() {
     // setup:
     let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
-    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
+    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
         context,
@@ -124,8 +124,8 @@ fn test_recreate_bucket() {
     // setup:
     let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
-    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
+    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
         context,
@@ -148,7 +148,7 @@ fn test_recreate_bucket() {
 
     let delete_result = scaleway_os.delete_bucket(bucket_name.as_str());
     assert!(delete_result.is_ok());
-    assert_eq!(false, scaleway_os.bucket_exists(bucket_name.as_str()));
+    assert!(!scaleway_os.bucket_exists(bucket_name.as_str()));
 
     let recreate_result = scaleway_os.create_bucket(bucket_name.as_str());
     assert!(recreate_result.is_ok());
@@ -166,8 +166,8 @@ fn test_put_file() {
     // setup:
     let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
-    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
+    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
         context,
@@ -199,12 +199,9 @@ fn test_put_file() {
 
     // validate:
     assert!(result.is_ok());
-    assert_eq!(
-        true,
-        scaleway_os
-            .get(bucket_name.as_str(), object_key.as_str(), false)
-            .is_ok()
-    );
+    assert!(scaleway_os
+        .get(bucket_name.as_str(), object_key.as_str(), false)
+        .is_ok());
 
     // clean-up:
     scaleway_os
@@ -218,8 +215,8 @@ fn test_get_file() {
     // setup:
     let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
-    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
+    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
         context,
@@ -253,12 +250,9 @@ fn test_get_file() {
 
     // validate:
     assert!(result.is_ok());
-    assert_eq!(
-        true,
-        scaleway_os
-            .get(bucket_name.as_str(), object_key.as_str(), false)
-            .is_ok()
-    );
+    assert!(scaleway_os
+        .get(bucket_name.as_str(), object_key.as_str(), false)
+        .is_ok());
 
     // clean-up:
     scaleway_os
@@ -272,8 +266,8 @@ fn test_ensure_file_is_absent() {
     // setup:
     let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
-    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or("undefined".to_string());
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
+    let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
 
     let scaleway_os = ScalewayOS::new(
         context,
