@@ -11,7 +11,6 @@ use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
 use crate::models::application::Application;
 use crate::models::types::{CloudProvider, ToTeraContext};
-use cmd_lib::log::log;
 use function_name::named;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -97,7 +96,7 @@ where
 
             // Delete container repository created for this application
             let logger = get_loggers(self, Action::Delete);
-            (logger.send_progress)(format!("🪓 Terminating container registry of the application"));
+            (logger.send_progress)("🪓 Terminating container registry of the application".to_string());
             if let Err(err) = target
                 .container_registry
                 .delete_repository(self.build().image.repository_name())
