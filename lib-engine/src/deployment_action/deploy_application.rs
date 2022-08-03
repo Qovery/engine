@@ -101,11 +101,7 @@ where
                 .container_registry
                 .delete_repository(self.build().image.repository_name())
             {
-                let engine_err = EngineError::new_container_registry_delete_repository_error(
-                    event_details.clone(),
-                    self.build().image.repository_name().to_string(),
-                    None,
-                );
+                let engine_err = EngineError::new_container_registry_error(event_details.clone(), err.clone());
 
                 let user_error = EngineError::new_engine_error(
                     engine_err.clone(),
