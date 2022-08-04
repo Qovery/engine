@@ -581,6 +581,8 @@ pub enum Tag {
     TerraformUnknownError,
     /// TerraformInvalidCredentials: terraform invalid cloud provider credentials
     TerraformInvalidCredentials,
+    /// TerraformNotEnoughPermissions: terraform issue due to user not having enough permissions to perform action on the resource
+    TerraformNotEnoughPermissions,
     /// TerraformConfigFileNotFound: terraform config file cannot be found
     TerraformConfigFileNotFound,
     /// TerraformConfigFileInvalidContent: terraform config file has invalid content
@@ -2276,6 +2278,14 @@ impl EngineError {
                 Some(terraform_error.into()),
                 None,
                 None,
+            ),
+            TerraformError::NotEnoughPermissions { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformNotEnoughPermissions,
+                terraform_error.to_safe_message(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                Some(Url::parse("https://hub.qovery.com/docs/getting-started/install-qovery/").expect("Error while trying to parse error link helper for `TerraformError::NotEnoughPermissions`, URL is not valid.")),
+                Some("Make sure you provide proper credentials for your cloud account.".to_string()),
             ),
         }
     }

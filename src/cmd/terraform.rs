@@ -53,6 +53,13 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    NotEnoughPermissions {
+        resource_type_and_name: String,
+        action: String,
+        user: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
     ServiceNotActivatedOptInRequired {
         service_type: String,
         /// raw_message: raw Terraform error message with all details.
@@ -195,6 +202,24 @@ impl TerraformError {
                 raw_message: raw_terraform_output,
             };
         }
+        if let Ok(aws_not_enough_permissions_re) = Regex::new(
+            r"AccessDenied: User: (?P<user>.+?) is not authorized to perform: (?P<action>.+?) on resource: (?P<resource_type_and_name>.+?) because",
+        ) {
+            if let Some(cap) = aws_not_enough_permissions_re.captures(raw_terraform_output.as_str()) {
+                if let (Some(resource_type_and_name), Some(user), Some(action)) = (
+                    cap.name("resource_type_and_name").map(|e| e.as_str()),
+                    cap.name("user").map(|e| e.as_str()),
+                    cap.name("action").map(|e| e.as_str()),
+                ) {
+                    return TerraformError::NotEnoughPermissions {
+                        resource_type_and_name: resource_type_and_name.to_string(),
+                        user: user.to_string(),
+                        action: action.to_string(),
+                        raw_message: raw_terraform_output.to_string(),
+                    };
+                }
+            }
+        }
 
         // This kind of error should be triggered as little as possible, ideally, there is no unknown errors
         // (un-catched) so we can act / report properly to the user.
@@ -212,6 +237,15 @@ impl TerraformError {
                 terraform_args.join(" "),
             ),
             TerraformError::InvalidCredentials { .. } => "Invalid credentials.".to_string(),
+            TerraformError::NotEnoughPermissions {
+                resource_type_and_name,
+                user,
+                action,
+                ..
+            } => format!(
+                "Error, user `{}` cannot perform `{}` on `{}`.",
+                user, action, resource_type_and_name
+            ),
             TerraformError::CannotDeleteLockFile {
                 terraform_provider_lock,
                 ..
@@ -275,6 +309,9 @@ impl Display for TerraformError {
                 format!("{}, here is the error:\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::InvalidCredentials { raw_message } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::NotEnoughPermissions { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::CannotDeleteLockFile { raw_message, .. } => {
@@ -837,5 +874,25 @@ terraform {
             // validate:
             assert_eq!(tc.expected_terraform_error, result);
         }
+    }
+
+    #[test]
+    fn test_terraform_error_aws_permissions_issue() {
+        // setup:
+        let raw_message = "Error: error creating IAM policy qovery-aws-EBS-CSI-Driver-z2242cca3: AccessDenied: User: arn:aws:iam::542561660426:user/thomas is not authorized to perform: iam:CreatePolicy on resource: policy qovery-aws-EBS-CSI-Driver-z2242cca3 because no identity-based policy allows the iam:CreatePolicy action status code: 403, request id: 01ca1501-a0db-438e-a6db-4a2628236cba".to_string();
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], raw_message.to_string());
+
+        // validate:
+        assert_eq!(
+            TerraformError::NotEnoughPermissions {
+                user: "arn:aws:iam::542561660426:user/thomas".to_string(),
+                action: "iam:CreatePolicy".to_string(),
+                resource_type_and_name: "policy qovery-aws-EBS-CSI-Driver-z2242cca3".to_string(),
+                raw_message,
+            },
+            result
+        );
     }
 }
