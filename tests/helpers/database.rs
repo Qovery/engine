@@ -24,7 +24,7 @@ use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::engine::EngineConfig;
 use qovery_engine::io_models::application::{Application, GitCredentials, Port, Protocol, Storage, StorageType};
 use qovery_engine::io_models::context::{CloneForTest, Context};
-use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
+use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::Action;
@@ -153,7 +153,7 @@ pub fn environment_3_apps_3_databases(
     let database_port_mongo = 27017;
     let database_db_name_mongo = "my-mongodb".to_string();
     let database_username_mongo = "superuser".to_string();
-    let database_password_mongo = generate_password();
+    let database_password_mongo = generate_password(CONTAINER);
     let database_uri_mongo = format!(
         "mongodb://{}:{}@{}:{}/{}",
         database_username_mongo,
@@ -168,7 +168,7 @@ pub fn environment_3_apps_3_databases(
     let fqdn = get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()).to_string();
     let database_port = 5432;
     let database_username = "superuser".to_string();
-    let database_password = generate_password();
+    let database_password = generate_password(CONTAINER);
     let database_name = "postgres".to_string();
 
     // pSQL 2 management part
@@ -492,7 +492,7 @@ pub fn test_db(
     let app_id = Uuid::new_v4();
     let database_username = match db_kind {
         DatabaseKind::Redis => match database_mode {
-            DatabaseMode::MANAGED => match version {
+            MANAGED => match version {
                 "6" => "default".to_string(),
                 _ => "superuser".to_string(),
             },
@@ -500,7 +500,7 @@ pub fn test_db(
         },
         _ => "superuser".to_string(),
     };
-    let database_password = generate_password();
+    let database_password = generate_password(database_mode.clone());
     let db_kind_str = db_kind.name().to_string();
     let db_id = generate_id();
     let database_host = format!("{}-{}", db_id, db_kind_str);
@@ -686,7 +686,7 @@ pub fn test_db(
                 Err(_) => panic!(),
             };
         }
-        DatabaseMode::MANAGED => {
+        MANAGED => {
             match get_svc(context, provider_kind, environment, secrets) {
                 Ok(svc) => {
                     let service = svc
@@ -800,7 +800,7 @@ pub fn test_pause_managed_db(
 
     let provider_kind = kubernetes_kind.get_cloud_provider_kind();
     let database_username = "superuser".to_string();
-    let database_password = generate_password();
+    let database_password = generate_password(database_mode.clone());
     let db_kind_str = db_kind.name().to_string();
     let db_id = generate_id();
     let database_host = format!("{}-{}", db_id, db_kind_str);
@@ -963,7 +963,7 @@ pub fn test_pause_managed_db(
                 Err(_) => panic!(),
             };
         }
-        DatabaseMode::MANAGED => {
+        MANAGED => {
             match get_svc(context, provider_kind, environment, secrets) {
                 Ok(svc) => {
                     let service = svc
@@ -1237,7 +1237,7 @@ pub fn test_db_on_upgrade(
                 Err(_) => panic!(),
             };
         }
-        DatabaseMode::MANAGED => {
+        MANAGED => {
             match get_svc(context, provider_kind.clone(), environment, secrets) {
                 Ok(svc) => {
                     let service = svc

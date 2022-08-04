@@ -106,7 +106,7 @@ pub fn environment_2_app_2_routers_1_psql(
 
     let database_port = 5432;
     let database_username = "superuser".to_string();
-    let database_password = generate_password();
+    let database_password = generate_password(CONTAINER);
     let database_name = "postgres".to_string();
 
     let suffix = generate_id();

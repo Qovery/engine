@@ -36,6 +36,7 @@ use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DIGITAL_OCEAN_SPACES_ACCESS_ID, DIGITAL_OCEAN_SPACES_SECRET_ID,
     DIGITAL_OCEAN_TOKEN, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
+use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use retry::Error::Operation;
 use serde::{Deserialize, Serialize};
@@ -79,7 +80,7 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
                     let ttl_converted: u32 = ttl.into_string().unwrap().parse().unwrap();
                     Some(ttl_converted)
                 }
-                None => Some(10800),
+                None => Some(14400),
             }
         },
         forced_upgrade: Option::from(env::var_os("forced_upgrade").is_some()),
@@ -458,7 +459,7 @@ pub fn generate_id() -> String {
     uuid
 }
 
-pub fn generate_password() -> String {
+pub fn generate_password(db_mode: DatabaseMode) -> String {
     // core special chars set: !#$%&*+-=?_
     // we will keep only those and exclude others
     let forbidden_chars = vec![
@@ -466,12 +467,17 @@ pub fn generate_password() -> String {
         '*',
     ];
 
+    let use_symbols = match db_mode {
+        MANAGED => true,
+        CONTAINER => false,
+    };
+
     let pg = PasswordGenerator::new()
         .length(32)
         .numbers(true)
         .lowercase_letters(true)
         .uppercase_letters(true)
-        .symbols(true)
+        .symbols(use_symbols)
         .spaces(false)
         .exclude_similar_characters(true)
         .strict(true);
@@ -978,7 +984,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "da5dd2b58b78576921373fcb4d4bddc796a804a8".to_string(),
+                app_commit: "e824fd7062e112d513baecb537114563b77dbaf4".to_string(),
                 app_env_vars: btreemap! {
                     "IS_DOCUMENTDB".to_string() => base64::encode((database_mode == MANAGED).to_string()),
                     "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => base64::encode(db_fqdn),
@@ -996,7 +1002,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "42f6553b6be617f954f903e01236e225bbb9f468".to_string(),
+                app_commit: "ba3dde5e67d8bdd85b25709c90875348071591a3".to_string(),
                 app_env_vars: btreemap! {
                     "MYSQL_HOST".to_string() => base64::encode(db_fqdn),
                     "MYSQL_PORT".to_string() => base64::encode(database_port.to_string()),
@@ -1016,7 +1022,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "f86286892f044d731332a1f613300bd850476f3f".to_string(),
+                app_commit: "750d5e6d616493ae50b6c6099e196b0643ae459f".to_string(),
                 app_env_vars: btreemap! {
                      "PG_DBNAME".to_string() => base64::encode(database_db_name),
                      "PG_HOST".to_string() => base64::encode(db_fqdn),
@@ -1032,7 +1038,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name,
-                app_commit: "476c6ead94a3a5365eabf4daa6d79b10d159a0d0".to_string(),
+                app_commit: "81256d5cc4bedfccfe18e2aa7783ee7fb9438a25".to_string(),
                 app_env_vars: btreemap! {
                 "IS_ELASTICCACHE".to_string() => base64::encode((database_mode == MANAGED && database_username == "default").to_string()),
                 "REDIS_HOST".to_string()      => base64::encode(db_fqdn),

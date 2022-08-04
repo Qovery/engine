@@ -9,23 +9,23 @@ pub fn get_self_hosted_postgres_version(requested_version: String) -> Result<Str
     // https://hub.docker.com/r/bitnami/postgresql/tags?page=1&ordering=last_updated
 
     // v10
-    let v10 = generate_supported_version(10, 1, 16, Some(0), Some(0), None);
+    let v10 = generate_supported_version(10, 1, 21, Some(0), Some(0), None);
     supported_postgres_versions.extend(v10);
 
     // v11
-    let v11 = generate_supported_version(11, 1, 11, Some(0), Some(0), None);
+    let v11 = generate_supported_version(11, 1, 16, Some(0), Some(0), None);
     supported_postgres_versions.extend(v11);
 
     // v12
-    let v12 = generate_supported_version(12, 2, 8, Some(0), Some(0), None);
+    let v12 = generate_supported_version(12, 2, 11, Some(0), Some(0), None);
     supported_postgres_versions.extend(v12);
 
     // v13
-    let v13 = generate_supported_version(13, 1, 4, Some(0), Some(0), None);
+    let v13 = generate_supported_version(13, 1, 7, Some(0), Some(0), None);
     supported_postgres_versions.extend(v13);
 
     // v14
-    let v14 = generate_supported_version(14, 4, 0, Some(0), Some(0), None);
+    let v14 = generate_supported_version(14, 4, 4, Some(0), Some(0), None);
     supported_postgres_versions.extend(v14);
 
     get_supported_version_to_use("Postgresql", supported_postgres_versions, requested_version)
@@ -36,11 +36,11 @@ pub fn get_self_hosted_mysql_version(requested_version: String) -> Result<String
     // https://hub.docker.com/r/bitnami/mysql/tags?page=1&ordering=last_updated
 
     // v5.7
-    let v57 = generate_supported_version(5, 7, 7, Some(16), Some(34), None);
+    let v57 = generate_supported_version(5, 7, 7, Some(16), Some(39), None);
     supported_mysql_versions.extend(v57);
 
     // v8
-    let v8 = generate_supported_version(8, 0, 0, Some(11), Some(24), None);
+    let v8 = generate_supported_version(8, 0, 0, Some(11), Some(30), None);
     supported_mysql_versions.extend(v8);
 
     get_supported_version_to_use("MySQL", supported_mysql_versions, requested_version)
@@ -52,19 +52,19 @@ pub fn get_self_hosted_mongodb_version(requested_version: String) -> Result<Stri
     // https://hub.docker.com/r/bitnami/mongodb/tags?page=1&ordering=last_updated
 
     // v3.6
-    let mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(22), None);
+    let mongo_version = generate_supported_version(3, 6, 6, Some(0), Some(23), None);
     supported_mongodb_versions.extend(mongo_version);
 
     // v4.0
-    let mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(23), None);
+    let mongo_version = generate_supported_version(4, 0, 0, Some(0), Some(27), None);
     supported_mongodb_versions.extend(mongo_version);
 
     // v4.2
-    let mongo_version = generate_supported_version(4, 2, 2, Some(0), Some(12), None);
+    let mongo_version = generate_supported_version(4, 2, 2, Some(0), Some(21), None);
     supported_mongodb_versions.extend(mongo_version);
 
     // v4.4
-    let mongo_version = generate_supported_version(4, 4, 4, Some(0), Some(4), None);
+    let mongo_version = generate_supported_version(4, 4, 4, Some(0), Some(15), None);
     supported_mongodb_versions.extend(mongo_version);
 
     get_supported_version_to_use("MongoDB", supported_mongodb_versions, requested_version)
@@ -76,10 +76,11 @@ pub fn get_self_hosted_redis_version(requested_version: String) -> Result<String
 
     supported_redis_versions.insert("7".to_string(), "7.0.4".to_string());
     supported_redis_versions.insert("7.0".to_string(), "7.0.4".to_string());
-    supported_redis_versions.insert("6".to_string(), "6.0.9".to_string());
+    supported_redis_versions.insert("6".to_string(), "6.2.7".to_string());
+    supported_redis_versions.insert("6.2".to_string(), "6.2.7".to_string());
     supported_redis_versions.insert("6.0".to_string(), "6.0.9".to_string());
-    supported_redis_versions.insert("5".to_string(), "5.0.10".to_string());
-    supported_redis_versions.insert("5.0".to_string(), "5.0.10".to_string());
+    supported_redis_versions.insert("5".to_string(), "5.0.14".to_string());
+    supported_redis_versions.insert("5.0".to_string(), "5.0.14".to_string());
 
     get_supported_version_to_use("Redis", supported_redis_versions, requested_version)
 }
