@@ -14,6 +14,8 @@ use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use qovery_engine::io_models::Action;
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
+use std::thread::sleep;
+use std::time::Duration;
 use tracing::{span, Level};
 use uuid::Uuid;
 
@@ -242,8 +244,14 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
 
-        let _environment = helpers::environment::working_minimal_environment(&context);
-        let mut environment = helpers::environment::working_minimal_environment(&context);
+        let mut environment = helpers::environment::working_minimal_environment_with_router(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
 
         let app_name = format!("postgresql-app-{}", generate_id());
         let database_host = get_svc_name(DatabaseKind::Postgresql, Kind::Aws).to_string();
@@ -298,7 +306,6 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 app
             })
             .collect::<Vec<qovery_engine::io_models::application::Application>>();
-        environment.routers[0].routes[0].service_long_id = environment.applications[0].long_id;
 
         let environment_to_redeploy = environment.clone();
         let environment_check = environment.clone();
@@ -311,6 +318,8 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
         assert!(matches!(ret, TransactionResult::Ok));
+
+        sleep(Duration::from_secs(60));
 
         let ret = environment_to_redeploy.deploy_environment(&ea_redeploy, logger.clone(), &engine_config_for_redeploy);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -426,7 +435,6 @@ pub fn test_postgresql_pause(
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore = "No database deployed in this version"]
 fn private_postgresql_v10_deploy_a_working_dev_environment() {
     test_postgresql_configuration("10", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
@@ -434,7 +442,7 @@ fn private_postgresql_v10_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore = "No database deployed in this version"]
+#[ignore]
 fn public_postgresql_v10_deploy_a_working_dev_environment() {
     test_postgresql_configuration("10", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -555,6 +563,7 @@ fn private_postgresql_v13_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn public_postgresql_v13_deploy_a_working_prod_environment() {
     test_postgresql_configuration("13", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -569,7 +578,6 @@ fn private_postgresql_v13_deploy_and_pause() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore = "Database not handle with terraform ATM"]
 fn private_postgresql_v14_deploy_a_working_prod_environment() {
     test_postgresql_configuration("14", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
@@ -577,7 +585,6 @@ fn private_postgresql_v14_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore = "Database not handle with terraform ATM"]
 fn public_postgresql_v14_deploy_a_working_prod_environment() {
     test_postgresql_configuration("14", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -634,7 +641,7 @@ pub fn test_mongodb_configuration(
 // development environment
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
-#[ignore = "No database deployed in this version"]
+#[test]
 fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
     test_mongodb_configuration("3.6", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
@@ -642,7 +649,7 @@ fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore = "No database deployed in this version"]
+#[ignore]
 fn public_mongodb_v3_6_deploy_a_working_dev_environment() {
     test_mongodb_configuration("3.6", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -760,7 +767,6 @@ pub fn test_mysql_configuration(
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore = "Only 1 deployed in this version"]
 fn private_mysql_v5_7_deploy_a_working_dev_environment() {
     test_mysql_configuration("5.7", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
@@ -768,7 +774,7 @@ fn private_mysql_v5_7_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore = "Only 1 deployed in this version"]
+#[ignore]
 fn public_mysql_v5_7_deploy_a_working_dev_environment() {
     test_mysql_configuration("5.7", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -790,7 +796,7 @@ fn public_mysql_v8_deploy_a_working_dev_environment() {
 // MySQL production environment (RDS)
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
-#[ignore = "No database deployed in this version"]
+#[test]
 fn private_mysql_v5_7_deploy_a_working_prod_environment() {
     test_mysql_configuration("5.7", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
@@ -798,7 +804,7 @@ fn private_mysql_v5_7_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore = "No database deployed in this version"]
+#[ignore]
 fn public_mysql_v5_7_deploy_a_working_prod_environment() {
     test_mysql_configuration("5.7", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
