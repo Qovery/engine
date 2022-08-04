@@ -21,9 +21,12 @@ spec:
   {%- endif %}
   strategy:
     type: RollingUpdate
-    {% if max_instances == 1 %}
     rollingUpdate:
+    {% if max_instances == 1 %}
       maxSurge: 1
+    {% else %}
+      maxSurge: 25%
+      maxUnavailable: 10%
     {% endif %}
   selector:
     matchLabels:
