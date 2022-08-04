@@ -3,7 +3,8 @@ use ::function_name::named;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 
 use crate::helpers::aws::{K3S_KUBERNETES_MAJOR_VERSION, K3S_KUBERNETES_MINOR_VERSION};
-use crate::helpers::common::{cluster_test, ClusterDomain, ClusterTestType};
+use crate::helpers::common::ClusterDomain;
+use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
 use crate::helpers::utilities::generate_cluster_id;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::WithoutNatGateways;

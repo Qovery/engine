@@ -1,6 +1,6 @@
 use crate::helpers::common::ClusterDomain;
-use crate::helpers::common::{cluster_test, ClusterTestType};
 use crate::helpers::digitalocean::{DO_KUBERNETES_MAJOR_VERSION, DO_KUBERNETES_MINOR_VERSION};
+use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
 use crate::helpers::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;

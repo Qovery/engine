@@ -1,6 +1,7 @@
 use crate::helpers;
 use crate::helpers::aws::{aws_default_engine_config, AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
-use crate::helpers::common::{test_db, test_pause_managed_db, ClusterDomain, Infrastructure};
+use crate::helpers::common::{ClusterDomain, Infrastructure};
+use crate::helpers::database::{test_db, test_pause_managed_db};
 use crate::helpers::utilities::{context, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
 use crate::helpers::utilities::{generate_id, get_svc_name, is_pod_restarted_env};
 use ::function_name::named;
@@ -51,8 +52,12 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
-        let environment =
-            environment_3_apps_3_databases(&context, AWS_DATABASE_INSTANCE_TYPE, AWS_DATABASE_DISK_TYPE, Kind::Aws);
+        let environment = helpers::database::environment_3_apps_3_databases(
+            &context,
+            AWS_DATABASE_INSTANCE_TYPE,
+            AWS_DATABASE_DISK_TYPE,
+            Kind::Aws,
+        );
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -97,7 +102,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
-        let environment = helpers::common::environnement_2_app_2_routers_1_psql(
+        let environment = helpers::environment::environment_2_app_2_routers_1_psql(
             &context,
             secrets
                 .clone()
@@ -167,7 +172,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment = helpers::common::environnement_2_app_2_routers_1_psql(
+        let environment = helpers::environment::environment_2_app_2_routers_1_psql(
             &context,
             test_domain.as_str(),
             AWS_DATABASE_INSTANCE_TYPE,
@@ -175,7 +180,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             Kind::Aws,
         );
         //let env_to_check = environment.clone();
-        let mut environment_delete = helpers::common::environnement_2_app_2_routers_1_psql(
+        let mut environment_delete = helpers::environment::environment_2_app_2_routers_1_psql(
             &context_for_deletion,
             test_domain.as_str(),
             AWS_DATABASE_INSTANCE_TYPE,
@@ -237,8 +242,8 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
 
-        let mut environment = helpers::common::working_minimal_environment(&context);
-        let mut environment = test_utilities::environment::working_minimal_environment(&context);
+        let _environment = helpers::environment::working_minimal_environment(&context);
+        let mut environment = helpers::environment::working_minimal_environment(&context);
 
         let app_name = format!("postgresql-app-{}", generate_id());
         let database_host = get_svc_name(DatabaseKind::Postgresql, Kind::Aws).to_string();
@@ -350,7 +355,7 @@ pub fn test_postgresql_configuration(
         cluster_id.as_str(),
     );
 
-    let environment = helpers::common::database_test_environment(&context);
+    let environment = helpers::database::database_test_environment(&context);
 
     engine_run_test(|| {
         test_db(
@@ -395,7 +400,7 @@ pub fn test_postgresql_pause(
         cluster_id.as_str(),
     );
 
-    let environment = helpers::common::database_test_environment(&context);
+    let environment = helpers::database::database_test_environment(&context);
 
     engine_run_test(|| {
         test_pause_managed_db(
@@ -603,7 +608,7 @@ pub fn test_mongodb_configuration(
             .as_str(),
         cluster_id.as_str(),
     );
-    let environment = helpers::common::database_test_environment(&context);
+    let environment = helpers::database::database_test_environment(&context);
 
     engine_run_test(|| {
         test_db(
@@ -728,7 +733,7 @@ pub fn test_mysql_configuration(
             .as_str(),
         cluster_id.as_str(),
     );
-    let environment = helpers::common::database_test_environment(&context);
+    let environment = helpers::database::database_test_environment(&context);
 
     engine_run_test(|| {
         test_db(
@@ -838,7 +843,7 @@ pub fn test_redis_configuration(
             .as_str(),
         cluster_id.as_str(),
     );
-    let environment = helpers::common::database_test_environment(&context);
+    let environment = helpers::database::database_test_environment(&context);
 
     engine_run_test(|| {
         test_db(

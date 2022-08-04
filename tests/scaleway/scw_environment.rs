@@ -1,5 +1,6 @@
 use crate::helpers;
-use crate::helpers::common::{session_is_sticky, Infrastructure};
+use crate::helpers::common::Infrastructure;
+use crate::helpers::environment::session_is_sticky;
 use crate::helpers::scaleway::scw_default_engine_config;
 use crate::helpers::scaleway::{clean_environments, SCW_TEST_ZONE};
 use crate::helpers::utilities::{
@@ -49,7 +50,7 @@ fn scaleway_test_build_phase() {
                 .as_str(),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
-        let environment = helpers::common::working_minimal_environment(&context);
+        let environment = helpers::environment::working_minimal_environment(&context);
 
         let env_action = environment.clone();
 
@@ -94,7 +95,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
-        let mut environment = helpers::common::working_minimal_environment(&context);
+        let environment = helpers::environment::working_minimal_environment(&context);
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
@@ -146,7 +147,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
 
-        let mut environment = helpers::common::non_working_environment(&context);
+        let mut environment = helpers::environment::non_working_environment(&context);
         environment.routers = vec![];
 
         let mut environment_for_delete = environment.clone();
@@ -198,7 +199,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
-        let environment = helpers::common::working_minimal_environment(&context);
+        let environment = helpers::environment::working_minimal_environment(&context);
 
         let env_action = environment.clone();
         let selector = format!("appId={}", to_short_id(&environment.applications[0].long_id));
@@ -286,7 +287,7 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
-        let mut environment = helpers::common::working_minimal_environment(&context);
+        let mut environment = helpers::environment::working_minimal_environment(&context);
         environment.applications = environment
             .applications
             .into_iter()
@@ -356,14 +357,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
-        let environment = helpers::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .as_ref()
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let environment = helpers::environment::working_minimal_environment(&context);
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -414,7 +408,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = scw_default_engine_config(&context_for_deletion, logger.clone());
 
-        let mut environment = helpers::common::working_minimal_environment(&context);
+        let mut environment = helpers::environment::working_minimal_environment(&context);
 
         let storage_size: u16 = 10;
         environment.applications = environment
@@ -489,7 +483,7 @@ fn deploy_a_working_environment_and_pause_it() {
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
-        let environment = helpers::common::working_minimal_environment(&context);
+        let environment = helpers::environment::working_minimal_environment(&context);
 
         let ea = environment.clone();
         let selector = format!("appId={}", to_short_id(&environment.applications[0].long_id));
@@ -569,7 +563,7 @@ fn scaleway_kapsule_redeploy_same_app() {
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = scw_default_engine_config(&context_for_deletion, logger.clone());
 
-        let mut environment = helpers::common::working_minimal_environment(&context);
+        let mut environment = helpers::environment::working_minimal_environment(&context);
 
         let storage_size: u16 = 10;
         environment.applications = environment
@@ -676,7 +670,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
         let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
 
         // env part generation
-        let environment = helpers::common::working_minimal_environment(&context);
+        let environment = helpers::environment::working_minimal_environment(&context);
         let mut environment_for_not_working = environment.clone();
         // this environment is broken by container exit
         environment_for_not_working.applications = environment_for_not_working
@@ -750,7 +744,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
                 .as_str(),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
-        let environment = helpers::common::working_minimal_environment(&context);
+        let environment = helpers::environment::working_minimal_environment(&context);
 
         // not working 1
         let context_for_not_working_1 = context.clone_not_same_execution_id();
@@ -846,7 +840,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
                 .as_str(),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
-        let environment = helpers::common::non_working_environment(&context);
+        let environment = helpers::environment::non_working_environment(&context);
 
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
@@ -898,7 +892,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
-        let environment = helpers::common::environment_only_http_server_router_with_sticky_session(
+        let environment = helpers::environment::environment_only_http_server_router_with_sticky_session(
             &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
@@ -1006,7 +1000,7 @@ fn deploy_container_with_no_router_on_scw() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
 
-        let mut environment = helpers::common::working_minimal_environment(&context);
+        let mut environment = helpers::environment::working_minimal_environment(&context);
 
         environment.routers = vec![];
         environment.applications = vec![];
@@ -1098,13 +1092,7 @@ fn deploy_container_with_router_on_scw() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
 
-        let mut environment = helpers::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let mut environment = helpers::environment::working_minimal_environment(&context);
 
         environment.applications = vec![];
         environment.containers = vec![Container {
