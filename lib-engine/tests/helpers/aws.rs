@@ -18,10 +18,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tracing::error;
 
-use crate::helpers::common::{
-    get_environment_test_kubernetes, Cluster, ClusterDomain, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES,
-};
+use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::dns::{dns_provider_cloudflare, dns_provider_qoverydns};
+use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
 use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;

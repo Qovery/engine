@@ -185,7 +185,7 @@ pub fn environment_3_apps_3_databases(
         applications: vec![
             Application {
                 long_id: Uuid::new_v4(),
-                name: app_name_1.clone(),
+                name: app_name_1,
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "5990752647af11ef21c3d46a51abbde3da1ab351".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
@@ -232,7 +232,7 @@ pub fn environment_3_apps_3_databases(
             },
             Application {
                 long_id: Uuid::new_v4(),
-                name: app_name_2.clone(),
+                name: app_name_2,
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "5990752647af11ef21c3d46a51abbde3da1ab351".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
@@ -271,7 +271,7 @@ pub fn environment_3_apps_3_databases(
             },
             Application {
                 long_id: Uuid::new_v4(),
-                name: app_name_3.clone(),
+                name: app_name_3,
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "158ea8ebc9897c50a7c56b910db33ce837ac1e61".to_string(),
                 dockerfile_path: Some(format!("Dockerfile-{}", version_mongo)),
@@ -699,7 +699,7 @@ pub fn test_db(
                     assert_eq!(service.len(), 1);
                     match is_public {
                         true => {
-                            if db.clone().kind == DatabaseKind::Postgresql || db.kind == DatabaseKind::Mysql {
+                            if db.kind == DatabaseKind::Postgresql || db.kind == DatabaseKind::Mysql {
                                 assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
                                 assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_fqdn);
                             } else {

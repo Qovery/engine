@@ -32,7 +32,7 @@ pub fn working_environment(
         action: Action::Create,
         applications: vec![Application {
             long_id: application_id,
-            name: application_name.to_string(),
+            name: application_name,
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
             dockerfile_path: Some("Dockerfile".to_string()),
@@ -102,7 +102,7 @@ pub fn environment_2_app_2_routers_1_psql(
     database_disk_type: &str,
     provider_kind: Kind,
 ) -> EnvironmentRequest {
-    let fqdn = get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()).to_string();
+    let fqdn = get_svc_name(DatabaseKind::Postgresql, provider_kind).to_string();
 
     let database_port = 5432;
     let database_username = "superuser".to_string();

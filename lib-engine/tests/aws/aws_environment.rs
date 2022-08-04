@@ -1,6 +1,7 @@
 use crate::helpers;
 use crate::helpers::aws::aws_default_engine_config;
-use crate::helpers::common::{session_is_sticky, Infrastructure};
+use crate::helpers::common::Infrastructure;
+use crate::helpers::environment::session_is_sticky;
 use crate::helpers::utilities::{context, generate_id, get_pvc, init, is_pod_restarted_env, kubernetes_config_path};
 use crate::helpers::utilities::{engine_run_test, get_pods, logger, FuncTestsSecrets};
 use ::function_name::named;
@@ -46,7 +47,7 @@ fn aws_test_build_phase() {
                 .as_str(),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
-        let mut environment = helpers::common::working_minimal_environment(&context);
+        let environment = helpers::environment::working_minimal_environment(&context);
 
         let ea = environment.clone();
 
@@ -91,7 +92,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
 
-        let mut environment = helpers::common::working_minimal_environment(&context);
+        let environment = helpers::environment::working_minimal_environment(&context);
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
@@ -137,7 +138,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
 
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
-        let environment = helpers::common::working_minimal_environment(&context);
+        let environment = helpers::environment::working_minimal_environment(&context);
 
         let ea = environment.clone();
         let selector = format!("appId={}", to_short_id(&environment.applications[0].long_id));
@@ -215,7 +216,7 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
 
-        let mut environment = helpers::common::non_working_environment(&context);
+        let mut environment = helpers::environment::non_working_environment(&context);
         environment.routers = vec![];
 
         let mut environment_delete = environment.clone();
@@ -262,7 +263,7 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
-        let mut environment = helpers::common::working_minimal_environment(&context);
+        let mut environment = helpers::environment::working_minimal_environment(&context);
         environment.applications = environment
             .applications
             .into_iter()
@@ -327,7 +328,7 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
-        let mut environment = helpers::common::working_minimal_environment(&context);
+        let mut environment = helpers::environment::working_minimal_environment(&context);
         environment.applications = environment
             .applications
             .into_iter()
@@ -392,13 +393,7 @@ fn deploy_a_working_environment_with_domain() {
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
-        let environment = helpers::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let environment = helpers::environment::working_minimal_environment(&context);
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -444,13 +439,7 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
-        let mut environment = helpers::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let mut environment = helpers::environment::working_minimal_environment(&context);
 
         let mut modified_environment = environment.clone();
         modified_environment.applications.clear();
@@ -522,7 +511,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
 
-        let mut environment = helpers::common::working_minimal_environment(&context);
+        let mut environment = helpers::environment::working_minimal_environment(&context);
 
         let storage_size: u16 = 10;
         environment.applications = environment
@@ -598,7 +587,7 @@ fn redeploy_same_app_with_ebs() {
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
 
-        let mut environment = helpers::common::working_minimal_environment(&context);
+        let mut environment = helpers::environment::working_minimal_environment(&context);
 
         let storage_size: u16 = 10;
         environment.applications = environment
@@ -692,7 +681,7 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
 
         // env part generation
-        let environment = helpers::common::working_minimal_environment(&context);
+        let environment = helpers::environment::working_minimal_environment(&context);
         let mut environment_for_not_working = environment.clone();
         // this environment is broken by container exit
         environment_for_not_working.applications = environment_for_not_working
@@ -761,7 +750,7 @@ fn deploy_ok_fail_fail_ok_environment() {
                 .as_str(),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
-        let environment = helpers::common::working_minimal_environment(&context);
+        let environment = helpers::environment::working_minimal_environment(&context);
 
         // not working 1
         let context_for_not_working_1 = context.clone_not_same_execution_id();
@@ -846,7 +835,7 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
                 .as_str(),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
-        let environment = helpers::common::non_working_environment(&context);
+        let environment = helpers::environment::non_working_environment(&context);
 
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
@@ -894,7 +883,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
-        let environment = helpers::common::environment_only_http_server_router_with_sticky_session(
+        let environment = helpers::environment::environment_only_http_server_router_with_sticky_session(
             &context,
             secrets
                 .DEFAULT_TEST_DOMAIN
@@ -994,7 +983,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
 
-        let mut environment = helpers::common::working_minimal_environment(&context);
+        let mut environment = helpers::environment::working_minimal_environment(&context);
 
         environment.applications = vec![];
         environment.containers = vec![Container {
@@ -1084,13 +1073,7 @@ fn deploy_container_with_router_on_aws_eks() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
 
-        let mut environment = helpers::common::working_minimal_environment(
-            &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let mut environment = helpers::environment::working_minimal_environment(&context);
 
         environment.applications = vec![];
         environment.containers = vec![Container {

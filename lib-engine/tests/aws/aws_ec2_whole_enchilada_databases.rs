@@ -11,9 +11,8 @@ use qovery_engine::transaction::Transaction;
 use crate::helpers;
 use crate::helpers::aws::AWS_TEST_REGION;
 use crate::helpers::aws_ec2::AWS_K3S_VERSION;
-use crate::helpers::common::test_db;
 use crate::helpers::common::{Cluster, ClusterDomain};
-use crate::helpers::database::{database_test_environment, test_db};
+use crate::helpers::database::test_db;
 use qovery_engine::transaction::TransactionResult;
 
 // By design, there is only one node instance for EC2 preventing to run in parallel database tests because of port clash.
@@ -21,10 +20,9 @@ use qovery_engine::transaction::TransactionResult;
 
 #[derive(Clone)]
 enum DbVersionsToTest {
-    Latest,
     AllSupported,
-    PublicManaged,
-    PrivateManaged,
+    LatestPublicManaged,
+    LatestPrivateManaged,
 }
 
 #[allow(dead_code)]
@@ -69,7 +67,7 @@ fn test_ec2_database(database_mode: DatabaseMode, is_public: bool, db_versions_t
         }
         assert!(matches!(deploy_tx.commit(), TransactionResult::Ok));
 
-        let environment = helpers::common::database_test_environment(&context);
+        let environment = helpers::database::database_test_environment(&context);
 
         let test_name_accessibility = match is_public {
             true => "public",
@@ -82,10 +80,9 @@ fn test_ec2_database(database_mode: DatabaseMode, is_public: bool, db_versions_t
 
         // PostgreSQL
         let postgres_versions_to_be_tested = match &db_versions_to_test {
-            DbVersionsToTest::Latest => vec!["14"],
             DbVersionsToTest::AllSupported => vec!["14", "13", "12", "11", "10"],
-            DbVersionsToTest::PublicManaged => vec!["13"],
-            DbVersionsToTest::PrivateManaged => vec!["13"],
+            DbVersionsToTest::LatestPublicManaged => vec!["13"],
+            DbVersionsToTest::LatestPrivateManaged => vec!["13"],
         };
         for postgres_version in postgres_versions_to_be_tested {
             test_db(
@@ -110,10 +107,9 @@ fn test_ec2_database(database_mode: DatabaseMode, is_public: bool, db_versions_t
 
         // MongoDB
         let mongodb_versions_to_be_tested = match &db_versions_to_test {
-            DbVersionsToTest::Latest => vec!["4.0"],
             DbVersionsToTest::AllSupported => vec!["4.4", "4.2", "4.0", "3.6"],
-            DbVersionsToTest::PublicManaged => vec![],
-            DbVersionsToTest::PrivateManaged => vec!["4.0"],
+            DbVersionsToTest::LatestPublicManaged => vec![],
+            DbVersionsToTest::LatestPrivateManaged => vec!["4.0"],
         };
         for mongodb_version in mongodb_versions_to_be_tested {
             test_db(
@@ -138,10 +134,9 @@ fn test_ec2_database(database_mode: DatabaseMode, is_public: bool, db_versions_t
 
         // MySQL
         let mysql_versions_to_be_tested = match &db_versions_to_test {
-            DbVersionsToTest::Latest => vec!["8.0"],
             DbVersionsToTest::AllSupported => vec!["8.0", "5.7"],
-            DbVersionsToTest::PublicManaged => vec!["8.0"],
-            DbVersionsToTest::PrivateManaged => vec!["8.0"],
+            DbVersionsToTest::LatestPublicManaged => vec!["8.0"],
+            DbVersionsToTest::LatestPrivateManaged => vec!["8.0"],
         };
         for mysql_version in mysql_versions_to_be_tested {
             test_db(
@@ -166,10 +161,9 @@ fn test_ec2_database(database_mode: DatabaseMode, is_public: bool, db_versions_t
 
         // Redis
         let redis_versions_to_be_tested = match &db_versions_to_test {
-            DbVersionsToTest::Latest => vec!["7"],
             DbVersionsToTest::AllSupported => vec!["7", "6", "5"],
-            DbVersionsToTest::PublicManaged => vec![],
-            DbVersionsToTest::PrivateManaged => vec!["6"],
+            DbVersionsToTest::LatestPublicManaged => vec![],
+            DbVersionsToTest::LatestPrivateManaged => vec!["6"],
         };
         for redis_version in redis_versions_to_be_tested {
             test_db(
@@ -208,7 +202,7 @@ fn test_public_managed_dbs() {
     // NOTE: this one can be long since it will test MySQL, Postgres, Redis and Mongo sequentially
     // and it's up to 20 minutes to provide such DBs AWS side.
     // Approx 80 minutes to complete
-    test_ec2_database(DatabaseMode::MANAGED, true, DbVersionsToTest::PublicManaged);
+    test_ec2_database(DatabaseMode::MANAGED, true, DbVersionsToTest::LatestPublicManaged);
 }
 
 #[cfg(feature = "test-aws-ec2-managed-services")]
@@ -217,7 +211,7 @@ fn test_private_managed_dbs() {
     // NOTE: this one can be long since it will test MySQL, Postgres, Redis and Mongo sequentially
     // and it's up to 20 minutes to provide such DBs AWS side.
     // Approx 80 minutes to complete
-    test_ec2_database(DatabaseMode::MANAGED, false, DbVersionsToTest::PrivateManaged);
+    test_ec2_database(DatabaseMode::MANAGED, false, DbVersionsToTest::LatestPrivateManaged);
 }
 
 #[cfg(feature = "test-aws-ec2-self-hosted")]
