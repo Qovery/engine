@@ -53,6 +53,13 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    NotEnoughPermissions {
+        resource_type_and_name: String,
+        action: String,
+        user: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
     ServiceNotActivatedOptInRequired {
         service_type: String,
         /// raw_message: raw Terraform error message with all details.
@@ -195,6 +202,24 @@ impl TerraformError {
                 raw_message: raw_terraform_output,
             };
         }
+        if let Ok(aws_not_enough_permissions_re) = Regex::new(
+            r"AccessDenied: User: (?P<user>.+?) is not authorized to perform: (?P<action>.+?) on resource: (?P<resource_type_and_name>.+?) because",
+        ) {
+            if let Some(cap) = aws_not_enough_permissions_re.captures(raw_terraform_output.as_str()) {
+                if let (Some(resource_type_and_name), Some(user), Some(action)) = (
+                    cap.name("resource_type_and_name").map(|e| e.as_str()),
+                    cap.name("user").map(|e| e.as_str()),
+                    cap.name("action").map(|e| e.as_str()),
+                ) {
+                    return TerraformError::NotEnoughPermissions {
+                        resource_type_and_name: resource_type_and_name.to_string(),
+                        user: user.to_string(),
+                        action: action.to_string(),
+                        raw_message: raw_terraform_output.to_string(),
+                    };
+                }
+            }
+        }
 
         // This kind of error should be triggered as little as possible, ideally, there is no unknown errors
         // (un-catched) so we can act / report properly to the user.
@@ -203,62 +228,56 @@ impl TerraformError {
             raw_message: raw_terraform_output,
         }
     }
-}
 
-impl Display for TerraformError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let message: String = match self {
-            TerraformError::Unknown {
-                terraform_args,
-                raw_message,
-            } => format!(
-                "Unknown error while performing Terraform command (terraform {}), here is the error:\n{}",
+    /// Returns safe Terraform error message part (not full error message).
+    pub fn to_safe_message(&self) -> String {
+        match self {
+            TerraformError::Unknown { terraform_args, .. } => format!(
+                "Unknown error while performing Terraform command (`terraform {}`)",
                 terraform_args.join(" "),
-                raw_message
             ),
-            TerraformError::InvalidCredentials { raw_message } => format!("Invalid credentials. \n{}", raw_message),
+            TerraformError::InvalidCredentials { .. } => "Invalid credentials.".to_string(),
+            TerraformError::NotEnoughPermissions {
+                resource_type_and_name,
+                user,
+                action,
+                ..
+            } => format!(
+                "Error, user `{}` cannot perform `{}` on `{}`.",
+                user, action, resource_type_and_name
+            ),
             TerraformError::CannotDeleteLockFile {
                 terraform_provider_lock,
-                raw_message,
-            } => format!(
-                "Wasn't able to delete terraform lock file {}\n{}",
-                terraform_provider_lock, raw_message
-            ),
-            TerraformError::ConfigFileNotFound { path, raw_message } => {
-                format!(
-                    "Error while trying to get Terraform configuration file `{}`. \n{}",
-                    path, raw_message,
-                )
+                ..
+            } => format!("Wasn't able to delete terraform lock file `{}`.", terraform_provider_lock,),
+            TerraformError::ConfigFileNotFound { path, .. } => {
+                format!("Error while trying to get Terraform configuration file `{}`.", path,)
             }
-            TerraformError::ConfigFileInvalidContent { path, raw_message } => {
+            TerraformError::ConfigFileInvalidContent { path, .. } => {
                 format!(
-                    "Error while trying to read Terraform configuration file, content is invalid `{}`.\n{}",
-                    path, raw_message,
+                    "Error while trying to read Terraform configuration file, content is invalid `{}`.",
+                    path,
                 )
             }
             TerraformError::CannotRemoveEntryOutOfStateList {
-                entry_to_be_removed,
-                raw_message,
+                entry_to_be_removed, ..
             } => {
-                format!(
-                    "Error while trying to remove entry `{}` from state list.\n{}",
-                    entry_to_be_removed, raw_message,
-                )
+                format!("Error while trying to remove entry `{}` from state list.", entry_to_be_removed,)
             }
             TerraformError::ContextUnsupportedParameterValue {
                 service_type,
                 parameter_name,
                 parameter_value,
-                raw_message,
+                ..
             } => {
                 format!(
-                    "Error {} value `{}` not supported for parameter `{}`.\n{}",
-                    service_type, parameter_value, parameter_name, raw_message,
+                    "Error {} value `{}` not supported for parameter `{}`.",
+                    service_type, parameter_value, parameter_name,
                 )
             }
-            TerraformError::QuotasExceeded { raw_message, sub_type } => {
+            TerraformError::QuotasExceeded { sub_type, .. } => {
                 format!(
-                    "Error, cloud provider quotas exceeded. {}\n{}",
+                    "Error, cloud provider quotas exceeded. {}",
                     match sub_type {
                         QuotaExceededError::ScwNewAccountNeedsValidation =>
                             "SCW new account requires cloud provider validation.".to_string(),
@@ -274,16 +293,48 @@ impl Display for TerraformError {
                             }
                         ),
                     },
-                    raw_message
                 )
             }
-            TerraformError::ServiceNotActivatedOptInRequired {
-                raw_message,
-                service_type,
-            } => format!(
-                "Error, service `{}` requiring an opt-in is not activated.\n{}",
-                service_type, raw_message
-            ),
+            TerraformError::ServiceNotActivatedOptInRequired { service_type, .. } => {
+                format!("Error, service `{}` requiring an opt-in is not activated.", service_type,)
+            }
+        }
+    }
+}
+
+impl Display for TerraformError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let message: String = match self {
+            TerraformError::Unknown { raw_message, .. } => {
+                format!("{}, here is the error:\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::InvalidCredentials { raw_message } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::NotEnoughPermissions { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::CannotDeleteLockFile { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::ConfigFileNotFound { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::ConfigFileInvalidContent { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::CannotRemoveEntryOutOfStateList { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::ContextUnsupportedParameterValue { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::QuotasExceeded { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::ServiceNotActivatedOptInRequired { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
         };
 
         f.write_str(&message)
@@ -308,10 +359,11 @@ fn manage_common_issues(
         let sleep_time = time::Duration::from_secs(sleep_time_int);
 
         // failed to install provider from shared cache, cleaning and sleeping before retrying...",
-        thread::sleep(sleep_time);
-
         return match fs::remove_file(&terraform_provider_lock) {
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                thread::sleep(sleep_time);
+                Ok(())
+            }
             Err(e) => Err(TerraformError::CannotDeleteLockFile {
                 terraform_provider_lock: terraform_provider_lock.to_string(),
                 raw_message: e.to_string(),
@@ -363,7 +415,9 @@ fn terraform_validate(root_dir: &str) -> Result<Vec<String>, TerraformError> {
         match terraform_exec(root_dir, terraform_args.clone()) {
             Ok(output) => OperationResult::Ok(output),
             Err(err) => {
-                let _ = manage_common_issues(terraform_args.clone(), &terraform_provider_lock, &err);
+                if manage_common_issues(terraform_args.clone(), &terraform_provider_lock, &err).is_ok() {
+                    let _ = terraform_init(root_dir);
+                };
                 // error while trying to Terraform validate on the rendered templates
                 OperationResult::Retry(err)
             }
@@ -820,5 +874,25 @@ terraform {
             // validate:
             assert_eq!(tc.expected_terraform_error, result);
         }
+    }
+
+    #[test]
+    fn test_terraform_error_aws_permissions_issue() {
+        // setup:
+        let raw_message = "Error: error creating IAM policy qovery-aws-EBS-CSI-Driver-z2242cca3: AccessDenied: User: arn:aws:iam::542561660426:user/thomas is not authorized to perform: iam:CreatePolicy on resource: policy qovery-aws-EBS-CSI-Driver-z2242cca3 because no identity-based policy allows the iam:CreatePolicy action status code: 403, request id: 01ca1501-a0db-438e-a6db-4a2628236cba".to_string();
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], raw_message.to_string());
+
+        // validate:
+        assert_eq!(
+            TerraformError::NotEnoughPermissions {
+                user: "arn:aws:iam::542561660426:user/thomas".to_string(),
+                action: "iam:CreatePolicy".to_string(),
+                resource_type_and_name: "policy qovery-aws-EBS-CSI-Driver-z2242cca3".to_string(),
+                raw_message,
+            },
+            result
+        );
     }
 }

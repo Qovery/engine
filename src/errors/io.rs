@@ -82,8 +82,6 @@ pub enum Tag {
     NotAllowedInstanceType,
     CannotGetSupportedVersions,
     CannotGetCluster,
-    ContainerRegistryError,
-
     NoClusterFound,
     OnlyOneClusterExpected,
     CloudProviderApiMissingInfo,
@@ -110,15 +108,20 @@ pub enum Tag {
     DockerPushImageError,
     DockerPullImageError,
     BuilderDockerCannotListImages,
-    ContainerRegistryRepositoryCreationError,
-    ContainerRegistryRepositorySetLifecycleError,
-    ContainerRegistryGetCredentialsError,
+    ContainerRegistryCannotCreateRepository,
+    ContainerRegistryCannotSetRepositoryLifecycleError,
+    ContainerRegistryCannotGetCredentials,
     ContainerRegistryImageDoesntExist,
     ContainerRegistryImageUnreachableAfterPush,
-    ContainerRegistryRepositoryDoesntExist,
-    ContainerRegistryDeleteRepositoryError,
-    ContainerRegistryDeleteImageError,
-    ContainerRegistryInformationError,
+    ContainerRegistryRepositoryDoesntExistInRegistry,
+    ContainerRegistryCannotDeleteRepository,
+    ContainerRegistryCannotDeleteRegistry,
+    ContainerRegistryCannotDeleteImage,
+    ContainerRegistryInvalidInformation,
+    ContainerRegistryCannotCreateRegistry,
+    ContainerRegistryRegistryDoesntExist,
+    ContainerRegistryInvalidCredentials,
+    ContainerRegistryCannotLinkRegistryToCluster,
     ObjectStorageInvalidBucketName,
     ObjectStorageCannotEmptyBucket,
     ObjectStorageCannotTagBucket,
@@ -160,6 +163,7 @@ pub enum Tag {
     TerraformCloudProviderActivationRequired,
     TerraformInvalidCredentials,
     TerraformServiceNotActivatedOptInRequired,
+    TerraformNotEnoughPermissions,
 }
 
 impl From<errors::Tag> for Tag {
@@ -251,17 +255,25 @@ impl From<errors::Tag> for Tag {
             errors::Tag::BuilderCloningRepositoryError => Tag::BuilderCloningRepositoryError,
             errors::Tag::DockerPushImageError => Tag::DockerPushImageError,
             errors::Tag::DockerPullImageError => Tag::DockerPullImageError,
-            errors::Tag::ContainerRegistryRepositoryCreationError => Tag::ContainerRegistryRepositoryCreationError,
-            errors::Tag::ContainerRegistryRepositorySetLifecycleError => {
-                Tag::ContainerRegistryRepositorySetLifecycleError
+            errors::Tag::ContainerRegistryCannotCreateRepository => Tag::ContainerRegistryCannotCreateRepository,
+            errors::Tag::ContainerRegistryCannotSetRepositoryLifecycle => {
+                Tag::ContainerRegistryCannotSetRepositoryLifecycleError
             }
-            errors::Tag::ContainerRegistryGetCredentialsError => Tag::ContainerRegistryGetCredentialsError,
-            errors::Tag::ContainerRegistryDeleteImageError => Tag::ContainerRegistryDeleteImageError,
+            errors::Tag::ContainerRegistryCannotGetCredentials => Tag::ContainerRegistryCannotGetCredentials,
+            errors::Tag::ContainerRegistryCannotDeleteImage => Tag::ContainerRegistryCannotDeleteImage,
             errors::Tag::ContainerRegistryImageDoesntExist => Tag::ContainerRegistryImageDoesntExist,
             errors::Tag::ContainerRegistryImageUnreachableAfterPush => Tag::ContainerRegistryImageUnreachableAfterPush,
-            errors::Tag::ContainerRegistryRepositoryDoesntExist => Tag::ContainerRegistryRepositoryDoesntExist,
-            errors::Tag::ContainerRegistryDeleteRepositoryError => Tag::ContainerRegistryDeleteRepositoryError,
-            errors::Tag::ContainerRegistryInformationError => Tag::ContainerRegistryInformationError,
+            errors::Tag::ContainerRegistryRepositoryDoesntExistInRegistry => {
+                Tag::ContainerRegistryRepositoryDoesntExistInRegistry
+            }
+            errors::Tag::ContainerRegistryCannotDeleteRepository => Tag::ContainerRegistryCannotDeleteRepository,
+            errors::Tag::ContainerRegistryInvalidInformation => Tag::ContainerRegistryInvalidInformation,
+            errors::Tag::ContainerRegistryRegistryDoesntExist => Tag::ContainerRegistryRegistryDoesntExist,
+            errors::Tag::ContainerRegistryInvalidCredentials => Tag::ContainerRegistryInvalidCredentials,
+            errors::Tag::ContainerRegistryCannotLinkRegistryToCluster => {
+                Tag::ContainerRegistryCannotLinkRegistryToCluster
+            }
+            errors::Tag::ContainerRegistryCannotDeleteRegistry => Tag::ContainerRegistryCannotDeleteRegistry,
             errors::Tag::BuilderDockerCannotListImages => Tag::BuilderDockerCannotListImages,
             errors::Tag::DockerError => Tag::DockerError,
             errors::Tag::ObjectStorageInvalidBucketName => Tag::ObjectStorageInvalidBucketName,
@@ -271,7 +283,7 @@ impl From<errors::Tag> for Tag {
                 Tag::ObjectStorageCannotActivateBucketVersioning
             }
             errors::Tag::BuilderError => Tag::BuilderError,
-            errors::Tag::ContainerRegistryError => Tag::ContainerRegistryError,
+            errors::Tag::ContainerRegistryCannotCreateRegistry => Tag::ContainerRegistryCannotCreateRegistry,
             errors::Tag::UnsupportedClusterKind => Tag::UnsupportedClusterKind,
             errors::Tag::NotAllowedInstanceType => Tag::NotAllowedInstanceType,
             errors::Tag::TerraformConfigFileNotFound => Tag::TerraformQoveryConfigMismatch,
@@ -316,6 +328,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::ObjectStorageCannotGetObjectFile => Tag::ObjectStorageCannotGetObjectFile,
             errors::Tag::TerraformInvalidCredentials => Tag::TerraformInvalidCredentials,
             errors::Tag::TerraformServiceNotActivatedOptInRequired => Tag::TerraformServiceNotActivatedOptInRequired,
+            errors::Tag::TerraformNotEnoughPermissions => Tag::TerraformNotEnoughPermissions,
         }
     }
 }

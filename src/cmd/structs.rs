@@ -649,9 +649,11 @@ mod tests {
 
         // verify:
         match svc {
-            Ok(_) => assert!(true),
+            Ok(_) => {
+                // OK
+            }
             Err(e) => {
-                return assert!(false, "{}", e);
+                panic!("Panic ! Error: {}", e)
             }
         }
     }
@@ -899,9 +901,11 @@ mod tests {
 
         // verify:
         match pvc {
-            Ok(_) => assert!(true),
+            Ok(_) => {
+                // OK
+            }
             Err(e) => {
-                return assert!(false, "{}", e);
+                panic!("Panic ! Error: {}", e)
             }
         }
     }
@@ -1133,7 +1137,7 @@ mod tests {
 }"#;
 
         let pod_status = serde_json::from_str::<KubernetesList<KubernetesPod>>(payload);
-        assert_eq!(pod_status.is_ok(), true);
+        assert!(pod_status.is_ok());
         let pod_status = pod_status.unwrap();
         assert_eq!(pod_status.items[0].status.conditions.as_ref().unwrap()[0].status, "False");
         assert_eq!(
@@ -1366,7 +1370,7 @@ mod tests {
 }"#;
 
         let pod_status = serde_json::from_str::<KubernetesList<KubernetesPod>>(payload);
-        assert_eq!(pod_status.is_ok(), true);
+        assert!(pod_status.is_ok());
         let pod_status = pod_status.unwrap();
         assert_eq!(pod_status.items[0].status.conditions.as_ref().unwrap()[0].status, "False");
         assert_eq!(
@@ -2726,9 +2730,11 @@ mod tests {
 
         // verify:
         match pdb {
-            Ok(_) => assert!(true),
+            Ok(_) => {
+                // OK
+            }
             Err(e) => {
-                return assert!(false, "{}", e);
+                panic!("Panic ! Error: {}", e)
             }
         }
     }
@@ -2743,9 +2749,11 @@ mod tests {
 
         // verify:
         match metrics_server {
-            Ok(_) => assert!(true),
+            Ok(_) => {
+                // OK
+            }
             Err(e) => {
-                return assert!(false, "{}", e);
+                panic!("Panic ! Error: {}", e)
             }
         }
     }

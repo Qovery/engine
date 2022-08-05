@@ -1,8 +1,9 @@
-extern crate test_utilities;
-
-use self::test_utilities::aws::{AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
-use self::test_utilities::common::ClusterDomain;
-use self::test_utilities::utilities::{context, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
+use crate::helpers;
+use crate::helpers::aws::{aws_default_engine_config, AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
+use crate::helpers::common::{ClusterDomain, Infrastructure};
+use crate::helpers::database::{test_db, test_pause_managed_db};
+use crate::helpers::utilities::{context, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{generate_id, get_svc_name, is_pod_restarted_env};
 use ::function_name::named;
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::cloud_provider::Kind;
@@ -13,9 +14,6 @@ use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use qovery_engine::io_models::Action;
 use qovery_engine::transaction::TransactionResult;
 use qovery_engine::utilities::to_short_id;
-use test_utilities::aws::aws_default_engine_config;
-use test_utilities::common::{test_db, test_pause_managed_db, Infrastructure};
-use test_utilities::utilities::{generate_id, get_svc_name, is_pod_restarted_env};
 use tracing::{span, Level};
 use uuid::Uuid;
 
@@ -54,12 +52,8 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
-        let environment = test_utilities::common::environment_3_apps_3_routers_3_databases(
+        let environment = helpers::database::environment_3_apps_3_databases(
             &context,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
             AWS_DATABASE_INSTANCE_TYPE,
             AWS_DATABASE_DISK_TYPE,
             Kind::Aws,
@@ -108,7 +102,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
-        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let environment = helpers::environment::environment_2_app_2_routers_1_psql(
             &context,
             secrets
                 .clone()
@@ -134,8 +128,8 @@ fn deploy_an_environment_with_db_and_pause_it() {
         // Check that we have actually 0 pods running for this db
         let app_name = format!("postgresql{}-0", environment.databases[0].name);
         let ret = get_pods(context, Kind::Aws, environment, app_name.as_str(), secrets);
-        assert_eq!(ret.is_ok(), true);
-        assert_eq!(ret.unwrap().items.is_empty(), true);
+        assert!(ret.is_ok());
+        assert!(ret.unwrap().items.is_empty());
 
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
@@ -178,7 +172,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
 
-        let environment = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let environment = helpers::environment::environment_2_app_2_routers_1_psql(
             &context,
             test_domain.as_str(),
             AWS_DATABASE_INSTANCE_TYPE,
@@ -186,7 +180,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             Kind::Aws,
         );
         //let env_to_check = environment.clone();
-        let mut environment_delete = test_utilities::common::environnement_2_app_2_routers_1_psql(
+        let mut environment_delete = helpers::environment::environment_2_app_2_routers_1_psql(
             &context_for_deletion,
             test_domain.as_str(),
             AWS_DATABASE_INSTANCE_TYPE,
@@ -248,14 +242,8 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let context_for_delete = context.clone_not_same_execution_id();
         let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
 
-        let mut environment = test_utilities::common::working_minimal_environment(
-            &context,
-            secrets
-                .clone()
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
-        );
+        let _environment = helpers::environment::working_minimal_environment(&context);
+        let mut environment = helpers::environment::working_minimal_environment(&context);
 
         let app_name = format!("postgresql-app-{}", generate_id());
         let database_host = get_svc_name(DatabaseKind::Postgresql, Kind::Aws).to_string();
@@ -329,10 +317,8 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let database_name = format!("postgresql{}-0", to_short_id(&environment_check.databases[0].long_id));
-        match is_pod_restarted_env(context, Kind::Aws, environment_check, database_name.as_str(), secrets) {
-            (true, _) => assert!(true),
-            (false, _) => assert!(false),
-        }
+        let (ret, _) = is_pod_restarted_env(context, Kind::Aws, environment_check, database_name.as_str(), secrets);
+        assert!(ret);
 
         let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
         assert!(matches!(ret, TransactionResult::Ok | TransactionResult::Error(_)));
@@ -369,7 +355,7 @@ pub fn test_postgresql_configuration(
         cluster_id.as_str(),
     );
 
-    let environment = test_utilities::common::database_test_environment(&context);
+    let environment = helpers::database::database_test_environment(&context);
 
     engine_run_test(|| {
         test_db(
@@ -414,7 +400,7 @@ pub fn test_postgresql_pause(
         cluster_id.as_str(),
     );
 
-    let environment = test_utilities::common::database_test_environment(&context);
+    let environment = helpers::database::database_test_environment(&context);
 
     engine_run_test(|| {
         test_pause_managed_db(
@@ -515,6 +501,7 @@ fn public_postgresql_v14_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "No deployed managed db in this version"]
 fn private_postgresql_v10_deploy_a_working_prod_environment() {
     test_postgresql_configuration("10", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
@@ -522,7 +509,7 @@ fn private_postgresql_v10_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "No deployed managed db in this version"]
 fn public_postgresql_v10_deploy_a_working_prod_environment() {
     test_postgresql_configuration("10", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -567,7 +554,6 @@ fn private_postgresql_v13_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore]
 fn public_postgresql_v13_deploy_a_working_prod_environment() {
     test_postgresql_configuration("13", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
@@ -622,7 +608,7 @@ pub fn test_mongodb_configuration(
             .as_str(),
         cluster_id.as_str(),
     );
-    let environment = test_utilities::common::database_test_environment(&context);
+    let environment = helpers::database::database_test_environment(&context);
 
     engine_run_test(|| {
         test_db(
@@ -708,6 +694,7 @@ fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "No managed db deploy in this version"]
 fn private_mongodb_v3_6_deploy_a_working_prod_environment() {
     test_mongodb_configuration("3.6", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
@@ -715,24 +702,8 @@ fn private_mongodb_v3_6_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore]
-fn public_mongodb_v3_6_deploy_a_working_prod_environment() {
-    test_mongodb_configuration("3.6", function_name!(), MANAGED, KubernetesKind::Eks, true);
-}
-
-#[cfg(feature = "test-aws-managed-services")]
-#[named]
-#[test]
 fn private_mongodb_v4_0_deploy_a_working_prod_environment() {
     test_mongodb_configuration("4.0", function_name!(), MANAGED, KubernetesKind::Eks, false);
-}
-
-#[cfg(feature = "test-aws-managed-services")]
-#[named]
-#[test]
-#[ignore]
-fn public_mongodb_v4_0_deploy_a_working_prod_environment() {
-    test_mongodb_configuration("4.0", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
 /**
@@ -762,7 +733,7 @@ pub fn test_mysql_configuration(
             .as_str(),
         cluster_id.as_str(),
     );
-    let environment = test_utilities::common::database_test_environment(&context);
+    let environment = helpers::database::database_test_environment(&context);
 
     engine_run_test(|| {
         test_db(
@@ -788,6 +759,7 @@ pub fn test_mysql_configuration(
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore = "Only one managed db in this version"]
 fn private_mysql_v5_7_deploy_a_working_dev_environment() {
     test_mysql_configuration("5.7", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
@@ -871,7 +843,7 @@ pub fn test_redis_configuration(
             .as_str(),
         cluster_id.as_str(),
     );
-    let environment = test_utilities::common::database_test_environment(&context);
+    let environment = helpers::database::database_test_environment(&context);
 
     engine_run_test(|| {
         test_db(
@@ -942,6 +914,7 @@ fn public_redis_v7_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "No managed db deploy in this version"]
 fn private_redis_v5_deploy_a_working_prod_environment() {
     test_redis_configuration("5", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
@@ -949,22 +922,6 @@ fn private_redis_v5_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
-#[ignore = "managed redis cannot be public ATM"]
-fn public_redis_v5_deploy_a_working_prod_environment() {
-    test_redis_configuration("5", function_name!(), MANAGED, KubernetesKind::Eks, true);
-}
-
-#[cfg(feature = "test-aws-managed-services")]
-#[named]
-#[test]
 fn private_redis_v6_deploy_a_working_prod_environment() {
     test_redis_configuration("6", function_name!(), MANAGED, KubernetesKind::Eks, false);
-}
-
-#[cfg(feature = "test-aws-managed-services")]
-#[named]
-#[test]
-#[ignore = "managed redis cannot be public ATM"]
-fn public_redis_v6_deploy_a_working_prod_environment() {
-    test_redis_configuration("6", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }

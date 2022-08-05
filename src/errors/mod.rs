@@ -581,6 +581,8 @@ pub enum Tag {
     TerraformUnknownError,
     /// TerraformInvalidCredentials: terraform invalid cloud provider credentials
     TerraformInvalidCredentials,
+    /// TerraformNotEnoughPermissions: terraform issue due to user not having enough permissions to perform action on the resource
+    TerraformNotEnoughPermissions,
     /// TerraformConfigFileNotFound: terraform config file cannot be found
     TerraformConfigFileNotFound,
     /// TerraformConfigFileInvalidContent: terraform config file has invalid content
@@ -680,26 +682,34 @@ pub enum Tag {
     DockerPushImageError,
     /// DockerPullImageError: represents an error when trying to pull a docker image.
     DockerPullImageError,
-    /// ContainerRegistryError: represents an error when trying to interact with a repository.
-    ContainerRegistryError,
-    /// ContainerRegistryRepositoryCreationError: represents an error when trying to create a repository.
-    ContainerRegistryRepositoryCreationError,
-    /// ContainerRegistryRepositorySetLifecycleError: represents an error when trying to set repository lifecycle policy.
-    ContainerRegistryRepositorySetLifecycleError,
-    /// ContainerRegistryGetCredentialsError: represents an error when trying to get container registry credentials.
-    ContainerRegistryGetCredentialsError,
-    /// ContainerRegistryDeleteImageError: represents an error while trying to delete an image.
-    ContainerRegistryDeleteImageError,
+    /// ContainerRegistryCannotCreateRepository: represents an error when trying to create a repository.
+    ContainerRegistryCannotCreateRepository,
+    /// ContainerRegistryCannotSetRepositoryLifecycle: represents an error when trying to set repository lifecycle policy.
+    ContainerRegistryCannotSetRepositoryLifecycle,
+    /// ContainerRegistryCannotGetCredentials: represents an error when trying to get container registry credentials.
+    ContainerRegistryCannotGetCredentials,
+    /// ContainerRegistryCannotDeleteImage: represents an error while trying to delete an image.
+    ContainerRegistryCannotDeleteImage,
     /// ContainerRegistryImageDoesntExist: represents an error, image doesn't exist in the registry.
     ContainerRegistryImageDoesntExist,
     /// ContainerRegistryImageUnreachableAfterPush: represents an error when image has been pushed but is unreachable.
     ContainerRegistryImageUnreachableAfterPush,
-    /// ContainerRegistryRepositoryDoesntExist: represents an error, repository doesn't exist.
-    ContainerRegistryRepositoryDoesntExist,
-    /// ContainerRegistryDeleteRepositoryError: represents an error while trying to delete a repository.
-    ContainerRegistryDeleteRepositoryError,
-    /// ContainerRegistryInformationError: represents an error on container registry information provided.
-    ContainerRegistryInformationError,
+    /// ContainerRegistryRepositoryDoesntExistInRegistry: represents an error, repository doesn't exist in registry.
+    ContainerRegistryRepositoryDoesntExistInRegistry,
+    /// ContainerRegistryRegistryDoesntExist: represents an error, registry doesn't exist.
+    ContainerRegistryRegistryDoesntExist,
+    /// ContainerRegistryCannotDeleteRepository: represents an error while trying to delete a repository.
+    ContainerRegistryCannotDeleteRepository,
+    /// ContainerRegistryInvalidInformation: represents an error on container registry information provided.
+    ContainerRegistryInvalidInformation,
+    /// ContainerRegistryInvalidCredentials: represents an error on container registry, credentials are not valid.
+    ContainerRegistryInvalidCredentials,
+    /// ContainerRegistryCannotLinkRegistryToCluster: represents an error on container registry where it cannot be linked to cluster
+    ContainerRegistryCannotLinkRegistryToCluster,
+    /// ContainerRegistryCannotCreateRegistry: represents an error on container registry where it cannot create a registry.
+    ContainerRegistryCannotCreateRegistry,
+    /// ContainerRegistryCannotDeleteRegistry: represents an error on container registry where it cannot delete a registry.
+    ContainerRegistryCannotDeleteRegistry,
     /// KubeconfigFileDoNotPermitToConnectToK8sCluster: represent a kubeconfig mismatch, not permitting to connect to k8s cluster
     KubeconfigFileDoNotPermitToConnectToK8sCluster,
     /// KubeconfigSecurityCheckError: represent an error because of a security concern/doubt on the kubeconfig file
@@ -2162,56 +2172,56 @@ impl EngineError {
             TerraformError::Unknown { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformUnknownError,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
+                terraform_error.to_string(), // Note: end-game goal is to have 0 Unknown Terraform issues. Showing everything in this case is just more convenient for both user and Qovery team.
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                 None,
                 Some(DEFAULT_HINT_MESSAGE.to_string()),
             ),
             TerraformError::InvalidCredentials { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformInvalidCredentials,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                 None,
                 Some(DEFAULT_HINT_MESSAGE.to_string()),
             ),
             TerraformError::ConfigFileNotFound { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformConfigFileNotFound,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                 None,
                 Some("This is normal if it's a newly created cluster".to_string()),
             ),
             TerraformError::ConfigFileInvalidContent { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformConfigFileInvalidContent,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                 None,
                 Some("Did you manually performed changes AWS side?".to_string()),
             ),
             TerraformError::CannotDeleteLockFile { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformCannotDeleteLockFile,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                 None,
                 None,
             ),
             TerraformError::CannotRemoveEntryOutOfStateList { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformCannotRemoveEntryOut,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                 None,
                 None,
             ),
             TerraformError::ContextUnsupportedParameterValue { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformContextUnsupportedParameterValue,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
-                Some(terraform_error.into()),
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                 None,
                 None,
             ),
@@ -2219,15 +2229,15 @@ impl EngineError {
                 raw_message: ref _raw_message,
                 ref sub_type,
             } => {
-                let terraform_error_string = terraform_error.to_string();
+                let terraform_error_string = terraform_error.to_safe_message();
                 match sub_type.clone() {
                     QuotaExceededError::ResourceLimitExceeded { resource_type, max_resource_count } => {
                         if let Some(Kind::Aws) = event_details.provider_kind() {
                             return EngineError::new(
                                 event_details,
                                 Tag::TerraformCloudProviderQuotasReached,
-                                terraform_error_string, // Note: Terraform error message are supposed to be safe
-                                Some(terraform_error.into()),
+                                terraform_error_string,
+                                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                                 Some(Url::parse("https://hub.qovery.com/docs/using-qovery/troubleshoot/").expect("Error while trying to parse error link helper for `QuotaExceededError::ResourceLimitExceeded`, URL is not valid.")),
                                 Some(format!("Request AWS to increase your `{}` limit{} via this page http://aws.amazon.com/contact-us/ec2-request.", resource_type, match max_resource_count {
                                     None => "".to_string(),
@@ -2264,10 +2274,18 @@ impl EngineError {
             TerraformError::ServiceNotActivatedOptInRequired { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformServiceNotActivatedOptInRequired,
-                terraform_error.to_string(), // Note: Terraform error message are supposed to be safe
+                terraform_error.to_safe_message(), // Note: Terraform error message are supposed to be safe
                 Some(terraform_error.into()),
                 None,
                 None,
+            ),
+            TerraformError::NotEnoughPermissions { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformNotEnoughPermissions,
+                terraform_error.to_safe_message(), // Note: Terraform error message are supposed to be safe
+                Some(terraform_error.into()),
+                Some(Url::parse("https://hub.qovery.com/docs/getting-started/install-qovery/").expect("Error while trying to parse error link helper for `TerraformError::NotEnoughPermissions`, URL is not valid.")),
+                Some("Make sure you provide proper credentials for your cloud account.".to_string()),
             ),
         }
     }
@@ -2336,15 +2354,104 @@ impl EngineError {
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
     pub fn new_container_registry_error(event_details: EventDetails, error: ContainerRegistryError) -> EngineError {
-        let command_error = CommandError::from(error);
-        EngineError::new(
-            event_details,
-            Tag::ContainerRegistryError,
-            command_error.message_safe(),
-            Some(command_error),
-            None,
-            None,
-        )
+        match error {
+            ContainerRegistryError::InvalidCredentials => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryInvalidCredentials,
+                "Container registry: credentials are not valid.".to_string(),
+                Some(error.into()),
+                Some(Url::parse("https://hub.qovery.com/docs/getting-started/install-qovery/").expect("Error while trying to parse error link helper for `ContainerRegistryError::InvalidCredentials`, URL is not valid.")),
+                Some("Make sure you provide proper credentials for your cloud account.".to_string()),
+            ),
+            ContainerRegistryError::CannotGetCredentials => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryCannotGetCredentials,
+                "Container registry: cannot get credentials.".to_string(),
+                Some(error.into()),
+                None,
+                None,
+            ),
+            ContainerRegistryError::CannotCreateRegistry { ref registry_name, .. } => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryCannotCreateRegistry,
+                format!("Container registry: cannot create registry: `{}`.", registry_name),
+                Some(error.into()),
+                None,
+                None,
+            ),
+            ContainerRegistryError::CannotDeleteRegistry { ref registry_name, .. } => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryCannotDeleteRegistry,
+                format!("Container registry: cannot delete registry: `{}`.", registry_name),
+                Some(error.into()),
+                None,
+                None,
+            ),
+            ContainerRegistryError::CannotDeleteImage { ref image_name, ref registry_name, ref repository_name, .. } => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryCannotDeleteImage,
+                format!("Container registry: cannot delete image `{}` from repository `{}` in registry `{}`.", image_name, repository_name, registry_name),
+                Some(error.into()),
+                None,
+                None,
+            ),
+            ContainerRegistryError::ImageDoesntExistInRegistry { ref image_name, ref registry_name, ref repository_name, .. } => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryImageDoesntExist,
+                format!("Container registry: image `{}` doesn't exist in repository `{}` in registry `{}`.", image_name, repository_name, registry_name),
+                Some(error.into()),
+                None,
+                None,
+            ),
+            ContainerRegistryError::RepositoryDoesntExistInRegistry { ref registry_name, ref repository_name, .. } => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryRepositoryDoesntExistInRegistry,
+                format!("Container registry: repository `{}` doesn't exist in registry `{}`.", repository_name, registry_name),
+                Some(error.into()),
+                None,
+                None,
+            ),
+            ContainerRegistryError::RegistryDoesntExist { ref registry_name, .. } => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryRegistryDoesntExist,
+                format!("Container registry: registry `{}` doesn't exist.", registry_name),
+                Some(error.into()),
+                None,
+                None,
+            ),
+            ContainerRegistryError::CannotLinkRegistryToCluster { ref registry_name, ref cluster_id, .. } => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryCannotLinkRegistryToCluster,
+                format!("Container registry: registry `{}` cannot be linked to cluster `{}`.", registry_name, cluster_id),
+                Some(error.into()),
+                None,
+                None,
+            ),
+            ContainerRegistryError::CannotCreateRepository { ref registry_name, ref repository_name, .. } => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryCannotCreateRepository,
+                format!("Container registry: cannot create repository `{}` in registry `{}`.", repository_name, registry_name),
+                Some(error.into()),
+                None,
+                None,
+            ),
+            ContainerRegistryError::CannotDeleteRepository { ref registry_name, ref repository_name, .. } => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryCannotDeleteRepository,
+                format!("Container registry: cannot delete repository `{}` from registry `{}`.", repository_name, registry_name),
+                Some(error.into()),
+                None,
+                None,
+            ),
+            ContainerRegistryError::CannotSetRepositoryLifecyclePolicy { ref registry_name, ref repository_name, .. } => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryCannotSetRepositoryLifecycle,
+                format!("Container registry: cannot set lifetime on repository `{}` in registry `{}`.", repository_name, registry_name),
+                Some(error.into()),
+                None,
+                None,
+            ),
+        }
     }
 
     /// Creates new error from an Build error
@@ -3026,201 +3133,6 @@ impl EngineError {
         )
     }
 
-    /// Creates new error when trying to create a new container registry namespace.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `repository_name`: Container repository name.
-    /// * `registry_name`: Registry to be created.
-    /// * `raw_error`: Raw error message.
-    pub fn new_container_registry_namespace_creation_error(
-        event_details: EventDetails,
-        repository_name: String,
-        registry_name: String,
-        raw_error: ContainerRegistryError,
-    ) -> EngineError {
-        let message = format!("Error, trying to create registry `{}` in `{}`.", registry_name, repository_name);
-
-        EngineError::new(
-            event_details,
-            Tag::ContainerRegistryRepositoryCreationError,
-            message,
-            Some(raw_error.into()),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new error when trying to set container repository lifecycle policy.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `repository_name`: Repository name.
-    /// * `raw_error`: Raw error message.
-    pub fn new_container_registry_repository_set_lifecycle_policy_error(
-        event_details: EventDetails,
-        repository_name: String,
-        raw_error: ContainerRegistryError,
-    ) -> EngineError {
-        let message = format!("Error, trying to set lifecycle policy repository `{}`.", repository_name,);
-
-        EngineError::new(
-            event_details,
-            Tag::ContainerRegistryRepositorySetLifecycleError,
-            message,
-            Some(raw_error.into()),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new error when trying to get container registry credentials.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `repository_name`: Repository name.
-    pub fn new_container_registry_get_credentials_error(
-        event_details: EventDetails,
-        repository_name: String,
-    ) -> EngineError {
-        let message = format!(
-            "Failed to retrieve credentials and endpoint URL from container registry `{}`.",
-            repository_name,
-        );
-
-        EngineError::new(
-            event_details,
-            Tag::ContainerRegistryGetCredentialsError,
-            message,
-            None,
-            None,
-            None,
-        )
-    }
-
-    /// Creates new error when trying to delete an image.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `image_name`: Image name.
-    /// * `raw_error`: Raw error message.
-    pub fn new_container_registry_delete_image_error(
-        event_details: EventDetails,
-        image_name: String,
-        raw_error: ContainerRegistryError,
-    ) -> EngineError {
-        let message = format!("Failed to delete image `{}`.", image_name,);
-
-        EngineError::new(
-            event_details,
-            Tag::ContainerRegistryDeleteImageError,
-            message,
-            Some(raw_error.into()),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new error when trying to get image from a registry.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `image_name`: Image name.
-    pub fn new_container_registry_image_doesnt_exist(
-        event_details: EventDetails,
-        image_name: String,
-        raw_error: ContainerRegistryError,
-    ) -> EngineError {
-        let message = format!("Image `{}` doesn't exists.", image_name,);
-
-        EngineError::new(
-            event_details,
-            Tag::ContainerRegistryImageDoesntExist,
-            message,
-            Some(raw_error.into()),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new error when image is unreachable after push.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `image_name`: Image name.
-    /// * `raw_error`: Raw error message.
-    pub fn new_container_registry_image_unreachable_after_push(
-        event_details: EventDetails,
-        image_name: String,
-    ) -> EngineError {
-        let message = format!(
-            "Image `{}` has been pushed on registry namespace but is not yet available after some time.",
-            image_name,
-        );
-
-        EngineError::new(
-            event_details,
-            Tag::ContainerRegistryImageUnreachableAfterPush,
-            message,
-            None,
-            None,
-            Some("Please try to redeploy in a few minutes.".to_string()),
-        )
-    }
-
-    /// Creates new error when trying to get image from a registry.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `repository_name`: Repository name.
-    pub fn new_container_registry_repository_doesnt_exist(
-        event_details: EventDetails,
-        repository_name: String,
-        raw_error: Option<CommandError>,
-    ) -> EngineError {
-        let message = format!("Repository `{}` doesn't exists.", repository_name,);
-
-        EngineError::new(
-            event_details,
-            Tag::ContainerRegistryRepositoryDoesntExist,
-            message,
-            raw_error,
-            None,
-            None,
-        )
-    }
-
-    /// Creates new error when trying to delete repository.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `repository_name`: Repository name.
-    /// * `raw_error`: Raw error message.
-    pub fn new_container_registry_delete_repository_error(
-        event_details: EventDetails,
-        repository_name: String,
-        raw_error: Option<CommandError>,
-    ) -> EngineError {
-        let message = format!("Failed to delete repository `{}`.", repository_name,);
-
-        EngineError::new(
-            event_details,
-            Tag::ContainerRegistryDeleteRepositoryError,
-            message,
-            raw_error,
-            None,
-            None,
-        )
-    }
-
     /// Creates new error when trying to list Docker images.
     ///
     /// Arguments:
@@ -3510,7 +3422,7 @@ impl EngineError {
 
         EngineError::new(
             event_details,
-            Tag::ContainerRegistryInformationError,
+            Tag::ContainerRegistryInvalidInformation,
             message_safe,
             Some(raw_error),
             None,

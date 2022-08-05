@@ -1,8 +1,6 @@
-extern crate test_utilities;
-
-use self::test_utilities::utilities::{context, engine_run_test, init, logger, FuncTestsSecrets};
+use crate::helpers::digitalocean::do_default_engine_config;
+use crate::helpers::utilities::{context, engine_run_test, init, logger, FuncTestsSecrets};
 use ::function_name::named;
-use test_utilities::digitalocean::do_default_engine_config;
 use tracing::{span, Level};
 
 use qovery_engine::transaction::{Transaction, TransactionResult};

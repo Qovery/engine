@@ -127,7 +127,7 @@ spec:
   - metadata:
       name: {{ s.long_id }}
       labels:
-        envId: {{ environment_long_id }}
+        envId: {{ environment_short_id }}
         qovery.com/service-id: {{ service.long_id }}
         qovery.com/service-type: container
         qovery.com/environment-id: {{ environment_long_id }}

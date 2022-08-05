@@ -131,28 +131,25 @@ impl ScwNodeGroup {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(test)]
-    mod tests {
-        use crate::cloud_provider::models::NodeGroups;
+    use crate::cloud_provider::models::NodeGroups;
 
-        #[test]
-        fn test_groups_nodes() {
-            assert!(NodeGroups::new("".to_string(), 2, 1, "dev1-l".to_string(), 20).is_err());
-            assert!(NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20).is_ok());
-            assert!(NodeGroups::new("".to_string(), 2, 3, "dev1-l".to_string(), 20).is_ok());
+    #[test]
+    fn test_groups_nodes() {
+        assert!(NodeGroups::new("".to_string(), 2, 1, "dev1-l".to_string(), 20).is_err());
+        assert!(NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20).is_ok());
+        assert!(NodeGroups::new("".to_string(), 2, 3, "dev1-l".to_string(), 20).is_ok());
 
-            assert_eq!(
-                NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20).unwrap(),
-                NodeGroups {
-                    name: "".to_string(),
-                    id: None,
-                    min_nodes: 2,
-                    max_nodes: 2,
-                    instance_type: "dev1-l".to_string(),
-                    disk_size_in_gib: 20,
-                    desired_nodes: None
-                }
-            );
-        }
+        assert_eq!(
+            NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20).unwrap(),
+            NodeGroups {
+                name: "".to_string(),
+                id: None,
+                min_nodes: 2,
+                max_nodes: 2,
+                instance_type: "dev1-l".to_string(),
+                disk_size_in_gib: 20,
+                desired_nodes: None
+            }
+        );
     }
 }

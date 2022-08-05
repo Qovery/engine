@@ -1,14 +1,12 @@
-extern crate test_utilities;
-
-use self::test_utilities::common::ClusterDomain;
-use self::test_utilities::digitalocean::{DO_KUBERNETES_MAJOR_VERSION, DO_KUBERNETES_MINOR_VERSION};
-use self::test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
+use crate::helpers::common::ClusterDomain;
+use crate::helpers::digitalocean::{DO_KUBERNETES_MAJOR_VERSION, DO_KUBERNETES_MINOR_VERSION};
+use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
+use crate::helpers::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::digital_ocean::DoRegion;
-use test_utilities::common::{cluster_test, ClusterTestType};
 
 #[cfg(feature = "test-do-infra")]
 fn create_and_destroy_doks_cluster(

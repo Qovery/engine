@@ -85,11 +85,18 @@ digitalocean = "0.1.1"
 scaleway_api_rs = "0.1.2"
 
 [dev-dependencies]
-test-utilities = { path = "test_utilities" }
+bstr = "0.2.17"
 tempdir = "0.3.7"
 tempfile = "3.3.0"
 maplit = "1.0.2"
 tracing-test = "0.2.1"
+tracing-subscriber = { version = "0.3.11", features = ["json"] }
+time = "0.3.9"
+passwords = "3.1.9"
+const_format = "0.2.23"
+hashicorp_vault = "2.1.0"
+curl = "0.4.43"
+dotenv = "0.15.0"
 
 [features]
 default = []

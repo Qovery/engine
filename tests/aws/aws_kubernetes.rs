@@ -1,12 +1,11 @@
-extern crate test_utilities;
-
 use std::str::FromStr;
 
+use crate::helpers::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
+use crate::helpers::common::ClusterDomain;
+use crate::helpers::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 use ::function_name::named;
-use test_utilities::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
-use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
-use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
 
+use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;

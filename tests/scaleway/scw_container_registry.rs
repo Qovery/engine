@@ -1,6 +1,4 @@
-extern crate test_utilities;
-
-use self::test_utilities::utilities::{context, FuncTestsSecrets};
+use crate::helpers::utilities::{context, FuncTestsSecrets};
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::models::scaleway::ScwZone;
 use tracing::debug;
@@ -30,8 +28,10 @@ fn test_get_registry_namespace() {
     // setup:
     let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
-    let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_default_project_id = secrets
+        .SCALEWAY_DEFAULT_PROJECT_ID
+        .unwrap_or_else(|| "undefined".to_string());
 
     // testing it in all regions
     for region in zones_to_test().into_iter() {
@@ -57,10 +57,10 @@ fn test_get_registry_namespace() {
         let result = container_registry.get_registry_namespace(&image);
 
         // verify:
-        assert_eq!(true, result.is_some());
+        assert!(result.is_some());
 
         let result = result.unwrap();
-        assert_eq!(true, result.status.is_some());
+        assert!(result.status.is_some());
 
         let status = result.status.unwrap();
         assert_eq!(scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready, status,);
@@ -76,8 +76,10 @@ fn test_create_registry_namespace() {
     // setup:
     let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
-    let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_default_project_id = secrets
+        .SCALEWAY_DEFAULT_PROJECT_ID
+        .unwrap_or_else(|| "undefined".to_string());
 
     // testing it in all regions
     for region in zones_to_test().into_iter() {
@@ -100,13 +102,13 @@ fn test_create_registry_namespace() {
         let result = container_registry.create_registry_namespace(&image);
 
         // verify:
-        assert_eq!(true, result.is_ok());
+        assert!(result.is_ok());
 
         let added_registry_result = container_registry.get_registry_namespace(&image);
-        assert_eq!(true, added_registry_result.is_some());
+        assert!(added_registry_result.is_some());
 
         let added_registry_result = added_registry_result.unwrap();
-        assert_eq!(true, added_registry_result.status.is_some());
+        assert!(added_registry_result.status.is_some());
 
         // clean-up:
         container_registry.delete_registry_namespace(&image).unwrap();
@@ -119,8 +121,10 @@ fn test_delete_registry_namespace() {
     // setup:
     let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
-    let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_default_project_id = secrets
+        .SCALEWAY_DEFAULT_PROJECT_ID
+        .unwrap_or_else(|| "undefined".to_string());
 
     // testing it in all regions
     for region in zones_to_test().into_iter() {
@@ -146,7 +150,7 @@ fn test_delete_registry_namespace() {
         let result = container_registry.delete_registry_namespace(&image);
 
         // verify:
-        assert_eq!(true, result.is_ok());
+        assert!(result.is_ok());
     }
 }
 
@@ -156,8 +160,10 @@ fn test_get_or_create_registry_namespace() {
     // setup:
     let context = context("fake_orga_id", "fake_cluster_id");
     let secrets = FuncTestsSecrets::new();
-    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or("undefined".to_string());
-    let scw_default_project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap_or("undefined".to_string());
+    let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
+    let scw_default_project_id = secrets
+        .SCALEWAY_DEFAULT_PROJECT_ID
+        .unwrap_or_else(|| "undefined".to_string());
 
     // testing it in all regions
     for region in zones_to_test().into_iter() {
@@ -185,37 +191,37 @@ fn test_get_or_create_registry_namespace() {
         let result = container_registry.get_or_create_registry_namespace(&image);
 
         // verify:
-        assert_eq!(true, result.is_ok());
+        assert!(result.is_ok());
 
         let result = result.unwrap();
-        assert_eq!(true, result.status.is_some());
+        assert!(result.status.is_some());
 
         let status = result.status.unwrap();
         assert_eq!(scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready, status,);
 
         let added_registry_result = container_registry.get_registry_namespace(&image);
-        assert_eq!(true, added_registry_result.is_some());
+        assert!(added_registry_result.is_some());
 
         let added_registry_result = added_registry_result.unwrap();
-        assert_eq!(true, added_registry_result.status.is_some());
+        assert!(added_registry_result.status.is_some());
 
         // second try: repository already created, so should be a get only
         let result = container_registry.get_or_create_registry_namespace(&image);
 
         // verify:
-        assert_eq!(true, result.is_ok());
+        assert!(result.is_ok());
 
         let result = result.unwrap();
-        assert_eq!(true, result.status.is_some());
+        assert!(result.status.is_some());
 
         let status = result.status.unwrap();
         assert_eq!(scaleway_api_rs::models::scaleway_registry_v1_namespace::Status::Ready, status,);
 
         let added_registry_result = container_registry.get_registry_namespace(&image);
-        assert_eq!(true, added_registry_result.is_some());
+        assert!(added_registry_result.is_some());
 
         let added_registry_result = added_registry_result.unwrap();
-        assert_eq!(true, added_registry_result.status.is_some());
+        assert!(added_registry_result.status.is_some());
 
         // clean-up:
         container_registry.delete_registry_namespace(&image).unwrap();

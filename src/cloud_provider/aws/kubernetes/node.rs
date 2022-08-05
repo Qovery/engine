@@ -164,7 +164,7 @@ mod tests {
             // then check the other way around
             match AwsInstancesType::from_str(&result_to_string) {
                 Ok(result_instance_type) => assert_eq!(instance_type, result_instance_type),
-                Err(_) => assert!(false),
+                Err(_) => panic!(),
             }
         }
     }

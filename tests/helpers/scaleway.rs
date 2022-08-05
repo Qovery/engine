@@ -22,11 +22,10 @@ use qovery_engine::logger::Logger;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 
-use crate::common::{
-    get_environment_test_kubernetes, Cluster, ClusterDomain, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES,
-};
-use crate::dns::dns_provider_cloudflare;
-use crate::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
+use crate::helpers::common::{Cluster, ClusterDomain};
+use crate::helpers::dns::dns_provider_cloudflare;
+use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
+use crate::helpers::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
 pub const SCW_TEST_ZONE: ScwZone = ScwZone::Paris2;
 pub const SCW_KUBERNETES_MAJOR_VERSION: u8 = 1;
@@ -220,7 +219,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
     }
 }
 
-pub fn scw_object_storage(context: Context, region: ScwZone) -> ScalewayOS {
+pub fn _scw_object_storage(context: Context, region: ScwZone) -> ScalewayOS {
     let secrets = FuncTestsSecrets::new();
     let random_id = generate_id();
 

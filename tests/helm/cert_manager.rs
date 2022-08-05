@@ -6,7 +6,7 @@ use serde_derive::Serialize;
 
 use std::path::PathBuf;
 
-use test_utilities::utilities::FuncTestsSecrets;
+use crate::helpers::utilities::FuncTestsSecrets;
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -164,11 +164,11 @@ fn test_create_chart_backup() {
     let lvl_1: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager.clone())];
     let lvl_2: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager_config.clone())];
 
-    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_1], false).map_err(|_| assert!(false));
+    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_1], false).map_err(|_| panic!());
 
     sleep(Duration::from_secs(30));
 
-    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_2], false).map_err(|_| assert!(false));
+    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_2], false).map_err(|_| panic!());
 
     let tmp_dir = TempDir::new("workspace_directory").expect("error creating temporary dir");
     let root_dir_path = Path::new(tmp_dir.path());
@@ -217,11 +217,11 @@ fn test_apply_chart_backup() {
     let lvl_1: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager.clone())];
     let lvl_2: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager_config.clone())];
 
-    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_1], false).map_err(|_| assert!(false));
+    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_1], false).map_err(|_| panic!());
 
     sleep(Duration::from_secs(30));
 
-    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_2], false).map_err(|_| assert!(false));
+    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_2], false).map_err(|_| panic!());
 
     let tmp_dir = TempDir::new("workspace_directory").expect("error creating temporary dir");
     let root_dir_path = Path::new(tmp_dir.path());
@@ -236,7 +236,7 @@ fn test_apply_chart_backup() {
 
     match helm.apply_chart_backup(root_dir_path, &vec![], cert_manager_config.get_chart_info()) {
         Err(_) => {
-            assert!(false)
+            panic!()
         }
         Ok(..) => {
             let string_path = list_yaml_backup_files(root_dir_path).unwrap().first().unwrap().clone();
@@ -267,11 +267,11 @@ fn test_should_not_create_chart_backup() {
     let lvl_1: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager.clone())];
     let lvl_2: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager_config.clone())];
 
-    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_1], false).map_err(|_| assert!(false));
+    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_1], false).map_err(|_| panic!());
 
     sleep(Duration::from_secs(30));
 
-    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_2], false).map_err(|_| assert!(false));
+    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_2], false).map_err(|_| panic!());
 
     let tmp_dir = TempDir::new("workspace_directory").expect("error creating temporary dir");
     let root_dir_path = Path::new(tmp_dir.path());
@@ -294,11 +294,11 @@ fn test_should_apply_chart_backup() {
     let lvl_1: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager.clone())];
     let lvl_2: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager_config.clone())];
 
-    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_1], false).map_err(|_| assert!(false));
+    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_1], false).map_err(|_| panic!());
 
     sleep(Duration::from_secs(30));
 
-    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_2], false).map_err(|_| assert!(false));
+    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_2], false).map_err(|_| panic!());
 
     sleep(Duration::from_secs(30));
 
@@ -306,7 +306,7 @@ fn test_should_apply_chart_backup() {
 
     let lvl_2_bis: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager_config.clone())];
 
-    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_2_bis], false).map_err(|_| assert!(false));
+    let _ = deploy_charts_levels(kube_config.as_path(), &vec![], vec![lvl_2_bis], false).map_err(|_| panic!());
 
     let secrets = kubectl_exec_get_secrets(
         kube_config.as_path(),

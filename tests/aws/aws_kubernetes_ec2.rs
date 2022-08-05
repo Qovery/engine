@@ -1,17 +1,16 @@
-extern crate test_utilities;
-
-use self::test_utilities::utilities::{context, engine_run_test, generate_id, logger};
+use crate::helpers::utilities::{context, engine_run_test, generate_id, logger};
 use ::function_name::named;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 
+use crate::helpers::aws::{K3S_KUBERNETES_MAJOR_VERSION, K3S_KUBERNETES_MINOR_VERSION};
+use crate::helpers::common::ClusterDomain;
+use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
+use crate::helpers::utilities::generate_cluster_id;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::WithoutNatGateways;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::Kind;
 use std::str::FromStr;
-use test_utilities::aws::{K3S_KUBERNETES_MAJOR_VERSION, K3S_KUBERNETES_MINOR_VERSION};
-use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
-use test_utilities::utilities::generate_cluster_id;
 
 fn create_and_destroy_aws_ec2_k3s_cluster(
     region: String,

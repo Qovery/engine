@@ -1,12 +1,14 @@
+use crate::helpers;
+use crate::helpers::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
+use crate::helpers::common::ClusterDomain;
+use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
+use crate::helpers::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets};
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::WithNatGateways;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::Kind;
 use std::str::FromStr;
-use test_utilities::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
-use test_utilities::common::{cluster_test, ClusterDomain, ClusterTestType};
-use test_utilities::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets};
 
 #[cfg(feature = "test-aws-whole-enchilada")]
 #[named]
@@ -35,7 +37,7 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             .as_str()
     );
 
-    let environment = test_utilities::common::working_minimal_environment(&context, cluster_domain.as_str());
+    let environment = helpers::environment::working_minimal_environment(&context);
     let env_action = environment;
 
     engine_run_test(|| {
@@ -128,7 +130,7 @@ fn create_pause_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             .as_str()
     );
 
-    let environment = test_utilities::common::working_minimal_environment(&context, cluster_domain.as_str());
+    let environment = helpers::environment::working_minimal_environment(&context);
     let env_action = environment;
 
     engine_run_test(|| {
@@ -175,7 +177,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             .as_str()
     );
 
-    let environment = test_utilities::common::working_minimal_environment(&context, cluster_domain.as_str());
+    let environment = helpers::environment::working_minimal_environment(&context);
     let env_action = environment;
 
     engine_run_test(|| {

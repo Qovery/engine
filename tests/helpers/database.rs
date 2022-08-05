@@ -1,125 +1,41 @@
-extern crate serde;
-extern crate serde_derive;
-
-use chrono::Utc;
-use std::cell::RefCell;
-
-use qovery_engine::cloud_provider::utilities::sanitize_name;
-use qovery_engine::dns_provider::DnsProvider;
-use qovery_engine::io_models::context::CloneForTest;
-
-use crate::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
-use crate::aws_ec2::ec2_kubernetes_instance;
-use crate::digitalocean::{DO_KUBERNETES_VERSION, DO_TEST_REGION};
-use crate::scaleway::{SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
-use crate::utilities::{
+use crate::helpers::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
+use crate::helpers::common::{compute_test_cluster_endpoint, Cluster, ClusterDomain, Infrastructure};
+use crate::helpers::digitalocean::{DO_KUBERNETES_VERSION, DO_TEST_REGION};
+use crate::helpers::kubernetes::{KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
+use crate::helpers::scaleway::{SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
+use crate::helpers::utilities::{
     db_disk_type, db_infos, db_instance_type, generate_id, generate_password, get_pvc, get_svc, get_svc_name, init,
     FuncTestsSecrets,
 };
-use base64;
-use qovery_engine::cloud_provider::aws::kubernetes::ec2::EC2;
-use qovery_engine::cloud_provider::aws::kubernetes::eks::EKS;
-use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
-use qovery_engine::cloud_provider::aws::regions::{AwsRegion, AwsZones};
+use chrono::Utc;
+use core::cell::RefCell;
+use core::default::Default;
+use core::option::Option;
+use core::option::Option::{None, Some};
+use core::result::Result::{Err, Ok};
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::environment::Environment;
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
-use qovery_engine::cloud_provider::kubernetes::Kubernetes;
-use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
-use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
-use qovery_engine::cloud_provider::{CloudProvider, Kind};
+use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::engine::EngineConfig;
 use qovery_engine::io_models::application::{Application, GitCredentials, Port, Protocol, Storage, StorageType};
-use qovery_engine::io_models::context::Context;
+use qovery_engine::io_models::context::{CloneForTest, Context};
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use qovery_engine::io_models::environment::EnvironmentRequest;
-use qovery_engine::io_models::router::{Route, Router};
 use qovery_engine::io_models::Action;
 use qovery_engine::logger::Logger;
-use qovery_engine::models::digital_ocean::DoRegion;
-use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
 use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::str::FromStr;
-use std::sync::Arc;
 use tracing::{span, Level};
-use url::Url;
 use uuid::Uuid;
-
-pub const KUBERNETES_MIN_NODES: i32 = 5;
-pub const KUBERNETES_MAX_NODES: i32 = 10;
-
-pub enum RegionActivationStatus {
-    Deactivated,
-    Activated,
-}
-
-#[derive(Clone)]
-pub enum ClusterDomain {
-    Default { cluster_id: String },
-    QoveryOwnedDomain { cluster_id: String, domain: String },
-    Custom { domain: String },
-}
-
-pub trait Cluster<T, U> {
-    fn docker_cr_engine(
-        context: &Context,
-        logger: Box<dyn Logger>,
-        localisation: &str,
-        kubernetes_kind: KubernetesKind,
-        kubernetes_version: String,
-        cluster_domain: &ClusterDomain,
-        vpc_network_mode: Option<VpcQoveryNetworkMode>,
-        min_nodes: i32,
-        max_nodes: i32,
-        engine_location: EngineLocation,
-    ) -> EngineConfig;
-    fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind) -> Box<T>;
-    fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups>;
-    fn kubernetes_cluster_options(
-        secrets: FuncTestsSecrets,
-        cluster_id: Option<String>,
-        engine_location: EngineLocation,
-    ) -> U;
-}
-
-pub trait Infrastructure {
-    fn build_environment(
-        &self,
-        environment: &EnvironmentRequest,
-        logger: Box<dyn Logger>,
-        engine_config: &EngineConfig,
-    ) -> (Environment, TransactionResult);
-
-    fn deploy_environment(
-        &self,
-        environment: &EnvironmentRequest,
-        logger: Box<dyn Logger>,
-        engine_config: &EngineConfig,
-    ) -> TransactionResult;
-
-    fn pause_environment(
-        &self,
-        environment: &EnvironmentRequest,
-        logger: Box<dyn Logger>,
-        engine_config: &EngineConfig,
-    ) -> TransactionResult;
-
-    fn delete_environment(
-        &self,
-        environment: &EnvironmentRequest,
-        logger: Box<dyn Logger>,
-        engine_config: &EngineConfig,
-    ) -> TransactionResult;
-}
 
 impl Infrastructure for EnvironmentRequest {
     fn build_environment(
@@ -222,26 +138,15 @@ impl Infrastructure for EnvironmentRequest {
     }
 }
 
-pub enum ClusterTestType {
-    Classic,
-    WithPause,
-    WithUpgrade,
-    WithNodesResize,
-}
-
-pub fn environment_3_apps_3_routers_3_databases(
+pub fn environment_3_apps_3_databases(
     context: &Context,
-    test_domain: &str,
     database_instance_type: &str,
     database_disk_type: &str,
     provider_kind: Kind,
 ) -> EnvironmentRequest {
     let app_name_1 = format!("{}-{}", "simple-app-1", generate_id());
-    let app_id_1 = Uuid::new_v4();
     let app_name_2 = format!("{}-{}", "simple-app-2", generate_id());
-    let app_id_2 = Uuid::new_v4();
     let app_name_3 = format!("{}-{}", "simple-app-3", generate_id());
-    let app_id_3 = Uuid::new_v4();
 
     // mongoDB management part
     let database_host_mongo = get_svc_name(DatabaseKind::Mongodb, provider_kind.clone()).to_string();
@@ -279,8 +184,8 @@ pub fn environment_3_apps_3_routers_3_databases(
         action: Action::Create,
         applications: vec![
             Application {
-                long_id: app_id_1,
-                name: app_name_1.clone(),
+                long_id: Uuid::new_v4(),
+                name: app_name_1,
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "5990752647af11ef21c3d46a51abbde3da1ab351".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
@@ -326,8 +231,8 @@ pub fn environment_3_apps_3_routers_3_databases(
                 advanced_settings: Default::default(),
             },
             Application {
-                long_id: app_id_2,
-                name: app_name_2.clone(),
+                long_id: Uuid::new_v4(),
+                name: app_name_2,
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "5990752647af11ef21c3d46a51abbde3da1ab351".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
@@ -365,8 +270,8 @@ pub fn environment_3_apps_3_routers_3_databases(
                 advanced_settings: Default::default(),
             },
             Application {
-                long_id: app_id_3,
-                name: app_name_3.clone(),
+                long_id: Uuid::new_v4(),
+                name: app_name_3,
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "158ea8ebc9897c50a7c56b910db33ce837ac1e61".to_string(),
                 dockerfile_path: Some(format!("Dockerfile-{}", version_mongo)),
@@ -407,47 +312,7 @@ pub fn environment_3_apps_3_routers_3_databases(
             },
         ],
         containers: vec![],
-        routers: vec![
-            Router {
-                long_id: Uuid::new_v4(),
-                name: "main".to_string(),
-                action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
-                public_port: 443,
-                custom_domains: vec![],
-                routes: vec![Route {
-                    path: "/app1".to_string(),
-                    service_long_id: app_id_1,
-                }],
-                sticky_sessions_enabled: false,
-            },
-            Router {
-                long_id: Uuid::new_v4(),
-                name: "second-router".to_string(),
-                action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
-                public_port: 443,
-                custom_domains: vec![],
-                routes: vec![Route {
-                    path: "/app2".to_string(),
-                    service_long_id: app_id_2,
-                }],
-                sticky_sessions_enabled: false,
-            },
-            Router {
-                long_id: Uuid::new_v4(),
-                name: "third-router".to_string(),
-                action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
-                public_port: 443,
-                custom_domains: vec![],
-                routes: vec![Route {
-                    path: "/app3".to_string(),
-                    service_long_id: app_id_3,
-                }],
-                sticky_sessions_enabled: false,
-            },
-        ],
+        routers: vec![],
         databases: vec![
             Database {
                 kind: DatabaseKind::Postgresql,
@@ -516,69 +381,6 @@ pub fn environment_3_apps_3_routers_3_databases(
                 mode: CONTAINER,
             },
         ],
-        clone_from_environment_id: None,
-    }
-}
-
-pub fn working_minimal_environment(context: &Context, test_domain: &str) -> EnvironmentRequest {
-    let application_id = Uuid::new_v4();
-    let application_name = to_short_id(&application_id);
-    let router_name = "main".to_string();
-    let application_domain = format!("{}.{}.{}", application_name, context.cluster_id(), test_domain);
-    EnvironmentRequest {
-        execution_id: context.execution_id().to_string(),
-        long_id: application_id,
-        project_long_id: Uuid::new_v4(),
-        organization_long_id: Uuid::new_v4(),
-        action: Action::Create,
-        applications: vec![Application {
-            long_id: application_id,
-            name: application_name.to_string(),
-            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
-            commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
-            dockerfile_path: Some("Dockerfile".to_string()),
-            buildpack_language: None,
-            root_path: String::from("/"),
-            action: Action::Create,
-            git_credentials: Some(GitCredentials {
-                login: "x-access-token".to_string(),
-                access_token: "xxx".to_string(),
-                expired_at: Utc::now(),
-            }),
-            storage: vec![],
-            environment_vars: BTreeMap::default(),
-            branch: "basic-app-deploy".to_string(),
-            ports: vec![Port {
-                id: "zdf7d6aad".to_string(),
-                long_id: Default::default(),
-                port: 80,
-                public_port: Some(443),
-                name: None,
-                publicly_accessible: true,
-                protocol: Protocol::HTTP,
-            }],
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 256,
-            min_instances: 2,
-            max_instances: 2,
-            cpu_burst: "100m".to_string(),
-            advanced_settings: Default::default(),
-        }],
-        containers: vec![],
-        routers: vec![Router {
-            long_id: Uuid::new_v4(),
-            name: router_name,
-            action: Action::Create,
-            default_domain: application_domain,
-            public_port: 443,
-            custom_domains: vec![],
-            routes: vec![Route {
-                path: "/".to_string(),
-                service_long_id: application_id,
-            }],
-            sticky_sessions_enabled: false,
-        }],
-        databases: vec![],
         clone_from_environment_id: None,
     }
 }
@@ -667,409 +469,6 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
     }
 }
 
-pub fn environment_only_http_server_router_with_sticky_session(
-    context: &Context,
-    test_domain: &str,
-) -> EnvironmentRequest {
-    let mut env = environment_only_http_server_router(context, test_domain);
-
-    for mut router in &mut env.routers {
-        router.sticky_sessions_enabled = true;
-    }
-
-    env.clone()
-}
-
-pub fn environnement_2_app_2_routers_1_psql(
-    context: &Context,
-    test_domain: &str,
-    database_instance_type: &str,
-    database_disk_type: &str,
-    provider_kind: Kind,
-) -> EnvironmentRequest {
-    let fqdn = get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()).to_string();
-
-    let database_port = 5432;
-    let database_username = "superuser".to_string();
-    let database_password = generate_password();
-    let database_name = "postgres".to_string();
-
-    let suffix = generate_id();
-    let application_name1 = sanitize_name("postgresql", &format!("{}-{}", "postgresql-app1", &suffix));
-    let application_id1 = Uuid::new_v4();
-    let application_name2 = sanitize_name("postgresql", &format!("{}-{}", "postgresql-app2", &suffix));
-    let application_id2 = Uuid::new_v4();
-
-    EnvironmentRequest {
-        execution_id: context.execution_id().to_string(),
-        long_id: Uuid::new_v4(),
-        project_long_id: Uuid::new_v4(),
-        organization_long_id: Uuid::new_v4(),
-        action: Action::Create,
-        databases: vec![Database {
-            kind: DatabaseKind::Postgresql,
-            action: Action::Create,
-            long_id: Uuid::new_v4(),
-            name: database_name.clone(),
-            version: "11.8.0".to_string(),
-            fqdn_id: fqdn.clone(),
-            fqdn: fqdn.clone(),
-            port: database_port,
-            username: database_username.clone(),
-            password: database_password.clone(),
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 512,
-            disk_size_in_gib: 10,
-            database_instance_type: database_instance_type.to_string(),
-            database_disk_type: database_disk_type.to_string(),
-            encrypt_disk: true,
-            activate_high_availability: false,
-            activate_backups: false,
-            publicly_accessible: false,
-            mode: CONTAINER,
-        }],
-        applications: vec![
-            Application {
-                long_id: application_id1,
-                name: application_name1.to_string(),
-                git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
-                commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
-                dockerfile_path: Some("Dockerfile".to_string()),
-                buildpack_language: None,
-                root_path: String::from("/"),
-                action: Action::Create,
-                git_credentials: Some(GitCredentials {
-                    login: "x-access-token".to_string(),
-                    access_token: "xxx".to_string(),
-                    expired_at: Utc::now(),
-                }),
-                storage: vec![],
-                environment_vars: btreemap! {
-                     "PG_DBNAME".to_string() => base64::encode(database_name.clone()),
-                     "PG_HOST".to_string() => base64::encode(fqdn.clone()),
-                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
-                     "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
-                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
-                },
-                branch: "master".to_string(),
-                ports: vec![Port {
-                    id: "zdf7d6aad".to_string(),
-                    long_id: Default::default(),
-                    port: 1234,
-                    public_port: Some(443),
-                    name: None,
-                    publicly_accessible: true,
-                    protocol: Protocol::HTTP,
-                }],
-                total_cpus: "100m".to_string(),
-                total_ram_in_mib: 256,
-                min_instances: 2,
-                max_instances: 2,
-                cpu_burst: "100m".to_string(),
-                advanced_settings: Default::default(),
-            },
-            Application {
-                long_id: application_id2,
-                name: application_name2.to_string(),
-                git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
-                commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
-                dockerfile_path: Some("Dockerfile".to_string()),
-                buildpack_language: None,
-                root_path: String::from("/"),
-                action: Action::Create,
-                git_credentials: Some(GitCredentials {
-                    login: "x-access-token".to_string(),
-                    access_token: "xxx".to_string(),
-                    expired_at: Utc::now(),
-                }),
-                storage: vec![],
-                environment_vars: btreemap! {
-                     "PG_DBNAME".to_string() => base64::encode(database_name),
-                     "PG_HOST".to_string() => base64::encode(fqdn),
-                     "PG_PORT".to_string() => base64::encode(database_port.to_string()),
-                     "PG_USERNAME".to_string() => base64::encode(database_username),
-                     "PG_PASSWORD".to_string() => base64::encode(database_password),
-                },
-                branch: "master".to_string(),
-                ports: vec![Port {
-                    id: "zdf7d6aad".to_string(),
-                    long_id: Default::default(),
-                    port: 1234,
-                    public_port: Some(443),
-                    name: None,
-                    publicly_accessible: true,
-                    protocol: Protocol::HTTP,
-                }],
-                total_cpus: "100m".to_string(),
-                total_ram_in_mib: 256,
-                min_instances: 2,
-                max_instances: 2,
-                cpu_burst: "100m".to_string(),
-                advanced_settings: Default::default(),
-            },
-        ],
-        containers: vec![],
-        routers: vec![
-            Router {
-                long_id: Uuid::new_v4(),
-                name: "main".to_string(),
-                action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
-                public_port: 443,
-                custom_domains: vec![],
-                routes: vec![Route {
-                    path: "/".to_string(),
-                    service_long_id: application_id1,
-                }],
-                sticky_sessions_enabled: false,
-            },
-            Router {
-                long_id: Uuid::new_v4(),
-                name: "second-router".to_string(),
-                action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
-                public_port: 443,
-                custom_domains: vec![],
-                routes: vec![Route {
-                    path: "/coco".to_string(),
-                    service_long_id: application_id2,
-                }],
-                sticky_sessions_enabled: false,
-            },
-        ],
-        clone_from_environment_id: None,
-    }
-}
-
-pub fn non_working_environment(context: &Context, test_domain: &str) -> EnvironmentRequest {
-    let mut environment = working_minimal_environment(context, test_domain);
-
-    environment.applications = environment
-        .applications
-        .into_iter()
-        .map(|mut app| {
-            app.git_url = "https://github.com/Qovery/engine-testing.git".to_string();
-            app.branch = "bugged-image".to_string();
-            app.commit_id = "c2b2d7b5d96832732df25fe992721f53842b5eac".to_string();
-            app
-        })
-        .collect::<Vec<_>>();
-
-    environment
-}
-
-// echo app environment is an environment that contains http-echo container (forked from hashicorp)
-// ECHO_TEXT var will be the content of the application root path
-pub fn echo_app_environment(context: &Context, test_domain: &str) -> EnvironmentRequest {
-    let suffix = generate_id();
-    let app_id = Uuid::new_v4();
-    EnvironmentRequest {
-        execution_id: context.execution_id().to_string(),
-        long_id: Uuid::new_v4(),
-        project_long_id: Uuid::new_v4(),
-        organization_long_id: Uuid::new_v4(),
-        action: Action::Create,
-        applications: vec![Application {
-            long_id: app_id,
-            name: format!("{}-{}", "echo-app", &suffix),
-            /*name: "simple-app".to_string(),*/
-            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
-            commit_id: "2205adea1db295547b99f7b17229afd7e879b6ff".to_string(),
-            dockerfile_path: Some("Dockerfile".to_string()),
-            buildpack_language: None,
-            root_path: String::from("/"),
-            action: Action::Create,
-            git_credentials: Some(GitCredentials {
-                login: "x-access-token".to_string(),
-                access_token: "xxx".to_string(),
-                expired_at: Utc::now(),
-            }),
-            storage: vec![],
-            environment_vars: btreemap! {
-                "ECHO_TEXT".to_string() => base64::encode("42"),
-            },
-            branch: "echo-app".to_string(),
-            ports: vec![Port {
-                id: "zdf7d6aad".to_string(),
-                long_id: Default::default(),
-                port: 5678,
-                public_port: Some(443),
-                name: None,
-                publicly_accessible: true,
-                protocol: Protocol::HTTP,
-            }],
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 256,
-            min_instances: 2,
-            max_instances: 2,
-            cpu_burst: "100m".to_string(),
-            advanced_settings: Default::default(),
-        }],
-        containers: vec![],
-        routers: vec![Router {
-            long_id: Uuid::new_v4(),
-            name: "main".to_string(),
-            action: Action::Create,
-            default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
-            public_port: 443,
-            custom_domains: vec![],
-            routes: vec![Route {
-                path: "/".to_string(),
-                service_long_id: app_id,
-            }],
-            sticky_sessions_enabled: false,
-        }],
-        databases: vec![],
-        clone_from_environment_id: None,
-    }
-}
-
-pub fn environment_only_http_server(context: &Context) -> EnvironmentRequest {
-    let suffix = generate_id();
-    EnvironmentRequest {
-        execution_id: context.execution_id().to_string(),
-        long_id: Uuid::new_v4(),
-        project_long_id: Uuid::new_v4(),
-        organization_long_id: Uuid::new_v4(),
-        action: Action::Create,
-        applications: vec![Application {
-            long_id: Uuid::new_v4(),
-            name: format!("{}-{}", "mini-http", &suffix),
-            /*name: "simple-app".to_string(),*/
-            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
-            commit_id: "a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
-            dockerfile_path: Some("Dockerfile".to_string()),
-            buildpack_language: None,
-            root_path: String::from("/"),
-            action: Action::Create,
-            git_credentials: Some(GitCredentials {
-                login: "x-access-token".to_string(),
-                access_token: "xxx".to_string(),
-                expired_at: Utc::now(),
-            }),
-            storage: vec![],
-            environment_vars: BTreeMap::default(),
-            branch: "mini-http".to_string(),
-            ports: vec![Port {
-                id: "zdf7d6aad".to_string(),
-                long_id: Default::default(),
-                port: 3000,
-                public_port: Some(443),
-                name: None,
-                publicly_accessible: true,
-                protocol: Protocol::HTTP,
-            }],
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 256,
-            min_instances: 2,
-            max_instances: 2,
-            cpu_burst: "100m".to_string(),
-            advanced_settings: Default::default(),
-        }],
-        containers: vec![],
-        routers: vec![],
-        databases: vec![],
-        clone_from_environment_id: None,
-    }
-}
-
-pub fn environment_only_http_server_router(context: &Context, test_domain: &str) -> EnvironmentRequest {
-    let suffix = generate_id();
-    let id = Uuid::new_v4();
-    EnvironmentRequest {
-        execution_id: context.execution_id().to_string(),
-        long_id: Uuid::new_v4(),
-        project_long_id: Uuid::new_v4(),
-        organization_long_id: Uuid::new_v4(),
-        action: Action::Create,
-        applications: vec![Application {
-            long_id: id,
-            name: format!("{}-{}", "mini-http", &suffix),
-            /*name: "simple-app".to_string(),*/
-            git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
-            commit_id: "a873edd459c97beb51453db056c40bca85f36ef9".to_string(),
-            dockerfile_path: Some("Dockerfile".to_string()),
-            buildpack_language: None,
-            root_path: String::from("/"),
-            action: Action::Create,
-            git_credentials: Some(GitCredentials {
-                login: "x-access-token".to_string(),
-                access_token: "xxx".to_string(),
-                expired_at: Utc::now(),
-            }),
-            storage: vec![],
-            environment_vars: BTreeMap::default(),
-            branch: "mini-http".to_string(),
-            ports: vec![Port {
-                id: "zdf7d6aad".to_string(),
-                long_id: Default::default(),
-                port: 3000,
-                public_port: Some(443),
-                name: None,
-                publicly_accessible: true,
-                protocol: Protocol::HTTP,
-            }],
-            total_cpus: "100m".to_string(),
-            total_ram_in_mib: 256,
-            min_instances: 2,
-            max_instances: 2,
-            cpu_burst: "100m".to_string(),
-            advanced_settings: Default::default(),
-        }],
-        containers: vec![],
-        routers: vec![Router {
-            long_id: Uuid::new_v4(),
-            name: "main".to_string(),
-            action: Action::Create,
-            default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
-            public_port: 443,
-            custom_domains: vec![],
-            routes: vec![Route {
-                path: "/".to_string(),
-                service_long_id: id,
-            }],
-            sticky_sessions_enabled: false,
-        }],
-        databases: vec![],
-        clone_from_environment_id: None,
-    }
-}
-
-/// Test if stick sessions are activated on given routers via cookie.
-pub fn session_is_sticky(url: Url, host: String, max_age: u32) -> bool {
-    let mut is_ok = true;
-    let http_client = reqwest::blocking::Client::builder()
-        .danger_accept_invalid_certs(true) // this test ignores certificate validity (not its purpose)
-        .build()
-        .expect("Cannot build reqwest client");
-
-    let http_request_result = http_client.get(url.to_string()).header("Host", host.as_str()).send();
-
-    if http_request_result.is_err() {
-        return false;
-    }
-
-    let http_response = http_request_result.expect("cannot retrieve HTTP request result");
-
-    is_ok &= match http_response.headers().get("Set-Cookie") {
-        None => false,
-        Some(value) => match value.to_str() {
-            Err(_) => false,
-            Ok(s) => s.contains("INGRESSCOOKIE_QOVERY=") && s.contains(format!("Max-Age={}", max_age).as_str()),
-        },
-    };
-
-    is_ok
-}
-
-fn compute_test_cluster_endpoint(cluster_domain: &ClusterDomain, default_domain: String) -> String {
-    match cluster_domain {
-        ClusterDomain::Default { cluster_id } => format!("{}.{}", cluster_id, default_domain),
-        ClusterDomain::QoveryOwnedDomain { cluster_id, domain } => format!("{}.{}", cluster_id, domain),
-        ClusterDomain::Custom { domain } => domain.to_string(),
-    }
-}
-
 pub fn test_db(
     context: Context,
     logger: Box<dyn Logger>,
@@ -1089,7 +488,6 @@ pub fn test_db(
     let span = span!(Level::INFO, "test", name = test_name);
     let _enter = span.enter();
     let context_for_delete = context.clone_not_same_execution_id();
-
     let provider_kind = kubernetes_kind.get_cloud_provider_kind();
     let app_id = Uuid::new_v4();
     let database_username = match db_kind {
@@ -1301,7 +699,7 @@ pub fn test_db(
                     assert_eq!(service.len(), 1);
                     match is_public {
                         true => {
-                            if db.clone().kind == DatabaseKind::Postgresql && db.kind == DatabaseKind::Mysql {
+                            if db.kind == DatabaseKind::Postgresql || db.kind == DatabaseKind::Mysql {
                                 assert!(annotations.contains_key("external-dns.alpha.kubernetes.io/hostname"));
                                 assert_eq!(annotations["external-dns.alpha.kubernetes.io/hostname"], database_fqdn);
                             } else {
@@ -1652,492 +1050,6 @@ pub fn test_pause_managed_db(
 
     let ret = environment_delete.delete_environment(&environment_delete, logger, engine_config_for_delete);
     assert!(matches!(ret, TransactionResult::Ok));
-
-    test_name.to_string()
-}
-
-pub fn get_environment_test_kubernetes(
-    context: &Context,
-    cloud_provider: Arc<Box<dyn CloudProvider>>,
-    kubernetes_version: &str,
-    dns_provider: Arc<Box<dyn DnsProvider>>,
-    logger: Box<dyn Logger>,
-    localisation: &str,
-    vpc_network_mode: Option<VpcQoveryNetworkMode>,
-    min_nodes: i32,
-    max_nodes: i32,
-    engine_location: EngineLocation,
-) -> Box<dyn Kubernetes> {
-    let secrets = FuncTestsSecrets::new();
-
-    let kubernetes: Box<dyn Kubernetes> = match cloud_provider.kubernetes_kind() {
-        KubernetesKind::Eks => {
-            let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
-            let mut options = AWS::kubernetes_cluster_options(secrets, None, engine_location);
-            if let Some(vpc_network_mode) = vpc_network_mode {
-                options.vpc_qovery_network_mode = vpc_network_mode;
-            }
-
-            Box::new(
-                EKS::new(
-                    context.clone(),
-                    context.cluster_id(),
-                    Uuid::new_v4(),
-                    format!("qovery-{}", context.cluster_id()).as_str(),
-                    kubernetes_version,
-                    region.clone(),
-                    region.get_zones_to_string(),
-                    cloud_provider,
-                    dns_provider,
-                    options,
-                    AWS::kubernetes_nodes(min_nodes, max_nodes),
-                    logger,
-                )
-                .unwrap(),
-            )
-        }
-        KubernetesKind::Ec2 => {
-            let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
-            let mut options = AWS::kubernetes_cluster_options(secrets, None, EngineLocation::QoverySide);
-            if let Some(vpc_network_mode) = vpc_network_mode {
-                options.vpc_qovery_network_mode = vpc_network_mode;
-            }
-
-            Box::new(
-                EC2::new(
-                    context.clone(),
-                    context.cluster_id(),
-                    Uuid::new_v4(),
-                    format!("qovery-{}", context.cluster_id()).as_str(),
-                    kubernetes_version,
-                    region.clone(),
-                    region.get_zones_to_string(),
-                    cloud_provider,
-                    dns_provider,
-                    options,
-                    ec2_kubernetes_instance(),
-                    logger,
-                )
-                .unwrap(),
-            )
-        }
-        KubernetesKind::Doks => {
-            let region = DoRegion::from_str(localisation).expect("DO region not supported");
-            Box::new(
-                DOKS::new(
-                    context.clone(),
-                    context.cluster_id().to_string(),
-                    Uuid::new_v4(),
-                    format!("qovery-{}", context.cluster_id()),
-                    kubernetes_version.to_string(),
-                    region,
-                    cloud_provider,
-                    dns_provider,
-                    DO::kubernetes_nodes(min_nodes, max_nodes),
-                    DO::kubernetes_cluster_options(
-                        secrets,
-                        Option::from(context.cluster_id().to_string()),
-                        EngineLocation::ClientSide,
-                    ),
-                    logger,
-                )
-                .unwrap(),
-            )
-        }
-        KubernetesKind::ScwKapsule => {
-            let zone = ScwZone::from_str(localisation).expect("SCW zone not supported");
-            Box::new(
-                Kapsule::new(
-                    context.clone(),
-                    context.cluster_id().to_string(),
-                    Uuid::new_v4(),
-                    format!("qovery-{}", context.cluster_id()),
-                    kubernetes_version.to_string(),
-                    zone,
-                    cloud_provider,
-                    dns_provider,
-                    Scaleway::kubernetes_nodes(min_nodes, max_nodes),
-                    Scaleway::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
-                    logger,
-                )
-                .unwrap(),
-            )
-        }
-    };
-
-    kubernetes
-}
-
-pub fn get_cluster_test_kubernetes<'a>(
-    secrets: FuncTestsSecrets,
-    context: &Context,
-    cluster_id: String,
-    cluster_name: String,
-    boot_version: String,
-    localisation: &str,
-    aws_zones: Option<Vec<AwsZones>>,
-    cloud_provider: Arc<Box<dyn CloudProvider>>,
-    kubernetes_provider: KubernetesKind,
-    dns_provider: Arc<Box<dyn DnsProvider>>,
-    vpc_network_mode: Option<VpcQoveryNetworkMode>,
-    logger: Box<dyn Logger>,
-    min_nodes: i32,
-    max_nodes: i32,
-) -> Box<dyn Kubernetes + 'a> {
-    let kubernetes: Box<dyn Kubernetes> = match kubernetes_provider {
-        KubernetesKind::Eks => {
-            let mut options = AWS::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide);
-            let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
-            if let Some(vpc_network_mode) = vpc_network_mode {
-                options.vpc_qovery_network_mode = vpc_network_mode;
-            }
-            let aws_zones = aws_zones.unwrap().into_iter().map(|zone| zone.to_string()).collect();
-
-            Box::new(
-                EKS::new(
-                    context.clone(),
-                    cluster_id.as_str(),
-                    Uuid::new_v4(),
-                    cluster_name.as_str(),
-                    boot_version.as_str(),
-                    aws_region,
-                    aws_zones,
-                    cloud_provider,
-                    dns_provider,
-                    options,
-                    AWS::kubernetes_nodes(min_nodes, max_nodes),
-                    logger,
-                )
-                .unwrap(),
-            )
-        }
-        KubernetesKind::Ec2 => {
-            let mut options = AWS::kubernetes_cluster_options(secrets, None, EngineLocation::QoverySide);
-            let aws_region = AwsRegion::from_str(localisation).expect("expected correct AWS region");
-            if let Some(vpc_network_mode) = vpc_network_mode {
-                options.vpc_qovery_network_mode = vpc_network_mode;
-            }
-            let aws_zones = aws_zones.unwrap().into_iter().map(|zone| zone.to_string()).collect();
-
-            Box::new(
-                EC2::new(
-                    context.clone(),
-                    cluster_id.as_str(),
-                    Uuid::new_v4(),
-                    cluster_name.as_str(),
-                    boot_version.as_str(),
-                    aws_region,
-                    aws_zones,
-                    cloud_provider,
-                    dns_provider,
-                    options,
-                    ec2_kubernetes_instance(),
-                    logger,
-                )
-                .unwrap(),
-            )
-        }
-        KubernetesKind::Doks => Box::new(
-            DOKS::new(
-                context.clone(),
-                cluster_id,
-                Uuid::new_v4(),
-                cluster_name.clone(),
-                boot_version,
-                DoRegion::from_str(localisation).expect("Unknown region set for DOKS"),
-                cloud_provider,
-                dns_provider,
-                DO::kubernetes_nodes(min_nodes, max_nodes),
-                DO::kubernetes_cluster_options(secrets, Option::from(cluster_name), EngineLocation::ClientSide),
-                logger,
-            )
-            .unwrap(),
-        ),
-        KubernetesKind::ScwKapsule => Box::new(
-            Kapsule::new(
-                context.clone(),
-                cluster_id,
-                Uuid::new_v4(),
-                cluster_name,
-                boot_version,
-                ScwZone::from_str(localisation).expect("Unknown zone set for Kapsule"),
-                cloud_provider,
-                dns_provider,
-                Scaleway::kubernetes_nodes(min_nodes, max_nodes),
-                Scaleway::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
-                logger,
-            )
-            .unwrap(),
-        ),
-    };
-
-    kubernetes
-}
-
-pub fn cluster_test(
-    test_name: &str,
-    provider_kind: Kind,
-    kubernetes_kind: KubernetesKind,
-    context: Context,
-    logger: Box<dyn Logger>,
-    localisation: &str,
-    aws_zones: Option<Vec<AwsZones>>,
-    test_type: ClusterTestType,
-    major_boot_version: u8,
-    minor_boot_version: u8,
-    cluster_domain: &ClusterDomain,
-    vpc_network_mode: Option<VpcQoveryNetworkMode>,
-    environment_to_deploy: Option<&EnvironmentRequest>,
-) -> String {
-    init();
-
-    let span = span!(Level::INFO, "test", name = test_name);
-    let _enter = span.enter();
-    let boot_version = format!("{}.{}", major_boot_version, minor_boot_version.clone());
-
-    let engine = match provider_kind {
-        Kind::Aws => AWS::docker_cr_engine(
-            &context,
-            logger.clone(),
-            localisation,
-            kubernetes_kind,
-            boot_version,
-            cluster_domain,
-            vpc_network_mode.clone(),
-            KUBERNETES_MIN_NODES,
-            KUBERNETES_MAX_NODES,
-            EngineLocation::ClientSide,
-        ),
-        Kind::Do => DO::docker_cr_engine(
-            &context,
-            logger.clone(),
-            localisation,
-            kubernetes_kind,
-            boot_version,
-            cluster_domain,
-            vpc_network_mode.clone(),
-            KUBERNETES_MIN_NODES,
-            KUBERNETES_MAX_NODES,
-            EngineLocation::ClientSide,
-        ),
-        Kind::Scw => Scaleway::docker_cr_engine(
-            &context,
-            logger.clone(),
-            localisation,
-            kubernetes_kind,
-            boot_version,
-            cluster_domain,
-            vpc_network_mode.clone(),
-            KUBERNETES_MIN_NODES,
-            KUBERNETES_MAX_NODES,
-            EngineLocation::ClientSide,
-        ),
-    };
-    let mut deploy_tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-    let mut delete_tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-
-    let mut aws_zones_string: Vec<String> = Vec::with_capacity(3);
-    if let Some(aws_zones) = aws_zones {
-        for zone in aws_zones {
-            aws_zones_string.push(zone.to_string())
-        }
-    };
-
-    // Deploy
-    if let Err(err) = deploy_tx.create_kubernetes() {
-        panic!("{:?}", err)
-    }
-    assert!(matches!(deploy_tx.commit(), TransactionResult::Ok));
-
-    // Deploy env if any
-    if let Some(env) = environment_to_deploy {
-        let mut deploy_env_tx =
-            Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-
-        // Deploy env
-        let env = env
-            .to_environment_domain(
-                &context,
-                engine.cloud_provider(),
-                engine.container_registry().registry_info(),
-                logger.clone(),
-            )
-            .unwrap();
-        let env = Rc::new(RefCell::new(env));
-        if let Err(err) = deploy_env_tx.deploy_environment(&env) {
-            panic!("{:?}", err)
-        }
-
-        assert!(matches!(deploy_env_tx.commit(), TransactionResult::Ok));
-    }
-
-    match test_type {
-        // TODO new test type
-        ClusterTestType::Classic => {}
-        ClusterTestType::WithPause => {
-            let mut pause_tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-            let mut resume_tx =
-                Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-
-            // Pause
-            if let Err(err) = pause_tx.pause_kubernetes() {
-                panic!("{:?}", err)
-            }
-            assert!(matches!(pause_tx.commit(), TransactionResult::Ok));
-
-            // Resume
-            if let Err(err) = resume_tx.create_kubernetes() {
-                panic!("{:?}", err)
-            }
-
-            assert!(matches!(resume_tx.commit(), TransactionResult::Ok));
-        }
-        ClusterTestType::WithUpgrade => {
-            let upgrade_to_version = format!("{}.{}", major_boot_version, (minor_boot_version + 1));
-            let engine = match provider_kind {
-                Kind::Aws => AWS::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    localisation,
-                    KubernetesKind::Eks,
-                    upgrade_to_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    KUBERNETES_MIN_NODES,
-                    KUBERNETES_MAX_NODES,
-                    EngineLocation::ClientSide,
-                ),
-                Kind::Do => DO::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    localisation,
-                    KubernetesKind::Doks,
-                    upgrade_to_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    KUBERNETES_MIN_NODES,
-                    KUBERNETES_MAX_NODES,
-                    EngineLocation::ClientSide,
-                ),
-                Kind::Scw => Scaleway::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    localisation,
-                    KubernetesKind::ScwKapsule,
-                    upgrade_to_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    KUBERNETES_MIN_NODES,
-                    KUBERNETES_MAX_NODES,
-                    EngineLocation::ClientSide,
-                ),
-            };
-            let mut upgrade_tx =
-                Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-            let mut delete_tx =
-                Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-
-            // Upgrade
-            if let Err(err) = upgrade_tx.create_kubernetes() {
-                panic!("{:?}", err)
-            }
-            assert!(matches!(upgrade_tx.commit(), TransactionResult::Ok));
-
-            // Delete
-            if let Err(err) = delete_tx.delete_kubernetes() {
-                panic!("{:?}", err)
-            }
-            assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
-
-            return test_name.to_string();
-        }
-        ClusterTestType::WithNodesResize => {
-            let min_nodes = 11;
-            let max_nodes = 15;
-            let kubernetes_version = format!("{}.{}", major_boot_version, minor_boot_version.clone());
-            let engine = match provider_kind {
-                Kind::Aws => AWS::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    localisation,
-                    KubernetesKind::Eks,
-                    kubernetes_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    min_nodes,
-                    max_nodes,
-                    EngineLocation::ClientSide,
-                ),
-                Kind::Do => DO::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    localisation,
-                    KubernetesKind::Doks,
-                    kubernetes_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    min_nodes,
-                    max_nodes,
-                    EngineLocation::ClientSide,
-                ),
-                Kind::Scw => Scaleway::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    localisation,
-                    KubernetesKind::ScwKapsule,
-                    kubernetes_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    min_nodes,
-                    max_nodes,
-                    EngineLocation::ClientSide,
-                ),
-            };
-            let mut upgrade_tx =
-                Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-            let mut delete_tx =
-                Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-            // Upgrade
-            if let Err(err) = upgrade_tx.create_kubernetes() {
-                panic!("{:?}", err)
-            }
-            assert!(matches!(upgrade_tx.commit(), TransactionResult::Ok));
-
-            // Delete
-            if let Err(err) = delete_tx.delete_kubernetes() {
-                panic!("{:?}", err)
-            }
-            assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
-            return test_name.to_string();
-        }
-    }
-
-    // Destroy env if any
-    if let Some(env) = environment_to_deploy {
-        let mut destroy_env_tx =
-            Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-
-        // Deploy env
-        let env = env
-            .to_environment_domain(
-                &context,
-                engine.cloud_provider(),
-                engine.container_registry().registry_info(),
-                logger.clone(),
-            )
-            .unwrap();
-        let env = Rc::new(RefCell::new(env));
-        if let Err(err) = destroy_env_tx.delete_environment(&env) {
-            panic!("{:?}", err)
-        }
-        assert!(matches!(destroy_env_tx.commit(), TransactionResult::Ok));
-    }
-
-    // Delete
-    if let Err(err) = delete_tx.delete_kubernetes() {
-        panic!("{:?}", err)
-    }
-    assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
 
     test_name.to_string()
 }

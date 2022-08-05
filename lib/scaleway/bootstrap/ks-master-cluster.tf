@@ -21,4 +21,9 @@ resource "scaleway_k8s_cluster" "kubernetes_cluster"  {
     maintenance_window_day = "any"
     maintenance_window_start_hour = 3
   }
+
+  timeouts {
+    create = "60m"
+    update = "60m"
+  }
 }

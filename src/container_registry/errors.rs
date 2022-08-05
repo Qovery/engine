@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Clone, Error, Debug, PartialEq)]
 pub enum ContainerRegistryError {
     #[error("Invalid credentials error.")]
     InvalidCredentials,

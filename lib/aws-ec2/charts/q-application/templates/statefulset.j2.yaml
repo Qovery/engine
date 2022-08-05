@@ -34,6 +34,9 @@ spec:
         appLongId: {{ long_id }}
         envLongId: {{ environment_long_id }}
         projectLongId: {{ project_long_id }}
+        qovery.com/service-id: {{ long_id }}
+        qovery.com/service-type: application
+        qovery.com/environment-id: {{ environment_long_id }}
       annotations:
         checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
     spec:

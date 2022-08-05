@@ -14,12 +14,17 @@ metadata:
   annotations:
     releaseTime: {% raw %}{{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}{% endraw %}
 spec:
+  {%- if service.min_instances == service.max_instances %}
   replicas: {{ service.min_instances }}
+  {%- endif %}
   strategy:
     type: RollingUpdate
-    {%- if service.max_instances == 1 %}
     rollingUpdate:
+    {%- if service.max_instances == 1 %}
       maxSurge: 1
+    {%- else %}
+      maxSurge: 25%
+      maxUnavailable: 10%
     {%- endif %}
   selector:
     matchLabels:
@@ -27,8 +32,7 @@ spec:
   template:
     metadata:
       labels:
-        envId: {{ environment_long_id }}
-        envLongId: {{ environment_long_id }}
+        envId: {{ environment_short_id }}
         qovery.com/service-id: {{ service.long_id }}
         qovery.com/service-type: container
         qovery.com/environment-id: {{ environment_long_id }}
@@ -38,14 +42,16 @@ spec:
     spec:
       affinity:
         podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: "qovery.com/service-id"
-                    operator: In
-                    values:
-                    - {{ service.long_id }}
-              topologyKey: "kubernetes.io/hostname"
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: "qovery.com/service-id"
+                      operator: In
+                      values:
+                      - {{ service.long_id }}
+                topologyKey: "kubernetes.io/hostname"
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
       securityContext: {}

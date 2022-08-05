@@ -534,64 +534,65 @@ mod tests {
     #[test]
     fn test_event_message() {
         // setup:
-        let test_cases: Vec<(
-            String,
-            Option<String>,
-            Option<Vec<(String, String)>>,
-            EventMessageVerbosity,
-            String,
-        )> = vec![
-            (
-                "safe".to_string(),
-                Some("raw".to_string()),
-                Some(vec![("env".to_string(), "value".to_string())]),
-                EventMessageVerbosity::SafeOnly,
-                "safe".to_string(),
-            ),
-            (
-                "safe".to_string(),
-                None,
-                None,
-                EventMessageVerbosity::SafeOnly,
-                "safe".to_string(),
-            ),
-            (
-                "safe".to_string(),
-                None,
-                None,
-                EventMessageVerbosity::FullDetails,
-                "safe".to_string(),
-            ),
-            (
-                "safe".to_string(),
-                Some("raw".to_string()),
-                None,
-                EventMessageVerbosity::FullDetails,
-                "safe / Full details: raw".to_string(),
-            ),
-            (
-                "safe".to_string(),
-                Some("raw".to_string()),
-                Some(vec![("env".to_string(), "value".to_string())]),
-                EventMessageVerbosity::FullDetailsWithoutEnvVars,
-                "safe / Full details: raw".to_string(),
-            ),
-            (
-                "safe".to_string(),
-                Some("raw".to_string()),
-                Some(vec![("env".to_string(), "value".to_string())]),
-                EventMessageVerbosity::FullDetails,
-                "safe / Full details: raw / Env vars: env=value".to_string(),
-            ),
+        struct TestCase {
+            safe_message: String,
+            raw_message: Option<String>,
+            envs: Option<Vec<(String, String)>>,
+            verbosity: EventMessageVerbosity,
+            expected_output: String,
+        }
+
+        let test_cases: Vec<TestCase> = vec![
+            TestCase {
+                safe_message: "safe".to_string(),
+                raw_message: Some("raw".to_string()),
+                envs: Some(vec![("env".to_string(), "value".to_string())]),
+                verbosity: EventMessageVerbosity::SafeOnly,
+                expected_output: "safe".to_string(),
+            },
+            TestCase {
+                safe_message: "safe".to_string(),
+                raw_message: None,
+                envs: None,
+                verbosity: EventMessageVerbosity::SafeOnly,
+                expected_output: "safe".to_string(),
+            },
+            TestCase {
+                safe_message: "safe".to_string(),
+                raw_message: None,
+                envs: None,
+                verbosity: EventMessageVerbosity::FullDetails,
+                expected_output: "safe".to_string(),
+            },
+            TestCase {
+                safe_message: "safe".to_string(),
+                raw_message: Some("raw".to_string()),
+                envs: None,
+                verbosity: EventMessageVerbosity::FullDetails,
+                expected_output: "safe / Full details: raw".to_string(),
+            },
+            TestCase {
+                safe_message: "safe".to_string(),
+                raw_message: Some("raw".to_string()),
+                envs: Some(vec![("env".to_string(), "value".to_string())]),
+                verbosity: EventMessageVerbosity::FullDetailsWithoutEnvVars,
+                expected_output: "safe / Full details: raw".to_string(),
+            },
+            TestCase {
+                safe_message: "safe".to_string(),
+                raw_message: Some("raw".to_string()),
+                envs: Some(vec![("env".to_string(), "value".to_string())]),
+                verbosity: EventMessageVerbosity::FullDetails,
+                expected_output: "safe / Full details: raw / Env vars: env=value".to_string(),
+            },
         ];
 
         for tc in test_cases {
             // execute:
-            let (safe_message, raw_message, env_vars, verbosity, expected) = tc;
-            let event_message = EventMessage::new_with_env_vars(safe_message, raw_message, env_vars);
+            let event_message = EventMessage::new_with_env_vars(tc.safe_message, tc.raw_message, tc.envs);
 
             // validate:
-            assert_eq!(expected, event_message.message(verbosity));
+            assert_eq!(tc.expected_output, event_message.message(tc.verbosity));
         }
     }
 
