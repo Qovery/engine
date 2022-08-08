@@ -105,6 +105,13 @@ impl Context {
         }
     }
 
+    pub fn is_first_cluster_deployment(&self) -> bool {
+        match &self.metadata {
+            Some(meta) => meta.is_first_cluster_deployment.unwrap_or(false),
+            _ => false,
+        }
+    }
+
     // Qovery features
     pub fn is_feature_enabled(&self, name: &Features) -> bool {
         for feature in &self.features {
@@ -124,6 +131,7 @@ pub struct Metadata {
     pub resource_expiration_in_seconds: Option<u32>,
     pub forced_upgrade: Option<bool>,
     pub disable_pleco: Option<bool>,
+    pub is_first_cluster_deployment: Option<bool>,
 }
 
 impl Metadata {
@@ -132,12 +140,14 @@ impl Metadata {
         resource_expiration_in_seconds: Option<u32>,
         forced_upgrade: Option<bool>,
         disable_pleco: Option<bool>,
+        is_first_cluster_deployment: Option<bool>,
     ) -> Self {
         Metadata {
             dry_run_deploy,
             resource_expiration_in_seconds,
             forced_upgrade,
             disable_pleco,
+            is_first_cluster_deployment,
         }
     }
 }
@@ -166,5 +176,86 @@ impl CloneForTest for Context {
             .collect::<String>();
         new.execution_id = format!("{}-{}", self.execution_id, suffix);
         new
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::io_models::context::Metadata;
+
+    #[test]
+    /// Preventing empty / partially empty metadata input from triggering a deserialization error
+    fn test_metadata_deserialization_empty_json() {
+        // execute:
+        let result: Metadata = serde_json::from_str("{}").expect("Error while trying to deserialize Metadata");
+
+        // verify:
+        assert_eq!(None, result.is_first_cluster_deployment);
+        assert_eq!(None, result.resource_expiration_in_seconds);
+        assert_eq!(None, result.forced_upgrade);
+        assert_eq!(None, result.disable_pleco);
+        assert_eq!(None, result.dry_run_deploy);
+    }
+
+    #[test]
+    fn test_metadata_deserialization_is_first_cluster_deployment() {
+        // setup:
+        struct TestCase<'a> {
+            input: &'a str,
+            expected: Result<Option<bool>, ()>,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: r#"{}"#,
+                expected: Ok(None),
+            },
+            TestCase {
+                input: r#"{"is_first_cluster_deployment": true}"#,
+                expected: Ok(Some(true)),
+            },
+            TestCase {
+                input: r#"{"is_first_cluster_deployment": false}"#,
+                expected: Ok(Some(false)),
+            },
+            TestCase {
+                input: r#"{"is_first_cluster_deployment": 1}"#,
+                expected: Err(()),
+            },
+            TestCase {
+                input: r#"{"is_first_cluster_deployment": 0}"#,
+                expected: Err(()),
+            },
+            TestCase {
+                input: r#"{"is_first_cluster_deployment": "true"}"#,
+                expected: Err(()),
+            },
+            TestCase {
+                input: r#"{"is_first_cluster_deployment": "false"}"#,
+                expected: Err(()),
+            },
+            TestCase {
+                input: r#"{"is_first_cluster_deployment": "bad"}"#,
+                expected: Err(()),
+            },
+            TestCase {
+                input: r#"{"is_first_cluster_deployment": -3}"#,
+                expected: Err(()),
+            },
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let result_value: Result<Metadata, serde_json::Error> = serde_json::from_str(tc.input);
+
+            // verify:
+            assert_eq!(
+                tc.expected,
+                match result_value {
+                    Ok(metadata) => Ok(metadata.is_first_cluster_deployment),
+                    Err(_) => Err(()),
+                }
+            );
+        }
     }
 }

@@ -84,6 +84,7 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
         },
         forced_upgrade: Option::from(env::var_os("forced_upgrade").is_some()),
         disable_pleco: Some(true),
+        is_first_cluster_deployment: None,
     };
 
     let enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
