@@ -820,6 +820,7 @@ pub struct ClusterAgentContext<'a> {
     pub cluster_long_id: &'a Uuid,
     pub cluster_jwt_token: &'a str,
     pub grpc_url: &'a str,
+    pub loki_url: Option<&'a str>,
 }
 
 // This one is the new agent in rust
@@ -876,6 +877,14 @@ pub fn get_chart_for_cluster_agent(
             ..Default::default()
         },
     };
+
+    // If log history is enabled, add the loki url to the values
+    if let Some(url) = context.loki_url {
+        cluster_agent.chart_info.values.push(ChartSetValue {
+            key: "environmentVariables.LOKI_URL".to_string(),
+            value: url.to_string(),
+        });
+    }
 
     // resources limits
     match custom_resources {

@@ -680,6 +680,11 @@ datasources:
         cluster_long_id: &chart_config_prerequisites.cluster_long_id,
         cluster_jwt_token: &chart_config_prerequisites.infra_options.jwt_token,
         grpc_url: &chart_config_prerequisites.infra_options.qovery_grpc_url,
+        loki_url: if chart_config_prerequisites.ff_log_history_enabled {
+            Some("http://loki.logging.svc.cluster.local:3100")
+        } else {
+            None
+        },
     };
     let cluster_agent = get_chart_for_cluster_agent(cluster_agent_context, chart_path, None)?;
 
