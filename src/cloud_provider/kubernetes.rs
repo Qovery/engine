@@ -187,9 +187,14 @@ pub trait Kubernetes {
             }) {
                 Ok((path, file)) => (path, file),
                 Err(Operation { error, .. }) => {
-                    // TODO(benjaminch):ENG-1252
-                    // This message should not be fired in case of new cluster.
                     // If existing cluster, it should be a warning.
+                    if self.context().is_first_cluster_deployment() {
+                        // if cluster first deployment, this case if normal, hence we do not log anything to end user
+                        return Err(error);
+                    }
+
+                    // It's not cluster first deployment
+                    // OR we don't know if it's cluster first deployment, we do log an info log to end user.
                     self.logger().log(EngineEvent::Info(
                         event_details,
                         EventMessage::new(
