@@ -723,6 +723,11 @@ datasources:
             name: "cert-manager".to_string(),
             path: chart_path("common/charts/cert-manager"),
             namespace: HelmChartNamespaces::CertManager,
+            crds_update: Some(CRDSUpdate {
+                path: "https://github.com/jetstack/cert-manager/releases/download/v1.4.4".to_string(),
+                resources: vec!["cert-manager.crds.yaml".to_string()],
+            }),
+            last_breaking_version_requiring_restart: Some(Version::new(1, 4, 4)),
             values: vec![
                 ChartSetValue {
                     key: "installCRDs".to_string(),
