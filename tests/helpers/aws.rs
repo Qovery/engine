@@ -17,6 +17,7 @@ use qovery_engine::logger::Logger;
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::error;
+use uuid::Uuid;
 
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::dns::{dns_provider_cloudflare, dns_provider_qoverydns};
@@ -47,6 +48,7 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
     ECR::new(
         context.clone(),
         "default-ecr-registry-Qovery Test",
+        Uuid::new_v4(),
         "ea59qe62xaw3wjai",
         secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
         secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),

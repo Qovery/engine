@@ -11,6 +11,7 @@ use crate::io_models::context::Context;
 use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::utilities;
 use url::Url;
+use uuid::Uuid;
 
 const CR_API_PATH: &str = "https://api.digitalocean.com/v2/registry";
 const CR_CLUSTER_API_PATH: &str = "https://api.digitalocean.com/v2/kubernetes/registry";
@@ -24,6 +25,7 @@ pub struct DOCR {
     pub name: String,
     pub api_key: String,
     pub id: String,
+    pub long_id: Uuid,
     pub registry_info: ContainerRegistryInfo,
     pub listeners: Listeners,
 }
@@ -32,6 +34,7 @@ impl DOCR {
     pub fn new(
         context: Context,
         id: &str,
+        long_id: Uuid,
         name: &str,
         api_key: &str,
         listener: Listener,
@@ -57,6 +60,7 @@ impl DOCR {
             id: id.into(),
             listeners: vec![listener],
             registry_info,
+            long_id,
         };
 
         if cr.context.docker.login(&cr.registry_info.endpoint).is_err() {
@@ -179,6 +183,10 @@ impl ContainerRegistry for DOCR {
 
     fn id(&self) -> &str {
         self.id.as_str()
+    }
+
+    fn long_id(&self) -> &Uuid {
+        &self.long_id
     }
 
     fn name(&self) -> &str {

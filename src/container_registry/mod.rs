@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use url::Url;
+use uuid::Uuid;
 
 use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
@@ -17,6 +18,7 @@ pub trait ContainerRegistry {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
+    fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())

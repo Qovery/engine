@@ -26,10 +26,12 @@ use retry::Error::Operation;
 use retry::OperationResult;
 use serde_json::json;
 use url::Url;
+use uuid::Uuid;
 
 pub struct ECR {
     context: Context,
     id: String,
+    long_id: Uuid,
     name: String,
     access_key_id: String,
     secret_access_key: String,
@@ -43,6 +45,7 @@ impl ECR {
     pub fn new(
         context: Context,
         id: &str,
+        long_id: Uuid,
         name: &str,
         access_key_id: &str,
         secret_access_key: &str,
@@ -53,6 +56,7 @@ impl ECR {
         let mut cr = ECR {
             context,
             id: id.to_string(),
+            long_id,
             name: name.to_string(),
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
@@ -356,6 +360,10 @@ impl ContainerRegistry for ECR {
 
     fn id(&self) -> &str {
         self.id.as_str()
+    }
+
+    fn long_id(&self) -> &Uuid {
+        &self.long_id
     }
 
     fn name(&self) -> &str {

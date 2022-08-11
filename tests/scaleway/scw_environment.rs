@@ -1010,6 +1010,7 @@ fn deploy_container_with_no_router_on_scw() {
             action: Action::Create,
             registry: Registry::DockerHub {
                 url: Url::parse("https://docker.io").unwrap(),
+                long_id: Uuid::new_v4(),
                 credentials: None,
             },
             image: "debian".to_string(),
@@ -1101,6 +1102,7 @@ fn deploy_container_with_router_on_scw() {
             action: Action::Create,
             registry: Registry::DockerHub {
                 url: Url::parse("https://docker.io").unwrap(),
+                long_id: Uuid::new_v4(),
                 credentials: None,
             },
             image: "httpd".to_string(),
