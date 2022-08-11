@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-exec dumb-init ./app
+exec dumb-init --single-child -- ./app
