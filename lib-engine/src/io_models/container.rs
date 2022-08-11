@@ -25,16 +25,19 @@ pub struct Credentials {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum Registry {
     DockerHub {
+        long_id: Uuid,
         url: Url,
         credentials: Option<Credentials>,
     },
 
     DoCr {
+        long_id: Uuid,
         url: Url,
         token: String,
     },
 
     ScalewayCr {
+        long_id: Uuid,
         url: Url,
         scaleway_access_key: String,
         scaleway_secret_key: String,
@@ -42,6 +45,7 @@ pub enum Registry {
 
     // AWS private ecr
     PrivateEcr {
+        long_id: Uuid,
         url: Url,
         region: String,
         access_key_id: String,
@@ -50,6 +54,7 @@ pub enum Registry {
 
     // AWS public ecr
     PublicEcr {
+        long_id: Uuid,
         url: Url,
     },
 }
@@ -62,6 +67,16 @@ impl Registry {
             Registry::ScalewayCr { url, .. } => url,
             Registry::PrivateEcr { url, .. } => url,
             Registry::PublicEcr { url, .. } => url,
+        }
+    }
+
+    pub fn id(&self) -> &Uuid {
+        match self {
+            Registry::DockerHub { long_id, .. } => long_id,
+            Registry::DoCr { long_id, .. } => long_id,
+            Registry::ScalewayCr { long_id, .. } => long_id,
+            Registry::PrivateEcr { long_id, .. } => long_id,
+            Registry::PublicEcr { long_id, .. } => long_id,
         }
     }
 }

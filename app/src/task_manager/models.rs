@@ -34,12 +34,13 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EngineRequest {
     pub id: String,
     pub organization_id: String,
-    pub organization_long_id: uuid::Uuid,
+    pub organization_long_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub action: Action,
     pub features: Vec<Features>,
@@ -219,7 +220,7 @@ impl CloudProvider {
         &self,
         context: Context,
         organization_id: &str,
-        organization_long_id: uuid::Uuid,
+        organization_long_id: Uuid,
     ) -> Option<Box<dyn qovery_engine::cloud_provider::CloudProvider>> {
         let terraform_state_credentials = qovery_engine::cloud_provider::TerraformStateCredentials {
             access_key_id: self.terraform_state_credentials.access_key_id.clone(),
@@ -277,7 +278,7 @@ pub struct TerraformStateCredentials {
 pub struct Kubernetes {
     pub kind: qovery_engine::cloud_provider::kubernetes::Kind,
     pub id: String,
-    pub long_id: uuid::Uuid,
+    pub long_id: Uuid,
     pub name: String,
     pub version: String,
     pub region: String,
@@ -396,6 +397,7 @@ impl Kubernetes {
 pub struct ContainerRegistry {
     pub kind: qovery_engine::container_registry::Kind,
     pub id: String,
+    pub long_id: Uuid,
     pub name: String,
     pub options: Options,
 }
@@ -412,6 +414,7 @@ impl ContainerRegistry {
                 ECR::new(
                     context,
                     self.id.as_str(),
+                    self.long_id,
                     self.name.as_str(),
                     self.options.access_key_id.as_ref()?.as_str(),
                     self.options.secret_access_key.as_ref()?.as_str(),
@@ -425,6 +428,7 @@ impl ContainerRegistry {
                 DOCR::new(
                     context,
                     self.id.as_str(),
+                    self.long_id,
                     self.name.as_str(),
                     self.options.token.as_ref()?.as_str(),
                     listener,
@@ -435,6 +439,7 @@ impl ContainerRegistry {
                 ScalewayCR::new(
                     context,
                     self.id.as_str(),
+                    self.long_id,
                     self.name.as_str(),
                     self.options.scaleway_secret_key.as_ref()?.as_str(),
                     self.options.scaleway_project_id.as_ref()?.as_str(),

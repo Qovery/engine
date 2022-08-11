@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use const_format::formatcp;
 use tracing::error;
+use uuid::Uuid;
 
 use qovery_engine::build_platform::Build;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
@@ -57,6 +58,7 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
     ScalewayCR::new(
         context.clone(),
         format!("default-registry-qovery-test-{}", random_id).as_str(),
+        Uuid::new_v4(),
         format!("default-registry-qovery-test-{}", random_id).as_str(),
         scw_secret_key.as_str(),
         scw_default_project_id.as_str(),
@@ -252,6 +254,7 @@ pub fn clean_environments(
     let container_registry_client = ScalewayCR::new(
         context.clone(),
         "test",
+        Uuid::new_v4(),
         "test",
         secret_token.as_str(),
         project_id.as_str(),

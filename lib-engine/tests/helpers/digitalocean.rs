@@ -10,6 +10,7 @@ use qovery_engine::container_registry::docr::DOCR;
 use qovery_engine::engine::EngineConfig;
 use qovery_engine::io_models::progress_listener::NoOpProgressListener;
 use std::sync::Arc;
+use uuid::Uuid;
 
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::dns::dns_provider_cloudflare;
@@ -38,6 +39,7 @@ pub fn container_registry_digital_ocean(context: &Context) -> DOCR {
     DOCR::new(
         context.clone(),
         DOCR_ID,
+        Uuid::new_v4(),
         DOCR_ID,
         secrets.DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
         Arc::new(Box::new(NoOpProgressListener {})),
@@ -189,6 +191,7 @@ pub fn clean_environments(
     let _do_cr = DOCR::new(
         context.clone(),
         "test",
+        Uuid::new_v4(),
         "test",
         secrets
             .DIGITAL_OCEAN_TOKEN
