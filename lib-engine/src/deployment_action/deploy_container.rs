@@ -78,7 +78,7 @@ where
             let err = EngineError::new_docker_error(event_details, err);
             let user_err = EngineError::new_engine_error(
                 err.clone(),
-                format!("❌ Failed to mirror image {}", self.image_with_tag()),
+                format!("❌ Failed to mirror image {}: {}", self.image_with_tag(), err),
                 None,
             );
             (loggers.send_error)(user_err);
