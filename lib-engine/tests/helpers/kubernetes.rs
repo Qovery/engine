@@ -228,12 +228,7 @@ pub fn cluster_test(
 
         // Deploy env
         let env = env
-            .to_environment_domain(
-                &context,
-                engine.cloud_provider(),
-                engine.container_registry().registry_info(),
-                logger.clone(),
-            )
+            .to_environment_domain(&context, engine.cloud_provider(), engine.container_registry(), logger.clone())
             .unwrap();
         let env = Rc::new(RefCell::new(env));
         if let Err(err) = deploy_env_tx.deploy_environment(&env) {
@@ -391,12 +386,7 @@ pub fn cluster_test(
 
         // Deploy env
         let env = env
-            .to_environment_domain(
-                &context,
-                engine.cloud_provider(),
-                engine.container_registry().registry_info(),
-                logger.clone(),
-            )
+            .to_environment_domain(&context, engine.cloud_provider(), engine.container_registry(), logger.clone())
             .unwrap();
         let env = Rc::new(RefCell::new(env));
         if let Err(err) = destroy_env_tx.delete_environment(&env) {

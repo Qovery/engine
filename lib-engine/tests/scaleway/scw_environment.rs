@@ -923,7 +923,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
             .to_environment_domain(
                 engine_config.context(),
                 engine_config.cloud_provider(),
-                engine_config.container_registry().registry_info(),
+                engine_config.container_registry(),
                 logger.clone(),
             )
             .unwrap();

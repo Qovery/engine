@@ -470,7 +470,7 @@ impl Task for EnvironmentTask {
         let env = environment_action.to_environment_domain(
             engine.context(),
             engine.cloud_provider(),
-            engine.container_registry().registry_info(),
+            engine.container_registry(),
             logger.clone(),
         );
 
