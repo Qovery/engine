@@ -164,6 +164,8 @@ pub enum Tag {
     TerraformInvalidCredentials,
     TerraformServiceNotActivatedOptInRequired,
     TerraformNotEnoughPermissions,
+    TerraformWaitingTimeoutResource,
+    TerraformAlreadyExistingResource,
 }
 
 impl From<errors::Tag> for Tag {
@@ -328,6 +330,8 @@ impl From<errors::Tag> for Tag {
             errors::Tag::ObjectStorageCannotGetObjectFile => Tag::ObjectStorageCannotGetObjectFile,
             errors::Tag::TerraformInvalidCredentials => Tag::TerraformInvalidCredentials,
             errors::Tag::TerraformServiceNotActivatedOptInRequired => Tag::TerraformServiceNotActivatedOptInRequired,
+            errors::Tag::TerraformWaitingTimeoutResource => Tag::TerraformWaitingTimeoutResource,
+            errors::Tag::TerraformAlreadyExistingResource => Tag::TerraformAlreadyExistingResource,
             errors::Tag::TerraformNotEnoughPermissions => Tag::TerraformNotEnoughPermissions,
         }
     }

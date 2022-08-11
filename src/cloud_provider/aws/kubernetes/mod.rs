@@ -787,36 +787,38 @@ fn create(
     );
 
     // upgrade cluster instead if required
-    match kubernetes.get_kubeconfig_file() {
-        Ok((path, _)) => match is_kubernetes_upgrade_required(
-            path,
-            kubernetes.version(),
-            kubernetes.cloud_provider().credentials_environment_variables(),
-            event_details.clone(),
-            kubernetes.logger(),
-        ) {
-            Ok(x) => {
-                if x.required_upgrade_on.is_some() {
-                    return kubernetes.upgrade_with_status(x);
+    if !kubernetes.context().is_first_cluster_deployment() {
+        match kubernetes.get_kubeconfig_file() {
+            Ok((path, _)) => match is_kubernetes_upgrade_required(
+                path,
+                kubernetes.version(),
+                kubernetes.cloud_provider().credentials_environment_variables(),
+                event_details.clone(),
+                kubernetes.logger(),
+            ) {
+                Ok(x) => {
+                    if x.required_upgrade_on.is_some() {
+                        return kubernetes.upgrade_with_status(x);
+                    }
+
+                    kubernetes_action = KubernetesClusterAction::Update(None);
+
+                    kubernetes.logger().log(EngineEvent::Info(
+                        event_details.clone(),
+                        EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
+                    ))
                 }
-
-                kubernetes_action = KubernetesClusterAction::Update(None);
-
-                kubernetes.logger().log(EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe("Kubernetes cluster upgrade not required".to_string()),
-                ))
-            }
-            Err(e) => {
-                kubernetes.logger().log(EngineEvent::Error(
-                    e,
-                    Some(EventMessage::new_from_safe(
-                        "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
-                    )),
-                ));
-            }
-        },
-        Err(_) => kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
+                Err(e) => {
+                    kubernetes.logger().log(EngineEvent::Error(
+                        e,
+                        Some(EventMessage::new_from_safe(
+                            "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
+                        )),
+                    ));
+                }
+            },
+            Err(_) => kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
+        };
     };
 
     // create AWS IAM roles

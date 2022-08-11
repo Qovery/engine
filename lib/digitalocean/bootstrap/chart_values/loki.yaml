@@ -22,6 +22,7 @@ config:
     enforce_metric_name: false            # qovery setting
     reject_old_samples: true              # qovery setting
     reject_old_samples_max_age: 168h      # qovery setting
+    max_concurrent_tail_requests: 100     # qovery setting (default 10)
   schema_config:
     configs:
       - from: 2020-05-15

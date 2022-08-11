@@ -274,7 +274,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_password();
+        let database_password = generate_password(CONTAINER);
 
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
@@ -424,6 +424,7 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
+#[ignore = "No database deployed in this version"]
 fn private_postgresql_v10_deploy_a_working_dev_environment() {
     test_postgresql_configuration("10", function_name!(), CONTAINER, false);
 }
@@ -431,7 +432,7 @@ fn private_postgresql_v10_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "No database deployed in this version"]
 fn public_postgresql_v10_deploy_a_working_dev_environment() {
     test_postgresql_configuration("10", function_name!(), CONTAINER, true);
 }
@@ -499,7 +500,7 @@ fn public_postgresql_v14_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-managed-services")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "No database deployed in this version"]
 fn private_postgresql_v10_deploy_a_working_prod_environment() {
     test_postgresql_configuration("10", function_name!(), MANAGED, false);
 }
@@ -507,7 +508,7 @@ fn private_postgresql_v10_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-scw-managed-services")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "No database deployed in this version"]
 fn public_postgresql_v10_deploy_a_working_prod_environment() {
     test_postgresql_configuration("10", function_name!(), MANAGED, true);
 }
@@ -607,6 +608,7 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
+#[ignore = "No database deployed in this version"]
 fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
     test_mongodb_configuration("3.6", function_name!(), CONTAINER, false);
 }
@@ -614,7 +616,7 @@ fn private_mongodb_v3_6_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "No database deployed in this version"]
 fn public_mongodb_v3_6_deploy_a_working_dev_environment() {
     test_mongodb_configuration("3.6", function_name!(), CONTAINER, true);
 }
@@ -710,6 +712,7 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
+#[ignore = "Only 1 deployed in this version"]
 fn private_mysql_v5_7_deploy_a_working_dev_environment() {
     test_mysql_configuration("5.7", function_name!(), CONTAINER, false);
 }
@@ -717,7 +720,7 @@ fn private_mysql_v5_7_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
-#[ignore]
+#[ignore = "Only 1 deployed in this version"]
 fn public_mysql_v5_7_deploy_a_working_dev_environment() {
     test_mysql_configuration("5.7", function_name!(), CONTAINER, true);
 }

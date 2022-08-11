@@ -13,16 +13,12 @@ resource "scaleway_k8s_pool" "kubernetes_cluster_workers_{{ loop.index }}" {
   size                = "{{ scw_ks_worker_node.min_nodes }}"
   min_size            = "{{ scw_ks_worker_node.min_nodes }}"
   max_size            = "{{ scw_ks_worker_node.max_nodes }}"
-  wait_for_pool_ready = true
+  wait_for_pool_ready = false
 
   timeouts {
-    create = "60m"
+    create = "30m"
     update = "60m"
   }
-
-  depends_on    = [
-    scaleway_k8s_cluster.kubernetes_cluster,
-  ]
 
   lifecycle {
     create_before_destroy = true

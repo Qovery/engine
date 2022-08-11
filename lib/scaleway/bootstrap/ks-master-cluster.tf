@@ -23,7 +23,7 @@ resource "scaleway_k8s_cluster" "kubernetes_cluster"  {
   }
 
   timeouts {
-    create = "60m"
+    create = "30m"
     update = "60m"
   }
 }
