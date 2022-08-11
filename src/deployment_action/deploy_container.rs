@@ -4,7 +4,6 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::docker::ContainerImage;
 use crate::container_registry::ecr::ECR;
-use crate::container_registry::ContainerRegistry;
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
@@ -34,7 +33,7 @@ where
         let loggers = get_loggers(self, *self.action());
 
         // We need to login to the registry to get access to the image
-        let url = get_url_with_credentials(&self.registry, target.container_registry);
+        let url = get_url_with_credentials(&self.registry);
         if url.password().is_some() {
             (loggers.send_progress)(format!(
                 "🔓 Login to registry {} as user {}",
@@ -167,11 +166,7 @@ where
     }
 }
 
-fn get_url_with_credentials(registry: &Registry, default_container_registry: &dyn ContainerRegistry) -> Url {
-    if registry.id() == default_container_registry.long_id() {
-        return default_container_registry.registry_info().endpoint.clone();
-    }
-
+fn get_url_with_credentials(registry: &Registry) -> Url {
     let url = match registry {
         Registry::DockerHub { url, credentials, .. } => {
             let mut url = url.clone();

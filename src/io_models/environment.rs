@@ -1,6 +1,6 @@
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::CloudProvider;
-use crate::container_registry::ContainerRegistryInfo;
+use crate::container_registry::ContainerRegistry;
 use crate::io_models::application::Application;
 use crate::io_models::container::Container;
 use crate::io_models::context::Context;
@@ -46,12 +46,17 @@ impl EnvironmentRequest {
         &self,
         context: &Context,
         cloud_provider: &dyn CloudProvider,
-        container_registry: &ContainerRegistryInfo,
+        container_registry: &dyn ContainerRegistry,
         logger: Box<dyn Logger>,
     ) -> Result<Environment, DomainError> {
         let mut applications = Vec::with_capacity(self.applications.len());
         for app in &self.applications {
-            match app.to_application_domain(context, app.to_build(container_registry), cloud_provider, logger.clone()) {
+            match app.to_application_domain(
+                context,
+                app.to_build(container_registry.registry_info()),
+                cloud_provider,
+                logger.clone(),
+            ) {
                 Ok(app) => applications.push(app),
                 Err(err) => {
                     return Err(DomainError::ApplicationError(err));
@@ -63,7 +68,7 @@ impl EnvironmentRequest {
         for container in &self.containers {
             match container
                 .clone()
-                .to_container_domain(context, cloud_provider, logger.clone())
+                .to_container_domain(context, cloud_provider, container_registry, logger.clone())
             {
                 Ok(app) => containers.push(app),
                 Err(err) => {

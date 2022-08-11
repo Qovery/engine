@@ -49,7 +49,7 @@ impl Infrastructure for EnvironmentRequest {
             .to_environment_domain(
                 engine_config.context(),
                 engine_config.cloud_provider(),
-                engine_config.container_registry().registry_info(),
+                engine_config.container_registry(),
                 logger,
             )
             .unwrap();
@@ -78,7 +78,7 @@ impl Infrastructure for EnvironmentRequest {
             .to_environment_domain(
                 engine_config.context(),
                 engine_config.cloud_provider(),
-                engine_config.container_registry().registry_info(),
+                engine_config.container_registry(),
                 logger,
             )
             .unwrap();
@@ -106,7 +106,7 @@ impl Infrastructure for EnvironmentRequest {
             .to_environment_domain(
                 engine_config.context(),
                 engine_config.cloud_provider(),
-                engine_config.container_registry().registry_info(),
+                engine_config.container_registry(),
                 logger,
             )
             .unwrap();
@@ -127,7 +127,7 @@ impl Infrastructure for EnvironmentRequest {
             .to_environment_domain(
                 engine_config.context(),
                 engine_config.cloud_provider(),
-                engine_config.container_registry().registry_info(),
+                engine_config.container_registry(),
                 logger,
             )
             .unwrap();
