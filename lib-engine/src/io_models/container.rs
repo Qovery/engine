@@ -71,7 +71,10 @@ impl Registry {
         }
     }
 
-    pub fn set_url(&mut self, new_url: Url) {
+    pub fn set_url(&mut self, mut new_url: Url) {
+        let _ = new_url.set_username("");
+        let _ = new_url.set_password(None);
+
         match self {
             Registry::DockerHub { ref mut url, .. } => *url = new_url,
             Registry::DoCr { ref mut url, .. } => *url = new_url,
