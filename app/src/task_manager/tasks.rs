@@ -280,7 +280,7 @@ impl Task for InfrastructureTask {
                     self.request
                         .cloud_provider
                         .kubernetes
-                        .cluster_advanced_settings
+                        .advanced_settings
                         .pleco_resources_ttl,
                 ) {
                     Ok(_) => {
@@ -524,7 +524,7 @@ impl Task for EnvironmentTask {
                     self.request
                         .cloud_provider
                         .kubernetes
-                        .cluster_advanced_settings
+                        .advanced_settings
                         .pleco_resources_ttl,
                 ) {
                     Ok(_) => {
