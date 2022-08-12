@@ -277,18 +277,13 @@ impl Task for InfrastructureTask {
                     self.request.archive.as_ref(),
                     file.as_str(),
                     AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
-                    self.request
-                        .cloud_provider
-                        .kubernetes
-                        .advanced_settings
-                        .pleco_resources_ttl,
                 ) {
                     Ok(_) => {
                         let _ = fs::remove_file(file).map_err(|err| error!("Cannot delete file {}", err));
                     }
-                    Err(e) => error!("Error while uploading archive {}", e),
+                    Err(e) => error!("Error while uploading archive {:?}", e),
                 },
-                Err(err) => error!("{}", err),
+                Err(err) => error!("{:?}", err),
             };
         };
 
@@ -416,7 +411,7 @@ impl Task for EnvironmentTask {
                     self,
                     &self.request,
                     self.action_context(ProgressLevel::Error),
-                    Some(format!("failed to create engine {}", err)),
+                    Some(format!("failed to create engine {:?}", err)),
                     true,
                     true,
                     false,
@@ -443,7 +438,7 @@ impl Task for EnvironmentTask {
                         self,
                         &self.request,
                         self.action_context(ProgressLevel::Error),
-                        Some(format!("failed to create engine transaction {}", err)),
+                        Some(format!("failed to create engine transaction {:?}", err)),
                         true,
                         true,
                         false,
@@ -521,18 +516,13 @@ impl Task for EnvironmentTask {
                     self.request.archive.as_ref(),
                     file.as_str(),
                     AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
-                    self.request
-                        .cloud_provider
-                        .kubernetes
-                        .advanced_settings
-                        .pleco_resources_ttl,
                 ) {
                     Ok(_) => {
                         let _ = fs::remove_file(file).map_err(|err| error!("Cannot remove file {}", err));
                     }
-                    Err(e) => error!("Error while uploading archive {}", e),
+                    Err(e) => error!("Error while uploading archive {:?}", e),
                 },
-                Err(err) => error!("{}", err),
+                Err(err) => error!("{:?}", err),
             };
         };
 
@@ -590,7 +580,7 @@ where
     fn send(&self, status: Status) {
         match self.sender.send(status) {
             Ok(_) => {}
-            Err(err) => error!("{}", err),
+            Err(err) => error!("{:?}", err),
         };
     }
 
@@ -808,7 +798,6 @@ fn upload_s3_file(
     archive: Option<&Archive>,
     file_path: &str,
     region: AwsRegion,
-    bucket_ttl: i32,
 ) -> Result<(), ObjectStorageError> {
     let archive = match archive {
         Some(archive) => archive,
@@ -830,10 +819,6 @@ fn upload_s3_file(
     );
 
     // I am using this s3 object directly to avoid reinventing the wheel.
-    let ttl = match bucket_ttl {
-        0 => None,
-        _ => Some(bucket_ttl),
-    };
     let s3 = qovery_engine::object_storage::s3::S3::new(
         context.clone(),
         "archive-123abc".to_string(),
@@ -842,7 +827,7 @@ fn upload_s3_file(
         archive.secret_access_key.to_string(),
         region,
         true,
-        ttl,
+        context.resource_expiration_in_seconds(),
     );
 
     match s3.put(archive.bucket_name.as_str(), object_key.as_str(), file_path) {
@@ -851,7 +836,7 @@ fn upload_s3_file(
             Ok(())
         }
         Err(err) => {
-            warn!("Error while pushing archive to s3, {}", err);
+            warn!("Error while pushing archive to s3, {:?}", err);
             Err(err)
         }
     }
