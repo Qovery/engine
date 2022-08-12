@@ -285,11 +285,7 @@ impl ContainerRegistry for ScalewayCR {
         Ok(())
     }
 
-    fn create_repository(
-        &self,
-        name: &str,
-        _image_retention_time_in_seconds: u32,
-    ) -> Result<(), ContainerRegistryError> {
+    fn create_repository(&self, name: &str) -> Result<(), ContainerRegistryError> {
         let _ = self.get_or_create_registry_namespace(name)?;
         Ok(())
     }

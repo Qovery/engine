@@ -87,6 +87,7 @@ pub fn context(organization_id: &str, cluster_id: &str) -> Context {
         disable_pleco: Some(true),
         is_first_cluster_deployment: None,
     };
+
     let enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
 
     Context::new(
