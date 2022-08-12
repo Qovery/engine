@@ -3,7 +3,7 @@ use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::kubernetes::{send_progress_on_long_task, Kind, Kubernetes, KubernetesUpgradeStatus};
-use crate::cloud_provider::models::{InstanceEc2, NodeGroups};
+use crate::cloud_provider::models::{ClusterAdvancedSettingsModel, InstanceEc2, NodeGroups};
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
 use crate::dns_provider::DnsProvider;
@@ -38,13 +38,14 @@ pub struct EC2 {
     instance: InstanceEc2,
     listeners: Listeners,
     logger: Box<dyn Logger>,
+    advanced_settings: ClusterAdvancedSettingsModel,
 }
 
 impl EC2 {
     pub fn new(
         context: Context,
         id: &str,
-        long_id: uuid::Uuid,
+        long_id: Uuid,
         name: &str,
         version: &str,
         region: AwsRegion,
@@ -54,12 +55,18 @@ impl EC2 {
         options: Options,
         instance: InstanceEc2,
         logger: Box<dyn Logger>,
+        advanced_settings: ClusterAdvancedSettingsModel,
     ) -> Result<Self, EngineError> {
         let event_details = kubernetes::event_details(&**cloud_provider, id, name, &region, &context);
         let template_directory = format!("{}/aws-ec2/bootstrap", context.lib_root_dir());
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
-        let s3 = kubernetes::s3(&context, &region, &**cloud_provider);
+        let s3 = kubernetes::s3(
+            &context,
+            &region,
+            &**cloud_provider,
+            advanced_settings.registry_image_retention_time,
+        );
         if let Err(e) = AwsInstancesType::from_str(instance.instance_type.as_str()) {
             let err = EngineError::new_unsupported_instance_type(event_details, instance.instance_type.as_str(), e);
             logger.log(EngineEvent::Error(err.clone(), None));
@@ -85,6 +92,7 @@ impl EC2 {
             template_directory,
             logger,
             listeners,
+            advanced_settings,
         })
     }
 
@@ -335,5 +343,9 @@ impl Kubernetes for EC2 {
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || kubernetes::delete_error(self))
+    }
+
+    fn get_advanced_settings(&self) -> ClusterAdvancedSettingsModel {
+        self.advanced_settings.clone()
     }
 }

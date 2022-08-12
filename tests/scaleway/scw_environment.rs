@@ -923,7 +923,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
             .to_environment_domain(
                 engine_config.context(),
                 engine_config.cloud_provider(),
-                engine_config.container_registry().registry_info(),
+                engine_config.container_registry(),
                 logger.clone(),
             )
             .unwrap();
@@ -1010,6 +1010,7 @@ fn deploy_container_with_no_router_on_scw() {
             action: Action::Create,
             registry: Registry::DockerHub {
                 url: Url::parse("https://docker.io").unwrap(),
+                long_id: Uuid::new_v4(),
                 credentials: None,
             },
             image: "debian".to_string(),
@@ -1101,6 +1102,7 @@ fn deploy_container_with_router_on_scw() {
             action: Action::Create,
             registry: Registry::DockerHub {
                 url: Url::parse("https://docker.io").unwrap(),
+                long_id: Uuid::new_v4(),
                 credentials: None,
             },
             image: "httpd".to_string(),

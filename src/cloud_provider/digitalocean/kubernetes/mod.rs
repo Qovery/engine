@@ -22,7 +22,7 @@ use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
     KubernetesUpgradeStatus, ProviderOptions,
 };
-use crate::cloud_provider::models::NodeGroups;
+use crate::cloud_provider::models::{ClusterAdvancedSettingsModel, NodeGroups};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
@@ -109,13 +109,14 @@ pub struct DOKS {
     options: DoksOptions,
     listeners: Listeners,
     logger: Box<dyn Logger>,
+    advanced_settings: ClusterAdvancedSettingsModel,
 }
 
 impl DOKS {
     pub fn new(
         context: Context,
         id: String,
-        long_id: uuid::Uuid,
+        long_id: Uuid,
         name: String,
         version: String,
         region: DoRegion,
@@ -124,6 +125,7 @@ impl DOKS {
         nodes_groups: Vec<NodeGroups>,
         options: DoksOptions,
         logger: Box<dyn Logger>,
+        advanced_settings: ClusterAdvancedSettingsModel,
     ) -> Result<Self, EngineError> {
         let template_directory = format!("{}/digitalocean/bootstrap", context.lib_root_dir());
 
@@ -175,6 +177,7 @@ impl DOKS {
             template_directory,
             logger,
             listeners,
+            advanced_settings,
         })
     }
 
@@ -301,9 +304,6 @@ impl DOKS {
             "metrics_history_enabled",
             &self.context.is_feature_enabled(&Features::MetricsHistory),
         );
-        if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
-        }
 
         // grafana credentials
         context.insert("grafana_admin_user", self.options.grafana_admin_user.as_str());
@@ -1562,5 +1562,9 @@ impl Kubernetes for DOKS {
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
+    }
+
+    fn get_advanced_settings(&self) -> ClusterAdvancedSettingsModel {
+        self.advanced_settings.clone()
     }
 }

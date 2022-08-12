@@ -1,5 +1,6 @@
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
+use crate::container_registry::ContainerRegistry;
 use crate::io_models::application::{to_environment_variable, AdvancedSettingsProbeType, Port, Storage};
 use crate::io_models::context::Context;
 use crate::io_models::Action;
@@ -25,16 +26,19 @@ pub struct Credentials {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum Registry {
     DockerHub {
+        long_id: Uuid,
         url: Url,
         credentials: Option<Credentials>,
     },
 
     DoCr {
+        long_id: Uuid,
         url: Url,
         token: String,
     },
 
     ScalewayCr {
+        long_id: Uuid,
         url: Url,
         scaleway_access_key: String,
         scaleway_secret_key: String,
@@ -42,6 +46,7 @@ pub enum Registry {
 
     // AWS private ecr
     PrivateEcr {
+        long_id: Uuid,
         url: Url,
         region: String,
         access_key_id: String,
@@ -50,6 +55,7 @@ pub enum Registry {
 
     // AWS public ecr
     PublicEcr {
+        long_id: Uuid,
         url: Url,
     },
 }
@@ -62,6 +68,29 @@ impl Registry {
             Registry::ScalewayCr { url, .. } => url,
             Registry::PrivateEcr { url, .. } => url,
             Registry::PublicEcr { url, .. } => url,
+        }
+    }
+
+    pub fn set_url(&mut self, mut new_url: Url) {
+        let _ = new_url.set_username("");
+        let _ = new_url.set_password(None);
+
+        match self {
+            Registry::DockerHub { ref mut url, .. } => *url = new_url,
+            Registry::DoCr { ref mut url, .. } => *url = new_url,
+            Registry::ScalewayCr { ref mut url, .. } => *url = new_url,
+            Registry::PrivateEcr { ref mut url, .. } => *url = new_url,
+            Registry::PublicEcr { ref mut url, .. } => *url = new_url,
+        }
+    }
+
+    pub fn id(&self) -> &Uuid {
+        match self {
+            Registry::DockerHub { long_id, .. } => long_id,
+            Registry::DoCr { long_id, .. } => long_id,
+            Registry::ScalewayCr { long_id, .. } => long_id,
+            Registry::PrivateEcr { long_id, .. } => long_id,
+            Registry::PublicEcr { long_id, .. } => long_id,
         }
     }
 }
@@ -177,13 +206,21 @@ pub struct Container {
 
 impl Container {
     pub fn to_container_domain(
-        self,
+        mut self,
         context: &Context,
         cloud_provider: &dyn CloudProvider,
+        default_container_registry: &dyn ContainerRegistry,
         logger: Box<dyn Logger>,
     ) -> Result<Box<dyn ContainerService>, ContainerError> {
         let environment_variables = to_environment_variable(&self.environment_vars);
         let listeners = cloud_provider.listeners().clone();
+
+        // Default registry is a bit special as the core does not knows its url/credentials as it is retrieved
+        // by us with some tags
+        if self.registry.id() == default_container_registry.long_id() {
+            self.registry
+                .set_url(default_container_registry.registry_info().endpoint.clone());
+        }
 
         let service: Box<dyn ContainerService> = match cloud_provider.kind() {
             CPKind::Aws => {

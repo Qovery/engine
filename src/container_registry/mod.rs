@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use url::Url;
+use uuid::Uuid;
 
 use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
@@ -17,6 +18,7 @@ pub trait ContainerRegistry {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
+    fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
@@ -33,7 +35,11 @@ pub trait ContainerRegistry {
     // i.e: docker.io/erebe or docker.io/qovery
     // All providers requires action for that
     // The convention for us is that we create one per application
-    fn create_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError>;
+    fn create_repository(
+        &self,
+        repository_name: &str,
+        image_retention_time_in_seconds: u32,
+    ) -> Result<(), ContainerRegistryError>;
     fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError>;
 
     fn delete_image(&self, image_name: &Image) -> Result<(), ContainerRegistryError>;

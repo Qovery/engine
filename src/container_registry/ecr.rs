@@ -26,10 +26,12 @@ use retry::Error::Operation;
 use retry::OperationResult;
 use serde_json::json;
 use url::Url;
+use uuid::Uuid;
 
 pub struct ECR {
     context: Context,
     id: String,
+    long_id: Uuid,
     name: String,
     access_key_id: String,
     secret_access_key: String,
@@ -43,6 +45,7 @@ impl ECR {
     pub fn new(
         context: Context,
         id: &str,
+        long_id: Uuid,
         name: &str,
         access_key_id: &str,
         secret_access_key: &str,
@@ -53,6 +56,7 @@ impl ECR {
         let mut cr = ECR {
             context,
             id: id.to_string(),
+            long_id,
             name: name.to_string(),
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
@@ -190,7 +194,11 @@ impl ECR {
         }
     }
 
-    fn create_repository(&self, repository_name: &str) -> Result<Repository, ContainerRegistryError> {
+    fn create_repository(
+        &self,
+        repository_name: &str,
+        image_retention_time_in_seconds: u32,
+    ) -> Result<Repository, ContainerRegistryError> {
         let container_registry_request = DescribeRepositoriesRequest {
             repository_names: Some(vec![repository_name.to_string()]),
             ..Default::default()
@@ -252,9 +260,9 @@ impl ECR {
         };
 
         // apply retention policy
-        let retention_policy_in_days = match self.context.is_test_cluster() {
-            true => 1,
-            false => 365,
+        let retention_policy_in_days = match image_retention_time_in_seconds / 86400 {
+            0..=1 => 1,
+            _ => image_retention_time_in_seconds / 86400,
         };
         let lifecycle_policy_text = json!({
           "rules": [
@@ -290,7 +298,11 @@ impl ECR {
         }
     }
 
-    fn get_or_create_repository(&self, repository_name: &str) -> Result<Repository, ContainerRegistryError> {
+    fn get_or_create_repository(
+        &self,
+        repository_name: &str,
+        image_retention_time_in_seconds: u32,
+    ) -> Result<Repository, ContainerRegistryError> {
         self.log_info(format!("🗂️ Provisioning container repository {}", repository_name));
 
         // check if the repository already exists
@@ -299,7 +311,7 @@ impl ECR {
             return Ok(repo);
         }
 
-        self.create_repository(repository_name)
+        self.create_repository(repository_name, image_retention_time_in_seconds)
     }
 
     pub fn get_credentials(ecr_client: &EcrClient) -> Result<ECRCredentials, ContainerRegistryError> {
@@ -358,6 +370,10 @@ impl ContainerRegistry for ECR {
         self.id.as_str()
     }
 
+    fn long_id(&self) -> &Uuid {
+        &self.long_id
+    }
+
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -372,8 +388,12 @@ impl ContainerRegistry for ECR {
         Ok(())
     }
 
-    fn create_repository(&self, name: &str) -> Result<(), ContainerRegistryError> {
-        let _ = self.get_or_create_repository(name)?;
+    fn create_repository(
+        &self,
+        name: &str,
+        image_retention_time_in_seconds: u32,
+    ) -> Result<(), ContainerRegistryError> {
+        let _ = self.get_or_create_repository(name, image_retention_time_in_seconds)?;
         Ok(())
     }
 

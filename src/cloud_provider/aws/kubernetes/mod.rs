@@ -211,7 +211,11 @@ fn aws_zones(
     Ok(aws_zones)
 }
 
-fn s3(context: &Context, region: &AwsRegion, cloud_provider: &dyn CloudProvider) -> S3 {
+fn s3(context: &Context, region: &AwsRegion, cloud_provider: &dyn CloudProvider, ttl: u32) -> S3 {
+    let bucket_ttl = match ttl {
+        0 => None,
+        _ => Some(ttl),
+    };
     S3::new(
         context.clone(),
         "s3-temp-id".to_string(),
@@ -220,7 +224,7 @@ fn s3(context: &Context, region: &AwsRegion, cloud_provider: &dyn CloudProvider)
         cloud_provider.secret_access_key(),
         region.clone(),
         true,
-        context.resource_expiration_in_seconds(),
+        bucket_ttl,
     )
 }
 
@@ -411,10 +415,6 @@ fn tera_context(
 
     context.insert("test_cluster", &kubernetes.context().is_test_cluster());
 
-    if let Some(resource_expiration_in_seconds) = kubernetes.context().resource_expiration_in_seconds() {
-        context.insert("resource_expiration_in_seconds", &resource_expiration_in_seconds);
-    }
-
     context.insert("force_upgrade", &kubernetes.context().requires_forced_upgrade());
 
     // Qovery features
@@ -592,6 +592,16 @@ fn tera_context(
     let user_ssh_key: Option<&str> = options.user_ssh_keys.get(0).map(|x| x.as_str());
     context.insert("user_ssh_key", user_ssh_key.unwrap_or_default());
     context.insert("discord_api_key", options.discord_api_key.as_str());
+
+    // Advanced settings
+    context.insert(
+        "registry_image_retention_time",
+        &kubernetes.get_advanced_settings().registry_image_retention_time,
+    );
+    context.insert(
+        "resource_expiration_in_seconds",
+        &kubernetes.get_advanced_settings().pleco_resources_ttl,
+    );
 
     Ok(context)
 }
@@ -1040,6 +1050,13 @@ fn create(
         .map(|x| (x.0.to_string(), x.1.to_string()))
         .collect();
 
+    if let Err(e) = kubectl_are_qovery_infra_pods_executed(kubeconfig_path, &credentials_environment_variables) {
+        kubernetes.logger().log(EngineEvent::Warning(
+            event_details.clone(),
+            EventMessage::new("Didn't manage to restart all paused pods".to_string(), Some(e.to_string())),
+        ));
+    }
+
     // send cluster info with kubeconfig
     // create vault connection (Vault connectivity should not be on the critical deployment path,
     // if it temporarily fails, just ignore it, data will be pushed on the next sync)
@@ -1148,13 +1165,6 @@ fn create(
             ));
         }
     };
-
-    if let Err(e) = kubectl_are_qovery_infra_pods_executed(kubeconfig_path, &credentials_environment_variables) {
-        kubernetes.logger().log(EngineEvent::Warning(
-            event_details.clone(),
-            EventMessage::new("Didn't manage to restart all paused pods".to_string(), Some(e.to_string())),
-        ));
-    }
 
     deploy_charts_levels(
         kubeconfig_path,

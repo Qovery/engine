@@ -185,7 +185,7 @@ variable "snapshot_identifier" {
 }
 {% endif %}
 
-{%- if resource_expiration_in_seconds is defined %}
+{%- if resource_expiration_in_seconds > 0 %}
 # Pleco ttl
 variable "resource_expiration_in_seconds" {
   description = "Resource expiration in seconds"

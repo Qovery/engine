@@ -523,6 +523,16 @@ pub fn eks_aws_helm_charts(
                     key: "grafana.serviceMonitor.enabled".to_string(),
                     value: "false".to_string(),
                 },
+                ChartSetValue {
+                    key: "kubelet.serviceMonitor.resource".to_string(),
+                    value: "true".to_string(),
+                },
+                ChartSetValue {
+                    key: "kubelet.serviceMonitor.resourcePath".to_string(),
+                    value: "/metrics/resource".to_string(),
+                },
+
+
                 // Limits prometheus-node-exporter
                 ChartSetValue {
                     key: "prometheus-node-exporter.resources.limits.cpu".to_string(),

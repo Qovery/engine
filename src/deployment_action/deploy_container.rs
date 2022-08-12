@@ -59,7 +59,10 @@ where
         let registry_info = target.container_registry.registry_info();
         target
             .container_registry
-            .create_repository(Self::QOVERY_MIRROR_REPOSITORY_NAME)
+            .create_repository(
+                Self::QOVERY_MIRROR_REPOSITORY_NAME,
+                target.kubernetes.get_advanced_settings().registry_image_retention_time,
+            )
             .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
 
         let source_image = ContainerImage::new(self.registry.url().clone(), self.image.clone(), vec![self.tag.clone()]);
@@ -78,7 +81,7 @@ where
             let err = EngineError::new_docker_error(event_details, err);
             let user_err = EngineError::new_engine_error(
                 err.clone(),
-                format!("❌ Failed to mirror image {}", self.image_with_tag()),
+                format!("❌ Failed to mirror image {}: {}", self.image_with_tag(), err),
                 None,
             );
             (loggers.send_error)(user_err);
@@ -168,7 +171,7 @@ where
 
 fn get_url_with_credentials(registry: &Registry) -> Url {
     let url = match registry {
-        Registry::DockerHub { url, credentials } => {
+        Registry::DockerHub { url, credentials, .. } => {
             let mut url = url.clone();
             if let Some(credentials) = credentials {
                 let _ = url.set_username(&credentials.login);
@@ -176,7 +179,7 @@ fn get_url_with_credentials(registry: &Registry) -> Url {
             }
             url
         }
-        Registry::DoCr { url, token } => {
+        Registry::DoCr { url, token, .. } => {
             let mut url = url.clone();
             let _ = url.set_username(token);
             let _ = url.set_password(Some(token));
@@ -186,6 +189,7 @@ fn get_url_with_credentials(registry: &Registry) -> Url {
             url,
             scaleway_access_key: _,
             scaleway_secret_key,
+            ..
         } => {
             let mut url = url.clone();
             let _ = url.set_username("nologin");
@@ -197,6 +201,7 @@ fn get_url_with_credentials(registry: &Registry) -> Url {
             region,
             access_key_id,
             secret_access_key,
+            ..
         } => {
             let creds = StaticProvider::new(access_key_id.to_string(), secret_access_key.to_string(), None, None);
             let region = Region::from_str(region).unwrap_or_default();
@@ -208,7 +213,7 @@ fn get_url_with_credentials(registry: &Registry) -> Url {
             let _ = url.set_password(Some(&credentials.password));
             url
         }
-        Registry::PublicEcr { url } => url.clone(),
+        Registry::PublicEcr { url, .. } => url.clone(),
     };
 
     url

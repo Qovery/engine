@@ -40,6 +40,7 @@ fn test_get_registry_namespace() {
         let container_registry = ScalewayCR::new(
             context.clone(),
             "",
+            Uuid::new_v4(),
             registry_name.as_str(),
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
@@ -88,6 +89,7 @@ fn test_create_registry_namespace() {
         let container_registry = ScalewayCR::new(
             context.clone(),
             "",
+            Uuid::new_v4(),
             registry_name.as_str(),
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
@@ -133,6 +135,7 @@ fn test_delete_registry_namespace() {
         let container_registry = ScalewayCR::new(
             context.clone(),
             "",
+            Uuid::new_v4(),
             registry_name.as_str(),
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),
@@ -172,6 +175,7 @@ fn test_get_or_create_registry_namespace() {
         let container_registry = ScalewayCR::new(
             context.clone(),
             "",
+            Uuid::new_v4(),
             registry_name.as_str(),
             scw_secret_key.as_str(),
             scw_default_project_id.as_str(),

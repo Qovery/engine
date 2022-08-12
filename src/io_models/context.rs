@@ -128,8 +128,8 @@ impl Context {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Metadata {
     pub dry_run_deploy: Option<bool>,
-    pub resource_expiration_in_seconds: Option<u32>,
     pub forced_upgrade: Option<bool>,
+    pub resource_expiration_in_seconds: Option<u32>,
     pub disable_pleco: Option<bool>,
     pub is_first_cluster_deployment: Option<bool>,
 }
