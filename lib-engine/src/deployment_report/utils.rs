@@ -102,7 +102,7 @@ pub fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec
                 type_: svc_type.to_string(),
                 state: DeploymentState::Terminating,
                 message: None,
-                events: get_last_events_for(events.iter(), svc_uid, 2)
+                events: get_last_events_for(events.iter(), svc_uid, DEFAULT_MAX_EVENTS)
                     .flat_map(to_event_context)
                     .collect(),
             });
@@ -131,7 +131,7 @@ pub fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec
                         type_: svc_type.to_string(),
                         state: DeploymentState::Starting,
                         message: Some("waiting to be assigned an Ip".to_string()),
-                        events: get_last_events_for(events.iter(), svc_uid, 2)
+                        events: get_last_events_for(events.iter(), svc_uid, DEFAULT_MAX_EVENTS)
                             .flat_map(to_event_context)
                             .collect(),
                     });
@@ -159,7 +159,7 @@ pub fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec
             type_: "kubernetes load balancer".to_string(),
             state: DeploymentState::Starting,
             message: Some("waiting to be assigned an Ip".to_string()),
-            events: get_last_events_for(events.iter(), svc_uid, 2)
+            events: get_last_events_for(events.iter(), svc_uid, DEFAULT_MAX_EVENTS)
                 .flat_map(to_event_context)
                 .collect(),
         });
@@ -203,7 +203,7 @@ pub fn to_pods_render_context(
                 state: DeploymentState::Failing,
                 message: Some(error_reason.to_string()),
                 restart_count: pod.restart_count(),
-                events: get_last_events_for(events.iter(), pod_uid, 2)
+                events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS)
                     .flat_map(to_event_context)
                     .collect(),
             });
@@ -216,7 +216,7 @@ pub fn to_pods_render_context(
                 state: DeploymentState::Starting,
                 message: None,
                 restart_count: pod.restart_count(),
-                events: get_last_events_for(events.iter(), pod_uid, 2)
+                events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS)
                     .flat_map(to_event_context)
                     .collect(),
             });
@@ -255,7 +255,7 @@ pub fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -
             pvcs_context.push(PvcRenderContext {
                 name: pvc_name.to_string(),
                 state: DeploymentState::Failing,
-                events: get_last_events_for(events.iter(), pvc_uid, 2)
+                events: get_last_events_for(events.iter(), pvc_uid, DEFAULT_MAX_EVENTS)
                     .flat_map(to_event_context)
                     .collect(),
             });
@@ -266,7 +266,7 @@ pub fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -
             pvcs_context.push(PvcRenderContext {
                 name: pvc_name.to_string(),
                 state: DeploymentState::Starting,
-                events: get_last_events_for(events.iter(), pvc_uid, 2)
+                events: get_last_events_for(events.iter(), pvc_uid, DEFAULT_MAX_EVENTS)
                     .flat_map(to_event_context)
                     .collect(),
             });
@@ -385,6 +385,8 @@ impl QPodExt for Pod {
         }
     }
 }
+
+const DEFAULT_MAX_EVENTS: usize = 3;
 
 pub fn get_last_events_for<'a>(
     events: impl Iterator<Item = &'a Event>,
