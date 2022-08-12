@@ -81,7 +81,10 @@ pub fn get_cluster_test_kubernetes<'a>(
                     options,
                     AWS::kubernetes_nodes(min_nodes, max_nodes),
                     logger,
-                    ClusterAdvancedSettingsModel::default(),
+                    ClusterAdvancedSettingsModel {
+                        pleco_resources_ttl: 14400,
+                        ..Default::default()
+                    },
                 )
                 .unwrap(),
             )
@@ -108,7 +111,10 @@ pub fn get_cluster_test_kubernetes<'a>(
                     options,
                     ec2_kubernetes_instance(),
                     logger,
-                    ClusterAdvancedSettingsModel::default(),
+                    ClusterAdvancedSettingsModel {
+                        pleco_resources_ttl: 14400,
+                        ..Default::default()
+                    },
                 )
                 .unwrap(),
             )
@@ -126,7 +132,10 @@ pub fn get_cluster_test_kubernetes<'a>(
                 DO::kubernetes_nodes(min_nodes, max_nodes),
                 DO::kubernetes_cluster_options(secrets, Option::from(cluster_name), EngineLocation::ClientSide),
                 logger,
-                ClusterAdvancedSettingsModel::default(),
+                ClusterAdvancedSettingsModel {
+                    pleco_resources_ttl: 14400,
+                    ..Default::default()
+                },
             )
             .unwrap(),
         ),
@@ -143,7 +152,10 @@ pub fn get_cluster_test_kubernetes<'a>(
                 Scaleway::kubernetes_nodes(min_nodes, max_nodes),
                 Scaleway::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
                 logger,
-                ClusterAdvancedSettingsModel::default(),
+                ClusterAdvancedSettingsModel {
+                    pleco_resources_ttl: 14400,
+                    ..Default::default()
+                },
             )
             .unwrap(),
         ),
@@ -445,7 +457,10 @@ pub fn get_environment_test_kubernetes(
                     options,
                     AWS::kubernetes_nodes(min_nodes, max_nodes),
                     logger,
-                    ClusterAdvancedSettingsModel::default(),
+                    ClusterAdvancedSettingsModel {
+                        pleco_resources_ttl: 14400,
+                        ..Default::default()
+                    },
                 )
                 .unwrap(),
             )
@@ -471,7 +486,10 @@ pub fn get_environment_test_kubernetes(
                     options,
                     ec2_kubernetes_instance(),
                     logger,
-                    ClusterAdvancedSettingsModel::default(),
+                    ClusterAdvancedSettingsModel {
+                        pleco_resources_ttl: 14400,
+                        ..Default::default()
+                    },
                 )
                 .unwrap(),
             )
@@ -495,7 +513,10 @@ pub fn get_environment_test_kubernetes(
                         EngineLocation::ClientSide,
                     ),
                     logger,
-                    ClusterAdvancedSettingsModel::default(),
+                    ClusterAdvancedSettingsModel {
+                        pleco_resources_ttl: 14400,
+                        ..Default::default()
+                    },
                 )
                 .unwrap(),
             )
@@ -515,7 +536,10 @@ pub fn get_environment_test_kubernetes(
                     Scaleway::kubernetes_nodes(min_nodes, max_nodes),
                     Scaleway::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
                     logger,
-                    ClusterAdvancedSettingsModel::default(),
+                    ClusterAdvancedSettingsModel {
+                        pleco_resources_ttl: 14400,
+                        ..Default::default()
+                    },
                 )
                 .unwrap(),
             )

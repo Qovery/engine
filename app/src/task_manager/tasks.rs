@@ -808,7 +808,7 @@ fn upload_s3_file(
     archive: Option<&Archive>,
     file_path: &str,
     region: AwsRegion,
-    bucket_ttl: u32,
+    bucket_ttl: i32,
 ) -> Result<(), ObjectStorageError> {
     let archive = match archive {
         Some(archive) => archive,

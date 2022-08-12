@@ -211,7 +211,7 @@ fn aws_zones(
     Ok(aws_zones)
 }
 
-fn s3(context: &Context, region: &AwsRegion, cloud_provider: &dyn CloudProvider, ttl: u32) -> S3 {
+fn s3(context: &Context, region: &AwsRegion, cloud_provider: &dyn CloudProvider, ttl: i32) -> S3 {
     let bucket_ttl = match ttl {
         0 => None,
         _ => Some(ttl),

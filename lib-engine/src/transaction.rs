@@ -185,7 +185,10 @@ impl<'a> Transaction<'a> {
                 .container_registry()
                 .create_repository(
                     app.get_build().image.repository_name(),
-                    self.engine.kubernetes().get_advanced_settings().pleco_resources_ttl,
+                    self.engine
+                        .kubernetes()
+                        .get_advanced_settings()
+                        .registry_image_retention_time,
                 )
                 .map_err(cr_to_engine_error)?;
 

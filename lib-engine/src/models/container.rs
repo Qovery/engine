@@ -424,5 +424,5 @@ pub(super) struct ContainerTeraContext {
     pub(super) service: ServiceTeraContext,
     pub(super) registry: Option<RegistryTeraContext>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
-    pub(super) resource_expiration_in_seconds: Option<u32>,
+    pub(super) resource_expiration_in_seconds: Option<i32>,
 }

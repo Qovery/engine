@@ -118,7 +118,7 @@ pub enum KubernetesClusterAction {
 pub struct ClusterAdvancedSettingsModel {
     pub load_balancer_size: String,
     pub registry_image_retention_time: u32,
-    pub pleco_resources_ttl: u32,
+    pub pleco_resources_ttl: i32,
 }
 
 impl From<ClusterAdvancedSettings> for ClusterAdvancedSettingsModel {
@@ -136,7 +136,7 @@ impl Default for ClusterAdvancedSettingsModel {
         ClusterAdvancedSettingsModel {
             load_balancer_size: "lb-s".to_string(),
             registry_image_retention_time: 86400,
-            pleco_resources_ttl: 14400,
+            pleco_resources_ttl: -1,
         }
     }
 }
