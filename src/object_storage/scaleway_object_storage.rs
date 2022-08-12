@@ -33,7 +33,7 @@ pub struct ScalewayOS {
     zone: ScwZone,
     bucket_delete_strategy: BucketDeleteStrategy,
     bucket_versioning_activated: bool,
-    bucket_ttl_in_seconds: Option<u32>,
+    bucket_ttl_in_seconds: Option<i32>,
 }
 
 impl ScalewayOS {
@@ -46,7 +46,7 @@ impl ScalewayOS {
         zone: ScwZone,
         bucket_delete_strategy: BucketDeleteStrategy,
         bucket_versioning_activated: bool,
-        bucket_ttl_in_seconds: Option<u32>,
+        bucket_ttl_in_seconds: Option<i32>,
     ) -> ScalewayOS {
         ScalewayOS {
             context,

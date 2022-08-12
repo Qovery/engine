@@ -61,12 +61,7 @@ impl EC2 {
         let template_directory = format!("{}/aws-ec2/bootstrap", context.lib_root_dir());
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
-        let s3 = kubernetes::s3(
-            &context,
-            &region,
-            &**cloud_provider,
-            advanced_settings.registry_image_retention_time,
-        );
+        let s3 = kubernetes::s3(&context, &region, &**cloud_provider, advanced_settings.pleco_resources_ttl);
         if let Err(e) = AwsInstancesType::from_str(instance.instance_type.as_str()) {
             let err = EngineError::new_unsupported_instance_type(event_details, instance.instance_type.as_str(), e);
             logger.log(EngineEvent::Error(err.clone(), None));

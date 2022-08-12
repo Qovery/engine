@@ -28,7 +28,7 @@ pub struct ClusterAdvancedSettings {
     #[serde(alias = "registry.image_retention_time")]
     pub registry_image_retention_time: u32,
     #[serde(alias = "pleco.resources.ttl")]
-    pub pleco_resources_ttl: u32,
+    pub pleco_resources_ttl: i32,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -36,7 +36,7 @@ impl Default for ClusterAdvancedSettings {
         ClusterAdvancedSettings {
             load_balancer_size: "lb-s".to_string(),
             registry_image_retention_time: 31536000,
-            pleco_resources_ttl: 0,
+            pleco_resources_ttl: -1,
         }
     }
 }

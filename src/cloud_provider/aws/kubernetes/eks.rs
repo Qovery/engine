@@ -77,12 +77,7 @@ impl EKS {
             return Err(e);
         };
 
-        let s3 = kubernetes::s3(
-            &context,
-            &region,
-            &**cloud_provider,
-            advanced_settings.registry_image_retention_time,
-        );
+        let s3 = kubernetes::s3(&context, &region, &**cloud_provider, advanced_settings.pleco_resources_ttl);
 
         // copy listeners from CloudProvider
         let listeners = cloud_provider.listeners().clone();
