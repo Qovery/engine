@@ -103,6 +103,12 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    WrongExpectedState {
+        resource_kind: String,
+        resource_name: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
 }
 
 impl TerraformError {
@@ -198,6 +204,25 @@ impl TerraformError {
                             resource_type: resource_type.to_string(),
                             max_resource_count: None,
                         },
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
+
+        // State issue
+        // AWS
+        if let Ok(aws_state_expected_re) = Regex::new(
+            r"Error modifying (?P<resource_kind>\w+) instance (?P<resource_name>.+?): \w+: You can't modify a .+",
+        ) {
+            if let Some(cap) = aws_state_expected_re.captures(raw_terraform_error_output.as_str()) {
+                if let (Some(resource_kind), Some(resource_name)) = (
+                    cap.name("resource_kind").map(|e| e.as_str()),
+                    cap.name("resource_name").map(|e| e.as_str()),
+                ) {
+                    return TerraformError::WrongExpectedState {
+                        resource_name: resource_name.to_string(),
+                        resource_kind: resource_kind.to_string(),
                         raw_message: raw_terraform_error_output.to_string(),
                     };
                 }
@@ -360,6 +385,11 @@ impl TerraformError {
             } => {
                 format!("Error, waiting for resource {}:{} timeout.", resource_type, resource_identifier)
             }
+            TerraformError::WrongExpectedState {
+                resource_name: resource_type,
+                resource_kind,
+                raw_message,
+            } => format!("Error, resource {}:{} was expected to be in another state. It happens when changes have been done Cloud provider side without Qovery. You need to fix it manually: {}", resource_type, resource_kind, raw_message),
         }
     }
 }
@@ -401,6 +431,9 @@ impl Display for TerraformError {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::WaitingTimeoutResource { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::WrongExpectedState { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
         };
@@ -1069,6 +1102,25 @@ terraform {
                 action: "iam:CreatePolicy".to_string(),
                 resource_type_and_name: "policy qovery-aws-EBS-CSI-Driver-z2242cca3".to_string(),
                 raw_message,
+            },
+            result
+        );
+    }
+
+    #[test]
+    fn test_terraform_error_aws_resource_state_issue() {
+        // setup:
+        let raw_message = "Error: Error modifying DB instance zabcd-postgresql: InvalidDBInstanceState: You can't modify a stopped DB instance. Start the DB instance, and then modify it".to_string();
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
+
+        // validate:
+        assert_eq!(
+            TerraformError::WrongExpectedState {
+                resource_name: "zabcd-postgresql".to_string(),
+                resource_kind: "DB".to_string(),
+                raw_message
             },
             result
         );

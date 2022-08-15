@@ -583,6 +583,8 @@ pub enum Tag {
     TerraformInvalidCredentials,
     /// TerraformNotEnoughPermissions: terraform issue due to user not having enough permissions to perform action on the resource
     TerraformNotEnoughPermissions,
+    /// TerraformWrongState: terraform issue due to wrong state of the resource
+    TerraformWrongState,
     /// TerraformConfigFileNotFound: terraform config file cannot be found
     TerraformConfigFileNotFound,
     /// TerraformConfigFileInvalidContent: terraform config file has invalid content
@@ -1465,7 +1467,7 @@ impl EngineError {
     /// Arguments:
     ///
     /// * `event_details`: Error linked event details.
-    /// * `kubernetes_upgrade_requested_raw_version`: Kubernetes requested upgrade raw version string.
+    /// * `kubernetetest_terraform_error_aws_permissions_issues_upgrade_requested_raw_version`: Kubernetes requested upgrade raw version string.
     /// * `error_message`: Raw error message.
     pub fn new_cannot_determine_k8s_requested_upgrade_version(
         event_details: EventDetails,
@@ -2307,6 +2309,13 @@ impl EngineError {
                 Some(Url::parse("https://hub.qovery.com/docs/getting-started/install-qovery/").expect("Error while trying to parse error link helper for `TerraformError::NotEnoughPermissions`, URL is not valid.")),
                 Some("Make sure you provide proper credentials for your cloud account.".to_string()),
             ),
+            TerraformError::WrongExpectedState { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformWrongState,
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()),
+                None,
+                Some("Try to set the resource in the desired state from your Cloud provider web console or API".to_string()))
         }
     }
 
