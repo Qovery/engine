@@ -1,4 +1,3 @@
-use crate::cloud_provider::io::ClusterAdvancedSettings;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -112,31 +111,4 @@ pub enum KubernetesClusterAction {
     Pause,
     Resume(Option<i32>),
     Delete,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ClusterAdvancedSettingsModel {
-    pub load_balancer_size: String,
-    pub registry_image_retention_time: u32,
-    pub pleco_resources_ttl: u32,
-}
-
-impl From<ClusterAdvancedSettings> for ClusterAdvancedSettingsModel {
-    fn from(advanced_settings: ClusterAdvancedSettings) -> Self {
-        ClusterAdvancedSettingsModel {
-            load_balancer_size: advanced_settings.load_balancer_size,
-            registry_image_retention_time: advanced_settings.registry_image_retention_time,
-            pleco_resources_ttl: advanced_settings.pleco_resources_ttl,
-        }
-    }
-}
-
-impl Default for ClusterAdvancedSettingsModel {
-    fn default() -> Self {
-        ClusterAdvancedSettingsModel {
-            load_balancer_size: "lb-s".to_string(),
-            registry_image_retention_time: 86400,
-            pleco_resources_ttl: 14400,
-        }
-    }
 }

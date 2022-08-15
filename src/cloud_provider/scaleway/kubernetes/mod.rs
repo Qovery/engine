@@ -7,7 +7,7 @@ use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
     KubernetesUpgradeStatus, ProviderOptions,
 };
-use crate::cloud_provider::models::{ClusterAdvancedSettingsModel, NodeGroups, NodeGroupsFormat};
+use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::scaleway::kubernetes::node::{ScwInstancesType, ScwNodeGroup};
@@ -24,7 +24,7 @@ use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_mana
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::{Context, Features};
 use crate::io_models::domain::ToHelmString;
 use crate::io_models::progress_listener::{Listener, Listeners, ListenersHelper};
@@ -134,7 +134,7 @@ impl KapsuleOptions {
 pub struct Kapsule {
     context: Context,
     id: String,
-    long_id: Uuid,
+    long_id: uuid::Uuid,
     name: String,
     version: String,
     zone: ScwZone,
@@ -146,14 +146,13 @@ pub struct Kapsule {
     options: KapsuleOptions,
     listeners: Listeners,
     logger: Box<dyn Logger>,
-    advanced_settings: ClusterAdvancedSettingsModel,
 }
 
 impl Kapsule {
     pub fn new(
         context: Context,
         id: String,
-        long_id: Uuid,
+        long_id: uuid::Uuid,
         name: String,
         version: String,
         zone: ScwZone,
@@ -162,7 +161,6 @@ impl Kapsule {
         nodes_groups: Vec<NodeGroups>,
         options: KapsuleOptions,
         logger: Box<dyn Logger>,
-        advanced_settings: ClusterAdvancedSettingsModel,
     ) -> Result<Kapsule, EngineError> {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
 
@@ -197,7 +195,7 @@ impl Kapsule {
             zone,
             BucketDeleteStrategy::Empty,
             false,
-            Some(advanced_settings.pleco_resources_ttl),
+            context.resource_expiration_in_seconds(),
         );
 
         let listeners = cloud_provider.listeners().clone();
@@ -216,7 +214,6 @@ impl Kapsule {
             options,
             logger,
             listeners,
-            advanced_settings,
         })
     }
 
@@ -498,6 +495,9 @@ impl Kapsule {
             "metrics_history_enabled",
             &self.context.is_feature_enabled(&Features::MetricsHistory),
         );
+        if self.context.resource_expiration_in_seconds().is_some() {
+            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
+        }
 
         // AWS S3 tfstates storage tfstates
         context.insert(
@@ -560,13 +560,6 @@ impl Kapsule {
         // Kubernetes workers
         context.insert("scw_ks_worker_nodes", &self.nodes_groups);
         context.insert("scw_ks_pool_autoscale", &true);
-
-        // Advanced settings
-        context.insert("load_balancer_size", &self.get_advanced_settings().load_balancer_size);
-        context.insert(
-            "resource_expiration_in_seconds",
-            &self.get_advanced_settings().pleco_resources_ttl,
-        );
 
         Ok(context)
     }
@@ -909,13 +902,6 @@ impl Kapsule {
             .map(|x| (x.0.to_string(), x.1.to_string()))
             .collect();
 
-        if let Err(e) = kubectl_are_qovery_infra_pods_executed(kubeconfig_path, &credentials_environment_variables) {
-            self.logger().log(EngineEvent::Warning(
-                event_details.clone(),
-                EventMessage::new("Didn't manage to restart all paused pods".to_string(), Some(e.to_string())),
-            ));
-        }
-
         let charts_prerequisites = ChartsConfigPrerequisites::new(
             self.cloud_provider.organization_id().to_string(),
             self.cloud_provider.organization_long_id(),
@@ -941,6 +927,13 @@ impl Kapsule {
             self.context.disable_pleco(),
             self.options.clone(),
         );
+
+        if let Err(e) = kubectl_are_qovery_infra_pods_executed(kubeconfig_path, &credentials_environment_variables) {
+            self.logger().log(EngineEvent::Warning(
+                event_details.clone(),
+                EventMessage::new("Didn't manage to restart all paused pods".to_string(), Some(e.to_string())),
+            ));
+        }
 
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
@@ -1549,7 +1542,7 @@ impl Kubernetes for Kapsule {
 
     #[named]
     fn on_create(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1563,7 +1556,7 @@ impl Kubernetes for Kapsule {
 
     #[named]
     fn on_create_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1698,7 +1691,7 @@ impl Kubernetes for Kapsule {
 
     #[named]
     fn on_upgrade(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1712,7 +1705,7 @@ impl Kubernetes for Kapsule {
 
     #[named]
     fn on_upgrade_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1726,7 +1719,7 @@ impl Kubernetes for Kapsule {
 
     #[named]
     fn on_downgrade(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Downgrade));
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1740,7 +1733,7 @@ impl Kubernetes for Kapsule {
 
     #[named]
     fn on_downgrade_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Downgrade));
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1754,7 +1747,7 @@ impl Kubernetes for Kapsule {
 
     #[named]
     fn on_pause(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1768,7 +1761,7 @@ impl Kubernetes for Kapsule {
 
     #[named]
     fn on_pause_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1782,7 +1775,7 @@ impl Kubernetes for Kapsule {
 
     #[named]
     fn on_delete(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1796,7 +1789,7 @@ impl Kubernetes for Kapsule {
 
     #[named]
     fn on_delete_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
         print_action(
             self.cloud_provider_name(),
             self.struct_name(),
@@ -1806,9 +1799,5 @@ impl Kubernetes for Kapsule {
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
-    }
-
-    fn get_advanced_settings(&self) -> ClusterAdvancedSettingsModel {
-        self.advanced_settings.clone()
     }
 }

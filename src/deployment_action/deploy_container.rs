@@ -59,10 +59,7 @@ where
         let registry_info = target.container_registry.registry_info();
         target
             .container_registry
-            .create_repository(
-                Self::QOVERY_MIRROR_REPOSITORY_NAME,
-                target.kubernetes.get_advanced_settings().registry_image_retention_time,
-            )
+            .create_repository(Self::QOVERY_MIRROR_REPOSITORY_NAME)
             .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
 
         let source_image = ContainerImage::new(self.registry.url().clone(), self.image.clone(), vec![self.tag.clone()]);
@@ -93,6 +90,15 @@ where
         execute_long_deployment(
             ApplicationDeploymentReporter::new_for_container(self, target, Action::Create),
             || {
+                // If the service have been paused, we must ensure we un-pause it first as hpa will not kick in
+                let _ = PauseServiceAction::new(
+                    self.selector(),
+                    self.is_stateful(),
+                    Duration::from_secs(5 * 60),
+                    event_details.clone(),
+                )
+                .unpause_if_needed(target);
+
                 let helm = HelmDeployment::new(
                     self.helm_release_name(),
                     self.to_tera_context(target)?,

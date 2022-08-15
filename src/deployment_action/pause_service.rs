@@ -4,11 +4,11 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 use crate::runtime::block_on;
 use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
-use k8s_openapi::api::autoscaling::v1::{HorizontalPodAutoscaler, Scale, ScaleSpec};
+use k8s_openapi::api::autoscaling::v1::{Scale, ScaleSpec};
 use k8s_openapi::api::core::v1::Pod;
-use kube::api::{DeleteParams, ListParams, Patch, PatchParams};
+use kube::api::{ListParams, Patch, PatchParams};
 use kube::runtime::wait::{await_condition, Condition};
-use kube::{Api, ResourceExt};
+use kube::Api;
 use std::time::Duration;
 
 fn has_deployment_ready_replicas(nb_ready_replicas: usize) -> impl Condition<Deployment> {
@@ -49,11 +49,8 @@ async fn pause_service(
     };
     let patch = Patch::Merge(new_scale);
 
-    // First we need to delete any horizontal pod autoscaler, that may mess with us
-    let hpas: Api<HorizontalPodAutoscaler> = Api::namespaced(kube.clone(), namespace);
-    for hpa in hpas.list(&list_params).await?.items {
-        hpas.delete(&hpa.name(), &DeleteParams::background()).await?;
-    }
+    // We don't need to remove HPA, if we set desired replicas to 0, hpa disable itself until we change it back
+    // https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#implicit-maintenance-mode-deactivation
 
     if is_statefulset {
         let statefulsets: Api<StatefulSet> = Api::namespaced(kube.clone(), namespace);
@@ -87,6 +84,44 @@ async fn pause_service(
     Ok(())
 }
 
+async fn unpause_service_if_needed(
+    kube: &kube::Client,
+    namespace: &str,
+    selector: &str,
+    is_statefulset: bool,
+) -> Result<(), kube::Error> {
+    let list_params = ListParams::default().labels(selector);
+    let patch_params = PatchParams::default();
+    let new_scale = Scale {
+        metadata: Default::default(),
+        spec: Some(ScaleSpec { replicas: Some(1_i32) }),
+        status: None,
+    };
+    let patch = Patch::Merge(new_scale);
+
+    if is_statefulset {
+        let statefulsets: Api<StatefulSet> = Api::namespaced(kube.clone(), namespace);
+        for statefulset in statefulsets.list(&list_params).await? {
+            if statefulset.status.map(|s| s.replicas).unwrap_or(0) == 0 {
+                if let Some(name) = statefulset.metadata.name {
+                    statefulsets.patch_scale(&name, &patch_params, &patch).await?;
+                }
+            }
+        }
+    } else {
+        let deployments: Api<Deployment> = Api::namespaced(kube.clone(), namespace);
+        for deployment in deployments.list(&list_params).await? {
+            if deployment.status.and_then(|s| s.replicas).unwrap_or(0) == 0 {
+                if let Some(name) = deployment.metadata.name {
+                    deployments.patch_scale(&name, &patch_params, &patch).await?;
+                }
+            }
+        }
+    };
+
+    Ok(())
+}
+
 pub struct PauseServiceAction {
     selector: String,
     is_statefulset: bool,
@@ -107,6 +142,48 @@ impl PauseServiceAction {
             timeout,
             event_details,
         }
+    }
+
+    pub fn unpause_if_needed(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        let fut = unpause_service_if_needed(
+            &target.kube,
+            target.environment.namespace(),
+            &self.selector,
+            self.is_statefulset,
+        );
+
+        match block_on(async { tokio::time::timeout(self.timeout, fut).await }) {
+            // Happy path
+            Ok(Ok(())) => {}
+
+            // error during scaling
+            Ok(Err(kube_err)) => {
+                let command_error = CommandError::new_from_safe_message(kube_err.to_string());
+                return Err(EngineError::new_k8s_scale_replicas(
+                    self.event_details.clone(),
+                    self.selector.clone(),
+                    target.environment.namespace().to_string(),
+                    0,
+                    command_error,
+                ));
+            }
+            // timeout
+            Err(_) => {
+                let command_error = CommandError::new_from_safe_message(format!(
+                    "Timout of {}s exceeded while un-pausing service",
+                    self.timeout.as_secs()
+                ));
+                return Err(EngineError::new_k8s_scale_replicas(
+                    self.event_details.clone(),
+                    self.selector.clone(),
+                    target.environment.namespace().to_string(),
+                    0,
+                    command_error,
+                ));
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -171,7 +248,7 @@ impl DeploymentAction for PauseServiceAction {
 #[cfg(test)]
 mod tests {
     use crate::deployment_action::pause_service::{
-        has_deployment_ready_replicas, has_statefulset_ready_replicas, pause_service,
+        has_deployment_ready_replicas, has_statefulset_ready_replicas, pause_service, unpause_service_if_needed,
     };
     use crate::deployment_action::test_utils::{
         get_simple_deployment, get_simple_hpa, get_simple_statefulset, NamespaceForTest,
@@ -277,6 +354,53 @@ mod tests {
         tokio::time::timeout(
             timeout,
             await_condition(statefulsets.clone(), &app_name, has_statefulset_ready_replicas(1)),
+        )
+        .await??;
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[named]
+    async fn test_unpause_deployment() -> Result<(), Box<dyn std::error::Error>> {
+        let kube_client = kube::Client::try_default().await.unwrap();
+        let namespace = format!(
+            "{}-{:?}",
+            function_name!().replace('_', "-"),
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
+        );
+        let timeout = Duration::from_secs(30);
+        let deployments: Api<Deployment> = Api::namespaced(kube_client.clone(), &namespace);
+        let deployment: Deployment = get_simple_deployment();
+        let hpas: Api<HorizontalPodAutoscaler> = Api::namespaced(kube_client.clone(), &namespace);
+        let hpa = get_simple_hpa();
+
+        let app_name = deployment.metadata.name.clone().unwrap_or_default();
+        let selector = format!("app={}", app_name);
+
+        // create simple deployment and wait for it to be ready
+        let _ns = NamespaceForTest::new(kube_client.clone(), namespace.to_string()).await?;
+
+        hpas.create(&PostParams::default(), &hpa).await.unwrap();
+        deployments.create(&PostParams::default(), &deployment).await.unwrap();
+        tokio::time::timeout(
+            timeout,
+            await_condition(deployments.clone(), &app_name, has_deployment_ready_replicas(1)),
+        )
+        .await??;
+
+        // Try to scale down our deployment
+        tokio::time::timeout(timeout, pause_service(&kube_client, &namespace, &selector, 0, false)).await??;
+        tokio::time::timeout(
+            timeout,
+            await_condition(deployments.clone(), &app_name, has_deployment_ready_replicas(0)),
+        )
+        .await??;
+
+        tokio::time::timeout(timeout, unpause_service_if_needed(&kube_client, &namespace, &selector, false)).await??;
+        tokio::time::timeout(
+            timeout,
+            await_condition(deployments.clone(), &app_name, has_deployment_ready_replicas(1)),
         )
         .await??;
 

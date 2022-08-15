@@ -20,14 +20,14 @@ fn test_delete_bucket() {
         .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
 
     let aws_os = S3::new(
-        context,
+        context.clone(),
         id,
         name,
         aws_access_key,
         aws_secret_key,
         aws_region.clone(),
         false,
-        Some(7200),
+        context.resource_expiration_in_seconds(),
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -63,14 +63,14 @@ fn test_create_bucket() {
         .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
 
     let aws_os = S3::new(
-        context,
+        context.clone(),
         id,
         name,
         aws_access_key,
         aws_secret_key,
         aws_region.clone(),
         false,
-        Some(7200),
+        context.resource_expiration_in_seconds(),
     );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
@@ -106,7 +106,16 @@ fn test_recreate_bucket() {
     let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
         .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
 
-    let aws_os = S3::new(context, id, name, aws_access_key, aws_secret_key, aws_region, false, Some(7200));
+    let aws_os = S3::new(
+        context.clone(),
+        id,
+        name,
+        aws_access_key,
+        aws_secret_key,
+        aws_region,
+        false,
+        context.resource_expiration_in_seconds(),
+    );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -142,7 +151,16 @@ fn test_put_file() {
     let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
         .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
 
-    let aws_os = S3::new(context, id, name, aws_access_key, aws_secret_key, aws_region, false, Some(7200));
+    let aws_os = S3::new(
+        context.clone(),
+        id,
+        name,
+        aws_access_key,
+        aws_secret_key,
+        aws_region,
+        false,
+        context.resource_expiration_in_seconds(),
+    );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
     let object_key = format!("test-object-{}", generate_id());
@@ -184,7 +202,16 @@ fn test_get_file() {
     let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
         .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
 
-    let aws_os = S3::new(context, id, name, aws_access_key, aws_secret_key, aws_region, false, Some(7200));
+    let aws_os = S3::new(
+        context.clone(),
+        id,
+        name,
+        aws_access_key,
+        aws_secret_key,
+        aws_region,
+        false,
+        context.resource_expiration_in_seconds(),
+    );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
     let object_key = format!("test-object-{}", generate_id());

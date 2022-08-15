@@ -6,7 +6,7 @@ locals {
     Region = var.region
     creationDate = time_static.on_ec2_create.rfc3339
     QoveryProduct = "EC2"
-    {% if resource_expiration_in_seconds > 0 %}ttl = var.resource_expiration_in_seconds{% endif %}
+    {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds{% endif %}
   }
 
   tags_ec2 = merge(

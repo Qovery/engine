@@ -14,7 +14,6 @@ use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes};
-use qovery_engine::cloud_provider::models::ClusterAdvancedSettingsModel;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
@@ -81,7 +80,6 @@ pub fn get_cluster_test_kubernetes<'a>(
                     options,
                     AWS::kubernetes_nodes(min_nodes, max_nodes),
                     logger,
-                    ClusterAdvancedSettingsModel::default(),
                 )
                 .unwrap(),
             )
@@ -108,7 +106,6 @@ pub fn get_cluster_test_kubernetes<'a>(
                     options,
                     ec2_kubernetes_instance(),
                     logger,
-                    ClusterAdvancedSettingsModel::default(),
                 )
                 .unwrap(),
             )
@@ -126,7 +123,6 @@ pub fn get_cluster_test_kubernetes<'a>(
                 DO::kubernetes_nodes(min_nodes, max_nodes),
                 DO::kubernetes_cluster_options(secrets, Option::from(cluster_name), EngineLocation::ClientSide),
                 logger,
-                ClusterAdvancedSettingsModel::default(),
             )
             .unwrap(),
         ),
@@ -143,7 +139,6 @@ pub fn get_cluster_test_kubernetes<'a>(
                 Scaleway::kubernetes_nodes(min_nodes, max_nodes),
                 Scaleway::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
                 logger,
-                ClusterAdvancedSettingsModel::default(),
             )
             .unwrap(),
         ),
@@ -445,7 +440,6 @@ pub fn get_environment_test_kubernetes(
                     options,
                     AWS::kubernetes_nodes(min_nodes, max_nodes),
                     logger,
-                    ClusterAdvancedSettingsModel::default(),
                 )
                 .unwrap(),
             )
@@ -471,7 +465,6 @@ pub fn get_environment_test_kubernetes(
                     options,
                     ec2_kubernetes_instance(),
                     logger,
-                    ClusterAdvancedSettingsModel::default(),
                 )
                 .unwrap(),
             )
@@ -495,7 +488,6 @@ pub fn get_environment_test_kubernetes(
                         EngineLocation::ClientSide,
                     ),
                     logger,
-                    ClusterAdvancedSettingsModel::default(),
                 )
                 .unwrap(),
             )
@@ -515,7 +507,6 @@ pub fn get_environment_test_kubernetes(
                     Scaleway::kubernetes_nodes(min_nodes, max_nodes),
                     Scaleway::kubernetes_cluster_options(secrets, None, EngineLocation::ClientSide),
                     logger,
-                    ClusterAdvancedSettingsModel::default(),
                 )
                 .unwrap(),
             )

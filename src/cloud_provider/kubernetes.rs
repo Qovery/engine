@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
-use crate::cloud_provider::models::{ClusterAdvancedSettingsModel, CpuLimits, InstanceEc2, NodeGroups};
+use crate::cloud_provider::models::{CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CloudProviderKind;
 use crate::cmd::kubectl::{kubectl_delete_apiservice, kubectl_delete_completed_jobs};
@@ -483,8 +483,6 @@ pub trait Kubernetes {
 
         Ok(())
     }
-
-    fn get_advanced_settings(&self) -> ClusterAdvancedSettingsModel;
 }
 
 pub trait KubernetesNode {

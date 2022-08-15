@@ -33,6 +33,15 @@ where
         );
 
         execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Create), || {
+            // If the service have been paused, we must ensure we un-pause it first as hpa will not kick in
+            let _ = PauseServiceAction::new(
+                self.selector(),
+                self.is_stateful(),
+                Duration::from_secs(5 * 60),
+                event_details.clone(),
+            )
+            .unpause_if_needed(target);
+
             let helm = HelmDeployment::new(
                 self.helm_release_name(),
                 self.to_tera_context(target)?,
