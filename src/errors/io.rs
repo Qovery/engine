@@ -166,6 +166,7 @@ pub enum Tag {
     TerraformNotEnoughPermissions,
     TerraformWaitingTimeoutResource,
     TerraformAlreadyExistingResource,
+    TerraformWrongState,
 }
 
 impl From<errors::Tag> for Tag {
@@ -333,6 +334,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::TerraformWaitingTimeoutResource => Tag::TerraformWaitingTimeoutResource,
             errors::Tag::TerraformAlreadyExistingResource => Tag::TerraformAlreadyExistingResource,
             errors::Tag::TerraformNotEnoughPermissions => Tag::TerraformNotEnoughPermissions,
+            errors::Tag::TerraformWrongState => Tag::TerraformWrongState,
         }
     }
 }
