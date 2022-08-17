@@ -316,9 +316,10 @@ where
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
         context.insert("publicly_accessible", &options.publicly_accessible);
 
-        if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
-        }
+        context.insert(
+            "resource_expiration_in_seconds",
+            &kubernetes.get_advanced_settings().pleco_resources_ttl,
+        );
 
         Ok(context)
     }

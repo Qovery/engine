@@ -22,5 +22,6 @@ controller:
       service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
       service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
       service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
+      service.beta.kubernetes.io/scw-loadbalancer-type: "{{ load_balancer_size }}"
       external-dns.alpha.kubernetes.io/hostname: "{{ wildcard_managed_dns }}"
     externalTrafficPolicy: "Local"
