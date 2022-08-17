@@ -113,6 +113,8 @@ pub struct ContainerAdvancedSettings {
     pub network_ingress_cors_allow_methods: String,
     #[serde(alias = "network.ingress.cors_allowed_headers")]
     pub network_ingress_cors_allow_headers: String,
+    #[serde(alias = "network.ingress.proxy_buffer_size_kb")]
+    pub network_ingress_proxy_buffer_size_kb: u32,
 
     // Readiness Probes
     #[serde(alias = "readiness_probe.type")]
@@ -160,6 +162,7 @@ impl Default for ContainerAdvancedSettings {
             network_ingress_cors_allow_origin: "*".to_string(),
             network_ingress_cors_allow_methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS".to_string(),
             network_ingress_cors_allow_headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization".to_string(),
+            network_ingress_proxy_buffer_size_kb: 4,
             readiness_probe_type: AdvancedSettingsProbeType::Tcp,
             readiness_probe_http_get_path: "/".to_string(),
             readiness_probe_initial_delay_seconds: 30,
