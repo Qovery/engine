@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Default, Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Default, Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct DoksList {
     pub kubernetes_clusters: Vec<KubernetesCluster>,
 }
 
-#[derive(Default, Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Default, Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct KubernetesCluster {
     pub id: String,
     pub name: String,
@@ -16,18 +16,18 @@ pub struct KubernetesCluster {
     pub vpc_uuid: String,
 }
 
-#[derive(Default, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Default, Serialize, Deserialize, PartialEq, Eq, Debug)]
 #[serde(rename_all = "snake_case")]
 pub struct DoksOptions {
     pub options: Options,
 }
 
-#[derive(Default, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Default, Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct Options {
     pub versions: Vec<KubernetesVersion>,
 }
 
-#[derive(Default, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Default, Serialize, Deserialize, PartialEq, Eq, Debug)]
 pub struct KubernetesVersion {
     pub slug: String,
     pub kubernetes_version: String,

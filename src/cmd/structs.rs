@@ -26,7 +26,7 @@ pub struct LabelsContent {
     pub value: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Secrets {
     pub api_version: String,
@@ -35,14 +35,14 @@ pub struct Secrets {
     pub items: Vec<SecretItem>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SecretsMetadata {
     pub resource_version: String,
     pub self_link: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SecretItem {
     pub api_version: String,
@@ -51,7 +51,7 @@ pub struct SecretItem {
     pub data: HashMap<String, String>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SecretMetadata {
     pub creation_timestamp: String,
@@ -60,7 +60,7 @@ pub struct SecretMetadata {
     pub uid: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Item {
     pub api_version: String,
@@ -68,7 +68,7 @@ pub struct Item {
     pub metadata: ItemMetadata,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ItemMetadata {
     pub creation_timestamp: String,
@@ -80,7 +80,7 @@ pub struct ItemMetadata {
     pub annotations: HashMap<String, String>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Namespace {
     pub api_version: String,
@@ -88,7 +88,7 @@ pub struct Namespace {
     pub metadata: NamespaceMetadata,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NamespaceMetadata {
     pub creation_timestamp: String,
@@ -377,7 +377,7 @@ pub struct ServerVersion {
     pub git_version: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct HelmListItem {
     pub name: String,
     pub namespace: String,
@@ -388,7 +388,7 @@ pub struct HelmListItem {
     pub app_version: String,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct HelmChart {
     pub name: String,
     pub namespace: String,
@@ -396,7 +396,7 @@ pub struct HelmChart {
     pub app_version: Option<Version>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct HelmChartVersions {
     pub chart_version: Option<Version>,
     pub app_version: Option<Version>,
@@ -433,7 +433,7 @@ impl HelmHistoryRow {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PVC {
     pub api_version: String,
@@ -441,7 +441,7 @@ pub struct PVC {
     pub kind: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PVCItem {
     pub api_version: String,
@@ -450,13 +450,13 @@ pub struct PVCItem {
     pub spec: PVCSpec,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PVCMetadata {
     pub resource_version: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PVCSpec {
     pub access_modes: Option<Vec<String>>,
@@ -466,19 +466,19 @@ pub struct PVCSpec {
     pub volume_name: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PVCResources {
     pub requests: PVCRequests,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PVCRequests {
     pub storage: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SVC {
     pub api_version: String,
@@ -486,7 +486,7 @@ pub struct SVC {
     pub kind: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SVCItem {
     pub api_version: String,
@@ -495,7 +495,7 @@ pub struct SVCItem {
     pub spec: SVCSpec,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SVCMetadata {
     pub resource_version: String,
@@ -503,13 +503,13 @@ pub struct SVCMetadata {
     pub annotations: HashMap<String, String>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct SVCSpec {
     #[serde(rename = "type")]
     pub svc_type: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PDB {
     pub api_version: String,
@@ -517,14 +517,14 @@ pub struct PDB {
     pub kind: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PDBMetadata {
     pub name: String,
     pub namespace: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PDBItem {
     pub api_version: String,
@@ -533,7 +533,7 @@ pub struct PDBItem {
     pub metadata: PDBMetadata,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PDBStatus {
     pub current_healthy: i16,
@@ -543,7 +543,7 @@ pub struct PDBStatus {
     pub observed_generation: i16,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HPA {
     pub api_version: String,
@@ -551,7 +551,7 @@ pub struct HPA {
     pub kind: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HPAItem {
     pub api_version: String,
@@ -559,20 +559,20 @@ pub struct HPAItem {
     pub metadata: HPAMetadata,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HPAMetadata {
     pub annotations: Option<HPAAnnotationCondition>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HPAAnnotationCondition {
     #[serde(rename = "autoscaling.alpha.kubernetes.io/conditions")]
     pub conditions: Option<String>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MetricsServer {
     pub kind: String,

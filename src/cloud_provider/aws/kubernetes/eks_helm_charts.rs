@@ -1291,12 +1291,10 @@ impl AwsVpcCniChart {
             environment_variables,
         ) {
             Ok(x) => match x.spec {
-                None => {
-                    return Err(CommandError::new_from_safe_message(format!(
-                        "Spec was not found in json output while looking at daemonset {}",
-                        &self.chart_info.name
-                    )))
-                }
+                None => Err(CommandError::new_from_safe_message(format!(
+                    "Spec was not found in json output while looking at daemonset {}",
+                    &self.chart_info.name
+                ))),
                 Some(spec) => match spec.selector.match_labels.k8s_app {
                     Some(x) if x == "aws-node" => Ok(true),
                     _ => Ok(false),

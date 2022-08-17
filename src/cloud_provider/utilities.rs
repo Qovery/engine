@@ -118,7 +118,7 @@ pub fn managed_db_name_sanitizer(max_size: usize, prefix: &str, name: &str) -> S
     new_name
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum TcpCheckErrors {
     DomainNotResolvable,
     PortNotOpen,

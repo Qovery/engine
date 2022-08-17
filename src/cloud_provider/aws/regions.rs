@@ -8,7 +8,7 @@ use std::str::FromStr;
 use strum_macros::EnumIter;
 
 // Sync with Qovery Core team if you update this content
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, EnumIter)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, EnumIter)]
 pub enum AwsZones {
     // North Virginia
     UsEast1A,
@@ -106,7 +106,7 @@ impl ToTerraformString for AwsZones {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, EnumIter)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, EnumIter)]
 // Sync with Qovery Core team if you update this content
 pub enum AwsRegion {
     UsEast1,
@@ -277,7 +277,7 @@ impl AwsRegion {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum RegionAndZoneErrors {
     RegionNotFound,
     RegionNotSupported,

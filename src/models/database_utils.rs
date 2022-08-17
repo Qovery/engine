@@ -126,12 +126,10 @@ pub fn get_supported_version_to_use(
     // if only a major version is required
     match all_supported_versions.get(&version.major) {
         Some(version) => Ok(version.to_string()),
-        None => {
-            return Err(CommandError::new_from_safe_message(format!(
-                "{} {} version is not supported",
-                database_name, version_to_check
-            )));
-        }
+        None => Err(CommandError::new_from_safe_message(format!(
+            "{} {} version is not supported",
+            database_name, version_to_check
+        ))),
     }
 }
 

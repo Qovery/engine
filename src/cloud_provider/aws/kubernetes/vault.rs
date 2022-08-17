@@ -6,7 +6,7 @@ use crate::secret_manager::vault::QVaultClient;
 use serde_derive::{Deserialize, Serialize};
 use vaultrs::api::kv2::responses::SecretVersionMetadata;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ClusterSecretsIoAws {
     pub aws_access_key: String,
     pub aws_default_region: String,
@@ -54,7 +54,7 @@ impl ClusterSecretsIoAws {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ClusterSecretsAws {
     #[serde(rename = "AWS_ACCESS_KEY_ID")]
     pub aws_access_key_id: String,

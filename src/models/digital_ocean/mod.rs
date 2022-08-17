@@ -120,9 +120,7 @@ impl FromStr for DoRegion {
             "fra1" => Ok(DoRegion::Frankfurt),
             "tor1" => Ok(DoRegion::Toronto),
             "blr1" => Ok(DoRegion::Bangalore),
-            _ => {
-                return Err(CommandError::new_from_safe_message(format!("`{}` region is not supported", s)));
-            }
+            _ => Err(CommandError::new_from_safe_message(format!("`{}` region is not supported", s))),
         }
     }
 }

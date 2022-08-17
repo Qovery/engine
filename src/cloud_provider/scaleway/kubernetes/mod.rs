@@ -51,7 +51,7 @@ use std::sync::Arc;
 use tera::Context as TeraContext;
 use uuid::Uuid;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum ScwNodeGroupErrors {
     CloudProviderApiError(CommandError),
     ClusterDoesNotExists(CommandError),
@@ -61,7 +61,7 @@ pub enum ScwNodeGroupErrors {
     NodeGroupValidationError(CommandError),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KapsuleOptions {
     // Qovery
     pub qovery_api_url: String,
