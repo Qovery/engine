@@ -93,39 +93,33 @@ impl DOCR {
                     Ok(output) => match output.status() {
                         StatusCode::OK => Ok(()),
                         StatusCode::CREATED => Ok(()),
-                        status => {
-                            return Err(ContainerRegistryError::CannotCreateRegistry {
-                                registry_name: registry_name.to_string(),
-                                raw_error_message: format!(
-                                    "Bad status code: `{}` returned by the DO registry API for creating DOCR `{}`.",
-                                    status,
-                                    registry_name.as_str(),
-                                ),
-                            });
-                        }
-                    },
-                    Err(e) => {
-                        return Err(ContainerRegistryError::CannotCreateRegistry {
+                        status => Err(ContainerRegistryError::CannotCreateRegistry {
                             registry_name: registry_name.to_string(),
                             raw_error_message: format!(
-                                "Failed to create DOCR repository `{}`, error: {}.",
+                                "Bad status code: `{}` returned by the DO registry API for creating DOCR `{}`.",
+                                status,
                                 registry_name.as_str(),
-                                e,
                             ),
-                        });
-                    }
+                        }),
+                    },
+                    Err(e) => Err(ContainerRegistryError::CannotCreateRegistry {
+                        registry_name: registry_name.to_string(),
+                        raw_error_message: format!(
+                            "Failed to create DOCR repository `{}`, error: {}.",
+                            registry_name.as_str(),
+                            e,
+                        ),
+                    }),
                 }
             }
-            Err(e) => {
-                return Err(ContainerRegistryError::CannotCreateRegistry {
-                    registry_name: registry_name.to_string(),
-                    raw_error_message: format!(
-                        "Failed to create DOCR repository `{}`, error: {}.",
-                        registry_name.as_str(),
-                        e,
-                    ),
-                });
-            }
+            Err(e) => Err(ContainerRegistryError::CannotCreateRegistry {
+                registry_name: registry_name.to_string(),
+                raw_error_message: format!(
+                    "Failed to create DOCR repository `{}`, error: {}.",
+                    registry_name.as_str(),
+                    e,
+                ),
+            }),
         }
     }
 
@@ -139,22 +133,18 @@ impl DOCR {
         match res {
             Ok(out) => match out.status() {
                 StatusCode::NO_CONTENT => Ok(()),
-                status => {
-                    return Err(ContainerRegistryError::CannotDeleteRegistry {
-                        registry_name: "default".to_string(),
-                        raw_error_message: format!(
-                            "Bad status code: `{}` returned by the DO registry API for deleting DOCR.",
-                            status,
-                        ),
-                    });
-                }
-            },
-            Err(e) => {
-                return Err(ContainerRegistryError::CannotDeleteRegistry {
+                status => Err(ContainerRegistryError::CannotDeleteRegistry {
                     registry_name: "default".to_string(),
-                    raw_error_message: format!("No response from the Digital Ocean API, error: {}", e),
-                });
-            }
+                    raw_error_message: format!(
+                        "Bad status code: `{}` returned by the DO registry API for deleting DOCR.",
+                        status,
+                    ),
+                }),
+            },
+            Err(e) => Err(ContainerRegistryError::CannotDeleteRegistry {
+                registry_name: "default".to_string(),
+                raw_error_message: format!("No response from the Digital Ocean API, error: {}", e),
+            }),
         }
     }
 
@@ -275,7 +265,7 @@ pub fn subscribe_kube_cluster_to_container_registry(
     };
 
     let res_cluster_to_link = serde_json::to_string(&cluster_ids);
-    return match res_cluster_to_link {
+    match res_cluster_to_link {
         Ok(cluster_to_link) => {
             let res = reqwest::blocking::Client::new()
                 .post(CR_CLUSTER_API_PATH)
@@ -304,7 +294,7 @@ pub fn subscribe_kube_cluster_to_container_registry(
             cluster_id: cluster_uuid.to_string(),
             raw_error_message: format!("Unable to Serialize digital ocean cluster uuids, error: {}", e),
         }),
-    };
+    }
 }
 
 pub fn get_current_registry_name(api_key: &str) -> Result<String, ContainerRegistryError> {
@@ -314,7 +304,7 @@ pub fn get_current_registry_name(api_key: &str) -> Result<String, ContainerRegis
         .headers(headers)
         .send();
 
-    return match res {
+    match res {
         Ok(output) => match output.status() {
             StatusCode::OK => {
                 let content = output.text().unwrap();
@@ -346,7 +336,7 @@ pub fn get_current_registry_name(api_key: &str) -> Result<String, ContainerRegis
                 e,
             ),
         }),
-    };
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -360,14 +350,14 @@ struct DoApiSubscribeToKubeCluster {
     cluster_uuids: Vec<String>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DoApiGetContainerRegistry {
     pub registry: Registry,
     pub subscription: Subscription,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Registry {
     pub name: String,
@@ -379,7 +369,7 @@ pub struct Registry {
     pub storage_usage_updated_at: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Subscription {
     pub tier: Tier,
@@ -389,7 +379,7 @@ pub struct Subscription {
     pub updated_at: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Tier {
     pub name: String,
@@ -406,14 +396,14 @@ pub struct Tier {
     pub monthly_price_in_cents: i64,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DescribeTagsForImage {
     pub tags: Vec<Tag>,
     pub meta: Meta,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Tag {
     #[serde(rename = "registry_name")]
@@ -430,7 +420,7 @@ pub struct Tag {
     pub updated_at: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde_derive::Serialize, serde_derive::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, serde_derive::Serialize, serde_derive::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Meta {
     pub total: i64,

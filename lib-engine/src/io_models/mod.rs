@@ -12,7 +12,7 @@ pub mod environment;
 pub mod progress_listener;
 pub mod router;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QoveryIdentifier {
     raw_long_id: String,
     short: String,

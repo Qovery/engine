@@ -25,7 +25,7 @@ pub fn extract_dockerfile_args(dockerfile_content: Vec<u8>) -> Result<HashSet<St
         })
         .map(|arg_value| {
             let x = arg_value.split('=').collect::<Vec<&str>>();
-            x.get(0).unwrap_or(&"").to_string()
+            x.first().unwrap_or(&"").to_string()
         })
         .collect::<HashSet<String>>();
 

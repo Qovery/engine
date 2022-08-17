@@ -490,7 +490,7 @@ pub trait KubernetesNode {
     fn as_any(&self) -> &dyn Any;
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     Eks,
@@ -806,7 +806,7 @@ where
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum KubernetesNodesType {
     Masters,
     Workers,

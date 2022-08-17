@@ -66,7 +66,7 @@ pub struct CpuLimits {
     pub cpu_limit: String,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct NodeGroups {
     pub name: String,
     pub id: Option<String>,
@@ -77,7 +77,7 @@ pub struct NodeGroups {
     pub disk_size_in_gib: i32,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
 pub struct NodeGroupsWithDesiredState {
     pub name: String,
     pub id: Option<String>,
