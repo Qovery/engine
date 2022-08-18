@@ -238,6 +238,7 @@ impl CloudProvider {
                 self.name.as_str(),
                 self.options.access_key_id.as_ref()?.as_str(),
                 self.options.secret_access_key.as_ref()?.as_str(),
+                self.kubernetes.region.as_str(),
                 self.zones.clone(),
                 self.kubernetes.kind.clone(),
                 terraform_state_credentials,
@@ -250,6 +251,7 @@ impl CloudProvider {
                 self.options.token.as_ref()?.as_str(),
                 self.options.spaces_access_id.as_ref()?.as_str(),
                 self.options.spaces_secret_key.as_ref()?.as_str(),
+                self.kubernetes.region.as_str(),
                 self.name.as_str(),
                 terraform_state_credentials,
             ))),
@@ -262,6 +264,7 @@ impl CloudProvider {
                 self.options.scaleway_access_key.as_ref()?.as_str(),
                 self.options.scaleway_secret_key.as_ref()?.as_str(),
                 self.options.scaleway_project_id.as_ref()?.as_str(),
+                self.kubernetes.region.as_str(),
                 terraform_state_credentials,
             ))),
         }

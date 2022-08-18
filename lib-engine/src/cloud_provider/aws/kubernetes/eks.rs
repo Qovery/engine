@@ -155,9 +155,13 @@ impl EKS {
         event_details: EventDetails,
         replicas_count: u32,
     ) -> Result<(), EngineError> {
+        let autoscaler_new_state = match replicas_count {
+            0 => "disable",
+            _ => "enable",
+        };
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe(format!("Scaling cluster autoscaler to `{}`.", replicas_count)),
+            EventMessage::new_from_safe(format!("Set cluster autoscaler to: `{}`.", autoscaler_new_state)),
         ));
         let (kubeconfig_path, _) = self.get_kubeconfig_file()?;
         let selector = "cluster-autoscaler-aws-cluster-autoscaler";

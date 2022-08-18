@@ -525,6 +525,10 @@ pub enum Tag {
     CannotConnectK8sCluster,
     /// CannotExecuteK8sApiCustomMetrics: represents an error when trying to get K8s API custom metrics.
     CannotExecuteK8sApiCustomMetrics,
+    /// CloudProviderGetLoadBalancer: represents an issue while trying to get load balancers from the cloud provider API
+    CloudProviderGetLoadBalancer,
+    /// CloudProviderGetLoadBalancerTags: represents an issue while trying to get load balancer tags from the cloud provider API
+    CloudProviderGetLoadBalancerTags,
     /// K8sCannotConnectToApi: represents an error when trying to contact K8s API.
     K8sCannotReachToApi,
     /// K8sPodDisruptionBudgetInInvalidState: represents an error where pod disruption budget is in an invalid state.
@@ -3511,6 +3515,48 @@ impl EngineError {
             None,
             None,
             Some("Check your DNS provider api url".to_string()),
+        )
+    }
+
+    /// Creates new error when getting load balancers from the cloud provider
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_cloud_provider_error_getting_load_balancers(
+        event_details: EventDetails,
+        cloud_provider_error_message: CommandError,
+    ) -> EngineError {
+        let message_safe = "Error while getting Load balancers from the cloud provider API".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::CloudProviderGetLoadBalancer,
+            message_safe,
+            Some(cloud_provider_error_message),
+            None,
+            Some("Please ensure Qovery has correct permissions or try again later".to_string()),
+        )
+    }
+
+    /// Creates new error when getting load balancer tags from the cloud provider
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_cloud_provider_error_getting_load_balancer_tags(
+        event_details: EventDetails,
+        cloud_provider_error_message: CommandError,
+    ) -> EngineError {
+        let message_safe = "Error while getting Load balancer tags from the cloud provider API".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::CloudProviderGetLoadBalancerTags,
+            message_safe,
+            Some(cloud_provider_error_message),
+            None,
+            Some("Please ensure Qovery has correct permissions or try again later".to_string()),
         )
     }
 }

@@ -27,6 +27,7 @@ pub struct DO {
     pub token: String,
     spaces_access_id: String,
     spaces_secret_key: String,
+    region: String,
     terraform_state_credentials: TerraformStateCredentials,
     listeners: Listeners,
 }
@@ -40,6 +41,7 @@ impl DO {
         token: &str,
         spaces_access_id: &str,
         spaces_secret_key: &str,
+        region: &str,
         name: &str,
         terraform_state_credentials: TerraformStateCredentials,
     ) -> Self {
@@ -52,6 +54,7 @@ impl DO {
             token: token.to_string(),
             spaces_access_id: spaces_access_id.to_string(),
             spaces_secret_key: spaces_secret_key.to_string(),
+            region: region.to_string(),
             terraform_state_credentials,
             listeners: vec![],
         }
@@ -97,6 +100,10 @@ impl CloudProvider for DO {
 
     fn secret_access_key(&self) -> String {
         self.spaces_secret_key.to_string()
+    }
+
+    fn region(&self) -> String {
+        self.region.to_string()
     }
 
     fn token(&self) -> &str {
@@ -155,5 +162,9 @@ impl CloudProvider for DO {
 
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::CloudProvider(self.id.to_string(), self.name.to_string())
+    }
+
+    fn aws_sdk_client(&self) -> Option<aws_config::SdkConfig> {
+        None
     }
 }

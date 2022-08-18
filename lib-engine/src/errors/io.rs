@@ -167,6 +167,8 @@ pub enum Tag {
     TerraformWaitingTimeoutResource,
     TerraformAlreadyExistingResource,
     TerraformWrongState,
+    CloudProviderGetLoadBalancer,
+    CloudProviderGetLoadBalancerTags,
 }
 
 impl From<errors::Tag> for Tag {
@@ -335,6 +337,8 @@ impl From<errors::Tag> for Tag {
             errors::Tag::TerraformAlreadyExistingResource => Tag::TerraformAlreadyExistingResource,
             errors::Tag::TerraformNotEnoughPermissions => Tag::TerraformNotEnoughPermissions,
             errors::Tag::TerraformWrongState => Tag::TerraformWrongState,
+            errors::Tag::CloudProviderGetLoadBalancer => Tag::CloudProviderGetLoadBalancer,
+            errors::Tag::CloudProviderGetLoadBalancerTags => Tag::CloudProviderGetLoadBalancerTags,
         }
     }
 }

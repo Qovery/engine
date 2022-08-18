@@ -38,6 +38,8 @@ impl CloudProvider for AWS {
     }
 }
 
+impl AWS {}
+
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub enum AwsStorageType {
     SC1,
