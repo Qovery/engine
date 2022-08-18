@@ -5,7 +5,7 @@ use crate::cloud_provider::digitalocean::models::vpc::{Vpc, Vpcs};
 use crate::errors::CommandError;
 use crate::models::digital_ocean::DoRegion;
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum VpcInitKind {
     Autodetect,

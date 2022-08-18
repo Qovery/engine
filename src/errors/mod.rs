@@ -32,7 +32,7 @@ pub enum ErrorMessageVerbosity {
 }
 
 /// CommandError: command error, mostly returned by third party tools.
-#[derive(Derivative, Clone, Error, PartialEq)]
+#[derive(Derivative, Clone, Error, PartialEq, Eq)]
 #[derivative(Debug)]
 pub struct CommandError {
     /// full_details: full error message, can contains unsafe text such as passwords and tokens.
@@ -466,7 +466,7 @@ impl From<TerraformError> for CommandError {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 /// Tag: unique identifier for an error.
 pub enum Tag {
     /// Unknown: unknown error.
@@ -762,7 +762,7 @@ pub enum Tag {
     ObjectStorageCannotGetObjectFile,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 /// EngineError: represents an engine error. Engine will always returns such errors carrying context infos easing monitoring and debugging.
 pub struct EngineError {
     /// tag: error unique identifier

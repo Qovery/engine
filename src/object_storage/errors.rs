@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-#[derive(Clone, Error, Debug, PartialEq)]
+#[derive(Clone, Error, Debug, PartialEq, Eq)]
 pub enum ObjectStorageError {
     #[error("Quotas exceeded while performing action on `{bucket_name:?}`: {raw_error_message:?}.")]
     QuotasExceeded {

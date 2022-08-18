@@ -76,16 +76,14 @@ impl Role {
                     .expect("Failed to create Tokio runtime to check if role exist")
                     .block_on(future_create);
 
-                return match created {
+                match created {
                     Ok(_) => Ok(true),
-                    Err(e) => {
-                        return Err(CommandError::new(
-                            format!("Unable to know if `{}` exist on AWS Account", &self.role_name),
-                            Some(e.to_string()),
-                            None,
-                        ));
-                    }
-                };
+                    Err(e) => Err(CommandError::new(
+                        format!("Unable to know if `{}` exist on AWS Account", &self.role_name),
+                        Some(e.to_string()),
+                        None,
+                    )),
+                }
             }
         }
     }

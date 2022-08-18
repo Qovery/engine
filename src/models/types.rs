@@ -34,7 +34,7 @@ pub trait ToTeraContext {
 
 // unfortunately some proposed versions are not SemVer like Elasticache (6.x)
 // this is why we need ot have our own structure
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct VersionsNumber {
     pub(crate) major: String,
     pub(crate) minor: Option<String>,

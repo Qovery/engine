@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ScwInstancesType {
     Gp1Xs,   // 4 cores 16 Gb RAM
     Gp1S,    // 8 cores 32 Gb RAM

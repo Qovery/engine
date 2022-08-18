@@ -11,7 +11,7 @@ use crate::dns_provider::DnsProvider;
 use crate::errors::EngineError;
 use crate::io_models::context::Context;
 
-#[derive(Error, Debug, PartialEq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum EngineConfigError {
     #[error("Build platform is not valid error: {0}")]
     BuildPlatformNotValid(EngineError),

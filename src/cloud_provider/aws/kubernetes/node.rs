@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use strum_macros::EnumIter;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumIter)]
 pub enum AwsInstancesType {
     T2Large,    // 2 cores 8Gb RAM
     T2Xlarge,   // 4 cores 16Gb RAM

@@ -65,7 +65,7 @@ pub mod doks_api;
 pub mod helm_charts;
 pub mod node;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DoksOptions {
     // Digital Ocean

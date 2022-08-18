@@ -23,7 +23,7 @@ bitflags! {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum QuotaExceededError {
     ResourceLimitExceeded {
         resource_type: String,
@@ -37,7 +37,7 @@ pub enum QuotaExceededError {
     ScwNewAccountNeedsValidation,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TerraformError {
     Unknown {
         terraform_args: Vec<String>,

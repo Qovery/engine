@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 // flavors helper: https://pcr.cloud-mercato.com/providers/flavors?provider=digitalocean
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum DoInstancesType {
     S1vcpu1gb,
     S1vcpu2gb,
