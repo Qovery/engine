@@ -135,7 +135,7 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
             (self.send_progress)(line);
         }
     }
-    fn deployment_terminated(&mut self, result: Self::DeploymentResult) {
+    fn deployment_terminated(&mut self, result: &Self::DeploymentResult) {
         let error = match result {
             Ok(_) => {
                 (self.send_success)(format!("✅ Deployment of {} succeeded", self.service_type.to_string()));
@@ -147,7 +147,7 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
         // Special case for app, as if helm timeout this is most likely an issue coming from the user
         if error.tag() == &HelmDeployTimeout {
             (self.send_error)(EngineError::new_engine_error(
-                error,
+                error.clone(),
                 format!(r#"
 ❌ {} failed to be deployed in the given time frame.
 This most likely an issue with its configuration or because the app failed to start correctly.
@@ -160,7 +160,7 @@ Look at the report from above to understand why, and check your applications log
         } else {
             (self.send_error)(error.clone());
             (self.send_error)(EngineError::new_engine_error(
-                error,
+                error.clone(),
                 format!(r#"
 ❌ Deployment of {} failed ! Look at the report above and to understand why.
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
