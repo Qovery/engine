@@ -21,6 +21,7 @@ pub struct Scaleway {
     access_key: String,
     secret_key: String,
     project_id: String,
+    region: String,
     terraform_state_credentials: TerraformStateCredentials,
     listeners: Listeners,
 }
@@ -35,6 +36,7 @@ impl Scaleway {
         access_key: &str,
         secret_key: &str,
         project_id: &str,
+        region: &str,
         terraform_state_credentials: TerraformStateCredentials,
     ) -> Scaleway {
         Scaleway {
@@ -46,6 +48,7 @@ impl Scaleway {
             access_key: access_key.to_string(),
             secret_key: secret_key.to_string(),
             project_id: project_id.to_string(),
+            region: region.to_string(),
             terraform_state_credentials,
             listeners: vec![],
         }
@@ -87,6 +90,10 @@ impl CloudProvider for Scaleway {
 
     fn secret_access_key(&self) -> String {
         self.secret_key.to_string()
+    }
+
+    fn region(&self) -> String {
+        self.region.clone()
     }
 
     fn token(&self) -> &str {
@@ -149,5 +156,9 @@ impl CloudProvider for Scaleway {
 
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::CloudProvider(self.id.to_string(), self.name.to_string())
+    }
+
+    fn aws_sdk_client(&self) -> Option<aws_config::SdkConfig> {
+        None
     }
 }
