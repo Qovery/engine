@@ -10,7 +10,8 @@ use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
 use qovery_engine::cloud_provider::digitalocean::DO;
-use qovery_engine::cloud_provider::models::{ClusterAdvancedSettingsModel, NodeGroups};
+use qovery_engine::cloud_provider::io::ClusterAdvancedSettings;
+use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::container_registry::docr::DOCR;
@@ -284,7 +285,7 @@ pub struct Kubernetes {
     pub region: String,
     pub options: Value,
     pub nodes_groups: Vec<NodeGroups>,
-    pub advanced_settings: ClusterAdvancedSettingsModel,
+    pub advanced_settings: ClusterAdvancedSettings,
 }
 
 impl Kubernetes {

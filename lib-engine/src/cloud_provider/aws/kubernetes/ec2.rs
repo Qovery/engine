@@ -2,8 +2,9 @@ use crate::cloud_provider::aws::kubernetes;
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
+use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{send_progress_on_long_task, Kind, Kubernetes, KubernetesUpgradeStatus};
-use crate::cloud_provider::models::{ClusterAdvancedSettingsModel, InstanceEc2, NodeGroups};
+use crate::cloud_provider::models::{InstanceEc2, NodeGroups};
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
 use crate::dns_provider::DnsProvider;
@@ -38,7 +39,7 @@ pub struct EC2 {
     instance: InstanceEc2,
     listeners: Listeners,
     logger: Box<dyn Logger>,
-    advanced_settings: ClusterAdvancedSettingsModel,
+    advanced_settings: ClusterAdvancedSettings,
 }
 
 impl EC2 {
@@ -55,7 +56,7 @@ impl EC2 {
         options: Options,
         instance: InstanceEc2,
         logger: Box<dyn Logger>,
-        advanced_settings: ClusterAdvancedSettingsModel,
+        advanced_settings: ClusterAdvancedSettings,
     ) -> Result<Self, EngineError> {
         let event_details = kubernetes::event_details(&**cloud_provider, id, name, &region, &context);
         let template_directory = format!("{}/aws-ec2/bootstrap", context.lib_root_dir());
@@ -340,7 +341,7 @@ impl Kubernetes for EC2 {
         send_progress_on_long_task(self, Action::Delete, || kubernetes::delete_error(self))
     }
 
-    fn get_advanced_settings(&self) -> ClusterAdvancedSettingsModel {
-        self.advanced_settings.clone()
+    fn get_advanced_settings(&self) -> &ClusterAdvancedSettings {
+        &self.advanced_settings
     }
 }

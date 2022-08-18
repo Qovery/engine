@@ -18,11 +18,12 @@ use crate::cloud_provider::digitalocean::network::vpc::{
     get_do_random_available_subnet_from_api, get_do_vpc_name_available_from_api, VpcInitKind,
 };
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo, ChartSetValue, HelmChartNamespaces};
+use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
     KubernetesUpgradeStatus, ProviderOptions,
 };
-use crate::cloud_provider::models::{ClusterAdvancedSettingsModel, NodeGroups};
+use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
@@ -109,7 +110,7 @@ pub struct DOKS {
     options: DoksOptions,
     listeners: Listeners,
     logger: Box<dyn Logger>,
-    advanced_settings: ClusterAdvancedSettingsModel,
+    advanced_settings: ClusterAdvancedSettings,
 }
 
 impl DOKS {
@@ -125,7 +126,7 @@ impl DOKS {
         nodes_groups: Vec<NodeGroups>,
         options: DoksOptions,
         logger: Box<dyn Logger>,
-        advanced_settings: ClusterAdvancedSettingsModel,
+        advanced_settings: ClusterAdvancedSettings,
     ) -> Result<Self, EngineError> {
         let template_directory = format!("{}/digitalocean/bootstrap", context.lib_root_dir());
 
@@ -1564,7 +1565,7 @@ impl Kubernetes for DOKS {
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
-    fn get_advanced_settings(&self) -> ClusterAdvancedSettingsModel {
-        self.advanced_settings.clone()
+    fn get_advanced_settings(&self) -> &ClusterAdvancedSettings {
+        &self.advanced_settings
     }
 }

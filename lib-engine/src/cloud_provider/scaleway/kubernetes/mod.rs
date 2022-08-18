@@ -3,11 +3,12 @@ pub mod node;
 
 use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
+use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
     is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
     KubernetesUpgradeStatus, ProviderOptions,
 };
-use crate::cloud_provider::models::{ClusterAdvancedSettingsModel, NodeGroups, NodeGroupsFormat};
+use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::scaleway::kubernetes::node::{ScwInstancesType, ScwNodeGroup};
@@ -146,7 +147,7 @@ pub struct Kapsule {
     options: KapsuleOptions,
     listeners: Listeners,
     logger: Box<dyn Logger>,
-    advanced_settings: ClusterAdvancedSettingsModel,
+    advanced_settings: ClusterAdvancedSettings,
 }
 
 impl Kapsule {
@@ -162,7 +163,7 @@ impl Kapsule {
         nodes_groups: Vec<NodeGroups>,
         options: KapsuleOptions,
         logger: Box<dyn Logger>,
-        advanced_settings: ClusterAdvancedSettingsModel,
+        advanced_settings: ClusterAdvancedSettings,
     ) -> Result<Kapsule, EngineError> {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
 
@@ -1808,7 +1809,7 @@ impl Kubernetes for Kapsule {
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
-    fn get_advanced_settings(&self) -> ClusterAdvancedSettingsModel {
-        self.advanced_settings.clone()
+    fn get_advanced_settings(&self) -> &ClusterAdvancedSettings {
+        &self.advanced_settings
     }
 }

@@ -1,4 +1,3 @@
-use crate::cloud_provider::models::ClusterAdvancedSettingsModel;
 use crate::cloud_provider::Kind as KindModel;
 use serde_derive::{Deserialize, Serialize};
 
@@ -20,7 +19,7 @@ impl From<KindModel> for Kind {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct ClusterAdvancedSettings {
     #[serde(alias = "load_balancer.size")]
@@ -37,16 +36,6 @@ impl Default for ClusterAdvancedSettings {
             load_balancer_size: "lb-s".to_string(),
             registry_image_retention_time: 31536000,
             pleco_resources_ttl: -1,
-        }
-    }
-}
-
-impl From<ClusterAdvancedSettingsModel> for ClusterAdvancedSettings {
-    fn from(advanced_settings: ClusterAdvancedSettingsModel) -> Self {
-        ClusterAdvancedSettings {
-            load_balancer_size: advanced_settings.load_balancer_size,
-            registry_image_retention_time: advanced_settings.registry_image_retention_time,
-            pleco_resources_ttl: advanced_settings.pleco_resources_ttl,
         }
     }
 }
