@@ -30,61 +30,65 @@ pub enum AbortReason {
     Timeout(Duration),
     Canceled(String),
 }
-pub struct CommandKiller<'a> {
-    should_abort: Box<dyn Fn() -> Option<AbortReason> + 'a>,
+
+pub enum CommandKillerTrigger<'a> {
+    Timeout(Instant, Duration),
+    Cancelable(&'a dyn Fn() -> bool),
+}
+
+impl<'a> CommandKillerTrigger<'a> {
+    pub fn should_abort(&self) -> Option<AbortReason> {
+        match self {
+            CommandKillerTrigger::Timeout(since, timeout) => {
+                if &since.elapsed() >= timeout {
+                    Some(AbortReason::Timeout(*timeout))
+                } else {
+                    None
+                }
+            }
+            CommandKillerTrigger::Cancelable(func) => {
+                if (func)() {
+                    Some(AbortReason::Canceled("Task Canceled".to_string()))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
+pub enum CommandKiller<'a> {
+    None,
+    One(CommandKillerTrigger<'a>),
+    Two(CommandKillerTrigger<'a>, CommandKillerTrigger<'a>),
 }
 
 impl<'a> CommandKiller<'a> {
-    pub fn never() -> CommandKiller<'a> {
-        CommandKiller {
-            should_abort: Box::new(|| None),
+    pub fn should_abort(&self) -> Option<AbortReason> {
+        match self {
+            CommandKiller::None => None,
+            CommandKiller::One(cmd) => cmd.should_abort(),
+            CommandKiller::Two(first, second) => first.should_abort().or_else(|| second.should_abort()),
         }
+    }
+
+    pub fn never() -> CommandKiller<'a> {
+        CommandKiller::None
     }
 
     pub fn from_timeout(timeout: Duration) -> CommandKiller<'a> {
-        let now = Instant::now();
-        CommandKiller {
-            should_abort: Box::new(move || {
-                if now.elapsed() >= timeout {
-                    return Some(AbortReason::Timeout(timeout));
-                }
-
-                None
-            }),
-        }
+        CommandKiller::One(CommandKillerTrigger::Timeout(Instant::now(), timeout))
     }
 
     pub fn from_cancelable(is_canceled: &'a dyn Fn() -> bool) -> CommandKiller<'a> {
-        CommandKiller {
-            should_abort: Box::new(move || {
-                if is_canceled() {
-                    return Some(AbortReason::Canceled("Task canceled".to_string()));
-                }
-                None
-            }),
-        }
+        CommandKiller::One(CommandKillerTrigger::Cancelable(is_canceled))
     }
 
     pub fn from(timeout: Duration, is_canceled: &'a dyn Fn() -> bool) -> CommandKiller<'a> {
-        let has_timeout = Self::from_timeout(timeout);
-        let is_canceled = Self::from_cancelable(is_canceled);
-        CommandKiller {
-            should_abort: Box::new(move || {
-                if let Some(reason) = (has_timeout.should_abort)() {
-                    return Some(reason);
-                }
-
-                if let Some(reason) = (is_canceled.should_abort)() {
-                    return Some(reason);
-                }
-
-                None
-            }),
-        }
-    }
-
-    pub fn should_abort(&self) -> Option<AbortReason> {
-        (self.should_abort)()
+        CommandKiller::Two(
+            CommandKillerTrigger::Timeout(Instant::now(), timeout),
+            CommandKillerTrigger::Cancelable(is_canceled),
+        )
     }
 }
 
