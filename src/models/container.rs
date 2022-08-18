@@ -155,7 +155,7 @@ impl<T: CloudProvider> Container<T> {
     }
 
     fn kube_service_name(&self) -> String {
-        format!("container-{}", self.long_id)
+        format!("container-{}", to_short_id(&self.long_id))
     }
 
     pub fn registry(&self) -> &Registry {

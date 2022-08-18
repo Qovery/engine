@@ -2,12 +2,11 @@ use crate::cloud_provider::aws::kubernetes;
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
+use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
     send_progress_on_long_task, Kind, Kubernetes, KubernetesNodesType, KubernetesUpgradeStatus,
 };
-use crate::cloud_provider::models::{
-    ClusterAdvancedSettingsModel, KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState,
-};
+use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd::kubectl::{kubectl_exec_scale_replicas, ScalingKind};
@@ -47,7 +46,7 @@ pub struct EKS {
     options: Options,
     listeners: Listeners,
     logger: Box<dyn Logger>,
-    advanced_settings: ClusterAdvancedSettingsModel,
+    advanced_settings: ClusterAdvancedSettings,
 }
 
 impl EKS {
@@ -64,7 +63,7 @@ impl EKS {
         options: Options,
         nodes_groups: Vec<NodeGroups>,
         logger: Box<dyn Logger>,
-        advanced_settings: ClusterAdvancedSettingsModel,
+        advanced_settings: ClusterAdvancedSettings,
     ) -> Result<Self, EngineError> {
         let event_details = kubernetes::event_details(&**cloud_provider, id, name, &region, &context);
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
@@ -678,8 +677,8 @@ impl Kubernetes for EKS {
         send_progress_on_long_task(self, Action::Delete, || kubernetes::delete_error(self))
     }
 
-    fn get_advanced_settings(&self) -> ClusterAdvancedSettingsModel {
-        self.advanced_settings.clone()
+    fn get_advanced_settings(&self) -> &ClusterAdvancedSettings {
+        &self.advanced_settings
     }
 }
 
