@@ -29,6 +29,8 @@ const DB_STOPPED_STATE: &str = "stopped";
 
 #[derive(Deserialize, Default)]
 struct CacheCluster {
+    #[serde(alias = "CacheClusterId")]
+    pub cache_cluster_id: String,
     #[serde(alias = "CacheClusterStatus")]
     pub cache_cluster_status: String,
 }
@@ -65,7 +67,6 @@ struct DocDbClustersResponse {
 fn get_managed_database_status(
     db_type: service::DatabaseType,
     db_id: &str,
-    db_version: &str,
     credentials: &[(&str, &str)],
 ) -> Result<String, (cmd::command::CommandError, String)> {
     let mut cmd = match db_type {
@@ -79,23 +80,22 @@ fn get_managed_database_status(
             &["docdb", "describe-db-clusters", "--db-cluster-identifier", db_id],
             credentials,
         ),
-        service::DatabaseType::Redis => match db_version.to_string().starts_with('5') {
-            true => QoveryCommand::new(
-                "aws",
-                &["elasticache", "describe-cache-clusters", "--cache-cluster-id", db_id],
-                credentials,
-            ),
-            false => QoveryCommand::new(
+        service::DatabaseType::Redis => {
+            let redis_cache_cluster_id = find_redis_cache_cluster_id(db_id, credentials)?;
+            if redis_cache_cluster_id.is_empty() {
+                return Ok("".to_string());
+            }
+            QoveryCommand::new(
                 "aws",
                 &[
                     "elasticache",
                     "describe-cache-clusters",
                     "--cache-cluster-id",
-                    format!("{}{}", db_id, "-001").as_str(),
+                    &redis_cache_cluster_id,
                 ],
                 credentials,
-            ),
-        },
+            )
+        }
     };
 
     let mut output_stdout: Vec<String> = vec![];
@@ -132,6 +132,44 @@ fn get_managed_database_status(
                 .unwrap_or_default())
         }
     }
+}
+
+/// We can have different cache_cluster_id patterns according to managed redis version:
+/// - v5: "z${db_id}"
+/// - v6 created before 2022-21-07: "z${db_id}"
+/// - v6 created after 2022-21-07: "z${db_id}-001"
+///
+/// So we need to get the correct cache_cluster_id by filtering every cache cluster containing the
+/// text "db_id"
+fn find_redis_cache_cluster_id(
+    db_id: &str,
+    credentials: &[(&str, &str)],
+) -> Result<String, (cmd::command::CommandError, String)> {
+    let mut describe_cache_clusters_command =
+        QoveryCommand::new("aws", &["elasticache", "describe-cache-clusters"], credentials);
+
+    let mut output_stdout: Vec<String> = vec![];
+    let mut output_stderr: Vec<String> = vec![];
+    let cache_clusters_result = describe_cache_clusters_command
+        .exec_with_output(&mut |line| output_stdout.push(line), &mut |line| output_stderr.push(line));
+
+    if let Err(cmd_error) = cache_clusters_result {
+        output_stdout.extend(output_stderr);
+        return Err((cmd_error, output_stdout.join("\n").trim().to_string()));
+    }
+
+    let cache_clusters: CacheClustersResponse =
+        serde_json::from_str(output_stdout.join("").as_str()).unwrap_or_default();
+    let cache_cluster_id_or_default = cache_clusters
+        .cache_clusters
+        .into_iter()
+        .find(|it| it.cache_cluster_id.contains(db_id))
+        .map(|it| it.cache_cluster_id)
+        // if no cache_cluster is found, return default will indicate to retry until timeout
+        // is reached in parent method
+        .unwrap_or_default();
+
+    Ok(cache_cluster_id_or_default)
 }
 
 fn start_stop_managed_database(
@@ -189,7 +227,6 @@ fn await_db_state(
     timeout: Duration,
     db_type: service::DatabaseType,
     db_id: &str,
-    db_version: &str,
     credentials: &[(&str, &str)],
     state: &str,
 ) -> Result<(), Option<(cmd::command::CommandError, String)>> {
@@ -200,7 +237,7 @@ fn await_db_state(
             break Err(None);
         }
 
-        match get_managed_database_status(db_type, db_id, db_version, credentials) {
+        match get_managed_database_status(db_type, db_id, credentials) {
             Ok(status) if status == state => break Ok(()),
             Ok(_) => thread::sleep(Duration::from_secs(30)),
             Err(err) => break Err(Some(err)),
@@ -301,7 +338,7 @@ where
     };
 
     // If the database is not in the available state, try to start it
-    match get_managed_database_status(db.db_type(), &db.fqdn_id, db.version().as_str(), &credentials) {
+    match get_managed_database_status(db.db_type(), &db.fqdn_id, &credentials) {
         Ok(status) if status == DB_READY_STATE => {}
         Ok(_) | Err(_) => {
             let _ = start_stop_managed_database(db.db_type(), &db.fqdn_id, &credentials, false);
@@ -312,7 +349,6 @@ where
         Duration::from_secs(60 * 30),
         db.db_type(),
         &db.fqdn_id,
-        db.version().as_str(),
         &credentials,
         DB_READY_STATE,
     );
@@ -431,7 +467,6 @@ where
                 Duration::from_secs(60 * 30),
                 self.db_type(),
                 &self.fqdn_id,
-                self.version().as_str(),
                 &credentials,
                 DB_STOPPED_STATE,
             );
