@@ -183,7 +183,13 @@ impl<'a> Transaction<'a> {
             // Be sure that our repository exist before trying to pull/push images from it
             self.engine
                 .container_registry()
-                .create_repository(app.get_build().image.repository_name())
+                .create_repository(
+                    app.get_build().image.repository_name(),
+                    self.engine
+                        .kubernetes()
+                        .get_advanced_settings()
+                        .registry_image_retention_time,
+                )
                 .map_err(cr_to_engine_error)?;
 
             // Ok now everything is setup, we can try to build the app

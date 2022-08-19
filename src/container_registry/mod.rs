@@ -35,7 +35,11 @@ pub trait ContainerRegistry {
     // i.e: docker.io/erebe or docker.io/qovery
     // All providers requires action for that
     // The convention for us is that we create one per application
-    fn create_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError>;
+    fn create_repository(
+        &self,
+        repository_name: &str,
+        image_retention_time_in_seconds: u32,
+    ) -> Result<(), ContainerRegistryError>;
     fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError>;
 
     fn delete_image(&self, image_name: &Image) -> Result<(), ContainerRegistryError>;

@@ -19,6 +19,7 @@ use uuid::Uuid;
 
 use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::CloudProvider;
 use crate::cloud_provider::Kind as CloudProviderKind;
@@ -483,6 +484,8 @@ pub trait Kubernetes {
 
         Ok(())
     }
+
+    fn get_advanced_settings(&self) -> &ClusterAdvancedSettings;
 }
 
 pub trait KubernetesNode {

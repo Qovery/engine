@@ -18,3 +18,24 @@ impl From<KindModel> for Kind {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(default)]
+pub struct ClusterAdvancedSettings {
+    #[serde(alias = "load_balancer.size")]
+    pub load_balancer_size: String,
+    #[serde(alias = "registry.image_retention_time")]
+    pub registry_image_retention_time: u32,
+    #[serde(alias = "pleco.resources.ttl")]
+    pub pleco_resources_ttl: i32,
+}
+
+impl Default for ClusterAdvancedSettings {
+    fn default() -> Self {
+        ClusterAdvancedSettings {
+            load_balancer_size: "lb-s".to_string(),
+            registry_image_retention_time: 31536000,
+            pleco_resources_ttl: -1,
+        }
+    }
+}

@@ -196,7 +196,11 @@ impl ContainerRegistry for DOCR {
         Ok(())
     }
 
-    fn create_repository(&self, _repository_name: &str) -> Result<(), ContainerRegistryError> {
+    fn create_repository(
+        &self,
+        _repository_name: &str,
+        _image_retention_time_in_seconds: u32,
+    ) -> Result<(), ContainerRegistryError> {
         // Nothing to do, DO only allow one registry and create repository on the flight when image are pushed
         Ok(())
     }

@@ -50,7 +50,7 @@ variable "database_tags" {
     "q_client_id"                                                                    = "{{ owner_id }}"
     "q_environment_id"                                                               = "{{ environment_id }}"
     "q_project_id"                                                                   = "{{ project_id }}"
-    {% if resource_expiration_in_seconds is defined %}
+    {% if resource_expiration_in_seconds > -1 %}
     "ttl"                                                                            = "{{ resource_expiration_in_seconds }}"
     {% endif %}
     {% if snapshot is defined and snapshot["snapshot_id"] %} meta_last_restored_from = { { snapshot['snapshot_id'] } }
@@ -59,7 +59,7 @@ variable "database_tags" {
   type        = map
 }
 
-{%- if resource_expiration_in_seconds is defined %}
+{%- if resource_expiration_in_seconds > -1 %}
 # Pleco ttl
 variable "resource_expiration_in_seconds" {
   description = "Resource expiration in seconds"

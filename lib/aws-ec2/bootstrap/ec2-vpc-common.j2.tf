@@ -7,7 +7,7 @@ locals {
     Name = "qovery-ec2-${var.kubernetes_cluster_id}",
     "kubernetes.io/cluster/qovery-${var.kubernetes_cluster_id}" = "shared",
     "kubernetes.io/role/elb" = 1,
-    {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds,{% endif %}
+    {% if resource_expiration_in_seconds > -1 %}ttl = var.resource_expiration_in_seconds,{% endif %}
   }
   )
 

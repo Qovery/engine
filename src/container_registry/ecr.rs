@@ -194,7 +194,11 @@ impl ECR {
         }
     }
 
-    fn create_repository(&self, repository_name: &str) -> Result<Repository, ContainerRegistryError> {
+    fn create_repository(
+        &self,
+        repository_name: &str,
+        image_retention_time_in_seconds: u32,
+    ) -> Result<Repository, ContainerRegistryError> {
         let container_registry_request = DescribeRepositoriesRequest {
             repository_names: Some(vec![repository_name.to_string()]),
             ..Default::default()
@@ -256,9 +260,9 @@ impl ECR {
         };
 
         // apply retention policy
-        let retention_policy_in_days = match self.context.is_test_cluster() {
-            true => 1,
-            false => 365,
+        let retention_policy_in_days = match image_retention_time_in_seconds / 86400 {
+            0..=1 => 1,
+            _ => image_retention_time_in_seconds / 86400,
         };
         let lifecycle_policy_text = json!({
           "rules": [
@@ -294,7 +298,11 @@ impl ECR {
         }
     }
 
-    fn get_or_create_repository(&self, repository_name: &str) -> Result<Repository, ContainerRegistryError> {
+    fn get_or_create_repository(
+        &self,
+        repository_name: &str,
+        image_retention_time_in_seconds: u32,
+    ) -> Result<Repository, ContainerRegistryError> {
         self.log_info(format!("🗂️ Provisioning container repository {}", repository_name));
 
         // check if the repository already exists
@@ -303,7 +311,7 @@ impl ECR {
             return Ok(repo);
         }
 
-        self.create_repository(repository_name)
+        self.create_repository(repository_name, image_retention_time_in_seconds)
     }
 
     pub fn get_credentials(ecr_client: &EcrClient) -> Result<ECRCredentials, ContainerRegistryError> {
@@ -380,8 +388,12 @@ impl ContainerRegistry for ECR {
         Ok(())
     }
 
-    fn create_repository(&self, name: &str) -> Result<(), ContainerRegistryError> {
-        let _ = self.get_or_create_repository(name)?;
+    fn create_repository(
+        &self,
+        name: &str,
+        image_retention_time_in_seconds: u32,
+    ) -> Result<(), ContainerRegistryError> {
+        let _ = self.get_or_create_repository(name, image_retention_time_in_seconds)?;
         Ok(())
     }
 

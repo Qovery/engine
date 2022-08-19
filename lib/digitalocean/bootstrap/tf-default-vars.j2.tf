@@ -190,7 +190,7 @@ variable "forced_upgrade" {
   type = string
 }
 
-{%- if resource_expiration_in_seconds is defined %}
+{%- if resource_expiration_in_seconds > -1 %}
 # Pleco ttl
 variable "resource_expiration_in_seconds" {
 description = "Resource expiration in seconds"

@@ -280,9 +280,10 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         context.insert("database_id", &self.id());
         context.insert("publicly_accessible", &self.publicly_accessible);
 
-        if self.context.resource_expiration_in_seconds().is_some() {
-            context.insert("resource_expiration_in_seconds", &self.context.resource_expiration_in_seconds())
-        }
+        context.insert(
+            "resource_expiration_in_seconds",
+            &kubernetes.get_advanced_settings().pleco_resources_ttl,
+        );
 
         Ok(context)
     }

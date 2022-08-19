@@ -6,7 +6,7 @@ locals {
     Region         = var.region
     creationDate   = time_static.on_cluster_create.rfc3339
     QoveryProduct = "DOKS"
-    {% if resource_expiration_in_seconds is defined %}ttl = var.resource_expiration_in_seconds{% endif %}
+    {% if resource_expiration_in_seconds > -1 %}ttl = var.resource_expiration_in_seconds{% endif %}
   }
   # NOTE:
   # - Digital Ocean doesn't support KV style tags

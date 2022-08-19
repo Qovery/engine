@@ -155,7 +155,7 @@ impl<T: CloudProvider> Container<T> {
     }
 
     fn kube_service_name(&self) -> String {
-        format!("container-{}", self.long_id)
+        format!("container-{}", to_short_id(&self.long_id))
     }
 
     pub fn registry(&self) -> &Registry {
@@ -220,7 +220,7 @@ impl<T: CloudProvider> Container<T> {
                     docker_json_config: docker_json.to_string(),
                 }),
             environment_variables: self.environment_variables.clone(),
-            resource_expiration_in_seconds: self.context.resource_expiration_in_seconds(),
+            resource_expiration_in_seconds: Some(kubernetes.get_advanced_settings().pleco_resources_ttl),
         };
 
         ctx
@@ -424,5 +424,5 @@ pub(super) struct ContainerTeraContext {
     pub(super) service: ServiceTeraContext,
     pub(super) registry: Option<RegistryTeraContext>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
-    pub(super) resource_expiration_in_seconds: Option<u32>,
+    pub(super) resource_expiration_in_seconds: Option<i32>,
 }

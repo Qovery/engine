@@ -29,7 +29,7 @@ pub struct S3 {
     secret_access_key: String,
     region: AwsRegion,
     bucket_versioning_activated: bool,
-    bucket_ttl_in_seconds: Option<u32>,
+    bucket_ttl_in_seconds: Option<i32>,
 }
 
 impl S3 {
@@ -41,7 +41,7 @@ impl S3 {
         secret_access_key: String,
         region: AwsRegion,
         bucket_versioning_activated: bool,
-        bucket_ttl_in_seconds: Option<u32>,
+        bucket_ttl_in_seconds: Option<i32>,
     ) -> Self {
         S3 {
             context,
