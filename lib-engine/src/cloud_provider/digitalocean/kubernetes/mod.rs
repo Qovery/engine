@@ -638,6 +638,7 @@ impl DOKS {
             acme_url: self.lets_encrypt_url(),
             dns_provider_config: self.dns_provider().provider_configuration(),
             disable_pleco: self.context.disable_pleco(),
+            cluster_advanced_settings: self.advanced_settings.clone(),
         };
 
         let chart_prefix_path = &temp_dir;
@@ -1565,7 +1566,7 @@ impl Kubernetes for DOKS {
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
-    fn get_advanced_settings(&self) -> &ClusterAdvancedSettings {
+    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
     }
 }

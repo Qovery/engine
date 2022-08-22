@@ -563,11 +563,8 @@ impl Kapsule {
         context.insert("scw_ks_pool_autoscale", &true);
 
         // Advanced settings
-        context.insert("load_balancer_size", &self.get_advanced_settings().load_balancer_size);
-        context.insert(
-            "resource_expiration_in_seconds",
-            &self.get_advanced_settings().pleco_resources_ttl,
-        );
+        context.insert("load_balancer_size", &self.advanced_settings().load_balancer_size);
+        context.insert("resource_expiration_in_seconds", &self.advanced_settings().pleco_resources_ttl);
 
         Ok(context)
     }
@@ -941,6 +938,7 @@ impl Kapsule {
             self.dns_provider().provider_configuration(),
             self.context.disable_pleco(),
             self.options.clone(),
+            self.advanced_settings().clone(),
         );
 
         self.logger().log(EngineEvent::Info(
@@ -1809,7 +1807,7 @@ impl Kubernetes for Kapsule {
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
-    fn get_advanced_settings(&self) -> &ClusterAdvancedSettings {
+    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
     }
 }

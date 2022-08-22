@@ -3,6 +3,7 @@ use crate::cloud_provider::helm::{
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, ChartValuesGenerated, ClusterAgentContext,
     CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
+use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use crate::cmd::helm_utils::CRDSUpdate;
@@ -46,6 +47,7 @@ pub struct ChartsConfigPrerequisites {
     pub disable_pleco: bool,
     // qovery options form json input
     pub infra_options: KapsuleOptions,
+    pub cluster_advanced_settings: ClusterAdvancedSettings,
 }
 
 impl ChartsConfigPrerequisites {
@@ -73,6 +75,7 @@ impl ChartsConfigPrerequisites {
         dns_provider_config: DnsProviderConfiguration,
         disable_pleco: bool,
         infra_options: KapsuleOptions,
+        cluster_advanced_settings: ClusterAdvancedSettings,
     ) -> Self {
         ChartsConfigPrerequisites {
             organization_id,
@@ -99,6 +102,7 @@ impl ChartsConfigPrerequisites {
             dns_provider_config,
             disable_pleco,
             infra_options,
+            cluster_advanced_settings,
         }
     }
 }
@@ -246,6 +250,24 @@ pub fn scw_helm_charts(
             timeout_in_seconds: 900,
             values_files: vec![chart_path("chart_values/loki.yaml")],
             values: vec![
+                ChartSetValue {
+                    key: "config.chunk_store_config.max_look_back_period".to_string(),
+                    value: format!(
+                        "{}w",
+                        chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .loki_log_retention_in_week
+                    ),
+                },
+                ChartSetValue {
+                    key: "config.table_manager.retention_period".to_string(),
+                    value: format!(
+                        "{}w",
+                        chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .loki_log_retention_in_week
+                    ),
+                },
                 ChartSetValue {
                     key: "config.storage_config.aws.s3".to_string(),
                     value: qovery_terraform_config.loki_storage_config_scaleway_s3,
