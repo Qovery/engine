@@ -220,7 +220,7 @@ impl<T: CloudProvider> Container<T> {
                     docker_json_config: docker_json.to_string(),
                 }),
             environment_variables: self.environment_variables.clone(),
-            resource_expiration_in_seconds: Some(kubernetes.get_advanced_settings().pleco_resources_ttl),
+            resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
         };
 
         ctx

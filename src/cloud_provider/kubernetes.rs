@@ -485,7 +485,7 @@ pub trait Kubernetes {
         Ok(())
     }
 
-    fn get_advanced_settings(&self) -> &ClusterAdvancedSettings;
+    fn advanced_settings(&self) -> &ClusterAdvancedSettings;
 }
 
 pub trait KubernetesNode {

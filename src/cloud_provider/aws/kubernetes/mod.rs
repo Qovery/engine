@@ -596,11 +596,11 @@ fn tera_context(
     // Advanced settings
     context.insert(
         "registry_image_retention_time",
-        &kubernetes.get_advanced_settings().registry_image_retention_time,
+        &kubernetes.advanced_settings().registry_image_retention_time,
     );
     context.insert(
         "resource_expiration_in_seconds",
-        &kubernetes.get_advanced_settings().pleco_resources_ttl,
+        &kubernetes.advanced_settings().pleco_resources_ttl,
     );
 
     Ok(context)
@@ -1108,6 +1108,7 @@ fn create(
                 acme_url: lets_encrypt_url(kubernetes.context()),
                 dns_provider_config: kubernetes.dns_provider().provider_configuration(),
                 disable_pleco: kubernetes.context().disable_pleco(),
+                cluster_advanced_settings: kubernetes.advanced_settings().clone(),
             };
             eks_aws_helm_charts(
                 format!("{}/qovery-tf-config.json", &temp_dir).as_str(),

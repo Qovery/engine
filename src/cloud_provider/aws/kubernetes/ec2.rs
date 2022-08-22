@@ -341,7 +341,7 @@ impl Kubernetes for EC2 {
         send_progress_on_long_task(self, Action::Delete, || kubernetes::delete_error(self))
     }
 
-    fn get_advanced_settings(&self) -> &ClusterAdvancedSettings {
+    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
     }
 }

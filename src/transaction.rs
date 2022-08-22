@@ -187,7 +187,7 @@ impl<'a> Transaction<'a> {
                     app.get_build().image.repository_name(),
                     self.engine
                         .kubernetes()
-                        .get_advanced_settings()
+                        .advanced_settings()
                         .registry_image_retention_time,
                 )
                 .map_err(cr_to_engine_error)?;
