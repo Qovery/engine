@@ -1,5 +1,6 @@
-use k8s_openapi::api::core::v1::{Namespace, Secret};
-use kube::api::{ObjectMeta, PostParams};
+use k8s_openapi::api::core::v1::{Namespace, Secret, Service};
+use kube::api::{ListParams, ObjectMeta, PostParams};
+use kube::core::ObjectList;
 use kube::{Api, Error};
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
@@ -1256,6 +1257,49 @@ pub async fn kube_does_secret_exists(kube: &kube::Client, name: &str, namespace:
     }
 }
 
+pub async fn kube_list_services(
+    kube: &kube::Client,
+    namespace_name: Option<&str>,
+    labels_selector: Option<&str>,
+) -> Result<ObjectList<Service>, CommandError> {
+    let client: Api<Service> = match namespace_name {
+        Some(namespace_name) => Api::namespaced(kube.clone(), namespace_name),
+        None => Api::all(kube.clone()),
+    };
+
+    let params = match labels_selector {
+        Some(x) => ListParams::default().labels(x),
+        None => ListParams::default(),
+    };
+
+    match client.list(&params).await {
+        Ok(x) => Ok(x),
+        Err(e) => Err(CommandError::new(
+            "Error while trying to get kubernetes services".to_string(),
+            Some(e.to_string()),
+            None,
+        )),
+    }
+}
+
+pub fn filter_svc_loadbalancers(load_balancers: ObjectList<Service>) -> Vec<Service> {
+    let mut filtered_load_balancers = Vec::new();
+
+    for service in load_balancers.into_iter() {
+        let spec = match &service.spec {
+            Some(x) => x,
+            None => continue,
+        };
+
+        match &spec.type_ {
+            Some(x) if x == "LoadBalancer" => filtered_load_balancers.push(service),
+            _ => continue,
+        };
+    }
+
+    filtered_load_balancers
+}
+
 pub async fn kube_create_namespace_if_not_exists(
     kube: &kube::Client,
     namespace_name: &str,
@@ -1312,12 +1356,15 @@ pub async fn kube_copy_secret_to_another_namespace(
 #[cfg(test)]
 mod tests {
 
+    use k8s_openapi::api::core::v1::{Service, ServiceSpec};
+    use kube::core::{ListMeta, ObjectList, ObjectMeta};
+
     use crate::cloud_provider::Kind::Aws;
 
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, convert_k8s_cpu_value_to_f32,
-        kube_create_namespace_if_not_exists, kube_does_secret_exists, validate_k8s_required_cpu_and_burstable,
-        KubernetesNodesType,
+        filter_svc_loadbalancers, kube_create_namespace_if_not_exists, kube_does_secret_exists, kube_list_services,
+        validate_k8s_required_cpu_and_burstable, KubernetesNodesType,
     };
     use crate::cloud_provider::models::CpuLimits;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
@@ -1328,38 +1375,89 @@ mod tests {
     use crate::models::types::VersionsNumber;
     use crate::runtime::block_on;
     use crate::utilities::get_kube_client;
+    use std::env;
     use std::str::FromStr;
 
     use super::kube_copy_secret_to_another_namespace;
-    pub const KUBECONFIG_PATH: &str = "/home/pmavro/kubeconfig";
 
-    #[ignore]
-    #[allow(dead_code)]
+    pub fn kubeconfig_path() -> String {
+        env::var("HOME").unwrap() + "/.kube/config"
+    }
+
+    pub fn get_svc_template() -> ObjectList<Service> {
+        ObjectList {
+            metadata: ListMeta { ..Default::default() },
+            items: vec![
+                Service {
+                    metadata: ObjectMeta {
+                        name: Some("loadbalancer".to_string()),
+                        namespace: Some("ns0".to_string()),
+                        ..Default::default()
+                    },
+                    spec: Some(ServiceSpec {
+                        type_: Some("LoadBalancer".to_string()),
+                        ..Default::default()
+                    }),
+                    status: None,
+                },
+                Service {
+                    metadata: ObjectMeta {
+                        name: Some("clusterip".to_string()),
+                        namespace: Some("ns1".to_string()),
+                        ..Default::default()
+                    },
+                    spec: Some(ServiceSpec {
+                        type_: Some("ClusterIp".to_string()),
+                        ..Default::default()
+                    }),
+                    status: None,
+                },
+            ],
+        }
+    }
+
     #[test]
+    #[cfg(feature = "test-local-kube")]
+    pub fn k8s_get_services() {
+        let kube_client = block_on(get_kube_client(kubeconfig_path(), &[])).unwrap();
+        let svcs = block_on(kube_list_services(&kube_client, None, None));
+        assert!(svcs.is_ok());
+        assert!(!svcs.unwrap().items.is_empty());
+    }
+
+    #[test]
+    pub fn k8s_get_filter_aws_loadbalancers() {
+        let svcs = get_svc_template();
+        let filtered_lbs = filter_svc_loadbalancers(svcs);
+        assert_eq!(filtered_lbs.len(), 1);
+        assert_eq!(filtered_lbs[0].clone().metadata.name.unwrap(), "loadbalancer");
+        assert_eq!(filtered_lbs[0].clone().metadata.namespace.unwrap(), "ns0");
+    }
+
+    #[test]
+    #[cfg(feature = "test-local-kube")]
     pub fn k8s_create_namespace() {
-        let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
+        let kube_client = block_on(get_kube_client(kubeconfig_path(), &[])).unwrap();
         assert!(block_on(kube_create_namespace_if_not_exists(&kube_client, "qovery-test-ns", None)).is_ok(),);
     }
 
-    #[ignore]
-    #[allow(dead_code)]
     #[test]
+    #[cfg(feature = "test-local-kube")]
     pub fn k8s_does_secret_exists_test() {
-        let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
-        let res = block_on(kube_does_secret_exists(&kube_client, "awsecr-cred", "default")).unwrap();
+        let kube_client = block_on(get_kube_client(kubeconfig_path(), &[])).unwrap();
+        let res = block_on(kube_does_secret_exists(&kube_client, "k3s-serving", "kube-system")).unwrap();
         assert!(res);
     }
 
-    #[ignore]
-    #[allow(dead_code)]
     #[test]
+    #[cfg(feature = "test-local-kube")]
     pub fn k8s_copy_secret_test() {
-        let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
+        let kube_client = block_on(get_kube_client(kubeconfig_path(), &[])).unwrap();
         block_on(kube_copy_secret_to_another_namespace(
             &kube_client,
-            "awsecr-cred",
+            "k3s-serving",
+            "kube-system",
             "default",
-            "qovery",
         ))
         .unwrap();
     }
