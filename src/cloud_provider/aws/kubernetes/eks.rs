@@ -433,17 +433,6 @@ impl Kubernetes for EKS {
             }
         }
 
-        if let Err(e) = self.delete_crashlooping_pods(
-            None,
-            None,
-            Some(3),
-            self.cloud_provider().credentials_environment_variables(),
-            Infrastructure(InfrastructureStep::Upgrade),
-        ) {
-            self.logger().log(EngineEvent::Error(e.clone(), None));
-            return Err(e);
-        }
-
         //
         // Upgrade worker nodes
         //
@@ -500,9 +489,6 @@ impl Kubernetes for EKS {
             EventMessage::new_from_safe("Upgrading Kubernetes worker nodes.".to_string()),
         ));
 
-        // Disable cluster autoscaler deployment
-        self.set_cluster_autoscaler_replicas(event_details.clone(), 0)?;
-
         if let Err(e) = self.delete_crashlooping_pods(
             None,
             None,
@@ -522,35 +508,27 @@ impl Kubernetes for EKS {
             return Err(e);
         }
 
-        match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
-            Ok(_) => {
-                // ensure all nodes are ready on Kubernetes
-                match self.check_workers_on_create() {
-                    Ok(_) => {
-                        self.send_to_customer(
-                            format!("Kubernetes {} nodes have been successfully upgraded", self.name()).as_str(),
-                            &listeners_helper,
-                        );
-                        self.logger().log(EngineEvent::Info(
-                            event_details.clone(),
-                            EventMessage::new_from_safe("Kubernetes nodes have been successfully upgraded".to_string()),
-                        ))
-                    }
-                    Err(e) => {
-                        return Err(EngineError::new_k8s_node_not_ready(event_details, e));
-                    }
-                };
-            }
-            Err(e) => {
-                // enable cluster autoscaler deployment
-                self.set_cluster_autoscaler_replicas(event_details.clone(), 1)?;
+        // Disable cluster autoscaler deployment and be sure we re-enable it on exist
+        let _ = scopeguard::guard(self.set_cluster_autoscaler_replicas(event_details.clone(), 0)?, |_| {
+            let _ = self.set_cluster_autoscaler_replicas(event_details.clone(), 1);
+        });
 
-                return Err(EngineError::new_terraform_error(event_details, e));
-            }
-        }
+        terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy())
+            .map_err(|e| EngineError::new_terraform_error(event_details.clone(), e))?;
 
-        // enable cluster autoscaler deployment
-        self.set_cluster_autoscaler_replicas(event_details, 1)
+        self.check_workers_on_create()
+            .map_err(|e| EngineError::new_k8s_node_not_ready(event_details.clone(), e))?;
+
+        self.send_to_customer(
+            format!("Kubernetes {} nodes have been successfully upgraded", self.name()).as_str(),
+            &listeners_helper,
+        );
+        self.logger().log(EngineEvent::Info(
+            event_details,
+            EventMessage::new_from_safe("Kubernetes nodes have been successfully upgraded".to_string()),
+        ));
+
+        Ok(())
     }
 
     #[named]
