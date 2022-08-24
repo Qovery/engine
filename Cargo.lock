@@ -3247,6 +3247,7 @@ dependencies = [
  "rusoto_sts",
  "rust-crypto",
  "scaleway_api_rs",
+ "scopeguard",
  "semver 1.0.9",
  "serde",
  "serde_derive",
