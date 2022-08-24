@@ -188,7 +188,7 @@ impl<'a> Transaction<'a> {
                     self.engine
                         .kubernetes()
                         .advanced_settings()
-                        .registry_image_retention_time,
+                        .registry_image_retention_time_sec,
                 )
                 .map_err(cr_to_engine_error)?;
 
