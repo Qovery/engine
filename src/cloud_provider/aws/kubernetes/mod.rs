@@ -596,7 +596,7 @@ fn tera_context(
     // Advanced settings
     context.insert(
         "registry_image_retention_time",
-        &kubernetes.advanced_settings().registry_image_retention_time,
+        &kubernetes.advanced_settings().registry_image_retention_time_sec,
     );
     context.insert(
         "resource_expiration_in_seconds",
