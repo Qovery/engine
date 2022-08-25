@@ -1,5 +1,10 @@
 use std::any::Any;
 
+use aws_config::provider_config::ProviderConfig;
+use aws_config::SdkConfig;
+use aws_smithy_client::erase::DynConnector;
+use aws_smithy_client::never::NeverConnector;
+use aws_types::os_shim_internal::Env;
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
@@ -25,6 +30,7 @@ pub struct AWS {
     name: String,
     pub access_key_id: String,
     pub secret_access_key: String,
+    pub region: String,
     pub zones: Vec<String>,
     kubernetes_kind: KubernetesKind,
     terraform_state_credentials: TerraformStateCredentials,
@@ -40,6 +46,7 @@ impl AWS {
         name: &str,
         access_key_id: &str,
         secret_access_key: &str,
+        region: &str,
         zones: Vec<String>,
         kubernetes_kind: KubernetesKind,
         terraform_state_credentials: TerraformStateCredentials,
@@ -52,6 +59,7 @@ impl AWS {
             name: name.to_string(),
             access_key_id: access_key_id.to_string(),
             secret_access_key: secret_access_key.to_string(),
+            region: region.to_string(),
             zones,
             kubernetes_kind,
             terraform_state_credentials,
@@ -103,6 +111,10 @@ impl CloudProvider for AWS {
 
     fn secret_access_key(&self) -> String {
         self.secret_access_key.to_string()
+    }
+
+    fn region(&self) -> String {
+        self.region.to_string()
     }
 
     fn token(&self) -> &str {
@@ -169,5 +181,24 @@ impl CloudProvider for AWS {
 
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::CloudProvider(self.id.to_string(), self.name.to_string())
+    }
+
+    fn aws_sdk_client(&self) -> Option<SdkConfig> {
+        let env = Env::from_slice(&[
+            ("AWS_MAX_ATTEMPTS", "10"),
+            ("AWS_REGION", self.region().as_str()),
+            ("AWS_ACCESS_KEY_ID", self.access_key_id().as_str()),
+            ("AWS_SECRET_ACCESS_KEY", self.secret_access_key().as_str()),
+        ]);
+
+        Some(block_on(
+            aws_config::from_env()
+                .configure(
+                    ProviderConfig::empty()
+                        .with_env(env)
+                        .with_http_connector(DynConnector::new(NeverConnector::new())),
+                )
+                .load(),
+        ))
     }
 }

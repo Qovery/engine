@@ -14,68 +14,73 @@ pub trait DeploymentReporter: Send {
 
     fn before_deployment_start(&mut self);
     fn deployment_in_progress(&mut self);
-    fn deployment_terminated(&mut self, result: Self::DeploymentResult);
+    fn deployment_terminated(&mut self, result: &Self::DeploymentResult);
     fn report_frequency(&self) -> Duration {
         Duration::from_secs(10)
     }
 }
 
 pub fn execute_long_deployment<R, F>(
-    mut deployment_reporter: impl DeploymentReporter<DeploymentResult = R> + 'static,
+    mut deployment_reporter: impl DeploymentReporter<DeploymentResult = R>,
     long_task: F,
 ) -> R
 where
-    R: Clone + Send + 'static,
     F: Fn() -> R,
 {
     // stop the thread when the blocking task is done
     let (tx, rx) = mpsc::channel();
     let deployment_start = Arc::new(Barrier::new(2));
 
-    // monitor thread to notify user while the blocking task is executed
-    let th_handle = thread::Builder::new().name("deployment-monitor".to_string()).spawn({
-        let deployment_start = deployment_start.clone();
-        let report_frequency = deployment_reporter.report_frequency();
-        // Propagate the current span into the thread. This span is only used by tests
-        let current_span = tracing::Span::current();
+    let deployment_result = thread::scope(|th_scope| {
+        // monitor thread to notify user while the blocking task is executed
+        let th_handle = thread::Builder::new()
+            .name("deployment-monitor".to_string())
+            .spawn_scoped(th_scope, {
+                let deployment_start = deployment_start.clone();
+                let report_frequency = deployment_reporter.report_frequency();
+                let deployment_reporter = &mut deployment_reporter; // to avoid moving the object into the thread
+                                                                    // Propagate the current span into the thread. This span is only used by tests
+                let current_span = tracing::Span::current();
 
-        move || {
-            let _span = current_span.enter();
+                move || {
+                    let _span = current_span.enter();
 
-            // Before the launch of the deployment
-            deployment_reporter.before_deployment_start();
+                    // Before the launch of the deployment
+                    deployment_reporter.before_deployment_start();
 
-            // Wait the start of the deployment
-            deployment_start.wait();
+                    // Wait the start of the deployment
+                    deployment_start.wait();
 
-            // Send deployment progress report every x secs
-            let deployment_result = loop {
-                match rx.recv_timeout(report_frequency) {
-                    // Deployment is terminated, we received the result of the task
-                    Ok(task_result) => break task_result,
+                    // Send deployment progress report every x secs
+                    loop {
+                        match rx.recv_timeout(report_frequency) {
+                            // Deployment is terminated, we received the result of the task
+                            Ok(_) => break,
 
-                    // Deployment is still in progress
-                    Err(RecvTimeoutError::Timeout) => deployment_reporter.deployment_in_progress(),
+                            // Deployment is still in progress
+                            Err(RecvTimeoutError::Timeout) => deployment_reporter.deployment_in_progress(),
 
-                    // Other side died without passing us the result ! this is a logical bug !
-                    Err(RecvTimeoutError::Disconnected) => {
-                        panic!("Haven't received task deployment result, but otherside of the channel is dead !");
+                            // Other side died without passing us the result ! this is a logical bug !
+                            Err(RecvTimeoutError::Disconnected) => {
+                                panic!(
+                                    "Haven't received task deployment result, but otherside of the channel is dead !"
+                                );
+                            }
+                        }
                     }
                 }
-            };
+            });
 
-            deployment_reporter.deployment_terminated(deployment_result);
-        }
+        // Wait for our watcher thread to be ready before starting
+        let _ = deployment_start.wait();
+        let deployment_result = long_task();
+        let _ = tx.send(());
+        let _ = th_handle.map(|th| th.join()); // wait for the thread to terminate
+
+        deployment_result
     });
 
-    // Wait for our watcher thread to be ready before starting
-    let _ = deployment_start.wait();
-    let deployment_result = long_task();
-    // INFO: could have been simpler with scoped thread, we require the error to be cloneable and send + static
-    // because we are spawning a thread that need to be static
-    let _ = tx.send(deployment_result.clone()); // send signal to thread to terminate
-    let _ = th_handle.map(|th| th.join()); // wait for the thread to terminate
-
+    deployment_reporter.deployment_terminated(&deployment_result);
     deployment_result
 }
 
@@ -113,7 +118,7 @@ mod test {
             self.deployment_in_progress.store(true, Ordering::SeqCst)
         }
 
-        fn deployment_terminated(&mut self, _result: Self::DeploymentResult) {
+        fn deployment_terminated(&mut self, _result: &Self::DeploymentResult) {
             self.deployment_terminated.store(true, Ordering::SeqCst);
         }
 

@@ -134,6 +134,10 @@ impl Cluster<DO, DoksOptions> for DO {
                 .DIGITAL_OCEAN_SPACES_SECRET_ID
                 .expect("DIGITAL_OCEAN_SPACES_SECRET_ID is not set")
                 .as_str(),
+            secrets
+                .DIGITAL_OCEAN_DEFAULT_REGION
+                .expect("DIGITAL_OCEAN_DEFAULT_REGION is not set")
+                .as_str(),
             format!("qovery-{}", cluster_id).as_str(),
             TerraformStateCredentials {
                 access_key_id: secrets

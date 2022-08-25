@@ -34,6 +34,8 @@ strum = "0.24.0"
 strum_macros = "0.24.0"
 urlencoding = "2.1.0"
 regex = "1"
+async-trait = "0.1.57"
+scopeguard = "1.1.0"
 
 kube = { version = "0.73.1", features = ["default", "runtime", "derive"] }
 k8s-openapi = { version = "0.15.0", default-features = false, features = ["v1_21"] }
@@ -77,6 +79,10 @@ rusoto_eks = "0.48.0"
 rusoto_s3 = "0.48.0"
 rusoto_dynamodb = "0.48.0"
 rusoto_iam = "0.48.0"
+aws-config = "0.47.0"
+aws-sdk-elasticloadbalancingv2 = "0.17.0"
+aws-types = "0.47.0"
+aws-smithy-client = "0.47.0"
 
 # Digital Ocean Deps
 digitalocean = "0.1.1"

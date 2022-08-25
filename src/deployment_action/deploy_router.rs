@@ -31,6 +31,8 @@ where
             self.logger(),
         );
 
+        //clean_up_deleted_k8s_nlb(target)?;
+
         execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Create), || {
             let helm = HelmDeployment::new(
                 self.helm_release_name(),

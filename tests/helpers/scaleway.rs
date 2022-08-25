@@ -157,6 +157,10 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
                 .SCALEWAY_DEFAULT_PROJECT_ID
                 .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets")
                 .as_str(),
+            secrets
+                .SCALEWAY_DEFAULT_REGION
+                .expect("SCALEWAY_DEFAULT_REGION is not set in secrets")
+                .as_str(),
             TerraformStateCredentials {
                 access_key_id: secrets
                     .TERRAFORM_AWS_ACCESS_KEY_ID

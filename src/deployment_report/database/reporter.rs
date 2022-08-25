@@ -192,7 +192,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             (self.send_progress)(line);
         }
     }
-    fn deployment_terminated(&mut self, result: Self::DeploymentResult) {
+    fn deployment_terminated(&mut self, result: &Self::DeploymentResult) {
         let error = match result {
             Ok(_) => {
                 if self.is_managed {
@@ -207,7 +207,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
 
         (self.send_error)(error.clone());
         (self.send_error)(EngineError::new_engine_error(
-            error,
+            error.clone(),
             r#"
 ❌ Deployment of database failed ! Look at the report above and to understand why.
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/

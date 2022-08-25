@@ -43,7 +43,6 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::{Context, Features};
 use crate::io_models::domain::{ToHelmString, ToTerraformString};
-use crate::io_models::progress_listener::ListenersHelper;
 use crate::io_models::QoveryIdentifier;
 use crate::object_storage::s3::S3;
 use crate::runtime::block_on;
@@ -596,11 +595,11 @@ fn tera_context(
     // Advanced settings
     context.insert(
         "registry_image_retention_time",
-        &kubernetes.get_advanced_settings().registry_image_retention_time,
+        &kubernetes.advanced_settings().registry_image_retention_time_sec,
     );
     context.insert(
         "resource_expiration_in_seconds",
-        &kubernetes.get_advanced_settings().pleco_resources_ttl,
+        &kubernetes.advanced_settings().pleco_resources_ttl,
     );
 
     Ok(context)
@@ -777,24 +776,12 @@ fn create(
     options: &Options,
 ) -> Result<(), EngineError> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
-    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
     let mut kubernetes_action = KubernetesClusterAction::Bootstrap;
 
     kubernetes.logger().log(EngineEvent::Info(
         event_details.clone(),
         EventMessage::new_from_safe("Preparing EKS cluster deployment.".to_string()),
     ));
-
-    kubernetes.send_to_customer(
-        format!(
-            "Preparing {} {} cluster deployment with id {}",
-            kubernetes.kind(),
-            kubernetes.name(),
-            kubernetes.id()
-        )
-        .as_str(),
-        &listeners_helper,
-    );
 
     // upgrade cluster instead if required
     if !kubernetes.context().is_first_cluster_deployment() {
@@ -894,17 +881,6 @@ fn create(
         event_details.clone(),
         EventMessage::new_from_safe(format!("Deploying {} cluster.", kubernetes.kind())),
     ));
-
-    kubernetes.send_to_customer(
-        format!(
-            "Deploying {} {} cluster deployment with id {}",
-            kubernetes.kind(),
-            kubernetes.name(),
-            kubernetes.id()
-        )
-        .as_str(),
-        &listeners_helper,
-    );
 
     // terraform deployment dedicated to cloud resources
     if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), kubernetes.context().is_dry_run_deploy()) {
@@ -1108,6 +1084,7 @@ fn create(
                 acme_url: lets_encrypt_url(kubernetes.context()),
                 dns_provider_config: kubernetes.dns_provider().provider_configuration(),
                 disable_pleco: kubernetes.context().disable_pleco(),
+                cluster_advanced_settings: kubernetes.advanced_settings().clone(),
             };
             eks_aws_helm_charts(
                 format!("{}/qovery-tf-config.json", &temp_dir).as_str(),
@@ -1231,18 +1208,6 @@ fn pause(
     options: &Options,
 ) -> Result<(), EngineError> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
-    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
-
-    kubernetes.send_to_customer(
-        format!(
-            "Preparing {} {} cluster pause with id {}",
-            kubernetes.kind(),
-            kubernetes.name(),
-            kubernetes.id()
-        )
-        .as_str(),
-        &listeners_helper,
-    );
 
     kubernetes.logger().log(EngineEvent::Info(
         kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause)),
@@ -1383,17 +1348,6 @@ fn pause(
         }
     }
 
-    kubernetes.send_to_customer(
-        format!(
-            "Pausing {} {} cluster deployment with id {}",
-            kubernetes.kind(),
-            kubernetes.name(),
-            kubernetes.id()
-        )
-        .as_str(),
-        &listeners_helper,
-    );
-
     kubernetes.logger().log(EngineEvent::Info(
         event_details.clone(),
         EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
@@ -1402,7 +1356,6 @@ fn pause(
     match terraform_apply_with_tf_workers_resources(temp_dir.as_str(), tf_workers_resources) {
         Ok(_) => {
             let message = format!("Kubernetes cluster {} successfully paused", kubernetes.name());
-            kubernetes.send_to_customer(&message, &listeners_helper);
             kubernetes
                 .logger()
                 .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(message)));
@@ -1430,24 +1383,12 @@ fn delete(
     options: &Options,
 ) -> Result<(), EngineError> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
-    let listeners_helper = ListenersHelper::new(kubernetes.listeners());
     let mut skip_kubernetes_step = false;
 
     kubernetes.logger().log(EngineEvent::Info(
         event_details.clone(),
         EventMessage::new_from_safe(format!("Preparing to delete {} cluster.", kubernetes.kind())),
     ));
-
-    kubernetes.send_to_customer(
-        format!(
-            "Preparing to delete {} cluster {} with id {}",
-            kubernetes.kind(),
-            kubernetes.name(),
-            kubernetes.id()
-        )
-        .as_str(),
-        &listeners_helper,
-    );
 
     let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
     let node_groups_with_desired_states = match kubernetes.kind() {
@@ -1537,7 +1478,6 @@ fn delete(
         kubernetes.id()
     );
 
-    kubernetes.send_to_customer(&message, &listeners_helper);
     kubernetes
         .logger()
         .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
@@ -1563,12 +1503,9 @@ fn delete(
             kubernetes.id()
         );
 
-        kubernetes.logger().log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new_from_safe(message.to_string()),
-        ));
-
-        kubernetes.send_to_customer(&message, &listeners_helper);
+        kubernetes
+            .logger()
+            .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
         let all_namespaces = kubectl_exec_get_all_namespaces(
             &kubernetes_config_file_path,
@@ -1629,8 +1566,6 @@ fn delete(
             kubernetes.name(),
             kubernetes.id()
         );
-
-        kubernetes.send_to_customer(&message, &listeners_helper);
 
         kubernetes
             .logger()
@@ -1736,7 +1671,6 @@ fn delete(
     };
 
     let message = format!("Deleting Kubernetes cluster {}/{}", kubernetes.name(), kubernetes.id());
-    kubernetes.send_to_customer(&message, &listeners_helper);
     kubernetes
         .logger()
         .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
@@ -1748,15 +1682,6 @@ fn delete(
 
     match cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
         Ok(_) => {
-            kubernetes.send_to_customer(
-                format!(
-                    "Kubernetes cluster {}/{} successfully deleted",
-                    kubernetes.name(),
-                    kubernetes.id()
-                )
-                .as_str(),
-                &listeners_helper,
-            );
             kubernetes.logger().log(EngineEvent::Info(
                 event_details.clone(),
                 EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),

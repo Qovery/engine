@@ -25,17 +25,20 @@ pub struct ClusterAdvancedSettings {
     #[serde(alias = "load_balancer.size")]
     pub load_balancer_size: String,
     #[serde(alias = "registry.image_retention_time")]
-    pub registry_image_retention_time: u32,
+    pub registry_image_retention_time_sec: u32,
     #[serde(alias = "pleco.resources.ttl")]
     pub pleco_resources_ttl: i32,
+    #[serde(alias = "loki.log_retention_in_week")]
+    pub loki_log_retention_in_week: u32,
 }
 
 impl Default for ClusterAdvancedSettings {
     fn default() -> Self {
         ClusterAdvancedSettings {
             load_balancer_size: "lb-s".to_string(),
-            registry_image_retention_time: 31536000,
+            registry_image_retention_time_sec: 31536000,
             pleco_resources_ttl: -1,
+            loki_log_retention_in_week: 12,
         }
     }
 }

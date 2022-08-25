@@ -42,7 +42,9 @@ spec:
               topologyKey: "kubernetes.io/hostname"
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 60
-      securityContext: {}
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: "OnRootMismatch"
       {%- if is_registry_secret %}
       imagePullSecrets:
         - name: {{ registry_secret }}

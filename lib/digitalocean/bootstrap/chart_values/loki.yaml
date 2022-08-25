@@ -48,10 +48,10 @@ config:
       resync_interval: 5s
       cache_location: /data/loki/boltdb-cache
   chunk_store_config:
-    max_look_back_period: 12w
+    max_look_back_period: ""              # qovery setting (default 12 week)
   table_manager:
     retention_deletes_enabled: true
-    retention_period: 12w
+    retention_period: ""                  # qovery setting (default 12 week)
   memberlist:
     abort_if_cluster_join_fails: false    # qovery setting
     bind_port: 7946                       # qovery setting

@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::fmt::{Display, Formatter};
 
+use aws_config::SdkConfig;
 use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::environment::Environment;
@@ -43,6 +44,8 @@ pub trait CloudProvider {
     }
     fn access_key_id(&self) -> String;
     fn secret_access_key(&self) -> String;
+    fn region(&self) -> String;
+    fn aws_sdk_client(&self) -> Option<SdkConfig>;
     fn token(&self) -> &str;
     fn is_valid(&self) -> Result<(), EngineError>;
     fn zones(&self) -> &Vec<String>;

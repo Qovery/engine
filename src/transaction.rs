@@ -187,8 +187,8 @@ impl<'a> Transaction<'a> {
                     app.get_build().image.repository_name(),
                     self.engine
                         .kubernetes()
-                        .get_advanced_settings()
-                        .registry_image_retention_time,
+                        .advanced_settings()
+                        .registry_image_retention_time_sec,
                 )
                 .map_err(cr_to_engine_error)?;
 
@@ -274,7 +274,7 @@ impl<'a> Transaction<'a> {
             match step {
                 Step::CreateKubernetes => {
                     // create kubernetes
-                    match self.commit_infrastructure(Action::Create, self.engine.kubernetes().on_create()) {
+                    match self.commit_infrastructure(self.engine.kubernetes().on_create()) {
                         TransactionResult::Ok => {}
                         err => {
                             error!("Error while creating infrastructure: {:?}", err);
@@ -284,7 +284,7 @@ impl<'a> Transaction<'a> {
                 }
                 Step::DeleteKubernetes => {
                     // delete kubernetes
-                    match self.commit_infrastructure(Action::Delete, self.engine.kubernetes().on_delete()) {
+                    match self.commit_infrastructure(self.engine.kubernetes().on_delete()) {
                         TransactionResult::Ok => {}
                         err => {
                             error!("Error while deleting infrastructure: {:?}", err);
@@ -294,7 +294,7 @@ impl<'a> Transaction<'a> {
                 }
                 Step::PauseKubernetes => {
                     // pause kubernetes
-                    match self.commit_infrastructure(Action::Pause, self.engine.kubernetes().on_pause()) {
+                    match self.commit_infrastructure(self.engine.kubernetes().on_pause()) {
                         TransactionResult::Ok => {}
                         err => {
                             error!("Error while pausing infrastructure: {:?}", err);
@@ -421,59 +421,24 @@ impl<'a> Transaction<'a> {
         TransactionResult::Ok
     }
 
-    fn commit_infrastructure(&self, action: Action, result: Result<(), EngineError>) -> TransactionResult {
-        // send back the right progress status
-        fn send_progress(lh: &ListenersHelper, action: Action, execution_id: &str, is_error: bool) {
-            let progress_info = ProgressInfo::new(
-                ProgressScope::Infrastructure {
-                    execution_id: execution_id.to_string(),
-                },
-                ProgressLevel::Info,
-                None::<&str>,
-                execution_id,
-            );
-
-            if !is_error {
-                match action {
-                    Action::Create => lh.deployed(progress_info),
-                    Action::Pause => lh.paused(progress_info),
-                    Action::Delete => lh.deleted(progress_info),
-                    Action::Nothing => {} // nothing to do here?
-                };
-                return;
-            }
-
-            match action {
-                Action::Create => lh.deployment_error(progress_info),
-                Action::Pause => lh.pause_error(progress_info),
-                Action::Delete => lh.delete_error(progress_info),
-                Action::Nothing => {} // nothing to do here?
-            };
-        }
-
-        let execution_id = self.engine.context().execution_id();
-        let lh = ListenersHelper::new(self.engine.kubernetes().listeners());
-
+    fn commit_infrastructure(&self, result: Result<(), EngineError>) -> TransactionResult {
         match result {
             Err(err) => {
                 warn!("infrastructure ROLLBACK STARTED! an error occurred {:?}", err);
                 match self.rollback() {
                     Ok(_) => {
                         // an error occurred on infrastructure deployment BUT rolledback is OK
-                        send_progress(&lh, action, execution_id, true);
                         TransactionResult::Error(Box::new(err))
                     }
                     Err(e) => {
                         // an error occurred on infrastructure deployment AND rolledback is KO
                         error!("infrastructure ROLLBACK FAILED! fatal error: {:?}", e);
-                        send_progress(&lh, action, execution_id, true);
                         TransactionResult::Error(Box::new(err))
                     }
                 }
             }
             _ => {
                 // infrastructure deployment OK
-                send_progress(&lh, action, execution_id, false);
                 TransactionResult::Ok
             }
         }
@@ -495,7 +460,7 @@ impl<'a> Transaction<'a> {
         ) where
             T: Service + ?Sized,
         {
-            let lh = ListenersHelper::new(kubernetes.listeners());
+            let lh = ListenersHelper::new(kubernetes.cloud_provider().listeners());
             let progress_info =
                 ProgressInfo::new(service.progress_scope(), ProgressLevel::Info, None::<&str>, execution_id);
 

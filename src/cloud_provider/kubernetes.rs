@@ -1,5 +1,6 @@
-use k8s_openapi::api::core::v1::{Namespace, Secret};
-use kube::api::{ObjectMeta, PostParams};
+use k8s_openapi::api::core::v1::{Namespace, Secret, Service};
+use kube::api::{ListParams, ObjectMeta, PostParams};
+use kube::core::ObjectList;
 use kube::{Api, Error};
 use retry::delay::{Fibonacci, Fixed};
 use retry::Error::Operation;
@@ -36,15 +37,14 @@ use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, Infras
 use crate::fs::{delete_file_if_exists, workspace_directory};
 use crate::io_models::context::Context;
 use crate::io_models::domain::StringPath;
-use crate::io_models::progress_listener::ProgressLevel::Info;
-use crate::io_models::progress_listener::{
-    Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-};
+use crate::io_models::progress_listener::{ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::models::types::VersionsNumber;
 use crate::object_storage::ObjectStorage;
+use crate::runtime::block_on;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
+use crate::utilities::get_kube_client;
 
 use super::models::NodeGroupsWithDesiredState;
 
@@ -56,15 +56,12 @@ pub trait Kubernetes {
     fn id(&self) -> &str;
     fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
-
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())
     }
-
     fn cluster_name(&self) -> String {
         format!("qovery-{}", self.id())
     }
-
     fn version(&self) -> &str;
     fn region(&self) -> &str;
     fn zone(&self) -> &str;
@@ -74,8 +71,23 @@ pub trait Kubernetes {
     fn logger(&self) -> &dyn Logger;
     fn config_file_store(&self) -> &dyn ObjectStorage;
     fn is_valid(&self) -> Result<(), EngineError>;
-    fn listeners(&self) -> &Listeners;
-    fn add_listener(&mut self, listener: Listener);
+    fn kube_client(&self) -> Result<kube::Client, EngineError> {
+        // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
+        let kubeconfig_path = self.get_kubeconfig_file_path().unwrap_or_default();
+        let kube_credentials: Vec<(String, String)> = self
+            .cloud_provider()
+            .credentials_environment_variables()
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
+        block_on(get_kube_client(kubeconfig_path, kube_credentials.as_slice())).map_err(|err| {
+            EngineError::new_cannot_connect_to_k8s_cluster(
+                self.get_event_details(Stage::General(GeneralStep::RetrieveClusterResources)),
+                err,
+            )
+        })
+    }
 
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         let context = self.context();
@@ -401,17 +413,6 @@ pub trait Kubernetes {
     fn on_pause_error(&self) -> Result<(), EngineError>;
     fn on_delete(&self) -> Result<(), EngineError>;
     fn on_delete_error(&self) -> Result<(), EngineError>;
-    fn send_to_customer(&self, message: &str, listeners_helper: &ListenersHelper) {
-        listeners_helper.upgrade_in_progress(ProgressInfo::new(
-            ProgressScope::Infrastructure {
-                execution_id: self.context().execution_id().to_string(),
-            },
-            Info,
-            Some(message),
-            self.context().execution_id(),
-        ))
-    }
-
     fn get_temp_dir(&self, event_details: EventDetails) -> Result<String, EngineError> {
         workspace_directory(
             self.context().workspace_root_dir(),
@@ -485,7 +486,7 @@ pub trait Kubernetes {
         Ok(())
     }
 
-    fn get_advanced_settings(&self) -> &ClusterAdvancedSettings;
+    fn advanced_settings(&self) -> &ClusterAdvancedSettings;
 }
 
 pub trait KubernetesNode {
@@ -1125,52 +1126,36 @@ where
     K: Kubernetes,
     F: Fn() -> R,
 {
-    let listeners = std::clone::Clone::clone(kubernetes.listeners());
     let logger = kubernetes.logger().clone_dyn();
     let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Create));
-
-    let progress_info = ProgressInfo::new(
-        ProgressScope::Infrastructure {
-            execution_id: kubernetes.context().execution_id().to_string(),
-        },
-        Info,
-        waiting_message.clone(),
-        kubernetes.context().execution_id(),
-    );
 
     let (tx, rx) = mpsc::channel();
 
     // monitor thread to notify user while the blocking task is executed
     let handle = thread::Builder::new().name("task-monitor".to_string()).spawn(move || {
         // stop the thread when the blocking task is done
-        let listeners_helper = ListenersHelper::new(&listeners);
         let action = action;
-        let progress_info = progress_info;
         let waiting_message = waiting_message.unwrap_or_else(|| "no message ...".to_string());
 
         loop {
             // do notify users here
-            let progress_info = Clone::clone(&progress_info);
             let event_details = Clone::clone(&event_details);
             let event_message = EventMessage::new_from_safe(waiting_message.to_string());
 
             match action {
                 Action::Create => {
-                    listeners_helper.deployment_in_progress(progress_info);
                     logger.log(EngineEvent::Info(
                         EventDetails::clone_changing_stage(event_details, Infrastructure(InfrastructureStep::Create)),
                         event_message,
                     ));
                 }
                 Action::Pause => {
-                    listeners_helper.pause_in_progress(progress_info);
                     logger.log(EngineEvent::Info(
                         EventDetails::clone_changing_stage(event_details, Infrastructure(InfrastructureStep::Pause)),
                         event_message,
                     ));
                 }
                 Action::Delete => {
-                    listeners_helper.delete_in_progress(progress_info);
                     logger.log(EngineEvent::Info(
                         EventDetails::clone_changing_stage(event_details, Infrastructure(InfrastructureStep::Delete)),
                         event_message,
@@ -1272,6 +1257,49 @@ pub async fn kube_does_secret_exists(kube: &kube::Client, name: &str, namespace:
     }
 }
 
+pub async fn kube_list_services(
+    kube: &kube::Client,
+    namespace_name: Option<&str>,
+    labels_selector: Option<&str>,
+) -> Result<ObjectList<Service>, CommandError> {
+    let client: Api<Service> = match namespace_name {
+        Some(namespace_name) => Api::namespaced(kube.clone(), namespace_name),
+        None => Api::all(kube.clone()),
+    };
+
+    let params = match labels_selector {
+        Some(x) => ListParams::default().labels(x),
+        None => ListParams::default(),
+    };
+
+    match client.list(&params).await {
+        Ok(x) => Ok(x),
+        Err(e) => Err(CommandError::new(
+            "Error while trying to get kubernetes services".to_string(),
+            Some(e.to_string()),
+            None,
+        )),
+    }
+}
+
+pub fn filter_svc_loadbalancers(load_balancers: ObjectList<Service>) -> Vec<Service> {
+    let mut filtered_load_balancers = Vec::new();
+
+    for service in load_balancers.into_iter() {
+        let spec = match &service.spec {
+            Some(x) => x,
+            None => continue,
+        };
+
+        match &spec.type_ {
+            Some(x) if x == "LoadBalancer" => filtered_load_balancers.push(service),
+            _ => continue,
+        };
+    }
+
+    filtered_load_balancers
+}
+
 pub async fn kube_create_namespace_if_not_exists(
     kube: &kube::Client,
     namespace_name: &str,
@@ -1328,12 +1356,15 @@ pub async fn kube_copy_secret_to_another_namespace(
 #[cfg(test)]
 mod tests {
 
+    use k8s_openapi::api::core::v1::{Service, ServiceSpec};
+    use kube::core::{ListMeta, ObjectList, ObjectMeta};
+
     use crate::cloud_provider::Kind::Aws;
 
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, convert_k8s_cpu_value_to_f32,
-        kube_create_namespace_if_not_exists, kube_does_secret_exists, validate_k8s_required_cpu_and_burstable,
-        KubernetesNodesType,
+        filter_svc_loadbalancers, kube_create_namespace_if_not_exists, kube_does_secret_exists, kube_list_services,
+        validate_k8s_required_cpu_and_burstable, KubernetesNodesType,
     };
     use crate::cloud_provider::models::CpuLimits;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
@@ -1344,38 +1375,89 @@ mod tests {
     use crate::models::types::VersionsNumber;
     use crate::runtime::block_on;
     use crate::utilities::get_kube_client;
+    use std::env;
     use std::str::FromStr;
 
     use super::kube_copy_secret_to_another_namespace;
-    pub const KUBECONFIG_PATH: &str = "/home/pmavro/kubeconfig";
 
-    #[ignore]
-    #[allow(dead_code)]
+    pub fn kubeconfig_path() -> String {
+        env::var("HOME").unwrap() + "/.kube/config"
+    }
+
+    pub fn get_svc_template() -> ObjectList<Service> {
+        ObjectList {
+            metadata: ListMeta { ..Default::default() },
+            items: vec![
+                Service {
+                    metadata: ObjectMeta {
+                        name: Some("loadbalancer".to_string()),
+                        namespace: Some("ns0".to_string()),
+                        ..Default::default()
+                    },
+                    spec: Some(ServiceSpec {
+                        type_: Some("LoadBalancer".to_string()),
+                        ..Default::default()
+                    }),
+                    status: None,
+                },
+                Service {
+                    metadata: ObjectMeta {
+                        name: Some("clusterip".to_string()),
+                        namespace: Some("ns1".to_string()),
+                        ..Default::default()
+                    },
+                    spec: Some(ServiceSpec {
+                        type_: Some("ClusterIp".to_string()),
+                        ..Default::default()
+                    }),
+                    status: None,
+                },
+            ],
+        }
+    }
+
     #[test]
+    #[cfg(feature = "test-local-kube")]
+    pub fn k8s_get_services() {
+        let kube_client = block_on(get_kube_client(kubeconfig_path(), &[])).unwrap();
+        let svcs = block_on(kube_list_services(&kube_client, None, None));
+        assert!(svcs.is_ok());
+        assert!(!svcs.unwrap().items.is_empty());
+    }
+
+    #[test]
+    pub fn k8s_get_filter_aws_loadbalancers() {
+        let svcs = get_svc_template();
+        let filtered_lbs = filter_svc_loadbalancers(svcs);
+        assert_eq!(filtered_lbs.len(), 1);
+        assert_eq!(filtered_lbs[0].clone().metadata.name.unwrap(), "loadbalancer");
+        assert_eq!(filtered_lbs[0].clone().metadata.namespace.unwrap(), "ns0");
+    }
+
+    #[test]
+    #[cfg(feature = "test-local-kube")]
     pub fn k8s_create_namespace() {
-        let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
+        let kube_client = block_on(get_kube_client(kubeconfig_path(), &[])).unwrap();
         assert!(block_on(kube_create_namespace_if_not_exists(&kube_client, "qovery-test-ns", None)).is_ok(),);
     }
 
-    #[ignore]
-    #[allow(dead_code)]
     #[test]
+    #[cfg(feature = "test-local-kube")]
     pub fn k8s_does_secret_exists_test() {
-        let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
-        let res = block_on(kube_does_secret_exists(&kube_client, "awsecr-cred", "default")).unwrap();
+        let kube_client = block_on(get_kube_client(kubeconfig_path(), &[])).unwrap();
+        let res = block_on(kube_does_secret_exists(&kube_client, "k3s-serving", "kube-system")).unwrap();
         assert!(res);
     }
 
-    #[ignore]
-    #[allow(dead_code)]
     #[test]
+    #[cfg(feature = "test-local-kube")]
     pub fn k8s_copy_secret_test() {
-        let kube_client = block_on(get_kube_client(KUBECONFIG_PATH, &[])).unwrap();
+        let kube_client = block_on(get_kube_client(kubeconfig_path(), &[])).unwrap();
         block_on(kube_copy_secret_to_another_namespace(
             &kube_client,
-            "awsecr-cred",
+            "k3s-serving",
+            "kube-system",
             "default",
-            "qovery",
         ))
         .unwrap();
     }

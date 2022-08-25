@@ -168,7 +168,7 @@ impl<M: DatabaseMode, T: DatabaseType<SCW, M>> Database<SCW, M, T> {
         context.insert("delete_automated_backups", &self.context().is_test_cluster());
         context.insert(
             "resource_expiration_in_seconds",
-            &kubernetes.get_advanced_settings().pleco_resources_ttl,
+            &kubernetes.advanced_settings().pleco_resources_ttl,
         );
 
         Ok(context)

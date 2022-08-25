@@ -28,7 +28,6 @@ use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
 use crate::io_models::context::{Context, Features};
 use crate::io_models::domain::ToHelmString;
-use crate::io_models::progress_listener::{Listener, Listeners, ListenersHelper};
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::models::scaleway::ScwZone;
@@ -145,7 +144,6 @@ pub struct Kapsule {
     nodes_groups: Vec<NodeGroups>,
     template_directory: String,
     options: KapsuleOptions,
-    listeners: Listeners,
     logger: Box<dyn Logger>,
     advanced_settings: ClusterAdvancedSettings,
 }
@@ -201,7 +199,6 @@ impl Kapsule {
             Some(advanced_settings.pleco_resources_ttl),
         );
 
-        let listeners = cloud_provider.listeners().clone();
         Ok(Kapsule {
             context,
             id,
@@ -216,7 +213,6 @@ impl Kapsule {
             template_directory,
             options,
             logger,
-            listeners,
             advanced_settings,
         })
     }
@@ -563,11 +559,8 @@ impl Kapsule {
         context.insert("scw_ks_pool_autoscale", &true);
 
         // Advanced settings
-        context.insert("load_balancer_size", &self.get_advanced_settings().load_balancer_size);
-        context.insert(
-            "resource_expiration_in_seconds",
-            &self.get_advanced_settings().pleco_resources_ttl,
-        );
+        context.insert("load_balancer_size", &self.advanced_settings().load_balancer_size);
+        context.insert("resource_expiration_in_seconds", &self.advanced_settings().pleco_resources_ttl);
 
         Ok(context)
     }
@@ -592,14 +585,9 @@ impl Kapsule {
     }
 
     fn create(&self) -> Result<(), EngineError> {
-        let listeners_helper = ListenersHelper::new(&self.listeners);
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
 
         // TODO(DEV-1061): remove legacy logger
-        self.send_to_customer(
-            format!("Preparing SCW {} cluster deployment with id {}", self.name(), self.id()).as_str(),
-            &listeners_helper,
-        );
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe("Preparing SCW cluster deployment.".to_string()),
@@ -670,11 +658,6 @@ impl Kapsule {
             event_details.clone(),
             EventMessage::new_from_safe("Deploying SCW cluster.".to_string()),
         ));
-
-        self.send_to_customer(
-            format!("Deploying SCW {} cluster deployment with id {}", self.name(), self.id()).as_str(),
-            &listeners_helper,
-        );
 
         // TODO(benjaminch): move this elsewhere
         // Create object-storage buckets
@@ -887,16 +870,10 @@ impl Kapsule {
 
         // ensure all nodes are ready on Kubernetes
         match self.check_workers_on_create() {
-            Ok(_) => {
-                self.send_to_customer(
-                    format!("Kubernetes {} nodes have been successfully created", self.name()).as_str(),
-                    &listeners_helper,
-                );
-                self.logger().log(EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
-                ))
-            }
+            Ok(_) => self.logger().log(EngineEvent::Info(
+                event_details.clone(),
+                EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
+            )),
             Err(e) => {
                 return Err(EngineError::new_k8s_node_not_ready(event_details, e));
             }
@@ -941,6 +918,7 @@ impl Kapsule {
             self.dns_provider().provider_configuration(),
             self.context.disable_pleco(),
             self.options.clone(),
+            self.advanced_settings().clone(),
         );
 
         self.logger().log(EngineEvent::Info(
@@ -1015,13 +993,6 @@ impl Kapsule {
 
     fn pause(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-
-        self.send_to_customer(
-            format!("Preparing SCW {} cluster pause with id {}", self.name(), self.id()).as_str(),
-            &listeners_helper,
-        );
-
         self.logger().log(EngineEvent::Info(
             self.get_event_details(Infrastructure(InfrastructureStep::Pause)),
             EventMessage::new_from_safe("Preparing cluster pause.".to_string()),
@@ -1149,10 +1120,6 @@ impl Kapsule {
             }
         }
 
-        self.send_to_customer(
-            format!("Pausing SCW {} cluster deployment with id {}", self.name(), self.id()).as_str(),
-            &listeners_helper,
-        );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe("Pausing cluster deployment.".to_string()),
@@ -1167,7 +1134,6 @@ impl Kapsule {
         };
 
         let message = format!("Kubernetes cluster {} successfully paused", self.name());
-        self.send_to_customer(&message, &listeners_helper);
         self.logger()
             .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(message)));
         Ok(())
@@ -1184,13 +1150,8 @@ impl Kapsule {
 
     fn delete(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
-        let listeners_helper = ListenersHelper::new(&self.listeners);
         let skip_kubernetes_step = false;
 
-        self.send_to_customer(
-            format!("Preparing to delete SCW cluster {} with id {}", self.name(), self.id()).as_str(),
-            &listeners_helper,
-        );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe("Preparing to delete cluster.".to_string()),
@@ -1235,7 +1196,6 @@ impl Kapsule {
             self.name(),
             self.id()
         );
-        self.send_to_customer(&message, &listeners_helper);
         self.logger()
             .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
@@ -1262,11 +1222,8 @@ impl Kapsule {
                 self.name(),
                 self.id()
             );
-            self.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe(message.to_string()),
-            ));
-            self.send_to_customer(&message, &listeners_helper);
+            self.logger()
+                .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
                 &kubeconfig_path,
@@ -1330,7 +1287,6 @@ impl Kapsule {
                 self.name(),
                 self.id()
             );
-            self.send_to_customer(&message, &listeners_helper);
             self.logger()
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
@@ -1440,7 +1396,6 @@ impl Kapsule {
         };
 
         let message = format!("Deleting Kubernetes cluster {}/{}", self.name(), self.id());
-        self.send_to_customer(&message, &listeners_helper);
         self.logger()
             .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
@@ -1451,10 +1406,6 @@ impl Kapsule {
 
         match cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
             Ok(_) => {
-                self.send_to_customer(
-                    format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id()).as_str(),
-                    &listeners_helper,
-                );
                 self.logger().log(EngineEvent::Info(
                     event_details,
                     EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),
@@ -1540,14 +1491,6 @@ impl Kubernetes for Kapsule {
         Ok(())
     }
 
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
-
     #[named]
     fn on_create(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
@@ -1578,16 +1521,6 @@ impl Kubernetes for Kapsule {
 
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-        self.send_to_customer(
-            format!(
-                "Start preparing Kapsule upgrade process {} cluster with id {}",
-                self.name(),
-                self.id()
-            )
-            .as_str(),
-            &listeners_helper,
-        );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe("Start preparing cluster upgrade process".to_string()),
@@ -1601,10 +1534,6 @@ impl Kubernetes for Kapsule {
         //
         // Upgrade nodes
         //
-        self.send_to_customer(
-            format!("Preparing nodes for upgrade for Kubernetes cluster {}", self.name()).as_str(),
-            &listeners_helper,
-        );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe("Preparing nodes for upgrade for Kubernetes cluster.".to_string()),
@@ -1641,10 +1570,6 @@ impl Kubernetes for Kapsule {
             ));
         }
 
-        self.send_to_customer(
-            format!("Upgrading Kubernetes {} nodes", self.name()).as_str(),
-            &listeners_helper,
-        );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe("Upgrading Kubernetes nodes.".to_string()),
@@ -1672,10 +1597,6 @@ impl Kubernetes for Kapsule {
         match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
             Ok(_) => match self.check_workers_on_upgrade(kubernetes_upgrade_status.requested_version.to_string()) {
                 Ok(_) => {
-                    self.send_to_customer(
-                        format!("Kubernetes {} nodes have been successfully upgraded", self.name()).as_str(),
-                        &listeners_helper,
-                    );
                     self.logger().log(EngineEvent::Info(
                         event_details,
                         EventMessage::new_from_safe("Kubernetes nodes have been successfully upgraded.".to_string()),
@@ -1809,7 +1730,7 @@ impl Kubernetes for Kapsule {
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
-    fn get_advanced_settings(&self) -> &ClusterAdvancedSettings {
+    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
     }
 }

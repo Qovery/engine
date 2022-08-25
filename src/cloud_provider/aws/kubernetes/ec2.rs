@@ -11,7 +11,6 @@ use crate::dns_provider::DnsProvider;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, InfrastructureStep, Stage};
 use crate::io_models::context::Context;
-use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::io_models::Action;
 use crate::logger::Logger;
 use crate::object_storage::s3::S3;
@@ -26,7 +25,7 @@ use uuid::Uuid;
 pub struct EC2 {
     context: Context,
     id: String,
-    long_id: uuid::Uuid,
+    long_id: Uuid,
     name: String,
     version: String,
     region: AwsRegion,
@@ -37,7 +36,6 @@ pub struct EC2 {
     template_directory: String,
     options: Options,
     instance: InstanceEc2,
-    listeners: Listeners,
     logger: Box<dyn Logger>,
     advanced_settings: ClusterAdvancedSettings,
 }
@@ -71,7 +69,6 @@ impl EC2 {
         }
 
         // copy listeners from CloudProvider
-        let listeners = cloud_provider.listeners().clone();
         Ok(EC2 {
             context,
             id: id.to_string(),
@@ -87,7 +84,6 @@ impl EC2 {
             instance,
             template_directory,
             logger,
-            listeners,
             advanced_settings,
         })
     }
@@ -167,14 +163,6 @@ impl Kubernetes for EC2 {
 
     fn is_valid(&self) -> Result<(), EngineError> {
         Ok(())
-    }
-
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
     }
 
     #[named]
@@ -341,7 +329,7 @@ impl Kubernetes for EC2 {
         send_progress_on_long_task(self, Action::Delete, || kubernetes::delete_error(self))
     }
 
-    fn get_advanced_settings(&self) -> &ClusterAdvancedSettings {
+    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
     }
 }

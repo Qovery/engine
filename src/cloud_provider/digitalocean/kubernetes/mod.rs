@@ -43,9 +43,7 @@ use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::{Context, Features};
 use crate::io_models::domain::{StringPath, ToHelmString};
-use crate::io_models::progress_listener::{
-    Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-};
+use crate::io_models::progress_listener::{Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::models::digital_ocean::DoRegion;
@@ -536,10 +534,6 @@ impl DOKS {
             event_details.clone(),
             EventMessage::new_from_safe("Deploying cluster.".to_string()),
         ));
-        self.send_to_customer(
-            format!("Deploying DOKS {} cluster deployment with id {}", self.name(), self.id()).as_str(),
-            &listeners_helper,
-        );
 
         // temporary: remove helm/kube management from terraform
         match terraform_init_validate_state_list(temp_dir.as_str()) {
@@ -583,16 +577,10 @@ impl DOKS {
         let kubeconfig_path = Path::new(kubeconfig_path);
 
         match self.check_workers_on_create() {
-            Ok(_) => {
-                self.send_to_customer(
-                    format!("Kubernetes {} nodes have been successfully created", self.name()).as_str(),
-                    &listeners_helper,
-                );
-                self.logger().log(EngineEvent::Info(
-                    event_details.clone(),
-                    EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
-                ))
-            }
+            Ok(_) => self.logger().log(EngineEvent::Info(
+                event_details.clone(),
+                EventMessage::new_from_safe("Kubernetes nodes have been successfully created".to_string()),
+            )),
             Err(e) => {
                 return Err(EngineError::new_k8s_node_not_ready(event_details, e));
             }
@@ -638,6 +626,7 @@ impl DOKS {
             acme_url: self.lets_encrypt_url(),
             dns_provider_config: self.dns_provider().provider_configuration(),
             disable_pleco: self.context.disable_pleco(),
+            cluster_advanced_settings: self.advanced_settings.clone(),
         };
 
         let chart_prefix_path = &temp_dir;
@@ -799,12 +788,7 @@ impl DOKS {
 
     fn delete(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
-        let listeners_helper = ListenersHelper::new(&self.listeners);
         let skip_kubernetes_step = false;
-        self.send_to_customer(
-            format!("Preparing to delete DOKS cluster {} with id {}", self.name(), self.id()).as_str(),
-            &listeners_helper,
-        );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe("Preparing to delete cluster.".to_string()),
@@ -853,7 +837,6 @@ impl DOKS {
             self.name(),
             self.id()
         );
-        self.send_to_customer(&message, &listeners_helper);
         self.logger()
             .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
@@ -879,11 +862,8 @@ impl DOKS {
                 self.name(),
                 self.id()
             );
-            self.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe(message.to_string()),
-            ));
-            self.send_to_customer(&message, &listeners_helper);
+            self.logger()
+                .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
             let all_namespaces = kubectl_exec_get_all_namespaces(
                 &kubeconfig_path,
@@ -943,7 +923,6 @@ impl DOKS {
                 self.name(),
                 self.id()
             );
-            self.send_to_customer(&message, &listeners_helper);
             self.logger()
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
@@ -1047,7 +1026,6 @@ impl DOKS {
         };
 
         let message = format!("Deleting Kubernetes cluster {}/{}", self.name(), self.id());
-        self.send_to_customer(&message, &listeners_helper);
         self.logger()
             .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
@@ -1058,10 +1036,6 @@ impl DOKS {
 
         match cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
             Ok(_) => {
-                self.send_to_customer(
-                    format!("Kubernetes cluster {}/{} successfully deleted", self.name(), self.id()).as_str(),
-                    &listeners_helper,
-                );
                 self.logger().log(EngineEvent::Info(
                     event_details,
                     EventMessage::new_from_safe("Kubernetes cluster successfully deleted".to_string()),
@@ -1145,14 +1119,6 @@ impl Kubernetes for DOKS {
 
     fn is_valid(&self) -> Result<(), EngineError> {
         Ok(())
-    }
-
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
     }
 
     fn get_kubeconfig_file(&self) -> Result<(String, File), EngineError> {
@@ -1316,16 +1282,6 @@ impl Kubernetes for DOKS {
 
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-        self.send_to_customer(
-            format!(
-                "Start preparing DOKS upgrade process {} cluster with id {}",
-                self.name(),
-                self.id()
-            )
-            .as_str(),
-            &listeners_helper,
-        );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe("Start preparing cluster upgrade process".to_string()),
@@ -1339,10 +1295,6 @@ impl Kubernetes for DOKS {
         //
         // Upgrade worker nodes
         //
-        self.send_to_customer(
-            format!("Preparing workers nodes for upgrade for Kubernetes cluster {}", self.name()).as_str(),
-            &listeners_helper,
-        );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe("Preparing workers nodes for upgrade for Kubernetes cluster.".to_string()),
@@ -1397,10 +1349,6 @@ impl Kubernetes for DOKS {
             ));
         }
 
-        self.send_to_customer(
-            format!("Upgrading Kubernetes {} nodes", self.name()).as_str(),
-            &listeners_helper,
-        );
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe("Upgrading Kubernetes nodes.".to_string()),
@@ -1428,10 +1376,6 @@ impl Kubernetes for DOKS {
         match terraform_init_validate_plan_apply(temp_dir.as_str(), self.context.is_dry_run_deploy()) {
             Ok(_) => match self.check_workers_on_upgrade(kubernetes_upgrade_status.requested_version.to_string()) {
                 Ok(_) => {
-                    self.send_to_customer(
-                        format!("Kubernetes {} nodes have been successfully upgraded", self.name()).as_str(),
-                        &listeners_helper,
-                    );
                     self.logger().log(EngineEvent::Info(
                         event_details,
                         EventMessage::new_from_safe("Kubernetes nodes have been successfully upgraded.".to_string()),
@@ -1565,7 +1509,7 @@ impl Kubernetes for DOKS {
         send_progress_on_long_task(self, Action::Delete, || self.delete_error())
     }
 
-    fn get_advanced_settings(&self) -> &ClusterAdvancedSettings {
+    fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
     }
 }

@@ -42,7 +42,7 @@ impl DeploymentReporter for RouterDeploymentReporter {
         (self.send_progress)("⌛️ Deployment of router in progress ...".to_string());
     }
 
-    fn deployment_terminated(&mut self, result: Self::DeploymentResult) {
+    fn deployment_terminated(&mut self, result: &Self::DeploymentResult) {
         let error = match result {
             Ok(_) => {
                 (self.send_success)("✅ Deployment of router succeeded".to_string());
@@ -53,7 +53,7 @@ impl DeploymentReporter for RouterDeploymentReporter {
 
         (self.send_error)(error.clone());
         (self.send_error)(EngineError::new_engine_error(
-            error,
+            error.clone(),
             r#"
 ❌ Deployment of router failed ! Look at the report above and to understand why.
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/

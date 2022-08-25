@@ -11,10 +11,19 @@ rules:
     resources:
       - pods
       - pods/log
+      - nodes
       - namespace
       - events
+      - nodes/stats
+      - nodes/proxy
     verbs:
       - get
       - list
       - watch
+  - apiGroups:
+      - metrics.k8s.io
+    resources:
+      - pods
+    verbs:
+      - get
 {{- end }}
