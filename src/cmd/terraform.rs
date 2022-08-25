@@ -109,6 +109,11 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    InstanceTypeDoesntExist {
+        instance_type: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
 }
 
 impl TerraformError {
@@ -261,6 +266,21 @@ impl TerraformError {
         }
 
         // Resources issues
+        // AWS
+        // InvalidParameterException: The following supplied instance types do not exist: [t3a.medium]
+        if let Ok(aws_wrong_instance_type_re) = Regex::new(
+            r"InvalidParameterException: The following supplied instance types do not exist: \[(?P<instance_type>.+?)\]",
+        ) {
+            if let Some(cap) = aws_wrong_instance_type_re.captures(raw_terraform_error_output.as_str()) {
+                if let Some(instance_type) = cap.name("instance_type").map(|e| e.as_str()) {
+                    return TerraformError::InstanceTypeDoesntExist {
+                        instance_type: instance_type.to_string(),
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
+
         // SCW
         if raw_terraform_error_output.contains("scaleway-sdk-go: waiting for")
             && raw_terraform_error_output.contains("failed: timeout after")
@@ -390,6 +410,7 @@ impl TerraformError {
                 resource_kind,
                 raw_message,
             } => format!("Error, resource {}:{} was expected to be in another state. It happens when changes have been done Cloud provider side without Qovery. You need to fix it manually: {}", resource_type, resource_kind, raw_message),
+            TerraformError::InstanceTypeDoesntExist { instance_type, ..} => format!("Error, instance type `{}` doesn't exist in cluster region.", instance_type)
         }
     }
 }
@@ -434,6 +455,9 @@ impl Display for TerraformError {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::WrongExpectedState { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::InstanceTypeDoesntExist { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
         };
@@ -1120,6 +1144,24 @@ terraform {
             TerraformError::WrongExpectedState {
                 resource_name: "zabcd-postgresql".to_string(),
                 resource_kind: "DB".to_string(),
+                raw_message
+            },
+            result
+        );
+    }
+
+    #[test]
+    fn test_terraform_error_aws_invalid_instance_type() {
+        // setup:
+        let raw_message = "Error: error creating EKS Node Group (qovery-z1c730e8f:qovery-20220708101440659400000001): InvalidParameterException: The following supplied instance types do not exist: [t3a.medium]".to_string();
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
+
+        // validate:
+        assert_eq!(
+            TerraformError::InstanceTypeDoesntExist {
+                instance_type: "t3a.medium".to_string(),
                 raw_message
             },
             result
