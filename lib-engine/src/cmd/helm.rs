@@ -330,7 +330,7 @@ impl Helm {
 
     pub fn get_chart_version(
         &self,
-        chart_name: String,
+        chart_name: &str,
         namespace: Option<&str>,
         envs: &[(&str, &str)],
     ) -> Result<Option<HelmChartVersions>, HelmError> {
@@ -580,7 +580,7 @@ impl Helm {
         // the chart before applying it.
         if let Some(breaking_version) = &chart.last_breaking_version_requiring_restart {
             if let Some(installed_versions) =
-                self.get_chart_version(chart.name.clone(), Some(chart.get_namespace_string().as_str()), envs)?
+                self.get_chart_version(&chart.name, Some(chart.get_namespace_string().as_str()), envs)?
             {
                 if installed_versions.chart_version.is_some()
                     && installed_versions
