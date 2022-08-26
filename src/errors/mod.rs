@@ -529,6 +529,8 @@ pub enum Tag {
     CloudProviderGetLoadBalancer,
     /// CloudProviderGetLoadBalancerTags: represents an issue while trying to get load balancer tags from the cloud provider API
     CloudProviderGetLoadBalancerTags,
+    /// CloudProviderDeleteLoadBalancer: represents an issue while trying to delete load balancer from the cloud provider API
+    CloudProviderDeleteLoadBalancer,
     /// K8sCannotConnectToApi: represents an error when trying to contact K8s API.
     K8sCannotReachToApi,
     /// K8sPodDisruptionBudgetInInvalidState: represents an error where pod disruption budget is in an invalid state.
@@ -3597,8 +3599,23 @@ impl EngineError {
             Some("Please ensure Qovery has correct permissions or try again later".to_string()),
         )
     }
-}
 
+    pub(crate) fn new_cloud_provider_error_deleting_load_balancer(
+        event_details: EventDetails,
+        cloud_provider_error_message: CommandError,
+    ) -> EngineError {
+        let message_safe = "Error while deleting Load balancer from the cloud provider API".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::CloudProviderDeleteLoadBalancer,
+            message_safe,
+            Some(cloud_provider_error_message),
+            None,
+            None,
+        )
+    }
+}
 impl Display for EngineError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // Note: just in case, env vars are not leaked since it can hold sensitive data such as secrets.

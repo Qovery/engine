@@ -172,6 +172,7 @@ pub enum Tag {
     TerraformMultipleInterruptsReceived,
     CloudProviderGetLoadBalancer,
     CloudProviderGetLoadBalancerTags,
+    CloudProviderDeleteLoadBalancer,
 }
 
 impl From<errors::Tag> for Tag {
@@ -345,6 +346,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CloudProviderGetLoadBalancer => Tag::CloudProviderGetLoadBalancer,
             errors::Tag::CloudProviderGetLoadBalancerTags => Tag::CloudProviderGetLoadBalancerTags,
             errors::Tag::K8sCannotDeletePvc => Tag::K8sCannotDeletePvc,
+            errors::Tag::CloudProviderDeleteLoadBalancer => Tag::CloudProviderDeleteLoadBalancer,
         }
     }
 }
