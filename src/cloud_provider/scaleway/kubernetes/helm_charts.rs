@@ -1,10 +1,10 @@
 use crate::cloud_provider::helm::{
     get_chart_for_cert_manager_config, get_chart_for_cluster_agent, get_chart_for_shell_agent,
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, ChartValuesGenerated, ClusterAgentContext,
-    CommonChart, CoreDNSConfigChart, HelmChart, HelmChartNamespaces, ShellAgentContext,
+    CommonChart, CoreDNSConfigChart, HelmAction, HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAgent, QoveryAppName, QoveryEngine};
+use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAppName, QoveryEngine};
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
 use crate::cmd::helm_utils::CRDSUpdate;
 use crate::dns_provider::DnsProviderConfiguration;
@@ -726,75 +726,15 @@ datasources:
     };
     let shell_agent = get_chart_for_shell_agent(shell_context, chart_path, None)?;
 
-    let qovery_agent_version: QoveryAgent = get_qovery_app_version(
-        QoveryAppName::Agent,
-        &chart_config_prerequisites.infra_options.agent_version_controller_token,
-        &chart_config_prerequisites.infra_options.qovery_api_url,
-        &chart_config_prerequisites.cluster_id,
-    )?;
-
-    let mut qovery_agent = CommonChart {
+    let qovery_agent = CommonChart {
         chart_info: ChartInfo {
             name: "qovery-agent".to_string(),
             path: chart_path("common/charts/qovery/qovery-agent"),
             namespace: HelmChartNamespaces::Qovery,
-            values: vec![
-                ChartSetValue {
-                    key: "image.tag".to_string(),
-                    value: qovery_agent_version.version,
-                },
-                ChartSetValue {
-                    key: "replicaCount".to_string(),
-                    value: "1".to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.GRPC_SERVER".to_string(),
-                    value: chart_config_prerequisites.infra_options.qovery_grpc_url.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.CLUSTER_JWT_TOKEN".to_string(),
-                    value: chart_config_prerequisites.infra_options.jwt_token.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.CLUSTER_ID".to_string(),
-                    value: chart_config_prerequisites.cluster_long_id.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.ORGANIZATION_ID".to_string(),
-                    value: chart_config_prerequisites.organization_long_id.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.LOKI_URL".to_string(),
-                    value: format!("http://{}", loki_kube_dns_name),
-                },
-                // resources limits
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "1".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "500Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "500Mi".to_string(),
-                },
-            ],
+            action: HelmAction::Destroy,
             ..Default::default()
         },
     };
-
-    if chart_config_prerequisites.ff_log_history_enabled {
-        qovery_agent.chart_info.values.push(ChartSetValue {
-            key: "environmentVariables.FEATURES".to_string(),
-            value: "LogsHistory".to_string(),
-        })
-    }
 
     let qovery_engine_version: QoveryEngine = get_qovery_app_version(
         QoveryAppName::Engine,
