@@ -1,3 +1,4 @@
+use crate::cloud_provider::aws::load_balancers::clean_up_deleted_k8s_nlb;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::kubectl::kubectl_exec_is_namespace_present;
@@ -71,6 +72,9 @@ impl<'a> EnvironmentDeployment<'a> {
             service.exec_action(target, *service.action())?;
             service.exec_check_action(*service.action())?;
         }
+
+        // clean up nlb
+        clean_up_deleted_k8s_nlb(self.event_details.clone(), target)?;
 
         Ok(())
     }

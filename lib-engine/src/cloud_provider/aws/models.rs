@@ -1,5 +1,12 @@
+use async_trait::async_trait;
+use aws_sdk_elasticloadbalancingv2::{
+    error::{DeleteLoadBalancerError, DescribeTagsError},
+    model::{LoadBalancer, TagDescription},
+};
+use aws_smithy_client::SdkError;
+
 #[async_trait]
-trait QoveryAwsSdkConfig {
+pub trait QoveryAwsSdkConfig {
     async fn list_all_aws_load_balancers(
         &self,
     ) -> Result<
@@ -10,4 +17,8 @@ trait QoveryAwsSdkConfig {
         &self,
         load_balancers: Vec<LoadBalancer>,
     ) -> Result<Vec<TagDescription>, SdkError<DescribeTagsError>>;
+    async fn delete_aws_load_balancer(
+        &self,
+        load_balancer_arn: String,
+    ) -> Result<(), SdkError<DeleteLoadBalancerError>>;
 }
