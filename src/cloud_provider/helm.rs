@@ -20,7 +20,6 @@ use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::{fs, thread};
 use thread::spawn;
-use tracing::{span, Level};
 use uuid::Uuid;
 
 #[derive(Clone, PartialEq, Eq)]
@@ -184,9 +183,8 @@ pub trait HelmChart: Send {
         Ok(None)
     }
 
-    fn get_selector(&self) -> Option<String> {
-        let infos = self.get_chart_info();
-        infos.k8s_selector.clone()
+    fn get_selector(&self) -> &Option<String> {
+        &self.get_chart_info().k8s_selector
     }
 
     fn get_chart_info(&self) -> &ChartInfo;
@@ -201,13 +199,11 @@ pub trait HelmChart: Send {
         envs: &[(String, String)],
         payload: Option<ChartPayload>,
     ) -> Result<Option<ChartPayload>, CommandError> {
-        let chart_infos = self.get_chart_info();
-
         // Cleaning any existing crash looping pod for this helm chart
         if let Some(selector) = self.get_selector() {
             kubectl_delete_crash_looping_pods(
                 &kubernetes_config,
-                Some(chart_infos.get_namespace_string().as_str()),
+                Some(self.get_chart_info().get_namespace_string().as_str()),
                 Some(selector.as_str()),
                 envs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect(),
             )?;
@@ -238,7 +234,7 @@ pub trait HelmChart: Send {
         envs: &[(String, String)],
         payload: Option<ChartPayload>,
     ) -> Result<Option<ChartPayload>, CommandError> {
-        let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
+        let environment_variables: Vec<(&str, &str)> = envs.iter().map(|(l, r)| (l.as_str(), r.as_str())).collect();
         let chart_info = self.get_chart_info();
         let helm = Helm::new(kubernetes_config, &environment_variables).map_err(to_command_error)?;
 
@@ -252,7 +248,7 @@ pub trait HelmChart: Send {
                 }
 
                 let installed_chart_version = match helm.get_chart_version(
-                    chart_info.name.clone(),
+                    &chart_info.name,
                     Some(chart_info.get_namespace_string().as_str()),
                     environment_variables.as_slice(),
                 ) {
@@ -282,16 +278,9 @@ pub trait HelmChart: Send {
                     }
                 };
 
-                if let Err(e) = update_crds_on_upgrade(
-                    kubernetes_config,
-                    chart_info.clone(),
-                    environment_variables.as_slice(),
-                    &helm,
-                )
-                .map_err(to_command_error)
-                {
-                    return Err(e);
-                }
+                // Verify that we don't need to upgrade the CRDS
+                update_crds_on_upgrade(kubernetes_config, chart_info.clone(), environment_variables.as_slice(), &helm)
+                    .map_err(to_command_error)?;
 
                 match helm.upgrade(chart_info, &[]).map_err(to_command_error) {
                     Ok(_) => {
@@ -324,6 +313,7 @@ pub trait HelmChart: Send {
             HelmAction::Destroy => {
                 let chart_info = self.get_chart_info();
                 if let Some(crds_update) = &chart_info.crds_update {
+                    // FIXME: This can't work as crd as .yaml in the string
                     for crd in &crds_update.resources {
                         if let Err(e) =
                             kubectl_exec_delete_crd(kubernetes_config, crd.as_str(), environment_variables.clone())
@@ -355,7 +345,7 @@ pub trait HelmChart: Send {
         payload: Option<ChartPayload>,
     ) -> Result<Option<ChartPayload>, CommandError> {
         // print events for future investigation
-        let environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
+        let environment_variables: Vec<(&str, &str)> = envs.iter().map(|(l, r)| (l.as_str(), r.as_str())).collect();
         match kubectl_exec_get_events(
             kubernetes_config,
             Some(self.get_chart_info().get_namespace_string().as_str()),
@@ -384,8 +374,8 @@ fn deploy_parallel_charts(
         let current_span = tracing::Span::current();
         let handle = spawn(move || {
             // making sure to pass the current span to the new thread not to lose any tracing info
-            span!(parent: &current_span, Level::INFO, "") // empty span name to reduce logs length
-                .in_scope(|| chart.run(path.as_path(), &environment_variables))
+            let _ = current_span.enter();
+            chart.run(path.as_path(), &environment_variables)
         });
         handles.push(handle);
     }
@@ -472,8 +462,6 @@ pub struct ChartPayload {
     data: HashMap<String, String>,
 }
 
-impl CommonChart {}
-
 impl HelmChart for CommonChart {
     fn get_chart_info(&self) -> &ChartInfo {
         &self.chart_info
@@ -495,7 +483,6 @@ impl HelmChart for CommonChart {
 }
 
 // CoreDNS config
-
 #[derive(Default)]
 pub struct CoreDNSConfigChart {
     pub chart_info: ChartInfo,
