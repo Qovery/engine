@@ -1,6 +1,6 @@
 {%- if custom_domains|length > 0 %}
 ---
-apiVersion: cert-manager.io/v1alpha2
+apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
   name: {{ id }}
