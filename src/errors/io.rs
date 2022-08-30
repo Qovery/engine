@@ -43,6 +43,7 @@ pub enum Tag {
     K8sPodDisruptionBudgetInInvalidState,
     K8sPodsDisruptionBudgetCannotBeRetrieved,
     K8sCannotDeletePod,
+    K8sCannotDeletePvc,
     K8sCannotGetCrashLoopingPods,
     K8sCannotDeleteCompletedJobs,
     K8sCannotGetPods,
@@ -341,6 +342,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::ObjectStorageCannotGetObjectFile => Tag::ObjectStorageCannotGetObjectFile,
             errors::Tag::CloudProviderGetLoadBalancer => Tag::CloudProviderGetLoadBalancer,
             errors::Tag::CloudProviderGetLoadBalancerTags => Tag::CloudProviderGetLoadBalancerTags,
+            errors::Tag::K8sCannotDeletePvc => Tag::K8sCannotDeletePvc,
         }
     }
 }
