@@ -12,6 +12,8 @@ global:
   priorityClassName: ""
   rbac:
     create: true
+    # Aggregate ClusterRoles to Kubernetes default user-facing roles. Ref: https://kubernetes.io/docs/reference/access-authn-authz/rbac/#user-facing-roles
+    aggregateClusterRoles: true
 
   podSecurityPolicy:
     enabled: false
@@ -81,13 +83,13 @@ serviceAccount:
   # Optional additional annotations to add to the controller's ServiceAccount
   # annotations: {}
   # Automount API credentials for a Service Account.
+  # Optional additional labels to add to the controller's ServiceAccount
+  # labels: {}
   automountServiceAccountToken: true
 
-# Optional additional arguments
+# Additional command line flags to pass to cert-manager controller binary.
+# To see all available flags run docker run quay.io/jetstack/cert-manager-controller:<version> --help
 extraArgs: []
-  # Use this flag to set a namespace that cert-manager will use to store
-  # supporting resources required for each ClusterIssuer (default is kube-system)
-  # - --cluster-resource-namespace=kube-system
   # When this flag is enabled, secrets will be automatically removed when the certificate resource is deleted
   # - --enable-certificate-owner-ref=true
   # Use this flag to enabled or disable arbitrary controllers, for example, disable the CertificiateRequests approver
@@ -120,7 +122,8 @@ securityContext:
 
 # Container Security Context to be set on the controller component container
 # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
-containerSecurityContext: {}
+containerSecurityContext:
+  allowPrivilegeEscalation: false
   # capabilities:
   #   drop:
   #   - ALL
@@ -140,6 +143,9 @@ volumeMounts: []
 
 podLabels: {}
 
+# Optional annotations to add to the controller Service
+# serviceAnnotations: {}
+
 # Optional additional labels to add to the controller Service
 # serviceLabels: {}
 
@@ -154,7 +160,8 @@ podLabels: {}
 #     - "1.1.1.1"
 #     - "8.8.8.8"
 
-nodeSelector: {}
+nodeSelector:
+  kubernetes.io/os: linux
 
 ingressShim: {}
   # defaultIssuerName: ""
@@ -171,6 +178,7 @@ prometheus:
     interval: 60s
     scrapeTimeout: 30s
     labels: {}
+    honorLabels: false
 
 # Use these variables to configure the HTTP_PROXY environment variables
 # http_proxy: "http://proxy:8080"
@@ -203,6 +211,23 @@ webhook:
   replicaCount: 1
   timeoutSeconds: 10
 
+  # Used to configure options for the webhook pod.
+  # This allows setting options that'd usually be provided via flags.
+  # An APIVersion and Kind must be specified in your values.yaml file.
+  # Flags will override options that are set here.
+  config:
+    # apiVersion: webhook.config.cert-manager.io/v1alpha1
+    # kind: WebhookConfiguration
+
+    # The port that the webhook should listen on for requests.
+    # In GKE private clusters, by default kubernetes apiservers are allowed to
+    # talk to the cluster nodes only on 443 and 10250. so configuring
+    # securePort: 10250, will work out of the box without needing to add firewall
+    # rules or requiring NET_BIND_SERVICE capabilities to bind port numbers <1000.
+    # This should be uncommented and set as a default by the chart once we graduate
+    # the apiVersion of WebhookConfiguration past v1alpha1.
+    # securePort: 10250
+
   strategy: {}
     # type: RollingUpdate
     # rollingUpdate:
@@ -216,7 +241,8 @@ webhook:
 
   # Container Security Context to be set on the webhook component container
   # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
-  containerSecurityContext: {}
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
     # capabilities:
     #   drop:
     #   - ALL
@@ -229,14 +255,20 @@ webhook:
   # Optional additional annotations to add to the webhook Pods
   # podAnnotations: {}
 
+  # Optional additional annotations to add to the webhook Service
+  # serviceAnnotations: {}
+
   # Optional additional annotations to add to the webhook MutatingWebhookConfiguration
   # mutatingWebhookConfigurationAnnotations: {}
 
   # Optional additional annotations to add to the webhook ValidatingWebhookConfiguration
   # validatingWebhookConfigurationAnnotations: {}
 
-  # Optional additional arguments for webhook
+  # Additional command line flags to pass to cert-manager webhook binary.
+  # To see all available flags run docker run quay.io/jetstack/cert-manager-webhook:<version> --help
   extraArgs: []
+  # Path to a file containing a WebhookConfiguration object used to configure the webhook
+  # - --config=<path-to-config-file>
 
   resources: {}
     # requests:
@@ -259,7 +291,8 @@ webhook:
     successThreshold: 1
     timeoutSeconds: 1
 
-  nodeSelector: {}
+  nodeSelector:
+    kubernetes.io/os: linux
 
   affinity: {}
 
@@ -267,6 +300,9 @@ webhook:
 
   # Optional additional labels to add to the Webhook Pods
   podLabels: {}
+
+  # Optional additional labels to add to the Webhook Service
+  serviceLabels: {}
 
   image:
     repository: quay.io/jetstack/cert-manager-webhook
@@ -291,6 +327,8 @@ webhook:
     # name: ""
     # Optional additional annotations to add to the controller's ServiceAccount
     # annotations: {}
+    # Optional additional labels to add to the webhook's ServiceAccount
+    # labels: {}
     # Automount API credentials for a Service Account.
     automountServiceAccountToken: true
 
@@ -340,7 +378,8 @@ cainjector:
 
   # Container Security Context to be set on the cainjector component container
   # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
-  containerSecurityContext: {}
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
     # capabilities:
     #   drop:
     #   - ALL
@@ -354,15 +393,19 @@ cainjector:
   # Optional additional annotations to add to the cainjector Pods
   # podAnnotations: {}
 
-  # Optional additional arguments for cainjector
+  # Additional command line flags to pass to cert-manager cainjector binary.
+  # To see all available flags run docker run quay.io/jetstack/cert-manager-cainjector:<version> --help
   extraArgs: []
+  # Enable profiling for cainjector
+  # - --enable-profiling=true
 
   resources: {}
     # requests:
     #   cpu: 10m
     #   memory: 32Mi
 
-  nodeSelector: {}
+  nodeSelector:
+    kubernetes.io/os: linux
 
   affinity: {}
 
@@ -395,4 +438,106 @@ cainjector:
     # Optional additional annotations to add to the controller's ServiceAccount
     # annotations: {}
     # Automount API credentials for a Service Account.
+    # Optional additional labels to add to the cainjector's ServiceAccount
+    # labels: {}
     automountServiceAccountToken: true
+
+# This startupapicheck is a Helm post-install hook that waits for the webhook
+# endpoints to become available.
+# The check is implemented using a Kubernetes Job- if you are injecting mesh
+# sidecar proxies into cert-manager pods, you probably want to ensure that they
+# are not injected into this Job's pod. Otherwise the installation may time out
+# due to the Job never being completed because the sidecar proxy does not exit.
+# See https://github.com/cert-manager/cert-manager/pull/4414 for context.
+startupapicheck:
+  enabled: true
+
+  # Pod Security Context to be set on the startupapicheck component Pod
+  # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+  securityContext:
+    runAsNonRoot: true
+
+  # Container Security Context to be set on the controller component container
+  # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    # capabilities:
+    #   drop:
+    #   - ALL
+    # readOnlyRootFilesystem: true
+    # runAsNonRoot: true
+
+  # Timeout for 'kubectl check api' command
+  timeout: 1m
+
+  # Job backoffLimit
+  backoffLimit: 4
+
+  # Optional additional annotations to add to the startupapicheck Job
+  jobAnnotations:
+    helm.sh/hook: post-install
+    helm.sh/hook-weight: "1"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+
+  # Optional additional annotations to add to the startupapicheck Pods
+  # podAnnotations: {}
+
+  # Additional command line flags to pass to startupapicheck binary.
+  # To see all available flags run docker run quay.io/jetstack/cert-manager-ctl:<version> --help
+  extraArgs: []
+
+  resources: {}
+    # requests:
+    #   cpu: 10m
+    #   memory: 32Mi
+
+  nodeSelector: {}
+
+  affinity: {}
+
+  tolerations: []
+
+  # Optional additional labels to add to the startupapicheck Pods
+  podLabels: {}
+
+  image:
+    repository: quay.io/jetstack/cert-manager-ctl
+    # You can manage a registry with
+    # registry: quay.io
+    # repository: jetstack/cert-manager-ctl
+
+    # Override the image tag to deploy by setting this variable.
+    # If no value is set, the chart's appVersion will be used.
+    # tag: canary
+
+    # Setting a digest will override any tag
+    # digest: sha256:0e072dddd1f7f8fc8909a2ca6f65e76c5f0d2fcfb8be47935ae3457e8bbceb20
+
+    pullPolicy: IfNotPresent
+
+  rbac:
+    # annotations for the startup API Check job RBAC and PSP resources
+    annotations:
+      helm.sh/hook: post-install
+      helm.sh/hook-weight: "-5"
+      helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the fullname template
+    # name: ""
+
+    # Optional additional annotations to add to the Job's ServiceAccount
+    annotations:
+      helm.sh/hook: post-install
+      helm.sh/hook-weight: "-5"
+      helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+
+    # Automount API credentials for a Service Account.
+    automountServiceAccountToken: true
+
+    # Optional additional labels to add to the startupapicheck's ServiceAccount
+    # labels: {}
