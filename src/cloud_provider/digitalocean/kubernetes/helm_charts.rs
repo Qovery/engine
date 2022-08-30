@@ -581,12 +581,24 @@ datasources:
     let cert_manager = CommonChart {
         chart_info: ChartInfo {
             name: "cert-manager".to_string(),
-            path: chart_path("common/charts/cert-manager"),
+            path: chart_path("common/charts/cert-manager-1.8"),
             namespace: HelmChartNamespaces::CertManager,
             values: vec![
                 ChartSetValue {
                     key: "installCRDs".to_string(),
                     value: "true".to_string(),
+                },
+                ChartSetValue {
+                    key: "startupapicheck.jobAnnotations.helm\\.sh/hook".to_string(),
+                    value: "post-install\\,post-upgrade".to_string(),
+                },
+                ChartSetValue {
+                    key: "startupapicheck.rbac.annotations.helm\\.sh/hook".to_string(),
+                    value: "post-install\\,post-upgrade".to_string(),
+                },
+                ChartSetValue {
+                    key: "startupapicheck.serviceAccount.annotations.helm\\.sh/hook".to_string(),
+                    value: "post-install\\,post-upgrade".to_string(),
                 },
                 ChartSetValue {
                     key: "replicaCount".to_string(),
