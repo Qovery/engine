@@ -23,6 +23,7 @@ pub mod events;
 pub mod fs;
 pub mod git;
 pub mod io_models;
+mod kubers_utils;
 pub mod logger;
 pub mod models;
 pub mod object_storage;

@@ -395,7 +395,7 @@ function test_local_stack() {
     echo "==========================TEST WITH LOCAL STACK==========================="
     trap "destroy_kube_cluster $kube_cluster_name" EXIT
     if [ -z $DOCKER_HOST ]; then unset $DOCKER_HOST; fi
-    cargo test --manifest-path lib-engine/Cargo.toml --features test-all-local
+    cargo test -j 2 --manifest-path lib-engine/Cargo.toml --features test-all-local
 }
 
 function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH branch name, threads
