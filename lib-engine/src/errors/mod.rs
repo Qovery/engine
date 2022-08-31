@@ -594,6 +594,8 @@ pub enum Tag {
     TerraformNotEnoughPermissions,
     /// TerraformWrongState: terraform issue due to wrong state of the resource
     TerraformWrongState,
+    /// TerraformResourceDependencyViolation: terraform issue due to resource dependency violation
+    TerraformResourceDependencyViolation,
     /// TerraformInstanceTypeDoesntExist: terraform issue due to instance type doesn't exist in the current region
     TerraformInstanceTypeDoesntExist,
     /// TerraformConfigFileNotFound: terraform config file cannot be found
@@ -2351,6 +2353,14 @@ impl EngineError {
                 Some(terraform_error.into()),
                 None,
                 Some("Try to set the resource in the desired state from your Cloud provider web console or API".to_string()),
+            ),
+            TerraformError::ResourceDependencyViolation { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformWrongState,
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()),
+                None,
+                None,
             ),
             TerraformError::InstanceTypeDoesntExist { .. } => EngineError::new(
                 event_details,

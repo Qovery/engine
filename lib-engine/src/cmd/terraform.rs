@@ -109,6 +109,12 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    ResourceDependencyViolation {
+        resource_kind: String,
+        resource_name: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
     InstanceTypeDoesntExist {
         instance_type: String,
         /// raw_message: raw Terraform error message with all details.
@@ -230,6 +236,25 @@ impl TerraformError {
                     cap.name("resource_name").map(|e| e.as_str()),
                 ) {
                     return TerraformError::WrongExpectedState {
+                        resource_name: resource_name.to_string(),
+                        resource_kind: resource_kind.to_string(),
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
+
+        // Dependencies issues
+        // AWS
+        if let Ok(aws_state_expected_re) = Regex::new(
+            r"Error deleting (?P<resource_kind>\w+): DependencyViolation: .+ '(?P<resource_name>.+?)' has dependencies and cannot be deleted",
+        ) {
+            if let Some(cap) = aws_state_expected_re.captures(raw_terraform_error_output.as_str()) {
+                if let (Some(resource_kind), Some(resource_name)) = (
+                    cap.name("resource_kind").map(|e| e.as_str()),
+                    cap.name("resource_name").map(|e| e.as_str()),
+                ) {
+                    return TerraformError::ResourceDependencyViolation {
                         resource_name: resource_name.to_string(),
                         resource_kind: resource_kind.to_string(),
                         raw_message: raw_terraform_error_output.to_string(),
@@ -423,6 +448,9 @@ impl TerraformError {
             TerraformError::AlreadyExistingResource { resource_type, .. } => {
                 format!("Error, resource {} already exists.", resource_type)
             }
+            TerraformError::ResourceDependencyViolation { resource_name, resource_kind, .. } => {
+                format!("Error, resource {} `{}` has dependency violation.", resource_kind, resource_name)
+            }
             TerraformError::WaitingTimeoutResource {
                 resource_type,
                 resource_identifier,
@@ -483,6 +511,9 @@ impl Display for TerraformError {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::WrongExpectedState { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::ResourceDependencyViolation { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::InstanceTypeDoesntExist { raw_message, .. } => {
@@ -1173,6 +1204,26 @@ terraform {
                 resource_name: "zabcd-postgresql".to_string(),
                 resource_kind: "DB".to_string(),
                 raw_message
+            },
+            result
+        );
+    }
+
+    #[test]
+    fn test_terraform_error_aws_dependency_violation_issue() {
+        // setup:
+        let raw_message = r#"Error: Error deleting VPC: DependencyViolation: The vpc 'vpc-0330249c67533e3e7' has dependencies and cannot be deleted.
+            status code: 400, request id: 2be352ce-4b43-4243-ace7-0b9f2ba35734"#;
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
+
+        // validate:
+        assert_eq!(
+            TerraformError::ResourceDependencyViolation {
+                resource_name: "vpc-0330249c67533e3e7".to_string(),
+                resource_kind: "VPC".to_string(),
+                raw_message: raw_message.to_string(),
             },
             result
         );

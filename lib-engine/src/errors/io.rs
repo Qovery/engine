@@ -166,6 +166,7 @@ pub enum Tag {
     TerraformWaitingTimeoutResource,
     TerraformAlreadyExistingResource,
     TerraformWrongState,
+    TerraformResourceDependencyViolation,
     TerraformContextUnsupportedParameterValue,
     TerraformQoveryConfigMismatch,
     TerraformInstanceTypeDoesntExist,
@@ -224,6 +225,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::TerraformErrorWhileExecutingDestroyPipeline => {
                 Tag::TerraformErrorWhileExecutingDestroyPipeline
             }
+            errors::Tag::TerraformResourceDependencyViolation => Tag::TerraformResourceDependencyViolation,
             errors::Tag::HelmChartsSetupError => Tag::HelmChartsSetupError,
             errors::Tag::HelmChartsDeployError => Tag::HelmChartsDeployError,
             errors::Tag::HelmChartsUpgradeError => Tag::HelmChartsUpgradeError,
