@@ -137,7 +137,7 @@ where
                 // Delete previous image from cache to cleanup resources
                 if let Some(last_image_tag) = last_image.and_then(|img| img.split(':').last().map(str::to_string)) {
                     if last_image_tag != self.tag_for_mirror() {
-                        let logger = get_loggers(self, Action::Delete);
+                        let logger = get_loggers(self, Action::Create);
                         (logger.send_progress)(format!("🪓 Deleting previous cached image {}", last_image_tag));
 
                         let image = Image {
