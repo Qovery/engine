@@ -586,6 +586,8 @@ pub enum Tag {
     TerraformUnknownError,
     /// TerraformInvalidCredentials: terraform invalid cloud provider credentials
     TerraformInvalidCredentials,
+    /// TerraformMultipleInterruptsReceived: terraform received multiple interrupts
+    TerraformMultipleInterruptsReceived,
     /// TerraformNotEnoughPermissions: terraform issue due to user not having enough permissions to perform action on the resource
     TerraformNotEnoughPermissions,
     /// TerraformWrongState: terraform issue due to wrong state of the resource
@@ -2202,6 +2204,14 @@ impl EngineError {
                 event_details,
                 Tag::TerraformUnknownError,
                 terraform_error.to_string(), // Note: end-game goal is to have 0 Unknown Terraform issues. Showing everything in this case is just more convenient for both user and Qovery team.
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
+                None,
+                Some(DEFAULT_HINT_MESSAGE.to_string()),
+            ),
+            TerraformError::MultipleInterruptsReceived { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformMultipleInterruptsReceived,
+                terraform_error.to_safe_message(),
                 Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
                 None,
                 Some(DEFAULT_HINT_MESSAGE.to_string()),

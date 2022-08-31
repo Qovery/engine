@@ -114,6 +114,10 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    MultipleInterruptsReceived {
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
 }
 
 impl TerraformError {
@@ -331,6 +335,13 @@ impl TerraformError {
             }
         }
 
+        // Terraform general errors
+        if raw_terraform_error_output.contains("Two interrupts received. Exiting immediately.") {
+            return TerraformError::MultipleInterruptsReceived {
+                raw_message: raw_terraform_error_output,
+            };
+        }
+
         // This kind of error should be triggered as little as possible, ideally, there is no unknown errors
         // (un-catched) so we can act / report properly to the user.
         TerraformError::Unknown {
@@ -346,6 +357,7 @@ impl TerraformError {
                 "Unknown error while performing Terraform command (`terraform {}`)",
                 terraform_args.join(" "),
             ),
+            TerraformError::MultipleInterruptsReceived { .. } => "Multiple interrupts received, stopping immediately..".to_string(),
             TerraformError::InvalidCredentials { .. } => "Invalid credentials.".to_string(),
             TerraformError::NotEnoughPermissions {
                 resource_type_and_name,
@@ -432,6 +444,9 @@ impl Display for TerraformError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let message: String = match self {
             TerraformError::Unknown { raw_message, .. } => {
+                format!("{}, here is the error:\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::MultipleInterruptsReceived { raw_message, .. } => {
                 format!("{}, here is the error:\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::InvalidCredentials { raw_message } => {
@@ -1198,5 +1213,25 @@ terraform {
             // validate:
             assert_eq!(tc.expected_terraform_error, result);
         }
+    }
+
+    #[test]
+    fn test_terraform_error_multiple_interrupts_received() {
+        // setup:
+        let raw_message = r#"Two interrupts received. Exiting immediately. Note that data
+        loss may have occurred.
+        
+        Error: rpc error: code = Unavailable desc = transport is closing
+        
+        
+        
+        Error: operation canceled"#
+            .to_string();
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
+
+        // validate:
+        assert_eq!(TerraformError::MultipleInterruptsReceived { raw_message }, result);
     }
 }

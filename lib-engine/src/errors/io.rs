@@ -169,6 +169,7 @@ pub enum Tag {
     TerraformContextUnsupportedParameterValue,
     TerraformQoveryConfigMismatch,
     TerraformInstanceTypeDoesntExist,
+    TerraformMultipleInterruptsReceived,
     CloudProviderGetLoadBalancer,
     CloudProviderGetLoadBalancerTags,
 }
@@ -335,6 +336,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::TerraformNotEnoughPermissions => Tag::TerraformNotEnoughPermissions,
             errors::Tag::TerraformWrongState => Tag::TerraformWrongState,
             errors::Tag::TerraformInstanceTypeDoesntExist => Tag::TerraformInstanceTypeDoesntExist,
+            errors::Tag::TerraformMultipleInterruptsReceived => Tag::TerraformMultipleInterruptsReceived,
             errors::Tag::HelmDeployTimeout => Tag::HelmDeployTimeout,
             errors::Tag::CannotPauseManagedDatabase => Tag::CannotPauseManagedDatabase,
             errors::Tag::ObjectStorageCannotDeleteBucket => Tag::ObjectStorageCannotDeleteBucket,
