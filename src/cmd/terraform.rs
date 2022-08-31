@@ -280,6 +280,19 @@ impl TerraformError {
                 }
             }
         }
+        // InvalidParameterValue: Invalid value 'wrong-instance-type' for InstanceType
+        if let Ok(aws_wrong_instance_type_re) =
+            Regex::new(r"InvalidParameterValue: Invalid value '(?P<instance_type>.+?)' for InstanceType")
+        {
+            if let Some(cap) = aws_wrong_instance_type_re.captures(raw_terraform_error_output.as_str()) {
+                if let Some(instance_type) = cap.name("instance_type").map(|e| e.as_str()) {
+                    return TerraformError::InstanceTypeDoesntExist {
+                        instance_type: instance_type.to_string(),
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
 
         // SCW
         if raw_terraform_error_output.contains("scaleway-sdk-go: waiting for")
@@ -1153,18 +1166,37 @@ terraform {
     #[test]
     fn test_terraform_error_aws_invalid_instance_type() {
         // setup:
-        let raw_message = "Error: error creating EKS Node Group (qovery-z1c730e8f:qovery-20220708101440659400000001): InvalidParameterException: The following supplied instance types do not exist: [t3a.medium]".to_string();
+        struct TestCase<'a> {
+            input_raw_message: &'a str,
+            expected_terraform_error: TerraformError,
+        }
 
-        // execute:
-        let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
-
-        // validate:
-        assert_eq!(
-            TerraformError::InstanceTypeDoesntExist {
-                instance_type: "t3a.medium".to_string(),
-                raw_message
+        let test_cases = vec![
+            TestCase {
+                input_raw_message:
+                "InvalidParameterException: The following supplied instance types do not exist: [t3a.medium]",
+                expected_terraform_error: TerraformError::InstanceTypeDoesntExist {
+                    instance_type: "t3a.medium".to_string(),
+                    raw_message: "InvalidParameterException: The following supplied instance types do not exist: [t3a.medium]".to_string(),
+                },
             },
-            result
-        );
+            TestCase {
+                input_raw_message:
+                "Error: creating EC2 Instance: InvalidParameterValue: Invalid value 'wrong-instance-type' for InstanceType",
+                expected_terraform_error: TerraformError::InstanceTypeDoesntExist {
+                    instance_type: "wrong-instance-type".to_string(),
+                    raw_message: "Error: creating EC2 Instance: InvalidParameterValue: Invalid value 'wrong-instance-type' for InstanceType".to_string(),
+                },
+            },
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let result =
+                TerraformError::new(vec!["apply".to_string()], "".to_string(), tc.input_raw_message.to_string());
+
+            // validate:
+            assert_eq!(tc.expected_terraform_error, result);
+        }
     }
 }
