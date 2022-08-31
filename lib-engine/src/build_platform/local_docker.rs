@@ -12,7 +12,7 @@ use crate::build_platform::dockerfile_utils::extract_dockerfile_args;
 use crate::build_platform::{Build, BuildError, BuildPlatform, Credentials, Kind};
 use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
-use crate::cmd::command::{CommandKiller, QoveryCommand};
+use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::docker::{BuildResult, ContainerImage, DockerError};
 use crate::events::{EngineEvent, EventMessage, Transmitter};
 use crate::fs::workspace_directory;
