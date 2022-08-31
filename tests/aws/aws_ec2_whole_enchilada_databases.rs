@@ -382,7 +382,7 @@ fn test_private_mongodb_managed_dbs() {
         DatabaseMode::MANAGED,
         DatabaseKind::Mongodb,
         false,
-        DbVersionsToTest::AllSupported,
+        DbVersionsToTest::LatestPrivateManaged,
     );
 }
 
@@ -395,7 +395,7 @@ fn test_private_redis_managed_dbs() {
         DatabaseMode::MANAGED,
         DatabaseKind::Redis,
         false,
-        DbVersionsToTest::AllSupported,
+        DbVersionsToTest::LatestPrivateManaged,
     );
 }
 

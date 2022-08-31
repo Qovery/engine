@@ -537,6 +537,7 @@ pub enum Tag {
     K8sPodsDisruptionBudgetCannotBeRetrieved,
     /// K8sCannotDeletePod: represents an error where we are not able to delete a pod.
     K8sCannotDeletePod,
+    K8sCannotDeletePvc,
     /// K8sCannotGetCrashLoopingPods: represents an error where we are not able to get crash looping pods.
     K8sCannotGetCrashLoopingPods,
     /// K8sCannotDeleteCompletedJobs: represents an error where we are not able to delete completed jobs.
@@ -1716,6 +1717,22 @@ impl EngineError {
         let message = format!("Unable to delete Kubernetes pod `{}`.", pod_name);
 
         EngineError::new(event_details, Tag::K8sCannotDeletePod, message, Some(raw_k8s_error), None, None)
+    }
+
+    /// Creates new error for kubernetes not being able to delete a pvc.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `pvc_name`: Pvc's name.
+    /// * `raw_k8s_error`: Raw error message.
+    pub fn new_k8s_cannot_delete_pvcs(
+        event_details: EventDetails,
+        pvc_name: String,
+        raw_k8s_error: CommandError,
+    ) -> EngineError {
+        let message = format!("Unable to delete Kubernetes pvc `{}`.", pvc_name);
+        EngineError::new(event_details, Tag::K8sCannotDeletePvc, message, Some(raw_k8s_error), None, None)
     }
 
     /// Creates new error for kubernetes not being able to get crash looping pods.

@@ -10,11 +10,17 @@ use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::application::reporter::ApplicationDeploymentReporter;
 use crate::deployment_report::execute_long_deployment;
 use crate::deployment_report::logger::get_loggers;
-use crate::errors::EngineError;
+use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, Stage};
 use crate::io_models::container::Registry;
+use crate::kubers_utils::kube_delete_all_from_selector;
 use crate::models::container::Container;
 use crate::models::types::{CloudProvider, ToTeraContext};
+use crate::runtime::block_on;
+use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
+use k8s_openapi::api::core::v1::PersistentVolumeClaim;
+use kube::api::ListParams;
+use kube::Api;
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::EcrClient;
@@ -102,6 +108,13 @@ where
                 )
                 .unpause_if_needed(target);
 
+                let last_image = block_on(get_last_deployed_image(
+                    target.kube.clone(),
+                    &self.selector(),
+                    self.is_stateful(),
+                    target.environment.namespace(),
+                ));
+
                 let helm = HelmDeployment::new(
                     self.helm_release_name(),
                     self.to_tera_context(target)?,
@@ -120,6 +133,27 @@ where
                     target.kubernetes.cloud_provider().credentials_environment_variables(),
                     event_details.clone(),
                 )?;
+
+                // Delete previous image from cache to cleanup resources
+                if let Some(last_image_tag) = last_image.and_then(|img| img.split(':').last().map(str::to_string)) {
+                    if last_image_tag != self.tag_for_mirror() {
+                        let logger = get_loggers(self, Action::Delete);
+                        (logger.send_progress)(format!("🪓 Deleting previous cached image {}", last_image_tag));
+
+                        let image = Image {
+                            name: Self::QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
+                            tag: last_image_tag,
+                            registry_url: target.container_registry.registry_info().endpoint.clone(),
+                            repository_name: Self::QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
+                            ..Default::default()
+                        };
+
+                        target
+                            .container_registry
+                            .delete_image(&image)
+                            .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
+                    }
+                }
 
                 Ok(())
             },
@@ -142,6 +176,8 @@ where
     }
 
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
+
         execute_long_deployment(
             ApplicationDeploymentReporter::new_for_container(self, target, Action::Delete),
             || {
@@ -154,27 +190,44 @@ where
                     Some(self.selector()),
                 );
 
-                helm.on_delete(target)
+                helm.on_delete(target)?;
+
+                let logger = get_loggers(self, Action::Delete);
+                // Delete pvc of statefulset if needed
+                // FIXME: Remove this after kubernetes 1.23 is deployed, at it should be done by kubernetes
+                if self.is_stateful() {
+                    (logger.send_progress)("🪓 Terminating network volume of the container".to_string());
+                    if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
+                        &target.kube,
+                        &self.selector(),
+                        target.environment.namespace(),
+                    )) {
+                        return Err(EngineError::new_k8s_cannot_delete_pvcs(
+                            event_details.clone(),
+                            self.selector(),
+                            CommandError::new_from_safe_message(err.to_string()),
+                        ));
+                    }
+                }
+
+                Ok(())
             },
         )?;
 
         let image = Image {
-            application_id: "".to_string(),
             name: Self::QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
             tag: self.tag_for_mirror(),
-            commit_id: "".to_string(),
-            registry_name: "".to_string(),
-            registry_docker_json_config: None,
             registry_url: target.container_registry.registry_info().endpoint.clone(),
             repository_name: Self::QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
+            ..Default::default()
         };
 
-        target.container_registry.delete_image(&image).map_err(|err| {
-            EngineError::new_container_registry_error(
-                self.get_event_details(Stage::Environment(EnvironmentStep::Delete)),
-                err,
-            )
-        })
+        let logger = get_loggers(self, Action::Delete);
+        (logger.send_progress)("🪓 Deleting cached image of the container".to_string());
+        target
+            .container_registry
+            .delete_image(&image)
+            .map_err(|err| EngineError::new_container_registry_error(event_details, err))
     }
 }
 
@@ -226,4 +279,53 @@ fn get_url_with_credentials(registry: &Registry) -> Url {
     };
 
     url
+}
+
+async fn get_last_deployed_image(
+    client: kube::Client,
+    selector: &str,
+    is_statefulset: bool,
+    namespace: &str,
+) -> Option<String> {
+    let list_params = ListParams::default().labels(selector);
+
+    if is_statefulset {
+        let api: Api<StatefulSet> = Api::namespaced(client, namespace);
+        Some(
+            api.list(&list_params)
+                .await
+                .ok()?
+                .items
+                .first()?
+                .spec
+                .as_ref()?
+                .template
+                .spec
+                .as_ref()?
+                .containers
+                .first()?
+                .image
+                .as_ref()?
+                .to_string(),
+        )
+    } else {
+        let api: Api<Deployment> = Api::namespaced(client, namespace);
+        Some(
+            api.list(&list_params)
+                .await
+                .ok()?
+                .items
+                .first()?
+                .spec
+                .as_ref()?
+                .template
+                .spec
+                .as_ref()?
+                .containers
+                .first()?
+                .image
+                .as_ref()?
+                .to_string(),
+        )
+    }
 }

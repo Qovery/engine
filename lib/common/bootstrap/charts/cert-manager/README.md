@@ -8,7 +8,7 @@ to renew certificates at an appropriate time before expiry.
 
 ## Prerequisites
 
-- Kubernetes 1.16 - 1.21 (note that Kubernetes 1.22 and later will require at least cert-manager v1.5)
+- Kubernetes 1.18+
 
 ## Installing the Chart
 
@@ -19,7 +19,7 @@ Before installing the chart, you must first install the cert-manager CustomResou
 This is performed in a separate step to allow you to easily uninstall and reinstall cert-manager without deleting your installed custom resources.
 
 ```bash
-$ kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.4.4/cert-manager.crds.yaml
+$ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.8.2/cert-manager.crds.yaml
 ```
 
 To install the chart with the release name `my-release`:
@@ -29,7 +29,7 @@ To install the chart with the release name `my-release`:
 $ helm repo add jetstack https://charts.jetstack.io
 
 ## Install the cert-manager helm chart
-$ helm install --name my-release --namespace cert-manager jetstack/cert-manager
+$ helm install my-release --namespace cert-manager --version v1.8.2 jetstack/cert-manager
 ```
 
 In order to begin issuing certificates, you will need to set up a ClusterIssuer
@@ -65,7 +65,7 @@ If you want to completely uninstall cert-manager from your cluster, you will als
 delete the previously installed CustomResourceDefinition resources:
 
 ```console
-$ kubectl delete -f https://github.com/jetstack/cert-manager/releases/download/v1.4.4/cert-manager.crds.yaml
+$ kubectl delete -f https://github.com/cert-manager/cert-manager/releases/download/v1.8.2/cert-manager.crds.yaml
 ```
 
 ## Configuration
@@ -85,11 +85,11 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `global.leaderElection.retryPeriod` | The duration the clients should wait between attempting acquisition and renewal of a leadership |  |
 | `installCRDs` | If true, CRD resources will be installed as part of the Helm chart. If enabled, when uninstalling CRD resources will be deleted causing all installed custom resources to be DELETED | `false` |
 | `image.repository` | Image repository | `quay.io/jetstack/cert-manager-controller` |
-| `image.tag` | Image tag | `v1.4.4` |
+| `image.tag` | Image tag | `v1.8.2` |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `replicaCount`  | Number of cert-manager replicas  | `1` |
 | `clusterResourceNamespace` | Override the namespace used to store DNS provider credentials etc. for ClusterIssuer resources | Same namespace as cert-manager pod |
-| `featureGates` | Comma-separated list of feature gates to enable on the controller pod | `` |
+| `featureGates` | Set of comma-separated key=value pairs that describe feature gates on the controller. Some feature gates may also have to be enabled on other components, and can be set supplying the `feature-gate` flag to `<component>.extraArgs` | `` |
 | `extraArgs` | Optional flags for cert-manager | `[]` |
 | `extraEnv` | Optional environment variables for cert-manager | `[]` |
 | `serviceAccount.create` | If `true`, create a new service account | `true` |
@@ -99,7 +99,7 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `volumes` | Optional volumes for cert-manager | `[]` |
 | `volumeMounts` | Optional volume mounts for cert-manager | `[]` |
 | `resources` | CPU/memory resource requests/limits | `{}` |
-| `securityContext` | Optional security context. The yaml block should adhere to the [SecurityContext spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#securitycontext-v1-core) | `{}` |
+| `securityContext` | Optional security context. The yaml block should adhere to the [SecurityContext spec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.22/#securitycontext-v1-core) | `{}` |
 | `securityContext.enabled` | Deprecated (use `securityContext`) - Enable security context | `false` |
 | `containerSecurityContext` | Security context to be set on the controller component container | `{}` |
 | `nodeSelector` | Node labels for pod assignment | `{}` |
@@ -117,12 +117,14 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `prometheus.servicemonitor.interval` | Prometheus scrape interval | `60s` |
 | `prometheus.servicemonitor.labels` | Add custom labels to ServiceMonitor | |
 | `prometheus.servicemonitor.scrapeTimeout` | Prometheus scrape timeout | `30s` |
+| `prometheus.servicemonitor.honorLabels` | Enable label honoring for metrics scraped by Prometheus (see [Prometheus scrape config docs](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config) for details). By setting `honorLabels` to `true`, Prometheus will prefer label contents given by cert-manager on conflicts. Can be used to remove the "exported_namespace" label for example.  | `false` |
 | `podAnnotations` | Annotations to add to the cert-manager pod | `{}` |
 | `deploymentAnnotations` | Annotations to add to the cert-manager deployment | `{}` |
 | `podDnsPolicy` | Optional cert-manager pod [DNS policy](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pods-dns-policy) |  |
 | `podDnsConfig` | Optional cert-manager pod [DNS configurations](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#pods-dns-config) |  |
 | `podLabels` | Labels to add to the cert-manager pod | `{}` |
 | `serviceLabels` | Labels to add to the cert-manager controller service | `{}` |
+| `serviceAnnotations` | Annotations to add to the cert-manager service | `{}` |
 | `http_proxy` | Value of the `HTTP_PROXY` environment variable in the cert-manager pod | |
 | `https_proxy` | Value of the `HTTPS_PROXY` environment variable in the cert-manager pod | |
 | `no_proxy` | Value of the `NO_PROXY` environment variable in the cert-manager pod | |
@@ -130,9 +132,12 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `webhook.timeoutSeconds` | Seconds the API server should wait the webhook to respond before treating the call as a failure. | `10` |
 | `webhook.podAnnotations` | Annotations to add to the webhook pods | `{}` |
 | `webhook.podLabels` | Labels to add to the cert-manager webhook pod | `{}` |
+| `webhook.serviceLabels` | Labels to add to the cert-manager webhook service | `{}` |
 | `webhook.deploymentAnnotations` | Annotations to add to the webhook deployment | `{}` |
 | `webhook.mutatingWebhookConfigurationAnnotations` | Annotations to add to the mutating webhook configuration | `{}` |
 | `webhook.validatingWebhookConfigurationAnnotations` | Annotations to add to the validating webhook configuration | `{}` |
+| `webhook.serviceAnnotations` | Annotations to add to the webhook service | `{}` |
+| `webhook.config` | WebhookConfiguration YAML used to configure flags for the webhook. Generates a ConfigMap containing contents of the field. See `values.yaml` for example. | `{}` |
 | `webhook.extraArgs` | Optional flags for cert-manager webhook component | `[]` |
 | `webhook.serviceAccount.create` | If `true`, create a new service account for the webhook component | `true` |
 | `webhook.serviceAccount.name` | Service account for the webhook component to be used. If not set and `webhook.serviceAccount.create` is `true`, a name is generated using the fullname template |  |
@@ -143,7 +148,7 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `webhook.affinity` | Node affinity for webhook pod assignment | `{}` |
 | `webhook.tolerations` | Node tolerations for webhook pod assignment | `[]` |
 | `webhook.image.repository` | Webhook image repository | `quay.io/jetstack/cert-manager-webhook` |
-| `webhook.image.tag` | Webhook image tag | `v1.4.4` |
+| `webhook.image.tag` | Webhook image tag | `v1.8.2` |
 | `webhook.image.pullPolicy` | Webhook image pull policy | `IfNotPresent` |
 | `webhook.securePort` | The port that the webhook should listen on for requests. | `10250` |
 | `webhook.securityContext` | Security context for webhook pod assignment | `{}` |
@@ -177,20 +182,39 @@ The following table lists the configurable parameters of the cert-manager chart 
 | `cainjector.affinity` | Node affinity for cainjector pod assignment | `{}` |
 | `cainjector.tolerations` | Node tolerations for cainjector pod assignment | `[]` |
 | `cainjector.image.repository` | cainjector image repository | `quay.io/jetstack/cert-manager-cainjector` |
-| `cainjector.image.tag` | cainjector image tag | `v1.4.4` |
+| `cainjector.image.tag` | cainjector image tag | `v1.8.2` |
 | `cainjector.image.pullPolicy` | cainjector image pull policy | `IfNotPresent` |
 | `cainjector.securityContext` | Security context for cainjector pod assignment | `{}` |
 | `cainjector.containerSecurityContext` | Security context to be set on cainjector component container | `{}` |
+| `startupapicheck.enabled` | Toggles whether the startupapicheck Job should be installed | `true` |
+| `startupapicheck.securityContext` | Pod Security Context to be set on the startupapicheck component Pod | `{}` |
+| `startupapicheck.timeout` | Timeout for 'kubectl check api' command | `1m` |
+| `startupapicheck.backoffLimit` | Job backoffLimit | `4` |
+| `startupapicheck.jobAnnotations` | Optional additional annotations to add to the startupapicheck Job | `{}` |
+| `startupapicheck.podAnnotations` | Optional additional annotations to add to the startupapicheck Pods | `{}` |
+| `startupapicheck.extraArgs` | Optional additional arguments for startupapicheck | `[]` |
+| `startupapicheck.resources` | CPU/memory resource requests/limits for the startupapicheck pod | `{}` |
+| `startupapicheck.nodeSelector` | Node labels for startupapicheck pod assignment | `{}` |
+| `startupapicheck.affinity` | Node affinity for startupapicheck pod assignment | `{}` |
+| `startupapicheck.tolerations` | Node tolerations for startupapicheck pod assignment | `[]` |
+| `startupapicheck.podLabels` | Optional additional labels to add to the startupapicheck Pods | `{}` |
+| `startupapicheck.image.repository` | startupapicheck image repository | `quay.io/jetstack/cert-manager-ctl` |
+| `startupapicheck.image.tag` | startupapicheck image tag | `v1.8.2` |
+| `startupapicheck.image.pullPolicy` | startupapicheck image pull policy | `IfNotPresent` |
+| `startupapicheck.serviceAccount.create` | If `true`, create a new service account for the startupapicheck component | `true` |
+| `startupapicheck.serviceAccount.name` | Service account for the startupapicheck component to be used. If not set and `startupapicheck.serviceAccount.create` is `true`, a name is generated using the fullname template |  |
+| `startupapicheck.serviceAccount.annotations` | Annotations to add to the service account for the startupapicheck component |  |
+| `startupapicheck.serviceAccount.automountServiceAccountToken` | Automount API credentials for the startupapicheck Service Account | `true` |
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
 
 Alternatively, a YAML file that specifies the values for the above parameters can be provided while installing the chart. For example,
 
 ```console
-$ helm install --name my-release -f values.yaml .
+$ helm install my-release -f values.yaml .
 ```
-> **Tip**: You can use the default [values.yaml](https://github.com/jetstack/cert-manager/blob/master/deploy/charts/cert-manager/values.yaml)
+> **Tip**: You can use the default [values.yaml](https://github.com/cert-manager/cert-manager/blob/master/deploy/charts/cert-manager/values.yaml)
 
 ## Contributing
 
-This chart is maintained at [github.com/jetstack/cert-manager](https://github.com/jetstack/cert-manager/tree/master/deploy/charts/cert-manager).
+This chart is maintained at [github.com/cert-manager/cert-manager](https://github.com/cert-manager/cert-manager/tree/master/deploy/charts/cert-manager).

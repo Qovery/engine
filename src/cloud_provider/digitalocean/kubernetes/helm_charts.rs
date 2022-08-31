@@ -581,7 +581,7 @@ datasources:
     let cert_manager = CommonChart {
         chart_info: ChartInfo {
             name: "cert-manager".to_string(),
-            path: chart_path("common/charts/cert-manager-1.8"),
+            path: chart_path("common/charts/cert-manager"),
             namespace: HelmChartNamespaces::CertManager,
             values: vec![
                 ChartSetValue {

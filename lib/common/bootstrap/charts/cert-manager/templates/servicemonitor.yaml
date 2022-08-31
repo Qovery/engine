@@ -12,13 +12,12 @@ metadata:
     app: {{ include "cert-manager.name" . }}
     app.kubernetes.io/name: {{ include "cert-manager.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
     app.kubernetes.io/component: "controller"
-    helm.sh/chart: {{ include "cert-manager.chart" . }}
+    {{- include "labels" . | nindent 4 }}
     prometheus: {{ .Values.prometheus.servicemonitor.prometheusInstance }}
-{{- if .Values.prometheus.servicemonitor.labels }}
-{{ toYaml .Values.prometheus.servicemonitor.labels | indent 4}}
-{{- end }}
+    {{- with .Values.prometheus.servicemonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
 spec:
   jobLabel: {{ template "cert-manager.fullname" . }}
   selector:
@@ -26,12 +25,15 @@ spec:
       app.kubernetes.io/name: {{ template "cert-manager.name" . }}
       app.kubernetes.io/instance: {{ .Release.Name }}
       app.kubernetes.io/component: "controller"
+{{- if .Values.prometheus.servicemonitor.namespace }}
   namespaceSelector:
     matchNames:
       - {{ .Release.Namespace }}
+{{- end }}
   endpoints:
   - targetPort: {{ .Values.prometheus.servicemonitor.targetPort }}
     path: {{ .Values.prometheus.servicemonitor.path }}
     interval: {{ .Values.prometheus.servicemonitor.interval }}
     scrapeTimeout: {{ .Values.prometheus.servicemonitor.scrapeTimeout }}
+    honorLabels: {{ .Values.prometheus.servicemonitor.honorLabels }}
 {{- end }}

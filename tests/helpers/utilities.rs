@@ -36,7 +36,6 @@ use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DIGITAL_OCEAN_SPACES_ACCESS_ID, DIGITAL_OCEAN_SPACES_SECRET_ID,
     DIGITAL_OCEAN_TOKEN, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
-use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use retry::Error::Operation;
 use serde::{Deserialize, Serialize};
@@ -466,17 +465,12 @@ pub fn generate_password(db_mode: DatabaseMode) -> String {
         '*',
     ];
 
-    let use_symbols = match db_mode {
-        MANAGED => true,
-        CONTAINER => false,
-    };
-
     let pg = PasswordGenerator::new()
         .length(32)
         .numbers(true)
         .lowercase_letters(true)
         .uppercase_letters(true)
-        .symbols(use_symbols)
+        .symbols(db_mode == MANAGED)
         .spaces(false)
         .exclude_similar_characters(true)
         .strict(true);
