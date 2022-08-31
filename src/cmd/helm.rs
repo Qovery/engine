@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use tracing::{error, info};
 
 use crate::cloud_provider::helm::ChartInfo;
-use crate::cmd::command::QoveryCommand;
+use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::cmd::helm::HelmCommand::{LIST, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{CannotRollback, CmdError, InvalidKubeConfig, ReleaseDoesNotExist};
 use crate::cmd::structs::{HelmChart, HelmChartVersions, HelmListItem};
@@ -719,7 +719,7 @@ pub fn to_engine_error(event_details: &EventDetails, error: HelmError) -> Engine
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::helm::{ChartInfo, ChartSetValue};
-    use crate::cmd::command::QoveryCommand;
+    use crate::cmd::command::{ExecutableCommand, QoveryCommand};
     use crate::cmd::helm::{helm_exec_with_output, Helm, HelmError};
     use semver::Version;
     use std::sync::{Arc, Barrier};

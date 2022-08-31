@@ -4,7 +4,7 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
 use crate::build_platform::Image;
-use crate::cmd::command::QoveryCommand;
+use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
 use crate::io_models::context::Context;

@@ -9,7 +9,7 @@ use serde::de::DeserializeOwned;
 
 use crate::cloud_provider::digitalocean::models::svc::DoLoadBalancer;
 use crate::cloud_provider::metrics::KubernetesApiMetrics;
-use crate::cmd::command::QoveryCommand;
+use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::cmd::structs::{
     Configmap, Daemonset, Item, KubernetesDeployment, KubernetesEvent, KubernetesIngress,
     KubernetesIngressStatusLoadBalancerIngress, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
