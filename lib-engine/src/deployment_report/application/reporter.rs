@@ -12,7 +12,10 @@ use crate::utilities::to_short_id;
 use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
 use kube::api::ListParams;
 use kube::Api;
+use std::time::{Duration, Instant};
 use uuid::Uuid;
+
+const MAX_ELASPED_TIME_WITHOUT_REPORT: Duration = Duration::from_secs(60 * 2);
 
 pub struct ApplicationDeploymentReporter {
     long_id: Uuid,
@@ -21,7 +24,7 @@ pub struct ApplicationDeploymentReporter {
     namespace: String,
     kube_client: kube::Client,
     selector: String,
-    last_report: String,
+    last_report: (String, Instant),
     send_progress: Box<dyn Fn(String) + Send>,
     send_success: Box<dyn Fn(String) + Send>,
     send_error: Box<dyn Fn(EngineError) + Send>,
@@ -46,7 +49,7 @@ impl ApplicationDeploymentReporter {
             namespace: deployment_target.environment.namespace().to_string(),
             kube_client: deployment_target.kube.clone(),
             selector: app.selector().unwrap_or_default(),
-            last_report: "".to_string(),
+            last_report: ("".to_string(), Instant::now()),
             send_progress,
             send_success,
             send_error,
@@ -71,7 +74,7 @@ impl ApplicationDeploymentReporter {
             namespace: deployment_target.environment.namespace().to_string(),
             kube_client: deployment_target.kube.clone(),
             selector: container.selector().unwrap_or_default(),
-            last_report: "".to_string(),
+            last_report: ("".to_string(), Instant::now()),
             send_progress,
             send_success,
             send_error,
@@ -125,13 +128,14 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
             }
         };
 
-        if rendered_report == self.last_report {
+        // don't spam log same report unless it has been too long time elapsed without one
+        if rendered_report == self.last_report.0 && self.last_report.1.elapsed() < MAX_ELASPED_TIME_WITHOUT_REPORT {
             return;
         }
-        self.last_report = rendered_report;
+        self.last_report = (rendered_report, Instant::now());
 
         // Send it to user
-        for line in self.last_report.trim_end().split('\n').map(str::to_string) {
+        for line in self.last_report.0.trim_end().split('\n').map(str::to_string) {
             (self.send_progress)(line);
         }
     }

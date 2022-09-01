@@ -349,6 +349,13 @@ pub trait ContainerService: Service + DeploymentAction + ToTeraContext {
     fn advanced_settings(&self) -> &ContainerAdvancedSettings;
     fn image_full(&self) -> String;
     fn kube_service_name(&self) -> String;
+    fn startup_timeout(&self) -> std::time::Duration {
+        let max = std::cmp::max(
+            self.advanced_settings().liveness_probe_initial_delay_seconds,
+            self.advanced_settings().readiness_probe_initial_delay_seconds,
+        );
+        std::time::Duration::from_secs(max as u64)
+    }
 }
 
 impl<T: CloudProvider> ContainerService for Container<T>
