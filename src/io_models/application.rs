@@ -18,6 +18,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
 
@@ -387,6 +388,7 @@ impl Application {
                 })
                 .collect::<BTreeMap<_, _>>(),
             disable_cache: disable_build_cache,
+            timeout: Duration::from_secs(self.advanced_settings.build_timeout_max_sec as u64),
         };
 
         build.compute_image_tag();
