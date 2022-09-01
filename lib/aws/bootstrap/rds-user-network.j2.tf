@@ -70,26 +70,26 @@ data "aws_subnet" "rds_zone_c" {
   id    = var.rds_subnets_zone_c_ids[count.index]
 }
 
-resource "aws_route_table_association" "rds_cluster_zone_a" {
-  count = length(var.rds_subnets_zone_a_ids)
-
-  subnet_id      = data.aws_subnet.rds_zone_a.*.id[count.index]
-  route_table_id = aws_route_table.eks_cluster.id
-}
-
-resource "aws_route_table_association" "rds_cluster_zone_b" {
-  count = length(var.rds_subnets_zone_b_ids)
-
-  subnet_id      = data.aws_subnet.rds_zone_b.*.id[count.index]
-  route_table_id = aws_route_table.eks_cluster.id
-}
-
-resource "aws_route_table_association" "rds_cluster_zone_c" {
-  count = length(var.rds_subnets_zone_c_ids)
-
-  subnet_id      = data.aws_subnet.rds_zone_c.*.id[count.index]
-  route_table_id = aws_route_table.eks_cluster.id
-}
+#resource "aws_route_table_association" "rds_cluster_zone_a" {
+#  count = length(var.rds_subnets_zone_a_ids)
+#
+#  subnet_id      = data.aws_subnet.rds_zone_a.*.id[count.index]
+#  route_table_id = aws_route_table.eks_cluster.id
+#}
+#
+#resource "aws_route_table_association" "rds_cluster_zone_b" {
+#  count = length(var.rds_subnets_zone_b_ids)
+#
+#  subnet_id      = data.aws_subnet.rds_zone_b.*.id[count.index]
+#  route_table_id = aws_route_table.eks_cluster.id
+#}
+#
+#resource "aws_route_table_association" "rds_cluster_zone_c" {
+#  count = length(var.rds_subnets_zone_c_ids)
+#
+#  subnet_id      = data.aws_subnet.rds_zone_c.*.id[count.index]
+#  route_table_id = aws_route_table.eks_cluster.id
+#}
 
 resource "aws_db_subnet_group" "rds" {
   description = "RDS linked to ${var.kubernetes_cluster_id}"

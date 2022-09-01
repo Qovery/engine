@@ -33,12 +33,12 @@ data "aws_vpc" "eks" {
 # Internet gateway
 # Needed because kubelet are targeting k8s control plan on a public address
 # So need a way to reach internet
-data "aws_internet_gateway" "eks_cluster" {
-  filter {
-    name   = "attachment.vpc-id"
-    values = [data.aws_vpc.eks.id]
-  }
-}
+#data "aws_internet_gateway" "eks_cluster" {
+#  filter {
+#    name   = "attachment.vpc-id"
+#    values = [data.aws_vpc.eks.id]
+#  }
+#}
 
 {% else %}
 
