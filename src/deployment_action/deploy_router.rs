@@ -39,6 +39,7 @@ where
                 PathBuf::from(self.workspace_directory()),
                 event_details.clone(),
                 None,
+                None,
             );
 
             helm.on_create(target)
@@ -108,6 +109,7 @@ where
                 PathBuf::from(self.helm_chart_dir()),
                 PathBuf::from(self.workspace_directory()),
                 event_details.clone(),
+                None,
                 None,
             );
 
