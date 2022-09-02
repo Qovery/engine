@@ -31,8 +31,6 @@ where
             self.logger(),
         );
 
-        //clean_up_deleted_k8s_nlb(target)?;
-
         execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Create), || {
             let helm = HelmDeployment::new(
                 self.helm_release_name(),
@@ -40,6 +38,7 @@ where
                 PathBuf::from(self.helm_chart_dir()),
                 PathBuf::from(self.workspace_directory()),
                 event_details.clone(),
+                None,
                 None,
             );
 
@@ -110,6 +109,7 @@ where
                 PathBuf::from(self.helm_chart_dir()),
                 PathBuf::from(self.workspace_directory()),
                 event_details.clone(),
+                None,
                 None,
             );
 

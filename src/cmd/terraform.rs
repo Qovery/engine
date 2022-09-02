@@ -3,7 +3,7 @@ use dirs::home_dir;
 use retry::delay::Fixed;
 use retry::OperationResult;
 
-use crate::cmd::command::QoveryCommand;
+use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::constants::TF_PLUGIN_CACHE_DIR;
 use rand::Rng;
 use regex::Regex;
@@ -109,8 +109,18 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    ResourceDependencyViolation {
+        resource_kind: String,
+        resource_name: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
     InstanceTypeDoesntExist {
         instance_type: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
+    MultipleInterruptsReceived {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
@@ -234,6 +244,25 @@ impl TerraformError {
             }
         }
 
+        // Dependencies issues
+        // AWS
+        if let Ok(aws_state_expected_re) = Regex::new(
+            r"Error deleting (?P<resource_kind>\w+): DependencyViolation: .+ '(?P<resource_name>.+?)' has dependencies and cannot be deleted",
+        ) {
+            if let Some(cap) = aws_state_expected_re.captures(raw_terraform_error_output.as_str()) {
+                if let (Some(resource_kind), Some(resource_name)) = (
+                    cap.name("resource_kind").map(|e| e.as_str()),
+                    cap.name("resource_name").map(|e| e.as_str()),
+                ) {
+                    return TerraformError::ResourceDependencyViolation {
+                        resource_name: resource_name.to_string(),
+                        resource_kind: resource_kind.to_string(),
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
+
         // Invalid credentials issues
         //SCW
         if raw_terraform_error_output.contains("error calling sts:GetCallerIdentity: operation error STS: GetCallerIdentity, https response error StatusCode: 403") {
@@ -331,6 +360,13 @@ impl TerraformError {
             }
         }
 
+        // Terraform general errors
+        if raw_terraform_error_output.contains("Two interrupts received. Exiting immediately.") {
+            return TerraformError::MultipleInterruptsReceived {
+                raw_message: raw_terraform_error_output,
+            };
+        }
+
         // This kind of error should be triggered as little as possible, ideally, there is no unknown errors
         // (un-catched) so we can act / report properly to the user.
         TerraformError::Unknown {
@@ -346,6 +382,7 @@ impl TerraformError {
                 "Unknown error while performing Terraform command (`terraform {}`)",
                 terraform_args.join(" "),
             ),
+            TerraformError::MultipleInterruptsReceived { .. } => "Multiple interrupts received, stopping immediately..".to_string(),
             TerraformError::InvalidCredentials { .. } => "Invalid credentials.".to_string(),
             TerraformError::NotEnoughPermissions {
                 resource_type_and_name,
@@ -411,6 +448,9 @@ impl TerraformError {
             TerraformError::AlreadyExistingResource { resource_type, .. } => {
                 format!("Error, resource {} already exists.", resource_type)
             }
+            TerraformError::ResourceDependencyViolation { resource_name, resource_kind, .. } => {
+                format!("Error, resource {} `{}` has dependency violation.", resource_kind, resource_name)
+            }
             TerraformError::WaitingTimeoutResource {
                 resource_type,
                 resource_identifier,
@@ -432,6 +472,9 @@ impl Display for TerraformError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let message: String = match self {
             TerraformError::Unknown { raw_message, .. } => {
+                format!("{}, here is the error:\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::MultipleInterruptsReceived { raw_message, .. } => {
                 format!("{}, here is the error:\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::InvalidCredentials { raw_message } => {
@@ -468,6 +511,9 @@ impl Display for TerraformError {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::WrongExpectedState { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::ResourceDependencyViolation { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::InstanceTypeDoesntExist { raw_message, .. } => {
@@ -845,21 +891,9 @@ pub fn terraform_init_validate_state_list(root_dir: &str) -> Result<Vec<String>,
 }
 
 /// This method should not be exposed to the outside world, it's internal magic.
-fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, TerraformError> {
-    // override if environment variable is set
-    let tf_plugin_cache_dir_value = match env::var_os(TF_PLUGIN_CACHE_DIR) {
-        Some(val) => format!("{:?}", val),
-        None => {
-            let home_dir = home_dir().expect("Could not find $HOME");
-            format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap())
-        }
-    };
-
+fn terraform_exec_from_command(cmd: &mut impl ExecutableCommand) -> Result<Vec<String>, TerraformError> {
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
-    let envs = &[(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())];
-    let mut cmd = QoveryCommand::new("terraform", &args, envs);
-    cmd.set_current_dir(root_dir);
 
     let result = cmd.exec_with_output(
         &mut |line| {
@@ -874,22 +908,92 @@ fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, Terraf
 
     match result {
         Ok(_) => Ok(stdout),
-        Err(_) => Err(TerraformError::new(
-            args.iter().map(|e| e.to_string()).collect(),
-            stdout.join("\n"),
-            stderr.join("\n"),
-        )),
+        Err(_) => Err(TerraformError::new(cmd.get_args(), stdout.join("\n"), stderr.join("\n"))),
     }
+}
+
+/// This method should not be exposed to the outside world, it's internal magic.
+fn terraform_exec(root_dir: &str, args: Vec<&str>) -> Result<Vec<String>, TerraformError> {
+    // override if environment variable is set
+    let tf_plugin_cache_dir_value = match env::var_os(TF_PLUGIN_CACHE_DIR) {
+        Some(val) => format!("{:?}", val),
+        None => {
+            let home_dir = home_dir().expect("Could not find $HOME");
+            format!("{}/.terraform.d/plugin-cache", home_dir.to_str().unwrap())
+        }
+    };
+
+    let envs = &[(TF_PLUGIN_CACHE_DIR, tf_plugin_cache_dir_value.as_str())];
+    let mut cmd = QoveryCommand::new("terraform", &args, envs);
+    cmd.set_current_dir(root_dir);
+
+    terraform_exec_from_command(&mut cmd)
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand};
     use crate::cmd::terraform::{
-        manage_common_issues, terraform_init, terraform_init_validate, QuotaExceededError, TerraformError,
+        manage_common_issues, terraform_exec_from_command, terraform_init, terraform_init_validate, QuotaExceededError,
+        TerraformError,
     };
     use std::fs;
+    use std::process::Child;
     use tracing::{span, Level};
     use tracing_test::traced_test;
+
+    // Creating a qovery command mock to fake underlying cli return
+    // TODO(benjaminch): This struct is by no mean complete nor polished and has been introduced to investigate an issue. It needs to be polished to be spred elsewhere.
+    struct QoveryCommandMock {
+        stdout_output: Option<String>,
+        stderr_output: Option<String>,
+    }
+
+    impl ExecutableCommand for QoveryCommandMock {
+        fn get_args(&self) -> Vec<String> {
+            vec![]
+        }
+
+        fn kill(_cmd_handle: &mut Child) {
+            todo!()
+        }
+
+        fn exec(&mut self) -> Result<(), CommandError> {
+            todo!()
+        }
+
+        fn exec_with_output<STDOUT, STDERR>(
+            &mut self,
+            stdout_output: &mut STDOUT,
+            stderr_output: &mut STDERR,
+        ) -> Result<(), CommandError>
+        where
+            STDOUT: FnMut(String),
+            STDERR: FnMut(String),
+        {
+            if let Some(stdout) = &self.stdout_output {
+                stdout_output(stdout.to_string());
+            }
+            if let Some(stderr) = &self.stderr_output {
+                stderr_output(stderr.to_string());
+            }
+
+            Err(CommandError::TimeoutError("boom!".to_string()))
+        }
+
+        fn exec_with_abort<STDOUT, STDERR>(
+            &mut self,
+            _stdout_output: &mut STDOUT,
+            _stderr_output: &mut STDERR,
+            _abort_notifier: &CommandKiller,
+        ) -> Result<(), CommandError>
+        where
+            STDOUT: FnMut(String),
+            STDERR: FnMut(String),
+        {
+            todo!()
+        }
+    }
 
     #[test]
     fn test_terraform_managed_errors() {
@@ -921,6 +1025,38 @@ in the dependency lock file
         };
         let result = manage_common_issues("", "/tmp/do_not_exists", &could_not_load_plugin_error);
         assert_eq!(result, terraform_init(""));
+    }
+
+    #[test]
+    fn test_terraform_truncated_raw_errors() {
+        // setup:
+        let raw_error_string = r#"Error: creating EC2 Instance: InvalidParameterValue: Invalid value 'wrong-instance-type' for InstanceType.
+            status code: 400, request id: 84c20698-c53c-47b3-b840-1a79eacccce6
+
+              on ec2.tf line 21, in resource \"aws_instance\" \"ec2_instance\":\n  21: resource \"aws_instance\" \"ec2_instance\" {
+
+              
+
+                 I am not truncated!
+
+        "#;
+
+        let qovery_cmd_mock = &mut QoveryCommandMock {
+            stdout_output: None,
+            stderr_output: Some(raw_error_string.to_string()),
+        };
+
+        // execute:
+        let result = terraform_exec_from_command(qovery_cmd_mock);
+
+        // verify:
+        assert_eq!(
+            Err(TerraformError::InstanceTypeDoesntExist {
+                instance_type: "wrong-instance-type".to_string(),
+                raw_message: raw_error_string.to_string(),
+            }),
+            result
+        );
     }
 
     #[test]
@@ -1164,6 +1300,26 @@ terraform {
     }
 
     #[test]
+    fn test_terraform_error_aws_dependency_violation_issue() {
+        // setup:
+        let raw_message = r#"Error: Error deleting VPC: DependencyViolation: The vpc 'vpc-0330249c67533e3e7' has dependencies and cannot be deleted.
+            status code: 400, request id: 2be352ce-4b43-4243-ace7-0b9f2ba35734"#;
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
+
+        // validate:
+        assert_eq!(
+            TerraformError::ResourceDependencyViolation {
+                resource_name: "vpc-0330249c67533e3e7".to_string(),
+                resource_kind: "VPC".to_string(),
+                raw_message: raw_message.to_string(),
+            },
+            result
+        );
+    }
+
+    #[test]
     fn test_terraform_error_aws_invalid_instance_type() {
         // setup:
         struct TestCase<'a> {
@@ -1198,5 +1354,25 @@ terraform {
             // validate:
             assert_eq!(tc.expected_terraform_error, result);
         }
+    }
+
+    #[test]
+    fn test_terraform_error_multiple_interrupts_received() {
+        // setup:
+        let raw_message = r#"Two interrupts received. Exiting immediately. Note that data
+        loss may have occurred.
+        
+        Error: rpc error: code = Unavailable desc = transport is closing
+        
+        
+        
+        Error: operation canceled"#
+            .to_string();
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
+
+        // validate:
+        assert_eq!(TerraformError::MultipleInterruptsReceived { raw_message }, result);
     }
 }

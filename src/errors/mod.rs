@@ -529,6 +529,8 @@ pub enum Tag {
     CloudProviderGetLoadBalancer,
     /// CloudProviderGetLoadBalancerTags: represents an issue while trying to get load balancer tags from the cloud provider API
     CloudProviderGetLoadBalancerTags,
+    /// CloudProviderDeleteLoadBalancer: represents an issue while trying to delete load balancer from the cloud provider API
+    CloudProviderDeleteLoadBalancer,
     /// K8sCannotConnectToApi: represents an error when trying to contact K8s API.
     K8sCannotReachToApi,
     /// K8sPodDisruptionBudgetInInvalidState: represents an error where pod disruption budget is in an invalid state.
@@ -586,10 +588,14 @@ pub enum Tag {
     TerraformUnknownError,
     /// TerraformInvalidCredentials: terraform invalid cloud provider credentials
     TerraformInvalidCredentials,
+    /// TerraformMultipleInterruptsReceived: terraform received multiple interrupts
+    TerraformMultipleInterruptsReceived,
     /// TerraformNotEnoughPermissions: terraform issue due to user not having enough permissions to perform action on the resource
     TerraformNotEnoughPermissions,
     /// TerraformWrongState: terraform issue due to wrong state of the resource
     TerraformWrongState,
+    /// TerraformResourceDependencyViolation: terraform issue due to resource dependency violation
+    TerraformResourceDependencyViolation,
     /// TerraformInstanceTypeDoesntExist: terraform issue due to instance type doesn't exist in the current region
     TerraformInstanceTypeDoesntExist,
     /// TerraformConfigFileNotFound: terraform config file cannot be found
@@ -2206,6 +2212,14 @@ impl EngineError {
                 None,
                 Some(DEFAULT_HINT_MESSAGE.to_string()),
             ),
+            TerraformError::MultipleInterruptsReceived { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformMultipleInterruptsReceived,
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
+                None,
+                Some(DEFAULT_HINT_MESSAGE.to_string()),
+            ),
             TerraformError::InvalidCredentials { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformInvalidCredentials,
@@ -2339,6 +2353,14 @@ impl EngineError {
                 Some(terraform_error.into()),
                 None,
                 Some("Try to set the resource in the desired state from your Cloud provider web console or API".to_string()),
+            ),
+            TerraformError::ResourceDependencyViolation { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformWrongState,
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()),
+                None,
+                None,
             ),
             TerraformError::InstanceTypeDoesntExist { .. } => EngineError::new(
                 event_details,
@@ -3587,8 +3609,23 @@ impl EngineError {
             Some("Please ensure Qovery has correct permissions or try again later".to_string()),
         )
     }
-}
 
+    pub(crate) fn new_cloud_provider_error_deleting_load_balancer(
+        event_details: EventDetails,
+        cloud_provider_error_message: CommandError,
+    ) -> EngineError {
+        let message_safe = "Error while deleting Load balancer from the cloud provider API".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::CloudProviderDeleteLoadBalancer,
+            message_safe,
+            Some(cloud_provider_error_message),
+            None,
+            None,
+        )
+    }
+}
 impl Display for EngineError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // Note: just in case, env vars are not leaked since it can hold sensitive data such as secrets.

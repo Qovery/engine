@@ -2,7 +2,6 @@
 
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 use std::{env, fs};
 
 use git2::{Cred, CredentialType};
@@ -12,7 +11,7 @@ use crate::build_platform::dockerfile_utils::extract_dockerfile_args;
 use crate::build_platform::{Build, BuildError, BuildPlatform, Credentials, Kind};
 use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
-use crate::cmd::command::{CommandKiller, QoveryCommand};
+use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::docker::{BuildResult, ContainerImage, DockerError};
 use crate::events::{EngineEvent, EventMessage, Transmitter};
 use crate::fs::workspace_directory;
@@ -22,8 +21,6 @@ use crate::io_models::progress_listener::{
     Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::logger::Logger;
-
-const BUILD_DURATION_TIMEOUT_SEC: u64 = 30 * 60;
 
 /// https://buildpacks.io/
 const BUILDPACKS_BUILDERS: [&str; 1] = [
@@ -211,7 +208,7 @@ impl LocalDocker {
             true,
             &mut |line| log_info(line),
             &mut |line| log_info(line),
-            &CommandKiller::from(Duration::from_secs(BUILD_DURATION_TIMEOUT_SEC), is_task_canceled),
+            &CommandKiller::from(build.timeout, is_task_canceled),
         );
 
         match exit_status {
@@ -315,7 +312,7 @@ impl LocalDocker {
 
             // buildpacks build
             let mut cmd = QoveryCommand::new("pack", &buildpacks_args, &self.get_docker_host_envs());
-            let cmd_killer = CommandKiller::from(Duration::from_secs(BUILD_DURATION_TIMEOUT_SEC), is_task_canceled);
+            let cmd_killer = CommandKiller::from(build.timeout, is_task_canceled);
             exit_status = cmd.exec_with_abort(
                 &mut |line| {
                     self.logger.log(EngineEvent::Info(

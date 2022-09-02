@@ -417,6 +417,18 @@ pub trait ApplicationService: Service + DeploymentAction + ToTeraContext {
     fn get_build_mut(&mut self) -> &mut Build;
     fn public_port(&self) -> Option<u16>;
     fn advanced_settings(&self) -> &ApplicationAdvancedSettings;
+    fn startup_timeout(&self) -> std::time::Duration {
+        let settings = self.advanced_settings();
+        let max = std::cmp::max(
+            settings.liveness_probe_initial_delay_seconds
+                + ((settings.liveness_probe_timeout_seconds + settings.liveness_probe_period_seconds)
+                    * settings.liveness_probe_failure_threshold),
+            settings.readiness_probe_initial_delay_seconds
+                + ((settings.readiness_probe_timeout_seconds + settings.readiness_probe_period_seconds)
+                    * settings.readiness_probe_failure_threshold),
+        );
+        std::time::Duration::from_secs(max as u64)
+    }
 }
 
 impl<T: CloudProvider> ApplicationService for Application<T>

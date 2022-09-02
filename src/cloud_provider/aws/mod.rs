@@ -20,6 +20,8 @@ use crate::io_models::QoveryIdentifier;
 use crate::runtime::block_on;
 
 pub mod kubernetes;
+pub mod load_balancers;
+pub mod models;
 pub mod regions;
 
 pub struct AWS {

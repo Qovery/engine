@@ -92,6 +92,33 @@ impl<'a> CommandKiller<'a> {
     }
 }
 
+pub trait ExecutableCommand {
+    fn get_args(&self) -> Vec<String>;
+
+    fn kill(cmd_handle: &mut Child);
+
+    fn exec(&mut self) -> Result<(), CommandError>;
+
+    fn exec_with_output<STDOUT, STDERR>(
+        &mut self,
+        stdout_output: &mut STDOUT,
+        stderr_output: &mut STDERR,
+    ) -> Result<(), CommandError>
+    where
+        STDOUT: FnMut(String),
+        STDERR: FnMut(String);
+
+    fn exec_with_abort<STDOUT, STDERR>(
+        &mut self,
+        stdout_output: &mut STDOUT,
+        stderr_output: &mut STDERR,
+        abort_notifier: &CommandKiller,
+    ) -> Result<(), CommandError>
+    where
+        STDOUT: FnMut(String),
+        STDERR: FnMut(String);
+}
+
 pub struct QoveryCommand {
     command: Command,
 }
@@ -111,6 +138,15 @@ impl QoveryCommand {
     pub fn set_current_dir<P: AsRef<Path>>(&mut self, root_dir: P) {
         self.command.current_dir(root_dir);
     }
+}
+
+impl ExecutableCommand for QoveryCommand {
+    fn get_args(&self) -> Vec<String> {
+        self.command
+            .get_args()
+            .map(|a| a.to_str().unwrap_or_default().to_string())
+            .collect()
+    }
 
     fn kill(cmd_handle: &mut Child) {
         let _ = cmd_handle
@@ -119,7 +155,7 @@ impl QoveryCommand {
             .map_err(|err| error!("Cannot kill process {:?} {}", cmd_handle, err));
     }
 
-    pub fn exec(&mut self) -> Result<(), CommandError> {
+    fn exec(&mut self) -> Result<(), CommandError> {
         self.exec_with_abort(
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
@@ -127,7 +163,7 @@ impl QoveryCommand {
         )
     }
 
-    pub fn exec_with_output<STDOUT, STDERR>(
+    fn exec_with_output<STDOUT, STDERR>(
         &mut self,
         stdout_output: &mut STDOUT,
         stderr_output: &mut STDERR,
@@ -139,7 +175,7 @@ impl QoveryCommand {
         self.exec_with_abort(stdout_output, stderr_output, &CommandKiller::never())
     }
 
-    pub fn exec_with_abort<STDOUT, STDERR>(
+    fn exec_with_abort<STDOUT, STDERR>(
         &mut self,
         stdout_output: &mut STDOUT,
         stderr_output: &mut STDERR,
@@ -326,7 +362,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::cmd::command::{does_binary_exist, run_version_command_for, CommandError, CommandKiller, QoveryCommand};
+    use crate::cmd::command::{
+        does_binary_exist, run_version_command_for, CommandError, CommandKiller, ExecutableCommand, QoveryCommand,
+    };
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Barrier};
     use std::thread;

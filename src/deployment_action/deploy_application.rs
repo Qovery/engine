@@ -10,7 +10,7 @@ use crate::deployment_report::logger::get_loggers;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, Stage};
 use crate::kubers_utils::kube_delete_all_from_selector;
-use crate::models::application::Application;
+use crate::models::application::{Application, ApplicationService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use function_name::named;
@@ -52,6 +52,7 @@ where
                 PathBuf::from(self.workspace_directory()),
                 event_details.clone(),
                 Some(self.selector()),
+                Some(self.startup_timeout()),
             );
 
             helm.on_create(target)?;
@@ -101,6 +102,7 @@ where
                 PathBuf::from(self.workspace_directory()),
                 event_details.clone(),
                 Some(self.selector()),
+                None,
             );
 
             helm.on_delete(target)?;

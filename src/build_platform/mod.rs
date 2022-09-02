@@ -14,6 +14,7 @@ use crate::utilities::compute_image_tag;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::hash::Hash;
 use std::path::PathBuf;
+use std::time::Duration;
 use url::Url;
 
 pub mod dockerfile_utils;
@@ -95,6 +96,7 @@ pub struct Build {
     pub image: Image,
     pub environment_variables: BTreeMap<String, String>,
     pub disable_cache: bool,
+    pub timeout: Duration,
 }
 
 impl Build {

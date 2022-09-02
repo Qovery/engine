@@ -166,11 +166,14 @@ pub enum Tag {
     TerraformWaitingTimeoutResource,
     TerraformAlreadyExistingResource,
     TerraformWrongState,
+    TerraformResourceDependencyViolation,
     TerraformContextUnsupportedParameterValue,
     TerraformQoveryConfigMismatch,
     TerraformInstanceTypeDoesntExist,
+    TerraformMultipleInterruptsReceived,
     CloudProviderGetLoadBalancer,
     CloudProviderGetLoadBalancerTags,
+    CloudProviderDeleteLoadBalancer,
 }
 
 impl From<errors::Tag> for Tag {
@@ -222,6 +225,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::TerraformErrorWhileExecutingDestroyPipeline => {
                 Tag::TerraformErrorWhileExecutingDestroyPipeline
             }
+            errors::Tag::TerraformResourceDependencyViolation => Tag::TerraformResourceDependencyViolation,
             errors::Tag::HelmChartsSetupError => Tag::HelmChartsSetupError,
             errors::Tag::HelmChartsDeployError => Tag::HelmChartsDeployError,
             errors::Tag::HelmChartsUpgradeError => Tag::HelmChartsUpgradeError,
@@ -335,6 +339,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::TerraformNotEnoughPermissions => Tag::TerraformNotEnoughPermissions,
             errors::Tag::TerraformWrongState => Tag::TerraformWrongState,
             errors::Tag::TerraformInstanceTypeDoesntExist => Tag::TerraformInstanceTypeDoesntExist,
+            errors::Tag::TerraformMultipleInterruptsReceived => Tag::TerraformMultipleInterruptsReceived,
             errors::Tag::HelmDeployTimeout => Tag::HelmDeployTimeout,
             errors::Tag::CannotPauseManagedDatabase => Tag::CannotPauseManagedDatabase,
             errors::Tag::ObjectStorageCannotDeleteBucket => Tag::ObjectStorageCannotDeleteBucket,
@@ -343,6 +348,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CloudProviderGetLoadBalancer => Tag::CloudProviderGetLoadBalancer,
             errors::Tag::CloudProviderGetLoadBalancerTags => Tag::CloudProviderGetLoadBalancerTags,
             errors::Tag::K8sCannotDeletePvc => Tag::K8sCannotDeletePvc,
+            errors::Tag::CloudProviderDeleteLoadBalancer => Tag::CloudProviderDeleteLoadBalancer,
         }
     }
 }

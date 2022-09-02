@@ -24,6 +24,7 @@ pub struct HelmDeployment {
     values: Vec<ChartSetValue>,
     event_details: EventDetails,
     pod_selector: Option<String>,
+    timeout: Duration,
 }
 
 impl HelmDeployment {
@@ -34,6 +35,7 @@ impl HelmDeployment {
         destination_folder: PathBuf,
         event_details: EventDetails,
         pod_selector: Option<String>,
+        timeout: Option<Duration>,
     ) -> HelmDeployment {
         HelmDeployment {
             release_name,
@@ -44,6 +46,7 @@ impl HelmDeployment {
             values: vec![],
             event_details,
             pod_selector,
+            timeout: std::cmp::max(timeout.unwrap_or(DEFAULT_HELM_TIMEOUT), DEFAULT_HELM_TIMEOUT),
         }
     }
 
@@ -65,6 +68,7 @@ impl HelmDeployment {
             values: vec![],
             event_details,
             pod_selector,
+            timeout: DEFAULT_HELM_TIMEOUT,
         }
     }
 
@@ -86,6 +90,7 @@ impl HelmDeployment {
             values,
             event_details,
             pod_selector,
+            timeout: DEFAULT_HELM_TIMEOUT,
         }
     }
 
@@ -127,7 +132,7 @@ impl DeploymentAction for HelmDeployment {
             self.release_name.to_string(),
             workspace_dir.to_string(),
             target.environment.namespace().to_string(),
-            DEFAULT_HELM_TIMEOUT.as_secs() as i64,
+            self.timeout.as_secs() as i64,
             vec![],
             self.values.clone(),
             vec![],
@@ -232,6 +237,7 @@ mod tests {
             dest_folder,
             event_details,
             Some("app=pause".to_string()),
+            None,
         );
 
         // Render a simple chart

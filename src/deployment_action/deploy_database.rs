@@ -4,7 +4,7 @@ use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::Kind::Aws;
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::cmd;
-use crate::cmd::command::QoveryCommand;
+use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::constants::AWS_DEFAULT_REGION;
 use crate::deployment_action::check_dns::CheckDnsForDomains;
 use crate::deployment_action::deploy_helm::HelmDeployment;

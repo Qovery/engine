@@ -1,4 +1,4 @@
-use crate::cmd::command::{CommandError, CommandKiller, QoveryCommand};
+use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use lazy_static::lazy_static;
 use std::fmt::{Display, Formatter};
 use std::path::Path;

@@ -14,7 +14,7 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, Stage};
 use crate::io_models::container::Registry;
 use crate::kubers_utils::kube_delete_all_from_selector;
-use crate::models::container::Container;
+use crate::models::container::{Container, ContainerService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
@@ -122,6 +122,7 @@ where
                     PathBuf::from(self.workspace_directory()),
                     event_details.clone(),
                     Some(self.selector()),
+                    Some(self.startup_timeout()),
                 );
 
                 helm.on_create(target)?;
@@ -188,6 +189,7 @@ where
                     PathBuf::from(self.workspace_directory()),
                     self.get_event_details(Stage::Environment(EnvironmentStep::Delete)),
                     Some(self.selector()),
+                    None,
                 );
 
                 helm.on_delete(target)?;
