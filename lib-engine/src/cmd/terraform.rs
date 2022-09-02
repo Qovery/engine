@@ -116,7 +116,8 @@ pub enum TerraformError {
         raw_message: String,
     },
     InstanceTypeDoesntExist {
-        instance_type: String,
+        /// Providers doesn't always provide back with instance type requested ... so might be None
+        instance_type: Option<String>,
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
@@ -303,7 +304,7 @@ impl TerraformError {
             if let Some(cap) = aws_wrong_instance_type_re.captures(raw_terraform_error_output.as_str()) {
                 if let Some(instance_type) = cap.name("instance_type").map(|e| e.as_str()) {
                     return TerraformError::InstanceTypeDoesntExist {
-                        instance_type: instance_type.to_string(),
+                        instance_type: Some(instance_type.to_string()),
                         raw_message: raw_terraform_error_output.to_string(),
                     };
                 }
@@ -316,11 +317,20 @@ impl TerraformError {
             if let Some(cap) = aws_wrong_instance_type_re.captures(raw_terraform_error_output.as_str()) {
                 if let Some(instance_type) = cap.name("instance_type").map(|e| e.as_str()) {
                     return TerraformError::InstanceTypeDoesntExist {
-                        instance_type: instance_type.to_string(),
+                        instance_type: Some(instance_type.to_string()),
                         raw_message: raw_terraform_error_output.to_string(),
                     };
                 }
             }
+        }
+        if raw_terraform_error_output.contains(
+            "Error: creating EC2 Instance: Unsupported: The requested configuration is currently not supported",
+        ) {
+            // That's a shame but with the error message, AWS doesn't provide requested instance type, so cannot provide it back in error message.
+            return TerraformError::InstanceTypeDoesntExist {
+                instance_type: None,
+                raw_message: raw_terraform_error_output,
+            };
         }
 
         // SCW
@@ -463,7 +473,10 @@ impl TerraformError {
                 resource_kind,
                 raw_message,
             } => format!("Error, resource {}:{} was expected to be in another state. It happens when changes have been done Cloud provider side without Qovery. You need to fix it manually: {}", resource_type, resource_kind, raw_message),
-            TerraformError::InstanceTypeDoesntExist { instance_type, ..} => format!("Error, instance type `{}` doesn't exist in cluster region.", instance_type)
+            TerraformError::InstanceTypeDoesntExist { instance_type, ..} => format!("Error, requested instance type{} doesn't exist in cluster region.", match instance_type {
+                Some(instance_type) => format!(" `{}`", instance_type),
+                None => "".to_string(),
+            })
         }
     }
 }
@@ -1052,7 +1065,7 @@ in the dependency lock file
         // verify:
         assert_eq!(
             Err(TerraformError::InstanceTypeDoesntExist {
-                instance_type: "wrong-instance-type".to_string(),
+                instance_type: Some("wrong-instance-type".to_string()),
                 raw_message: raw_error_string.to_string(),
             }),
             result
@@ -1332,7 +1345,7 @@ terraform {
                 input_raw_message:
                 "InvalidParameterException: The following supplied instance types do not exist: [t3a.medium]",
                 expected_terraform_error: TerraformError::InstanceTypeDoesntExist {
-                    instance_type: "t3a.medium".to_string(),
+                    instance_type: Some("t3a.medium".to_string()),
                     raw_message: "InvalidParameterException: The following supplied instance types do not exist: [t3a.medium]".to_string(),
                 },
             },
@@ -1340,8 +1353,16 @@ terraform {
                 input_raw_message:
                 "Error: creating EC2 Instance: InvalidParameterValue: Invalid value 'wrong-instance-type' for InstanceType",
                 expected_terraform_error: TerraformError::InstanceTypeDoesntExist {
-                    instance_type: "wrong-instance-type".to_string(),
+                    instance_type: Some("wrong-instance-type".to_string()),
                     raw_message: "Error: creating EC2 Instance: InvalidParameterValue: Invalid value 'wrong-instance-type' for InstanceType".to_string(),
+                },
+            },
+            TestCase {
+                input_raw_message:
+                "Error: creating EC2 Instance: Unsupported: The requested configuration is currently not supported.",
+                expected_terraform_error: TerraformError::InstanceTypeDoesntExist {
+                    instance_type: None,
+                    raw_message: "Error: creating EC2 Instance: Unsupported: The requested configuration is currently not supported.".to_string(),
                 },
             },
         ];
