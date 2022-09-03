@@ -45,6 +45,7 @@ impl Router {
         &self,
         context: &Context,
         custom_domain_check_enabled: bool,
+        whitelist_source_range: String,
         cloud_provider: &dyn CloudProvider,
         logger: Box<dyn Logger>,
     ) -> Result<Box<dyn RouterService>, RouterError> {
@@ -69,6 +70,7 @@ impl Router {
         let listeners = cloud_provider.listeners().clone();
         let advanced_settings = RouterAdvancedSettings {
             custom_domain_check_enabled,
+            whitelist_source_range,
         };
 
         match cloud_provider.kind() {
