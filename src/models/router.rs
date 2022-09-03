@@ -148,7 +148,6 @@ impl<T: CloudProvider> Router<T> {
             context.insert("whitelist_source_range_enabled", &false);
         } else {
             context.insert("whitelist_source_range_enabled", &true);
-            context.insert("whitelist_source_range", &self.advanced_settings.whitelist_source_range);
         }
 
         // autoscaler
