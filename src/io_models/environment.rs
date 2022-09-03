@@ -80,19 +80,44 @@ impl EnvironmentRequest {
         let mut routers = Vec::with_capacity(self.routers.len());
         for router in &self.routers {
             let mut custom_domain_check_enabled = true;
+            let mut whitelist_source_range = "0.0.0.0/0".to_string();
+
             for app in &self.applications {
-                if !app.advanced_settings.deployment_custom_domain_check_enabled {
-                    for route in &router.routes {
-                        if route.service_long_id == app.long_id {
+                for route in &router.routes {
+                    if route.service_long_id == app.long_id {
+                        if !app.advanced_settings.deployment_custom_domain_check_enabled {
                             // disable custom domain check for this router
                             custom_domain_check_enabled = false;
-                            break;
                         }
+
+                        whitelist_source_range = app.advanced_settings.network_ingress_whitelist_source_range.clone();
                     }
                 }
             }
 
-            match router.to_router_domain(context, custom_domain_check_enabled, cloud_provider, logger.clone()) {
+            for container in &self.containers {
+                for route in &router.routes {
+                    if route.service_long_id == container.long_id {
+                        if !container.advanced_settings.deployment_custom_domain_check_enabled {
+                            // disable custom domain check for this router
+                            custom_domain_check_enabled = false;
+                        }
+
+                        whitelist_source_range = container
+                            .advanced_settings
+                            .network_ingress_whitelist_source_range
+                            .clone();
+                    }
+                }
+            }
+
+            match router.to_router_domain(
+                context,
+                custom_domain_check_enabled,
+                whitelist_source_range,
+                cloud_provider,
+                logger.clone(),
+            ) {
                 Ok(router) => routers.push(router),
                 Err(err) => {
                     return Err(DomainError::RouterError(err));
