@@ -811,7 +811,13 @@ fn digitalocean_doks_deploy_a_working_environment_with_sticky_session() {
             .routers
             .first()
             .unwrap()
-            .to_router_domain(engine_config.context(), true, engine_config.cloud_provider(), logger.clone())
+            .to_router_domain(
+                engine_config.context(),
+                true,
+                "0.0.0.0/0".to_string(),
+                engine_config.cloud_provider(),
+                logger.clone(),
+            )
             .unwrap();
         let environment_domain = environment
             .to_environment_domain(

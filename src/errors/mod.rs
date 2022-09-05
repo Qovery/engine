@@ -154,6 +154,16 @@ impl Display for CommandError {
     }
 }
 
+impl From<serde_json::Error> for CommandError {
+    fn from(err: serde_json::Error) -> Self {
+        CommandError::new(
+            "Serde error while performing Serialization / Deserialization".to_string(),
+            Some(err.to_string()),
+            None,
+        )
+    }
+}
+
 impl From<Error> for CommandError {
     fn from(err: Error) -> Self {
         CommandError::new("IO error".to_string(), Some(err.to_string()), None)
@@ -471,6 +481,8 @@ impl From<TerraformError> for CommandError {
 pub enum Tag {
     /// Unknown: unknown error.
     Unknown,
+    /// InvalidEngineApiInput: represents an error where Engine's API input is not valid and cannot be deserialized.
+    InvalidEngineApiInputCannotBeDeserialized,
     /// MissingRequiredEnvVariable: represents an error where a required env variable is not set.
     MissingRequiredEnvVariable,
     /// NoClusterFound: represents an error where no cluster was found
@@ -975,6 +987,28 @@ impl EngineError {
         engine_error.link = None;
 
         engine_error
+    }
+
+    /// Creates new error for Engine API input cannot be deserialized.
+    ///
+    ///
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw serde message.
+    pub fn new_invalid_engine_api_input_cannot_be_deserialized(
+        event_details: EventDetails,
+        raw_error: serde_json::Error,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::InvalidEngineApiInputCannotBeDeserialized,
+            "Input is invalid and cannot be deserialized.".to_string(),
+            Some(raw_error.into()),
+            None,
+            Some("This is a Qovery issue, please contact our support team".to_string()),
+        )
     }
 
     /// Creates new error for missing required env variable.

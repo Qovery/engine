@@ -24,6 +24,7 @@ pub enum RouterError {
 
 pub struct RouterAdvancedSettings {
     pub custom_domain_check_enabled: bool,
+    pub whitelist_source_range: String,
 }
 
 pub struct Router<T: CloudProvider> {
@@ -140,6 +141,14 @@ impl<T: CloudProvider> Router<T> {
                 None
             })
             .collect::<Vec<_>>();
+
+        // whitelist source ranges
+        if self.advanced_settings.whitelist_source_range.contains("0.0.0.0") {
+            // if whitelist source range contains 0.0.0.0, then we don't need to add the whitelist source range
+            context.insert("whitelist_source_range_enabled", &false);
+        } else {
+            context.insert("whitelist_source_range_enabled", &true);
+        }
 
         // autoscaler
         context.insert("nginx_enable_horizontal_autoscaler", "false");

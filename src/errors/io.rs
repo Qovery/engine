@@ -21,8 +21,8 @@ impl From<errors::CommandError> for CommandError {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Tag {
-    /// Unknown: unknown error.
     Unknown,
+    InvalidEngineApiInputCannotBeDeserialized,
     MissingRequiredEnvVariable,
     ClusterHasNoWorkerNodes,
     ClusterWorkerNodeNotFound,
@@ -180,6 +180,7 @@ impl From<errors::Tag> for Tag {
     fn from(tag: errors::Tag) -> Self {
         match tag {
             errors::Tag::Unknown => Tag::Unknown,
+            errors::Tag::InvalidEngineApiInputCannotBeDeserialized => Tag::InvalidEngineApiInputCannotBeDeserialized,
             errors::Tag::UnsupportedInstanceType => Tag::UnsupportedInstanceType,
             errors::Tag::CannotRetrieveClusterConfigFile => Tag::CannotRetrieveClusterConfigFile,
             errors::Tag::CannotCreateFile => Tag::CannotCreateFile,

@@ -1,7 +1,9 @@
+{%- if not user_provided_network -%}
+
 resource "aws_security_group" "eks_cluster" {
   name        = "qovery-eks-${var.kubernetes_cluster_id}"
   description = "Cluster communication with worker nodes"
-  vpc_id      = {%- if user_provided_network -%} data.aws_vpc.eks.id {%- else -%} aws_vpc.eks.id {%- endif %}
+  vpc_id      = aws_vpc.eks.id
 
   egress {
     from_port   = 0
@@ -25,3 +27,5 @@ resource "aws_security_group_rule" "cluster_ingress_workstation_https" {
   to_port           = 443
   type              = "ingress"
 }
+
+{%- endif -%}
