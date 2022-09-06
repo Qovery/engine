@@ -576,7 +576,11 @@ pub fn ec2_aws_helm_charts(
 
     let level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
-    let mut level_3: Vec<Box<dyn HelmChart>> = vec![];
+    let level_3: Vec<Box<dyn HelmChart>> = if let Some(qovery_webhook) = qovery_cert_manager_webhook {
+        vec![Box::new(qovery_webhook)]
+    } else {
+        vec![]
+    };
 
     let level_4: Vec<Box<dyn HelmChart>> = vec![];
 
@@ -592,10 +596,6 @@ pub fn ec2_aws_helm_charts(
         Box::new(cluster_agent),
         Box::new(shell_agent),
     ];
-
-    if let Some(qovery_webhook) = qovery_cert_manager_webhook {
-        level_3.push(Box::new(qovery_webhook));
-    }
 
     info!("charts configuration preparation finished");
     Ok(vec![level_1, level_2, level_3, level_4, level_5, level_6, level_7])
