@@ -36,10 +36,6 @@ spec:
           env:
             - name: GROUP_NAME
               value: {{ .Values.groupName | quote }}
-          {{ if and .Values.secret.accessKey .Values.secret.secretKey }}
-          envFrom:
-          - secretRef:
-              name: {{ .Values.secret.name }}
           ports:
             - name: https
               containerPort: 443
