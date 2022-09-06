@@ -15,6 +15,9 @@ spec:
       release: {{ .Release.Name }}
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        checksum/config: {{ include (print $.Template.BasePath "/secret-qovery-registry.yaml") . | sha256sum }}
       labels:
         app: {{ include "qovery-webhook.name" . }}
         release: {{ .Release.Name }}
