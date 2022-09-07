@@ -182,7 +182,10 @@ pub fn eks_aws_helm_charts(
                 },
                 ChartSetValue {
                     key: "syncIamGroup".to_string(),
-                    value: "Admins".to_string(),
+                    value: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .aws_iam_user_mapper_group_name
+                        .clone(),
                 },
                 // resources limits
                 ChartSetValue {
