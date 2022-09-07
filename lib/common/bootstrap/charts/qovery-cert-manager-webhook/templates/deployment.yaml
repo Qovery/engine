@@ -15,6 +15,8 @@ spec:
       release: {{ .Release.Name }}
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/secret-qovery-registry.yaml") . | sha256sum }}
       labels:
         app: {{ include "qovery-webhook.name" . }}
         release: {{ .Release.Name }}
@@ -34,11 +36,6 @@ spec:
           env:
             - name: GROUP_NAME
               value: {{ .Values.groupName | quote }}
-          {{ if and .Values.secret.accessKey .Values.secret.secretKey }}
-          envFrom:
-          - secretRef:
-              name: {{ .Values.secret.name }}
-          {{ end }}
           ports:
             - name: https
               containerPort: 443

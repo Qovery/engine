@@ -29,11 +29,11 @@ spec:
               # Only needed if you don't have default credentials as seen above.
               apiKeySecretRef:
                 key: apiKey
-                name: {{ .Values.externalDnsProvider }}-api-secrets
+                name: {{ .Values.externalDnsProvider }}-api-token-secret
               apiUrlSecretRef:
                 key: apiUrl
-                name: {{ .Values.externalDnsProvider }}-api-secrets
+                name: {{ .Values.externalDnsProvider }}-api-token-secret
               apiPortSecretRef:
                 key: apiPort
-                name: {{ .Values.externalDnsProvider }}-api-secrets
+                name: {{ .Values.externalDnsProvider }}-api-token-secret
 {{ end }}
