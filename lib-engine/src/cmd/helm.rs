@@ -404,7 +404,7 @@ impl Helm {
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(envs),
             &mut |line| {
-                debug!("{}", line);
+                info!("{}", line);
             },
             &mut |line| {
                 stderr_msg.push_str(&line);

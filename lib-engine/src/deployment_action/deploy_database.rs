@@ -1,4 +1,4 @@
-use crate::cloud_provider::helm::ChartSetValue;
+use crate::cloud_provider::helm::{ChartInfo, ChartSetValue, HelmAction, HelmChartNamespaces};
 use crate::cloud_provider::service::{delete_pending_service, get_database_terraform_config, Action, Service};
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::Kind::Aws;
@@ -20,7 +20,7 @@ use crate::models::database::{Container, Database, DatabaseService, DatabaseType
 use crate::models::types::{CloudProvider, ToTeraContext};
 use function_name::named;
 use serde::Deserialize;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -312,17 +312,24 @@ where
         },
     ];
 
-    let helm_deploy = HelmDeployment::new_with_values(
-        format!("{}-externalname", db.fqdn_id), // here it is the fqdn id :O
+    let chart = ChartInfo {
+        name: format!("{}-externalname", db.fqdn_id), // here it is the fqdn id :O
+        path: format!("{}/{}", &workspace_dir, "service-chart"),
+        namespace: HelmChartNamespaces::Custom,
+        custom_namespace: Some(target.environment.namespace().to_string()),
+        values,
+        ..Default::default()
+    };
+
+    let helm = HelmDeployment::new(
+        event_details.clone(),
         tera_context,
         PathBuf::from(db.helm_chart_external_name_service_dir()),
-        Path::new(&workspace_dir).join("service-chart"),
-        values,
-        event_details.clone(),
         None,
+        chart,
     );
 
-    helm_deploy.on_create(target)?;
+    helm.on_create(target)?;
 
     // We don't manage START/PAUSE for managed database elsewhere than for AWS
     if target.kubernetes.cloud_provider().kind() != Aws {
@@ -521,17 +528,23 @@ where
             terraform_deploy.on_delete(target)?;
 
             // Delete the service attached
-            let helm_deploy = HelmDeployment::new_with_values(
-                format!("{}-externalname", self.fqdn_id), // here it is the fqdn id :O
+            let chart = ChartInfo {
+                name: format!("{}-externalname", self.fqdn_id), // here it is the fqdn id :O
+                path: format!("{}/{}", &workspace_dir, "service-chart"),
+                namespace: HelmChartNamespaces::Custom,
+                custom_namespace: Some(target.environment.namespace().to_string()),
+                action: HelmAction::Destroy,
+                ..Default::default()
+            };
+            let helm = HelmDeployment::new(
+                event_details.clone(),
                 tera::Context::default(),
                 PathBuf::from(self.helm_chart_external_name_service_dir()),
-                Path::new(&workspace_dir).join("service-chart"),
-                vec![],
-                event_details.clone(),
                 None,
+                chart,
             );
 
-            helm_deploy.on_delete(target)
+            helm.on_delete(target)
         })
     }
 }
@@ -554,14 +567,21 @@ where
         );
 
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
-            let helm = HelmDeployment::new_with_values_file_override(
-                self.helm_release_name(),
+            let chart = ChartInfo {
+                name: self.helm_release_name(),
+                path: self.workspace_directory(),
+                namespace: HelmChartNamespaces::Custom,
+                custom_namespace: Some(target.environment.namespace().to_string()),
+                k8s_selector: Some(self.selector()),
+                values_files: vec![format!("{}/qovery-values.yaml", self.workspace_directory())],
+                ..Default::default()
+            };
+            let helm = HelmDeployment::new(
+                event_details.clone(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
-                PathBuf::from(self.workspace_directory()),
-                PathBuf::from(self.helm_chart_values_dir()),
-                event_details.clone(),
-                Some(self.selector()),
+                Some(PathBuf::from(format!("{}/qovery-values.j2.yaml", self.helm_chart_values_dir()))),
+                chart,
             );
 
             helm.on_create(target)?;
@@ -640,14 +660,20 @@ where
         );
 
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Delete), || {
-            let helm = HelmDeployment::new_with_values_file_override(
-                self.helm_release_name(),
+            let chart = ChartInfo {
+                name: self.helm_release_name(),
+                action: HelmAction::Destroy,
+                namespace: HelmChartNamespaces::Custom,
+                custom_namespace: Some(target.environment.namespace().to_string()),
+                k8s_selector: Some(self.selector()),
+                ..Default::default()
+            };
+            let helm = HelmDeployment::new(
+                event_details.clone(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
-                PathBuf::from(self.workspace_directory()),
-                PathBuf::from(self.helm_chart_values_dir()),
-                event_details.clone(),
-                Some(self.selector()),
+                None,
+                chart,
             );
 
             helm.on_delete(target)
