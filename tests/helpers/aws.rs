@@ -20,7 +20,7 @@ use tracing::error;
 use uuid::Uuid;
 
 use crate::helpers::common::{Cluster, ClusterDomain};
-use crate::helpers::dns::{dns_provider_cloudflare, dns_provider_qoverydns};
+use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
 use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
@@ -96,12 +96,8 @@ impl Cluster<AWS, Options> for AWS {
         let build_platform = Box::new(build_platform_local_docker(context, logger.clone()));
 
         // use AWS
-        let cloud_provider: Arc<Box<dyn CloudProvider>> =
-            Arc::new(AWS::cloud_provider(context, kubernetes_kind.clone()));
-        let dns_provider = match kubernetes_kind {
-            KubernetesKind::Ec2 => Arc::new(dns_provider_qoverydns(context, cluster_domain)),
-            _ => Arc::new(dns_provider_cloudflare(context, cluster_domain)),
-        };
+        let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(AWS::cloud_provider(context, kubernetes_kind));
+        let dns_provider = Arc::new(dns_provider_qoverydns(context, cluster_domain));
 
         let kubernetes = get_environment_test_kubernetes(
             context,
