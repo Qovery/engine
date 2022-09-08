@@ -162,11 +162,8 @@ impl<T: CloudProvider> Container<T> {
         &self.registry
     }
 
-    fn public_port(&self) -> Option<u16> {
-        self.ports
-            .iter()
-            .find(|port| port.publicly_accessible)
-            .map(|port| port.port as u16)
+    fn public_ports(&self) -> impl Iterator<Item = &Port> + '_ {
+        self.ports.iter().filter(|port| port.publicly_accessible)
     }
 
     pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> ContainerTeraContext {
@@ -208,7 +205,7 @@ impl<T: CloudProvider> Container<T> {
                 min_instances: self.min_instances,
                 max_instances: self.max_instances,
                 ports: self.ports.clone(),
-                default_port: self.ports.iter().find_or_first(|p| p.publicly_accessible).cloned(),
+                default_port: self.ports.iter().find_or_first(|p| p.is_default).cloned(),
                 storages: vec![],
                 advanced_settings: self.advanced_settings.clone(),
             },
@@ -251,7 +248,7 @@ impl<T: CloudProvider> Container<T> {
     }
 
     pub fn publicly_accessible(&self) -> bool {
-        self.public_port().is_some()
+        self.public_ports().count() > 0
     }
 
     pub fn image_with_tag(&self) -> String {
@@ -345,7 +342,7 @@ impl<T: CloudProvider> Service for Container<T> {
 }
 
 pub trait ContainerService: Service + DeploymentAction + ToTeraContext {
-    fn public_port(&self) -> Option<u16>;
+    fn public_ports(&self) -> Vec<&Port>;
     fn advanced_settings(&self) -> &ContainerAdvancedSettings;
     fn image_full(&self) -> String;
     fn kube_service_name(&self) -> String;
@@ -367,8 +364,8 @@ impl<T: CloudProvider> ContainerService for Container<T>
 where
     Container<T>: Service + ToTeraContext + DeploymentAction,
 {
-    fn public_port(&self) -> Option<u16> {
-        self.public_port()
+    fn public_ports(&self) -> Vec<&Port> {
+        self.public_ports().collect_vec()
     }
 
     fn advanced_settings(&self) -> &ContainerAdvancedSettings {

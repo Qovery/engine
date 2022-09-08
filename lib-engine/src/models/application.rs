@@ -13,6 +13,7 @@ use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::utilities::to_short_id;
+use itertools::Itertools;
 use std::marker::PhantomData;
 use tera::Context as TeraContext;
 use uuid::Uuid;
@@ -107,11 +108,8 @@ impl<T: CloudProvider> Application<T> {
         )
     }
 
-    fn public_port(&self) -> Option<u16> {
-        self.ports
-            .iter()
-            .find(|port| port.publicly_accessible)
-            .map(|port| port.port as u16)
+    fn public_ports(&self) -> impl Iterator<Item = &Port> + '_ {
+        self.ports.iter().filter(|port| port.publicly_accessible)
     }
 
     pub(super) fn default_tera_context(&self, kubernetes: &dyn Kubernetes, environment: &Environment) -> TeraContext {
@@ -140,9 +138,9 @@ impl<T: CloudProvider> Application<T> {
             &self.advanced_settings.hpa_cpu_average_utilization_percent,
         );
 
-        if let Some(private_port) = self.public_port() {
+        if let Some(default_port) = self.ports.iter().find(|p| p.is_default) {
             context.insert("is_private_port", &true);
-            context.insert("private_port", &private_port);
+            context.insert("private_port", &default_port.port);
         } else {
             context.insert("is_private_port", &false);
         }
@@ -317,7 +315,7 @@ impl<T: CloudProvider> Application<T> {
     }
 
     pub fn publicly_accessible(&self) -> bool {
-        self.public_port().is_some()
+        self.public_ports().count() > 0
     }
 
     pub fn logger(&self) -> &dyn Logger {
@@ -415,7 +413,7 @@ impl<T: CloudProvider> Service for Application<T> {
 pub trait ApplicationService: Service + DeploymentAction + ToTeraContext {
     fn get_build(&self) -> &Build;
     fn get_build_mut(&mut self) -> &mut Build;
-    fn public_port(&self) -> Option<u16>;
+    fn public_ports(&self) -> Vec<&Port>;
     fn advanced_settings(&self) -> &ApplicationAdvancedSettings;
     fn startup_timeout(&self) -> std::time::Duration {
         let settings = self.advanced_settings();
@@ -443,8 +441,8 @@ where
         self.build_mut()
     }
 
-    fn public_port(&self) -> Option<u16> {
-        self.public_port()
+    fn public_ports(&self) -> Vec<&Port> {
+        self.public_ports().collect_vec()
     }
 
     fn advanced_settings(&self) -> &ApplicationAdvancedSettings {
