@@ -30,7 +30,7 @@ pub struct ClusterAdvancedSettings {
     pub pleco_resources_ttl: i32,
     #[serde(alias = "loki.log_retention_in_week")]
     pub loki_log_retention_in_week: u32,
-    #[serde(alias = "aws.iam_user_mapper.group_name")]
+    #[serde(alias = "aws.iam.admin_group")]
     pub aws_iam_user_mapper_group_name: String,
 }
 
