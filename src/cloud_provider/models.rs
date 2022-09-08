@@ -44,20 +44,18 @@ pub struct CustomDomain {
 #[derive(Serialize, Deserialize)]
 pub struct CustomDomainDataTemplate {
     pub domain: String,
-    pub domain_hash: String,
-    pub target_domain: String,
+}
+
+#[derive(Serialize)]
+pub struct HostDataTemplate {
+    pub domain_name: String,
+    pub service_name: String,
+    pub service_port: u16,
 }
 
 pub struct Route {
     pub path: String,
     pub service_long_id: Uuid,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct RouteDataTemplate {
-    pub path: String,
-    pub application_name: String,
-    pub application_port: u16,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]

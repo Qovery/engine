@@ -11,7 +11,6 @@ pub mod cloud_provider;
 pub mod cmd;
 pub mod constants;
 pub mod container_registry;
-mod crypto;
 mod deletion_utilities;
 mod deployment_action;
 mod deployment_report;

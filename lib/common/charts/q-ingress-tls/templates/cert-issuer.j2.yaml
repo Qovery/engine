@@ -9,6 +9,10 @@ metadata:
     routerLongId: {{ long_id }}
     envLongId: {{ environment_long_id }}
     projectLongId: {{ project_long_id }}
+    qovery.com/service-id: {{ long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
 spec:
   acme:
     server: {{ spec_acme_server }}

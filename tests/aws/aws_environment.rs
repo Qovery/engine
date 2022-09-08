@@ -393,7 +393,14 @@ fn deploy_a_working_environment_with_domain() {
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
-        let environment = helpers::environment::working_minimal_environment(&context);
+        let environment = helpers::environment::working_minimal_environment_with_router(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
