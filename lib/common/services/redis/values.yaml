@@ -417,7 +417,7 @@ master:
 
   ## Redis Master pod priorityClassName
   ##
-  priorityClassName: ''
+  priorityClassName: ""
 
   ## An array to add extra env vars
   ## For example:
