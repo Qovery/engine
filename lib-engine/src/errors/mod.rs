@@ -380,6 +380,21 @@ impl From<ContainerRegistryError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
+            ContainerRegistryError::CannotSetRepositoryTags {
+                registry_name,
+                repository_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!(
+                    "Container registry error, cannot set tags for for repository `{}` in registry: `{}`",
+                    repository_name, registry_name
+                ),
+                Some(raw_error_message),
+                None,
+            ),
+            ContainerRegistryError::Unknown { raw_error_message } => {
+                CommandError::new("Container registry unknown error.".to_string(), Some(raw_error_message), None)
+            }
         }
     }
 }
@@ -741,6 +756,10 @@ pub enum Tag {
     ContainerRegistryCannotCreateRegistry,
     /// ContainerRegistryCannotDeleteRegistry: represents an error on container registry where it cannot delete a registry.
     ContainerRegistryCannotDeleteRegistry,
+    /// ContainerRegistryCannotSetTags: represents an error on container registry where it cannot cannot set tags.
+    ContainerRegistryCannotSetRepositoryTags,
+    /// ContainerRegistryCannotSetTags: represents an unknown error on container registry.
+    ContainerRegistryUnknownError,
     /// KubeconfigFileDoNotPermitToConnectToK8sCluster: represent a kubeconfig mismatch, not permitting to connect to k8s cluster
     KubeconfigFileDoNotPermitToConnectToK8sCluster,
     /// KubeconfigSecurityCheckError: represent an error because of a security concern/doubt on the kubeconfig file
@@ -2568,6 +2587,14 @@ impl EngineError {
                 None,
                 None,
             ),
+            ContainerRegistryError::CannotSetRepositoryTags { ref registry_name, ref repository_name, .. } => EngineError::new(event_details,
+            Tag::ContainerRegistryCannotSetRepositoryTags,
+            format!("Container registry: cannot set tags on repository `{}` in registry `{}`.", repository_name, registry_name),
+            Some(error.into()),
+                                                                                                                               None,
+                                                                                                                               None,
+            ),
+            ContainerRegistryError::Unknown {..} => EngineError::new(event_details, Tag::ContainerRegistryUnknownError, "Container registry unknown error.".to_string(), Some(error.into()),None, None)
         }
     }
 
