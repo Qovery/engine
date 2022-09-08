@@ -283,7 +283,7 @@ fn digitalocean_doks_build_with_buildpacks_and_deploy_a_working_environment() {
                     id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
                     port: 3000,
-                    public_port: Some(443),
+                    is_default: true,
                     name: None,
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,

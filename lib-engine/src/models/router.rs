@@ -4,7 +4,7 @@ use crate::cloud_provider::utilities::sanitize_name;
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
-use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage, Transmitter};
+use crate::events::Transmitter;
 use crate::io_models::context::Context;
 use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::logger::Logger;
@@ -85,7 +85,6 @@ impl<T: CloudProvider> Router<T> {
     where
         Self: Service,
     {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
@@ -160,37 +159,6 @@ impl<T: CloudProvider> Router<T> {
         context.insert("nginx_limit_cpu", "200m");
         context.insert("nginx_limit_memory", "128Mi");
 
-        let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
-
-        // Default domain
-        match crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
-            kubernetes_config_file_path,
-            "nginx-ingress",
-            "nginx-ingress-ingress-nginx-controller",
-            kubernetes.cloud_provider().credentials_environment_variables(),
-        ) {
-            Ok(external_ingress_hostname_default) => match external_ingress_hostname_default {
-                Some(hostname) => context.insert("external_ingress_hostname_default", hostname.as_str()),
-                None => {
-                    // TODO(benjaminch): Handle better this one via a proper error eventually
-                    self.logger().log(EngineEvent::Warning(
-                        event_details,
-                        EventMessage::new_from_safe(
-                            "Error while trying to get Load Balancer hostname from Kubernetes cluster".to_string(),
-                        ),
-                    ));
-                }
-            },
-            _ => {
-                // FIXME really?
-                // TODO(benjaminch): Handle better this one via a proper error eventually
-                self.logger().log(EngineEvent::Warning(
-                    event_details,
-                    EventMessage::new_from_safe("Can't fetch external ingress hostname.".to_string()),
-                ));
-            }
-        }
-
         let router_default_domain_hash = crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
 
         // TODO(benjaminch): remove this one once subdomain migration has been done, CF ENG-1302
@@ -251,11 +219,7 @@ impl<T: CloudProvider> Router<T> {
     }
 
     pub fn helm_chart_dir(&self) -> String {
-        format!(
-            "{}/{}/charts/q-ingress-tls",
-            self.context.lib_root_dir(),
-            T::lib_directory_name()
-        )
+        format!("{}/common/charts/q-ingress-tls", self.context.lib_root_dir(),)
     }
 }
 
