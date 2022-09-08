@@ -165,7 +165,7 @@ impl<T: CloudProvider> Router<T> {
         // If domain contains cluster id in it, it means cluster has already declared wildcard and there is no need to declare app domain since it can use the cluster wildcard.
         let router_should_declare_domain_to_external_dns = !self
             .default_domain
-            .contains(format!(".{}.", self.context().cluster_id()).as_str());
+            .contains(format!(".{}.", target.kubernetes.id()).as_str());
 
         let tls_domain = kubernetes.dns_provider().domain().wildcarded();
         context.insert("router_tls_domain", tls_domain.to_string().as_str());
