@@ -140,7 +140,7 @@ impl<T: CloudProvider> Router<T> {
 
             for custom_domain in &self.custom_domains {
                 hosts.push(HostDataTemplate {
-                    domain_name: format!("p{}-{}", port.port, custom_domain.domain),
+                    domain_name: format!("p{}.{}", port.port, custom_domain.domain),
                     service_name: service_name.clone(),
                     service_port: port.port,
                 });
