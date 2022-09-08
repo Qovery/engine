@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use url::Url;
 use uuid::Uuid;
 
@@ -39,6 +40,7 @@ pub trait ContainerRegistry {
         &self,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
+        tags: Option<HashMap<String, String>>,
     ) -> Result<(), ContainerRegistryError>;
     fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError>;
 

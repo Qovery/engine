@@ -24,6 +24,7 @@ use kube::Api;
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::EcrClient;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
@@ -63,11 +64,19 @@ where
         // This is required only to avoid to manage rotating credentials
         (loggers.send_progress)("🪞 Mirroring image to private cluster registry to ensure reproducibility".to_string());
         let registry_info = target.container_registry.registry_info();
+        let mut tags: HashMap<String, String> = HashMap::new();
+        if target.kubernetes.advanced_settings().pleco_resources_ttl > -1 {
+            tags.insert(
+                "ttl".to_string(),
+                (&target.kubernetes.advanced_settings().pleco_resources_ttl).to_string(),
+            );
+        }
         target
             .container_registry
             .create_repository(
                 Self::QOVERY_MIRROR_REPOSITORY_NAME,
                 target.kubernetes.advanced_settings().registry_image_retention_time_sec,
+                Some(tags),
             )
             .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
 

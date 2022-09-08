@@ -121,6 +121,8 @@ pub enum Tag {
     ContainerRegistryRegistryDoesntExist,
     ContainerRegistryInvalidCredentials,
     ContainerRegistryCannotLinkRegistryToCluster,
+    ContainerRegistryCannotSetRepositoryTags,
+    ContainerRegistryUnknownError,
     ObjectStorageInvalidBucketName,
     ObjectStorageCannotEmptyBucket,
     ObjectStorageCannotTagBucket,
@@ -286,6 +288,8 @@ impl From<errors::Tag> for Tag {
                 Tag::ContainerRegistryCannotLinkRegistryToCluster
             }
             errors::Tag::ContainerRegistryCannotDeleteRegistry => Tag::ContainerRegistryCannotDeleteRegistry,
+            errors::Tag::ContainerRegistryCannotSetRepositoryTags => Tag::ContainerRegistryCannotSetRepositoryTags,
+            errors::Tag::ContainerRegistryUnknownError => Tag::ContainerRegistryUnknownError,
             errors::Tag::BuilderDockerCannotListImages => Tag::BuilderDockerCannotListImages,
             errors::Tag::DockerError => Tag::DockerError,
             errors::Tag::ObjectStorageInvalidBucketName => Tag::ObjectStorageInvalidBucketName,

@@ -1,5 +1,6 @@
 #![allow(clippy::field_reassign_with_default)]
 
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
@@ -7,7 +8,8 @@ use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
     BatchDeleteImageRequest, CreateRepositoryRequest, DeleteRepositoryError, DeleteRepositoryRequest,
     DescribeImagesRequest, DescribeRepositoriesError, DescribeRepositoriesRequest, Ecr, EcrClient,
-    GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier, PutLifecyclePolicyRequest, Repository,
+    GetAuthorizationTokenRequest, ImageDetail, ImageIdentifier, PutLifecyclePolicyRequest, Repository, Tag,
+    TagResourceRequest,
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
@@ -23,7 +25,7 @@ use crate::logger::Logger;
 use crate::runtime::block_on;
 use retry::delay::Fixed;
 use retry::Error::Operation;
-use retry::OperationResult;
+use retry::{Error, OperationResult};
 use serde_json::json;
 use url::Url;
 use uuid::Uuid;
@@ -198,6 +200,7 @@ impl ECR {
         &self,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
+        tags: Option<HashMap<String, String>>,
     ) -> Result<Repository, ContainerRegistryError> {
         let container_registry_request = DescribeRepositoriesRequest {
             repository_names: Some(vec![repository_name.to_string()]),
@@ -217,84 +220,117 @@ impl ECR {
             );
             match repositories {
                 // Repo already exist, so ok
-                Ok(_) => OperationResult::Ok(()),
-
-                // Repo does not exist, so creating it
-                Err(RusotoError::Service(DescribeRepositoriesError::RepositoryNotFound(_))) => {
-                    if let Err(err) = block_on(self.ecr_client().create_repository(crr.clone())) {
-                        OperationResult::Retry(Err(ContainerRegistryError::CannotCreateRepository {
-                            registry_name: self.name.to_string(),
-                            repository_name: repository_name.to_string(),
-                            raw_error_message: err.to_string(),
-                        }))
-                    } else {
-                        // The Repo should be created at this point, but we want to verify that
-                        // the describe/list return it now. we want to reloop so return a retry instead of a ok
-                        OperationResult::Retry(Err(ContainerRegistryError::CannotCreateRepository {
-                            registry_name: self.name.to_string(),
-                            repository_name: repository_name.to_string(),
-                            raw_error_message: "Retry to check repository exist".to_string(),
-                        }))
+                Ok(result) => OperationResult::Ok(result.repositories),
+                Err(e) => match e {
+                    RusotoError::Service(DescribeRepositoriesError::RepositoryNotFound(_)) => {
+                        match block_on(self.ecr_client().create_repository(crr.clone())) {
+                            // The Repo should be created at this point, but we want to verify that
+                            // the describe/list return it now. we want to reloop so return a retry instead of a ok
+                            Ok(_) => OperationResult::Retry(Err(ContainerRegistryError::CannotCreateRepository {
+                                registry_name: self.name.to_string(),
+                                repository_name: repository_name.to_string(),
+                                raw_error_message: "Retry to check repository exist".to_string(),
+                            })),
+                            // Repo does not exist, so creating it
+                            Err(err) => OperationResult::Retry(Err(ContainerRegistryError::CannotCreateRepository {
+                                registry_name: self.name.to_string(),
+                                repository_name: repository_name.to_string(),
+                                raw_error_message: err.to_string(),
+                            })),
+                        }
                     }
-                }
-
-                // Unknown error, so retries ¯\_(ツ)_/¯
-                Err(err) => OperationResult::Retry(Err(ContainerRegistryError::CannotCreateRepository {
-                    registry_name: self.name.to_string(),
-                    repository_name: repository_name.to_string(),
-                    raw_error_message: err.to_string(),
-                })),
+                    // Unknown error, so retries ¯\_(ツ)_/¯
+                    _ => OperationResult::Retry(Err(ContainerRegistryError::CannotCreateRepository {
+                        registry_name: self.name.to_string(),
+                        repository_name: repository_name.to_string(),
+                        raw_error_message: e.to_string(),
+                    })),
+                },
             }
         });
 
         match repo_created {
-            Ok(_) => {}
-            Err(Operation { error, .. }) => return error,
-            Err(retry::Error::Internal(e)) => {
-                return Err(ContainerRegistryError::CannotCreateRepository {
-                    registry_name: self.name.to_string(),
-                    repository_name: repository_name.to_string(),
-                    raw_error_message: e,
-                })
-            }
-        };
-
-        // apply retention policy
-        let retention_policy_in_days = match image_retention_time_in_seconds / 86400 {
-            0..=1 => 1,
-            _ => image_retention_time_in_seconds / 86400,
-        };
-        let lifecycle_policy_text = json!({
-          "rules": [
-            {
-              "action": {
-                "type": "expire"
-              },
-              "selection": {
-                "countType": "sinceImagePushed",
-                "countUnit": "days",
-                "countNumber": retention_policy_in_days,
-                "tagStatus": "any"
-              },
-              "description": "Images retention policy",
-              "rulePriority": 1
-            }
-          ]
-        });
-
-        let plp = PutLifecyclePolicyRequest {
-            repository_name: repository_name.to_string(),
-            lifecycle_policy_text: lifecycle_policy_text.to_string(),
-            ..Default::default()
-        };
-
-        match block_on(self.ecr_client().put_lifecycle_policy(plp)) {
-            Err(err) => Err(ContainerRegistryError::CannotSetRepositoryLifecyclePolicy {
+            Err(Operation { error, .. }) => error,
+            Err(Error::Internal(e)) => Err(ContainerRegistryError::CannotCreateRepository {
                 registry_name: self.name.to_string(),
                 repository_name: repository_name.to_string(),
-                raw_error_message: err.to_string(),
+                raw_error_message: e,
             }),
-            _ => Ok(self.get_repository(repository_name).expect("cannot get repository")),
+            Ok(repos) => {
+                // apply retention policy
+                if let Some(repos) = repos {
+                    let retention_policy_in_days = match image_retention_time_in_seconds / 86400 {
+                        0..=1 => 1,
+                        _ => image_retention_time_in_seconds / 86400,
+                    };
+
+                    let lifecycle_policy_text = json!({
+                      "rules": [
+                        {
+                          "action": {
+                            "type": "expire"
+                          },
+                          "selection": {
+                            "countType": "sinceImagePushed",
+                            "countUnit": "days",
+                            "countNumber": retention_policy_in_days,
+                            "tagStatus": "any"
+                          },
+                          "description": "Images retention policy",
+                          "rulePriority": 1
+                        }
+                      ]
+                    });
+
+                    let plp = PutLifecyclePolicyRequest {
+                        repository_name: repository_name.to_string(),
+                        lifecycle_policy_text: lifecycle_policy_text.to_string(),
+                        ..Default::default()
+                    };
+
+                    if let Err(e) = match block_on(self.ecr_client().put_lifecycle_policy(plp)) {
+                        Err(err) => Err(ContainerRegistryError::CannotSetRepositoryLifecyclePolicy {
+                            registry_name: self.name.to_string(),
+                            repository_name: repository_name.to_string(),
+                            raw_error_message: err.to_string(),
+                        }),
+                        _ => Ok(self.get_repository(repository_name).expect("cannot get repository")),
+                    } {
+                        return Err(e);
+                    }
+
+                    if let (Some(tags_to_apply), Some(repository_arn)) = (tags, &repos[0].repository_arn) {
+                        let mut ecr_tags: Vec<Tag> = vec![];
+                        for (key, value) in tags_to_apply {
+                            ecr_tags.push(Tag {
+                                key: Some(key),
+                                value: Some(value),
+                            })
+                        }
+                        let trr = TagResourceRequest {
+                            resource_arn: repository_arn.to_string(),
+                            tags: ecr_tags,
+                        };
+
+                        if let Err(e) = match block_on(self.ecr_client().tag_resource(trr)) {
+                            Err(err) => Err(ContainerRegistryError::CannotSetRepositoryTags {
+                                registry_name: self.name.to_string(),
+                                repository_name: repository_name.to_string(),
+                                raw_error_message: err.to_string(),
+                            }),
+                            _ => Ok(self.get_repository(repository_name).expect("cannot get repository")),
+                        } {
+                            return Err(e);
+                        }
+                    }
+
+                    Ok(repos[0].clone())
+                } else {
+                    Err(ContainerRegistryError::Unknown {
+                        raw_error_message: "Cannot get repositories".to_string(),
+                    })
+                }
+            }
         }
     }
 
@@ -302,6 +338,7 @@ impl ECR {
         &self,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
+        tags: Option<HashMap<String, String>>,
     ) -> Result<Repository, ContainerRegistryError> {
         self.log_info(format!("🗂️ Provisioning container repository {}", repository_name));
 
@@ -311,7 +348,7 @@ impl ECR {
             return Ok(repo);
         }
 
-        self.create_repository(repository_name, image_retention_time_in_seconds)
+        self.create_repository(repository_name, image_retention_time_in_seconds, tags)
     }
 
     pub fn get_credentials(ecr_client: &EcrClient) -> Result<ECRCredentials, ContainerRegistryError> {
@@ -392,8 +429,9 @@ impl ContainerRegistry for ECR {
         &self,
         name: &str,
         image_retention_time_in_seconds: u32,
+        tags: Option<HashMap<String, String>>,
     ) -> Result<(), ContainerRegistryError> {
-        let _ = self.get_or_create_repository(name, image_retention_time_in_seconds)?;
+        let _ = self.get_or_create_repository(name, image_retention_time_in_seconds, tags)?;
         Ok(())
     }
 
