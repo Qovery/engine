@@ -76,7 +76,6 @@ where
             .create_repository(
                 Self::QOVERY_MIRROR_REPOSITORY_NAME,
                 target.kubernetes.advanced_settings().registry_image_retention_time_sec,
-                Some(tags),
             )
             .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
 

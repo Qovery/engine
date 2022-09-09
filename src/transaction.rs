@@ -200,7 +200,6 @@ impl<'a> Transaction<'a> {
                         .kubernetes()
                         .advanced_settings()
                         .registry_image_retention_time_sec,
-                    Some(tags),
                 )
                 .map_err(cr_to_engine_error)?;
 

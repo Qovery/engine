@@ -2,7 +2,6 @@ extern crate digitalocean;
 
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 use crate::build_platform::Image;
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
@@ -201,7 +200,6 @@ impl ContainerRegistry for DOCR {
         &self,
         _repository_name: &str,
         _image_retention_time_in_seconds: u32,
-        _tags: Option<HashMap<String, String>>,
     ) -> Result<(), ContainerRegistryError> {
         // Nothing to do, DO only allow one registry and create repository on the flight when image are pushed
         Ok(())
