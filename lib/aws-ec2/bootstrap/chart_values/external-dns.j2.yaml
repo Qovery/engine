@@ -12,9 +12,9 @@ pdns:
   apiPort: "{{ qoverydns_api_port }}"
   apiKey: "{{ qoverydns_api_key }}"
 
-annotationFilter: "external-dns.alpha.kubernetes.io/exclude notin (true)" # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
 {% endif %}
 
+annotationFilter: "external-dns.alpha.kubernetes.io/exclude notin (true)" # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
 domainFilters: {{ managed_dns_domains_root_helm_format }}
 triggerLoopOnEvent: true
 policy: sync

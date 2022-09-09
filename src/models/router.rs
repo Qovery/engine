@@ -1,10 +1,10 @@
-use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, Route, RouteDataTemplate};
+use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate, Route};
 use crate::cloud_provider::service::{default_tera_context, Action, Service, ServiceType};
 use crate::cloud_provider::utilities::sanitize_name;
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
-use crate::events::{EngineEvent, EnvironmentStep, EventMessage, Stage, Transmitter};
+use crate::events::{EnvironmentStep, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::logger::Logger;
@@ -85,62 +85,75 @@ impl<T: CloudProvider> Router<T> {
     where
         Self: Service,
     {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
 
         let custom_domain_data_templates = self
             .custom_domains
             .iter()
-            .map(|cd| {
-                let domain_hash = crate::crypto::to_sha1_truncate_16(cd.domain.as_str());
-                CustomDomainDataTemplate {
-                    domain: cd.domain.clone(),
-                    domain_hash,
-                    target_domain: cd.target_domain.clone(),
-                }
+            .map(|cd| CustomDomainDataTemplate {
+                domain: cd.domain.clone(),
             })
             .collect::<Vec<_>>();
 
-        // FIXME: For now we only support one public port per application
-        // it should be possible add more if we prefix port_name in front of the fqdn
-        // (i.e: p4242.zxxxx-zzzzz.cluster.mydomain.com)
-        let route_data_templates = self
+        // We can only have 1 router per application/container.
+        // Core never mix multiple services inside one router
+        let service_id = self
             .routes
-            .iter()
-            .filter_map(|r| {
-                if let Some(application) = &environment
-                    .applications
-                    .iter()
-                    .find(|app| app.long_id() == &r.service_long_id)
-                {
-                    if let Some(public_port) = application.public_port() {
-                        return Some(RouteDataTemplate {
-                            path: r.path.clone(),
-                            application_name: application.sanitized_name(),
-                            application_port: public_port,
-                        });
-                    }
-                }
+            .first()
+            .map(|r| r.service_long_id)
+            .ok_or_else(|| EngineError::new_router_failed_to_deploy(event_details.clone()))?;
 
-                if let Some(container) = &environment
+        // Check if the service is an application
+        let (service_name, ports) =
+            if let Some(application) = &environment.applications.iter().find(|app| app.long_id() == &service_id) {
+                (application.sanitized_name(), application.public_ports())
+            } else {
+                let container = environment
                     .containers
                     .iter()
-                    .find(|container| container.long_id() == &r.service_long_id)
-                {
-                    if let Some(public_port) = container.public_port() {
-                        return Some(RouteDataTemplate {
-                            path: r.path.clone(),
-                            application_name: container.kube_service_name(),
-                            application_port: public_port,
-                        });
-                    }
-                }
+                    .find(|container| container.long_id() == &service_id)
+                    .ok_or_else(|| EngineError::new_router_failed_to_deploy(event_details))?;
 
-                None
-            })
-            .collect::<Vec<_>>();
+                (container.kube_service_name(), container.public_ports())
+            };
+
+        // (custom_domain + default_domain) * (ports + default_port)
+        let mut hosts: Vec<HostDataTemplate> =
+            Vec::with_capacity((custom_domain_data_templates.len() + 1) * (ports.len() + 1));
+        for port in ports {
+            hosts.push(HostDataTemplate {
+                domain_name: format!("p{}-{}", port.port, self.default_domain),
+                service_name: service_name.clone(),
+                service_port: port.port,
+            });
+
+            if port.is_default {
+                hosts.push(HostDataTemplate {
+                    domain_name: self.default_domain.clone(),
+                    service_name: service_name.clone(),
+                    service_port: port.port,
+                });
+            }
+
+            for custom_domain in &self.custom_domains {
+                hosts.push(HostDataTemplate {
+                    domain_name: format!("p{}.{}", port.port, custom_domain.domain),
+                    service_name: service_name.clone(),
+                    service_port: port.port,
+                });
+
+                if port.is_default {
+                    hosts.push(HostDataTemplate {
+                        domain_name: custom_domain.domain.clone(),
+                        service_name: service_name.clone(),
+                        service_port: port.port,
+                    });
+                }
+            }
+        }
 
         // whitelist source ranges
         if self.advanced_settings.whitelist_source_range.contains("0.0.0.0") {
@@ -160,55 +173,21 @@ impl<T: CloudProvider> Router<T> {
         context.insert("nginx_limit_cpu", "200m");
         context.insert("nginx_limit_memory", "128Mi");
 
-        let kubernetes_config_file_path = kubernetes.get_kubeconfig_file_path()?;
-
-        // Default domain
-        match crate::cmd::kubectl::kubectl_exec_get_external_ingress_hostname(
-            kubernetes_config_file_path,
-            "nginx-ingress",
-            "nginx-ingress-ingress-nginx-controller",
-            kubernetes.cloud_provider().credentials_environment_variables(),
-        ) {
-            Ok(external_ingress_hostname_default) => match external_ingress_hostname_default {
-                Some(hostname) => context.insert("external_ingress_hostname_default", hostname.as_str()),
-                None => {
-                    // TODO(benjaminch): Handle better this one via a proper error eventually
-                    self.logger().log(EngineEvent::Warning(
-                        event_details,
-                        EventMessage::new_from_safe(
-                            "Error while trying to get Load Balancer hostname from Kubernetes cluster".to_string(),
-                        ),
-                    ));
-                }
-            },
-            _ => {
-                // FIXME really?
-                // TODO(benjaminch): Handle better this one via a proper error eventually
-                self.logger().log(EngineEvent::Warning(
-                    event_details,
-                    EventMessage::new_from_safe("Can't fetch external ingress hostname.".to_string()),
-                ));
-            }
-        }
-
-        let router_default_domain_hash = crate::crypto::to_sha1_truncate_16(self.default_domain.as_str());
-
         // TODO(benjaminch): remove this one once subdomain migration has been done, CF ENG-1302
         // If domain contains cluster id in it, it means cluster has already declared wildcard and there is no need to declare app domain since it can use the cluster wildcard.
         let router_should_declare_domain_to_external_dns = !self
             .default_domain
-            .contains(format!(".{}.", self.context().cluster_id()).as_str());
+            .contains(format!(".{}.", target.kubernetes.id()).as_str());
 
         let tls_domain = kubernetes.dns_provider().domain().wildcarded();
         context.insert("router_tls_domain", tls_domain.to_string().as_str());
         context.insert("router_default_domain", self.default_domain.as_str());
-        context.insert("router_default_domain_hash", router_default_domain_hash.as_str());
         context.insert(
             "router_should_declare_domain_to_external_dns",
             &router_should_declare_domain_to_external_dns,
         );
         context.insert("custom_domains", &custom_domain_data_templates);
-        context.insert("routes", &route_data_templates);
+        context.insert("hosts", &hosts);
         context.insert("spec_acme_email", "tls@qovery.com"); // TODO CHANGE ME
         context.insert("metadata_annotations_cert_manager_cluster_issuer", "letsencrypt-qovery");
 
@@ -251,11 +230,7 @@ impl<T: CloudProvider> Router<T> {
     }
 
     pub fn helm_chart_dir(&self) -> String {
-        format!(
-            "{}/{}/charts/q-ingress-tls",
-            self.context.lib_root_dir(),
-            T::lib_directory_name()
-        )
+        format!("{}/common/charts/q-ingress-tls", self.context.lib_root_dir(),)
     }
 }
 

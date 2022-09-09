@@ -30,6 +30,8 @@ pub struct ClusterAdvancedSettings {
     pub pleco_resources_ttl: i32,
     #[serde(alias = "loki.log_retention_in_week")]
     pub loki_log_retention_in_week: u32,
+    #[serde(alias = "aws.iam.admin_group")]
+    pub aws_iam_user_mapper_group_name: String,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -39,6 +41,7 @@ impl Default for ClusterAdvancedSettings {
             registry_image_retention_time_sec: 31536000,
             pleco_resources_ttl: -1,
             loki_log_retention_in_week: 12,
+            aws_iam_user_mapper_group_name: "Admins".to_string(),
         }
     }
 }

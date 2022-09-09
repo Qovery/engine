@@ -272,8 +272,8 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
                     id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
                     port: 3000,
-                    public_port: Some(443),
                     name: None,
+                    is_default: true,
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
                 }];
@@ -337,7 +337,7 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
                     id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
                     port: 3000,
-                    public_port: Some(443),
+                    is_default: true,
                     name: None,
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
@@ -393,7 +393,14 @@ fn deploy_a_working_environment_with_domain() {
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
-        let environment = helpers::environment::working_minimal_environment(&context);
+        let environment = helpers::environment::working_minimal_environment_with_router(
+            &context,
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .as_str(),
+        );
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -1020,7 +1027,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
                     long_id: Uuid::new_v4(),
                     id: Uuid::new_v4().to_string(),
                     port: 8080,
-                    public_port: Some(443),
+                    is_default: true,
                     name: Some("http".to_string()),
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
@@ -1029,7 +1036,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
                     long_id: Uuid::new_v4(),
                     id: Uuid::new_v4().to_string(),
                     port: 8081,
-                    public_port: Some(443),
+                    is_default: false,
                     name: Some("grpc".to_string()),
                     publicly_accessible: false,
                     protocol: Protocol::HTTP,
@@ -1107,7 +1114,7 @@ fn deploy_container_with_router_on_aws_eks() {
                     long_id: Uuid::new_v4(),
                     id: Uuid::new_v4().to_string(),
                     port: 80,
-                    public_port: Some(443),
+                    is_default: true,
                     name: Some("http".to_string()),
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
@@ -1116,7 +1123,7 @@ fn deploy_container_with_router_on_aws_eks() {
                     long_id: Uuid::new_v4(),
                     id: Uuid::new_v4().to_string(),
                     port: 8081,
-                    public_port: Some(443),
+                    is_default: false,
                     name: Some("grpc".to_string()),
                     publicly_accessible: false,
                     protocol: Protocol::HTTP,

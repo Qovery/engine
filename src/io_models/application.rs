@@ -34,7 +34,7 @@ pub struct Port {
     pub id: String,
     pub long_id: Uuid,
     pub port: u16,
-    pub public_port: Option<u16>,
+    pub is_default: bool,
     pub name: Option<String>,
     pub publicly_accessible: bool,
     pub protocol: Protocol,

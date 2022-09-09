@@ -313,7 +313,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                     id: "zdf7d6aad".to_string(),
                     long_id: Default::default(),
                     port: 1234,
-                    public_port: Some(443),
+                    is_default: true,
                     name: None,
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
