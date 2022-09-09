@@ -55,6 +55,7 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
         secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
         Arc::new(Box::new(NoOpProgressListener {})),
         logger,
+        hashmap! {},
     )
     .unwrap()
 }

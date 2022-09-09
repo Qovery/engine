@@ -41,6 +41,7 @@ pub struct ECR {
     registry_info: Option<ContainerRegistryInfo>,
     listeners: Listeners,
     logger: Box<dyn Logger>,
+    tags: HashMap<String, String>,
 }
 
 impl ECR {
@@ -54,6 +55,7 @@ impl ECR {
         region: &str,
         listener: Listener,
         logger: Box<dyn Logger>,
+        tags: HashMap<String, String>,
     ) -> Result<Self, ContainerRegistryError> {
         let mut cr = ECR {
             context,
@@ -66,6 +68,7 @@ impl ECR {
             registry_info: None,
             listeners: vec![listener],
             logger,
+            tags,
         };
 
         let credentials = Self::get_credentials(&cr.ecr_client())?;
@@ -200,7 +203,6 @@ impl ECR {
         &self,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
-        tags: Option<HashMap<String, String>>,
     ) -> Result<Repository, ContainerRegistryError> {
         let container_registry_request = DescribeRepositoriesRequest {
             repository_names: Some(vec![repository_name.to_string()]),
@@ -299,12 +301,12 @@ impl ECR {
                         return Err(e);
                     }
 
-                    if let (Some(tags_to_apply), Some(repository_arn)) = (tags, &repos[0].repository_arn) {
+                    if let Some(repository_arn) = &repos[0].repository_arn {
                         let mut ecr_tags: Vec<Tag> = vec![];
-                        for (key, value) in tags_to_apply {
+                        for (key, value) in &self.tags {
                             ecr_tags.push(Tag {
-                                key: Some(key),
-                                value: Some(value),
+                                key: Some(key.to_string()),
+                                value: Some(value.to_string()),
                             })
                         }
                         let trr = TagResourceRequest {
@@ -338,7 +340,6 @@ impl ECR {
         &self,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
-        tags: Option<HashMap<String, String>>,
     ) -> Result<Repository, ContainerRegistryError> {
         self.log_info(format!("🗂️ Provisioning container repository {}", repository_name));
 
@@ -348,7 +349,7 @@ impl ECR {
             return Ok(repo);
         }
 
-        self.create_repository(repository_name, image_retention_time_in_seconds, tags)
+        self.create_repository(repository_name, image_retention_time_in_seconds)
     }
 
     pub fn get_credentials(ecr_client: &EcrClient) -> Result<ECRCredentials, ContainerRegistryError> {
@@ -429,9 +430,8 @@ impl ContainerRegistry for ECR {
         &self,
         name: &str,
         image_retention_time_in_seconds: u32,
-        tags: Option<HashMap<String, String>>,
     ) -> Result<(), ContainerRegistryError> {
-        let _ = self.get_or_create_repository(name, image_retention_time_in_seconds, tags)?;
+        let _ = self.get_or_create_repository(name, image_retention_time_in_seconds)?;
         Ok(())
     }
 

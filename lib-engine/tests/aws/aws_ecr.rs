@@ -24,6 +24,7 @@ fn create_ecr_repository_with_tags() {
         &secrets.AWS_DEFAULT_REGION.expect("Unable to get default region"),
         Arc::new(Box::new(NoOpProgressListener {})),
         logger(),
+        hashmap! {"ttl".to_string() => 3600.to_string()},
     )
     .unwrap();
 
@@ -31,11 +32,7 @@ fn create_ecr_repository_with_tags() {
     assert!(cr.is_ok());
 
     let repo_name = format!("test-{}", Uuid::new_v4());
-    let repo_creation = container_registry.create_repository(
-        repo_name.as_str(),
-        3600,
-        Some(hashmap! {"ttl".to_string() => 3600.to_string()}),
-    );
+    let repo_creation = container_registry.create_repository(repo_name.as_str(), 3600);
     assert!(repo_creation.is_ok());
 
     let result = block_on(

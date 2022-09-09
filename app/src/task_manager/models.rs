@@ -430,6 +430,7 @@ impl ContainerRegistry {
                     self.options.region.as_ref()?.as_str(),
                     listener,
                     logger,
+                    HashMap::new(),
                 )
                 .ok()?,
             )),
