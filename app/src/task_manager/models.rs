@@ -86,9 +86,22 @@ impl EngineRequest {
         cloud_provider.add_listener(progress_listener.clone());
         let cloud_provider = Arc::new(cloud_provider);
 
+        let mut tags = (&self
+            .cloud_provider
+            .kubernetes
+            .advanced_settings
+            .cloud_provider_container_registry_tags)
+            .clone();
+        if self.cloud_provider.kubernetes.advanced_settings.pleco_resources_ttl > -1 {
+            tags.insert(
+                "ttl".to_string(),
+                (&self.cloud_provider.kubernetes.advanced_settings.pleco_resources_ttl).to_string(),
+            );
+        };
+
         let container_registry = self
             .container_registry
-            .to_engine_container_registry(context.clone(), progress_listener.clone(), logger.clone())
+            .to_engine_container_registry(context.clone(), progress_listener.clone(), logger.clone(), tags)
             .ok_or_else(|| {
                 let event_details = self.create_event_details();
                 IoEngineError::new_error_on_container_registry_information(
@@ -417,6 +430,7 @@ impl ContainerRegistry {
         context: Context,
         listener: Listener,
         logger: Box<dyn Logger>,
+        tags: HashMap<String, String>,
     ) -> Option<Box<dyn qovery_engine::container_registry::ContainerRegistry>> {
         match self.kind {
             qovery_engine::container_registry::Kind::Ecr => Some(Box::new(
@@ -430,7 +444,7 @@ impl ContainerRegistry {
                     self.options.region.as_ref()?.as_str(),
                     listener,
                     logger,
-                    HashMap::new(),
+                    tags,
                 )
                 .ok()?,
             )),
