@@ -1,7 +1,7 @@
 use crate::build_platform::BuildError;
 use crate::cloud_provider::environment::Environment;
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::rc::Rc;
 use uuid::Uuid;
 
@@ -180,17 +180,6 @@ impl<'a> Transaction<'a> {
                 continue;
             }
 
-            let mut tags: HashMap<String, String> = HashMap::new();
-            if self.engine.kubernetes().advanced_settings().pleco_resources_ttl > -1 {
-                tags.insert(
-                    "ttl".to_string(),
-                    self.engine
-                        .kubernetes()
-                        .advanced_settings()
-                        .pleco_resources_ttl
-                        .to_string(),
-                );
-            }
             // Be sure that our repository exist before trying to pull/push images from it
             self.engine
                 .container_registry()

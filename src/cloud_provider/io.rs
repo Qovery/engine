@@ -1,5 +1,6 @@
 use crate::cloud_provider::Kind as KindModel;
 use serde_derive::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -32,6 +33,8 @@ pub struct ClusterAdvancedSettings {
     pub loki_log_retention_in_week: u32,
     #[serde(alias = "aws.iam.admin_group")]
     pub aws_iam_user_mapper_group_name: String,
+    #[serde(alias = "cloud_provider.container_registry.tags")]
+    pub cloud_provider_container_registry_tags: HashMap<String, String>,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -42,6 +45,7 @@ impl Default for ClusterAdvancedSettings {
             pleco_resources_ttl: -1,
             loki_log_retention_in_week: 12,
             aws_iam_user_mapper_group_name: "Admins".to_string(),
+            cloud_provider_container_registry_tags: HashMap::new(),
         }
     }
 }
