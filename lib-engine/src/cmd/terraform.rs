@@ -674,7 +674,7 @@ pub fn terraform_plan(root_dir: &str) -> Result<Vec<String>, TerraformError> {
 
 fn terraform_apply(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     let terraform_args = vec!["apply", "-no-color", "-auto-approve", "tf_plan"];
-    let result = retry::retry(Fixed::from_millis(3000).take(3), || {
+    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // ensure we do plan before apply otherwise apply could crash.
         if let Err(e) = terraform_plan(root_dir) {
             return OperationResult::Retry(e);
@@ -711,7 +711,7 @@ pub fn terraform_apply_with_tf_workers_resources(
         terraform_args_string.push(format!("-target={}", x));
     }
 
-    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
+    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // terraform plan first
         if let Err(err) = terraform_plan(root_dir) {
             return OperationResult::Retry(err);
@@ -750,7 +750,7 @@ pub fn terraform_state_rm_entry(root_dir: &str, entry: &str) -> Result<Vec<Strin
 pub fn terraform_destroy(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     // terraform destroy
     let terraform_args = vec!["destroy", "-no-color", "-auto-approve"];
-    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
+    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // terraform plan first
         if let Err(err) = terraform_plan(root_dir) {
             return OperationResult::Retry(err);
