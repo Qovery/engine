@@ -16,12 +16,12 @@ metadata:
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
   annotations:
+    kubernetes.io/tls-acme: "true"
     {%- if router_should_declare_domain_to_external_dns == true %}
     external-dns.alpha.kubernetes.io/ttl: "300"
     {%- else %}
     external-dns.alpha.kubernetes.io/exclude: "true" # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
     {%- endif %}
-    kubernetes.io/tls-acme: "true"
     {%- if custom_domains|length > 0 %}
     cert-manager.io/issuer: {{ id }}
     {%- else %}
