@@ -172,6 +172,18 @@ impl TerraformError {
                 }
             }
         }
+        if let Ok(aws_service_not_activated_re) = Regex::new(
+            r"Error creating (?P<service_type>[\w?\s]+): OptInRequired: You are not subscribed to this service",
+        ) {
+            if let Some(cap) = aws_service_not_activated_re.captures(raw_terraform_error_output.as_str()) {
+                if let Some(service_type) = cap.name("service_type").map(|e| e.as_str()) {
+                    return TerraformError::ServiceNotActivatedOptInRequired {
+                        service_type: service_type.to_string(),
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
         if let Ok(aws_quotas_exceeded_re) = Regex::new(
             r"You have exceeded the limit of (?P<resource_type>[\w?\s]+) allowed on your AWS account \((?P<max_resource_count>\d+) by default\)",
         ) {
@@ -1203,6 +1215,13 @@ terraform {
                 expected_terraform_error: TerraformError::ServiceNotActivatedOptInRequired {
                     raw_message: "Releasing state lock. This may take a few moments...  Error: Error fetching Availability Zones: OptInRequired: You are not subscribed to this service. Please go to http://aws.amazon.com to subscribe. \tstatus code: 401, request id: e34e6aa4-bb37-44fe-a68c-b4859f3f6de9".to_string(),
                     service_type: "Availability Zones".to_string(),
+                },
+            },
+            TestCase {
+                input_raw_message: "Error: Error creating VPC: OptInRequired: You are not subscribed to this service. Please go to http://aws.amazon.com to subscribe.",
+                expected_terraform_error: TerraformError::ServiceNotActivatedOptInRequired {
+                    raw_message: "Error: Error creating VPC: OptInRequired: You are not subscribed to this service. Please go to http://aws.amazon.com to subscribe.".to_string(),
+                    service_type: "VPC".to_string(),
                 },
             },
             TestCase {
