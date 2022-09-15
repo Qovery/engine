@@ -615,6 +615,8 @@ pub enum Tag {
     TerraformUnknownError,
     /// TerraformInvalidCredentials: terraform invalid cloud provider credentials
     TerraformInvalidCredentials,
+    /// TerraformAccountBlockedByProvider: terraform cannot perform action because account has been blocked by cloud provider.
+    TerraformAccountBlockedByProvider,
     /// TerraformMultipleInterruptsReceived: terraform received multiple interrupts
     TerraformMultipleInterruptsReceived,
     /// TerraformNotEnoughPermissions: terraform issue due to user not having enough permissions to perform action on the resource
@@ -2281,6 +2283,21 @@ impl EngineError {
                 None,
                 Some(DEFAULT_HINT_MESSAGE.to_string()),
             ),
+            TerraformError::AccountBlockedByProvider { .. } => {
+                let hint_message = match event_details.provider_kind() {
+                   Some(Kind::Aws) => Some("This AWS account is currently blocked and not recognized as a valid account. Please contact aws-verification@amazon.com directly to get more details. Maybe you are not allowed to use your free tier in this region? Maybe you need to provide billing info? ".to_string()),
+                    _ => Some("This account is currently blocked by your cloud provider, please contact them directly.".to_string()),
+                };
+
+                EngineError::new(
+                    event_details,
+                    Tag::TerraformAccountBlockedByProvider,
+                    terraform_error.to_safe_message(),
+                    Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
+                    Some(Url::parse("https://hub.qovery.com/docs/using-qovery/troubleshoot/#my-cloud-account-has-been-blocked-what-should-i-do").expect("Error while trying to parse error link helper for `Tag::TerraformAccountBlockedByProvider`, URL is not valid.")),
+                    hint_message,
+                )
+            },
             TerraformError::ConfigFileNotFound { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformConfigFileNotFound,
