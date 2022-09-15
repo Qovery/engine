@@ -48,6 +48,10 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    AccountBlockedByProvider {
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
     QuotasExceeded {
         sub_type: QuotaExceededError,
         /// raw_message: raw Terraform error message with all details.
@@ -132,6 +136,14 @@ impl TerraformError {
         // TODO(benjaminch): this logic might probably not live here on the long run.
         // There is some cloud providers specific errors and it would make more sense to delegate logic
         // identifying those errors (trait implementation) on cloud provider side next to their kubernetes implementation.
+
+        // Cloud account issue
+        // AWS
+        if raw_terraform_error_output.contains("Blocked: This account is currently blocked") {
+            return TerraformError::AccountBlockedByProvider {
+                raw_message: raw_terraform_error_output,
+            };
+        }
 
         // Quotas issues
         // SCW
@@ -404,7 +416,8 @@ impl TerraformError {
                 "Unknown error while performing Terraform command (`terraform {}`)",
                 terraform_args.join(" "),
             ),
-            TerraformError::MultipleInterruptsReceived { .. } => "Multiple interrupts received, stopping immediately..".to_string(),
+            TerraformError::MultipleInterruptsReceived { .. } => "Multiple interrupts received, stopping immediately.".to_string(),
+            TerraformError::AccountBlockedByProvider { .. } => "Yout account has been blocked by cloud provider.".to_string(),
             TerraformError::InvalidCredentials { .. } => "Invalid credentials.".to_string(),
             TerraformError::NotEnoughPermissions {
                 resource_type_and_name,
@@ -500,6 +513,9 @@ impl Display for TerraformError {
                 format!("{}, here is the error:\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::MultipleInterruptsReceived { raw_message, .. } => {
+                format!("{}, here is the error:\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::AccountBlockedByProvider { raw_message, .. } => {
                 format!("{}, here is the error:\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::InvalidCredentials { raw_message } => {
@@ -1414,5 +1430,18 @@ terraform {
 
         // validate:
         assert_eq!(TerraformError::MultipleInterruptsReceived { raw_message }, result);
+    }
+
+    #[test]
+    fn test_terraform_error_aws_account_blocked() {
+        // setup:
+        let raw_message = "Error: creating EC2 Instance: Blocked: This account is currently blocked and not recognized as a valid account. Please contact aws-verification@amazon.com if you have questions."
+            .to_string();
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
+
+        // validate:
+        assert_eq!(TerraformError::AccountBlockedByProvider { raw_message }, result);
     }
 }

@@ -173,6 +173,7 @@ pub enum Tag {
     TerraformQoveryConfigMismatch,
     TerraformInstanceTypeDoesntExist,
     TerraformMultipleInterruptsReceived,
+    TerraformAccountBlockedByProvider,
     CloudProviderGetLoadBalancer,
     CloudProviderGetLoadBalancerTags,
     CloudProviderDeleteLoadBalancer,
@@ -182,6 +183,7 @@ impl From<errors::Tag> for Tag {
     fn from(tag: errors::Tag) -> Self {
         match tag {
             errors::Tag::Unknown => Tag::Unknown,
+            errors::Tag::TerraformAccountBlockedByProvider => Tag::TerraformAccountBlockedByProvider,
             errors::Tag::InvalidEngineApiInputCannotBeDeserialized => Tag::InvalidEngineApiInputCannotBeDeserialized,
             errors::Tag::UnsupportedInstanceType => Tag::UnsupportedInstanceType,
             errors::Tag::CannotRetrieveClusterConfigFile => Tag::CannotRetrieveClusterConfigFile,
