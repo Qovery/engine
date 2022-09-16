@@ -63,6 +63,7 @@ where
         // This is required only to avoid to manage rotating credentials
         (loggers.send_progress)("🪞 Mirroring image to private cluster registry to ensure reproducibility".to_string());
         let registry_info = target.container_registry.registry_info();
+
         target
             .container_registry
             .create_repository(

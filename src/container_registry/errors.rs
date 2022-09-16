@@ -2,6 +2,8 @@ use thiserror::Error;
 
 #[derive(Clone, Error, Debug, PartialEq, Eq)]
 pub enum ContainerRegistryError {
+    #[error("Unknown error.")]
+    Unknown { raw_error_message: String },
     #[error("Invalid credentials error.")]
     InvalidCredentials,
     #[error("Cannot get credentials error.")]
@@ -61,6 +63,15 @@ pub enum ContainerRegistryError {
     },
     #[error("Cannot set lifecycle policy for repository `{repository_name:?}` in registry `{registry_name:?}`: {raw_error_message:?}.")]
     CannotSetRepositoryLifecyclePolicy {
+        registry_name: String,
+        repository_name: String,
+        raw_error_message: String,
+    },
+
+    #[error(
+        "Cannot set tags for repository `{repository_name:?}` in registry `{registry_name:?}`: {raw_error_message:?}."
+    )]
+    CannotSetRepositoryTags {
         registry_name: String,
         repository_name: String,
         raw_error_message: String,

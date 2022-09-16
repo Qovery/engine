@@ -48,6 +48,10 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    AccountBlockedByProvider {
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
     QuotasExceeded {
         sub_type: QuotaExceededError,
         /// raw_message: raw Terraform error message with all details.
@@ -116,7 +120,8 @@ pub enum TerraformError {
         raw_message: String,
     },
     InstanceTypeDoesntExist {
-        instance_type: String,
+        /// Providers doesn't always provide back with instance type requested ... so might be None
+        instance_type: Option<String>,
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
@@ -131,6 +136,14 @@ impl TerraformError {
         // TODO(benjaminch): this logic might probably not live here on the long run.
         // There is some cloud providers specific errors and it would make more sense to delegate logic
         // identifying those errors (trait implementation) on cloud provider side next to their kubernetes implementation.
+
+        // Cloud account issue
+        // AWS
+        if raw_terraform_error_output.contains("Blocked: This account is currently blocked") {
+            return TerraformError::AccountBlockedByProvider {
+                raw_message: raw_terraform_error_output,
+            };
+        }
 
         // Quotas issues
         // SCW
@@ -161,6 +174,18 @@ impl TerraformError {
         }
         if let Ok(aws_service_not_activated_re) = Regex::new(
             r"Error fetching (?P<service_type>[\w?\s]+): OptInRequired: You are not subscribed to this service",
+        ) {
+            if let Some(cap) = aws_service_not_activated_re.captures(raw_terraform_error_output.as_str()) {
+                if let Some(service_type) = cap.name("service_type").map(|e| e.as_str()) {
+                    return TerraformError::ServiceNotActivatedOptInRequired {
+                        service_type: service_type.to_string(),
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
+        if let Ok(aws_service_not_activated_re) = Regex::new(
+            r"Error creating (?P<service_type>[\w?\s]+): OptInRequired: You are not subscribed to this service",
         ) {
             if let Some(cap) = aws_service_not_activated_re.captures(raw_terraform_error_output.as_str()) {
                 if let Some(service_type) = cap.name("service_type").map(|e| e.as_str()) {
@@ -303,7 +328,7 @@ impl TerraformError {
             if let Some(cap) = aws_wrong_instance_type_re.captures(raw_terraform_error_output.as_str()) {
                 if let Some(instance_type) = cap.name("instance_type").map(|e| e.as_str()) {
                     return TerraformError::InstanceTypeDoesntExist {
-                        instance_type: instance_type.to_string(),
+                        instance_type: Some(instance_type.to_string()),
                         raw_message: raw_terraform_error_output.to_string(),
                     };
                 }
@@ -316,11 +341,20 @@ impl TerraformError {
             if let Some(cap) = aws_wrong_instance_type_re.captures(raw_terraform_error_output.as_str()) {
                 if let Some(instance_type) = cap.name("instance_type").map(|e| e.as_str()) {
                     return TerraformError::InstanceTypeDoesntExist {
-                        instance_type: instance_type.to_string(),
+                        instance_type: Some(instance_type.to_string()),
                         raw_message: raw_terraform_error_output.to_string(),
                     };
                 }
             }
+        }
+        if raw_terraform_error_output.contains(
+            "Error: creating EC2 Instance: Unsupported: The requested configuration is currently not supported",
+        ) {
+            // That's a shame but with the error message, AWS doesn't provide requested instance type, so cannot provide it back in error message.
+            return TerraformError::InstanceTypeDoesntExist {
+                instance_type: None,
+                raw_message: raw_terraform_error_output,
+            };
         }
 
         // SCW
@@ -382,7 +416,8 @@ impl TerraformError {
                 "Unknown error while performing Terraform command (`terraform {}`)",
                 terraform_args.join(" "),
             ),
-            TerraformError::MultipleInterruptsReceived { .. } => "Multiple interrupts received, stopping immediately..".to_string(),
+            TerraformError::MultipleInterruptsReceived { .. } => "Multiple interrupts received, stopping immediately.".to_string(),
+            TerraformError::AccountBlockedByProvider { .. } => "Yout account has been blocked by cloud provider.".to_string(),
             TerraformError::InvalidCredentials { .. } => "Invalid credentials.".to_string(),
             TerraformError::NotEnoughPermissions {
                 resource_type_and_name,
@@ -463,7 +498,10 @@ impl TerraformError {
                 resource_kind,
                 raw_message,
             } => format!("Error, resource {}:{} was expected to be in another state. It happens when changes have been done Cloud provider side without Qovery. You need to fix it manually: {}", resource_type, resource_kind, raw_message),
-            TerraformError::InstanceTypeDoesntExist { instance_type, ..} => format!("Error, instance type `{}` doesn't exist in cluster region.", instance_type)
+            TerraformError::InstanceTypeDoesntExist { instance_type, ..} => format!("Error, requested instance type{} doesn't exist in cluster region.", match instance_type {
+                Some(instance_type) => format!(" `{}`", instance_type),
+                None => "".to_string(),
+            })
         }
     }
 }
@@ -475,6 +513,9 @@ impl Display for TerraformError {
                 format!("{}, here is the error:\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::MultipleInterruptsReceived { raw_message, .. } => {
+                format!("{}, here is the error:\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::AccountBlockedByProvider { raw_message, .. } => {
                 format!("{}, here is the error:\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::InvalidCredentials { raw_message } => {
@@ -674,7 +715,7 @@ pub fn terraform_plan(root_dir: &str) -> Result<Vec<String>, TerraformError> {
 
 fn terraform_apply(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     let terraform_args = vec!["apply", "-no-color", "-auto-approve", "tf_plan"];
-    let result = retry::retry(Fixed::from_millis(3000).take(3), || {
+    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // ensure we do plan before apply otherwise apply could crash.
         if let Err(e) = terraform_plan(root_dir) {
             return OperationResult::Retry(e);
@@ -711,7 +752,7 @@ pub fn terraform_apply_with_tf_workers_resources(
         terraform_args_string.push(format!("-target={}", x));
     }
 
-    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
+    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // terraform plan first
         if let Err(err) = terraform_plan(root_dir) {
             return OperationResult::Retry(err);
@@ -750,7 +791,7 @@ pub fn terraform_state_rm_entry(root_dir: &str, entry: &str) -> Result<Vec<Strin
 pub fn terraform_destroy(root_dir: &str) -> Result<Vec<String>, TerraformError> {
     // terraform destroy
     let terraform_args = vec!["destroy", "-no-color", "-auto-approve"];
-    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
+    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // terraform plan first
         if let Err(err) = terraform_plan(root_dir) {
             return OperationResult::Retry(err);
@@ -1052,7 +1093,7 @@ in the dependency lock file
         // verify:
         assert_eq!(
             Err(TerraformError::InstanceTypeDoesntExist {
-                instance_type: "wrong-instance-type".to_string(),
+                instance_type: Some("wrong-instance-type".to_string()),
                 raw_message: raw_error_string.to_string(),
             }),
             result
@@ -1190,6 +1231,13 @@ terraform {
                 expected_terraform_error: TerraformError::ServiceNotActivatedOptInRequired {
                     raw_message: "Releasing state lock. This may take a few moments...  Error: Error fetching Availability Zones: OptInRequired: You are not subscribed to this service. Please go to http://aws.amazon.com to subscribe. \tstatus code: 401, request id: e34e6aa4-bb37-44fe-a68c-b4859f3f6de9".to_string(),
                     service_type: "Availability Zones".to_string(),
+                },
+            },
+            TestCase {
+                input_raw_message: "Error: Error creating VPC: OptInRequired: You are not subscribed to this service. Please go to http://aws.amazon.com to subscribe.",
+                expected_terraform_error: TerraformError::ServiceNotActivatedOptInRequired {
+                    raw_message: "Error: Error creating VPC: OptInRequired: You are not subscribed to this service. Please go to http://aws.amazon.com to subscribe.".to_string(),
+                    service_type: "VPC".to_string(),
                 },
             },
             TestCase {
@@ -1332,7 +1380,7 @@ terraform {
                 input_raw_message:
                 "InvalidParameterException: The following supplied instance types do not exist: [t3a.medium]",
                 expected_terraform_error: TerraformError::InstanceTypeDoesntExist {
-                    instance_type: "t3a.medium".to_string(),
+                    instance_type: Some("t3a.medium".to_string()),
                     raw_message: "InvalidParameterException: The following supplied instance types do not exist: [t3a.medium]".to_string(),
                 },
             },
@@ -1340,8 +1388,16 @@ terraform {
                 input_raw_message:
                 "Error: creating EC2 Instance: InvalidParameterValue: Invalid value 'wrong-instance-type' for InstanceType",
                 expected_terraform_error: TerraformError::InstanceTypeDoesntExist {
-                    instance_type: "wrong-instance-type".to_string(),
+                    instance_type: Some("wrong-instance-type".to_string()),
                     raw_message: "Error: creating EC2 Instance: InvalidParameterValue: Invalid value 'wrong-instance-type' for InstanceType".to_string(),
+                },
+            },
+            TestCase {
+                input_raw_message:
+                "Error: creating EC2 Instance: Unsupported: The requested configuration is currently not supported.",
+                expected_terraform_error: TerraformError::InstanceTypeDoesntExist {
+                    instance_type: None,
+                    raw_message: "Error: creating EC2 Instance: Unsupported: The requested configuration is currently not supported.".to_string(),
                 },
             },
         ];
@@ -1374,5 +1430,18 @@ terraform {
 
         // validate:
         assert_eq!(TerraformError::MultipleInterruptsReceived { raw_message }, result);
+    }
+
+    #[test]
+    fn test_terraform_error_aws_account_blocked() {
+        // setup:
+        let raw_message = "Error: creating EC2 Instance: Blocked: This account is currently blocked and not recognized as a valid account. Please contact aws-verification@amazon.com if you have questions."
+            .to_string();
+
+        // execute:
+        let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
+
+        // validate:
+        assert_eq!(TerraformError::AccountBlockedByProvider { raw_message }, result);
     }
 }

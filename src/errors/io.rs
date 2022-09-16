@@ -121,6 +121,8 @@ pub enum Tag {
     ContainerRegistryRegistryDoesntExist,
     ContainerRegistryInvalidCredentials,
     ContainerRegistryCannotLinkRegistryToCluster,
+    ContainerRegistryCannotSetRepositoryTags,
+    ContainerRegistryUnknownError,
     ObjectStorageInvalidBucketName,
     ObjectStorageCannotEmptyBucket,
     ObjectStorageCannotTagBucket,
@@ -171,6 +173,7 @@ pub enum Tag {
     TerraformQoveryConfigMismatch,
     TerraformInstanceTypeDoesntExist,
     TerraformMultipleInterruptsReceived,
+    TerraformAccountBlockedByProvider,
     CloudProviderGetLoadBalancer,
     CloudProviderGetLoadBalancerTags,
     CloudProviderDeleteLoadBalancer,
@@ -180,6 +183,7 @@ impl From<errors::Tag> for Tag {
     fn from(tag: errors::Tag) -> Self {
         match tag {
             errors::Tag::Unknown => Tag::Unknown,
+            errors::Tag::TerraformAccountBlockedByProvider => Tag::TerraformAccountBlockedByProvider,
             errors::Tag::InvalidEngineApiInputCannotBeDeserialized => Tag::InvalidEngineApiInputCannotBeDeserialized,
             errors::Tag::UnsupportedInstanceType => Tag::UnsupportedInstanceType,
             errors::Tag::CannotRetrieveClusterConfigFile => Tag::CannotRetrieveClusterConfigFile,
@@ -286,6 +290,8 @@ impl From<errors::Tag> for Tag {
                 Tag::ContainerRegistryCannotLinkRegistryToCluster
             }
             errors::Tag::ContainerRegistryCannotDeleteRegistry => Tag::ContainerRegistryCannotDeleteRegistry,
+            errors::Tag::ContainerRegistryCannotSetRepositoryTags => Tag::ContainerRegistryCannotSetRepositoryTags,
+            errors::Tag::ContainerRegistryUnknownError => Tag::ContainerRegistryUnknownError,
             errors::Tag::BuilderDockerCannotListImages => Tag::BuilderDockerCannotListImages,
             errors::Tag::DockerError => Tag::DockerError,
             errors::Tag::ObjectStorageInvalidBucketName => Tag::ObjectStorageInvalidBucketName,

@@ -24,7 +24,7 @@ use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 
 use crate::helpers::common::{Cluster, ClusterDomain};
-use crate::helpers::dns::dns_provider_cloudflare;
+use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
 use crate::helpers::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 
@@ -105,7 +105,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
 
         // use Scaleway
         let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(Self::cloud_provider(context, kubernetes_kind));
-        let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_cloudflare(context, cluster_domain));
+        let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_qoverydns(context, cluster_domain));
 
         let cluster = get_environment_test_kubernetes(
             context,
