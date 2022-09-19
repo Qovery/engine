@@ -44,17 +44,14 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
+        let cluster_id = secrets
+            .SCALEWAY_TEST_CLUSTER_LONG_ID
+            .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+            cluster_id,
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
@@ -99,17 +96,14 @@ fn deploy_an_environment_with_db_and_pause_it() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
+        let cluster_id = secrets
+            .SCALEWAY_TEST_CLUSTER_LONG_ID
+            .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+            cluster_id,
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
@@ -176,18 +170,16 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
+        let cluster_id = secrets
+            .SCALEWAY_TEST_CLUSTER_LONG_ID
+            .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+            cluster_id,
         );
+
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
         let engine_config_for_deletion = scw_default_engine_config(&context_for_deletion, logger.clone());
@@ -248,18 +240,16 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
+        let cluster_id = secrets
+            .SCALEWAY_TEST_CLUSTER_LONG_ID
+            .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
-            secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+            cluster_id,
         );
+
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_redeploy = context.clone_not_same_execution_id();
         let engine_config_for_redeploy = scw_default_engine_config(&context_for_redeploy, logger.clone());
@@ -386,17 +376,13 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
     let secrets = FuncTestsSecrets::new();
     let cluster_id = secrets
-        .SCALEWAY_TEST_CLUSTER_ID
-        .as_ref()
-        .expect("SCALEWAY_TEST_CLUSTER_ID")
-        .to_string();
+        .SCALEWAY_TEST_CLUSTER_LONG_ID
+        .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
     let context = context(
         secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        cluster_id.as_str(),
+            .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+            .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+        cluster_id,
     );
     let environment = database_test_environment(&context);
 
@@ -413,7 +399,7 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
             database_mode,
             is_public,
             ClusterDomain::Default {
-                cluster_id: cluster_id.to_string(),
+                cluster_id: to_short_id(&cluster_id),
             },
             None,
         )
@@ -570,17 +556,13 @@ fn public_postgresql_v13_deploy_a_working_prod_environment() {
 fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
     let secrets = FuncTestsSecrets::new();
     let cluster_id = secrets
-        .SCALEWAY_TEST_CLUSTER_ID
-        .as_ref()
-        .expect("SCALEWAY_TEST_CLUSTER_ID")
-        .to_string();
+        .SCALEWAY_TEST_CLUSTER_LONG_ID
+        .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
     let context = context(
         secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        cluster_id.as_str(),
+            .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+            .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+        cluster_id,
     );
     let environment = database_test_environment(&context);
 
@@ -597,7 +579,7 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
             database_mode,
             is_public,
             ClusterDomain::Default {
-                cluster_id: cluster_id.to_string(),
+                cluster_id: to_short_id(&cluster_id),
             },
             None,
         )
@@ -674,17 +656,13 @@ fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
 fn test_mysql_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
     let secrets = FuncTestsSecrets::new();
     let cluster_id = secrets
-        .SCALEWAY_TEST_CLUSTER_ID
-        .as_ref()
-        .expect("SCALEWAY_TEST_CLUSTER_ID")
-        .to_string();
+        .SCALEWAY_TEST_CLUSTER_LONG_ID
+        .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
     let context = context(
         secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        cluster_id.as_str(),
+            .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+            .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+        cluster_id,
     );
     let environment = database_test_environment(&context);
 
@@ -701,7 +679,7 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
             database_mode,
             is_public,
             ClusterDomain::Default {
-                cluster_id: cluster_id.to_string(),
+                cluster_id: to_short_id(&cluster_id),
             },
             None,
         )
@@ -765,17 +743,13 @@ fn public_mysql_v8_deploy_a_working_prod_environment() {
 fn test_redis_configuration(version: &str, test_name: &str, database_mode: DatabaseMode, is_public: bool) {
     let secrets = FuncTestsSecrets::new();
     let cluster_id = secrets
-        .SCALEWAY_TEST_CLUSTER_ID
-        .as_ref()
-        .expect("SCALEWAY_TEST_CLUSTER_ID")
-        .to_string();
+        .SCALEWAY_TEST_CLUSTER_LONG_ID
+        .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
     let context = context(
         secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-            .as_str(),
-        cluster_id.as_str(),
+            .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+            .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+        cluster_id,
     );
     let environment = database_test_environment(&context);
 
@@ -792,7 +766,7 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
             database_mode,
             is_public,
             ClusterDomain::Default {
-                cluster_id: cluster_id.to_string(),
+                cluster_id: to_short_id(&cluster_id),
             },
             None,
         )

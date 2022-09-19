@@ -133,9 +133,9 @@ impl DOKS {
                 let err = EngineError::new_unsupported_instance_type(
                     EventDetails::new(
                         Some(cloud_provider.kind()),
-                        QoveryIdentifier::new_from_long_id(context.organization_id().to_string()),
-                        QoveryIdentifier::new_from_long_id(context.cluster_id().to_string()),
-                        QoveryIdentifier::new_from_long_id(context.execution_id().to_string()),
+                        QoveryIdentifier::new(*context.organization_long_id()),
+                        QoveryIdentifier::new(*context.cluster_long_id()),
+                        context.execution_id().to_string(),
                         Some(region.to_string()),
                         Infrastructure(InfrastructureStep::LoadConfiguration),
                         Transmitter::Kubernetes(id, name),
@@ -271,7 +271,7 @@ impl DOKS {
         // DOKS
         context.insert("test_cluster", &self.context.is_test_cluster());
         context.insert("doks_cluster_id", &self.id());
-        context.insert("kubernetes_full_cluster_id", self.context().cluster_id());
+        context.insert("kubernetes_full_cluster_id", self.context().cluster_short_id());
         context.insert("doks_master_name", &self.name());
         context.insert("doks_version", self.get_supported_doks_version(event_details.clone())?.as_str());
         context.insert("do_space_kubeconfig_filename", &self.kubeconfig_file_name());

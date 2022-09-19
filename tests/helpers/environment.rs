@@ -23,7 +23,7 @@ pub fn working_environment(
     let application_id = Uuid::new_v4();
     let application_name = to_short_id(&application_id);
     let router_name = "main".to_string();
-    let application_domain = format!("{}.{}.{}", application_name, context.cluster_id(), test_domain);
+    let application_domain = format!("{}.{}.{}", application_name, context.cluster_short_id(), test_domain);
     let mut req = EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         long_id: application_id,
@@ -227,7 +227,7 @@ pub fn environment_2_app_2_routers_1_psql(
                 long_id: Uuid::new_v4(),
                 name: "main".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_short_id(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -240,7 +240,7 @@ pub fn environment_2_app_2_routers_1_psql(
                 long_id: Uuid::new_v4(),
                 name: "second-router".to_string(),
                 action: Action::Create,
-                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
+                default_domain: format!("{}.{}.{}", generate_id(), context.cluster_short_id(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
                 routes: vec![Route {
@@ -322,7 +322,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             long_id: Uuid::new_v4(),
             name: "main".to_string(),
             action: Action::Create,
-            default_domain: format!("{}.{}.{}", generate_id(), context.cluster_id(), test_domain),
+            default_domain: format!("{}.{}.{}", generate_id(), context.cluster_short_id(), test_domain),
             public_port: 443,
             custom_domains: vec![],
             routes: vec![Route {
@@ -346,7 +346,7 @@ pub fn environment_only_http_server(
     let suffix = generate_id();
     let application_id = Uuid::new_v4();
     let application_name = format!("{}-{}", "mini-http", &suffix);
-    let application_domain = format!("{}.{}.{}", application_name, context.cluster_id(), test_domain);
+    let application_domain = format!("{}.{}.{}", application_name, context.cluster_short_id(), test_domain);
 
     let mut req = EnvironmentRequest {
         execution_id: context.execution_id().to_string(),

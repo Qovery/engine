@@ -692,6 +692,7 @@ mod tests {
     use crate::errors::Tag;
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
+    use uuid::Uuid;
 
     #[test]
     fn test_nodegroup_autoscaling_group() {
@@ -772,7 +773,7 @@ mod tests {
             None,
             QoveryIdentifier::new_random(),
             QoveryIdentifier::new_random(),
-            QoveryIdentifier::new_random(),
+            Uuid::new_v4().to_string(),
             None,
             Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
             Transmitter::Kubernetes("".to_string(), "".to_string()),

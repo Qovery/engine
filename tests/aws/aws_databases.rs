@@ -39,17 +39,14 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
+        let cluster_id = secrets
+            .AWS_TEST_CLUSTER_LONG_ID
+            .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
-            secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            cluster_id,
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
@@ -89,17 +86,14 @@ fn deploy_an_environment_with_db_and_pause_it() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
+        let cluster_id = secrets
+            .AWS_TEST_CLUSTER_LONG_ID
+            .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
-            secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            cluster_id,
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
@@ -154,17 +148,14 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
+        let cluster_id = secrets
+            .AWS_TEST_CLUSTER_LONG_ID
+            .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
-            secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            cluster_id,
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
@@ -226,17 +217,14 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
+        let cluster_id = secrets
+            .AWS_TEST_CLUSTER_LONG_ID
+            .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
-            secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            cluster_id,
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_redeploy = context.clone_not_same_execution_id();
@@ -269,7 +257,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             fqdn: database_host.clone(),
             port: database_port,
             username: database_username.clone(),
-            password: database_password.clone(),
+            password: database_password.to_string(),
             total_cpus: "500m".to_string(),
             total_ram_in_mib: 512,
             disk_size_in_gib: 10,
@@ -301,7 +289,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                      "PG_HOST".to_string() => base64::encode(database_host.clone()),
                      "PG_PORT".to_string() => base64::encode(database_port.to_string()),
                      "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
-                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
+                     "PG_PASSWORD".to_string() => base64::encode(database_password),
                 };
                 app
             })
@@ -351,17 +339,13 @@ pub fn test_postgresql_configuration(
 ) {
     let secrets = FuncTestsSecrets::new();
     let cluster_id = secrets
-        .AWS_TEST_CLUSTER_ID
-        .as_ref()
-        .expect("AWS_TEST_CLUSTER_ID is not set")
-        .to_string();
+        .AWS_TEST_CLUSTER_LONG_ID
+        .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
     let context = context(
         secrets
-            .AWS_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("AWS_TEST_ORGANIZATION_ID is not set")
-            .as_str(),
-        cluster_id.as_str(),
+            .AWS_TEST_ORGANIZATION_LONG_ID
+            .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+        cluster_id,
     );
 
     let environment = helpers::database::database_test_environment(&context);
@@ -396,17 +380,13 @@ pub fn test_postgresql_pause(
 ) {
     let secrets = FuncTestsSecrets::new();
     let cluster_id = secrets
-        .AWS_TEST_CLUSTER_ID
-        .as_ref()
-        .expect("AWS_TEST_CLUSTER_ID is not set")
-        .to_string();
+        .AWS_TEST_CLUSTER_LONG_ID
+        .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
     let context = context(
         secrets
-            .AWS_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("AWS_TEST_ORGANIZATION_ID is not set")
-            .as_str(),
-        cluster_id.as_str(),
+            .AWS_TEST_ORGANIZATION_LONG_ID
+            .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+        cluster_id,
     );
 
     let environment = helpers::database::database_test_environment(&context);
@@ -604,17 +584,13 @@ pub fn test_mongodb_configuration(
 ) {
     let secrets = FuncTestsSecrets::new();
     let cluster_id = secrets
-        .AWS_TEST_CLUSTER_ID
-        .as_ref()
-        .expect("AWS_TEST_CLUSTER_ID is not set")
-        .to_string();
+        .AWS_TEST_CLUSTER_LONG_ID
+        .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
     let context = context(
         secrets
-            .AWS_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("AWS_TEST_ORGANIZATION_ID is not set")
-            .as_str(),
-        cluster_id.as_str(),
+            .AWS_TEST_ORGANIZATION_LONG_ID
+            .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+        cluster_id,
     );
     let environment = helpers::database::database_test_environment(&context);
 
@@ -729,17 +705,13 @@ pub fn test_mysql_configuration(
 ) {
     let secrets = FuncTestsSecrets::new();
     let cluster_id = secrets
-        .AWS_TEST_CLUSTER_ID
-        .as_ref()
-        .expect("AWS_TEST_CLUSTER_ID is not set")
-        .to_string();
+        .AWS_TEST_CLUSTER_LONG_ID
+        .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
     let context = context(
         secrets
-            .AWS_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("AWS_TEST_ORGANIZATION_ID is not set")
-            .as_str(),
-        cluster_id.as_str(),
+            .AWS_TEST_ORGANIZATION_LONG_ID
+            .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+        cluster_id,
     );
     let environment = helpers::database::database_test_environment(&context);
 
@@ -838,17 +810,13 @@ pub fn test_redis_configuration(
 ) {
     let secrets = FuncTestsSecrets::new();
     let cluster_id = secrets
-        .AWS_TEST_CLUSTER_ID
-        .as_ref()
-        .expect("AWS_TEST_CLUSTER_ID is not set")
-        .to_string();
+        .AWS_TEST_CLUSTER_LONG_ID
+        .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
     let context = context(
         secrets
-            .AWS_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("AWS_TEST_ORGANIZATION_ID is not set")
-            .as_str(),
-        cluster_id.as_str(),
+            .AWS_TEST_ORGANIZATION_LONG_ID
+            .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+        cluster_id,
     );
     let environment = helpers::database::database_test_environment(&context);
 

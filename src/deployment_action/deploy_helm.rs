@@ -195,6 +195,7 @@ mod tests {
 
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
+    use uuid::Uuid;
 
     #[test]
     #[named]
@@ -207,9 +208,9 @@ mod tests {
 
         let event_details = EventDetails::new(
             None,
-            QoveryIdentifier::from("puic".to_string()),
-            QoveryIdentifier::from("puic".to_string()),
-            QoveryIdentifier::from("puic".to_string()),
+            QoveryIdentifier::new_random(),
+            QoveryIdentifier::new_random(),
+            Uuid::new_v4().to_string(),
             None,
             Stage::General(GeneralStep::RetrieveClusterConfig),
             Transmitter::SecretManager("sdfsdf".to_string()),

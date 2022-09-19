@@ -197,15 +197,18 @@ pub fn environment_3_apps_3_databases(
                     access_token: "xxx".to_string(),
                     expired_at: Utc::now(),
                 }),
-                storage: vec![Storage {
-                    id: generate_id(),
-                    long_id: Uuid::new_v4(),
-                    name: "photos".to_string(),
-                    storage_type: StorageType::Ssd,
-                    size_in_gib: 10,
-                    mount_point: "/mnt/photos".to_string(),
-                    snapshot_retention_in_days: 0,
-                }],
+                storage: {
+                    let id = Uuid::new_v4();
+                    vec![Storage {
+                        id: to_short_id(&id),
+                        long_id: id,
+                        name: "photos".to_string(),
+                        storage_type: StorageType::Ssd,
+                        size_in_gib: 10,
+                        mount_point: "/mnt/photos".to_string(),
+                        snapshot_retention_in_days: 0,
+                    }]
+                },
                 environment_vars: btreemap! {
                      "PG_DBNAME".to_string() => base64::encode(database_name.clone()),
                      "PG_HOST".to_string() => base64::encode(fqdn.clone()),
@@ -503,7 +506,7 @@ pub fn test_db(
     let database_password = generate_password(database_mode.clone());
     let db_kind_str = db_kind.name().to_string();
     let db_id = generate_id();
-    let database_host = format!("{}-{}", db_id, db_kind_str);
+    let database_host = format!("{}-{}", to_short_id(&db_id), db_kind_str);
     let database_fqdn = format!(
         "{}.{}",
         database_host,
@@ -526,7 +529,7 @@ pub fn test_db(
 
     let db_infos = db_infos(
         db_kind.clone(),
-        db_id.clone(),
+        to_short_id(&db_id),
         database_mode.clone(),
         database_username.clone(),
         database_password.clone(),
@@ -544,7 +547,7 @@ pub fn test_db(
         kind: db_kind,
         action: Action::Create,
         long_id: Uuid::new_v4(),
-        name: db_id,
+        name: to_short_id(&db_id),
         version: version.to_string(),
         fqdn_id: database_host.clone(),
         fqdn: database_fqdn.clone(),
@@ -803,7 +806,7 @@ pub fn test_pause_managed_db(
     let database_password = generate_password(database_mode.clone());
     let db_kind_str = db_kind.name().to_string();
     let db_id = generate_id();
-    let database_host = format!("{}-{}", db_id, db_kind_str);
+    let database_host = format!("{}-{}", to_short_id(&db_id), db_kind_str);
     let database_fqdn = format!(
         "{}.{}",
         database_host,
@@ -826,7 +829,7 @@ pub fn test_pause_managed_db(
 
     let db_infos = db_infos(
         db_kind.clone(),
-        db_id.clone(),
+        to_short_id(&db_id),
         database_mode.clone(),
         database_username.clone(),
         database_password.clone(),
@@ -844,7 +847,7 @@ pub fn test_pause_managed_db(
         kind: db_kind,
         action: Action::Create,
         long_id: Uuid::new_v4(),
-        name: db_id,
+        name: to_short_id(&db_id),
         version: version.to_string(),
         fqdn_id: database_host.clone(),
         fqdn: database_fqdn.clone(),
@@ -1081,7 +1084,7 @@ pub fn test_db_on_upgrade(
     let database_fqdn = format!(
         "{}.{}.{}",
         database_host,
-        context.cluster_id(),
+        context.cluster_short_id(),
         secrets
             .clone()
             .DEFAULT_TEST_DOMAIN
@@ -1172,7 +1175,7 @@ pub fn test_db_on_upgrade(
             KubernetesKind::Eks,
             kubernetes_version.clone(),
             &ClusterDomain::Default {
-                cluster_id: context.cluster_id().to_string(),
+                cluster_id: context.cluster_short_id().to_string(),
             },
             None,
             KUBERNETES_MIN_NODES,
@@ -1186,7 +1189,7 @@ pub fn test_db_on_upgrade(
             KubernetesKind::Doks,
             kubernetes_version.clone(),
             &ClusterDomain::Default {
-                cluster_id: context.cluster_id().to_string(),
+                cluster_id: context.cluster_short_id().to_string(),
             },
             None,
             KUBERNETES_MIN_NODES,
@@ -1200,7 +1203,7 @@ pub fn test_db_on_upgrade(
             KubernetesKind::ScwKapsule,
             kubernetes_version.clone(),
             &ClusterDomain::Default {
-                cluster_id: context.cluster_id().to_string(),
+                cluster_id: context.cluster_short_id().to_string(),
             },
             None,
             KUBERNETES_MIN_NODES,
@@ -1269,7 +1272,7 @@ pub fn test_db_on_upgrade(
             KubernetesKind::Eks,
             kubernetes_version,
             &ClusterDomain::Default {
-                cluster_id: context_for_delete.cluster_id().to_string(),
+                cluster_id: context_for_delete.cluster_short_id().to_string(),
             },
             None,
             KUBERNETES_MIN_NODES,
@@ -1283,7 +1286,7 @@ pub fn test_db_on_upgrade(
             KubernetesKind::Doks,
             kubernetes_version,
             &ClusterDomain::Default {
-                cluster_id: context_for_delete.cluster_id().to_string(),
+                cluster_id: context_for_delete.cluster_short_id().to_string(),
             },
             None,
             KUBERNETES_MIN_NODES,
@@ -1297,7 +1300,7 @@ pub fn test_db_on_upgrade(
             KubernetesKind::ScwKapsule,
             kubernetes_version,
             &ClusterDomain::Default {
-                cluster_id: context_for_delete.cluster_id().to_string(),
+                cluster_id: context_for_delete.cluster_short_id().to_string(),
             },
             None,
             KUBERNETES_MIN_NODES,
