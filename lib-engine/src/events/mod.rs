@@ -443,7 +443,7 @@ pub struct EventDetails {
     /// cluster_id: Qovery cluster identifier.
     cluster_id: QoveryIdentifier,
     /// execution_id: Qovery execution identifier.
-    execution_id: QoveryIdentifier,
+    execution_id: String,
     /// region: event's region (cloud provider specific region). Can be set to None if not applicable in the case of an application for example.
     region: Option<Region>, // TODO(benjaminch): find a way to make Region a real struct type
     /// stage: stage in which this event has been triggered.
@@ -468,7 +468,7 @@ impl EventDetails {
         provider_kind: Option<Kind>,
         organisation_id: QoveryIdentifier,
         cluster_id: QoveryIdentifier,
-        execution_id: QoveryIdentifier,
+        execution_id: String,
         region: Option<Region>,
         stage: Stage,
         transmitter: Transmitter,
@@ -513,7 +513,7 @@ impl EventDetails {
     }
 
     /// Returns event's Qovery execution identifier.
-    pub fn execution_id(&self) -> &QoveryIdentifier {
+    pub fn execution_id(&self) -> &str {
         &self.execution_id
     }
 

@@ -338,7 +338,7 @@ mod test {
                 Some(Kind::Scw),
                 QoveryIdentifier::new_random(),
                 QoveryIdentifier::new_random(),
-                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random().to_string(),
                 Some(ScwRegion::Paris.as_str().to_string()),
                 Stage::Infrastructure(InfrastructureStep::CreateError),
                 Transmitter::Kubernetes("".to_string(), "".to_string()),

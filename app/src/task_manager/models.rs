@@ -176,9 +176,9 @@ impl EngineRequest {
         let kubernetes = &self.cloud_provider.kubernetes;
         EventDetails::new(
             Some(self.cloud_provider.kind.clone()),
-            QoveryIdentifier::from(self.organization_id.to_string()),
-            QoveryIdentifier::new_from_long_id(kubernetes.long_id.to_string()),
-            QoveryIdentifier::from(self.id.to_string()),
+            QoveryIdentifier::new(self.organization_long_id),
+            QoveryIdentifier::new(kubernetes.long_id),
+            self.id.to_string(),
             Some(kubernetes.region.to_string()),
             Stage::Infrastructure(infrastructure_step),
             Transmitter::Kubernetes(kubernetes.id.to_string(), kubernetes.name.to_string()),

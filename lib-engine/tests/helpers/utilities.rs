@@ -10,13 +10,12 @@ use dirs::home_dir;
 use dotenv::dotenv;
 use gethostname;
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
 use std::io::{Error, ErrorKind, Write};
 use std::path::Path;
 
 use passwords::PasswordGenerator;
 use qovery_engine::cloud_provider::digitalocean::kubernetes::doks_api::get_do_kubeconfig_by_cluster_name;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use std::env;
@@ -60,10 +59,9 @@ use qovery_engine::utilities::to_short_id;
 use time::Instant;
 use tracing_subscriber::EnvFilter;
 use url::Url;
+use uuid::Uuid;
 
-pub fn context(organization_id: &str, cluster_id: &str) -> Context {
-    let organization_id = organization_id.to_string();
-    let cluster_id = cluster_id.to_string();
+pub fn context(organization_id: Uuid, cluster_id: Uuid) -> Context {
     let execution_id = execution_id();
     let home_dir = env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_str().unwrap().to_string());
     let lib_root_dir = env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
@@ -114,8 +112,11 @@ pub struct FuncTestsSecrets {
     pub AWS_SECRET_ACCESS_KEY: Option<String>,
     pub AWS_TEST_CLUSTER_ID: Option<String>,
     pub AWS_EC2_TEST_CLUSTER_ID: Option<String>,
+    pub AWS_EC2_TEST_CLUSTER_LONG_ID: Option<Uuid>,
+    pub AWS_TEST_CLUSTER_LONG_ID: Option<Uuid>,
     pub AWS_EC2_TEST_CLUSTER_DOMAIN: Option<String>,
     pub AWS_TEST_ORGANIZATION_ID: Option<String>,
+    pub AWS_TEST_ORGANIZATION_LONG_ID: Option<Uuid>,
     pub AWS_EC2_DEFAULT_CLUSTER_ID: Option<String>,
     pub BIN_VERSION_FILE: Option<String>,
     pub CLOUDFLARE_DOMAIN: Option<String>,
@@ -148,7 +149,9 @@ pub struct FuncTestsSecrets {
     pub SCALEWAY_SECRET_KEY: Option<String>,
     pub SCALEWAY_DEFAULT_REGION: Option<String>,
     pub SCALEWAY_TEST_CLUSTER_ID: Option<String>,
+    pub SCALEWAY_TEST_CLUSTER_LONG_ID: Option<Uuid>,
     pub SCALEWAY_TEST_ORGANIZATION_ID: Option<String>,
+    pub SCALEWAY_TEST_ORGANIZATION_LONG_ID: Option<Uuid>,
     pub TERRAFORM_AWS_ACCESS_KEY_ID: Option<String>,
     pub TERRAFORM_AWS_SECRET_ACCESS_KEY: Option<String>,
     pub TERRAFORM_AWS_REGION: Option<String>,
@@ -212,8 +215,11 @@ impl FuncTestsSecrets {
             AWS_SECRET_ACCESS_KEY: None,
             AWS_TEST_CLUSTER_ID: None,
             AWS_EC2_TEST_CLUSTER_ID: None,
+            AWS_EC2_TEST_CLUSTER_LONG_ID: None,
+            AWS_TEST_CLUSTER_LONG_ID: None,
             AWS_EC2_TEST_CLUSTER_DOMAIN: None,
             AWS_TEST_ORGANIZATION_ID: None,
+            AWS_TEST_ORGANIZATION_LONG_ID: None,
             AWS_EC2_DEFAULT_CLUSTER_ID: None,
             BIN_VERSION_FILE: None,
             CLOUDFLARE_DOMAIN: None,
@@ -246,7 +252,9 @@ impl FuncTestsSecrets {
             SCALEWAY_SECRET_KEY: None,
             SCALEWAY_DEFAULT_REGION: None,
             SCALEWAY_TEST_CLUSTER_ID: None,
+            SCALEWAY_TEST_CLUSTER_LONG_ID: None,
             SCALEWAY_TEST_ORGANIZATION_ID: None,
+            SCALEWAY_TEST_ORGANIZATION_LONG_ID: None,
             TERRAFORM_AWS_ACCESS_KEY_ID: None,
             TERRAFORM_AWS_SECRET_ACCESS_KEY: None,
             TERRAFORM_AWS_REGION: None,
@@ -283,11 +291,11 @@ impl FuncTestsSecrets {
         }
     }
 
-    fn select_secret(name: &str, vault_fallback: Option<String>) -> Option<String> {
-        match env::var_os(&name) {
-            Some(x) => Some(x.into_string().unwrap()),
-            None if vault_fallback.is_some() => vault_fallback,
-            None => None,
+    fn select_secret<T: for<'a> TryFrom<&'a str>>(name: &str, vault_fallback: Option<T>) -> Option<T> {
+        match env::var(&name) {
+            Ok(x) => T::try_from(x.as_str()).ok(),
+            Err(_) if vault_fallback.is_some() => vault_fallback,
+            Err(_) => None,
         }
     }
 
@@ -299,8 +307,17 @@ impl FuncTestsSecrets {
             AWS_DEFAULT_REGION: Self::select_secret("AWS_DEFAULT_REGION", secrets.AWS_DEFAULT_REGION),
             AWS_SECRET_ACCESS_KEY: Self::select_secret("AWS_SECRET_ACCESS_KEY", secrets.AWS_SECRET_ACCESS_KEY),
             AWS_TEST_ORGANIZATION_ID: Self::select_secret("AWS_TEST_ORGANIZATION_ID", secrets.AWS_TEST_ORGANIZATION_ID),
+            AWS_TEST_ORGANIZATION_LONG_ID: Self::select_secret(
+                "AWS_TEST_ORGANIZATION_LONG_ID",
+                secrets.AWS_TEST_ORGANIZATION_LONG_ID,
+            ),
             AWS_TEST_CLUSTER_ID: Self::select_secret("AWS_TEST_CLUSTER_ID", secrets.AWS_TEST_CLUSTER_ID),
             AWS_EC2_TEST_CLUSTER_ID: Self::select_secret("AWS_EC2_TEST_CLUSTER_ID", secrets.AWS_EC2_TEST_CLUSTER_ID),
+            AWS_EC2_TEST_CLUSTER_LONG_ID: Self::select_secret(
+                "AWS_EC2_TEST_CLUSTER_LONG_ID",
+                secrets.AWS_EC2_TEST_CLUSTER_LONG_ID,
+            ),
+            AWS_TEST_CLUSTER_LONG_ID: Self::select_secret("AWS_TEST_CLUSTER_LONG_ID", secrets.AWS_TEST_CLUSTER_LONG_ID),
             AWS_EC2_TEST_CLUSTER_DOMAIN: Self::select_secret(
                 "AWS_EC2_TEST_CLUSTER_DOMAIN",
                 secrets.AWS_EC2_TEST_CLUSTER_DOMAIN,
@@ -370,7 +387,15 @@ impl FuncTestsSecrets {
                 "SCALEWAY_TEST_ORGANIZATION_ID",
                 secrets.SCALEWAY_TEST_ORGANIZATION_ID,
             ),
+            SCALEWAY_TEST_ORGANIZATION_LONG_ID: Self::select_secret(
+                "SCALEWAY_TEST_ORGANIZATION_LONG_ID",
+                secrets.SCALEWAY_TEST_ORGANIZATION_LONG_ID,
+            ),
             SCALEWAY_TEST_CLUSTER_ID: Self::select_secret("SCALEWAY_TEST_CLUSTER_ID", secrets.SCALEWAY_TEST_CLUSTER_ID),
+            SCALEWAY_TEST_CLUSTER_LONG_ID: Self::select_secret(
+                "SCALEWAY_TEST_CLUSTER_LONG_ID",
+                secrets.SCALEWAY_TEST_CLUSTER_LONG_ID,
+            ),
             TERRAFORM_AWS_ACCESS_KEY_ID: Self::select_secret(
                 "TERRAFORM_AWS_ACCESS_KEY_ID",
                 secrets.TERRAFORM_AWS_ACCESS_KEY_ID,
@@ -442,19 +467,8 @@ where
     teardown(start, test_name);
 }
 
-pub fn generate_id() -> String {
-    // Should follow DNS naming convention https://tools.ietf.org/html/rfc1035
-    let uuid;
-
-    loop {
-        let rand_string: Vec<u8> = thread_rng().sample_iter(Alphanumeric).take(15).collect();
-        let rand_string = String::from_utf8(rand_string).unwrap();
-        if rand_string.chars().next().unwrap().is_alphabetic() {
-            uuid = rand_string.to_lowercase();
-            break;
-        }
-    }
-    uuid
+pub fn generate_id() -> Uuid {
+    Uuid::new_v4()
 }
 
 pub fn generate_password(db_mode: DatabaseMode) -> String {
@@ -515,9 +529,10 @@ pub fn kubernetes_config_path(
     workspace_directory: &str,
     secrets: FuncTestsSecrets,
 ) -> Result<String, CommandError> {
-    let kubernetes_config_bucket_name = format!("qovery-kubeconfigs-{}", context.cluster_id());
-    let kubernetes_config_object_key = format!("{}.yaml", context.cluster_id());
-    let kubernetes_config_file_path = format!("{}/kubernetes_config_{}", workspace_directory, context.cluster_id());
+    let kubernetes_config_bucket_name = format!("qovery-kubeconfigs-{}", context.cluster_short_id());
+    let kubernetes_config_object_key = format!("{}.yaml", context.cluster_short_id());
+    let kubernetes_config_file_path =
+        format!("{}/kubernetes_config_{}", workspace_directory, context.cluster_short_id());
 
     let _ = get_kubernetes_config_file(
         context,
@@ -561,7 +576,7 @@ where
                 )
             }
             Kind::Do => {
-                let cluster_name = format!("qovery-{}", context.cluster_id());
+                let cluster_name = format!("qovery-{}", context.cluster_short_id());
                 let kubeconfig = match get_do_kubeconfig_by_cluster_name(
                     secrets.clone().DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
                     cluster_name.as_str(),
@@ -836,7 +851,7 @@ pub fn execution_id() -> String {
 }
 
 // avoid test collisions
-pub fn generate_cluster_id(region: &str) -> String {
+pub fn generate_cluster_id(region: &str) -> Uuid {
     let check_if_running_on_gitlab_env_var = "CI_PROJECT_TITLE";
 
     // if running on CI, generate an ID
@@ -847,31 +862,16 @@ pub fn generate_cluster_id(region: &str) -> String {
 
     match gethostname::gethostname().into_string() {
         // shrink to 15 chars in order to avoid resources name issues
-        Ok(mut current_name) => {
-            let mut shrink_size = 15;
-
-            // override cluster id
-            current_name = match env::var_os("custom_cluster_id") {
-                None => current_name,
-                Some(x) => x.into_string().unwrap(),
-            };
-
-            // flag such name to ease deletion later on
-            current_name = format!("fixed-{}", current_name);
-
-            // avoid out of bounds issue
-            if current_name.chars().count() < shrink_size {
-                shrink_size = current_name.chars().count()
+        Ok(current_name) => {
+            let mut bytes: [u8; 16] = [0; 16];
+            for byte in current_name.as_bytes() {
+                bytes[*byte as usize % 16] += byte;
             }
 
-            let mut final_name = (&current_name[..shrink_size]).to_string();
-            // do not end with a non alphanumeric char
-            while !final_name.chars().last().unwrap().is_alphanumeric() {
-                shrink_size -= 1;
-                final_name = (&current_name[..shrink_size]).to_string();
+            for byte in region.bytes() {
+                bytes[byte as usize % 16] += byte;
             }
-            // note ensure you use only lowercase  (uppercase are not allowed in lot of AWS resources)
-            format!("{}-{}", final_name.to_lowercase(), region.to_lowercase())
+            Uuid::from_bytes(bytes)
         }
         _ => generate_id(),
     }

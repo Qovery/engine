@@ -11,8 +11,7 @@ use crate::cmd::helm::HelmError;
 use crate::cmd::terraform::{QuotaExceededError, TerraformError};
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
-use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
-use crate::io_models::QoveryIdentifier;
+use crate::events::{EventDetails, Stage};
 use crate::models::types::VersionsNumber;
 use crate::object_storage::errors::ObjectStorageError;
 use derivative::Derivative;
@@ -902,7 +901,7 @@ impl EngineError {
                 self.event_details.provider_kind(),
                 self.event_details.organisation_id().clone(),
                 self.event_details.cluster_id().clone(),
-                self.event_details.execution_id().clone(),
+                self.event_details.execution_id().to_string(),
                 self.event_details.region(),
                 stage,
                 self.event_details.transmitter(),
@@ -912,41 +911,6 @@ impl EngineError {
             underlying_error: self.underlying_error.as_ref().cloned(),
             link: self.link.as_ref().cloned(),
             hint_message: self.hint_message.as_ref().cloned(),
-        }
-    }
-
-    /// Creates new engine error from legacy engine error easing migration.
-    pub fn new_from_legacy_engine_error(e: LegacyEngineError) -> Self {
-        let message = e.message.unwrap_or_default();
-        EngineError {
-            tag: Tag::Unknown,
-            event_details: EventDetails::new(
-                None,
-                QoveryIdentifier::new_from_long_id("".to_string()),
-                QoveryIdentifier::new_from_long_id("".to_string()),
-                QoveryIdentifier::new_from_long_id(e.execution_id.to_string()),
-                None,
-                Stage::General(GeneralStep::UnderMigration),
-                match e.scope {
-                    EngineErrorScope::Engine => Transmitter::Kubernetes("".to_string(), "".to_string()),
-                    EngineErrorScope::BuildPlatform(id, name) => Transmitter::BuildPlatform(id, name),
-                    EngineErrorScope::ContainerRegistry(id, name) => Transmitter::ContainerRegistry(id, name),
-                    EngineErrorScope::CloudProvider(id, name) => Transmitter::CloudProvider(id, name),
-                    EngineErrorScope::Kubernetes(id, name) => Transmitter::Kubernetes(id, name),
-                    EngineErrorScope::DnsProvider(id, name) => Transmitter::DnsProvider(id, name),
-                    EngineErrorScope::ObjectStorage(id, name) => Transmitter::ObjectStorage(id, name),
-                    EngineErrorScope::Environment(id, name) => Transmitter::Environment(id, name),
-                    EngineErrorScope::Database(id, db_type, name) => Transmitter::Database(id, db_type, name),
-                    EngineErrorScope::Application(id, name, commit) => Transmitter::Application(id, name, commit),
-                    EngineErrorScope::Router(id, name) => Transmitter::Router(id, name),
-                    EngineErrorScope::SecretManager(id) => Transmitter::SecretManager(id),
-                    EngineErrorScope::Container(id, name, version) => Transmitter::Container(id, name, version),
-                },
-            ),
-            user_log_message: message,
-            underlying_error: None,
-            link: None,
-            hint_message: None,
         }
     }
 
@@ -3718,6 +3682,7 @@ mod tests {
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
     use crate::models::scaleway::ScwRegion;
+    use uuid::Uuid;
 
     #[test]
     fn test_command_error_test_hidding_env_vars_in_message_safe_only() {
@@ -3767,7 +3732,7 @@ mod tests {
                 Some(Kind::Scw),
                 QoveryIdentifier::new_random(),
                 QoveryIdentifier::new_random(),
-                QoveryIdentifier::new_random(),
+                Uuid::new_v4().to_string(),
                 Some(ScwRegion::Paris.as_str().to_string()),
                 Stage::Infrastructure(InfrastructureStep::Create),
                 Transmitter::Kubernetes(cluster_id.to_string(), cluster_id.to_string()),
@@ -3800,7 +3765,7 @@ mod tests {
                 Some(Kind::Scw),
                 QoveryIdentifier::new_random(),
                 QoveryIdentifier::new_random(),
-                QoveryIdentifier::new_random(),
+                Uuid::new_v4().to_string(),
                 Some(ScwRegion::Paris.as_str().to_string()),
                 Stage::Infrastructure(InfrastructureStep::Create),
                 Transmitter::Kubernetes(cluster_id.to_string(), cluster_id.to_string()),
@@ -3850,7 +3815,7 @@ mod tests {
                 Some(Kind::Scw),
                 QoveryIdentifier::new_random(),
                 QoveryIdentifier::new_random(),
-                QoveryIdentifier::new_random(),
+                "".to_string(),
                 Some(ScwRegion::Paris.as_str().to_string()),
                 Stage::Infrastructure(InfrastructureStep::Create),
                 Transmitter::Kubernetes(cluster_id.to_string(), cluster_id.to_string()),
@@ -3883,7 +3848,7 @@ mod tests {
                 Some(Kind::Scw),
                 QoveryIdentifier::new_random(),
                 QoveryIdentifier::new_random(),
-                QoveryIdentifier::new_random(),
+                "".to_string(),
                 Some(ScwRegion::Paris.as_str().to_string()),
                 Stage::Infrastructure(InfrastructureStep::Create),
                 Transmitter::Kubernetes(cluster_id.to_string(), cluster_id.to_string()),

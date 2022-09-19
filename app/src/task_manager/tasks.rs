@@ -62,8 +62,8 @@ impl InfrastructureTask {
 
     fn info_context(&self) -> Context {
         Context::new(
-            self.request.organization_id.to_string(),
-            self.request.cloud_provider.kubernetes.long_id.to_string(),
+            self.request.organization_long_id,
+            self.request.cloud_provider.kubernetes.long_id,
             self.request.id.to_string(),
             self.workspace_root_dir.to_string(),
             self.lib_root_dir.to_string(),
@@ -153,9 +153,9 @@ impl InfrastructureTask {
             let engine_event = EngineEvent::Info(
                 EventDetails::new(
                     Some(self.request.cloud_provider.kind.clone()),
-                    QoveryIdentifier::from(self.request.organization_id.to_string()),
-                    QoveryIdentifier::new_from_long_id(kubernetes.long_id.to_string()),
-                    QoveryIdentifier::from(self.request.id.to_string()),
+                    QoveryIdentifier::new(self.request.organization_long_id),
+                    QoveryIdentifier::new(kubernetes.long_id),
+                    self.request.id.to_string(),
                     Some(kubernetes.region.to_string()),
                     Infrastructure(infrastructure_step),
                     Transmitter::Kubernetes(kubernetes.id.to_string(), kubernetes.name.to_string()),
@@ -339,8 +339,8 @@ impl EnvironmentTask {
 
     fn info_context(&self) -> Context {
         Context::new(
-            self.request.organization_id.to_string(),
-            self.request.cloud_provider.kubernetes.long_id.to_string(),
+            self.request.organization_long_id,
+            self.request.cloud_provider.kubernetes.long_id,
             self.request.id.to_string(),
             self.workspace_root_dir.to_string(),
             self.lib_root_dir.to_string(),
@@ -818,7 +818,7 @@ fn upload_s3_file(
         }
     };
 
-    let object_key = format!("{}/{}", context.organization_id(), basename(file_path, '/'));
+    let object_key = format!("{}/{}", context.organization_short_id(), basename(file_path, '/'));
 
     info!(
         "Sending file {} to bucket {} object {} with access_key_id '{}' and secret_access_key '{}'",
