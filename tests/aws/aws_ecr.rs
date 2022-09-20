@@ -1,4 +1,4 @@
-use crate::helpers::utilities::{context, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{context, generate_id, logger, FuncTestsSecrets};
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::io_models::progress_listener::NoOpProgressListener;
@@ -11,7 +11,7 @@ use uuid::Uuid;
 #[cfg(feature = "test-aws-infra")]
 #[test]
 fn create_ecr_repository_with_tags() {
-    let context = context("fake_orga_id", "fake_cluster_id");
+    let context = context(generate_id(), generate_id());
     let secrets = FuncTestsSecrets::new();
     let registry_name = format!("test-{}", Uuid::new_v4());
     let container_registry = ECR::new(

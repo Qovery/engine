@@ -177,9 +177,9 @@ fn event_details<S: Into<String>>(
 ) -> EventDetails {
     EventDetails::new(
         Some(cloud_provider.kind()),
-        QoveryIdentifier::new_from_long_id(context.organization_id().to_string()),
-        QoveryIdentifier::new_from_long_id(context.cluster_id().to_string()),
-        QoveryIdentifier::new_from_long_id(context.execution_id().to_string()),
+        QoveryIdentifier::new(*context.organization_long_id()),
+        QoveryIdentifier::new(*context.cluster_long_id()),
+        context.execution_id().to_string(),
         Some(kubernetes_region.to_string()),
         Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
         Transmitter::Kubernetes(kubernetes_id.into(), kubernetes_name.into()),
@@ -536,7 +536,7 @@ fn tera_context(
     context.insert("ec2_cidr_subnet", &ec2_cidr_subnet);
     context.insert("kubernetes_cluster_name", kubernetes.name());
     context.insert("kubernetes_cluster_id", kubernetes.id());
-    context.insert("kubernetes_full_cluster_id", kubernetes.context().cluster_id());
+    context.insert("kubernetes_full_cluster_id", kubernetes.context().cluster_short_id());
     context.insert("eks_region_cluster_id", region_cluster_id.as_str());
     context.insert("eks_worker_nodes", &node_groups);
     context.insert("ec2_zone_a_subnet_blocks_private", &ec2_zone_a_subnet_blocks_private);

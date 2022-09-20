@@ -2,7 +2,7 @@ use crate::helpers;
 use crate::helpers::aws::aws_default_engine_config;
 use crate::helpers::common::Infrastructure;
 use crate::helpers::environment::session_is_sticky;
-use crate::helpers::utilities::{context, generate_id, get_pvc, init, is_pod_restarted_env, kubernetes_config_path};
+use crate::helpers::utilities::{context, get_pvc, init, is_pod_restarted_env, kubernetes_config_path};
 use crate::helpers::utilities::{engine_run_test, get_pods, logger, FuncTestsSecrets};
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
@@ -36,15 +36,11 @@ fn aws_test_build_phase() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let environment = helpers::environment::working_minimal_environment(&context);
@@ -78,15 +74,11 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
@@ -124,16 +116,13 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
+
         let engine_config = aws_default_engine_config(&context, logger.clone());
 
         let context_for_delete = context.clone_not_same_execution_id();
@@ -202,15 +191,11 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
@@ -250,15 +235,11 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
@@ -315,15 +296,11 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
@@ -380,15 +357,11 @@ fn deploy_a_working_environment_with_domain() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
@@ -433,15 +406,11 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
@@ -504,15 +473,11 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let logger = logger();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
@@ -525,9 +490,10 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
             .applications
             .into_iter()
             .map(|mut app| {
+                let id = Uuid::new_v4();
                 app.storage = vec![Storage {
-                    id: generate_id(),
-                    long_id: Uuid::new_v4(),
+                    id: to_short_id(&id),
+                    long_id: id,
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
                     size_in_gib: storage_size,
@@ -578,15 +544,11 @@ fn redeploy_same_app_with_ebs() {
         let logger = logger();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_bis = context.clone_not_same_execution_id();
@@ -601,9 +563,10 @@ fn redeploy_same_app_with_ebs() {
             .applications
             .into_iter()
             .map(|mut app| {
+                let id = Uuid::new_v4();
                 app.storage = vec![Storage {
-                    id: generate_id(),
-                    long_id: Uuid::new_v4(),
+                    id: to_short_id(&id),
+                    long_id: id,
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
                     size_in_gib: storage_size,
@@ -671,15 +634,11 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_not_working = context.clone_not_same_execution_id();
@@ -746,15 +705,11 @@ fn deploy_ok_fail_fail_ok_environment() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let environment = helpers::environment::working_minimal_environment(&context);
@@ -831,15 +786,11 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
         let logger = logger();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let environment = helpers::environment::non_working_environment(&context);
@@ -877,15 +828,11 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID in secrets")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set in secrets")
-                .as_str(),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
@@ -984,13 +931,11 @@ fn deploy_container_with_no_router_on_aws_eks() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set"),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set"),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
@@ -1073,15 +1018,11 @@ fn deploy_container_with_router_on_aws_eks() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             secrets
-                .AWS_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("AWS_TEST_CLUSTER_ID is not set")
-                .as_str(),
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
         let engine_config = aws_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();

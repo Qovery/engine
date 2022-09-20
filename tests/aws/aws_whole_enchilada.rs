@@ -8,6 +8,7 @@ use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::WithNa
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::utilities::to_short_id;
 use std::str::FromStr;
 
 #[cfg(feature = "test-aws-whole-enchilada")]
@@ -25,11 +26,11 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
-    let context = context(organization_id.as_str(), cluster_id.as_str());
+    let context = context(organization_id, cluster_id);
 
     let cluster_domain = format!(
         "{}.{}",
-        cluster_id.as_str(),
+        to_short_id(&cluster_id),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -74,11 +75,11 @@ fn create_resize_and_destroy_eks_cluster_with_env_in_eu_west_3() {
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
-    let context = context(organization_id.as_str(), cluster_id.as_str());
+    let context = context(organization_id, cluster_id);
 
     let cluster_domain = format!(
         "{}.{}",
-        cluster_id.as_str(),
+        to_short_id(&cluster_id),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -118,11 +119,11 @@ fn create_pause_and_destroy_eks_cluster_with_env_in_eu_west_3() {
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
-    let context = context(organization_id.as_str(), cluster_id.as_str());
+    let context = context(organization_id, cluster_id);
 
     let cluster_domain = format!(
         "{}.{}",
-        cluster_id.as_str(),
+        to_short_id(&cluster_id),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -165,11 +166,11 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
-    let context = context(organization_id.as_str(), cluster_id.as_str());
+    let context = context(organization_id, cluster_id);
 
     let cluster_domain = format!(
         "{}.{}",
-        cluster_id.as_str(),
+        to_short_id(&cluster_id),
         secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()

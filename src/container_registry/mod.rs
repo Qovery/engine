@@ -51,9 +51,9 @@ pub trait ContainerRegistry {
         let context = self.context();
         let ev = EventDetails::new(
             None,
-            QoveryIdentifier::from(context.organization_id().to_string()),
-            QoveryIdentifier::from(context.cluster_id().to_string()),
-            QoveryIdentifier::from(context.execution_id().to_string()),
+            QoveryIdentifier::new(*context.organization_long_id()),
+            QoveryIdentifier::new(*context.cluster_long_id()),
+            context.execution_id().to_string(),
             None,
             stage,
             Transmitter::ContainerRegistry(self.id().to_string(), self.name().to_string()),

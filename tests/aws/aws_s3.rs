@@ -4,12 +4,13 @@ use qovery_engine::object_storage::s3::S3;
 use qovery_engine::object_storage::ObjectStorage;
 use std::str::FromStr;
 use tempfile::NamedTempFile;
+use uuid::Uuid;
 
 #[cfg(feature = "test-aws-infra")]
 #[test]
 fn test_delete_bucket() {
     // setup:
-    let context = context("fake_orga_id", "fake_cluster_id");
+    let context = context(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let id = generate_id();
     let name = format!("test-{}", id);
@@ -21,7 +22,7 @@ fn test_delete_bucket() {
 
     let aws_os = S3::new(
         context,
-        id,
+        id.to_string(),
         name,
         aws_access_key,
         aws_secret_key,
@@ -52,7 +53,7 @@ fn test_delete_bucket() {
 #[test]
 fn test_create_bucket() {
     // setup:
-    let context = context("fake_orga_id", "fake_cluster_id");
+    let context = context(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let id = generate_id();
     let name = format!("test-{}", id);
@@ -64,7 +65,7 @@ fn test_create_bucket() {
 
     let aws_os = S3::new(
         context,
-        id,
+        id.to_string(),
         name,
         aws_access_key,
         aws_secret_key,
@@ -96,7 +97,7 @@ fn test_create_bucket() {
 #[test]
 fn test_recreate_bucket() {
     // setup:
-    let context = context("fake_orga_id", "fake_cluster_id");
+    let context = context(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let id = generate_id();
     let name = format!("test-{}", id);
@@ -106,7 +107,16 @@ fn test_recreate_bucket() {
     let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
         .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
 
-    let aws_os = S3::new(context, id, name, aws_access_key, aws_secret_key, aws_region, false, Some(7200));
+    let aws_os = S3::new(
+        context,
+        id.to_string(),
+        name,
+        aws_access_key,
+        aws_secret_key,
+        aws_region,
+        false,
+        Some(7200),
+    );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -132,7 +142,7 @@ fn test_recreate_bucket() {
 #[test]
 fn test_put_file() {
     // setup:
-    let context = context("fake_orga_id", "fake_cluster_id");
+    let context = context(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let id = generate_id();
     let name = format!("test-{}", id);
@@ -142,7 +152,16 @@ fn test_put_file() {
     let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
         .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
 
-    let aws_os = S3::new(context, id, name, aws_access_key, aws_secret_key, aws_region, false, Some(7200));
+    let aws_os = S3::new(
+        context,
+        id.to_string(),
+        name,
+        aws_access_key,
+        aws_secret_key,
+        aws_region,
+        false,
+        Some(7200),
+    );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
     let object_key = format!("test-object-{}", generate_id());
@@ -174,7 +193,7 @@ fn test_put_file() {
 #[test]
 fn test_get_file() {
     // setup:
-    let context = context("fake_orga_id", "fake_cluster_id");
+    let context = context(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let id = generate_id();
     let name = format!("test-{}", id);
@@ -184,7 +203,16 @@ fn test_get_file() {
     let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
         .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
 
-    let aws_os = S3::new(context, id, name, aws_access_key, aws_secret_key, aws_region, false, Some(7200));
+    let aws_os = S3::new(
+        context,
+        id.to_string(),
+        name,
+        aws_access_key,
+        aws_secret_key,
+        aws_region,
+        false,
+        Some(7200),
+    );
 
     let bucket_name = format!("qovery-test-bucket-{}", generate_id());
     let object_key = format!("test-object-{}", generate_id());

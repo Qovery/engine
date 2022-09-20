@@ -23,16 +23,14 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
         let _enter = span.enter();
 
         let organization_id = secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID");
+            .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+            .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID");
         let cluster_id = secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID");
+            .SCALEWAY_TEST_CLUSTER_LONG_ID
+            .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
 
         let logger = logger();
-        let context = context(organization_id.as_str(), cluster_id.as_str());
+        let context = context(organization_id, cluster_id);
         let engine = scw_default_engine_config(&context, logger.clone());
         let mut tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 
@@ -65,16 +63,14 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
         let _enter = span.enter();
 
         let organization_id = secrets
-            .SCALEWAY_TEST_ORGANIZATION_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_ORGANIZATION_ID");
+            .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+            .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID");
         let cluster_id = secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .as_ref()
-            .expect("SCALEWAY_TEST_CLUSTER_ID");
+            .SCALEWAY_TEST_CLUSTER_LONG_ID
+            .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
 
         let logger = logger();
-        let context = context(organization_id.as_str(), cluster_id.as_str());
+        let context = context(organization_id, cluster_id);
         let engine = scw_default_engine_config(&context, logger.clone());
         let mut tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
 

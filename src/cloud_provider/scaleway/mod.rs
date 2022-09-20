@@ -137,9 +137,9 @@ impl CloudProvider for Scaleway {
         let context = self.context();
         EventDetails::new(
             None,
-            QoveryIdentifier::from(context.organization_id().to_string()),
-            QoveryIdentifier::from(context.cluster_id().to_string()),
-            QoveryIdentifier::from(context.execution_id().to_string()),
+            QoveryIdentifier::new(*context.organization_long_id()),
+            QoveryIdentifier::new(*context.cluster_long_id()),
+            context.execution_id().to_string(),
             None,
             stage,
             self.to_transmitter(),

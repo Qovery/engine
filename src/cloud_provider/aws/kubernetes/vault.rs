@@ -238,9 +238,9 @@ mod tests {
     fn get_event_details() -> EventDetails {
         EventDetails::new(
             None,
-            QoveryIdentifier::new("123e4567-e89b-12d3-a456-426614174000".to_string(), "z123e456".to_string()),
-            QoveryIdentifier::new("123e4567-e89b-12d3-a456-426614174000".to_string(), "z123e456".to_string()),
-            QoveryIdentifier::new("123e4567-e89b-12d3-a456-426614174000".to_string(), "z123e456".to_string()),
+            QoveryIdentifier::new(Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap()),
+            QoveryIdentifier::new(Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap()),
+            "123e4567-e89b-12d3-a456-426614174000".to_string(),
             None,
             Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
             Transmitter::SecretManager("".to_string()),

@@ -68,7 +68,7 @@ pub fn aws_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> 
         KubernetesKind::Eks,
         AWS_KUBERNETES_VERSION.to_string(),
         &ClusterDomain::Default {
-            cluster_id: context.cluster_id().to_string(),
+            cluster_id: context.cluster_short_id().to_string(),
         },
         None,
         KUBERNETES_MIN_NODES,

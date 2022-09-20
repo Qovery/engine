@@ -446,9 +446,9 @@ pub fn get_environment_test_kubernetes(
             Box::new(
                 EKS::new(
                     context.clone(),
-                    context.cluster_id(),
+                    context.cluster_short_id(),
                     Uuid::new_v4(),
-                    format!("qovery-{}", context.cluster_id()).as_str(),
+                    format!("qovery-{}", context.cluster_short_id()).as_str(),
                     kubernetes_version,
                     region.clone(),
                     region.get_zones_to_string(),
@@ -475,9 +475,9 @@ pub fn get_environment_test_kubernetes(
             Box::new(
                 EC2::new(
                     context.clone(),
-                    context.cluster_id(),
+                    context.cluster_short_id(),
                     Uuid::new_v4(),
-                    format!("qovery-{}", context.cluster_id()).as_str(),
+                    format!("qovery-{}", context.cluster_short_id()).as_str(),
                     kubernetes_version,
                     region.clone(),
                     region.get_zones_to_string(),
@@ -499,9 +499,9 @@ pub fn get_environment_test_kubernetes(
             Box::new(
                 DOKS::new(
                     context.clone(),
-                    context.cluster_id().to_string(),
+                    context.cluster_short_id().to_string(),
                     Uuid::new_v4(),
-                    format!("qovery-{}", context.cluster_id()),
+                    format!("qovery-{}", context.cluster_short_id()),
                     kubernetes_version.to_string(),
                     region,
                     cloud_provider,
@@ -509,7 +509,7 @@ pub fn get_environment_test_kubernetes(
                     DO::kubernetes_nodes(min_nodes, max_nodes),
                     DO::kubernetes_cluster_options(
                         secrets,
-                        Option::from(context.cluster_id().to_string()),
+                        Option::from(context.cluster_short_id().to_string()),
                         EngineLocation::ClientSide,
                     ),
                     logger,
@@ -526,9 +526,9 @@ pub fn get_environment_test_kubernetes(
             Box::new(
                 Kapsule::new(
                     context.clone(),
-                    context.cluster_id().to_string(),
+                    context.cluster_short_id().to_string(),
                     Uuid::new_v4(),
-                    format!("qovery-{}", context.cluster_id()),
+                    format!("qovery-{}", context.cluster_short_id()),
                     kubernetes_version.to_string(),
                     zone,
                     cloud_provider,

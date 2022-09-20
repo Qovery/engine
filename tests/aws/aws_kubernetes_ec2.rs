@@ -10,6 +10,7 @@ use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::WithoutNatGateways;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::utilities::to_short_id;
 use std::str::FromStr;
 
 fn create_and_destroy_aws_ec2_k3s_cluster(
@@ -28,14 +29,16 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
             test_name,
             Kind::Aws,
             KKind::Ec2,
-            context(generate_id().as_str(), cluster_id.as_str()),
+            context(generate_id(), cluster_id),
             logger(),
             region.to_aws_format(),
             Some(zones),
             test_type,
             major_boot_version,
             minor_boot_version,
-            &ClusterDomain::Default { cluster_id },
+            &ClusterDomain::Default {
+                cluster_id: to_short_id(&cluster_id),
+            },
             Option::from(vpc_network_mode),
             None,
         )

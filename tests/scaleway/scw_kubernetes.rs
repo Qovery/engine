@@ -8,6 +8,7 @@ use crate::helpers::common::ClusterDomain;
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::scaleway::ScwZone;
+use qovery_engine::utilities::to_short_id;
 
 #[cfg(feature = "test-scw-infra")]
 fn create_and_destroy_kapsule_cluster(
@@ -24,14 +25,16 @@ fn create_and_destroy_kapsule_cluster(
             test_name,
             Kind::Scw,
             KKind::ScwKapsule,
-            context(generate_id().as_str(), cluster_id.as_str()),
+            context(generate_id(), cluster_id),
             logger(),
             zone.as_str(),
             None,
             test_type,
             major_boot_version,
             minor_boot_version,
-            &ClusterDomain::Default { cluster_id },
+            &ClusterDomain::Default {
+                cluster_id: to_short_id(&cluster_id),
+            },
             vpc_network_mode,
             None,
         )

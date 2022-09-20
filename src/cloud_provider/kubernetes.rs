@@ -93,9 +93,9 @@ pub trait Kubernetes {
         let context = self.context();
         EventDetails::new(
             Some(self.cloud_provider().kind()),
-            QoveryIdentifier::from(context.organization_id().to_string()),
-            QoveryIdentifier::from(context.cluster_id().to_string()),
-            QoveryIdentifier::from(context.execution_id().to_string()),
+            QoveryIdentifier::new(*context.organization_long_id()),
+            QoveryIdentifier::new(*context.cluster_long_id()),
+            context.execution_id().to_string(),
             Some(self.region().to_string()),
             stage,
             Transmitter::Kubernetes(self.id().to_string(), self.name().to_string()),
@@ -1377,6 +1377,7 @@ mod tests {
     use crate::utilities::get_kube_client;
     use std::env;
     use std::str::FromStr;
+    use uuid::Uuid;
 
     use super::kube_copy_secret_to_another_namespace;
 
@@ -1470,7 +1471,7 @@ mod tests {
             None,
             QoveryIdentifier::new_random(),
             QoveryIdentifier::new_random(),
-            QoveryIdentifier::new_random(),
+            Uuid::new_v4().to_string(),
             None,
             Stage::Infrastructure(InfrastructureStep::Upgrade),
             Transmitter::Kubernetes(QoveryIdentifier::new_random().to_string(), "test".to_string()),
@@ -2041,14 +2042,13 @@ mod tests {
         let logger = StdIoLogger::new();
         let execution_id = "execution_id";
         let context_id = "context_id";
-        let organization_id = "organization_id";
         let cluster_id = "cluster_id";
 
         let event_details = EventDetails::new(
             Some(Aws),
-            QoveryIdentifier::new_from_long_id(organization_id.to_string()),
-            QoveryIdentifier::new_from_long_id(cluster_id.to_string()),
-            QoveryIdentifier::new_from_long_id(execution_id.to_string()),
+            QoveryIdentifier::new_random(),
+            QoveryIdentifier::new_random(),
+            Uuid::new_v4().to_string(),
             Some("region_fake".to_string()),
             Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
             Transmitter::Kubernetes(cluster_id.to_string(), format!("{}-name", cluster_id)),

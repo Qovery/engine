@@ -10,6 +10,7 @@ use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 use qovery_engine::logger::Logger;
 use qovery_engine::transaction::{Transaction, TransactionResult};
+use qovery_engine::utilities::to_short_id;
 
 use crate::helpers;
 use crate::helpers::aws::AWS_TEST_REGION;
@@ -237,7 +238,7 @@ fn test_ec2_database(
         let logger = logger();
         let organization_id = generate_id();
         let cluster_id = generate_cluster_id(AWS_TEST_REGION.to_aws_format());
-        let context = context(organization_id.as_str(), cluster_id.as_str());
+        let context = context(organization_id, cluster_id);
 
         // create dedicated EC2 cluster:
         let secrets = FuncTestsSecrets::new();
@@ -247,7 +248,7 @@ fn test_ec2_database(
             .expect("DEFAULT_TEST_DOMAIN must be set")
             .to_string();
         let cluster_domain = ClusterDomain::QoveryOwnedDomain {
-            cluster_id,
+            cluster_id: to_short_id(&cluster_id),
             domain: attributed_domain,
         };
 

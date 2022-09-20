@@ -6,7 +6,7 @@ use crate::helpers::scaleway::{clean_environments, SCW_TEST_ZONE};
 use crate::helpers::utilities::{
     context, engine_run_test, get_pods, init, kubernetes_config_path, logger, FuncTestsSecrets,
 };
-use crate::helpers::utilities::{generate_id, get_pvc, is_pod_restarted_env};
+use crate::helpers::utilities::{get_pvc, is_pod_restarted_env};
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType};
@@ -39,15 +39,11 @@ fn scaleway_test_build_phase() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let environment = helpers::environment::working_minimal_environment(&context);
@@ -82,15 +78,11 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
@@ -133,15 +125,11 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
@@ -186,15 +174,11 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
@@ -274,15 +258,11 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
@@ -344,15 +324,11 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
@@ -394,15 +370,11 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
         let logger = logger();
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
@@ -415,9 +387,10 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
             .applications
             .into_iter()
             .map(|mut app| {
+                let id = Uuid::new_v4();
                 app.storage = vec![Storage {
-                    id: generate_id(),
-                    long_id: Uuid::new_v4(),
+                    id: to_short_id(&id),
+                    long_id: id,
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
                     size_in_gib: storage_size,
@@ -470,15 +443,11 @@ fn deploy_a_working_environment_and_pause_it() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
@@ -547,15 +516,11 @@ fn scaleway_kapsule_redeploy_same_app() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_bis = context.clone_not_same_execution_id();
@@ -570,9 +535,10 @@ fn scaleway_kapsule_redeploy_same_app() {
             .applications
             .into_iter()
             .map(|mut app| {
+                let id = Uuid::new_v4();
                 app.storage = vec![Storage {
-                    id: generate_id(),
-                    long_id: Uuid::new_v4(),
+                    id: to_short_id(&id),
+                    long_id: id,
                     name: "photos".to_string(),
                     storage_type: StorageType::Ssd,
                     size_in_gib: storage_size,
@@ -653,15 +619,11 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_not_working = context.clone_not_same_execution_id();
@@ -733,15 +695,11 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let environment = helpers::environment::working_minimal_environment(&context);
@@ -829,15 +787,11 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID")
-                .as_str(),
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let environment = helpers::environment::non_working_environment(&context);
@@ -879,15 +833,11 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID is not set in secrets")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID is not set in secrets")
-                .as_str(),
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
@@ -992,15 +942,11 @@ fn deploy_container_with_no_router_on_scw() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID is not set in secrets")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID is not set in secrets")
-                .as_str(),
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
@@ -1085,15 +1031,11 @@ fn deploy_container_with_router_on_scw() {
         let secrets = FuncTestsSecrets::new();
         let context = context(
             secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID is not set in secrets")
-                .as_str(),
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             secrets
-                .SCALEWAY_TEST_CLUSTER_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_ID is not set in secrets")
-                .as_str(),
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
         );
         let engine_config = scw_default_engine_config(&context, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();

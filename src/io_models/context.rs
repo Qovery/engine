@@ -1,13 +1,17 @@
 use crate::cmd::docker::Docker;
+use crate::utilities::to_short_id;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use url::Url;
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct Context {
-    organization_id: String,
-    cluster_id: String,
+    organization_id: Uuid,
+    organization_short_id: String,
+    cluster_id: Uuid,
+    cluster_short_id: String,
     execution_id: String,
     workspace_root_dir: String,
     lib_root_dir: String,
@@ -20,8 +24,8 @@ pub struct Context {
 
 impl Context {
     pub fn new(
-        organization_id: String,
-        cluster_id: String,
+        organization_id: Uuid,
+        cluster_id: Uuid,
         execution_id: String,
         workspace_root_dir: String,
         lib_root_dir: String,
@@ -33,7 +37,9 @@ impl Context {
     ) -> Self {
         Context {
             organization_id,
+            organization_short_id: to_short_id(&organization_id),
             cluster_id,
+            cluster_short_id: to_short_id(&cluster_id),
             execution_id,
             workspace_root_dir,
             lib_root_dir,
@@ -45,12 +51,20 @@ impl Context {
         }
     }
 
-    pub fn organization_id(&self) -> &str {
-        self.organization_id.as_str()
+    pub fn organization_short_id(&self) -> &str {
+        &self.organization_short_id
     }
 
-    pub fn cluster_id(&self) -> &str {
-        self.cluster_id.as_str()
+    pub fn organization_long_id(&self) -> &Uuid {
+        &self.organization_id
+    }
+
+    pub fn cluster_long_id(&self) -> &Uuid {
+        &self.cluster_id
+    }
+
+    pub fn cluster_short_id(&self) -> &str {
+        &self.cluster_short_id
     }
 
     pub fn execution_id(&self) -> &str {

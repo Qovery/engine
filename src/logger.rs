@@ -91,11 +91,11 @@ mod tests {
     #[test]
     fn test_log() {
         // setup:
-        let orga_id = QoveryIdentifier::new_from_long_id(Uuid::new_v4().to_string());
-        let cluster_id = QoveryIdentifier::new_from_long_id(Uuid::new_v4().to_string());
+        let orga_id = QoveryIdentifier::new(Uuid::new_v4());
+        let cluster_id = QoveryIdentifier::new(Uuid::new_v4());
         let cluster_name = format!("qovery-{}", cluster_id);
-        let execution_id = QoveryIdentifier::new_from_long_id(Uuid::new_v4().to_string());
-        let app_id = QoveryIdentifier::new_from_long_id(Uuid::new_v4().to_string());
+        let execution_id = QoveryIdentifier::new(Uuid::new_v4());
+        let app_id = QoveryIdentifier::new(Uuid::new_v4());
         let app_name = format!("simple-app-{}", app_id);
         let app_version = Uuid::new_v4();
         let user_message = "User message";
@@ -112,7 +112,7 @@ mod tests {
                             Some(Kind::Scw),
                             orga_id.clone(),
                             cluster_id.clone(),
-                            execution_id.clone(),
+                            execution_id.to_string(),
                             Some(ScwRegion::Paris.as_str().to_string()),
                             Stage::Infrastructure(InfrastructureStep::Create),
                             Transmitter::Kubernetes(cluster_id.to_string(), cluster_name.to_string()),
@@ -136,7 +136,7 @@ mod tests {
                         Some(Kind::Scw),
                         orga_id.clone(),
                         cluster_id.clone(),
-                        execution_id.clone(),
+                        execution_id.to_string(),
                         Some(ScwRegion::Paris.as_str().to_string()),
                         Stage::Infrastructure(InfrastructureStep::Create),
                         Transmitter::Kubernetes(cluster_id.to_string(), cluster_name),
@@ -151,7 +151,7 @@ mod tests {
                         Some(Kind::Scw),
                         orga_id.clone(),
                         cluster_id.clone(),
-                        execution_id.clone(),
+                        execution_id.to_string(),
                         Some(ScwRegion::Paris.as_str().to_string()),
                         Stage::Environment(EnvironmentStep::Pause),
                         Transmitter::Application(app_id.to_string(), app_name.to_string(), app_version.to_string()),
@@ -166,7 +166,7 @@ mod tests {
                         Some(Kind::Scw),
                         orga_id.clone(),
                         cluster_id.clone(),
-                        execution_id.clone(),
+                        execution_id.to_string(),
                         Some(ScwRegion::Paris.as_str().to_string()),
                         Stage::Environment(EnvironmentStep::Delete),
                         Transmitter::Application(app_id.to_string(), app_name, app_version.to_string()),
