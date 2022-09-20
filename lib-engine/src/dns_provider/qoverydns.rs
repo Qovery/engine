@@ -1,6 +1,7 @@
 use std::net::Ipv4Addr;
 use tera::Context as TeraContext;
 use url::Url;
+use uuid::Uuid;
 
 use crate::dns_provider::errors::DnsProviderError;
 use crate::dns_provider::Kind;
@@ -20,14 +21,14 @@ pub struct QoveryDnsConfig {
 
 pub struct QoveryDns {
     context: Context,
-    id: String,
+    long_id: Uuid,
     name: String,
     domain: Domain,
     dns_config: QoveryDnsConfig,
 }
 
 impl QoveryDns {
-    pub fn new(context: Context, id: &str, api_url: Url, api_key: &str, name: &str, domain: Domain) -> Self {
+    pub fn new(context: Context, long_id: Uuid, api_url: Url, api_key: &str, name: &str, domain: Domain) -> Self {
         let mut api_port = "".to_string();
         let mut api_url_scheme_and_domain = "".to_string();
 
@@ -46,7 +47,7 @@ impl QoveryDns {
 
         QoveryDns {
             context,
-            id: id.to_string(),
+            long_id,
             name: name.to_string(),
             domain,
             dns_config: QoveryDnsConfig {
@@ -72,8 +73,8 @@ impl DnsProvider for QoveryDns {
         Kind::QoveryDns
     }
 
-    fn id(&self) -> &str {
-        &self.id
+    fn long_id(&self) -> &Uuid {
+        &self.long_id
     }
 
     fn name(&self) -> &str {

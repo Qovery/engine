@@ -9,7 +9,6 @@ use chrono::{DateTime, Utc};
 use crossbeam_channel::Sender;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cmd::docker::Docker;
-use qovery_engine::dns_provider::errors::DnsProviderError;
 use qovery_engine::engine::EngineConfigError;
 use url::Url;
 
@@ -17,7 +16,9 @@ use qovery_engine::error::{EngineError, EngineErrorCause};
 use qovery_engine::errors;
 use qovery_engine::errors::ErrorMessageVerbosity;
 use qovery_engine::events::Stage::Infrastructure;
-use qovery_engine::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
+use qovery_engine::events::{
+    EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter,
+};
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::progress_listener::{ProgressInfo, ProgressLevel, ProgressListener, ProgressScope};
 use qovery_engine::io_models::QoveryIdentifier;
@@ -39,6 +40,7 @@ pub struct InfrastructureTask {
     docker: Docker,
     request: EngineRequest,
     status_sender: Sender<Status>,
+    logger: Box<dyn Logger>,
 }
 
 impl InfrastructureTask {
@@ -48,6 +50,7 @@ impl InfrastructureTask {
         workspace_root_dir: String,
         lib_root_dir: String,
         docker_host: Option<Url>,
+        logger: Box<dyn Logger>,
     ) -> Self {
         let docker = Docker::new(docker_host.clone()).expect("Can't init docker builder");
         InfrastructureTask {
@@ -57,6 +60,7 @@ impl InfrastructureTask {
             docker,
             request,
             status_sender,
+            logger,
         }
     }
 
@@ -188,7 +192,7 @@ impl Task for InfrastructureTask {
         let _ = self.status_sender.send(status);
     }
 
-    fn run(&self, logger: Box<dyn Logger>) {
+    fn run(&self) {
         info!(
             "infrastructure task {} started with infrastructure id {}-{}-{}",
             self.id(),
@@ -214,12 +218,12 @@ impl Task for InfrastructureTask {
 
         let engine = match self
             .request
-            .engine(&self.info_context(), my_progress_listener, logger.clone())
+            .engine(&self.info_context(), my_progress_listener, self.logger.clone())
         {
             Ok(engine) => engine,
             Err(err) => {
                 self.send_infrastructure_progress(
-                    logger.clone(),
+                    self.logger.clone(),
                     self.action_context(ProgressLevel::Error),
                     Some("Failed to create the engine".to_string()),
                     Some(err),
@@ -229,27 +233,17 @@ impl Task for InfrastructureTask {
         };
 
         // check and init the connection to all services
-        let mut tx = match Transaction::new(&engine, logger.clone(), self.cancel_checker(), Box::new(|_| {})) {
+        let mut tx = match Transaction::new(&engine, self.logger.clone(), self.cancel_checker(), Box::new(|_| {})) {
             Ok(transaction) => transaction,
             Err(err) => {
                 let engine_error = match err {
                     EngineConfigError::BuildPlatformNotValid(engine_error) => engine_error,
                     EngineConfigError::CloudProviderNotValid(engine_error) => engine_error,
-                    EngineConfigError::DnsProviderNotValid(dns_provider_error) => {
-                        let event_details = self.request.create_event_details();
-                        match dns_provider_error {
-                            DnsProviderError::InvalidCredentials => {
-                                errors::EngineError::new_error_on_dns_provider_invalid_credentials(event_details)
-                            }
-                            DnsProviderError::InvalidApiUrl => {
-                                errors::EngineError::new_error_on_dns_provider_invalid_api_url(event_details)
-                            }
-                        }
-                    }
+                    EngineConfigError::DnsProviderNotValid(engine_error) => engine_error,
                     EngineConfigError::KubernetesNotValid(engine_error) => engine_error,
                 };
                 self.send_infrastructure_progress(
-                    logger.clone(),
+                    self.logger.clone(),
                     self.action_context(ProgressLevel::Error),
                     Some("Failed to get engine session".to_string()),
                     Some(engine_error),
@@ -264,7 +258,7 @@ impl Task for InfrastructureTask {
             Action::Delete => tx.delete_kubernetes(),
         };
 
-        self.handle_transaction_result(logger.clone(), tx.commit());
+        self.handle_transaction_result(self.logger.clone(), tx.commit());
 
         // only store if not running on a workstation
         if env::var("DEPLOY_FROM_FILE_KIND").is_err() {
@@ -314,6 +308,7 @@ pub struct EnvironmentTask {
     status_sender: Sender<Status>,
     cancel_requested: Arc<AtomicBool>,
     current_step: Arc<RwLock<StepName>>,
+    logger: Box<dyn Logger>,
 }
 
 impl EnvironmentTask {
@@ -323,6 +318,7 @@ impl EnvironmentTask {
         workspace_root_dir: String,
         lib_root_dir: String,
         docker_host: Option<Url>,
+        logger: Box<dyn Logger>,
     ) -> Self {
         let docker = Docker::new(docker_host.clone()).expect("Can't init docker builder");
         EnvironmentTask {
@@ -332,6 +328,7 @@ impl EnvironmentTask {
             docker,
             request,
             status_sender,
+            logger,
             cancel_requested: Arc::new(AtomicBool::from(false)),
             current_step: Arc::new(RwLock::new(Waiting)),
         }
@@ -373,6 +370,18 @@ impl EnvironmentTask {
             *self.created_at(),
         )
     }
+
+    fn get_event_details(&self, step: EnvironmentStep) -> EventDetails {
+        EventDetails::new(
+            Some(self.request.cloud_provider.kind.clone()),
+            QoveryIdentifier::new(self.request.organization_long_id),
+            QoveryIdentifier::new(self.request.cloud_provider.kubernetes.long_id),
+            self.request.id.to_string(),
+            None,
+            Stage::Environment(step),
+            Transmitter::TaskManager,
+        )
+    }
 }
 
 impl Task for EnvironmentTask {
@@ -388,8 +397,19 @@ impl Task for EnvironmentTask {
         let _ = self.status_sender.send(status);
     }
 
-    fn run(&self, logger: Box<dyn Logger>) {
+    fn run(&self) {
         info!("environment task {} started", self.id());
+
+        self.logger.log(EngineEvent::Info(
+            self.get_event_details(EnvironmentStep::Start),
+            EventMessage::new("Qovery Engine starts to run the deployment".to_string(), None),
+        ));
+        let _guard = scopeguard::guard((), |_| {
+            self.logger.log(EngineEvent::Info(
+                self.get_event_details(EnvironmentStep::Terminated),
+                EventMessage::new("Qovery Engine has finished the deployment".to_string(), None),
+            ));
+        });
 
         send_progress(
             self,
@@ -408,10 +428,11 @@ impl Task for EnvironmentTask {
 
         let engine = match self
             .request
-            .engine(&self.info_context(), my_progress_listener, logger.clone())
+            .engine(&self.info_context(), my_progress_listener, self.logger.clone())
         {
             Ok(engine) => engine,
             Err(err) => {
+                self.logger.log(EngineEvent::Error(err.clone(), None));
                 send_progress(
                     self,
                     &self.request,
@@ -435,26 +456,38 @@ impl Task for EnvironmentTask {
                 }
             }
         };
-        let mut tx =
-            match Transaction::new(&engine, logger.clone(), self.cancel_checker(), Box::new(task_status_updater)) {
-                Ok(transaction) => transaction,
-                Err(err) => {
-                    send_progress(
-                        self,
-                        &self.request,
-                        self.action_context(ProgressLevel::Error),
-                        Some(format!("failed to create engine transaction {}", err)),
-                        true,
-                        true,
-                        false,
-                    );
+        let mut tx = match Transaction::new(
+            &engine,
+            self.logger.clone(),
+            self.cancel_checker(),
+            Box::new(task_status_updater),
+        ) {
+            Ok(transaction) => transaction,
+            Err(err) => {
+                self.logger.log(EngineEvent::Error(err.engine_error().clone(), None));
+                send_progress(
+                    self,
+                    &self.request,
+                    self.action_context(ProgressLevel::Error),
+                    Some(format!("failed to create engine transaction {}", err)),
+                    true,
+                    true,
+                    false,
+                );
 
-                    return;
-                }
-            };
+                return;
+            }
+        };
 
-        let environment_action = match self.request.environment() {
+        let environment_action = match &self.request.target_environment {
             None => {
+                self.logger.log(EngineEvent::Error(
+                    errors::EngineError::new_invalid_engine_payload(
+                        self.request.event_details(),
+                        "failed to get environment action, self.request.environment_action() returned None variant",
+                    ),
+                    None,
+                ));
                 send_progress(
                     self,
                     &self.request,
@@ -476,12 +509,19 @@ impl Task for EnvironmentTask {
             engine.context(),
             engine.cloud_provider(),
             engine.container_registry(),
-            logger.clone(),
+            self.logger.clone(),
         );
 
         let env = match env {
             Ok(env) => env,
             Err(err) => {
+                self.logger.log(EngineEvent::Error(
+                    errors::EngineError::new_invalid_engine_payload(
+                        self.request.event_details(),
+                        err.to_string().as_str(),
+                    ),
+                    None,
+                ));
                 send_progress(
                     self,
                     &self.request,
@@ -544,6 +584,10 @@ impl Task for EnvironmentTask {
             if current_step.can_be_canceled() {
                 self.cancel_requested.store(true, Ordering::Release);
 
+                self.logger.log(EngineEvent::Info(
+                    self.get_event_details(EnvironmentStep::Cancel),
+                    EventMessage::new("Cancel request received, aborting the deployment".to_string(), None),
+                ));
                 self.send_status(Status::new(
                     State::Canceling,
                     Some("Cancel request received, going to abort the deployment".to_string()),

@@ -6,7 +6,6 @@ use crate::build_platform::BuildPlatform;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::CloudProvider;
 use crate::container_registry::ContainerRegistry;
-use crate::dns_provider::errors::DnsProviderError;
 use crate::dns_provider::DnsProvider;
 use crate::errors::EngineError;
 use crate::io_models::context::Context;
@@ -18,9 +17,20 @@ pub enum EngineConfigError {
     #[error("Cloud provider is not valid error: {0}")]
     CloudProviderNotValid(EngineError),
     #[error("DNS provider is not valid error: {0}")]
-    DnsProviderNotValid(DnsProviderError),
+    DnsProviderNotValid(EngineError),
     #[error("Kubernetes is not valid error: {0}")]
     KubernetesNotValid(EngineError),
+}
+
+impl EngineConfigError {
+    pub fn engine_error(&self) -> &EngineError {
+        match self {
+            EngineConfigError::BuildPlatformNotValid(e) => e,
+            EngineConfigError::CloudProviderNotValid(e) => e,
+            EngineConfigError::DnsProviderNotValid(e) => e,
+            EngineConfigError::KubernetesNotValid(e) => e,
+        }
+    }
 }
 
 pub struct EngineConfig {
@@ -81,7 +91,9 @@ impl EngineConfig {
         }
 
         if let Err(e) = self.dns_provider.is_valid() {
-            return Err(EngineConfigError::DnsProviderNotValid(e));
+            return Err(EngineConfigError::DnsProviderNotValid(
+                e.to_engine_error(self.dns_provider.event_details()),
+            ));
         }
 
         Ok(())

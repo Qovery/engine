@@ -6,6 +6,7 @@ use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::domain::Domain;
 use url::Url;
+use uuid::Uuid;
 
 pub fn dns_provider_cloudflare(context: &Context, domain: &ClusterDomain) -> Box<dyn DnsProvider> {
     let secrets = FuncTestsSecrets::new();
@@ -20,7 +21,7 @@ pub fn dns_provider_cloudflare(context: &Context, domain: &ClusterDomain) -> Box
     });
     Box::new(Cloudflare::new(
         context.clone(),
-        "qoverytestdnsclo",
+        Uuid::new_v4(),
         "Qovery Test Cloudflare",
         domain,
         secrets.CLOUDFLARE_TOKEN.expect("CLOUDFLARE_TOKEN is not set").as_str(), // Cloudflare name: Qovery test
@@ -41,7 +42,7 @@ pub fn dns_provider_qoverydns(context: &Context, cluster_domain: &ClusterDomain)
     });
     Box::new(QoveryDns::new(
         context.clone(),
-        "qoverytestdnsqdns",
+        Uuid::new_v4(),
         Url::parse(
             secrets
                 .QOVERY_DNS_API_URL

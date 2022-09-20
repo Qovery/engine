@@ -22,7 +22,7 @@ use qovery_engine::dns_provider::io::Kind;
 use qovery_engine::dns_provider::qoverydns::QoveryDns;
 use qovery_engine::engine::EngineConfig;
 use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
-use qovery_engine::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+use qovery_engine::events::{EnvironmentStep, EventDetails, InfrastructureStep, Stage, Transmitter};
 use qovery_engine::io_models::context::{Context, Features, Metadata};
 use qovery_engine::io_models::domain::Domain;
 use qovery_engine::io_models::environment::EnvironmentRequest;
@@ -73,7 +73,7 @@ impl EngineRequest {
             .cloud_provider
             .to_engine_cloud_provider(context.clone(), self.organization_id.as_str(), self.organization_long_id)
             .ok_or_else(|| {
-                let event_details = self.create_event_details();
+                let event_details = self.event_details();
                 IoEngineError::new_error_on_cloud_provider_information(
                     event_details,
                     CommandError::new(
@@ -103,7 +103,7 @@ impl EngineRequest {
             .container_registry
             .to_engine_container_registry(context.clone(), progress_listener.clone(), logger.clone(), tags)
             .ok_or_else(|| {
-                let event_details = self.create_event_details();
+                let event_details = self.event_details();
                 IoEngineError::new_error_on_container_registry_information(
                     event_details,
                     CommandError::new(
@@ -127,7 +127,7 @@ impl EngineRequest {
             .dns_provider
             .to_engine_dns_provider(context.clone(), cluster_jwt_token)
             .ok_or_else(|| {
-                let event_details = self.create_event_details();
+                let event_details = self.event_details();
                 IoEngineError::new_error_on_dns_provider_information(
                     event_details,
                     CommandError::new(
@@ -162,16 +162,20 @@ impl EngineRequest {
         ))
     }
 
-    pub fn environment(&self) -> Option<EnvironmentRequest> {
-        let environment = self.target_environment.as_ref().unwrap().clone();
-        Some(environment)
-    }
-
-    pub fn create_event_details(&self) -> EventDetails {
-        let infrastructure_step = match self.action {
-            Action::Create => InfrastructureStep::Create,
-            Action::Pause => InfrastructureStep::Pause,
-            Action::Delete => InfrastructureStep::Delete,
+    pub fn event_details(&self) -> EventDetails {
+        let stage = match &self.target_environment {
+            // It means it is an infra deployment request
+            None => match self.action {
+                Action::Create => Stage::Infrastructure(InfrastructureStep::Create),
+                Action::Pause => Stage::Infrastructure(InfrastructureStep::Pause),
+                Action::Delete => Stage::Infrastructure(InfrastructureStep::Delete),
+            },
+            // It means it is an environment deployment request
+            Some(_) => match self.action {
+                Action::Create => Stage::Environment(EnvironmentStep::Deploy),
+                Action::Pause => Stage::Environment(EnvironmentStep::Pause),
+                Action::Delete => Stage::Environment(EnvironmentStep::Delete),
+            },
         };
         let kubernetes = &self.cloud_provider.kubernetes;
         EventDetails::new(
@@ -180,7 +184,7 @@ impl EngineRequest {
             QoveryIdentifier::new(kubernetes.long_id),
             self.id.to_string(),
             Some(kubernetes.region.to_string()),
-            Stage::Infrastructure(infrastructure_step),
+            stage,
             Transmitter::Kubernetes(kubernetes.long_id, kubernetes.name.to_string()),
         )
     }
@@ -482,7 +486,7 @@ impl ContainerRegistry {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DnsProvider {
     pub kind: Kind,
-    pub id: String,
+    pub id: Uuid,
     pub name: String,
     pub domain: String,
     pub options: HashMap<String, String>,
@@ -501,7 +505,7 @@ impl DnsProvider {
 
                 Some(Box::new(Cloudflare::new(
                     context,
-                    self.id.as_str(),
+                    self.id,
                     self.name.as_str(),
                     Domain::new(self.domain.clone()),
                     token.as_str(),
@@ -514,7 +518,7 @@ impl DnsProvider {
                 if let Ok(api_url) = Url::parse(qoverydns_api_url) {
                     return Some(Box::new(QoveryDns::new(
                         context,
-                        self.id.as_str(),
+                        self.id,
                         api_url,
                         &cluster_jwt_token,
                         self.name.as_str(),

@@ -32,6 +32,7 @@ openssl = { version = "0.10.40", features = ["vendored"] }
 evmap = "10.0.2"
 url = "2.2.2"
 regex = "1"
+scopeguard = "1.1.0"
 
 # Webserver (For Prometheus, Healthcheck, ...)
 tokio = { version = "1.18.1", features = ["net", "rt-multi-thread"] }

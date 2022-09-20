@@ -13,7 +13,6 @@ use core::fmt;
 use core::fmt::Formatter;
 use prometheus::{self, IntGauge};
 use qovery_engine::io_models::progress_listener::{ProgressLevel, ProgressScope};
-use qovery_engine::logger::Logger;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::thread::JoinHandle;
@@ -132,7 +131,7 @@ impl TaskManager {
     }
 
     /// run task manager - only a single instance will run
-    pub fn run(&mut self, logger: Box<dyn Logger>) -> Result<(), Error> {
+    pub fn run(&mut self) -> Result<(), Error> {
         if self.running {
             return Err(Error::AlreadyRunning);
         }
@@ -194,7 +193,7 @@ impl TaskManager {
 
                     let current_task = current_task_lock.read().unwrap();
                     let task = current_task.as_ref().unwrap();
-                    task.run(logger.clone());
+                    task.run();
                     info!("task {} took {} sec to be executed", &task.id(), start_time.elapsed().as_secs());
                     info!("it remains {} tasks to be run", task_executor_rx.len());
                     nb_running_tasks.dec();
@@ -212,7 +211,7 @@ pub trait Task: Send + Sync {
     fn created_at(&self) -> &DateTime<Utc>;
     fn id(&self) -> &str;
     fn send_status(&self, status: Status);
-    fn run(&self, logger: Box<dyn Logger>);
+    fn run(&self);
     fn cancel(&self) -> bool;
     fn cancel_checker(&self) -> Box<dyn Fn() -> bool>;
 }
@@ -309,7 +308,6 @@ mod tests {
     use chrono::{DateTime, NaiveDateTime, Utc};
     use crossbeam_channel::Sender;
     use qovery_engine::io_models::progress_listener::{ProgressLevel, ProgressScope};
-    use qovery_engine::logger::{Logger, StdIoLogger};
     use std::sync::atomic::Ordering::Acquire;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Barrier};
@@ -350,7 +348,7 @@ mod tests {
             let _ = self.task_status_tx.send(status);
         }
 
-        fn run(&self, _logger: Box<dyn Logger>) {
+        fn run(&self) {
             self.barrier_begin.wait();
             let _ = self
                 .have_been_run
@@ -379,7 +377,7 @@ mod tests {
             "1"
         }
         fn send_status(&self, _status: Status) {}
-        fn run(&self, _logger: Box<dyn Logger>) {}
+        fn run(&self) {}
         fn cancel(&self) -> bool {
             false
         }
@@ -391,7 +389,6 @@ mod tests {
 
     #[test]
     fn test_taskmanager_run() {
-        let logger = StdIoLogger::new();
         let mut tm = TaskManager::new();
         tm.running_tasks = prometheus::IntGauge::new("abc", "degf").unwrap();
         let task = WaitingTask::new(tm.task_status_tx.clone());
@@ -401,7 +398,7 @@ mod tests {
         tm.add_task(Box::new(task.clone()));
 
         let task_status_rx = tm.task_status_rx.clone();
-        tm.run(Box::new(logger)).expect("Impossible to run task Manager");
+        tm.run().expect("Impossible to run task Manager");
         assert!(task_status_rx.recv_timeout(Duration::from_secs(10)).is_ok());
 
         task.barrier_begin.wait();
@@ -425,12 +422,11 @@ mod tests {
 
     #[test]
     fn test_taskmanager_cleanup() {
-        let logger = StdIoLogger::new();
         let mut tm = TaskManager::new();
         tm.running_tasks = prometheus::IntGauge::new("abcd", "degf").unwrap();
         let task = WaitingTask::new(tm.task_status_tx.clone());
         let task_status_rx = tm.get_task_status_rx().clone();
-        tm.run(Box::new(logger)).expect("Impossible to run task Manager");
+        tm.run().expect("Impossible to run task Manager");
         tm.add_task(Box::new(task.clone()));
 
         assert_eq!(task_status_rx.recv().unwrap().status, State::Waiting);
@@ -457,7 +453,6 @@ mod tests {
 
     #[test]
     fn test_taskmanager_graceful_shutdown() {
-        let logger = StdIoLogger::new();
         let mut tm = TaskManager::new();
         tm.running_tasks = prometheus::IntGauge::new("abcde", "degf").unwrap();
 
@@ -470,7 +465,7 @@ mod tests {
 
         assert_eq!(tm.remaining_tasks_to_run(), 3);
         tm.stop();
-        tm.run(Box::new(logger)).expect("Impossible to run task Manager");
+        tm.run().expect("Impossible to run task Manager");
 
         assert!(tm.wait_shutdown().is_ok());
         assert_eq!(tm.remaining_tasks_to_run(), 0);

@@ -10,6 +10,7 @@ use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
 use crate::cmd::terraform::{QuotaExceededError, TerraformError};
 use crate::container_registry::errors::ContainerRegistryError;
+
 use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
 use crate::events::{EventDetails, Stage};
 use crate::models::types::VersionsNumber;
@@ -495,6 +496,8 @@ impl From<TerraformError> for CommandError {
 pub enum Tag {
     /// Unknown: unknown error.
     Unknown,
+    /// InvalidEnginePayload: represents an error when the received payload contains invalid informations.
+    InvalidEnginePayload,
     /// InvalidEngineApiInput: represents an error where Engine's API input is not valid and cannot be deserialized.
     InvalidEngineApiInputCannotBeDeserialized,
     /// MissingRequiredEnvVariable: represents an error where a required env variable is not set.
@@ -991,6 +994,25 @@ impl EngineError {
             Tag::InvalidEngineApiInputCannotBeDeserialized,
             "Input is invalid and cannot be deserialized.".to_string(),
             Some(raw_error.into()),
+            None,
+            Some("This is a Qovery issue, please contact our support team".to_string()),
+        )
+    }
+
+    /// Creates new error for Engine API payload that are not valid.
+    ///
+    ///
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `message`: Raw error message.
+    pub fn new_invalid_engine_payload(event_details: EventDetails, message: &str) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::InvalidEnginePayload,
+            format!("Input is invalid and cannot be executed by the engine: {}", message),
+            None,
             None,
             Some("This is a Qovery issue, please contact our support team".to_string()),
         )

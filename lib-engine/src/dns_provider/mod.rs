@@ -3,10 +3,13 @@ use std::net::Ipv4Addr;
 use crate::dns_provider::cloudflare::CloudflareDnsConfig;
 use crate::dns_provider::errors::DnsProviderError;
 use crate::dns_provider::qoverydns::QoveryDnsConfig;
+use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
 use tera::Context as TeraContext;
+use uuid::Uuid;
 
 use crate::io_models::context::Context;
 use crate::io_models::domain::Domain;
+use crate::io_models::QoveryIdentifier;
 
 pub mod cloudflare;
 pub mod errors;
@@ -38,14 +41,22 @@ pub trait DnsProvider {
     fn context(&self) -> &Context;
     fn provider_name(&self) -> &str;
     fn kind(&self) -> Kind;
-    fn id(&self) -> &str;
+    fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
-    fn name_with_id(&self) -> String {
-        format!("{} ({})", self.name(), self.id())
-    }
     fn insert_into_teracontext<'a>(&self, context: &'a mut TeraContext) -> &'a mut TeraContext;
     fn provider_configuration(&self) -> DnsProviderConfiguration;
     fn domain(&self) -> &Domain;
     fn resolvers(&self) -> Vec<Ipv4Addr>;
     fn is_valid(&self) -> Result<(), DnsProviderError>;
+    fn event_details(&self) -> EventDetails {
+        EventDetails::new(
+            None,
+            QoveryIdentifier::new(*self.context().organization_long_id()),
+            QoveryIdentifier::new(*self.context().cluster_long_id()),
+            self.context().execution_id().to_string(),
+            None,
+            Stage::General(GeneralStep::ValidateSystemRequirements),
+            Transmitter::DnsProvider(*self.long_id(), self.provider_name().to_string()),
+        )
+    }
 }

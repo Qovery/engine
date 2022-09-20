@@ -68,6 +68,7 @@ fn to_engine_task(
     docker_tcp_socket: &Option<Url>,
     task_selector: &TaskSelector,
     status_sender: Sender<Status>,
+    logger: Box<dyn Logger>,
 ) -> Result<Box<dyn Task>, EngineError> {
     let request = match serde_json::from_slice::<EngineRequest>(&msg.data) {
         Ok(req) => req,
@@ -124,6 +125,7 @@ fn to_engine_task(
             workspace_root_dir.to_string(),
             lib_root_dir.to_string(),
             docker_tcp_socket.clone(),
+            logger,
         )),
         TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(
             request,
@@ -131,6 +133,7 @@ fn to_engine_task(
             workspace_root_dir.to_string(),
             lib_root_dir.to_string(),
             docker_tcp_socket.clone(),
+            logger,
         )),
     };
 
@@ -407,6 +410,7 @@ pub fn using_json_path_parameter(
             workspace_root_dir,
             lib_root_dir,
             docker_host,
+            logger,
         )),
         TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(
             req,
@@ -414,11 +418,12 @@ pub fn using_json_path_parameter(
             workspace_root_dir,
             lib_root_dir,
             docker_host,
+            logger,
         )),
     };
 
     task_manager.add_task(task);
-    let _ = task_manager.run(logger);
+    let _ = task_manager.run();
 
     while task_manager.remaining_tasks_to_run() > 0 {
         sleep(Duration::from_secs(30))
@@ -454,7 +459,7 @@ fn using_nats_server(
 
     let mut tm = TaskManager::new();
     let status_rx = tm.get_task_status_rx().clone();
-    tm.run(logger.clone()).expect("cannot run task manager");
+    tm.run().expect("cannot run task manager");
     let task_manager = Arc::new(tm);
 
     let _ = {
@@ -618,6 +623,7 @@ fn spawn_task_poller(
                 &docker_host,
                 &task_selector,
                 task_manager.get_task_status_tx().clone(),
+                logger.clone(),
             ) {
                 Ok(task) => task,
                 Err(err) => {
