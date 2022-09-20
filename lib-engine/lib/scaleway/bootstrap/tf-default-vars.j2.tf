@@ -18,24 +18,6 @@ variable "zone" {
   type        = string
 }
 
-variable "qovery_nats_url" {
-  description = "URL of qovery nats server"
-  default = "{{ qovery_nats_url }}"
-  type = string
-}
-
-variable "qovery_nats_user" {
-  description = "user of qovery nats server"
-  default = "{{ qovery_nats_user }}"
-  type = string
-}
-
-variable "qovery_nats_password" {
-  description = "password of qovery nats server"
-  default = "{{ qovery_nats_password }}"
-  type = string
-}
-
 variable "test_cluster" {
   description = "Is this a test cluster?"
   default = "{{ test_cluster }}"
@@ -99,53 +81,7 @@ variable "scaleway_ks_pool_autoscale" {
   type    = bool
 }
 
-# Engine info
-
-variable "qovery_engine_info" {
-  description = "Qovery engine info"
-  default = {
-    "token" = "{{ engine_version_controller_token }}"
-    "api_fqdn" = "{{ qovery_api_url }}"
-  }
-  type = map(string)
-}
-
-variable "qovery_engine_replicas" {
-  description = "This variable is used to get random ID generated for the engine"
-  default = "2"
-  type = number
-}
-
-# Agent info
-
-variable "qovery_agent_info" {
-  description = "Qovery agent info"
-  default = {
-    "token" = "{{ agent_version_controller_token }}"
-    "api_fqdn" = "{{ qovery_api_url }}"
-  }
-  type = map(string)
-}
-
-variable "qovery_agent_replicas" {
-  description = "This variable is used to get random ID generated for the agent"
-  default = "1"
-  type = number
-}
-
 # Qovery features
-
-variable "log_history_enabled" {
-  description = "Enable log history"
-  default = {{ log_history_enabled }}
-  type = bool
-}
-
-variable "metrics_history_enabled" {
-  description = "Enable metrics history"
-  default = {{ metrics_history_enabled }}
-  type = bool
-}
 
 {%- if resource_expiration_in_seconds > -1 %}
 # Pleco ttl
