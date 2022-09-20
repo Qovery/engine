@@ -168,6 +168,8 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
 pub enum EnvironmentStep {
     Build,
     Built,
+    Cancel,
+    Cancelled,
     Deploy,
     Deployed,
     Pause,
@@ -183,6 +185,8 @@ pub enum EnvironmentStep {
     ScaledUp,
     ScaleDown,
     ScaledDown,
+    Start,
+    Terminated,
 }
 
 impl From<events::EnvironmentStep> for EnvironmentStep {
@@ -205,6 +209,10 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
             events::EnvironmentStep::Deleted => EnvironmentStep::Deleted,
             events::EnvironmentStep::ScaledUp => EnvironmentStep::ScaledUp,
             events::EnvironmentStep::ScaledDown => EnvironmentStep::ScaledDown,
+            events::EnvironmentStep::Start => EnvironmentStep::Start,
+            events::EnvironmentStep::Cancel => EnvironmentStep::Cancel,
+            events::EnvironmentStep::Cancelled => EnvironmentStep::Cancelled,
+            events::EnvironmentStep::Terminated => EnvironmentStep::Terminated,
         }
     }
 }

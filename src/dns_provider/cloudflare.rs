@@ -1,5 +1,6 @@
 use std::net::Ipv4Addr;
 use tera::Context as TeraContext;
+use uuid::Uuid;
 
 use crate::dns_provider::errors::DnsProviderError;
 use crate::dns_provider::{DnsProvider, DnsProviderConfiguration, Kind};
@@ -13,7 +14,7 @@ pub struct CloudflareDnsConfig {
 
 pub struct Cloudflare {
     context: Context,
-    id: String,
+    long_id: Uuid,
     name: String,
     domain: Domain,
     cloudflare_api_token: String,
@@ -23,7 +24,7 @@ pub struct Cloudflare {
 impl Cloudflare {
     pub fn new(
         context: Context,
-        id: &str,
+        long_id: Uuid,
         name: &str,
         domain: Domain,
         cloudflare_api_token: &str,
@@ -31,7 +32,7 @@ impl Cloudflare {
     ) -> Self {
         Cloudflare {
             context,
-            id: id.to_string(),
+            long_id,
             name: name.to_string(),
             domain,
             cloudflare_api_token: cloudflare_api_token.to_string(),
@@ -53,8 +54,8 @@ impl DnsProvider for Cloudflare {
         Kind::Cloudflare
     }
 
-    fn id(&self) -> &str {
-        &self.id
+    fn long_id(&self) -> &Uuid {
+        &self.long_id
     }
 
     fn name(&self) -> &str {
