@@ -98,7 +98,7 @@ pub trait Kubernetes {
             context.execution_id().to_string(),
             Some(self.region().to_string()),
             stage,
-            Transmitter::Kubernetes(self.id().to_string(), self.name().to_string()),
+            Transmitter::Kubernetes(*self.long_id(), self.name().to_string()),
         )
     }
 
@@ -1474,7 +1474,7 @@ mod tests {
             Uuid::new_v4().to_string(),
             None,
             Stage::Infrastructure(InfrastructureStep::Upgrade),
-            Transmitter::Kubernetes(QoveryIdentifier::new_random().to_string(), "test".to_string()),
+            Transmitter::Kubernetes(Uuid::new_v4(), "test".to_string()),
         );
         let logger = StdIoLogger::new();
 
@@ -2051,7 +2051,7 @@ mod tests {
             Uuid::new_v4().to_string(),
             Some("region_fake".to_string()),
             Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
-            Transmitter::Kubernetes(cluster_id.to_string(), format!("{}-name", cluster_id)),
+            Transmitter::Kubernetes(Uuid::new_v4(), format!("{}-name", cluster_id)),
         );
 
         let mut total_cpu = "0.25".to_string();

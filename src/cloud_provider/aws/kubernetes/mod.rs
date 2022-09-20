@@ -12,6 +12,7 @@ use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_eks::{DescribeNodegroupRequest, Eks, EksClient, ListNodegroupsRequest, NodegroupScalingConfig};
 use serde::{Deserialize, Serialize};
 use tera::Context as TeraContext;
+use uuid::Uuid;
 
 use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
     ec2_aws_helm_charts, get_aws_ec2_qovery_terraform_config, Ec2ChartsConfigPrerequisites,
@@ -168,10 +169,10 @@ pub struct UserNetworkConfig {
 
 impl ProviderOptions for Options {}
 
-fn event_details<S: Into<String>>(
+fn event_details(
     cloud_provider: &dyn CloudProvider,
-    kubernetes_id: S,
-    kubernetes_name: S,
+    kubernetes_id: Uuid,
+    kubernetes_name: String,
     kubernetes_region: &AwsRegion,
     context: &Context,
 ) -> EventDetails {
@@ -182,7 +183,7 @@ fn event_details<S: Into<String>>(
         context.execution_id().to_string(),
         Some(kubernetes_region.to_string()),
         Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
-        Transmitter::Kubernetes(kubernetes_id.into(), kubernetes_name.into()),
+        Transmitter::Kubernetes(kubernetes_id, kubernetes_name),
     )
 }
 

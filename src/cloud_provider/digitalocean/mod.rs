@@ -12,6 +12,7 @@ use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::io_models::QoveryIdentifier;
+use crate::utilities::to_short_id;
 
 pub mod do_api_common;
 pub mod kubernetes;
@@ -21,6 +22,7 @@ pub mod network;
 pub struct DO {
     context: Context,
     id: String,
+    long_id: Uuid,
     organization_id: String,
     organization_long_id: Uuid,
     name: String,
@@ -35,7 +37,7 @@ pub struct DO {
 impl DO {
     pub fn new(
         context: Context,
-        id: &str,
+        long_id: Uuid,
         organization_id: &str,
         organization_long_id: Uuid,
         token: &str,
@@ -47,7 +49,8 @@ impl DO {
     ) -> Self {
         DO {
             context,
-            id: id.to_string(),
+            id: to_short_id(&long_id),
+            long_id,
             organization_id: organization_id.to_string(),
             organization_long_id,
             name: name.to_string(),
@@ -161,7 +164,7 @@ impl CloudProvider for DO {
     }
 
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::CloudProvider(self.id.to_string(), self.name.to_string())
+        Transmitter::CloudProvider(self.long_id, self.name.to_string())
     }
 
     fn aws_sdk_client(&self) -> Option<aws_config::SdkConfig> {

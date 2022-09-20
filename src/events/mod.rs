@@ -12,6 +12,7 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::io_models::QoveryIdentifier;
 use derivative::Derivative;
 use std::fmt::{Display, Formatter};
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 /// EngineEvent: represents an event happening in the Engine.
@@ -365,7 +366,7 @@ impl Display for EnvironmentStep {
 }
 
 /// TransmitterId: represents a transmitter unique identifier.
-type TransmitterId = String;
+type TransmitterId = Uuid;
 /// TransmitterName: represents a transmitter name.
 type TransmitterName = String;
 /// TransmitterType: represents a transmitter type.

@@ -6,6 +6,7 @@ use std::{env, fs};
 
 use git2::{Cred, CredentialType};
 use sysinfo::{DiskExt, RefreshKind, SystemExt};
+use uuid::Uuid;
 
 use crate::build_platform::dockerfile_utils::extract_dockerfile_args;
 use crate::build_platform::{Build, BuildError, BuildPlatform, Credentials, Kind};
@@ -21,6 +22,7 @@ use crate::io_models::progress_listener::{
     Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
 };
 use crate::logger::Logger;
+use crate::utilities::to_short_id;
 
 /// https://buildpacks.io/
 const BUILDPACKS_BUILDERS: [&str; 1] = [
@@ -34,16 +36,18 @@ const BUILDPACKS_BUILDERS: [&str; 1] = [
 pub struct LocalDocker {
     context: Context,
     id: String,
+    long_id: Uuid,
     name: String,
     listeners: Listeners,
     logger: Box<dyn Logger>,
 }
 
 impl LocalDocker {
-    pub fn new(context: Context, id: &str, name: &str, logger: Box<dyn Logger>) -> Result<Self, BuildError> {
+    pub fn new(context: Context, long_id: Uuid, name: &str, logger: Box<dyn Logger>) -> Result<Self, BuildError> {
         Ok(LocalDocker {
             context,
-            id: id.to_string(),
+            id: to_short_id(&long_id),
+            long_id,
             name: name.to_string(),
             listeners: vec![],
             logger,
@@ -395,6 +399,10 @@ impl BuildPlatform for LocalDocker {
         self.id.as_str()
     }
 
+    fn long_id(&self) -> &Uuid {
+        &self.long_id
+    }
+
     fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -577,6 +585,6 @@ impl BuildPlatform for LocalDocker {
     }
 
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::BuildPlatform(self.id().to_string(), self.name().to_string())
+        Transmitter::BuildPlatform(self.long_id, self.name().to_string())
     }
 }

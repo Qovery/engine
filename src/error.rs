@@ -1,8 +1,9 @@
 use crate::events::Transmitter;
 use std::process::ExitStatus;
+use uuid::Uuid;
 
 pub type Type = String;
-pub type Id = String;
+pub type Id = Uuid;
 pub type Name = String;
 pub type Version = String;
 

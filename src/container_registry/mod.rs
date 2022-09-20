@@ -56,7 +56,7 @@ pub trait ContainerRegistry {
             context.execution_id().to_string(),
             None,
             stage,
-            Transmitter::ContainerRegistry(self.id().to_string(), self.name().to_string()),
+            Transmitter::ContainerRegistry(*self.long_id(), self.name().to_string()),
         );
 
         ev

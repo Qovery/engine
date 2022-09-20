@@ -129,7 +129,7 @@ impl Cluster<AWS, Options> for AWS {
             AwsRegion::from_str(secrets.AWS_DEFAULT_REGION.unwrap().as_str()).expect("AWS region not supported");
         Box::new(AWS::new(
             context.clone(),
-            "u8nb94c7fwxzr2jt",
+            Uuid::new_v4(),
             secrets
                 .AWS_TEST_ORGANIZATION_ID
                 .as_ref()
