@@ -23,10 +23,6 @@ terraform {
       source  = "hashicorp/time"
       version = "~> 0.3"
     }
-    vault = {
-      source = "hashicorp/vault"
-      version = "~> 2.24.1"
-    }
   }
   required_version = ">= 0.14"
 }
@@ -38,17 +34,4 @@ provider "scaleway" {
   project_id	  = var.scaleway_project_id
   zone            = var.zone
   region          = var.region
-}
-
-provider "vault" {
-  {% if vault_auth_method == "app_role" and not test_cluster %}
-  auth_login {
-    path = "auth/approle/login"
-
-    parameters = {
-      role_id   = "{{ vault_role_id }}"
-      secret_id = "{{ vault_secret_id }}"
-    }
-  }
-  {% endif %}
 }
