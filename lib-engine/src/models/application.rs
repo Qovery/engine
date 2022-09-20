@@ -402,7 +402,7 @@ impl<T: CloudProvider> Service for Application<T> {
     }
 
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Application(self.id.to_string(), self.name.to_string(), self.commit_id())
+        Transmitter::Application(self.long_id, self.name.to_string(), self.commit_id())
     }
 
     fn as_service(&self) -> &dyn Service {

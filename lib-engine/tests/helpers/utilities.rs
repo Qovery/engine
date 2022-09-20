@@ -40,10 +40,6 @@ use retry::Error::Operation;
 use serde::{Deserialize, Serialize};
 
 extern crate time;
-use crate::helpers::digitalocean::{
-    DO_MANAGED_DATABASE_DISK_TYPE, DO_MANAGED_DATABASE_INSTANCE_TYPE, DO_SELF_HOSTED_DATABASE_DISK_TYPE,
-    DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
-};
 use qovery_engine::cmd::command::{ExecutableCommand, QoveryCommand};
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
@@ -419,7 +415,7 @@ impl FuncTestsSecrets {
 }
 
 pub fn build_platform_local_docker(context: &Context, logger: Box<dyn Logger>) -> LocalDocker {
-    LocalDocker::new(context.clone(), "oxqlm3r99vwcmvuj", "qovery-local-docker", logger).unwrap()
+    LocalDocker::new(context.clone(), Uuid::new_v4(), "qovery-local-docker", logger).unwrap()
 }
 
 pub fn init() -> Instant {
@@ -1048,8 +1044,8 @@ pub fn db_disk_type(provider_kind: Kind, database_mode: DatabaseMode) -> String 
     match provider_kind {
         Kind::Aws => "gp2",
         Kind::Do => match database_mode {
-            MANAGED => DO_MANAGED_DATABASE_DISK_TYPE,
-            DatabaseMode::CONTAINER => DO_SELF_HOSTED_DATABASE_DISK_TYPE,
+            MANAGED => "",
+            DatabaseMode::CONTAINER => "",
         },
         Kind::Scw => match database_mode {
             MANAGED => SCW_MANAGED_DATABASE_DISK_TYPE,
@@ -1068,8 +1064,8 @@ pub fn db_instance_type(provider_kind: Kind, db_kind: DatabaseKind, database_mod
             DatabaseKind::Redis => "cache.t3.micro",
         },
         Kind::Do => match database_mode {
-            MANAGED => DO_MANAGED_DATABASE_INSTANCE_TYPE,
-            DatabaseMode::CONTAINER => DO_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
+            MANAGED => "",
+            DatabaseMode::CONTAINER => "",
         },
         Kind::Scw => match database_mode {
             MANAGED => SCW_MANAGED_DATABASE_INSTANCE_TYPE,

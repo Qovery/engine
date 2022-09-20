@@ -63,7 +63,7 @@ impl EKS {
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
     ) -> Result<Self, EngineError> {
-        let event_details = kubernetes::event_details(&**cloud_provider, id, name, &region, &context);
+        let event_details = kubernetes::event_details(&**cloud_provider, long_id, name.to_string(), &region, &context);
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
@@ -776,7 +776,7 @@ mod tests {
             Uuid::new_v4().to_string(),
             None,
             Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
-            Transmitter::Kubernetes("".to_string(), "".to_string()),
+            Transmitter::Kubernetes(Uuid::new_v4(), "".to_string()),
         );
         assert!(EKS::validate_node_groups(
             vec![NodeGroups::new("".to_string(), 3, 5, "t3.medium".to_string(), 20).unwrap()],

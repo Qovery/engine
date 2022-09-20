@@ -137,7 +137,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             .expect("SCALEWAY_TEST_CLUSTER_ID is not set");
         Box::new(Scaleway::new(
             context.clone(),
-            cluster_id.as_str(),
+            *context.cluster_long_id(),
             secrets
                 .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
                 .as_ref()

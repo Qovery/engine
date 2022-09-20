@@ -333,7 +333,7 @@ impl<T: CloudProvider> Service for Container<T> {
     }
 
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Container(self.id.to_string(), self.name.to_string(), self.image_with_tag())
+        Transmitter::Container(self.long_id, self.name.to_string(), self.image_with_tag())
     }
 
     fn as_service(&self) -> &dyn Service {

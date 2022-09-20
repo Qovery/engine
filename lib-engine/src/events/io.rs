@@ -5,6 +5,7 @@ use crate::errors::io::EngineError;
 use crate::events;
 use chrono::{DateTime, Utc};
 use serde_derive::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Deserialize, Serialize)]
 #[serde(untagged)]
@@ -208,7 +209,7 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
     }
 }
 
-type TransmitterId = String;
+type TransmitterId = Uuid;
 type TransmitterName = String;
 type TransmitterType = String;
 type TransmitterVersion = String;
@@ -329,6 +330,7 @@ mod test {
     use crate::events::{EngineEvent, EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
     use crate::models::scaleway::ScwRegion;
+    use uuid::Uuid;
 
     #[test]
     fn should_use_default_enum_value_when_serializing_infrastructure_step() {
@@ -341,7 +343,7 @@ mod test {
                 QoveryIdentifier::new_random().to_string(),
                 Some(ScwRegion::Paris.as_str().to_string()),
                 Stage::Infrastructure(InfrastructureStep::CreateError),
-                Transmitter::Kubernetes("".to_string(), "".to_string()),
+                Transmitter::Kubernetes(Uuid::new_v4(), "".to_string()),
             ),
             "user_log_message".to_string(),
             None,

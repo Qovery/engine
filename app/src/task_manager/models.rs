@@ -181,7 +181,7 @@ impl EngineRequest {
             self.id.to_string(),
             Some(kubernetes.region.to_string()),
             Stage::Infrastructure(infrastructure_step),
-            Transmitter::Kubernetes(kubernetes.id.to_string(), kubernetes.name.to_string()),
+            Transmitter::Kubernetes(kubernetes.long_id, kubernetes.name.to_string()),
         )
     }
 }
@@ -198,6 +198,7 @@ pub enum Action {
 pub struct BuildPlatform {
     pub kind: qovery_engine::build_platform::Kind,
     pub id: String,
+    pub long_id: Uuid,
     pub name: String,
     pub options: Options,
 }
@@ -211,7 +212,7 @@ impl BuildPlatform {
         Box::new(match self.kind {
             qovery_engine::build_platform::Kind::LocalDocker => {
                 // FIXME: Remove the unwrap by propagating errors above
-                LocalDocker::new(context.clone(), self.id.as_str(), self.name.as_str(), logger).unwrap()
+                LocalDocker::new(context.clone(), self.long_id, self.name.as_str(), logger).unwrap()
             }
         })
     }
@@ -221,7 +222,7 @@ impl BuildPlatform {
 pub struct CloudProvider {
     pub kind: qovery_engine::cloud_provider::Kind,
     pub id: String,
-    pub long_id: String,
+    pub long_id: Uuid,
     pub name: String,
     pub zones: Vec<String>,
     pub options: Options,
@@ -245,7 +246,7 @@ impl CloudProvider {
         match self.kind {
             qovery_engine::cloud_provider::Kind::Aws => Some(Box::new(AWS::new(
                 context,
-                self.id.as_str(),
+                self.long_id,
                 organization_id,
                 organization_long_id,
                 self.name.as_str(),
@@ -258,7 +259,7 @@ impl CloudProvider {
             ))),
             qovery_engine::cloud_provider::Kind::Do => Some(Box::new(DO::new(
                 context,
-                self.id.as_str(),
+                self.long_id,
                 organization_id,
                 organization_long_id,
                 self.options.token.as_ref()?.as_str(),
@@ -270,7 +271,7 @@ impl CloudProvider {
             ))),
             qovery_engine::cloud_provider::Kind::Scw => Some(Box::new(Scaleway::new(
                 context,
-                self.id.as_str(),
+                self.long_id,
                 organization_id,
                 organization_long_id,
                 self.name.as_str(),
@@ -334,7 +335,6 @@ impl Kubernetes {
             },
             qovery_engine::cloud_provider::kubernetes::Kind::Doks => match DOKS::new(
                 context.clone(),
-                self.id.clone(),
                 self.long_id,
                 self.name.clone(),
                 self.version.clone(),
@@ -354,7 +354,6 @@ impl Kubernetes {
             },
             qovery_engine::cloud_provider::kubernetes::Kind::ScwKapsule => match Kapsule::new(
                 context.clone(),
-                self.id.clone(),
                 self.long_id,
                 self.name.clone(),
                 self.version.clone(),

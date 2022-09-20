@@ -52,6 +52,7 @@ use crate::object_storage::spaces::{BucketDeleteStrategy, Spaces};
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
 use crate::string::terraform_list_format;
+use crate::utilities::to_short_id;
 use ::function_name::named;
 use std::path::Path;
 use std::str::FromStr;
@@ -114,7 +115,6 @@ pub struct DOKS {
 impl DOKS {
     pub fn new(
         context: Context,
-        id: String,
         long_id: Uuid,
         name: String,
         version: String,
@@ -138,7 +138,7 @@ impl DOKS {
                         context.execution_id().to_string(),
                         Some(region.to_string()),
                         Infrastructure(InfrastructureStep::LoadConfiguration),
-                        Transmitter::Kubernetes(id, name),
+                        Transmitter::Kubernetes(long_id, name),
                     ),
                     node_group.instance_type.as_str(),
                     e,
@@ -163,7 +163,7 @@ impl DOKS {
         let listeners = cloud_provider.listeners().clone();
         Ok(DOKS {
             context,
-            id,
+            id: to_short_id(&long_id),
             long_id,
             name,
             version,

@@ -153,7 +153,7 @@ impl<'a> Transaction<'a> {
             let event_details = self.get_event_details(
                 Stage::Environment(EnvironmentStep::Build),
                 Transmitter::ContainerRegistry(
-                    self.engine.container_registry().id().to_string(),
+                    *self.engine.container_registry().long_id(),
                     self.engine.container_registry().name().to_string(),
                 ),
             );
@@ -164,7 +164,7 @@ impl<'a> Transaction<'a> {
             self.get_event_details(
                 Stage::Environment(EnvironmentStep::Build),
                 Transmitter::BuildPlatform(
-                    self.engine.build_platform().id().to_string(),
+                    *self.engine.build_platform().long_id(),
                     self.engine.build_platform().name().to_string(),
                 ),
             )

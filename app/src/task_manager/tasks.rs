@@ -158,7 +158,7 @@ impl InfrastructureTask {
                     self.request.id.to_string(),
                     Some(kubernetes.region.to_string()),
                     Infrastructure(infrastructure_step),
-                    Transmitter::Kubernetes(kubernetes.id.to_string(), kubernetes.name.to_string()),
+                    Transmitter::Kubernetes(kubernetes.long_id, kubernetes.name.to_string()),
                 ),
                 event_message,
             );

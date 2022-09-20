@@ -18,6 +18,7 @@ use crate::io_models::context::Context;
 use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::io_models::QoveryIdentifier;
 use crate::runtime::block_on;
+use crate::utilities::to_short_id;
 
 pub mod kubernetes;
 pub mod load_balancers;
@@ -27,6 +28,7 @@ pub mod regions;
 pub struct AWS {
     context: Context,
     id: String,
+    long_id: Uuid,
     organization_id: String,
     organization_long_id: Uuid,
     name: String,
@@ -42,7 +44,7 @@ pub struct AWS {
 impl AWS {
     pub fn new(
         context: Context,
-        id: &str,
+        long_id: Uuid,
         organization_id: &str,
         organization_long_id: Uuid,
         name: &str,
@@ -55,7 +57,8 @@ impl AWS {
     ) -> Self {
         AWS {
             context,
-            id: id.to_string(),
+            id: to_short_id(&long_id),
+            long_id,
             organization_id: organization_id.to_string(),
             organization_long_id,
             name: name.to_string(),
@@ -182,7 +185,7 @@ impl CloudProvider for AWS {
     }
 
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::CloudProvider(self.id.to_string(), self.name.to_string())
+        Transmitter::CloudProvider(self.long_id, self.name.to_string())
     }
 
     fn aws_sdk_client(&self) -> Option<SdkConfig> {

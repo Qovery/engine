@@ -16,6 +16,7 @@ use std::hash::Hash;
 use std::path::PathBuf;
 use std::time::Duration;
 use url::Url;
+use uuid::Uuid;
 
 pub mod dockerfile_utils;
 pub mod local_docker;
@@ -68,6 +69,7 @@ pub trait BuildPlatform {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
+    fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
     fn name_with_id(&self) -> String {
         format!("{} ({})", self.name(), self.id())

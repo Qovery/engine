@@ -284,7 +284,7 @@ impl<T: CloudProvider> Service for Router<T> {
     }
 
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Router(self.id.to_string(), self.name.to_string())
+        Transmitter::Router(self.long_id, self.name.to_string())
     }
 
     fn as_service(&self) -> &dyn Service {
