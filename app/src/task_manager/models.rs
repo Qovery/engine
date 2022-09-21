@@ -486,7 +486,7 @@ impl ContainerRegistry {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DnsProvider {
     pub kind: Kind,
-    pub id: Uuid,
+    pub long_id: Uuid,
     pub name: String,
     pub domain: String,
     pub options: HashMap<String, String>,
@@ -505,7 +505,7 @@ impl DnsProvider {
 
                 Some(Box::new(Cloudflare::new(
                     context,
-                    self.id,
+                    self.long_id,
                     self.name.as_str(),
                     Domain::new(self.domain.clone()),
                     token.as_str(),
@@ -518,7 +518,7 @@ impl DnsProvider {
                 if let Ok(api_url) = Url::parse(qoverydns_api_url) {
                     return Some(Box::new(QoveryDns::new(
                         context,
-                        self.id,
+                        self.long_id,
                         api_url,
                         &cluster_jwt_token,
                         self.name.as_str(),
