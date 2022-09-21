@@ -1,4 +1,4 @@
-use crate::cloud_provider::helm::{ChartInfo, ChartSetValue};
+use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
@@ -8,112 +8,67 @@ use crate::template::generate_and_copy_all_files_into_dir;
 use k8s_openapi::api::core::v1::Pod;
 use kube::api::ListParams;
 use kube::Api;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tera::Context as TeraContext;
 use tokio::time::Instant;
 
 const DEFAULT_HELM_TIMEOUT: Duration = Duration::from_secs(10 * 60);
-
+/// Helm Deployment manages Helm + jinja support
 pub struct HelmDeployment {
-    release_name: String,
-    tera_context: TeraContext,
-    chart_folder: PathBuf,
-    destination_folder: PathBuf,
-    value_file_override: Option<PathBuf>,
-    values: Vec<ChartSetValue>,
     event_details: EventDetails,
-    pod_selector: Option<String>,
-    timeout: Duration,
+    tera_context: TeraContext,
+    /// The chart source directory which will be copied into the workspace
+    chart_orginal_dir: PathBuf,
+    /// name of the value files to render and use during helm deploy
+    pub render_custom_values_file: Option<PathBuf>,
+    /// Path should be inside the workspace directory because it will be copied there
+    pub helm_chart: ChartInfo,
 }
 
 impl HelmDeployment {
     pub fn new(
-        release_name: String,
-        tera_context: TeraContext,
-        chart_folder: PathBuf,
-        destination_folder: PathBuf,
         event_details: EventDetails,
-        pod_selector: Option<String>,
-        timeout: Option<Duration>,
+        tera_context: TeraContext,
+        chart_orginal_dir: PathBuf,
+        render_custom_values_file: Option<PathBuf>,
+        helm_chart: ChartInfo,
     ) -> HelmDeployment {
         HelmDeployment {
-            release_name,
-            tera_context,
-            chart_folder,
-            destination_folder,
-            value_file_override: None,
-            values: vec![],
             event_details,
-            pod_selector,
-            timeout: std::cmp::max(timeout.unwrap_or(DEFAULT_HELM_TIMEOUT), DEFAULT_HELM_TIMEOUT),
-        }
-    }
-
-    pub fn new_with_values_file_override(
-        release_name: String,
-        tera_context: TeraContext,
-        chart_folder: PathBuf,
-        destination_folder: PathBuf,
-        value_override: PathBuf,
-        event_details: EventDetails,
-        pod_selector: Option<String>,
-    ) -> HelmDeployment {
-        HelmDeployment {
-            release_name,
             tera_context,
-            chart_folder,
-            destination_folder,
-            value_file_override: Some(value_override),
-            values: vec![],
-            event_details,
-            pod_selector,
-            timeout: DEFAULT_HELM_TIMEOUT,
-        }
-    }
-
-    pub fn new_with_values(
-        release_name: String,
-        tera_context: TeraContext,
-        chart_folder: PathBuf,
-        destination_folder: PathBuf,
-        values: Vec<ChartSetValue>,
-        event_details: EventDetails,
-        pod_selector: Option<String>,
-    ) -> HelmDeployment {
-        HelmDeployment {
-            release_name,
-            tera_context,
-            chart_folder,
-            destination_folder,
-            value_file_override: None,
-            values,
-            event_details,
-            pod_selector,
-            timeout: DEFAULT_HELM_TIMEOUT,
+            chart_orginal_dir,
+            render_custom_values_file,
+            helm_chart,
         }
     }
 
     fn prepare_helm_chart(&self) -> Result<(), EngineError> {
         // Copy the root folder
-        generate_and_copy_all_files_into_dir(&self.chart_folder, &self.destination_folder, self.tera_context.clone())
+        generate_and_copy_all_files_into_dir(&self.chart_orginal_dir, &self.helm_chart.path, self.tera_context.clone())
             .map_err(|e| {
-            EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                self.event_details.clone(),
-                self.chart_folder.to_string_lossy().to_string(),
-                self.destination_folder.to_string_lossy().to_string(),
-                e,
-            )
-        })?;
-
-        // If we have some special value override, replace it also
-        if let Some(value_override) = &self.value_file_override {
-            generate_and_copy_all_files_into_dir(value_override, &self.destination_folder, self.tera_context.clone())
-                .map_err(|e| {
                 EngineError::new_cannot_copy_files_from_one_directory_to_another(
                     self.event_details.clone(),
-                    self.chart_folder.to_string_lossy().to_string(),
-                    self.destination_folder.to_string_lossy().to_string(),
+                    self.chart_orginal_dir.to_string_lossy().to_string(),
+                    self.helm_chart.path.clone(),
+                    e,
+                )
+            })?;
+
+        // If we have some special value override, render and copy it
+        if let Some(custom_value) = self.render_custom_values_file.clone() {
+            let custom_value_dir_path = custom_value.parent().unwrap_or_else(|| Path::new("./"));
+
+            generate_and_copy_all_files_into_dir(
+                custom_value_dir_path,
+                &self.helm_chart.path,
+                self.tera_context.clone(),
+            )
+            .map_err(|e| {
+                EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                    self.event_details.clone(),
+                    self.chart_orginal_dir.to_string_lossy().to_string(),
+                    self.helm_chart.path.clone(),
                     e,
                 )
             })?;
@@ -127,22 +82,13 @@ impl DeploymentAction for HelmDeployment {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         self.prepare_helm_chart()?;
 
-        let workspace_dir = self.destination_folder.to_str().unwrap_or_default();
-        let chart = ChartInfo::new_from_custom_namespace(
-            self.release_name.to_string(),
-            workspace_dir.to_string(),
-            target.environment.namespace().to_string(),
-            self.timeout.as_secs() as i64,
-            vec![],
-            self.values.clone(),
-            vec![],
-            false,
-            None,
-        );
+        // print diff in logs
+        let _ = target.helm.upgrade_diff(&self.helm_chart, &[]);
 
+        //upgrade
         target
             .helm
-            .upgrade(&chart, &[])
+            .upgrade(&self.helm_chart, &[])
             .map_err(|e| EngineError::new_helm_error(self.event_details.clone(), e))
     }
 
@@ -151,16 +97,14 @@ impl DeploymentAction for HelmDeployment {
     }
 
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let chart = ChartInfo::new_from_release_name(&self.release_name, target.environment.namespace());
-
         target
             .helm
-            .uninstall(&chart, &[])
+            .uninstall(&self.helm_chart, &[])
             .map_err(|e| EngineError::new_helm_error(self.event_details.clone(), e))?;
 
         // helm does not wait for pod to terminate https://github.com/helm/helm/issues/10586
         // So wait for
-        if let Some(pod_selector) = &self.pod_selector {
+        if let Some(pod_selector) = &self.helm_chart.k8s_selector {
             block_on(async {
                 let started = Instant::now();
 
@@ -231,18 +175,16 @@ mod tests {
 
         let mut tera_context = tera::Context::default();
         tera_context.insert("app_name", "pause");
-        let helm_deployment = HelmDeployment::new(
-            chart.name.clone(),
+        let helm = HelmDeployment::new(
+            event_details,
             tera_context,
             PathBuf::from("tests/helm/simple_app_deployment"),
-            dest_folder,
-            event_details,
-            Some("app=pause".to_string()),
             None,
+            chart.clone(),
         );
 
         // Render a simple chart
-        helm_deployment.prepare_helm_chart().unwrap();
+        helm.prepare_helm_chart().unwrap();
 
         let mut kube_config = dirs::home_dir().unwrap();
         kube_config.push(".kube/config");

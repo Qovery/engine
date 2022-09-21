@@ -35,6 +35,7 @@ use crate::object_storage::scaleway_object_storage::{BucketDeleteStrategy, Scale
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
 use crate::string::terraform_list_format;
+use crate::utilities::to_short_id;
 use ::function_name::named;
 use reqwest::StatusCode;
 use retry::delay::Fixed;
@@ -151,7 +152,6 @@ pub struct Kapsule {
 impl Kapsule {
     pub fn new(
         context: Context,
-        id: String,
         long_id: Uuid,
         name: String,
         version: String,
@@ -175,7 +175,7 @@ impl Kapsule {
                         context.execution_id().to_string(),
                         Some(zone.region_str().to_string()),
                         Infrastructure(InfrastructureStep::LoadConfiguration),
-                        Transmitter::Kubernetes(id, name),
+                        Transmitter::Kubernetes(long_id, name),
                     ),
                     node_group.instance_type.as_str(),
                     e,
@@ -201,7 +201,7 @@ impl Kapsule {
 
         Ok(Kapsule {
             context,
-            id,
+            id: to_short_id(&long_id),
             long_id,
             name,
             version,

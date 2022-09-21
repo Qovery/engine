@@ -12,6 +12,7 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::io_models::QoveryIdentifier;
 use derivative::Derivative;
 use std::fmt::{Display, Formatter};
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 /// EngineEvent: represents an event happening in the Engine.
@@ -300,12 +301,20 @@ impl Display for InfrastructureStep {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// EnvironmentStep: represents an engine environment step.
 pub enum EnvironmentStep {
+    /// Deployment has started. It is the first message sent by the engine.
+    Start,
+    /// Deployment is terminated. It is the terminal message sent by the engine
+    Terminated,
     /// LoadConfiguration: first step in environment, aiming to load all configuration (from Terraform, etc).
     LoadConfiguration,
     /// Build: building an application (docker or build packs).
     Build,
     /// Built: env is built.
     Built,
+    // Environment received notification and is in progress to be cancelled.
+    Cancel,
+    // Environment deployment has been cancelled.
+    Cancelled,
     /// Deploy: deploy an environment (application to kubernetes).
     Deploy,
     /// Deployed: env has been deployed.
@@ -359,13 +368,17 @@ impl Display for EnvironmentStep {
                 EnvironmentStep::Deleted => "deleted",
                 EnvironmentStep::ScaledUp => "scaled-up",
                 EnvironmentStep::ScaledDown => "scaled-down",
+                EnvironmentStep::Start => "start",
+                EnvironmentStep::Cancel => "cancel",
+                EnvironmentStep::Cancelled => "cancelled",
+                EnvironmentStep::Terminated => "terminated",
             },
         )
     }
 }
 
 /// TransmitterId: represents a transmitter unique identifier.
-type TransmitterId = String;
+type TransmitterId = Uuid;
 /// TransmitterName: represents a transmitter name.
 type TransmitterName = String;
 /// TransmitterType: represents a transmitter type.

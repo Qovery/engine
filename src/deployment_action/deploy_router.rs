@@ -1,3 +1,4 @@
+use crate::cloud_provider::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::cloud_provider::models::CustomDomain;
 use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::utilities::print_action;
@@ -32,14 +33,20 @@ where
         );
 
         execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Create), || {
+            let chart = ChartInfo {
+                name: self.helm_release_name(),
+                path: self.workspace_directory(),
+                namespace: HelmChartNamespaces::Custom,
+                custom_namespace: Some(target.environment.namespace().to_string()),
+                ..Default::default()
+            };
+
             let helm = HelmDeployment::new(
-                self.helm_release_name(),
+                event_details.clone(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
-                PathBuf::from(self.workspace_directory()),
-                event_details.clone(),
                 None,
-                None,
+                chart,
             );
 
             helm.on_create(target)
@@ -98,19 +105,24 @@ where
             "router",
             function_name!(),
             self.name(),
-            event_details.clone(),
+            event_details,
             self.logger(),
         );
 
         execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Delete), || {
+            let chart = ChartInfo {
+                name: self.helm_release_name(),
+                namespace: HelmChartNamespaces::Custom,
+                custom_namespace: Some(target.environment.namespace().to_string()),
+                action: HelmAction::Destroy,
+                ..Default::default()
+            };
             let helm = HelmDeployment::new(
-                self.helm_release_name(),
+                self.get_event_details(Stage::Environment(EnvironmentStep::Delete)),
                 self.to_tera_context(target)?,
-                PathBuf::from(self.helm_chart_dir()),
-                PathBuf::from(self.workspace_directory()),
-                event_details.clone(),
+                PathBuf::from(self.helm_chart_dir().as_str()),
                 None,
-                None,
+                chart,
             );
 
             helm.on_delete(target)

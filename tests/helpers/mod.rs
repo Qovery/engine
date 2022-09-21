@@ -3,7 +3,6 @@ pub mod aws;
 pub mod aws_ec2;
 pub mod common;
 pub mod database;
-pub mod digitalocean;
 pub mod dns;
 pub mod edge_aws_rs;
 pub mod environment;

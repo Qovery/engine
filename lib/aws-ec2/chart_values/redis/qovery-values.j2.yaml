@@ -1,0 +1,101 @@
+image:
+  tag: "{{ version }}"
+
+nameOverride: "{{ sanitized_name }}"
+fullnameOverride: "{{ sanitized_name }}"
+
+cluster:
+  enabled: false
+  service:
+    labels:
+      envId: "{{ environment_id }}"
+      databaseId: "{{ id }}"
+      databaseLongId: "{{ long_id }}"
+      envLongId: "{{ environment_long_id }}"
+      projectLongId: "{{ project_long_id }}"
+      qovery.com/service-id: "{{ long_id }}"
+      qovery.com/service-type: "database"
+      qovery.com/environment-id: "{{ environment_long_id }}"
+      qovery.com/project-id: "{{ project_long_id }}"
+
+networkPolicy:
+  allowExternal: true
+
+rbac:
+  create: true
+
+usePassword: true
+password: "{{ database_password }}"
+
+master:
+  podLabels:
+    envId: "{{ environment_id }}"
+    databaseId: "{{ id }}"
+    databaseLongId: "{{ long_id }}"
+    envLongId: "{{ environment_long_id }}"
+    projectLongId: "{{ project_long_id }}"
+    qovery.com/service-id: "{{ long_id }}"
+    qovery.com/service-type: "database"
+    qovery.com/environment-id: "{{ environment_long_id }}"
+    qovery.com/project-id: "{{ project_long_id }}"
+  podAnnotations:
+    envId: "{{ environment_id }}"
+    databaseId: "{{ id }}"
+    databaseLongId: "{{ long_id }}"
+    envLongId: "{{ environment_long_id }}"
+    projectLongId: "{{ project_long_id }}"
+    qovery.com/service-id: "{{ long_id }}"
+    qovery.com/service-type: "database"
+    qovery.com/environment-id: "{{ environment_long_id }}"
+    qovery.com/project-id: "{{ project_long_id }}"
+
+  service:
+    ##  Redis Master Service type
+    name: {{ service_name }}
+    {% if publicly_accessible -%}
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+      external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
+      external-dns.alpha.kubernetes.io/ttl: "300"
+    {% endif %}
+    labels:
+      envId: "{{ environment_id }}"
+      databaseId: "{{ id }}"
+      databaseLongId: "{{ long_id }}"
+      envLongId: "{{ environment_long_id }}"
+      projectLongId: "{{ project_long_id }}"
+      qovery.com/service-id: "{{ long_id }}"
+      qovery.com/service-type: "database"
+      qovery.com/environment-id: "{{ environment_long_id }}"
+      qovery.com/project-id: "{{ project_long_id }}"
+
+  persistence:
+    storageClass: "aws-ebs-gp2-0"
+    size: "{{ database_disk_size_in_gib }}Gi"
+
+  ## Update strategy, can be set to RollingUpdate or onDelete by default.
+  ## https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#updating-statefulsets
+  statefulset:
+    labels:
+      envId: "{{ environment_id }}"
+      databaseId: "{{ id }}"
+      databaseLongId: "{{ long_id }}"
+      envLongId: "{{ environment_long_id }}"
+      projectLongId: "{{ project_long_id }}"
+      qovery.com/service-id: "{{ long_id }}"
+      qovery.com/service-type: "database"
+      qovery.com/environment-id: "{{ environment_long_id }}"
+      qovery.com/project-id: "{{ project_long_id }}"
+
+  priorityClassName: ""
+
+volumePermissions:
+  enabled: true
+
+resources:
+  requests:
+    memory: "{{ database_ram_size_in_mib }}Mi"
+    cpu: "{{ database_total_cpus }}"
+  limits:
+    memory: "{{ database_ram_size_in_mib }}Mi"
+    cpu: "{{ database_total_cpus }}"

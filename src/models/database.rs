@@ -211,7 +211,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Datab
     }
 
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Database(self.id.to_string(), T::short_name().to_string(), self.name.to_string())
+        Transmitter::Database(self.long_id, T::short_name().to_string(), self.name.to_string())
     }
 
     fn as_service(&self) -> &dyn Service {

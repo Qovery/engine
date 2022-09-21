@@ -333,7 +333,7 @@ impl<T: CloudProvider> Service for Container<T> {
     }
 
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Container(self.id.to_string(), self.name.to_string(), self.image_with_tag())
+        Transmitter::Container(self.long_id, self.name.to_string(), self.image_with_tag())
     }
 
     fn as_service(&self) -> &dyn Service {
@@ -348,15 +348,15 @@ pub trait ContainerService: Service + DeploymentAction + ToTeraContext {
     fn kube_service_name(&self) -> String;
     fn startup_timeout(&self) -> std::time::Duration {
         let settings = self.advanced_settings();
-        let max = std::cmp::max(
-            settings.liveness_probe_initial_delay_seconds
-                + ((settings.liveness_probe_timeout_seconds + settings.liveness_probe_period_seconds)
-                    * settings.liveness_probe_failure_threshold),
-            settings.readiness_probe_initial_delay_seconds
-                + ((settings.readiness_probe_timeout_seconds + settings.readiness_probe_period_seconds)
-                    * settings.readiness_probe_failure_threshold),
-        );
-        std::time::Duration::from_secs(max as u64)
+        let readiness_probe_timeout = settings.readiness_probe_initial_delay_seconds
+            + ((settings.readiness_probe_timeout_seconds + settings.readiness_probe_period_seconds)
+                * settings.readiness_probe_failure_threshold);
+        let liveness_probe_timeout = settings.liveness_probe_initial_delay_seconds
+            + ((settings.liveness_probe_timeout_seconds + settings.liveness_probe_period_seconds)
+                * settings.liveness_probe_failure_threshold);
+        let probe_timeout = std::cmp::max(readiness_probe_timeout, liveness_probe_timeout);
+        let startup_timeout = std::cmp::max(probe_timeout /* * 10 rolling restart percent */, 60 * 10);
+        std::time::Duration::from_secs(startup_timeout as u64)
     }
 }
 

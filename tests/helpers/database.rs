@@ -1,6 +1,5 @@
 use crate::helpers::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
 use crate::helpers::common::{compute_test_cluster_endpoint, Cluster, ClusterDomain, Infrastructure};
-use crate::helpers::digitalocean::{DO_KUBERNETES_VERSION, DO_TEST_REGION};
 use crate::helpers::kubernetes::{KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
 use crate::helpers::scaleway::{SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
 use crate::helpers::utilities::{
@@ -14,7 +13,6 @@ use core::option::Option;
 use core::option::Option::{None, Some};
 use core::result::Result::{Err, Ok};
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::environment::Environment;
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
@@ -599,7 +597,7 @@ pub fn test_db(
 
     let (localisation, kubernetes_version) = match provider_kind {
         Kind::Aws => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
-        Kind::Do => (DO_TEST_REGION.to_string(), DO_KUBERNETES_VERSION.to_string()),
+        Kind::Do => ("".to_string(), "".to_string()),
         Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
     };
 
@@ -632,18 +630,7 @@ pub fn test_db(
                     1,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
                 ),
-                KubernetesKind::Doks => DO::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    localisation.as_str(),
-                    KubernetesKind::Doks,
-                    kubernetes_version.clone(),
-                    &cluster_domain,
-                    None,
-                    KUBERNETES_MIN_NODES,
-                    KUBERNETES_MAX_NODES,
-                    EngineLocation::ClientSide,
-                ),
+                KubernetesKind::Doks => todo!(),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context,
                     logger.clone(),
@@ -746,18 +733,7 @@ pub fn test_db(
                     1,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
                 ),
-                KubernetesKind::Doks => DO::docker_cr_engine(
-                    &context_for_delete,
-                    logger.clone(),
-                    localisation.as_str(),
-                    KubernetesKind::Doks,
-                    kubernetes_version,
-                    &cluster_domain,
-                    None,
-                    KUBERNETES_MIN_NODES,
-                    KUBERNETES_MAX_NODES,
-                    EngineLocation::ClientSide,
-                ),
+                KubernetesKind::Doks => todo!(),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,
                     logger.clone(),
@@ -876,7 +852,7 @@ pub fn test_pause_managed_db(
 
     let (localisation, kubernetes_version) = match provider_kind {
         Kind::Aws => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
-        Kind::Do => (DO_TEST_REGION.to_string(), DO_KUBERNETES_VERSION.to_string()),
+        Kind::Do => ("".to_string(), "".to_string()),
         Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
     };
 
@@ -909,18 +885,7 @@ pub fn test_pause_managed_db(
                     1,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
                 ),
-                KubernetesKind::Doks => DO::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    localisation.as_str(),
-                    KubernetesKind::Doks,
-                    kubernetes_version.clone(),
-                    &cluster_domain,
-                    None,
-                    KUBERNETES_MIN_NODES,
-                    KUBERNETES_MAX_NODES,
-                    EngineLocation::ClientSide,
-                ),
+                KubernetesKind::Doks => todo!(),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context,
                     logger.clone(),
@@ -1019,18 +984,7 @@ pub fn test_pause_managed_db(
                     1,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
                 ),
-                KubernetesKind::Doks => DO::docker_cr_engine(
-                    &context_for_delete,
-                    logger.clone(),
-                    localisation.as_str(),
-                    KubernetesKind::Doks,
-                    kubernetes_version,
-                    &cluster_domain,
-                    None,
-                    KUBERNETES_MIN_NODES,
-                    KUBERNETES_MAX_NODES,
-                    EngineLocation::ClientSide,
-                ),
+                KubernetesKind::Doks => todo!(),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,
                     logger.clone(),
@@ -1163,7 +1117,7 @@ pub fn test_db_on_upgrade(
 
     let (localisation, kubernetes_version) = match provider_kind {
         Kind::Aws => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
-        Kind::Do => (DO_TEST_REGION.to_string(), DO_KUBERNETES_VERSION.to_string()),
+        Kind::Do => ("".to_string(), "".to_string()),
         Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
     };
 
@@ -1182,20 +1136,7 @@ pub fn test_db_on_upgrade(
             KUBERNETES_MAX_NODES,
             EngineLocation::ClientSide,
         ),
-        Kind::Do => DO::docker_cr_engine(
-            &context,
-            logger.clone(),
-            localisation.as_str(),
-            KubernetesKind::Doks,
-            kubernetes_version.clone(),
-            &ClusterDomain::Default {
-                cluster_id: context.cluster_short_id().to_string(),
-            },
-            None,
-            KUBERNETES_MIN_NODES,
-            KUBERNETES_MAX_NODES,
-            EngineLocation::ClientSide,
-        ),
+        Kind::Do => todo!(),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
             logger.clone(),
@@ -1279,20 +1220,7 @@ pub fn test_db_on_upgrade(
             KUBERNETES_MAX_NODES,
             EngineLocation::ClientSide,
         ),
-        Kind::Do => DO::docker_cr_engine(
-            &context_for_delete,
-            logger.clone(),
-            localisation.as_str(),
-            KubernetesKind::Doks,
-            kubernetes_version,
-            &ClusterDomain::Default {
-                cluster_id: context_for_delete.cluster_short_id().to_string(),
-            },
-            None,
-            KUBERNETES_MIN_NODES,
-            KUBERNETES_MAX_NODES,
-            EngineLocation::ClientSide,
-        ),
+        Kind::Do => todo!(),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context_for_delete,
             logger.clone(),

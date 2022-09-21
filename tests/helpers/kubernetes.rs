@@ -11,8 +11,6 @@ use qovery_engine::cloud_provider::aws::kubernetes::eks::EKS;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
-use qovery_engine::cloud_provider::digitalocean::DO;
 use qovery_engine::cloud_provider::io::ClusterAdvancedSettings;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
@@ -23,7 +21,6 @@ use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::Logger;
-use qovery_engine::models::digital_ocean::DoRegion;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::{Transaction, TransactionResult};
 use std::rc::Rc;
@@ -119,30 +116,10 @@ pub fn get_cluster_test_kubernetes<'a>(
                 .unwrap(),
             )
         }
-        KubernetesKind::Doks => Box::new(
-            DOKS::new(
-                context.clone(),
-                cluster_id,
-                Uuid::new_v4(),
-                cluster_name.clone(),
-                boot_version,
-                DoRegion::from_str(localisation).expect("Unknown region set for DOKS"),
-                cloud_provider,
-                dns_provider,
-                DO::kubernetes_nodes(min_nodes, max_nodes),
-                DO::kubernetes_cluster_options(secrets, Option::from(cluster_name), EngineLocation::ClientSide),
-                logger,
-                ClusterAdvancedSettings {
-                    pleco_resources_ttl: 14400,
-                    ..Default::default()
-                },
-            )
-            .unwrap(),
-        ),
+        KubernetesKind::Doks => todo!(),
         KubernetesKind::ScwKapsule => Box::new(
             Kapsule::new(
                 context.clone(),
-                cluster_id,
                 Uuid::new_v4(),
                 cluster_name,
                 boot_version,
@@ -197,18 +174,7 @@ pub fn cluster_test(
             KUBERNETES_MAX_NODES,
             EngineLocation::ClientSide,
         ),
-        Kind::Do => DO::docker_cr_engine(
-            &context,
-            logger.clone(),
-            localisation,
-            kubernetes_kind,
-            boot_version,
-            cluster_domain,
-            vpc_network_mode.clone(),
-            KUBERNETES_MIN_NODES,
-            KUBERNETES_MAX_NODES,
-            EngineLocation::ClientSide,
-        ),
+        Kind::Do => todo!(),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
             logger.clone(),
@@ -291,18 +257,7 @@ pub fn cluster_test(
                     KUBERNETES_MAX_NODES,
                     EngineLocation::ClientSide,
                 ),
-                Kind::Do => DO::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    localisation,
-                    KubernetesKind::Doks,
-                    upgrade_to_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    KUBERNETES_MIN_NODES,
-                    KUBERNETES_MAX_NODES,
-                    EngineLocation::ClientSide,
-                ),
+                Kind::Do => todo!(),
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
                     logger.clone(),
@@ -352,18 +307,7 @@ pub fn cluster_test(
                     max_nodes,
                     EngineLocation::ClientSide,
                 ),
-                Kind::Do => DO::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    localisation,
-                    KubernetesKind::Doks,
-                    kubernetes_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    min_nodes,
-                    max_nodes,
-                    EngineLocation::ClientSide,
-                ),
+                Kind::Do => todo!(),
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
                     logger.clone(),
@@ -494,40 +438,13 @@ pub fn get_environment_test_kubernetes(
                 .unwrap(),
             )
         }
-        KubernetesKind::Doks => {
-            let region = DoRegion::from_str(localisation).expect("DO region not supported");
-            Box::new(
-                DOKS::new(
-                    context.clone(),
-                    context.cluster_short_id().to_string(),
-                    Uuid::new_v4(),
-                    format!("qovery-{}", context.cluster_short_id()),
-                    kubernetes_version.to_string(),
-                    region,
-                    cloud_provider,
-                    dns_provider,
-                    DO::kubernetes_nodes(min_nodes, max_nodes),
-                    DO::kubernetes_cluster_options(
-                        secrets,
-                        Option::from(context.cluster_short_id().to_string()),
-                        EngineLocation::ClientSide,
-                    ),
-                    logger,
-                    ClusterAdvancedSettings {
-                        pleco_resources_ttl: 14400,
-                        ..Default::default()
-                    },
-                )
-                .unwrap(),
-            )
-        }
+        KubernetesKind::Doks => todo!(),
         KubernetesKind::ScwKapsule => {
             let zone = ScwZone::from_str(localisation).expect("SCW zone not supported");
             Box::new(
                 Kapsule::new(
                     context.clone(),
-                    context.cluster_short_id().to_string(),
-                    Uuid::new_v4(),
+                    *context.cluster_long_id(),
                     format!("qovery-{}", context.cluster_short_id()),
                     kubernetes_version.to_string(),
                     zone,

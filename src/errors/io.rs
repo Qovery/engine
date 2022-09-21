@@ -177,6 +177,7 @@ pub enum Tag {
     CloudProviderGetLoadBalancer,
     CloudProviderGetLoadBalancerTags,
     CloudProviderDeleteLoadBalancer,
+    InvalidEnginePayload,
 }
 
 impl From<errors::Tag> for Tag {
@@ -356,6 +357,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CloudProviderGetLoadBalancerTags => Tag::CloudProviderGetLoadBalancerTags,
             errors::Tag::K8sCannotDeletePvc => Tag::K8sCannotDeletePvc,
             errors::Tag::CloudProviderDeleteLoadBalancer => Tag::CloudProviderDeleteLoadBalancer,
+            errors::Tag::InvalidEnginePayload => Tag::InvalidEnginePayload,
         }
     }
 }

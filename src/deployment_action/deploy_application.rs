@@ -1,3 +1,4 @@
+use crate::cloud_provider::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::cloud_provider::service::{delete_pending_service, Action, Service};
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::DeploymentTarget;
@@ -45,14 +46,22 @@ where
             )
             .unpause_if_needed(target);
 
+            let chart = ChartInfo {
+                name: self.helm_release_name(),
+                path: self.workspace_directory(),
+                namespace: HelmChartNamespaces::Custom,
+                custom_namespace: Some(target.environment.namespace().to_string()),
+                timeout_in_seconds: self.startup_timeout().as_secs() as i64,
+                k8s_selector: Some(self.selector()),
+                ..Default::default()
+            };
+
             let helm = HelmDeployment::new(
-                self.helm_release_name(),
+                event_details.clone(),
                 self.to_tera_context(target)?,
                 PathBuf::from(self.helm_chart_dir()),
-                PathBuf::from(self.workspace_directory()),
-                event_details.clone(),
-                Some(self.selector()),
-                Some(self.startup_timeout()),
+                None,
+                chart,
             );
 
             helm.on_create(target)?;
@@ -95,14 +104,20 @@ where
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Delete), || {
+            let chart = ChartInfo {
+                name: self.helm_release_name(),
+                namespace: HelmChartNamespaces::Custom,
+                custom_namespace: Some(target.environment.namespace().to_string()),
+                action: HelmAction::Destroy,
+                k8s_selector: Some(self.selector()),
+                ..Default::default()
+            };
             let helm = HelmDeployment::new(
-                self.helm_release_name(),
-                Context::default(),
-                PathBuf::from(self.helm_chart_dir()),
-                PathBuf::from(self.workspace_directory()),
                 event_details.clone(),
-                Some(self.selector()),
+                Context::default(),
+                PathBuf::from(self.helm_chart_dir().as_str()),
                 None,
+                chart,
             );
 
             helm.on_delete(target)?;
