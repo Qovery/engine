@@ -19,11 +19,7 @@ data "aws_subnet_ids" "selected" {
 
 data "aws_security_group" "selected" {
   filter {
-    name = "tag:Name"
-    values = ["qovery-eks-workers"]
-  }
-  filter {
-    name   = "tag:kubernetes.io/cluster/${var.kubernetes_cluster_id}"
+    name   = "tag:kubernetes.io/cluster/qovery-${var.kubernetes_cluster_id}"
     values = ["owned"]
   }
 }
