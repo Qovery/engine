@@ -165,6 +165,10 @@ impl Kubernetes for EC2 {
         Ok(())
     }
 
+    fn is_network_managed_by_user(&self) -> bool {
+        false
+    }
+
     #[named]
     fn on_create(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
