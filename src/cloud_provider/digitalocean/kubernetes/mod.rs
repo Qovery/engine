@@ -1121,6 +1121,10 @@ impl Kubernetes for DOKS {
         Ok(())
     }
 
+    fn is_network_managed_by_user(&self) -> bool {
+        false
+    }
+
     fn get_kubeconfig_file(&self) -> Result<(String, File), EngineError> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let bucket_name = format!("qovery-kubeconfigs-{}", self.id());

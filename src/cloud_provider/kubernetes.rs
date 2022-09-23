@@ -71,6 +71,7 @@ pub trait Kubernetes {
     fn logger(&self) -> &dyn Logger;
     fn config_file_store(&self) -> &dyn ObjectStorage;
     fn is_valid(&self) -> Result<(), EngineError>;
+    fn is_network_managed_by_user(&self) -> bool;
     fn kube_client(&self) -> Result<kube::Client, EngineError> {
         // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
         let kubeconfig_path = self.get_kubeconfig_file_path().unwrap_or_default();

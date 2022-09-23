@@ -294,6 +294,7 @@ where
             context.insert(k, v);
         }
 
+        context.insert("user_provided_network", &kubernetes.is_network_managed_by_user());
         context.insert("kubernetes_cluster_id", kubernetes.id());
         context.insert("kubernetes_cluster_name", kubernetes.name());
         context.insert("fqdn_id", self.fqdn_id.as_str());
