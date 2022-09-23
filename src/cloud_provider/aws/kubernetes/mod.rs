@@ -1,4 +1,7 @@
 use core::fmt;
+use k8s_openapi::api::apps::v1::DaemonSet;
+use kube::api::{Patch, PatchParams};
+use kube::Api;
 use std::io::Read;
 use std::path::Path;
 use std::str::FromStr;
@@ -1057,6 +1060,26 @@ fn create(
         EventMessage::new_from_safe("Preparing chart configuration to be deployed".to_string()),
     ));
 
+    // When the user control the network/vpc configuration, we may hit a bug of the in tree aws load balancer controller
+    // were if there is a custom dns server set for the VPC, kube-proxy nodes are not correctly configured and load balancer healthcheck are failing
+    // The correct fix would be to stop using the k8s in tree lb controller, and use instead the external aws lb controller.
+    // But as we don't want to do the migration for all users, we will just patch the kube-proxy configuration on the fly
+    // https://aws.amazon.com/premiumsupport/knowledge-center/eks-troubleshoot-unhealthy-targets-nlb/
+    // https://github.com/kubernetes/kubernetes/issues/80579
+    // https://github.com/kubernetes/cloud-provider-aws/issues/87
+    if kubernetes.is_network_managed_by_user() && kubernetes.kind() == Kind::Eks {
+        info!("patching kube-proxy configuration to fix k8s in tree load balancer controller bug");
+        block_on(patch_kube_proxy_for_aws_user_network(kubernetes.kube_client()?)).map_err(|e| {
+            EngineError::new_k8s_node_not_ready(
+                event_details.clone(),
+                CommandError::new_from_safe_message(format!(
+                    "Cannot patch kube proxy for user configured network: {}",
+                    e
+                )),
+            )
+        })?;
+    }
+
     let helm_charts_to_deploy = match kubernetes.kind() {
         Kind::Eks => {
             let charts_prerequisites = EksChartsConfigPrerequisites {
@@ -1711,4 +1734,57 @@ fn delete_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
     ));
 
     Ok(())
+}
+
+async fn patch_kube_proxy_for_aws_user_network(kube_client: kube::Client) -> Result<DaemonSet, kube::Error> {
+    let daemon_set: Api<DaemonSet> = Api::namespaced(kube_client, "kube-system");
+    let patch_params = PatchParams::default();
+    let daemonset_patch = serde_json::json!({
+      "spec": {
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "name": "kube-proxy",
+                "command": [
+                  "kube-proxy",
+                  "--v=2",
+                  "--hostname-override=$(NODE_NAME)",
+                  "--config=/var/lib/kube-proxy-config/config"
+                ],
+                "env": [
+                  {
+                    "name": "NODE_NAME",
+                    "valueFrom": {
+                      "fieldRef": {
+                        "apiVersion": "v1",
+                        "fieldPath": "spec.nodeName"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    });
+
+    daemon_set
+        .patch("kube-proxy", &patch_params, &Patch::Strategic(daemonset_patch))
+        .await
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::aws::kubernetes::patch_kube_proxy_for_aws_user_network;
+
+    #[ignore]
+    #[tokio::test]
+    async fn test_kube_proxy_patch() -> Result<(), Box<dyn std::error::Error>> {
+        let kube_client = kube::Client::try_default().await.unwrap();
+        patch_kube_proxy_for_aws_user_network(kube_client).await?;
+
+        Ok(())
+    }
 }
