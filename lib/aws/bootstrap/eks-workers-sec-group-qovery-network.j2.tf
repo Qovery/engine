@@ -20,7 +20,7 @@ resource "aws_security_group" "eks_cluster_workers" {
     local.tags_eks,
     {
       Name = "qovery-eks-workers",
-      "kubernetes.io/cluster/${var.kubernetes_cluster_id}" = "owned",
+      "kubernetes.io/cluster/qovery-${var.kubernetes_cluster_id}" = "owned",
     }
   )
 }

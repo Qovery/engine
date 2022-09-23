@@ -248,6 +248,10 @@ impl Kubernetes for EKS {
         Ok(())
     }
 
+    fn is_network_managed_by_user(&self) -> bool {
+        self.options.user_network_config.is_some()
+    }
+
     #[named]
     fn on_create(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));

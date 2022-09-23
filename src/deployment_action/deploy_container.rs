@@ -240,7 +240,7 @@ where
         };
 
         let logger = get_loggers(self, Action::Delete);
-        (logger.send_progress)("🪓 Deleting cached image of the container".to_string());
+        (logger.send_success)("🪓 Deleting cached image of the container".to_string());
         target
             .container_registry
             .delete_image(&image)
