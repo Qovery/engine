@@ -215,10 +215,13 @@ type TransmitterType = String;
 type TransmitterVersion = String;
 
 #[derive(Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 #[serde(tag = "type")]
 pub enum Transmitter {
-    TaskManager,
+    TaskManager {
+        id: TransmitterId,
+        name: TransmitterName,
+    },
     BuildPlatform {
         id: TransmitterId,
         name: TransmitterName,
@@ -274,7 +277,7 @@ pub enum Transmitter {
 impl From<events::Transmitter> for Transmitter {
     fn from(transmitter: events::Transmitter) -> Self {
         match transmitter {
-            events::Transmitter::TaskManager => Transmitter::TaskManager,
+            events::Transmitter::TaskManager(id, name) => Transmitter::TaskManager { id, name },
             events::Transmitter::BuildPlatform(id, name) => Transmitter::BuildPlatform { id, name },
             events::Transmitter::ContainerRegistry(id, name) => Transmitter::ContainerRegistry { id, name },
             events::Transmitter::CloudProvider(id, name) => Transmitter::CloudProvider { id, name },
@@ -285,7 +288,6 @@ impl From<events::Transmitter> for Transmitter {
             events::Transmitter::Database(id, db_type, name) => Transmitter::Database { id, db_type, name },
             events::Transmitter::Application(id, name, commit) => Transmitter::Application { id, name, commit },
             events::Transmitter::Router(id, name) => Transmitter::Router { id, name },
-            events::Transmitter::SecretManager(name) => Transmitter::SecretManager { name },
             events::Transmitter::Container(id, name, version) => Transmitter::Container {
                 id,
                 name,

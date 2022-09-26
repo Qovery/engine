@@ -378,7 +378,7 @@ type TransmitterVersion = String;
 /// Transmitter: represents the event's source caller (transmitter).
 pub enum Transmitter {
     /// TaskManager: engine main task manager.
-    TaskManager,
+    TaskManager(TransmitterId, TransmitterName),
     /// BuildPlatform: platform aiming to build applications images.
     BuildPlatform(TransmitterId, TransmitterName),
     /// ContainerRegistry: container registry engine part.
@@ -401,8 +401,6 @@ pub enum Transmitter {
     Container(TransmitterId, TransmitterName, TransmitterVersion),
     /// Router: router engine part.
     Router(TransmitterId, TransmitterName),
-    /// SecretManager: secret manager part
-    SecretManager(TransmitterName),
 }
 
 impl Display for Transmitter {
@@ -411,7 +409,7 @@ impl Display for Transmitter {
             f,
             "{}",
             match &self {
-                Transmitter::TaskManager => "engine_task_manager".to_string(),
+                Transmitter::TaskManager(id, name) => format!("engine_task_manager({}, {})", id, name),
                 Transmitter::BuildPlatform(id, name) => format!("build_platform({}, {})", id, name),
                 Transmitter::ContainerRegistry(id, name) => format!("container_registry({}, {})", id, name),
                 Transmitter::CloudProvider(id, name) => format!("cloud_provider({}, {})", id, name),
@@ -423,7 +421,6 @@ impl Display for Transmitter {
                 Transmitter::Application(id, name, version) =>
                     format!("application({}, {}, commit: {})", id, name, version),
                 Transmitter::Router(id, name) => format!("router({}, {})", id, name),
-                Transmitter::SecretManager(name) => format!("secret_manager({})", name),
                 Transmitter::Container(id, name, version) =>
                     format!("container({}, {}, version: {})", id, name, version),
             }
