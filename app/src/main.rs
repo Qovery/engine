@@ -101,7 +101,7 @@ fn to_engine_task(
                         },
                         info.region,
                         Stage::General(GeneralStep::ValidateApiInput),
-                        Transmitter::TaskManager,
+                        Transmitter::TaskManager(Uuid::new_v4(), "engine".to_string()),
                     ),
                     None => EventDetails::new(
                         None,
@@ -110,7 +110,7 @@ fn to_engine_task(
                         "".to_string(),
                         None,
                         Stage::General(GeneralStep::ValidateApiInput),
-                        Transmitter::TaskManager,
+                        Transmitter::TaskManager(Uuid::new_v4(), "engine".to_string()),
                     ),
                 },
                 err,

@@ -11,6 +11,7 @@ use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine::EngineConfigError;
 use url::Url;
+use uuid::Uuid;
 
 use qovery_engine::error::{EngineError, EngineErrorCause};
 use qovery_engine::errors;
@@ -300,6 +301,7 @@ impl Task for InfrastructureTask {
 
 #[derive(Clone)]
 pub struct EnvironmentTask {
+    id: Uuid,
     workspace_root_dir: String,
     lib_root_dir: String,
     docker_host: Option<Url>,
@@ -322,6 +324,7 @@ impl EnvironmentTask {
     ) -> Self {
         let docker = Docker::new(docker_host.clone()).expect("Can't init docker builder");
         EnvironmentTask {
+            id: Uuid::new_v4(),
             workspace_root_dir,
             lib_root_dir,
             docker_host,
@@ -379,7 +382,7 @@ impl EnvironmentTask {
             self.request.id.to_string(),
             None,
             Stage::Environment(step),
-            Transmitter::TaskManager,
+            Transmitter::TaskManager(self.id, "engine".to_string()),
         )
     }
 }

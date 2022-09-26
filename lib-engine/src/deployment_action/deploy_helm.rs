@@ -157,7 +157,7 @@ mod tests {
             Uuid::new_v4().to_string(),
             None,
             Stage::General(GeneralStep::RetrieveClusterConfig),
-            Transmitter::SecretManager("sdfsdf".to_string()),
+            Transmitter::TaskManager(Uuid::new_v4(), "engine".to_string()),
         );
 
         let dest_folder = PathBuf::from(format!("/tmp/{}", namespace));

@@ -385,7 +385,7 @@ impl Kubernetes {
                     true => {
                         return Err(EngineError::new(
                             EngineErrorCause::Internal,
-                            EngineErrorScope::Engine,
+                            EngineErrorScope::Kubernetes(self.long_id, self.name.clone()),
                             context.execution_id(),
                             Some(format!("Expected 1 node, found {}", &self.nodes_groups.len())),
                         ))
