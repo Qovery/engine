@@ -66,11 +66,7 @@ impl LocalDocker {
         // ensure there is enough disk space left before building a new image
         // For CI, we should skip this job
         if env::var_os("CI").is_some() {
-            self.logger.log(EngineEvent::Info(
-                self.get_event_details(),
-                EventMessage::new_from_safe("CI environment variable found, no docker prune will be made".to_string()),
-            ));
-
+            info!("CI environment detected, skipping reclaim space job (docker pruine)");
             return;
         }
 
@@ -107,14 +103,12 @@ impl LocalDocker {
             "Purging docker images to reclaim disk space. Only {} % disk free space, This may take some time",
             disk_free_space_percent
         );
-        self.logger
-            .log(EngineEvent::Info(self.get_event_details(), EventMessage::new_from_safe(msg)));
+        info!("{}", msg);
 
         // Request a purge if a disk is being low on space
         if let Err(err) = self.context.docker.prune_images() {
             let msg = format!("Error while purging docker images: {}", err);
-            self.logger
-                .log(EngineEvent::Warning(self.get_event_details(), EventMessage::new_from_safe(msg)));
+            error!("{}", msg);
         }
     }
 
@@ -129,9 +123,12 @@ impl LocalDocker {
         // logger
         let log_info = {
             let app_id = build.image.application_id.clone();
+            let app_long_id = build.image.application_long_id;
+            let app_name = build.image.application_name.clone();
+            let app_commit = build.image.commit_id.clone();
             move |msg: String| {
                 self.logger.log(EngineEvent::Info(
-                    self.get_event_details(),
+                    self.get_event_details(app_long_id, app_name.clone(), app_commit.clone()),
                     EventMessage::new_from_safe(msg.clone()),
                 ));
 
@@ -320,7 +317,11 @@ impl LocalDocker {
             exit_status = cmd.exec_with_abort(
                 &mut |line| {
                     self.logger.log(EngineEvent::Info(
-                        self.get_event_details(),
+                        self.get_event_details(
+                            build.image.application_long_id,
+                            build.image.application_name.clone(),
+                            build.image.commit_id.clone(),
+                        ),
                         EventMessage::new_from_safe(line.to_string()),
                     ));
 
@@ -335,7 +336,11 @@ impl LocalDocker {
                 },
                 &mut |line| {
                     self.logger.log(EngineEvent::Warning(
-                        self.get_event_details(),
+                        self.get_event_details(
+                            build.image.application_long_id,
+                            build.image.application_name.clone(),
+                            build.image.commit_id.clone(),
+                        ),
                         EventMessage::new_from_safe(line.to_string()),
                     ));
 
@@ -408,7 +413,11 @@ impl BuildPlatform for LocalDocker {
     }
 
     fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<BuildResult, BuildError> {
-        let event_details = self.get_event_details();
+        let event_details = self.get_event_details(
+            build.image.application_long_id,
+            build.image.application_name.clone(),
+            build.image.commit_id.clone(),
+        );
         let listeners_helper = ListenersHelper::new(&self.listeners);
         let app_id = build.image.application_id.clone();
 
