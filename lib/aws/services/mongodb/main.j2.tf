@@ -18,12 +18,12 @@ data "aws_subnet_ids" "k8s_subnet_ids" {
 }
 
 data "aws_security_group" "selected" {
-  {%- if not user_provided_network -%}
+  {% if not user_provided_network %}
   filter {
      name = "tag:Name"
      values = ["qovery-eks-workers"]
    }
-  {%- endif %}
+  {% endif %}
 
   filter {
     name   = "tag:kubernetes.io/cluster/qovery-${var.kubernetes_cluster_id}"
