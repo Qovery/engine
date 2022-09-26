@@ -164,7 +164,6 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
 }
 
 #[derive(Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub enum EnvironmentStep {
     Build,
     Built,
@@ -215,7 +214,6 @@ type TransmitterType = String;
 type TransmitterVersion = String;
 
 #[derive(Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
 #[serde(tag = "type")]
 pub enum Transmitter {
     TaskManager {
