@@ -164,27 +164,23 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
 }
 
 #[derive(Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum EnvironmentStep {
     Build,
     Built,
+    BuiltError,
     Cancel,
     Cancelled,
     Deploy,
     Deployed,
+    DeployedError,
     Pause,
     Paused,
-    Resume,
-    Resumed,
-    Update,
-    Updated,
+    PausedError,
     Delete,
     Deleted,
+    DeletedError,
     LoadConfiguration,
-    ScaleUp,
-    ScaledUp,
-    ScaleDown,
-    ScaledDown,
     Start,
     Terminated,
 }
@@ -194,25 +190,21 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
         match step {
             events::EnvironmentStep::Build => EnvironmentStep::Build,
             events::EnvironmentStep::Deploy => EnvironmentStep::Deploy,
-            events::EnvironmentStep::Update => EnvironmentStep::Update,
             events::EnvironmentStep::Delete => EnvironmentStep::Delete,
             events::EnvironmentStep::Pause => EnvironmentStep::Pause,
-            events::EnvironmentStep::Resume => EnvironmentStep::Resume,
             events::EnvironmentStep::LoadConfiguration => EnvironmentStep::LoadConfiguration,
-            events::EnvironmentStep::ScaleUp => EnvironmentStep::ScaleUp,
-            events::EnvironmentStep::ScaleDown => EnvironmentStep::ScaleDown,
             events::EnvironmentStep::Built => EnvironmentStep::Built,
             events::EnvironmentStep::Deployed => EnvironmentStep::Deployed,
             events::EnvironmentStep::Paused => EnvironmentStep::Paused,
-            events::EnvironmentStep::Resumed => EnvironmentStep::Resumed,
-            events::EnvironmentStep::Updated => EnvironmentStep::Updated,
             events::EnvironmentStep::Deleted => EnvironmentStep::Deleted,
-            events::EnvironmentStep::ScaledUp => EnvironmentStep::ScaledUp,
-            events::EnvironmentStep::ScaledDown => EnvironmentStep::ScaledDown,
             events::EnvironmentStep::Start => EnvironmentStep::Start,
             events::EnvironmentStep::Cancel => EnvironmentStep::Cancel,
             events::EnvironmentStep::Cancelled => EnvironmentStep::Cancelled,
             events::EnvironmentStep::Terminated => EnvironmentStep::Terminated,
+            events::EnvironmentStep::BuiltError => EnvironmentStep::BuiltError,
+            events::EnvironmentStep::DeployedError => EnvironmentStep::DeployedError,
+            events::EnvironmentStep::PausedError => EnvironmentStep::PausedError,
+            events::EnvironmentStep::DeletedError => EnvironmentStep::DeletedError,
         }
     }
 }

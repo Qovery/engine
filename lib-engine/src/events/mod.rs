@@ -311,6 +311,8 @@ pub enum EnvironmentStep {
     Build,
     /// Built: env is built.
     Built,
+    /// BuiltError: Terminal error on building an application.
+    BuiltError,
     // Environment received notification and is in progress to be cancelled.
     Cancel,
     // Environment deployment has been cancelled.
@@ -319,30 +321,20 @@ pub enum EnvironmentStep {
     Deploy,
     /// Deployed: env has been deployed.
     Deployed,
+    /// DeployError: Terminal error on deploying an environment/service.
+    DeployedError,
     /// Pause: pause an environment.
     Pause,
     /// Paused: env has been paused.
     Paused,
-    /// Resume: resume a paused environment.
-    Resume,
-    /// Resumed: env has been resumed.
-    Resumed,
-    /// Update: update an environment.
-    Update,
-    /// Updated: env has been updated.
-    Updated,
+    /// PauseError: Terminal error on pausing an environment/service.
+    PausedError,
     /// Delete: delete an environment.
     Delete,
     /// Deleted: env has been deleted.
     Deleted,
-    /// ScaleUp: scale up an environment.
-    ScaleUp,
-    /// ScaledUp: env has been scaled-up.
-    ScaledUp,
-    /// ScaleDown: scale down an environment.
-    ScaleDown,
-    /// ScaledDown: env has been scaled-down.
-    ScaledDown,
+    /// DeleteError: Terminal error on deleting an environment/service.
+    DeletedError,
 }
 
 impl Display for EnvironmentStep {
@@ -353,25 +345,21 @@ impl Display for EnvironmentStep {
             match &self {
                 EnvironmentStep::Build => "build",
                 EnvironmentStep::Deploy => "deploy",
-                EnvironmentStep::Update => "update",
                 EnvironmentStep::Delete => "delete",
                 EnvironmentStep::Pause => "pause",
-                EnvironmentStep::Resume => "resume",
                 EnvironmentStep::LoadConfiguration => "load-configuration",
-                EnvironmentStep::ScaleUp => "scale-up",
-                EnvironmentStep::ScaleDown => "scale-down",
                 EnvironmentStep::Built => "built",
                 EnvironmentStep::Deployed => "deployed",
                 EnvironmentStep::Paused => "paused",
-                EnvironmentStep::Resumed => "resumed",
-                EnvironmentStep::Updated => "updated",
                 EnvironmentStep::Deleted => "deleted",
-                EnvironmentStep::ScaledUp => "scaled-up",
-                EnvironmentStep::ScaledDown => "scaled-down",
                 EnvironmentStep::Start => "start",
                 EnvironmentStep::Cancel => "cancel",
                 EnvironmentStep::Cancelled => "cancelled",
                 EnvironmentStep::Terminated => "terminated",
+                EnvironmentStep::BuiltError => "built-error",
+                EnvironmentStep::DeployedError => "deployed-error",
+                EnvironmentStep::PausedError => "paused-error",
+                EnvironmentStep::DeletedError => "deleted-error",
             },
         )
     }
@@ -640,10 +628,8 @@ mod tests {
                 InfrastructureStep::LoadConfiguration.to_string(),
             ),
             (Stage::Environment(EnvironmentStep::Pause), EnvironmentStep::Pause.to_string()),
-            (Stage::Environment(EnvironmentStep::Resume), EnvironmentStep::Resume.to_string()),
             (Stage::Environment(EnvironmentStep::Build), EnvironmentStep::Build.to_string()),
             (Stage::Environment(EnvironmentStep::Delete), EnvironmentStep::Delete.to_string()),
-            (Stage::Environment(EnvironmentStep::Update), EnvironmentStep::Update.to_string()),
             (Stage::Environment(EnvironmentStep::Deploy), EnvironmentStep::Deploy.to_string()),
         ];
 
