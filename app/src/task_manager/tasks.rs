@@ -403,12 +403,12 @@ impl Task for EnvironmentTask {
 
         self.logger.log(EngineEvent::Info(
             self.get_event_details(EnvironmentStep::Start),
-            EventMessage::new("Qovery Engine starts to run the deployment".to_string(), None),
+            EventMessage::new("Qovery Engine starts to execute the deployment".to_string(), None),
         ));
         let _guard = scopeguard::guard((), |_| {
             self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Terminated),
-                EventMessage::new("Qovery Engine has finished the deployment".to_string(), None),
+                EventMessage::new("Qovery Engine has terminated the deployment".to_string(), None),
             ));
         });
 
@@ -540,7 +540,8 @@ impl Task for EnvironmentTask {
         };
 
         let env = Rc::new(RefCell::new(env));
-        let _ = match self.request.action {
+        let action = self.request.action.clone();
+        let _ = match action {
             Action::Create => tx.deploy_environment(&env),
             Action::Pause => tx.pause_environment(&env),
             Action::Delete => tx.delete_environment(&env),
@@ -548,6 +549,46 @@ impl Task for EnvironmentTask {
 
         // run the actions
         let tx_result = tx.commit();
+        let _ = match (action, &tx_result) {
+            (_, TransactionResult::Canceled) => self.logger.log(EngineEvent::Info(
+                self.get_event_details(EnvironmentStep::Cancelled),
+                EventMessage::new("Deployment has been cancelled".to_string(), None),
+            )),
+            (Action::Create, TransactionResult::Ok) => self.logger.log(EngineEvent::Info(
+                self.get_event_details(EnvironmentStep::Deployed),
+                EventMessage::new("Environment is deployed".to_string(), None),
+            )),
+            (Action::Pause, TransactionResult::Ok) => self.logger.log(EngineEvent::Info(
+                self.get_event_details(EnvironmentStep::Paused),
+                EventMessage::new("Environment is deployed".to_string(), None),
+            )),
+            (Action::Delete, TransactionResult::Ok) => self.logger.log(EngineEvent::Info(
+                self.get_event_details(EnvironmentStep::Deleted),
+                EventMessage::new("Environment is deleted".to_string(), None),
+            )),
+
+            (Action::Create, TransactionResult::Error(err)) => {
+                self.logger.log(EngineEvent::Error(*err.clone(), None));
+                self.logger.log(EngineEvent::Info(
+                    self.get_event_details(EnvironmentStep::DeployedError),
+                    EventMessage::new("Environment failed to be deployed".to_string(), None),
+                ));
+            }
+            (Action::Pause, TransactionResult::Error(err)) => {
+                self.logger.log(EngineEvent::Error(*err.clone(), None));
+                self.logger.log(EngineEvent::Info(
+                    self.get_event_details(EnvironmentStep::PausedError),
+                    EventMessage::new("Environment failed to be paused".to_string(), None),
+                ));
+            }
+            (Action::Delete, TransactionResult::Error(err)) => {
+                self.logger.log(EngineEvent::Error(*err.clone(), None));
+                self.logger.log(EngineEvent::Info(
+                    self.get_event_details(EnvironmentStep::DeployedError),
+                    EventMessage::new("Environment failed to be deleted".to_string(), None),
+                ));
+            }
+        };
 
         handle_transaction_result(tx_result, self, &self.request, self.action_context(ProgressLevel::Info));
 
