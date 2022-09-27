@@ -37,7 +37,7 @@ impl EngineError {
 
 #[derive(Debug)]
 pub enum EngineErrorScope {
-    Engine,
+    Engine(Id, Name),
     BuildPlatform(Id, Name),
     ContainerRegistry(Id, Name),
     CloudProvider(Id, Name),
@@ -49,13 +49,12 @@ pub enum EngineErrorScope {
     Application(Id, Name, Version),
     Container(Id, Name, Version),
     Router(Id, Name),
-    SecretManager(Name),
 }
 
 impl From<Transmitter> for EngineErrorScope {
     fn from(transmitter: Transmitter) -> Self {
         match transmitter {
-            Transmitter::TaskManager => EngineErrorScope::Engine,
+            Transmitter::TaskManager(id, name) => EngineErrorScope::Engine(id, name),
             Transmitter::BuildPlatform(id, name) => EngineErrorScope::BuildPlatform(id, name),
             Transmitter::ContainerRegistry(id, name) => EngineErrorScope::ContainerRegistry(id, name),
             Transmitter::CloudProvider(id, name) => EngineErrorScope::CloudProvider(id, name),
@@ -66,7 +65,6 @@ impl From<Transmitter> for EngineErrorScope {
             Transmitter::Database(id, db_type, name) => EngineErrorScope::Database(id, db_type, name),
             Transmitter::Application(id, name, commit) => EngineErrorScope::Application(id, name, commit),
             Transmitter::Router(id, name) => EngineErrorScope::Router(id, name),
-            Transmitter::SecretManager(name) => EngineErrorScope::SecretManager(name),
             Transmitter::Container(id, name, version) => EngineErrorScope::Container(id, name, version),
         }
     }

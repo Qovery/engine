@@ -164,27 +164,22 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
 }
 
 #[derive(Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
 pub enum EnvironmentStep {
     Build,
     Built,
+    BuiltError,
     Cancel,
     Cancelled,
     Deploy,
     Deployed,
+    DeployedError,
     Pause,
     Paused,
-    Resume,
-    Resumed,
-    Update,
-    Updated,
+    PausedError,
     Delete,
     Deleted,
+    DeletedError,
     LoadConfiguration,
-    ScaleUp,
-    ScaledUp,
-    ScaleDown,
-    ScaledDown,
     Start,
     Terminated,
 }
@@ -194,25 +189,21 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
         match step {
             events::EnvironmentStep::Build => EnvironmentStep::Build,
             events::EnvironmentStep::Deploy => EnvironmentStep::Deploy,
-            events::EnvironmentStep::Update => EnvironmentStep::Update,
             events::EnvironmentStep::Delete => EnvironmentStep::Delete,
             events::EnvironmentStep::Pause => EnvironmentStep::Pause,
-            events::EnvironmentStep::Resume => EnvironmentStep::Resume,
             events::EnvironmentStep::LoadConfiguration => EnvironmentStep::LoadConfiguration,
-            events::EnvironmentStep::ScaleUp => EnvironmentStep::ScaleUp,
-            events::EnvironmentStep::ScaleDown => EnvironmentStep::ScaleDown,
             events::EnvironmentStep::Built => EnvironmentStep::Built,
             events::EnvironmentStep::Deployed => EnvironmentStep::Deployed,
             events::EnvironmentStep::Paused => EnvironmentStep::Paused,
-            events::EnvironmentStep::Resumed => EnvironmentStep::Resumed,
-            events::EnvironmentStep::Updated => EnvironmentStep::Updated,
             events::EnvironmentStep::Deleted => EnvironmentStep::Deleted,
-            events::EnvironmentStep::ScaledUp => EnvironmentStep::ScaledUp,
-            events::EnvironmentStep::ScaledDown => EnvironmentStep::ScaledDown,
             events::EnvironmentStep::Start => EnvironmentStep::Start,
             events::EnvironmentStep::Cancel => EnvironmentStep::Cancel,
             events::EnvironmentStep::Cancelled => EnvironmentStep::Cancelled,
             events::EnvironmentStep::Terminated => EnvironmentStep::Terminated,
+            events::EnvironmentStep::BuiltError => EnvironmentStep::BuiltError,
+            events::EnvironmentStep::DeployedError => EnvironmentStep::DeployedError,
+            events::EnvironmentStep::PausedError => EnvironmentStep::PausedError,
+            events::EnvironmentStep::DeletedError => EnvironmentStep::DeletedError,
         }
     }
 }
@@ -223,10 +214,12 @@ type TransmitterType = String;
 type TransmitterVersion = String;
 
 #[derive(Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
 #[serde(tag = "type")]
 pub enum Transmitter {
-    TaskManager,
+    TaskManager {
+        id: TransmitterId,
+        name: TransmitterName,
+    },
     BuildPlatform {
         id: TransmitterId,
         name: TransmitterName,
@@ -282,7 +275,7 @@ pub enum Transmitter {
 impl From<events::Transmitter> for Transmitter {
     fn from(transmitter: events::Transmitter) -> Self {
         match transmitter {
-            events::Transmitter::TaskManager => Transmitter::TaskManager,
+            events::Transmitter::TaskManager(id, name) => Transmitter::TaskManager { id, name },
             events::Transmitter::BuildPlatform(id, name) => Transmitter::BuildPlatform { id, name },
             events::Transmitter::ContainerRegistry(id, name) => Transmitter::ContainerRegistry { id, name },
             events::Transmitter::CloudProvider(id, name) => Transmitter::CloudProvider { id, name },
@@ -293,7 +286,6 @@ impl From<events::Transmitter> for Transmitter {
             events::Transmitter::Database(id, db_type, name) => Transmitter::Database { id, db_type, name },
             events::Transmitter::Application(id, name, commit) => Transmitter::Application { id, name, commit },
             events::Transmitter::Router(id, name) => Transmitter::Router { id, name },
-            events::Transmitter::SecretManager(name) => Transmitter::SecretManager { name },
             events::Transmitter::Container(id, name, version) => Transmitter::Container {
                 id,
                 name,

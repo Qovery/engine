@@ -4,6 +4,7 @@ use crate::runtime::block_on;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::env;
+use uuid::Uuid;
 use vaultrs::api::kv2::responses::SecretVersionMetadata;
 use vaultrs::client::{VaultClient, VaultClientSettingsBuilder};
 use vaultrs::error::ClientError;
@@ -72,7 +73,7 @@ impl QVaultClient {
     pub fn new(event_details: EventDetails) -> Result<QVaultClient, EngineError> {
         let event_details = EventDetails::clone_changing_transmitter(
             event_details,
-            Transmitter::SecretManager("QoveryVault".to_string()),
+            Transmitter::TaskManager(Uuid::new_v4(), "vault".to_string()),
         );
 
         let vault_addr = Self::get_env_var("VAULT_ADDR", event_details.clone())?;

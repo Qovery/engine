@@ -243,7 +243,7 @@ mod tests {
             "123e4567-e89b-12d3-a456-426614174000".to_string(),
             None,
             Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
-            Transmitter::SecretManager("".to_string()),
+            Transmitter::TaskManager(Uuid::new_v4(), "engine".to_string()),
         )
     }
 

@@ -79,7 +79,7 @@ pub trait BuildPlatform {
     fn listeners(&self) -> &Listeners;
     fn add_listener(&mut self, listener: Listener);
     fn to_transmitter(&self) -> Transmitter;
-    fn get_event_details(&self) -> EventDetails {
+    fn get_event_details(&self, app_id: Uuid, app_name: String, app_commit: String) -> EventDetails {
         let context = self.context();
         EventDetails::new(
             None,
@@ -88,7 +88,7 @@ pub trait BuildPlatform {
             context.execution_id().to_string(),
             None,
             Stage::Environment(EnvironmentStep::Build),
-            self.to_transmitter(),
+            Transmitter::Application(app_id, app_name, app_commit),
         )
     }
 }
@@ -144,6 +144,8 @@ pub struct GitRepository {
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Image {
     pub application_id: String,
+    pub application_long_id: Uuid,
+    pub application_name: String,
     pub name: String,
     pub tag: String,
     pub commit_id: String,
@@ -197,6 +199,8 @@ impl Default for Image {
     fn default() -> Self {
         Image {
             application_id: "".to_string(),
+            application_long_id: Default::default(),
+            application_name: "".to_string(),
             name: "".to_string(),
             tag: "".to_string(),
             commit_id: "".to_string(),
