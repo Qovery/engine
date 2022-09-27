@@ -1,6 +1,5 @@
 use crate::cloud_provider::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::cloud_provider::service::{delete_pending_service, Action, Service};
-use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::pause_service::PauseServiceAction;
@@ -14,7 +13,6 @@ use crate::kubers_utils::kube_delete_all_from_selector;
 use crate::models::application::{Application, ApplicationService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
-use function_name::named;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -24,18 +22,8 @@ impl<T: CloudProvider> DeploymentAction for Application<T>
 where
     Application<T>: ToTeraContext,
 {
-    #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            T::short_name(),
-            "application",
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-
         execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Create), || {
             // If the service have been paused, we must ensure we un-pause it first as hpa will not kick in
             let _ = PauseServiceAction::new(
@@ -78,18 +66,7 @@ where
         })
     }
 
-    #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            T::short_name(),
-            "application",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
         execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Pause), || {
             let pause_service = PauseServiceAction::new(
                 self.selector(),
