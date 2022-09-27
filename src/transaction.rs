@@ -200,12 +200,19 @@ impl<'a> Transaction<'a> {
 
             // logging
             let image_name = app.get_build().image.full_image_name_with_tag();
-            let msg = match &build_result {
-                Ok(_) => format!("✅ Container image {} is built and ready to use", &image_name),
-                Err(BuildError::Aborted { .. }) => {
-                    format!("🚫 Container image {} build has been canceled", &image_name)
-                }
-                Err(err) => format!("❌ Container image {} failed to be build: {}", &image_name, err),
+            let (msg, step) = match &build_result {
+                Ok(_) => (
+                    format!("✅ Container image {} is built and ready to use", &image_name),
+                    EnvironmentStep::Built,
+                ),
+                Err(BuildError::Aborted { .. }) => (
+                    format!("🚫 Container image {} build has been canceled", &image_name),
+                    EnvironmentStep::Cancelled,
+                ),
+                Err(err) => (
+                    format!("❌ Container image {} failed to be build: {}", &image_name, err),
+                    EnvironmentStep::BuiltError,
+                ),
             };
 
             let progress_info = ProgressInfo::new(
@@ -221,7 +228,7 @@ impl<'a> Transaction<'a> {
             );
             ListenersHelper::new(self.engine.build_platform().listeners()).deployment_in_progress(progress_info);
 
-            let event_details = build_event_details();
+            let event_details = app.get_event_details(Stage::Environment(step));
             self.logger
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
 
