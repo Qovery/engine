@@ -1,6 +1,5 @@
 #![allow(deprecated)]
 
-use crate::cloud_provider::io::Kind;
 use crate::errors::io::EngineError;
 use crate::events;
 use chrono::{DateTime, Utc};
@@ -298,7 +297,6 @@ impl From<events::Transmitter> for Transmitter {
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub struct EventDetails {
-    provider_kind: Option<Kind>,
     organization_id: String,
     cluster_id: String,
     execution_id: String,
@@ -308,9 +306,7 @@ pub struct EventDetails {
 
 impl From<events::EventDetails> for EventDetails {
     fn from(details: events::EventDetails) -> Self {
-        let provider_kind = details.provider_kind.map(Kind::from);
         EventDetails {
-            provider_kind,
             organization_id: details.organisation_id.to_string(),
             cluster_id: details.cluster_id.to_string(),
             execution_id: details.execution_id.to_string(),
@@ -327,7 +323,6 @@ mod test {
     use crate::events::io::EngineEvent as EngineEventIo;
     use crate::events::{EngineEvent, EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
-    use crate::models::scaleway::ScwRegion;
     use uuid::Uuid;
 
     #[test]
