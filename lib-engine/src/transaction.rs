@@ -160,16 +160,6 @@ impl<'a> Transaction<'a> {
             to_engine_error(event_details, err)
         };
 
-        let build_event_details = || -> EventDetails {
-            self.get_event_details(
-                Stage::Environment(EnvironmentStep::Build),
-                Transmitter::BuildPlatform(
-                    *self.engine.build_platform().long_id(),
-                    self.engine.build_platform().name().to_string(),
-                ),
-            )
-        };
-
         // Do setup of registry and be sure we are login to the registry
         let cr_registry = self.engine.container_registry();
         cr_registry.create_registry().map_err(cr_to_engine_error)?;
