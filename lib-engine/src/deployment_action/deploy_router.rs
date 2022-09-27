@@ -1,7 +1,6 @@
 use crate::cloud_provider::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::cloud_provider::models::CustomDomain;
 use crate::cloud_provider::service::{Action, Service};
-use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::check_dns::CheckDnsForDomains;
 use crate::deployment_action::deploy_helm::HelmDeployment;
@@ -13,25 +12,14 @@ use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
 use crate::models::router::{Router, RouterService};
 use crate::models::types::{CloudProvider, ToTeraContext};
-use function_name::named;
 use std::path::PathBuf;
 
 impl<T: CloudProvider> DeploymentAction for Router<T>
 where
     Router<T>: RouterService,
 {
-    #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            T::short_name(),
-            "router",
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-
         execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Create), || {
             let chart = ChartInfo {
                 name: self.helm_release_name(),
@@ -53,18 +41,7 @@ where
         })
     }
 
-    #[named]
     fn on_create_check(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            T::short_name(),
-            "router",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
         // check non custom domains
         let logger = get_loggers(self, self.action);
         let custom_domains_to_check: Vec<CustomDomain> = if self.advanced_settings.custom_domain_check_enabled {
@@ -83,32 +60,11 @@ where
         Ok(())
     }
 
-    #[named]
-    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            T::short_name(),
-            "router",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        Ok(())
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+        execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Pause), || Ok(()))
     }
 
-    #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            T::short_name(),
-            "router",
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
         execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Delete), || {
             let chart = ChartInfo {
                 name: self.helm_release_name(),
