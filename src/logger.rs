@@ -72,7 +72,6 @@ mod tests {
     use crate::errors::EngineError;
     use crate::events::{EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
-    use crate::models::scaleway::ScwRegion;
     use tracing_test::traced_test;
     use url::Url;
     use uuid::Uuid;
@@ -209,21 +208,6 @@ mod tests {
                         "provider=\"{}\"",
                         match details.provider_kind() {
                             Some(k) => k.to_string(),
-                            None => "".to_string(),
-                        }
-                    )
-                    .as_str()
-                ),
-                "{}",
-                tc.description
-            );
-
-            assert!(
-                logs_contain(
-                    format!(
-                        "region=\"{}\"",
-                        match details.region() {
-                            Some(r) => r.to_string(),
                             None => "".to_string(),
                         }
                     )
