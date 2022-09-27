@@ -86,7 +86,6 @@ pub trait BuildPlatform {
             QoveryIdentifier::new(*context.organization_long_id()),
             QoveryIdentifier::new(*context.cluster_long_id()),
             context.execution_id().to_string(),
-            None,
             Stage::Environment(EnvironmentStep::Build),
             Transmitter::Application(app_id, app_name, app_commit),
         )

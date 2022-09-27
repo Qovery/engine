@@ -161,7 +161,6 @@ impl InfrastructureTask {
                     QoveryIdentifier::new(self.request.organization_long_id),
                     QoveryIdentifier::new(kubernetes.long_id),
                     self.request.id.to_string(),
-                    Some(kubernetes.region.to_string()),
                     Infrastructure(infrastructure_step),
                     Transmitter::Kubernetes(kubernetes.long_id, kubernetes.name.to_string()),
                 ),
@@ -380,7 +379,6 @@ impl EnvironmentTask {
             QoveryIdentifier::new(self.request.organization_long_id),
             QoveryIdentifier::new(self.request.cloud_provider.kubernetes.long_id),
             self.request.id.to_string(),
-            None,
             Stage::Environment(step),
             Transmitter::TaskManager(self.id, "engine".to_string()),
         )

@@ -155,7 +155,6 @@ mod tests {
             QoveryIdentifier::new_random(),
             QoveryIdentifier::new_random(),
             Uuid::new_v4().to_string(),
-            None,
             Stage::General(GeneralStep::RetrieveClusterConfig),
             Transmitter::TaskManager(Uuid::new_v4(), "engine".to_string()),
         );

@@ -183,7 +183,6 @@ impl EngineRequest {
             QoveryIdentifier::new(self.organization_long_id),
             QoveryIdentifier::new(kubernetes.long_id),
             self.id.to_string(),
-            Some(kubernetes.region.to_string()),
             stage,
             Transmitter::Kubernetes(kubernetes.long_id, kubernetes.name.to_string()),
         )
