@@ -3702,7 +3702,6 @@ mod tests {
     use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
-    use crate::models::scaleway::ScwRegion;
     use uuid::Uuid;
 
     #[test]
