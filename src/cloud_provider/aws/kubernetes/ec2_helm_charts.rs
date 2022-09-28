@@ -4,13 +4,18 @@ use crate::cloud_provider::helm::{
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, ClusterAgentContext, CommonChart,
     CoreDNSConfigChart, HelmAction, HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
+use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
+use crate::cloud_provider::helm_charts::ToCommonHelmChart;
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAppName, QoveryEngine};
 use crate::cmd::terraform::TerraformError;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
+
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufReader;
+use std::iter::FromIterator;
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,6 +116,7 @@ pub fn ec2_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
     let aws_ebs_csi_driver = CommonChart {
         chart_info: ChartInfo {
@@ -122,16 +128,20 @@ pub fn ec2_aws_helm_charts(
             }],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     // Qovery storage class
-    let q_storage_class = CommonChart {
-        chart_info: ChartInfo {
-            name: "q-storageclass".to_string(),
-            path: chart_path("/charts/q-storageclass"),
-            ..Default::default()
-        },
-    };
+    let q_storage_class = QoveryStorageClassChart::new(
+        chart_prefix_path,
+        HashSet::from_iter(vec![
+            QoveryStorageType::Ssd,
+            QoveryStorageType::Hdd,
+            QoveryStorageType::Cold,
+            QoveryStorageType::Nvme,
+        ]),
+    )
+    .to_common_helm_chart();
 
     let coredns_config = CoreDNSConfigChart {
         chart_info: ChartInfo {
@@ -181,6 +191,7 @@ pub fn ec2_aws_helm_charts(
             }],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let external_dns = CommonChart {
@@ -201,6 +212,7 @@ pub fn ec2_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
@@ -239,6 +251,7 @@ pub fn ec2_aws_helm_charts(
                 ],
                 ..Default::default()
             },
+            ..Default::default()
         });
     }
 
@@ -259,6 +272,7 @@ pub fn ec2_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let cert_manager = CommonChart {
@@ -333,6 +347,7 @@ pub fn ec2_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let cert_manager_config = get_chart_for_cert_manager_config(
@@ -378,6 +393,7 @@ pub fn ec2_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let nginx_ingress_wildcard_dns_record = CommonChart {
@@ -401,6 +417,7 @@ pub fn ec2_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let cluster_agent_context = ClusterAgentContext {
@@ -458,6 +475,7 @@ pub fn ec2_aws_helm_charts(
             action: HelmAction::Destroy,
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let qovery_engine_version: QoveryEngine = get_qovery_app_version(
@@ -563,6 +581,7 @@ pub fn ec2_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     // chart deployment order matters!!!

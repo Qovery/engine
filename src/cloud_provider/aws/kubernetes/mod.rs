@@ -5,6 +5,7 @@ use kube::Api;
 use std::io::Read;
 use std::path::Path;
 use std::str::FromStr;
+
 use std::{env, fs};
 
 use retry::delay::Fixed;
@@ -1166,6 +1167,7 @@ fn create(
     };
 
     deploy_charts_levels(
+        &kubernetes.kube_client()?,
         kubeconfig_path,
         &credentials_environment_variables,
         helm_charts_to_deploy,
