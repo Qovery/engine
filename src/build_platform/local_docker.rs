@@ -26,7 +26,7 @@ use crate::utilities::to_short_id;
 
 /// https://buildpacks.io/
 const BUILDPACKS_BUILDERS: [&str; 1] = [
-    "heroku/buildpacks:20",
+    "heroku/builder-classic:22",
     // removed because it does not support dynamic port binding
     //"gcr.io/buildpacks/builder:v1",
     //"paketobuildpacks/builder:base",
