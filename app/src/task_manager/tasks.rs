@@ -568,23 +568,20 @@ impl Task for EnvironmentTask {
             )),
 
             (Action::Create, TransactionResult::Error(err)) => {
-                self.logger.log(EngineEvent::Error(*err.clone(), None));
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::DeployedError),
                     EventMessage::new("Environment failed to be deployed".to_string(), None),
                 ));
             }
             (Action::Pause, TransactionResult::Error(err)) => {
-                self.logger.log(EngineEvent::Error(*err.clone(), None));
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::PausedError),
                     EventMessage::new("Environment failed to be paused".to_string(), None),
                 ));
             }
             (Action::Delete, TransactionResult::Error(err)) => {
-                self.logger.log(EngineEvent::Error(*err.clone(), None));
                 self.logger.log(EngineEvent::Info(
-                    self.get_event_details(EnvironmentStep::DeployedError),
+                    self.get_event_details(EnvironmentStep::DeletedError),
                     EventMessage::new("Environment failed to be deleted".to_string(), None),
                 ));
             }
