@@ -549,7 +549,7 @@ impl Task for EnvironmentTask {
 
         // run the actions
         let tx_result = tx.commit();
-        let _ = match (action, &tx_result) {
+        match (action, &tx_result) {
             (_, TransactionResult::Canceled) => self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Cancelled),
                 EventMessage::new("Deployment has been cancelled".to_string(), None),
@@ -567,19 +567,19 @@ impl Task for EnvironmentTask {
                 EventMessage::new("Environment is deleted".to_string(), None),
             )),
 
-            (Action::Create, TransactionResult::Error(err)) => {
+            (Action::Create, TransactionResult::Error(_err)) => {
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::DeployedError),
                     EventMessage::new("Environment failed to be deployed".to_string(), None),
                 ));
             }
-            (Action::Pause, TransactionResult::Error(err)) => {
+            (Action::Pause, TransactionResult::Error(_err)) => {
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::PausedError),
                     EventMessage::new("Environment failed to be paused".to_string(), None),
                 ));
             }
-            (Action::Delete, TransactionResult::Error(err)) => {
+            (Action::Delete, TransactionResult::Error(_err)) => {
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::DeletedError),
                     EventMessage::new("Environment failed to be deleted".to_string(), None),
