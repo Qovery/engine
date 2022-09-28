@@ -16,7 +16,6 @@ mod deployment_action;
 mod deployment_report;
 pub mod dns_provider;
 pub mod engine;
-pub mod error;
 pub mod errors;
 pub mod events;
 pub mod fs;
