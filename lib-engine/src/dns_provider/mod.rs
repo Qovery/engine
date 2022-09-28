@@ -3,7 +3,7 @@ use std::net::Ipv4Addr;
 use crate::dns_provider::cloudflare::CloudflareDnsConfig;
 use crate::dns_provider::errors::DnsProviderError;
 use crate::dns_provider::qoverydns::QoveryDnsConfig;
-use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
+use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
 use tera::Context as TeraContext;
 use uuid::Uuid;
 
@@ -54,7 +54,7 @@ pub trait DnsProvider {
             QoveryIdentifier::new(*self.context().organization_long_id()),
             QoveryIdentifier::new(*self.context().cluster_long_id()),
             self.context().execution_id().to_string(),
-            Stage::General(GeneralStep::ValidateSystemRequirements),
+            Stage::Infrastructure(InfrastructureStep::ValidateSystemRequirements),
             Transmitter::DnsProvider(*self.long_id(), self.provider_name().to_string()),
         )
     }

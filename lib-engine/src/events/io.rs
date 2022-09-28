@@ -86,8 +86,8 @@ impl From<events::EventMessage> for EventMessage {
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[serde(tag = "type", content = "step")]
 pub enum Stage {
-    General(GeneralStep),
     Infrastructure(InfrastructureStep),
     Environment(EnvironmentStep),
 }
@@ -95,30 +95,8 @@ pub enum Stage {
 impl From<events::Stage> for Stage {
     fn from(stage: events::Stage) -> Self {
         match stage {
-            events::Stage::General(step) => Stage::General(GeneralStep::from(step)),
             events::Stage::Infrastructure(step) => Stage::Infrastructure(InfrastructureStep::from(step)),
             events::Stage::Environment(step) => Stage::Environment(EnvironmentStep::from(step)),
-        }
-    }
-}
-
-#[derive(Deserialize, Serialize)]
-pub enum GeneralStep {
-    RetrieveClusterConfig,
-    RetrieveClusterResources,
-    ValidateSystemRequirements,
-    UnderMigration,
-    ValidateApiInput,
-}
-
-impl From<events::GeneralStep> for GeneralStep {
-    fn from(step: events::GeneralStep) -> Self {
-        match step {
-            events::GeneralStep::RetrieveClusterConfig => GeneralStep::RetrieveClusterConfig,
-            events::GeneralStep::RetrieveClusterResources => GeneralStep::RetrieveClusterResources,
-            events::GeneralStep::ValidateSystemRequirements => GeneralStep::ValidateSystemRequirements,
-            events::GeneralStep::UnderMigration => GeneralStep::UnderMigration,
-            events::GeneralStep::ValidateApiInput => GeneralStep::ValidateApiInput,
         }
     }
 }
@@ -139,6 +117,13 @@ pub enum InfrastructureStep {
     Delete,
     Deleted,
     DeleteError,
+    ValidateApiInput,
+    ValidateSystemRequirements,
+    RetrieveClusterConfig,
+    RetrieveClusterResources,
+    UnderMigration,
+    Start,
+    Terminated,
 }
 
 impl From<events::InfrastructureStep> for InfrastructureStep {
@@ -158,6 +143,13 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
             events::InfrastructureStep::CreateError => InfrastructureStep::CreateError,
             events::InfrastructureStep::PauseError => InfrastructureStep::PauseError,
             events::InfrastructureStep::DeleteError => InfrastructureStep::DeleteError,
+            events::InfrastructureStep::ValidateApiInput => InfrastructureStep::ValidateApiInput,
+            events::InfrastructureStep::ValidateSystemRequirements => InfrastructureStep::ValidateSystemRequirements,
+            events::InfrastructureStep::RetrieveClusterConfig => InfrastructureStep::RetrieveClusterConfig,
+            events::InfrastructureStep::RetrieveClusterResources => InfrastructureStep::RetrieveClusterResources,
+            events::InfrastructureStep::UnderMigration => InfrastructureStep::UnderMigration,
+            events::InfrastructureStep::Start => InfrastructureStep::Start,
+            events::InfrastructureStep::Terminated => InfrastructureStep::Terminated,
         }
     }
 }
@@ -181,6 +173,11 @@ pub enum EnvironmentStep {
     LoadConfiguration,
     Start,
     Terminated,
+    ValidateApiInput,
+    ValidateSystemRequirements,
+    RetrieveClusterConfig,
+    RetrieveClusterResources,
+    UnderMigration,
 }
 
 impl From<events::EnvironmentStep> for EnvironmentStep {
@@ -203,6 +200,11 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
             events::EnvironmentStep::DeployedError => EnvironmentStep::DeployedError,
             events::EnvironmentStep::PausedError => EnvironmentStep::PausedError,
             events::EnvironmentStep::DeletedError => EnvironmentStep::DeletedError,
+            events::EnvironmentStep::ValidateApiInput => EnvironmentStep::ValidateApiInput,
+            events::EnvironmentStep::ValidateSystemRequirements => EnvironmentStep::ValidateSystemRequirements,
+            events::EnvironmentStep::RetrieveClusterConfig => EnvironmentStep::RetrieveClusterConfig,
+            events::EnvironmentStep::RetrieveClusterResources => EnvironmentStep::RetrieveClusterResources,
+            events::EnvironmentStep::UnderMigration => EnvironmentStep::UnderMigration,
         }
     }
 }
@@ -301,7 +303,7 @@ mod test {
         match serde_json::to_string(&event_io) {
             Ok(json) => {
                 // validate:
-                assert!(json.contains("{\"infrastructure\":\"CreateError\"}"))
+                assert!(json.contains(r#"{"type":"infrastructure","step":"CreateError"}"#))
             }
             Err(e) => {
                 panic!("Panic ! Error: {}", e)

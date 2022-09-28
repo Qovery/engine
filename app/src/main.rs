@@ -28,7 +28,8 @@ use uuid::Uuid;
 
 use qovery_engine::cmd;
 use qovery_engine::errors::EngineError;
-use qovery_engine::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, Stage, Transmitter};
+use qovery_engine::events::InfrastructureStep::ValidateApiInput;
+use qovery_engine::events::{EngineEvent, EventDetails, EventMessage, Stage, Transmitter};
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use utils::Mode;
@@ -93,7 +94,7 @@ fn to_engine_task(
                             Some(id) => id,
                             None => "".to_string(),
                         },
-                        Stage::General(GeneralStep::ValidateApiInput),
+                        Stage::Infrastructure(ValidateApiInput),
                         Transmitter::TaskManager(Uuid::new_v4(), "engine".to_string()),
                     ),
                     None => EventDetails::new(
@@ -101,7 +102,7 @@ fn to_engine_task(
                         QoveryIdentifier::default(),
                         QoveryIdentifier::default(),
                         "".to_string(),
-                        Stage::General(GeneralStep::ValidateApiInput),
+                        Stage::Infrastructure(ValidateApiInput),
                         Transmitter::TaskManager(Uuid::new_v4(), "engine".to_string()),
                     ),
                 },

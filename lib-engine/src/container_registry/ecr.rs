@@ -16,7 +16,7 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
-use crate::events::{EngineEvent, EventMessage, GeneralStep, Stage};
+use crate::events::{EngineEvent, EventMessage, InfrastructureStep, Stage};
 use crate::io_models::context::Context;
 use crate::logger::Logger;
 use crate::runtime::block_on;
@@ -91,7 +91,7 @@ impl ECR {
 
     pub fn log_info(&self, msg: String) {
         self.logger.log(EngineEvent::Info(
-            self.get_event_details(Stage::General(GeneralStep::ValidateSystemRequirements)),
+            self.get_event_details(Stage::Infrastructure(InfrastructureStep::ValidateSystemRequirements)),
             EventMessage::new_from_safe(msg),
         ));
     }

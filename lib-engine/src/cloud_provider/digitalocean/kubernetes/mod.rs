@@ -40,7 +40,7 @@ use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_mana
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter};
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::{Context, Features};
 use crate::io_models::domain::{StringPath, ToHelmString};
 use crate::io_models::{Action, QoveryIdentifier};
@@ -1110,7 +1110,7 @@ impl Kubernetes for DOKS {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let bucket_name = format!("qovery-kubeconfigs-{}", self.id());
         let object_key = self.get_kubeconfig_filename();
-        let stage = Stage::General(GeneralStep::RetrieveClusterConfig);
+        let stage = Stage::Infrastructure(InfrastructureStep::RetrieveClusterConfig);
 
         // check if kubeconfig locally exists
         let local_kubeconfig = match self.get_temp_dir(event_details.clone()) {
