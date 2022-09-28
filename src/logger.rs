@@ -45,11 +45,6 @@ impl Logger for StdIoLogger {
                 None => "".to_string(),
             }
             .as_str(),
-            region = match event_details.region() {
-                Some(region) => region,
-                None => "".to_string(),
-            }
-            .as_str(),
             stage = stage.to_string().as_str(),
             step = stage.sub_step_name().as_str(),
             transmitter = event_details.transmitter().to_string().as_str(),
@@ -77,7 +72,6 @@ mod tests {
     use crate::errors::EngineError;
     use crate::events::{EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
-    use crate::models::scaleway::ScwRegion;
     use tracing_test::traced_test;
     use url::Url;
     use uuid::Uuid;
@@ -113,7 +107,6 @@ mod tests {
                             orga_id.clone(),
                             cluster_id.clone(),
                             execution_id.to_string(),
-                            Some(ScwRegion::Paris.as_str().to_string()),
                             Stage::Infrastructure(InfrastructureStep::Create),
                             Transmitter::Kubernetes(Uuid::new_v4(), cluster_name.to_string()),
                         ),
@@ -137,7 +130,6 @@ mod tests {
                         orga_id.clone(),
                         cluster_id.clone(),
                         execution_id.to_string(),
-                        Some(ScwRegion::Paris.as_str().to_string()),
                         Stage::Infrastructure(InfrastructureStep::Create),
                         Transmitter::Kubernetes(Uuid::new_v4(), cluster_name),
                     ),
@@ -152,7 +144,6 @@ mod tests {
                         orga_id.clone(),
                         cluster_id.clone(),
                         execution_id.to_string(),
-                        Some(ScwRegion::Paris.as_str().to_string()),
                         Stage::Environment(EnvironmentStep::Pause),
                         Transmitter::Application(Uuid::new_v4(), app_name.to_string(), app_version.to_string()),
                     ),
@@ -167,7 +158,6 @@ mod tests {
                         orga_id.clone(),
                         cluster_id.clone(),
                         execution_id.to_string(),
-                        Some(ScwRegion::Paris.as_str().to_string()),
                         Stage::Environment(EnvironmentStep::Delete),
                         Transmitter::Application(Uuid::new_v4(), app_name, app_version.to_string()),
                     ),
@@ -218,21 +208,6 @@ mod tests {
                         "provider=\"{}\"",
                         match details.provider_kind() {
                             Some(k) => k.to_string(),
-                            None => "".to_string(),
-                        }
-                    )
-                    .as_str()
-                ),
-                "{}",
-                tc.description
-            );
-
-            assert!(
-                logs_contain(
-                    format!(
-                        "region=\"{}\"",
-                        match details.region() {
-                            Some(r) => r.to_string(),
                             None => "".to_string(),
                         }
                     )

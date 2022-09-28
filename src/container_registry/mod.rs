@@ -54,7 +54,6 @@ pub trait ContainerRegistry {
             QoveryIdentifier::new(*context.organization_long_id()),
             QoveryIdentifier::new(*context.cluster_long_id()),
             context.execution_id().to_string(),
-            None,
             stage,
             Transmitter::ContainerRegistry(*self.long_id(), self.name().to_string()),
         );

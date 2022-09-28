@@ -905,7 +905,6 @@ impl EngineError {
                 self.event_details.organisation_id().clone(),
                 self.event_details.cluster_id().clone(),
                 self.event_details.execution_id().to_string(),
-                self.event_details.region(),
                 stage,
                 self.event_details.transmitter(),
             ),
@@ -3703,7 +3702,6 @@ mod tests {
     use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
-    use crate::models::scaleway::ScwRegion;
     use uuid::Uuid;
 
     #[test]
@@ -3755,7 +3753,6 @@ mod tests {
                 QoveryIdentifier::new_random(),
                 QoveryIdentifier::new_random(),
                 Uuid::new_v4().to_string(),
-                Some(ScwRegion::Paris.as_str().to_string()),
                 Stage::Infrastructure(InfrastructureStep::Create),
                 Transmitter::Kubernetes(Uuid::new_v4(), cluster_id.to_string()),
             ),
@@ -3788,7 +3785,6 @@ mod tests {
                 QoveryIdentifier::new_random(),
                 QoveryIdentifier::new_random(),
                 Uuid::new_v4().to_string(),
-                Some(ScwRegion::Paris.as_str().to_string()),
                 Stage::Infrastructure(InfrastructureStep::Create),
                 Transmitter::Kubernetes(Uuid::new_v4(), cluster_id.to_string()),
             ),
@@ -3838,7 +3834,6 @@ mod tests {
                 QoveryIdentifier::new_random(),
                 QoveryIdentifier::new_random(),
                 "".to_string(),
-                Some(ScwRegion::Paris.as_str().to_string()),
                 Stage::Infrastructure(InfrastructureStep::Create),
                 Transmitter::Kubernetes(Uuid::new_v4(), cluster_id.to_string()),
             ),
@@ -3871,7 +3866,6 @@ mod tests {
                 QoveryIdentifier::new_random(),
                 QoveryIdentifier::new_random(),
                 "".to_string(),
-                Some(ScwRegion::Paris.as_str().to_string()),
                 Stage::Infrastructure(InfrastructureStep::Create),
                 Transmitter::Kubernetes(Uuid::new_v4(), cluster_id.to_string()),
             ),

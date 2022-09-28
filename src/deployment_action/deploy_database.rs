@@ -1,6 +1,5 @@
 use crate::cloud_provider::helm::{ChartInfo, ChartSetValue, HelmAction, HelmChartNamespaces};
 use crate::cloud_provider::service::{delete_pending_service, get_database_terraform_config, Action, Service};
-use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::Kind::Aws;
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::cmd;
@@ -18,7 +17,6 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::models::database::{Container, Database, DatabaseService, DatabaseType, Managed};
 use crate::models::types::{CloudProvider, ToTeraContext};
-use function_name::named;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::thread;
@@ -387,35 +385,14 @@ impl<C: CloudProvider, T: DatabaseType<C, Managed>> DeploymentAction for Databas
 where
     Database<C, Managed, T>: ToTeraContext,
 {
-    #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
             on_create_managed_impl(self, event_details.clone(), target)
         })
     }
 
-    #[named]
     fn on_create_check(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
         if self.publicly_accessible {
             let logger = get_loggers(self, self.action);
             let domain_checker = CheckDnsForDomains {
@@ -430,18 +407,8 @@ where
         Ok(())
     }
 
-    #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Pause), || {
             // We don't manage PAUSE for managed database elsewhere than for AWS
             if target.kubernetes.cloud_provider().kind() != Aws {
@@ -497,18 +464,8 @@ where
         })
     }
 
-    #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Delete), || {
             // First we must ensure the DB is created and in a ready state
             // because if not, the deletion is going to fail (i.e: cannot snapshot paused db)
@@ -554,18 +511,8 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> DeploymentAction for Datab
 where
     Database<C, Container, T>: ToTeraContext,
 {
-    #[named]
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
             let chart = ChartInfo {
                 name: self.helm_release_name(),
@@ -598,18 +545,7 @@ where
         })
     }
 
-    #[named]
     fn on_create_check(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
         if self.publicly_accessible {
             let logger = get_loggers(self, self.action);
             let domain_checker = CheckDnsForDomains {
@@ -624,18 +560,7 @@ where
         Ok(())
     }
 
-    #[named]
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Pause), || {
             let pause_service = PauseServiceAction::new(
                 self.selector(),
@@ -647,18 +572,8 @@ where
         })
     }
 
-    #[named]
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        print_action(
-            C::short_name(),
-            T::db_type().to_string().as_str(),
-            function_name!(),
-            self.name(),
-            event_details.clone(),
-            self.logger(),
-        );
-
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Delete), || {
             let chart = ChartInfo {
                 name: self.helm_release_name(),

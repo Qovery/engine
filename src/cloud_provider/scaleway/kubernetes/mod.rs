@@ -173,7 +173,6 @@ impl Kapsule {
                         QoveryIdentifier::new(*context.organization_long_id()),
                         QoveryIdentifier::new(*context.cluster_long_id()),
                         context.execution_id().to_string(),
-                        Some(zone.region_str().to_string()),
                         Infrastructure(InfrastructureStep::LoadConfiguration),
                         Transmitter::Kubernetes(long_id, name),
                     ),

@@ -61,7 +61,6 @@ impl<'a> Transaction<'a> {
             QoveryIdentifier::new(*context.organization_long_id()),
             QoveryIdentifier::new(*context.cluster_long_id()),
             context.execution_id().to_string(),
-            None,
             stage,
             transmitter,
         )
@@ -160,16 +159,6 @@ impl<'a> Transaction<'a> {
             to_engine_error(event_details, err)
         };
 
-        let build_event_details = || -> EventDetails {
-            self.get_event_details(
-                Stage::Environment(EnvironmentStep::Build),
-                Transmitter::BuildPlatform(
-                    *self.engine.build_platform().long_id(),
-                    self.engine.build_platform().name().to_string(),
-                ),
-            )
-        };
-
         // Do setup of registry and be sure we are login to the registry
         let cr_registry = self.engine.container_registry();
         cr_registry.create_registry().map_err(cr_to_engine_error)?;
@@ -200,12 +189,19 @@ impl<'a> Transaction<'a> {
 
             // logging
             let image_name = app.get_build().image.full_image_name_with_tag();
-            let msg = match &build_result {
-                Ok(_) => format!("✅ Container image {} is built and ready to use", &image_name),
-                Err(BuildError::Aborted { .. }) => {
-                    format!("🚫 Container image {} build has been canceled", &image_name)
-                }
-                Err(err) => format!("❌ Container image {} failed to be build: {}", &image_name, err),
+            let (msg, step) = match &build_result {
+                Ok(_) => (
+                    format!("✅ Container image {} is built and ready to use", &image_name),
+                    EnvironmentStep::Built,
+                ),
+                Err(BuildError::Aborted { .. }) => (
+                    format!("🚫 Container image {} build has been canceled", &image_name),
+                    EnvironmentStep::Cancelled,
+                ),
+                Err(err) => (
+                    format!("❌ Container image {} failed to be build: {}", &image_name, err),
+                    EnvironmentStep::BuiltError,
+                ),
             };
 
             let progress_info = ProgressInfo::new(
@@ -221,7 +217,7 @@ impl<'a> Transaction<'a> {
             );
             ListenersHelper::new(self.engine.build_platform().listeners()).deployment_in_progress(progress_info);
 
-            let event_details = build_event_details();
+            let event_details = app.get_event_details(Stage::Environment(step));
             self.logger
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
 

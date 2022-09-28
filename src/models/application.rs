@@ -345,7 +345,6 @@ impl<T: CloudProvider> Application<T> {
             QoveryIdentifier::new(*context.organization_long_id()),
             QoveryIdentifier::new(*context.cluster_long_id()),
             context.execution_id().to_string(),
-            None,
             stage,
             self.to_transmitter(),
         )

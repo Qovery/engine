@@ -428,9 +428,6 @@ impl Display for Transmitter {
     }
 }
 
-/// Region: represents event's cloud provider region.
-type Region = String;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// EventDetails: represents an event details, carrying all useful data such as Qovery identifiers, transmitter, stage etc.
 pub struct EventDetails {
@@ -442,8 +439,6 @@ pub struct EventDetails {
     cluster_id: QoveryIdentifier,
     /// execution_id: Qovery execution identifier.
     execution_id: String,
-    /// region: event's region (cloud provider specific region). Can be set to None if not applicable in the case of an application for example.
-    region: Option<Region>, // TODO(benjaminch): find a way to make Region a real struct type
     /// stage: stage in which this event has been triggered.
     stage: Stage,
     /// transmitter: source triggering the event.
@@ -459,7 +454,6 @@ impl EventDetails {
     /// * `organisation_id`: Qovery's organisation identifier.
     /// * `cluster_id`: Qovery's cluster identifier.
     /// * `execution_id`: Qovery's execution identifier.
-    /// * `region`: Event's region (cloud provider region).
     /// * `stage`: Event's stage in which this event has been triggered.
     /// * `transmitter`: Event's source transmitter.
     pub fn new(
@@ -467,7 +461,6 @@ impl EventDetails {
         organisation_id: QoveryIdentifier,
         cluster_id: QoveryIdentifier,
         execution_id: String,
-        region: Option<Region>,
         stage: Stage,
         transmitter: Transmitter,
     ) -> Self {
@@ -476,7 +469,6 @@ impl EventDetails {
             organisation_id,
             cluster_id,
             execution_id,
-            region,
             stage,
             transmitter,
         }
@@ -513,11 +505,6 @@ impl EventDetails {
     /// Returns event's Qovery execution identifier.
     pub fn execution_id(&self) -> &str {
         &self.execution_id
-    }
-
-    /// Returns event's region (cloud provider region).
-    pub fn region(&self) -> Option<Region> {
-        self.region.clone()
     }
 
     /// Returns event's stage in which the event has been triggered.

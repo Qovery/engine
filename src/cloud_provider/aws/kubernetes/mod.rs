@@ -176,7 +176,6 @@ fn event_details(
     cloud_provider: &dyn CloudProvider,
     kubernetes_id: Uuid,
     kubernetes_name: String,
-    kubernetes_region: &AwsRegion,
     context: &Context,
 ) -> EventDetails {
     EventDetails::new(
@@ -184,7 +183,6 @@ fn event_details(
         QoveryIdentifier::new(*context.organization_long_id()),
         QoveryIdentifier::new(*context.cluster_long_id()),
         context.execution_id().to_string(),
-        Some(kubernetes_region.to_string()),
         Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
         Transmitter::Kubernetes(kubernetes_id, kubernetes_name),
     )

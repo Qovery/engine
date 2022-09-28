@@ -54,7 +54,6 @@ pub trait DnsProvider {
             QoveryIdentifier::new(*self.context().organization_long_id()),
             QoveryIdentifier::new(*self.context().cluster_long_id()),
             self.context().execution_id().to_string(),
-            None,
             Stage::General(GeneralStep::ValidateSystemRequirements),
             Transmitter::DnsProvider(*self.long_id(), self.provider_name().to_string()),
         )

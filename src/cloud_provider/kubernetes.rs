@@ -97,7 +97,6 @@ pub trait Kubernetes {
             QoveryIdentifier::new(*context.organization_long_id()),
             QoveryIdentifier::new(*context.cluster_long_id()),
             context.execution_id().to_string(),
-            Some(self.region().to_string()),
             stage,
             Transmitter::Kubernetes(*self.long_id(), self.name().to_string()),
         )
@@ -1473,7 +1472,6 @@ mod tests {
             QoveryIdentifier::new_random(),
             QoveryIdentifier::new_random(),
             Uuid::new_v4().to_string(),
-            None,
             Stage::Infrastructure(InfrastructureStep::Upgrade),
             Transmitter::Kubernetes(Uuid::new_v4(), "test".to_string()),
         );
@@ -2050,7 +2048,6 @@ mod tests {
             QoveryIdentifier::new_random(),
             QoveryIdentifier::new_random(),
             Uuid::new_v4().to_string(),
-            Some("region_fake".to_string()),
             Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
             Transmitter::Kubernetes(Uuid::new_v4(), format!("{}-name", cluster_id)),
         );
