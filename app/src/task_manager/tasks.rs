@@ -387,7 +387,7 @@ impl Task for EnvironmentTask {
             )),
             (Action::Create, TransactionResult::Ok) => self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Deployed),
-                EventMessage::new("❤️ Environment is deployed".to_string(), None),
+                EventMessage::new("❤️ Deployment succeeded".to_string(), None),
             )),
             (Action::Pause, TransactionResult::Ok) => self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Paused),
@@ -402,7 +402,7 @@ impl Task for EnvironmentTask {
                 self.logger.log(EngineEvent::Error(*err.clone(), None));
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::DeployedError),
-                    EventMessage::new("💣 Environment failed to be deployed".to_string(), None),
+                    EventMessage::new("💣 Deployment failed".to_string(), None),
                 ));
             }
             (Action::Pause, TransactionResult::Error(err)) => {
