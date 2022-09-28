@@ -491,7 +491,7 @@ impl BuildPlatform for LocalDocker {
 
         // now we have to decide if we use buildpack or docker to build our application
         // If no Dockerfile specified, we should use BuildPacks
-        let result = if let Some(dockerfile_path) = &build.git_repository.dockerfile_path {
+        if let Some(dockerfile_path) = &build.git_repository.dockerfile_path {
             // build container from the provided Dockerfile
 
             let dockerfile_absolute_path = repository_root_path.join(dockerfile_path);
@@ -521,17 +521,7 @@ impl BuildPlatform for LocalDocker {
                 !build.disable_cache,
                 is_task_canceled,
             )
-        };
-
-        // log image building infos
-        if let Ok(build_result) = &result {
-            self.logger.log(EngineEvent::Info(
-                event_details,
-                EventMessage::new_from_safe(build_result.to_string()),
-            ));
         }
-
-        result
     }
 
     fn logger(&self) -> Box<dyn Logger> {
