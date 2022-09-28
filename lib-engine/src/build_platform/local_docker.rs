@@ -21,7 +21,7 @@ use crate::io_models::context::Context;
 use crate::logger::Logger;
 use crate::utilities::to_short_id;
 
-/// https://buildpacks.io/
+/// https://github.com/heroku/builder
 const BUILDPACKS_BUILDERS: [&str; 1] = [
     "heroku/builder-classic:22",
     // removed because it does not support dynamic port binding
