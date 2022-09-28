@@ -7,7 +7,6 @@ use crate::cloud_provider::{
 use crate::constants::{SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY};
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
-use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::io_models::QoveryIdentifier;
 use crate::utilities::to_short_id;
 
@@ -25,7 +24,6 @@ pub struct Scaleway {
     project_id: String,
     region: String,
     terraform_state_credentials: TerraformStateCredentials,
-    listeners: Listeners,
 }
 
 impl Scaleway {
@@ -53,7 +51,6 @@ impl Scaleway {
             project_id: project_id.to_string(),
             region: region.to_string(),
             terraform_state_credentials,
-            listeners: vec![],
         }
     }
 }
@@ -146,14 +143,6 @@ impl CloudProvider for Scaleway {
             stage,
             self.to_transmitter(),
         )
-    }
-
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
     }
 
     fn to_transmitter(&self) -> Transmitter {

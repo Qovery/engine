@@ -5,15 +5,13 @@ use std::collections::HashSet;
 use std::rc::Rc;
 use uuid::Uuid;
 
-use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::service::{Action, Service};
+use crate::cloud_provider::service::Action;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::to_engine_error;
 use crate::deployment_action::deploy_environment::EnvironmentDeployment;
 use crate::engine::{EngineConfig, EngineConfigError};
 use crate::errors::{EngineError, Tag};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, Transmitter};
-use crate::io_models::progress_listener::{ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::application::ApplicationService;
@@ -204,19 +202,6 @@ impl<'a> Transaction<'a> {
                 ),
             };
 
-            let progress_info = ProgressInfo::new(
-                ProgressScope::Application {
-                    id: app.id().to_string(),
-                },
-                match build_result.is_ok() {
-                    true => ProgressLevel::Info,
-                    false => ProgressLevel::Error,
-                },
-                Some(msg.to_string()),
-                self.engine.context().execution_id(),
-            );
-            ListenersHelper::new(self.engine.build_platform().listeners()).deployment_in_progress(progress_info);
-
             let event_details = app.get_event_details(Stage::Environment(step));
             self.logger
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
@@ -308,11 +293,6 @@ impl<'a> Transaction<'a> {
                     match self.build_and_push_applications(applications, &option) {
                         Ok(apps) => apps,
                         Err(engine_err) => {
-                            self.logger.log(EngineEvent::Error(
-                                engine_err.clone(),
-                                Some(EventMessage::new_from_safe("ROLLBACK STARTED! an error occurred".to_string())),
-                            ));
-
                             return if engine_err.tag() == &Tag::TaskCancellationRequested {
                                 TransactionResult::Canceled
                             } else {
@@ -444,40 +424,7 @@ impl<'a> Transaction<'a> {
     where
         F: Fn(&Environment) -> Result<(), (HashSet<Uuid>, EngineError)>,
     {
-        let execution_id = self.engine.context().execution_id();
-
         // send back the right progress status
-        fn send_progress<T>(
-            kubernetes: &dyn Kubernetes,
-            action: &Action,
-            service: &T,
-            execution_id: &str,
-            is_error: bool,
-        ) where
-            T: Service + ?Sized,
-        {
-            let lh = ListenersHelper::new(kubernetes.cloud_provider().listeners());
-            let progress_info =
-                ProgressInfo::new(service.progress_scope(), ProgressLevel::Info, None::<&str>, execution_id);
-
-            if !is_error {
-                match action {
-                    Action::Create => lh.deployed(progress_info),
-                    Action::Pause => lh.paused(progress_info),
-                    Action::Delete => lh.deleted(progress_info),
-                    Action::Nothing => {} // nothing to do here?
-                };
-                return;
-            }
-
-            match action {
-                Action::Create => lh.deployment_error(progress_info),
-                Action::Pause => lh.pause_error(progress_info),
-                Action::Delete => lh.delete_error(progress_info),
-                Action::Nothing => {} // nothing to do here?
-            };
-        }
-
         if let Err((deployed_services, err)) = action_fn(environment) {
             let rollback_result = match self.rollback() {
                 Ok(_) => TransactionResult::Error(Box::new(err)),
@@ -493,42 +440,18 @@ impl<'a> Transaction<'a> {
                 if deployed_services.contains(service.long_id()) {
                     continue;
                 }
-
-                send_progress(
-                    self.engine.kubernetes(),
-                    &environment.action,
-                    service.as_service(),
-                    execution_id,
-                    true,
-                );
             }
 
             for service in &environment.applications {
                 if deployed_services.contains(service.long_id()) {
                     continue;
                 }
-
-                send_progress(
-                    self.engine.kubernetes(),
-                    &environment.action,
-                    service.as_service(),
-                    execution_id,
-                    true,
-                );
             }
 
             for service in &environment.routers {
                 if deployed_services.contains(service.long_id()) {
                     continue;
                 }
-
-                send_progress(
-                    self.engine.kubernetes(),
-                    &environment.action,
-                    service.as_service(),
-                    execution_id,
-                    true,
-                );
             }
 
             return rollback_result;

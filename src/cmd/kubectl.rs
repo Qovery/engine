@@ -1068,14 +1068,12 @@ where
         };
 
     for crash_looping_pod in crash_looping_pods.iter() {
-        if let Err(e) = kubectl_exec_delete_pod(
+        kubectl_exec_delete_pod(
             &kubernetes_config,
             crash_looping_pod.metadata.namespace.as_str(),
             crash_looping_pod.metadata.name.as_str(),
             envs.clone(),
-        ) {
-            return Err(e);
-        }
+        )?;
     }
 
     Ok(crash_looping_pods)

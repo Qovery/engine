@@ -15,7 +15,6 @@ use crate::cmd::terraform::TerraformError;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EngineEvent, EventDetails, EventMessage, Stage, Transmitter};
 use crate::io_models::context::Context;
-use crate::io_models::progress_listener::{Listener, Listeners, ProgressScope};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 
@@ -60,20 +59,7 @@ pub trait Service {
     // used to retrieve logs by using Kubernetes labels (selector)
     fn selector(&self) -> Option<String>;
     fn logger(&self) -> &dyn Logger;
-    fn listeners(&self) -> &Listeners;
-    fn add_listener(&mut self, listener: Listener);
     fn to_transmitter(&self) -> Transmitter;
-    fn progress_scope(&self) -> ProgressScope {
-        let id = self.id().to_string();
-
-        match self.service_type() {
-            ServiceType::Application => ProgressScope::Application { id },
-            ServiceType::Database(_) => ProgressScope::Database { id },
-            ServiceType::Router => ProgressScope::Router { id },
-            ServiceType::Container => ProgressScope::Container { id: *self.long_id() },
-        }
-    }
-
     fn as_service(&self) -> &dyn Service;
 }
 

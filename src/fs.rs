@@ -19,10 +19,7 @@ pub fn delete_file_if_exists(file: &str) -> Result<(), Error> {
         return Ok(());
     }
 
-    if let Err(e) = fs::remove_file(&file) {
-        return Err(e);
-    };
-    Ok(())
+    fs::remove_file(&file)
 }
 
 pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), Error> {

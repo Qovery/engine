@@ -15,7 +15,6 @@ use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::errors::EngineError;
 use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
 use crate::io_models::context::Context;
-use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::io_models::QoveryIdentifier;
 use crate::runtime::block_on;
 use crate::utilities::to_short_id;
@@ -38,7 +37,6 @@ pub struct AWS {
     pub zones: Vec<String>,
     kubernetes_kind: KubernetesKind,
     terraform_state_credentials: TerraformStateCredentials,
-    listeners: Listeners,
 }
 
 impl AWS {
@@ -68,7 +66,6 @@ impl AWS {
             zones,
             kubernetes_kind,
             terraform_state_credentials,
-            listeners: vec![],
         }
     }
 
@@ -120,6 +117,25 @@ impl CloudProvider for AWS {
 
     fn region(&self) -> String {
         self.region.to_string()
+    }
+
+    fn aws_sdk_client(&self) -> Option<SdkConfig> {
+        let env = Env::from_slice(&[
+            ("AWS_MAX_ATTEMPTS", "10"),
+            ("AWS_REGION", self.region().as_str()),
+            ("AWS_ACCESS_KEY_ID", self.access_key_id().as_str()),
+            ("AWS_SECRET_ACCESS_KEY", self.secret_access_key().as_str()),
+        ]);
+
+        Some(block_on(
+            aws_config::from_env()
+                .configure(
+                    ProviderConfig::empty()
+                        .with_env(env)
+                        .with_http_connector(DynConnector::new(NeverConnector::new())),
+                )
+                .load(),
+        ))
     }
 
     fn token(&self) -> &str {
@@ -175,34 +191,7 @@ impl CloudProvider for AWS {
         )
     }
 
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
-
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::CloudProvider(self.long_id, self.name.to_string())
-    }
-
-    fn aws_sdk_client(&self) -> Option<SdkConfig> {
-        let env = Env::from_slice(&[
-            ("AWS_MAX_ATTEMPTS", "10"),
-            ("AWS_REGION", self.region().as_str()),
-            ("AWS_ACCESS_KEY_ID", self.access_key_id().as_str()),
-            ("AWS_SECRET_ACCESS_KEY", self.secret_access_key().as_str()),
-        ]);
-
-        Some(block_on(
-            aws_config::from_env()
-                .configure(
-                    ProviderConfig::empty()
-                        .with_env(env)
-                        .with_http_connector(DynConnector::new(NeverConnector::new())),
-                )
-                .load(),
-        ))
     }
 }

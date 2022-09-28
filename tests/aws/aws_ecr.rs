@@ -1,11 +1,9 @@
 use crate::helpers::utilities::{context, generate_id, logger, FuncTestsSecrets};
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::container_registry::ContainerRegistry;
-use qovery_engine::io_models::progress_listener::NoOpProgressListener;
 use qovery_engine::runtime::block_on;
 use rusoto_ecr::Ecr;
 use rusoto_ecr::{DescribeRepositoriesRequest, ListTagsForResourceRequest, Tag};
-use std::sync::Arc;
 use uuid::Uuid;
 
 #[cfg(feature = "test-aws-infra")]
@@ -22,7 +20,6 @@ fn create_ecr_repository_with_tags() {
         &secrets.AWS_ACCESS_KEY_ID.expect("Unable to get access key"),
         &secrets.AWS_SECRET_ACCESS_KEY.expect("Unable to get secret key"),
         &secrets.AWS_DEFAULT_REGION.expect("Unable to get default region"),
-        Arc::new(Box::new(NoOpProgressListener {})),
         logger(),
         hashmap! {"ttl".to_string() => 3600.to_string()},
     )
