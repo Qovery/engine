@@ -298,7 +298,7 @@ impl Task for EnvironmentTask {
             self.get_event_details(EnvironmentStep::Start),
             EventMessage::new("🚀 Qovery Engine starts to execute the deployment".to_string(), None),
         ));
-        let _guard = scopeguard::guard((), |_| {
+        let guard = scopeguard::guard((), |_| {
             self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Terminated),
                 EventMessage::new("Qovery Engine has terminated the deployment".to_string(), None),
@@ -420,6 +420,10 @@ impl Task for EnvironmentTask {
                 ));
             }
         };
+
+        // Uploading to S3 can take a lot of time, and might hit the core timeout
+        // So we early drop the guard to notify core that the task is done
+        drop(guard);
 
         // only store if not running on a workstation
         if env::var("DEPLOY_FROM_FILE_KIND").is_err() {
