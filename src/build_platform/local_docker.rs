@@ -118,10 +118,9 @@ impl LocalDocker {
         let log_info = {
             let app_long_id = build.image.application_long_id;
             let app_name = build.image.application_name.clone();
-            let app_commit = build.image.commit_id.clone();
             move |msg: String| {
                 self.logger.log(EngineEvent::Info(
-                    self.get_event_details(app_long_id, app_name.clone(), app_commit.clone()),
+                    self.get_event_details(app_long_id, app_name.clone()),
                     EventMessage::new_from_safe(msg),
                 ));
             }
@@ -302,21 +301,13 @@ impl LocalDocker {
             exit_status = cmd.exec_with_abort(
                 &mut |line| {
                     self.logger.log(EngineEvent::Info(
-                        self.get_event_details(
-                            build.image.application_long_id,
-                            build.image.application_name.clone(),
-                            build.image.commit_id.clone(),
-                        ),
+                        self.get_event_details(build.image.application_long_id, build.image.application_name.clone()),
                         EventMessage::new_from_safe(line),
                     ));
                 },
                 &mut |line| {
                     self.logger.log(EngineEvent::Warning(
-                        self.get_event_details(
-                            build.image.application_long_id,
-                            build.image.application_name.clone(),
-                            build.image.commit_id.clone(),
-                        ),
+                        self.get_event_details(build.image.application_long_id, build.image.application_name.clone()),
                         EventMessage::new_from_safe(line),
                     ));
                 },
@@ -380,11 +371,8 @@ impl BuildPlatform for LocalDocker {
     }
 
     fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<BuildResult, BuildError> {
-        let event_details = self.get_event_details(
-            build.image.application_long_id,
-            build.image.application_name.clone(),
-            build.image.commit_id.clone(),
-        );
+        let event_details =
+            self.get_event_details(build.image.application_long_id, build.image.application_name.clone());
         let app_id = build.image.application_id.clone();
 
         // check if we should already abort the task
