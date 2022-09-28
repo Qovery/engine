@@ -387,7 +387,7 @@ impl Task for EnvironmentTask {
             )),
             (Action::Create, TransactionResult::Ok) => self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Deployed),
-                EventMessage::new("❤️ Deployment succeeded".to_string(), None),
+                EventMessage::new("❤️ Deployment succeeded ❤️".to_string(), None),
             )),
             (Action::Pause, TransactionResult::Ok) => self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Paused),
