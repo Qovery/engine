@@ -33,7 +33,7 @@ use crate::cmd::structs::KubernetesNodeCondition;
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter};
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::fs::{delete_file_if_exists, workspace_directory};
 use crate::io_models::context::Context;
 use crate::io_models::domain::StringPath;
@@ -83,7 +83,7 @@ pub trait Kubernetes {
 
         block_on(get_kube_client(kubeconfig_path, kube_credentials.as_slice())).map_err(|err| {
             EngineError::new_cannot_connect_to_k8s_cluster(
-                self.get_event_details(Stage::General(GeneralStep::RetrieveClusterResources)),
+                self.get_event_details(Infrastructure(InfrastructureStep::RetrieveClusterResources)),
                 err,
             )
         })
@@ -147,7 +147,7 @@ pub trait Kubernetes {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let object_key = self.get_kubeconfig_filename();
         let bucket_name = self.get_bucket_name();
-        let stage = Stage::General(GeneralStep::RetrieveClusterConfig);
+        let stage = Infrastructure(InfrastructureStep::RetrieveClusterConfig);
 
         // check if kubeconfig locally exists
         let local_kubeconfig = match self.kubeconfig_local_file_path() {
@@ -294,7 +294,7 @@ pub trait Kubernetes {
 
     fn resources(&self, _environment: &Environment) -> Result<Resources, EngineError> {
         let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
-        let stage = Stage::General(GeneralStep::RetrieveClusterResources);
+        let stage = Infrastructure(InfrastructureStep::RetrieveClusterResources);
 
         let nodes = match kubectl_exec_get_node(
             kubernetes_config_file_path,

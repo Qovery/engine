@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::cloud_provider::{kubernetes::Kind as KubernetesKind, CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::errors::EngineError;
-use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
+use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::io_models::QoveryIdentifier;
 use crate::utilities::to_short_id;
@@ -115,7 +115,7 @@ impl CloudProvider for DO {
     }
 
     fn is_valid(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::General(GeneralStep::RetrieveClusterConfig));
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::RetrieveClusterConfig));
         let client = DigitalOcean::new(&self.token);
         match client {
             Ok(_x) => Ok(()),

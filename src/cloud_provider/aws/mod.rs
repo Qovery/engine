@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::cloud_provider::{kubernetes::Kind as KubernetesKind, CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY};
 use crate::errors::EngineError;
-use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
+use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::io_models::QoveryIdentifier;
 use crate::runtime::block_on;
@@ -143,7 +143,7 @@ impl CloudProvider for AWS {
     }
 
     fn is_valid(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::General(GeneralStep::RetrieveClusterConfig));
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::RetrieveClusterConfig));
         let client = StsClient::new_with_client(self.client(), Region::default());
         let s = block_on(client.get_caller_identity(GetCallerIdentityRequest::default()));
 
