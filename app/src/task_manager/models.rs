@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use qovery_engine::errors::{CommandError, EngineError as IoEngineError};
+use qovery_engine::errors::{CommandError, EngineError as IoEngineError, EngineError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -21,7 +21,6 @@ use qovery_engine::dns_provider::cloudflare::Cloudflare;
 use qovery_engine::dns_provider::io::Kind;
 use qovery_engine::dns_provider::qoverydns::QoveryDns;
 use qovery_engine::engine::EngineConfig;
-use qovery_engine::error::{EngineError, EngineErrorCause, EngineErrorScope};
 use qovery_engine::events::{EnvironmentStep, EventDetails, InfrastructureStep, Stage, Transmitter};
 use qovery_engine::io_models::context::{Context, Features, Metadata};
 use qovery_engine::io_models::domain::Domain;
@@ -142,7 +141,7 @@ impl EngineRequest {
         ) {
             Ok(x) => x,
             Err(e) => {
-                error!("{:?}", e.message);
+                error!("{:?}", e);
                 panic!("Can't deploy infrastructure, please check json")
             }
         };
@@ -329,7 +328,7 @@ impl Kubernetes {
                 self.advanced_settings.clone(),
             ) {
                 Ok(res) => Ok(Box::new(res)),
-                Err(e) => Err(e.to_legacy_engine_error()),
+                Err(e) => Err(e),
             },
             qovery_engine::cloud_provider::kubernetes::Kind::Doks => match DOKS::new(
                 context.clone(),
@@ -348,7 +347,7 @@ impl Kubernetes {
                 self.advanced_settings.clone(),
             ) {
                 Ok(res) => Ok(Box::new(res)),
-                Err(e) => Err(e.to_legacy_engine_error()),
+                Err(e) => Err(e),
             },
             qovery_engine::cloud_provider::kubernetes::Kind::ScwKapsule => match Kapsule::new(
                 context.clone(),
@@ -372,16 +371,14 @@ impl Kubernetes {
                 self.advanced_settings.clone(),
             ) {
                 Ok(res) => Ok(Box::new(res)),
-                Err(e) => Err(e.to_legacy_engine_error()),
+                Err(e) => Err(e),
             },
             qovery_engine::cloud_provider::kubernetes::Kind::Ec2 => {
                 let ec2_instance = match self.nodes_groups.len() != 1 {
                     true => {
-                        return Err(EngineError::new(
-                            EngineErrorCause::Internal,
-                            EngineErrorScope::Kubernetes(self.long_id, self.name.clone()),
-                            context.execution_id(),
-                            Some(format!("Expected 1 node, found {}", &self.nodes_groups.len())),
+                        return Err(EngineError::new_missing_nodegroup_information_error(
+                            cloud_provider
+                                .get_event_details(Stage::Infrastructure(InfrastructureStep::RetrieveClusterResources)),
                         ))
                     }
                     false => self.nodes_groups[0].to_ec2_instance(),
@@ -405,7 +402,7 @@ impl Kubernetes {
                     self.advanced_settings.clone(),
                 ) {
                     Ok(res) => Ok(Box::new(res)),
-                    Err(e) => Err(e.to_legacy_engine_error()),
+                    Err(e) => Err(e),
                 }
             }
         }

@@ -17,7 +17,6 @@ use crate::cmd::structs::{
     KubernetesVersion, MetricsServer, Namespace, Secrets, HPA, PDB, PVC, SVC,
 };
 use crate::constants::KUBECONFIG;
-use crate::error::{SimpleError, SimpleErrorKind};
 use crate::errors::{CommandError, ErrorMessageVerbosity};
 
 pub enum ScalingKind {
@@ -299,44 +298,6 @@ where
 
     let is_ready = matches!(first_item.status.phase, KubernetesPodStatusPhase::Running);
     Ok(Some(is_ready))
-}
-
-pub fn kubectl_exec_is_job_ready_with_retry<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    job_name: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<Option<bool>, SimpleError>
-where
-    P: AsRef<Path>,
-{
-    let result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
-        let r = kubectl_exec_is_job_ready(kubernetes_config.as_ref(), namespace, job_name, envs.clone());
-
-        match r {
-            Ok(is_ready) => match is_ready {
-                Some(true) => OperationResult::Ok(true),
-                _ => {
-                    let t = format!("job {} is not ready yet", job_name);
-                    info!("{}", t.as_str());
-                    OperationResult::Retry(t)
-                }
-            },
-            Err(err) => OperationResult::Err(format!("command error: {:?}", err)),
-        }
-    });
-
-    match result {
-        Err(err) => match err {
-            retry::Error::Operation {
-                error: _,
-                total_delay: _,
-                tries: _,
-            } => Ok(Some(false)),
-            retry::Error::Internal(err) => Err(SimpleError::new(SimpleErrorKind::Other, Some(err))),
-        },
-        Ok(_) => Ok(Some(true)),
-    }
 }
 
 pub fn kubectl_exec_is_job_ready<P>(
