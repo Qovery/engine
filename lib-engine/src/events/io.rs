@@ -209,66 +209,22 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
 
 type TransmitterId = Uuid;
 type TransmitterName = String;
-type TransmitterType = String;
-type TransmitterVersion = String;
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type")]
 pub enum Transmitter {
-    TaskManager {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    BuildPlatform {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    ContainerRegistry {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    CloudProvider {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    Kubernetes {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    DnsProvider {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    ObjectStorage {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    Environment {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    Database {
-        id: TransmitterId,
-        db_type: TransmitterType,
-        name: TransmitterName,
-    },
-    Application {
-        id: TransmitterId,
-        name: TransmitterName,
-        commit: TransmitterVersion,
-    },
-    Container {
-        id: TransmitterId,
-        name: TransmitterName,
-        image: TransmitterVersion,
-    },
-    Router {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    SecretManager {
-        name: TransmitterName,
-    },
+    TaskManager { id: TransmitterId, name: TransmitterName },
+    BuildPlatform { id: TransmitterId, name: TransmitterName },
+    ContainerRegistry { id: TransmitterId, name: TransmitterName },
+    CloudProvider { id: TransmitterId, name: TransmitterName },
+    Kubernetes { id: TransmitterId, name: TransmitterName },
+    DnsProvider { id: TransmitterId, name: TransmitterName },
+    ObjectStorage { id: TransmitterId, name: TransmitterName },
+    Environment { id: TransmitterId, name: TransmitterName },
+    Database { id: TransmitterId, name: TransmitterName },
+    Application { id: TransmitterId, name: TransmitterName },
+    Container { id: TransmitterId, name: TransmitterName },
+    Router { id: TransmitterId, name: TransmitterName },
 }
 
 impl From<events::Transmitter> for Transmitter {
@@ -282,14 +238,10 @@ impl From<events::Transmitter> for Transmitter {
             events::Transmitter::DnsProvider(id, name) => Transmitter::DnsProvider { id, name },
             events::Transmitter::ObjectStorage(id, name) => Transmitter::ObjectStorage { id, name },
             events::Transmitter::Environment(id, name) => Transmitter::Environment { id, name },
-            events::Transmitter::Database(id, db_type, name) => Transmitter::Database { id, db_type, name },
-            events::Transmitter::Application(id, name, commit) => Transmitter::Application { id, name, commit },
+            events::Transmitter::Database(id, name) => Transmitter::Database { id, name },
+            events::Transmitter::Application(id, name) => Transmitter::Application { id, name },
             events::Transmitter::Router(id, name) => Transmitter::Router { id, name },
-            events::Transmitter::Container(id, name, version) => Transmitter::Container {
-                id,
-                name,
-                image: version,
-            },
+            events::Transmitter::Container(id, name) => Transmitter::Container { id, name },
         }
     }
 }

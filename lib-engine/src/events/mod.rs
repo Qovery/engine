@@ -369,10 +369,6 @@ impl Display for EnvironmentStep {
 type TransmitterId = Uuid;
 /// TransmitterName: represents a transmitter name.
 type TransmitterName = String;
-/// TransmitterType: represents a transmitter type.
-type TransmitterType = String; // TODO(benjaminch): makes it a real enum / type
-/// TransmitterVersion: represents a transmitter version.
-type TransmitterVersion = String;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Transmitter: represents the event's source caller (transmitter).
@@ -394,11 +390,11 @@ pub enum Transmitter {
     /// Environment: environment engine part.
     Environment(TransmitterId, TransmitterName),
     /// Database: database engine part.
-    Database(TransmitterId, TransmitterType, TransmitterName),
+    Database(TransmitterId, TransmitterName),
     /// Application: application engine part.
-    Application(TransmitterId, TransmitterName, TransmitterVersion),
+    Application(TransmitterId, TransmitterName),
     /// Application: application engine part.
-    Container(TransmitterId, TransmitterName, TransmitterVersion),
+    Container(TransmitterId, TransmitterName),
     /// Router: router engine part.
     Router(TransmitterId, TransmitterName),
 }
@@ -417,12 +413,10 @@ impl Display for Transmitter {
                 Transmitter::DnsProvider(id, name) => format!("dns_provider({}, {})", id, name),
                 Transmitter::ObjectStorage(id, name) => format!("object_strorage({}, {})", id, name),
                 Transmitter::Environment(id, name) => format!("environment({}, {})", id, name),
-                Transmitter::Database(id, db_type, name) => format!("database({}, {}, {})", id, db_type, name),
-                Transmitter::Application(id, name, version) =>
-                    format!("application({}, {}, commit: {})", id, name, version),
+                Transmitter::Database(id, name) => format!("database({}, {})", id, name),
+                Transmitter::Application(id, name) => format!("application({}, {})", id, name),
                 Transmitter::Router(id, name) => format!("router({}, {})", id, name),
-                Transmitter::Container(id, name, version) =>
-                    format!("container({}, {}, version: {})", id, name, version),
+                Transmitter::Container(id, name) => format!("container({}, {})", id, name),
             }
         )
     }

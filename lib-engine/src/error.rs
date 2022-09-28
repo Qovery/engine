@@ -45,9 +45,9 @@ pub enum EngineErrorScope {
     DnsProvider(Id, Name),
     ObjectStorage(Id, Name),
     Environment(Id, Name),
-    Database(Id, Type, Name),
-    Application(Id, Name, Version),
-    Container(Id, Name, Version),
+    Database(Id, Name),
+    Application(Id, Name),
+    Container(Id, Name),
     Router(Id, Name),
 }
 
@@ -62,10 +62,10 @@ impl From<Transmitter> for EngineErrorScope {
             Transmitter::DnsProvider(id, name) => EngineErrorScope::DnsProvider(id, name),
             Transmitter::ObjectStorage(id, name) => EngineErrorScope::ObjectStorage(id, name),
             Transmitter::Environment(id, name) => EngineErrorScope::Environment(id, name),
-            Transmitter::Database(id, db_type, name) => EngineErrorScope::Database(id, db_type, name),
-            Transmitter::Application(id, name, commit) => EngineErrorScope::Application(id, name, commit),
+            Transmitter::Database(id, name) => EngineErrorScope::Database(id, name),
+            Transmitter::Application(id, name) => EngineErrorScope::Application(id, name),
             Transmitter::Router(id, name) => EngineErrorScope::Router(id, name),
-            Transmitter::Container(id, name, version) => EngineErrorScope::Container(id, name, version),
+            Transmitter::Container(id, name) => EngineErrorScope::Container(id, name),
         }
     }
 }
