@@ -131,22 +131,6 @@ impl Subject {
             name: format!("engine.task.{}.cancel", task.id()),
         }
     }
-
-    pub fn new_from_string(subject_name: String) -> Self {
-        Subject { name: subject_name }
-    }
-
-    /// Check whether the NATS subject is an Engine's old subject of not.
-    ///
-    /// New NATS topic format:
-    ///  "engine.env.logs.organization_id.cluster_id.execution_id"
-    ///  "engine.infra.logs.organization_id.cluster_id.execution_id"
-    ///
-    /// Old NATS topic format:
-    ///   "engine.cloud.organization_id.cloud_provider.region.suffix"
-    pub fn is_legacy_topic(&self) -> bool {
-        !self.name.contains(".logs.")
-    }
 }
 
 impl Display for Subject {

@@ -8,7 +8,6 @@ use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
 use crate::io_models::context::Context;
-use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::utilities;
 use url::Url;
 use uuid::Uuid;
@@ -27,7 +26,6 @@ pub struct DOCR {
     pub id: String,
     pub long_id: Uuid,
     pub registry_info: ContainerRegistryInfo,
-    pub listeners: Listeners,
 }
 
 impl DOCR {
@@ -37,7 +35,6 @@ impl DOCR {
         long_id: Uuid,
         name: &str,
         api_key: &str,
-        listener: Listener,
     ) -> Result<Self, ContainerRegistryError> {
         let registry_name = name.to_string();
         let registry_name2 = name.to_string();
@@ -58,7 +55,6 @@ impl DOCR {
             name: name.to_string(),
             api_key: api_key.into(),
             id: id.into(),
-            listeners: vec![listener],
             registry_info,
             long_id,
         };

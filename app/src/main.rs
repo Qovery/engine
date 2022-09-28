@@ -5,8 +5,6 @@ extern crate lazy_static;
 #[macro_use]
 extern crate prometheus;
 #[macro_use]
-extern crate serde;
-#[macro_use]
 extern crate tracing;
 
 use std::fs::File;
@@ -14,7 +12,6 @@ use std::io::{BufRead, BufReader, Error};
 use std::path::Path;
 use std::sync::Arc;
 
-use chrono::Utc;
 use std::borrow::Borrow;
 use std::thread::sleep;
 use std::time::Duration;
@@ -32,7 +29,6 @@ use uuid::Uuid;
 use qovery_engine::cmd;
 use qovery_engine::errors::EngineError;
 use qovery_engine::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, Stage, Transmitter};
-use qovery_engine::io_models::progress_listener::{ProgressLevel, ProgressScope};
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use utils::Mode;
@@ -43,12 +39,11 @@ use crate::custom_error::{EngineInitError, ErrorKind};
 use crate::logger::composite_logger::CompositeLogger;
 use crate::logger::nats_logger::NatsLogger;
 
-use crate::models::{StatusResponse, TaskSelector};
-use crate::nats::subjects::SubjectInfo;
-use crate::nats::{subjects, Connection, Message};
-use crate::subjects::Subject;
+use crate::models::TaskSelector;
+use crate::nats::subjects::{Subject, SubjectInfo};
+use crate::nats::{Connection, Message};
 use crate::task_manager::models::EngineRequest;
-use crate::task_manager::scheduler::{ActionContext, State, Status, Task, TaskManager};
+use crate::task_manager::scheduler::{Task, TaskManager};
 use crate::task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 use crate::utils::{log_no_spam_builder, LogErrorOnDrop};
 
@@ -67,7 +62,6 @@ fn to_engine_task(
     lib_root_dir: &str,
     docker_tcp_socket: &Option<Url>,
     task_selector: &TaskSelector,
-    status_sender: Sender<Status>,
     logger: Box<dyn Logger>,
 ) -> Result<Box<dyn Task>, EngineError> {
     let request = match serde_json::from_slice::<EngineRequest>(&msg.data) {
@@ -119,7 +113,6 @@ fn to_engine_task(
     let task: Box<dyn Task> = match task_selector {
         TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(
             request,
-            status_sender,
             workspace_root_dir.to_string(),
             lib_root_dir.to_string(),
             docker_tcp_socket.clone(),
@@ -127,7 +120,6 @@ fn to_engine_task(
         )),
         TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(
             request,
-            status_sender,
             workspace_root_dir.to_string(),
             lib_root_dir.to_string(),
             docker_tcp_socket.clone(),
@@ -402,17 +394,11 @@ pub fn using_json_path_parameter(
 
     let mut task_manager = TaskManager::new();
     let task: Box<dyn Task> = match deployment_type {
-        TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(
-            req,
-            task_manager.get_task_status_tx().clone(),
-            workspace_root_dir,
-            lib_root_dir,
-            docker_host,
-            logger,
-        )),
+        TaskSelector::Environment(_) => {
+            Box::new(EnvironmentTask::new(req, workspace_root_dir, lib_root_dir, docker_host, logger))
+        }
         TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(
             req,
-            task_manager.get_task_status_tx().clone(),
             workspace_root_dir,
             lib_root_dir,
             docker_host,
@@ -456,38 +442,8 @@ fn using_nats_server(
     info!("connection to the NATS server established");
 
     let mut tm = TaskManager::new();
-    let status_rx = tm.get_task_status_rx().clone();
     tm.run().expect("cannot run task manager");
     let task_manager = Arc::new(tm);
-
-    let _ = {
-        let thread_name = "deployment-status-sender";
-        let nc = nc.clone();
-        let func = move || {
-            let _drop_logger = LogErrorOnDrop::new(thread_name);
-            loop {
-                // send back the message to a topic: E.g core.task.status
-                // json: {"status": {"kind": "Failed", "message": "blablabla"}, "id": "abc", "created_at": "<datetime>"}
-                match status_rx.recv() {
-                    Ok(status) => {
-                        let sr = StatusResponse::new(status.context.execution_id.to_string(), status);
-                        let json = serde_json::to_string(&sr).unwrap();
-                        debug!("send through NATS StatusResponse: {}", json.as_str());
-                        let _ = nc
-                            .publish(&subjects::CORE_TASK_STATUS, json.as_bytes())
-                            .map_err(|err| error!("Cannot publish on {}: {}", subjects::CORE_TASK_STATUS.name, err));
-                    }
-                    // Other end of the channel is disconnected
-                    Err(_) => return,
-                };
-            }
-        };
-
-        thread::Builder::new()
-            .name(thread_name.to_string())
-            .spawn(func)
-            .unwrap()
-    };
 
     let (sig_term_tx, sig_term_rx) = unbounded::<bool>();
     {
@@ -620,7 +576,6 @@ fn spawn_task_poller(
                 &lib_root_dir,
                 &docker_host,
                 &task_selector,
-                task_manager.get_task_status_tx().clone(),
                 logger.clone(),
             ) {
                 Ok(task) => task,
@@ -631,35 +586,6 @@ fn spawn_task_poller(
                         err.clone(),
                         Some(EventMessage::new_from_safe(format!("{}.", err_message))),
                     ));
-
-                    let nats_subject = Subject::new_from_string(msg.subject.to_string());
-                    if nats_subject.is_legacy_topic() {
-                        // ... send it via old logger as well if coming from old NATS
-                        // TODO(benjaminch): To be removed once old logger to be removed
-                        let execution_id = err.event_details().execution_id().to_string();
-                        let action_context = ActionContext::new(
-                            ProgressScope::Queued,
-                            ProgressLevel::Error,
-                            execution_id.to_string(),
-                            Utc::now(),
-                        );
-                        let status_response = StatusResponse::new(
-                            execution_id.to_string(),
-                            Status::new(State::Error, Some(err.to_string()), action_context),
-                        );
-                        match serde_json::to_string(&status_response) {
-                            Err(e) => error!("Error while trying to send error to old NATS topic, cannot serialize status response to JSON: {}", e),
-                            Ok(json_encoded_payload) => {
-                                if let Err(e) = nats.publish(
-                                    &nats_subject,
-                                    json_encoded_payload.as_bytes(),
-                                ) {
-                                    error!("Error while trying to send error to old NATS topic: {}", e);
-                                };
-                            }
-                        }
-                    }
-
                     continue;
                 }
             };

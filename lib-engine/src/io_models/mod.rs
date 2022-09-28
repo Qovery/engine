@@ -10,7 +10,6 @@ pub mod context;
 pub mod database;
 pub mod domain;
 pub mod environment;
-pub mod progress_listener;
 pub mod router;
 
 #[derive(Clone, Debug, PartialEq, Eq)]

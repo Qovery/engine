@@ -6,32 +6,27 @@ use std::sync::{Arc, RwLock};
 use std::{env, fs};
 
 use chrono::{DateTime, Utc};
-use crossbeam_channel::Sender;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine::EngineConfigError;
 use url::Url;
 use uuid::Uuid;
 
-use qovery_engine::error::{EngineError, EngineErrorCause};
 use qovery_engine::errors;
-use qovery_engine::errors::ErrorMessageVerbosity;
 use qovery_engine::events::Stage::Infrastructure;
 use qovery_engine::events::{
     EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter,
 };
 use qovery_engine::io_models::context::Context;
-use qovery_engine::io_models::progress_listener::{ProgressInfo, ProgressLevel, ProgressListener, ProgressScope};
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::Logger;
 use qovery_engine::object_storage::errors::ObjectStorageError;
-use qovery_engine::transaction::{RollbackError, StepName, Transaction, TransactionResult};
+use qovery_engine::transaction::{StepName, Transaction, TransactionResult};
 
 use crate::task_manager::models::{Action, Archive, EngineRequest};
-use crate::task_manager::scheduler::{ActionContext, State, Status, Task};
+use crate::task_manager::scheduler::Task;
 use qovery_engine::object_storage::ObjectStorage;
 use qovery_engine::transaction::StepName::Waiting;
-use qovery_engine::utilities::to_short_id;
 
 #[derive(Clone)]
 pub struct InfrastructureTask {
@@ -40,14 +35,12 @@ pub struct InfrastructureTask {
     docker_host: Option<Url>,
     docker: Docker,
     request: EngineRequest,
-    status_sender: Sender<Status>,
     logger: Box<dyn Logger>,
 }
 
 impl InfrastructureTask {
     pub fn new(
         request: EngineRequest,
-        status_sender: Sender<Status>,
         workspace_root_dir: String,
         lib_root_dir: String,
         docker_host: Option<Url>,
@@ -60,7 +53,6 @@ impl InfrastructureTask {
             docker_host,
             docker,
             request,
-            status_sender,
             logger,
         }
     }
@@ -80,35 +72,13 @@ impl InfrastructureTask {
         )
     }
 
-    fn action_context(&self, level: ProgressLevel) -> ActionContext {
-        ActionContext::new(
-            ProgressScope::Infrastructure {
-                execution_id: self.id().to_string(),
-            },
-            level,
-            self.id().to_string(),
-            *self.created_at(),
-        )
-    }
-
     fn handle_transaction_result(&self, logger: Box<dyn Logger>, transaction_result: TransactionResult) {
         match transaction_result {
             TransactionResult::Ok => {
-                let action_context = self.action_context(ProgressLevel::Info);
-                self.send_infrastructure_progress(logger.clone(), action_context, None, None);
+                self.send_infrastructure_progress(logger.clone(), None);
             }
             TransactionResult::Error(engine_error) => {
-                let action_context = self.action_context(ProgressLevel::Error);
-                self.send_infrastructure_progress(
-                    logger.clone(),
-                    action_context,
-                    Some(format_engine_error_output(
-                        engine_error.to_legacy_engine_error(),
-                        None,
-                        ErrorMessageVerbosity::FullDetailsWithoutEnvVars,
-                    )),
-                    Some(*engine_error),
-                );
+                self.send_infrastructure_progress(logger.clone(), Some(*engine_error));
             }
             TransactionResult::Canceled => {
                 // should never happen by design
@@ -117,13 +87,7 @@ impl InfrastructureTask {
         }
     }
 
-    fn send_infrastructure_progress(
-        &self,
-        logger: Box<dyn Logger>,
-        context: ActionContext,
-        message: Option<String>,
-        option_engine_error: Option<errors::EngineError>,
-    ) {
+    fn send_infrastructure_progress(&self, logger: Box<dyn Logger>, option_engine_error: Option<errors::EngineError>) {
         let kubernetes = &self.request.cloud_provider.kubernetes;
         if let Some(engine_error) = option_engine_error {
             let infrastructure_step = match self.request.action {
@@ -140,13 +104,6 @@ impl InfrastructureTask {
             );
 
             logger.log(engine_event);
-
-            let status = match self.request.action {
-                Action::Create => Status::new(State::DeploymentError, message, context),
-                Action::Pause => Status::new(State::PauseError, message, context),
-                Action::Delete => Status::new(State::DeleteError, message, context),
-            };
-            self.send_status(status)
         } else {
             let infrastructure_step = match self.request.action {
                 Action::Create => InfrastructureStep::Created,
@@ -168,13 +125,6 @@ impl InfrastructureTask {
             );
 
             logger.log(engine_event);
-
-            let status = match self.request.action {
-                Action::Create => Status::new(State::Deployed, message, context),
-                Action::Pause => Status::new(State::Paused, message, context),
-                Action::Delete => Status::new(State::Deleted, message, context),
-            };
-            self.send_status(status)
         }
     }
 }
@@ -188,10 +138,6 @@ impl Task for InfrastructureTask {
         self.request.id.as_str()
     }
 
-    fn send_status(&self, status: Status) {
-        let _ = self.status_sender.send(status);
-    }
-
     fn run(&self) {
         info!(
             "infrastructure task {} started with infrastructure id {}-{}-{}",
@@ -201,33 +147,10 @@ impl Task for InfrastructureTask {
             self.request.build_platform.id.as_str()
         );
 
-        send_progress(
-            self,
-            &self.request,
-            self.action_context(ProgressLevel::Info),
-            None,
-            false,
-            false,
-            false,
-        );
-
-        let my_progress_listener: Arc<Box<dyn ProgressListener>> = Arc::new(Box::new(MyProgressListener {
-            task: self.clone(),
-            sender: self.status_sender.clone(),
-        }));
-
-        let engine = match self
-            .request
-            .engine(&self.info_context(), my_progress_listener, self.logger.clone())
-        {
+        let engine = match self.request.engine(&self.info_context(), self.logger.clone()) {
             Ok(engine) => engine,
             Err(err) => {
-                self.send_infrastructure_progress(
-                    self.logger.clone(),
-                    self.action_context(ProgressLevel::Error),
-                    Some("Failed to create the engine".to_string()),
-                    Some(err),
-                );
+                self.send_infrastructure_progress(self.logger.clone(), Some(err));
                 return;
             }
         };
@@ -242,12 +165,7 @@ impl Task for InfrastructureTask {
                     EngineConfigError::DnsProviderNotValid(engine_error) => engine_error,
                     EngineConfigError::KubernetesNotValid(engine_error) => engine_error,
                 };
-                self.send_infrastructure_progress(
-                    self.logger.clone(),
-                    self.action_context(ProgressLevel::Error),
-                    Some("Failed to get engine session".to_string()),
-                    Some(engine_error),
-                );
+                self.send_infrastructure_progress(self.logger.clone(), Some(engine_error));
                 return;
             }
         };
@@ -306,7 +224,6 @@ pub struct EnvironmentTask {
     docker_host: Option<Url>,
     docker: Docker,
     request: EngineRequest,
-    status_sender: Sender<Status>,
     cancel_requested: Arc<AtomicBool>,
     current_step: Arc<RwLock<StepName>>,
     logger: Box<dyn Logger>,
@@ -315,7 +232,6 @@ pub struct EnvironmentTask {
 impl EnvironmentTask {
     pub fn new(
         request: EngineRequest,
-        status_sender: Sender<Status>,
         workspace_root_dir: String,
         lib_root_dir: String,
         docker_host: Option<Url>,
@@ -329,7 +245,6 @@ impl EnvironmentTask {
             docker_host,
             docker,
             request,
-            status_sender,
             logger,
             cancel_requested: Arc::new(AtomicBool::from(false)),
             current_step: Arc::new(RwLock::new(Waiting)),
@@ -355,24 +270,6 @@ impl EnvironmentTask {
         self.cancel_requested.load(Ordering::Acquire)
     }
 
-    fn action_context(&self, level: ProgressLevel) -> ActionContext {
-        let target_environment_id = self
-            .request
-            .target_environment
-            .as_ref()
-            .expect("missing `target_environment` to create ActionContext")
-            .long_id;
-
-        ActionContext::new(
-            ProgressScope::Environment {
-                id: to_short_id(&target_environment_id),
-            },
-            level,
-            self.id().to_string(),
-            *self.created_at(),
-        )
-    }
-
     fn get_event_details(&self, step: EnvironmentStep) -> EventDetails {
         EventDetails::new(
             Some(self.request.cloud_provider.kind.clone()),
@@ -394,10 +291,6 @@ impl Task for EnvironmentTask {
         self.request.id.as_str()
     }
 
-    fn send_status(&self, status: Status) {
-        let _ = self.status_sender.send(status);
-    }
-
     fn run(&self) {
         info!("environment task {} started", self.id());
 
@@ -412,38 +305,10 @@ impl Task for EnvironmentTask {
             ));
         });
 
-        send_progress(
-            self,
-            &self.request,
-            self.action_context(ProgressLevel::Info),
-            None,
-            false,
-            false,
-            false,
-        );
-
-        let my_progress_listener: Arc<Box<dyn ProgressListener>> = Arc::new(Box::new(MyProgressListener {
-            task: self.clone(),
-            sender: self.status_sender.clone(),
-        }));
-
-        let engine = match self
-            .request
-            .engine(&self.info_context(), my_progress_listener, self.logger.clone())
-        {
+        let engine = match self.request.engine(&self.info_context(), self.logger.clone()) {
             Ok(engine) => engine,
             Err(err) => {
-                self.logger.log(EngineEvent::Error(err.clone(), None));
-                send_progress(
-                    self,
-                    &self.request,
-                    self.action_context(ProgressLevel::Error),
-                    Some(format!("failed to create engine {}", err)),
-                    true,
-                    true,
-                    false,
-                );
-
+                self.logger.log(EngineEvent::Error(err, None));
                 return;
             }
         };
@@ -466,16 +331,6 @@ impl Task for EnvironmentTask {
             Ok(transaction) => transaction,
             Err(err) => {
                 self.logger.log(EngineEvent::Error(err.engine_error().clone(), None));
-                send_progress(
-                    self,
-                    &self.request,
-                    self.action_context(ProgressLevel::Error),
-                    Some(format!("failed to create engine transaction {}", err)),
-                    true,
-                    true,
-                    false,
-                );
-
                 return;
             }
         };
@@ -489,18 +344,6 @@ impl Task for EnvironmentTask {
                     ),
                     None,
                 ));
-                send_progress(
-                    self,
-                    &self.request,
-                    self.action_context(ProgressLevel::Error),
-                    Some(
-                        "failed to get environment action, self.request.environment_action() returned None variant"
-                            .to_string(),
-                    ),
-                    true,
-                    true,
-                    false,
-                );
                 return;
             }
             Some(ea) => ea,
@@ -523,18 +366,6 @@ impl Task for EnvironmentTask {
                     ),
                     None,
                 ));
-                send_progress(
-                    self,
-                    &self.request,
-                    self.action_context(ProgressLevel::Error),
-                    Some(format!(
-                        "Failed to create environment domain, please check your configuration: {}",
-                        err
-                    )),
-                    true,
-                    true,
-                    false,
-                );
                 return;
             }
         };
@@ -552,7 +383,7 @@ impl Task for EnvironmentTask {
         match (action, &tx_result) {
             (_, TransactionResult::Canceled) => self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Cancelled),
-                EventMessage::new("Deployment has been cancelled".to_string(), None),
+                EventMessage::new("🚫 Deployment has been canceled at user request 🚫".to_string(), None),
             )),
             (Action::Create, TransactionResult::Ok) => self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Deployed),
@@ -586,8 +417,6 @@ impl Task for EnvironmentTask {
                 ));
             }
         };
-
-        handle_transaction_result(tx_result, self, &self.request, self.action_context(ProgressLevel::Info));
 
         // only store if not running on a workstation
         if env::var("DEPLOY_FROM_FILE_KIND").is_err() {
@@ -627,24 +456,6 @@ impl Task for EnvironmentTask {
                     self.get_event_details(EnvironmentStep::Cancel),
                     EventMessage::new("Cancel request received, aborting the deployment".to_string(), None),
                 ));
-                self.send_status(Status::new(
-                    State::Canceling,
-                    Some("Cancel request received, going to abort the deployment".to_string()),
-                    ActionContext::new(
-                        ProgressScope::Environment {
-                            id: self
-                                .request
-                                .target_environment
-                                .as_ref()
-                                .map(|env| to_short_id(&env.long_id))
-                                .unwrap_or_default(),
-                        },
-                        ProgressLevel::Info,
-                        self.id().to_string(),
-                        *self.created_at(),
-                    ),
-                ));
-
                 return true;
             }
         }
@@ -655,226 +466,6 @@ impl Task for EnvironmentTask {
     fn cancel_checker(&self) -> Box<dyn Fn() -> bool> {
         let cancel_requested = self.cancel_requested.clone();
         Box::new(move || cancel_requested.load(Ordering::Acquire))
-    }
-}
-
-struct MyProgressListener<T>
-where
-    T: Task + Clone + 'static,
-{
-    task: T,
-    sender: Sender<Status>,
-}
-
-impl<T> MyProgressListener<T>
-where
-    T: Task + Clone + 'static,
-{
-    fn send(&self, status: Status) {
-        match self.sender.send(status) {
-            Ok(_) => {}
-            Err(err) => error!("{}", err),
-        };
-    }
-
-    fn action_context(&self, info: ProgressInfo) -> ActionContext {
-        ActionContext::new(info.scope, info.level, info.execution_id, *self.task.created_at())
-    }
-}
-
-impl<T> ProgressListener for MyProgressListener<T>
-where
-    T: Task + Clone + 'static + Sync,
-{
-    fn deployment_in_progress(&self, info: ProgressInfo) {
-        self.send(Status::new(
-            State::DeploymentInProgress,
-            info.message.clone(),
-            self.action_context(info),
-        ));
-    }
-
-    fn pause_in_progress(&self, info: ProgressInfo) {
-        self.send(Status::new(
-            State::PauseInProgress,
-            info.message.clone(),
-            self.action_context(info),
-        ));
-    }
-
-    fn delete_in_progress(&self, info: ProgressInfo) {
-        self.send(Status::new(
-            State::DeleteInProgress,
-            info.message.clone(),
-            self.action_context(info),
-        ));
-    }
-
-    fn error(&self, info: ProgressInfo) {
-        self.send(Status::new(State::Error, info.message.clone(), self.action_context(info)));
-    }
-
-    fn deployed(&self, info: ProgressInfo) {
-        self.send(Status::new(State::Deployed, info.message.clone(), self.action_context(info)));
-    }
-
-    fn paused(&self, info: ProgressInfo) {
-        self.send(Status::new(State::Paused, info.message.clone(), self.action_context(info)));
-    }
-
-    fn deleted(&self, info: ProgressInfo) {
-        self.send(Status::new(State::Deleted, info.message.clone(), self.action_context(info)));
-    }
-
-    fn deployment_error(&self, info: ProgressInfo) {
-        self.send(Status::new(
-            State::DeploymentError,
-            info.message.clone(),
-            self.action_context(info),
-        ));
-    }
-
-    fn pause_error(&self, info: ProgressInfo) {
-        self.send(Status::new(State::PauseError, info.message.clone(), self.action_context(info)));
-    }
-
-    fn delete_error(&self, info: ProgressInfo) {
-        self.send(Status::new(State::DeleteError, info.message.clone(), self.action_context(info)));
-    }
-}
-
-fn send_progress(
-    task: &dyn Task,
-    request: &EngineRequest,
-    context: ActionContext,
-    message: Option<String>,
-    is_error: bool,
-    is_final: bool,
-    is_cancel: bool,
-) {
-    let status = if is_cancel {
-        Status::new(State::Canceled, message, context)
-    } else if is_error {
-        match request.action {
-            Action::Create => Status::new(State::DeploymentError, message, context),
-            Action::Pause => Status::new(State::PauseError, message, context),
-            Action::Delete => Status::new(State::DeleteError, message, context),
-        }
-    } else if is_final {
-        match request.action {
-            Action::Create => Status::new(State::Deployed, message, context),
-            Action::Pause => Status::new(State::Paused, message, context),
-            Action::Delete => Status::new(State::Deleted, message, context),
-        }
-    } else {
-        match request.action {
-            Action::Create => Status::new(State::DeploymentInProgress, message, context),
-            Action::Pause => Status::new(State::PauseInProgress, message, context),
-            Action::Delete => Status::new(State::DeleteInProgress, message, context),
-        }
-    };
-
-    task.send_status(status);
-}
-
-fn handle_transaction_result(
-    transaction_result: TransactionResult,
-    task: &dyn Task,
-    request: &EngineRequest,
-    mut action_context: ActionContext,
-) {
-    match transaction_result {
-        TransactionResult::Ok => {
-            action_context.level = ProgressLevel::Info;
-
-            send_progress(task, request, action_context, None, false, true, false);
-        }
-        TransactionResult::Error(engine_error) => {
-            action_context.level = ProgressLevel::Error;
-
-            send_progress(
-                task,
-                request,
-                action_context,
-                Some(format_engine_error_output(
-                    engine_error.to_legacy_engine_error(),
-                    None,
-                    ErrorMessageVerbosity::FullDetailsWithoutEnvVars,
-                )),
-                true,
-                false,
-                false,
-            );
-        }
-        TransactionResult::Canceled => {
-            action_context.level = ProgressLevel::Error;
-
-            let msg = format!("🚫 Deployment {} has been canceled at user request 🚫", task.id());
-            send_progress(task, request, action_context, Some(msg), false, true, true);
-        }
-    }
-}
-
-fn format_engine_error_output(
-    engine_error: EngineError,
-    _rollback_error: Option<RollbackError>,
-    _verbosity: ErrorMessageVerbosity,
-) -> String {
-    // Pmavro: I let it commented if one day we need it again
-    // let scope = match engine_error.scope {
-    //     EngineErrorScope::Engine => String::from("Engine"),
-    //     EngineErrorScope::BuildPlatform(id, name) => format!("Build platform '{}' with id '{}'", name, id),
-    //     EngineErrorScope::ContainerRegistry(id, name) => format!("Container registry '{}' with id '{}'", name, id),
-    //     EngineErrorScope::CloudProvider(id, name) => format!("Cloud provider '{}' with id '{}'", name, id),
-    //     EngineErrorScope::Kubernetes(id, name) => format!("Kubernetes '{}' with id '{}'", name, id),
-    //     EngineErrorScope::DnsProvider(id, name) => format!("DNS provider '{}' with id '{}'", name, id),
-    //     EngineErrorScope::Environment(id, name) => format!("Environment '{}' with id '{}'", name, id),
-    //     EngineErrorScope::Database(id, type_, name) => format!("{} Database '{}' with id '{}'", type_, name, id),
-    //     EngineErrorScope::Application(id, name, version) => {
-    //         format!("Application '{}' with id '{}' and version '{}'", name, id, version)
-    //     }
-    //     EngineErrorScope::Router(id, name) => format!("Router '{}' with id '{}'", name, id),
-    //     EngineErrorScope::ObjectStorage(id, name) => format!("Object Storage '{}' with id '{}'", name, id),
-    // };
-
-    // let rollback_engine_error_message = match rollback_error {
-    //     Some(RollbackError::CommitError(rollback_engine_error)) => Some(format!(
-    //         "{} (event_details: {:?})",
-    //         rollback_engine_error.message(verbosity),
-    //         rollback_engine_error.event_details(),
-    //     )),
-    //     _ => None,
-    // };
-
-    // let rollback_message = match rollback_engine_error_message {
-    //     Some(error_message) => format!("Rollback error: {}", error_message),
-    //     None => String::new(),
-    // };
-
-    match engine_error.cause {
-        // IMPORTANT NOTE:
-        // Today "If you need assistance, you can reach the support team from the Qovery console with the integrated chat"
-        // this message is hard coded into the core, so we should not update it until the error mechanism is in place
-        EngineErrorCause::Internal => r#"
---------------------------------------
-SCROLL UP - THE ERROR MESSAGE IS ABOVE
---------------------------------------
-"#
-        .trim()
-        .to_string(),
-        EngineErrorCause::User(hint) => format!(
-            r#"
---------------------------------------
-SCROLL UP - THE ERROR MESSAGE IS ABOVE
-
-ℹ️ Hint: {}
---------------------------------------
-"#,
-            hint,
-        )
-        .trim()
-        .to_string(),
-        EngineErrorCause::Canceled => "Deployment has been canceled".to_string(),
     }
 }
 

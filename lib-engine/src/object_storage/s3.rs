@@ -226,9 +226,7 @@ impl ObjectStorage for S3 {
         let s3_client = self.get_s3_client();
 
         // make sure to delete all bucket content before trying to delete the bucket
-        if let Err(e) = self.empty_bucket(bucket_name) {
-            return Err(e);
-        }
+        self.empty_bucket(bucket_name)?;
 
         match block_on(s3_client.delete_bucket(DeleteBucketRequest {
             bucket: bucket_name.to_string(),

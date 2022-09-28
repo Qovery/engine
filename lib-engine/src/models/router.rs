@@ -6,7 +6,6 @@ use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage, Transmitter};
 use crate::io_models::context::Context;
-use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::logger::Logger;
 use crate::models::types::CloudProvider;
 use crate::models::types::ToTeraContext;
@@ -38,7 +37,6 @@ pub struct Router<T: CloudProvider> {
     pub(crate) custom_domains: Vec<CustomDomain>,
     pub(crate) sticky_sessions_enabled: bool,
     pub(crate) routes: Vec<Route>,
-    pub(crate) listeners: Listeners,
     pub(crate) logger: Box<dyn Logger>,
     pub(crate) _extra_settings: T::RouterExtraSettings,
     pub(crate) advanced_settings: RouterAdvancedSettings,
@@ -56,7 +54,6 @@ impl<T: CloudProvider> Router<T> {
         sticky_sessions_enabled: bool,
         extra_settings: T::RouterExtraSettings,
         advanced_settings: RouterAdvancedSettings,
-        listeners: Listeners,
         logger: Box<dyn Logger>,
     ) -> Result<Self, RouterError> {
         Ok(Self {
@@ -70,7 +67,6 @@ impl<T: CloudProvider> Router<T> {
             custom_domains,
             sticky_sessions_enabled,
             routes,
-            listeners,
             logger,
             _extra_settings: extra_settings,
             advanced_settings,
@@ -273,14 +269,6 @@ impl<T: CloudProvider> Service for Router<T> {
 
     fn logger(&self) -> &dyn Logger {
         self.logger.borrow()
-    }
-
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
     }
 
     fn to_transmitter(&self) -> Transmitter {

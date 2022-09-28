@@ -15,7 +15,6 @@ use crate::engine::EngineConfig;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
-use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::runtime::block_on;
 use crate::utilities::get_kube_client;
 
@@ -57,8 +56,6 @@ pub trait CloudProvider {
     fn terraform_state_credentials(&self) -> &TerraformStateCredentials;
     fn as_any(&self) -> &dyn Any;
     fn get_event_details(&self, stage: Stage) -> EventDetails;
-    fn listeners(&self) -> &Listeners;
-    fn add_listener(&mut self, listener: Listener);
     fn to_transmitter(&self) -> Transmitter;
 }
 

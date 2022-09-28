@@ -1,18 +1,14 @@
-use std::mem::ManuallyDrop;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use chrono::{DateTime, Utc};
-use crossbeam_channel::{unbounded, Receiver, RecvError, RecvTimeoutError, Sender};
-use serde::{Deserialize, Serialize};
-
 use crate::utils::log_no_spam_builder;
 use crate::utils::LogErrorOnDrop;
+use chrono::{DateTime, Utc};
 use core::fmt;
 use core::fmt::Formatter;
+use crossbeam_channel::{unbounded, Receiver, RecvError, RecvTimeoutError, Sender};
 use prometheus::{self, IntGauge};
-use qovery_engine::io_models::progress_listener::{ProgressLevel, ProgressScope};
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::thread::JoinHandle;
@@ -28,8 +24,6 @@ pub struct TaskManager {
     task_executor_rx: Receiver<Box<dyn Task>>,
     should_stop: Arc<AtomicBool>,
     is_stopped: Arc<AtomicBool>,
-    task_status_tx: Sender<Status>,
-    task_status_rx: Receiver<Status>,
     running_tasks: IntGauge,
     running: bool,
     // We use a Mutex to provide interior mutability
@@ -42,7 +36,6 @@ pub struct TaskManager {
 impl TaskManager {
     pub fn new() -> Self {
         let (task_executor_tx, task_executor_rx) = unbounded::<Box<dyn Task>>();
-        let (task_status_tx, task_status_rx) = unbounded::<Status>();
         let should_stop = Arc::new(AtomicBool::new(false));
         let is_stopped = Arc::new(AtomicBool::new(false));
 
@@ -51,8 +44,6 @@ impl TaskManager {
             task_executor_rx,
             should_stop,
             is_stopped,
-            task_status_tx,
-            task_status_rx,
             running_tasks: METRICS_NB_RUNNING_TASKS.clone(),
             running: false,
             threads_handle: Mutex::new(Vec::with_capacity(2)),
@@ -60,38 +51,7 @@ impl TaskManager {
         }
     }
 
-    pub fn get_task_status_tx(&self) -> &Sender<Status> {
-        &self.task_status_tx
-    }
-    pub fn get_task_status_rx(&self) -> &Receiver<Status> {
-        &self.task_status_rx
-    }
-
     pub fn add_task(&self, task: Box<dyn Task>) {
-        let message = match self.remaining_tasks_to_run() {
-            0 => Some("🚀 Starting engines, your deployment is going to start !".to_string()),
-            nb_tasks => {
-                info!("Task is queued. {} remaining tasks.", nb_tasks);
-                Some(format!(
-                    "Task is queued ({} tasks left) and will start when a worker is available.",
-                    nb_tasks
-                ))
-            }
-        };
-
-        let status = Status::new(
-            State::Waiting,
-            message,
-            ActionContext::new(
-                ProgressScope::Queued,
-                ProgressLevel::Info,
-                task.id().to_string(),
-                *task.created_at(),
-            ),
-        );
-
-        task.send_status(status);
-
         // add internal task to queue
         let _ = self
             .task_executor_tx
@@ -210,75 +170,9 @@ impl TaskManager {
 pub trait Task: Send + Sync {
     fn created_at(&self) -> &DateTime<Utc>;
     fn id(&self) -> &str;
-    fn send_status(&self, status: Status);
     fn run(&self);
     fn cancel(&self) -> bool;
     fn cancel_checker(&self) -> Box<dyn Fn() -> bool>;
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct ActionContext {
-    pub scope: ProgressScope,
-    pub level: ProgressLevel,
-    pub execution_id: String,
-    pub task_created_at: DateTime<Utc>,
-}
-
-impl ActionContext {
-    pub fn new(
-        scope: ProgressScope,
-        level: ProgressLevel,
-        execution_id: String,
-        task_created_at: DateTime<Utc>,
-    ) -> Self {
-        ActionContext {
-            scope,
-            level,
-            execution_id,
-            task_created_at,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct Status {
-    pub status: State,
-    pub message: Option<String>,
-    pub context: ActionContext,
-}
-
-impl Status {
-    pub fn new(status: State, message: Option<String>, context: ActionContext) -> Self {
-        Status {
-            status,
-            message,
-            context,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum State {
-    Waiting,
-    DeploymentInProgress,
-    PauseInProgress,
-    DeleteInProgress,
-    Error,
-    Deployed,
-    Paused,
-    Deleted,
-    DeploymentError,
-    PauseError,
-    DeleteError,
-    Canceling,
-    Canceled,
-}
-
-impl evmap::shallow_copy::ShallowCopy for Status {
-    unsafe fn shallow_copy(&self) -> ManuallyDrop<Self> {
-        ManuallyDrop::new(self.clone())
-    }
 }
 
 #[derive(Debug)]
@@ -304,10 +198,8 @@ impl fmt::Display for Error {
 
 #[cfg(test)]
 mod tests {
-    use crate::task_manager::scheduler::{ActionContext, State, Status, Task, TaskManager};
+    use crate::task_manager::scheduler::{Task, TaskManager};
     use chrono::{DateTime, NaiveDateTime, Utc};
-    use crossbeam_channel::Sender;
-    use qovery_engine::io_models::progress_listener::{ProgressLevel, ProgressScope};
     use std::sync::atomic::Ordering::Acquire;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Barrier};
@@ -320,18 +212,16 @@ mod tests {
         pub have_been_run: Arc<AtomicBool>,
         pub barrier_begin: Arc<Barrier>,
         pub barrier_end: Arc<Barrier>,
-        pub task_status_tx: Sender<Status>,
     }
 
     impl WaitingTask {
-        fn new(sender: Sender<Status>) -> WaitingTask {
+        fn new() -> WaitingTask {
             WaitingTask {
                 date: DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc),
                 bytes: vec![],
                 have_been_run: Arc::new(AtomicBool::new(false)),
                 barrier_begin: Arc::new(Barrier::new(2)),
                 barrier_end: Arc::new(Barrier::new(2)),
-                task_status_tx: sender,
             }
         }
     }
@@ -342,10 +232,6 @@ mod tests {
 
         fn id(&self) -> &str {
             "0"
-        }
-
-        fn send_status(&self, status: Status) {
-            let _ = self.task_status_tx.send(status);
         }
 
         fn run(&self) {
@@ -376,7 +262,6 @@ mod tests {
         fn id(&self) -> &str {
             "1"
         }
-        fn send_status(&self, _status: Status) {}
         fn run(&self) {}
         fn cancel(&self) -> bool {
             false
@@ -391,15 +276,13 @@ mod tests {
     fn test_taskmanager_run() {
         let mut tm = TaskManager::new();
         tm.running_tasks = prometheus::IntGauge::new("abc", "degf").unwrap();
-        let task = WaitingTask::new(tm.task_status_tx.clone());
+        let task = WaitingTask::new();
 
         assert_eq!(tm.running_tasks.get(), 0);
         assert!(!task.have_been_run.load(Acquire));
         tm.add_task(Box::new(task.clone()));
 
-        let task_status_rx = tm.task_status_rx.clone();
         tm.run().expect("Impossible to run task Manager");
-        assert!(task_status_rx.recv_timeout(Duration::from_secs(10)).is_ok());
 
         task.barrier_begin.wait();
         assert_eq!(tm.running_tasks.get(), 1);
@@ -424,28 +307,12 @@ mod tests {
     fn test_taskmanager_cleanup() {
         let mut tm = TaskManager::new();
         tm.running_tasks = prometheus::IntGauge::new("abcd", "degf").unwrap();
-        let task = WaitingTask::new(tm.task_status_tx.clone());
-        let task_status_rx = tm.get_task_status_rx().clone();
+        let task = WaitingTask::new();
         tm.run().expect("Impossible to run task Manager");
         tm.add_task(Box::new(task.clone()));
 
-        assert_eq!(task_status_rx.recv().unwrap().status, State::Waiting);
-
         task.barrier_begin.wait();
         task.barrier_end.wait();
-
-        task.send_status(Status {
-            status: State::Deleted,
-            message: None,
-            context: ActionContext {
-                scope: ProgressScope::Queued,
-                level: ProgressLevel::Debug,
-                execution_id: "".to_string(),
-                task_created_at: DateTime::from_utc(NaiveDateTime::from_timestamp(0, 0), Utc),
-            },
-        });
-
-        assert_eq!(task_status_rx.recv().unwrap().status, State::Deleted);
 
         tm.stop();
         assert!(tm.wait_shutdown().is_ok());
