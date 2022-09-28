@@ -1,5 +1,4 @@
 use crate::errors;
-use crate::events::io::EventDetails;
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
@@ -366,7 +365,6 @@ impl From<errors::Tag> for Tag {
 #[serde(rename_all = "lowercase")]
 pub struct EngineError {
     tag: Tag,
-    event_details: EventDetails,
     user_log_message: String,
     underlying_error: Option<CommandError>,
     link: Option<String>,
@@ -377,7 +375,6 @@ impl From<errors::EngineError> for EngineError {
     fn from(error: errors::EngineError) -> Self {
         EngineError {
             tag: Tag::from(error.tag),
-            event_details: EventDetails::from(error.event_details),
             user_log_message: error.user_log_message,
             underlying_error: error.underlying_error.map(CommandError::from),
             link: error.link.map(|url| url.to_string()),

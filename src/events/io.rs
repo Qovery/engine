@@ -31,6 +31,7 @@ pub enum EngineEvent {
     Error {
         r#type: String,
         timestamp: DateTime<Utc>,
+        details: EventDetails,
         error: EngineError,
         message: Option<EventMessage>,
     },
@@ -61,6 +62,7 @@ impl From<events::EngineEvent> for EngineEvent {
             events::EngineEvent::Error(e, m) => EngineEvent::Error {
                 r#type: "error".to_string(),
                 timestamp,
+                details: EventDetails::from(e.event_details().clone()),
                 error: EngineError::from(e),
                 message: m.map(EventMessage::from),
             },
