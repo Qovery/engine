@@ -16,12 +16,13 @@ use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::runtime::block_on;
-use crate::utilities::get_kube_client;
+use crate::utilities::create_kube_client;
 
 pub mod aws;
 pub mod digitalocean;
 pub mod environment;
 pub mod helm;
+pub mod helm_charts;
 pub mod io;
 pub mod kubernetes;
 pub mod metrics;
@@ -134,7 +135,7 @@ impl<'a> DeploymentTarget<'a> {
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
 
-        let kube_client = block_on(get_kube_client(kubeconfig_path.clone(), kube_credentials.as_slice()))
+        let kube_client = block_on(create_kube_client(kubeconfig_path.clone(), kube_credentials.as_slice()))
             .map_err(|err| EngineError::new_cannot_connect_to_k8s_cluster(event_details.clone(), err))?;
 
         let helm = Helm::new(

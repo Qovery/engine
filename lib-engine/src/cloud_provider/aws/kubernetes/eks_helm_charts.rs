@@ -5,17 +5,23 @@ use crate::cloud_provider::helm::{
     ClusterAgentContext, CommonChart, CoreDNSConfigChart, HelmAction, HelmChart, HelmChartNamespaces,
     ShellAgentContext,
 };
+use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
+use crate::cloud_provider::helm_charts::ToCommonHelmChart;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAppName, QoveryEngine};
 use crate::cmd::helm_utils::CRDSUpdate;
 use crate::cmd::kubectl::{kubectl_delete_crash_looping_pods, kubectl_exec_get_daemonset, kubectl_exec_with_output};
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::{CommandError, ErrorMessageVerbosity};
+
 use semver::Version;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::BufReader;
+use std::iter::FromIterator;
 use std::path::Path;
+
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -97,13 +103,16 @@ pub fn eks_aws_helm_charts(
     let loki_kube_dns_name = format!("loki.{}.svc:3100", loki_namespace);
 
     // Qovery storage class
-    let q_storage_class = CommonChart {
-        chart_info: ChartInfo {
-            name: "q-storageclass".to_string(),
-            path: chart_path("/charts/q-storageclass"),
-            ..Default::default()
-        },
-    };
+    let q_storage_class = QoveryStorageClassChart::new(
+        chart_prefix_path,
+        HashSet::from_iter(vec![
+            QoveryStorageType::Ssd,
+            QoveryStorageType::Hdd,
+            QoveryStorageType::Cold,
+            QoveryStorageType::Nvme,
+        ]),
+    )
+    .to_common_helm_chart();
 
     let mut aws_vpc_cni_chart = AwsVpcCniChart {
         chart_info: ChartInfo {
@@ -207,6 +216,7 @@ pub fn eks_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let aws_node_term_handler = CommonChart {
@@ -249,6 +259,7 @@ pub fn eks_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let aws_ui_view = CommonChart {
@@ -258,6 +269,7 @@ pub fn eks_aws_helm_charts(
             namespace: HelmChartNamespaces::KubeSystem,
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let cluster_autoscaler = CommonChart {
@@ -324,6 +336,7 @@ pub fn eks_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let coredns_config = CoreDNSConfigChart {
@@ -372,6 +385,7 @@ pub fn eks_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let promtail = CommonChart {
@@ -412,6 +426,7 @@ pub fn eks_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let loki = CommonChart {
@@ -480,6 +495,7 @@ pub fn eks_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     /* Example to delete an old install
@@ -594,6 +610,7 @@ pub fn eks_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let prometheus_adapter = CommonChart {
@@ -639,6 +656,7 @@ pub fn eks_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
@@ -677,6 +695,7 @@ pub fn eks_aws_helm_charts(
                 ],
                 ..Default::default()
             },
+            ..Default::default()
         });
     }
 
@@ -705,6 +724,7 @@ pub fn eks_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let kube_state_metrics = CommonChart {
@@ -737,6 +757,7 @@ pub fn eks_aws_helm_charts(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let grafana_datasources = format!(
@@ -789,6 +810,7 @@ datasources:
             }],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let cert_manager = CommonChart {
@@ -886,6 +908,7 @@ datasources:
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let cert_manager_config = get_chart_for_cert_manager_config(
@@ -946,6 +969,7 @@ datasources:
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let pleco = CommonChart {
@@ -973,6 +997,7 @@ datasources:
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let cluster_agent_context = ClusterAgentContext {
@@ -1011,6 +1036,7 @@ datasources:
             action: HelmAction::Destroy,
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let qovery_engine_version: QoveryEngine = get_qovery_app_version(
@@ -1116,6 +1142,7 @@ datasources:
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     // chart deployment order matters!!!

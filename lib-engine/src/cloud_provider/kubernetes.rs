@@ -43,7 +43,7 @@ use crate::models::types::VersionsNumber;
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
 use crate::unit_conversion::{any_to_mi, cpu_string_to_float};
-use crate::utilities::get_kube_client;
+use crate::utilities::create_kube_client;
 
 use super::models::NodeGroupsWithDesiredState;
 
@@ -81,7 +81,7 @@ pub trait Kubernetes {
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
 
-        block_on(get_kube_client(kubeconfig_path, kube_credentials.as_slice())).map_err(|err| {
+        block_on(create_kube_client(kubeconfig_path, kube_credentials.as_slice())).map_err(|err| {
             EngineError::new_cannot_connect_to_k8s_cluster(
                 self.get_event_details(Infrastructure(InfrastructureStep::RetrieveClusterResources)),
                 err,
@@ -1358,7 +1358,7 @@ mod tests {
     use crate::logger::StdIoLogger;
     use crate::models::types::VersionsNumber;
     use crate::runtime::block_on;
-    use crate::utilities::get_kube_client;
+    use crate::utilities::create_kube_client;
     use std::env;
     use std::str::FromStr;
     use uuid::Uuid;
@@ -1404,7 +1404,7 @@ mod tests {
     #[test]
     #[cfg(feature = "test-local-kube")]
     pub fn k8s_get_services() {
-        let kube_client = block_on(get_kube_client(kubeconfig_path(), &[])).unwrap();
+        let kube_client = block_on(create_kube_client(kubeconfig_path(), &[])).unwrap();
         let svcs = block_on(kube_list_services(&kube_client, None, None));
         assert!(svcs.is_ok());
         assert!(!svcs.unwrap().items.is_empty());
@@ -1422,14 +1422,14 @@ mod tests {
     #[test]
     #[cfg(feature = "test-local-kube")]
     pub fn k8s_create_namespace() {
-        let kube_client = block_on(get_kube_client(kubeconfig_path(), &[])).unwrap();
+        let kube_client = block_on(create_kube_client(kubeconfig_path(), &[])).unwrap();
         assert!(block_on(kube_create_namespace_if_not_exists(&kube_client, "qovery-test-ns", None)).is_ok(),);
     }
 
     #[test]
     #[cfg(feature = "test-local-kube")]
     pub fn k8s_does_secret_exists_test() {
-        let kube_client = block_on(get_kube_client(kubeconfig_path(), &[])).unwrap();
+        let kube_client = block_on(create_kube_client(kubeconfig_path(), &[])).unwrap();
         let res = block_on(kube_does_secret_exists(&kube_client, "k3s-serving", "kube-system")).unwrap();
         assert!(res);
     }
@@ -1437,7 +1437,7 @@ mod tests {
     #[test]
     #[cfg(feature = "test-local-kube")]
     pub fn k8s_copy_secret_test() {
-        let kube_client = block_on(get_kube_client(kubeconfig_path(), &[])).unwrap();
+        let kube_client = block_on(create_kube_client(kubeconfig_path(), &[])).unwrap();
         block_on(kube_copy_secret_to_another_namespace(
             &kube_client,
             "k3s-serving",

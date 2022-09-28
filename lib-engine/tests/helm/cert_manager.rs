@@ -120,6 +120,7 @@ fn cert_manager_conf() -> (Helm, PathBuf, CommonChart, CommonChart) {
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     let cert_manager_config = CommonChart {
@@ -151,6 +152,7 @@ fn cert_manager_conf() -> (Helm, PathBuf, CommonChart, CommonChart) {
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     (helm, kube_config, cert_manager, cert_manager_config)
