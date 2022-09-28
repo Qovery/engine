@@ -296,7 +296,7 @@ impl Task for EnvironmentTask {
 
         self.logger.log(EngineEvent::Info(
             self.get_event_details(EnvironmentStep::Start),
-            EventMessage::new("Qovery Engine starts to execute the deployment".to_string(), None),
+            EventMessage::new("🚀 Qovery Engine starts to execute the deployment".to_string(), None),
         ));
         let _guard = scopeguard::guard((), |_| {
             self.logger.log(EngineEvent::Info(
@@ -387,15 +387,15 @@ impl Task for EnvironmentTask {
             )),
             (Action::Create, TransactionResult::Ok) => self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Deployed),
-                EventMessage::new("Environment is deployed".to_string(), None),
+                EventMessage::new("❤️ Environment is deployed".to_string(), None),
             )),
             (Action::Pause, TransactionResult::Ok) => self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Paused),
-                EventMessage::new("Environment is deployed".to_string(), None),
+                EventMessage::new("⏸️ Environment is paused".to_string(), None),
             )),
             (Action::Delete, TransactionResult::Ok) => self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Deleted),
-                EventMessage::new("Environment is deleted".to_string(), None),
+                EventMessage::new("🗑️ Environment is deleted".to_string(), None),
             )),
 
             (Action::Create, TransactionResult::Error(_err)) => {
