@@ -402,7 +402,7 @@ impl BuildPlatform for LocalDocker {
             repository_root_path.to_string_lossy()
         );
         self.logger
-            .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
+            .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(msg)));
 
         // Create callback that will be called by git to provide credentials per user
         // If people use submodule, they need to provide us their ssh key

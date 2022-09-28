@@ -398,22 +398,25 @@ impl Task for EnvironmentTask {
                 EventMessage::new("🗑️ Environment is deleted".to_string(), None),
             )),
 
-            (Action::Create, TransactionResult::Error(_err)) => {
+            (Action::Create, TransactionResult::Error(err)) => {
+                self.logger.log(EngineEvent::Error(*err.clone(), None));
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::DeployedError),
-                    EventMessage::new("Environment failed to be deployed".to_string(), None),
+                    EventMessage::new("💣 Environment failed to be deployed".to_string(), None),
                 ));
             }
-            (Action::Pause, TransactionResult::Error(_err)) => {
+            (Action::Pause, TransactionResult::Error(err)) => {
+                self.logger.log(EngineEvent::Error(*err.clone(), None));
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::PausedError),
-                    EventMessage::new("Environment failed to be paused".to_string(), None),
+                    EventMessage::new("💣 Environment failed to be paused".to_string(), None),
                 ));
             }
-            (Action::Delete, TransactionResult::Error(_err)) => {
+            (Action::Delete, TransactionResult::Error(err)) => {
+                self.logger.log(EngineEvent::Error(*err.clone(), None));
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::DeletedError),
-                    EventMessage::new("Environment failed to be deleted".to_string(), None),
+                    EventMessage::new("💣 Environment failed to be deleted".to_string(), None),
                 ));
             }
         };
