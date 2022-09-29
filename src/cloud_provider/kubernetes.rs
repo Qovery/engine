@@ -406,8 +406,6 @@ pub trait Kubernetes {
     fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError>;
     fn on_upgrade(&self) -> Result<(), EngineError>;
     fn on_upgrade_error(&self) -> Result<(), EngineError>;
-    fn on_downgrade(&self) -> Result<(), EngineError>;
-    fn on_downgrade_error(&self) -> Result<(), EngineError>;
     fn on_pause(&self) -> Result<(), EngineError>;
     fn on_pause_error(&self) -> Result<(), EngineError>;
     fn on_delete(&self) -> Result<(), EngineError>;
