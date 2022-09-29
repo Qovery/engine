@@ -532,6 +532,10 @@ impl Helm {
             },
             &mut |line| {
                 warn!("chart {}: {}", chart.name, line);
+                // we don't want to flood user with debug log
+                if line.contains(" [debug] ") {
+                    return;
+                }
                 error_message.push(line);
             },
         );
