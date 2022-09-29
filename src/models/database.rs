@@ -8,7 +8,6 @@ use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::io_models::database::DatabaseOptions;
-use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::logger::Logger;
 use crate::models::database_utils::{
     get_self_hosted_mongodb_version, get_self_hosted_mysql_version, get_self_hosted_postgres_version,
@@ -94,7 +93,6 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     pub(crate) publicly_accessible: bool,
     pub(crate) private_port: u16,
     pub(crate) options: T::DatabaseOptions,
-    pub(crate) listeners: Listeners,
     pub(crate) logger: Box<dyn Logger>,
 }
 
@@ -113,7 +111,6 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
         publicly_accessible: bool,
         private_port: u16,
         options: T::DatabaseOptions,
-        listeners: Listeners,
         logger: Box<dyn Logger>,
     ) -> Result<Self, DatabaseError> {
         // TODO: Implement domain constraint logic
@@ -134,7 +131,6 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
             publicly_accessible,
             private_port,
             options,
-            listeners,
             logger,
         })
     }
@@ -202,16 +198,8 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Datab
         self.logger.borrow()
     }
 
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
-
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Database(self.long_id, T::short_name().to_string(), self.name.to_string())
+        Transmitter::Database(self.long_id, self.name.to_string())
     }
 
     fn as_service(&self) -> &dyn Service {
@@ -296,7 +284,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
             service::DatabaseType::Redis => get_self_hosted_redis_version,
         };
 
-        check_service_version(fn_version(self.version.to_string()), self, event_details, self.logger())
+        check_service_version(fn_version(self.version.to_string()), self, event_details)
     }
 }
 

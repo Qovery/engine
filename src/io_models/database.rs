@@ -66,7 +66,6 @@ impl Database {
             publicly_accessible: self.publicly_accessible,
         };
 
-        let listeners = cloud_provider.listeners().clone();
         let version = VersionsNumber::from_str(self.version.as_str())
             .map_err(|_| DatabaseError::InvalidConfig(format!("Bad version number: {}", self.version)))?;
 
@@ -90,7 +89,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 } else {
@@ -108,7 +106,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 }
@@ -132,7 +129,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 } else {
@@ -150,7 +146,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 }
@@ -175,7 +170,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 } else {
@@ -193,7 +187,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 }
@@ -217,7 +210,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 } else {
@@ -235,7 +227,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 }
@@ -259,7 +250,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 } else {
@@ -277,7 +267,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 }
@@ -301,7 +290,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 } else {
@@ -319,7 +307,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 }
@@ -343,7 +330,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 } else {
@@ -361,7 +347,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 }
@@ -385,7 +370,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 } else {
@@ -403,7 +387,6 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        listeners,
                         logger,
                     )?))
                 }
@@ -424,7 +407,6 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    listeners,
                     logger,
                 )?;
 
@@ -445,7 +427,6 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    listeners,
                     logger,
                 )?;
 
@@ -466,7 +447,6 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    listeners,
                     logger,
                 )?;
 
@@ -487,7 +467,6 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    listeners,
                     logger,
                 )?;
 
@@ -524,7 +503,6 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    listeners,
                     logger,
                 )?;
 
@@ -545,7 +523,6 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    listeners,
                     logger,
                 )?;
 
@@ -566,7 +543,6 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    listeners,
                     logger,
                 )?;
 
@@ -587,7 +563,6 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    listeners,
                     logger,
                 )?;
 
@@ -608,7 +583,6 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    listeners,
                     logger,
                 )?;
 
@@ -629,7 +603,6 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    listeners,
                     logger,
                 )?;
 

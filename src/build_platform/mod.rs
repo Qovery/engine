@@ -7,7 +7,6 @@ use crate::cmd::docker::{BuildResult, DockerError};
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
-use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::utilities::compute_image_tag;
@@ -76,10 +75,8 @@ pub trait BuildPlatform {
     }
     fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<BuildResult, BuildError>;
     fn logger(&self) -> Box<dyn Logger>;
-    fn listeners(&self) -> &Listeners;
-    fn add_listener(&mut self, listener: Listener);
     fn to_transmitter(&self) -> Transmitter;
-    fn get_event_details(&self, app_id: Uuid, app_name: String, app_commit: String) -> EventDetails {
+    fn get_event_details(&self, app_id: Uuid, app_name: String) -> EventDetails {
         let context = self.context();
         EventDetails::new(
             None,
@@ -87,7 +84,7 @@ pub trait BuildPlatform {
             QoveryIdentifier::new(*context.cluster_long_id()),
             context.execution_id().to_string(),
             Stage::Environment(EnvironmentStep::Build),
-            Transmitter::Application(app_id, app_name, app_commit),
+            Transmitter::Application(app_id, app_name),
         )
     }
 }

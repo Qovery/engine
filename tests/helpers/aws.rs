@@ -12,7 +12,6 @@ use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::ecr::ECR;
 use qovery_engine::engine::EngineConfig;
 use qovery_engine::io_models::context::Context;
-use qovery_engine::io_models::progress_listener::NoOpProgressListener;
 use qovery_engine::logger::Logger;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -53,7 +52,6 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
         secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
         secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),
         secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
-        Arc::new(Box::new(NoOpProgressListener {})),
         logger,
         hashmap! {},
     )

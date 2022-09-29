@@ -8,7 +8,6 @@ use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::application::{AdvancedSettingsProbeType, ApplicationAdvancedSettings, Port};
 use crate::io_models::context::Context;
-use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::types::{CloudProvider, ToTeraContext};
@@ -40,7 +39,6 @@ pub struct Application<T: CloudProvider> {
     pub(super) build: Build,
     pub(super) storage: Vec<Storage<T::StorageTypes>>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
-    pub(super) listeners: Listeners,
     pub(super) logger: Box<dyn Logger>,
     pub(super) advanced_settings: ApplicationAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
@@ -64,7 +62,6 @@ impl<T: CloudProvider> Application<T> {
         environment_variables: Vec<EnvironmentVariable>,
         advanced_settings: ApplicationAdvancedSettings,
         extra_settings: T::AppExtraSettings,
-        listeners: Listeners,
         logger: Box<dyn Logger>,
     ) -> Result<Self, ApplicationError> {
         // TODO: Check that the information provided are coherent
@@ -85,7 +82,6 @@ impl<T: CloudProvider> Application<T> {
             build,
             storage,
             environment_variables,
-            listeners,
             logger,
             advanced_settings,
             _extra_settings: extra_settings,
@@ -392,16 +388,8 @@ impl<T: CloudProvider> Service for Application<T> {
         self.logger()
     }
 
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
-
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Application(self.long_id, self.name.to_string(), self.commit_id())
+        Transmitter::Application(self.long_id, self.name.to_string())
     }
 
     fn as_service(&self) -> &dyn Service {

@@ -31,6 +31,7 @@ pub enum EngineEvent {
     Error {
         r#type: String,
         timestamp: DateTime<Utc>,
+        details: EventDetails,
         error: EngineError,
         message: Option<EventMessage>,
     },
@@ -61,6 +62,7 @@ impl From<events::EngineEvent> for EngineEvent {
             events::EngineEvent::Error(e, m) => EngineEvent::Error {
                 r#type: "error".to_string(),
                 timestamp,
+                details: EventDetails::from(e.event_details().clone()),
                 error: EngineError::from(e),
                 message: m.map(EventMessage::from),
             },
@@ -86,8 +88,8 @@ impl From<events::EventMessage> for EventMessage {
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[serde(tag = "type", content = "step")]
 pub enum Stage {
-    General(GeneralStep),
     Infrastructure(InfrastructureStep),
     Environment(EnvironmentStep),
 }
@@ -95,30 +97,8 @@ pub enum Stage {
 impl From<events::Stage> for Stage {
     fn from(stage: events::Stage) -> Self {
         match stage {
-            events::Stage::General(step) => Stage::General(GeneralStep::from(step)),
             events::Stage::Infrastructure(step) => Stage::Infrastructure(InfrastructureStep::from(step)),
             events::Stage::Environment(step) => Stage::Environment(EnvironmentStep::from(step)),
-        }
-    }
-}
-
-#[derive(Deserialize, Serialize)]
-pub enum GeneralStep {
-    RetrieveClusterConfig,
-    RetrieveClusterResources,
-    ValidateSystemRequirements,
-    UnderMigration,
-    ValidateApiInput,
-}
-
-impl From<events::GeneralStep> for GeneralStep {
-    fn from(step: events::GeneralStep) -> Self {
-        match step {
-            events::GeneralStep::RetrieveClusterConfig => GeneralStep::RetrieveClusterConfig,
-            events::GeneralStep::RetrieveClusterResources => GeneralStep::RetrieveClusterResources,
-            events::GeneralStep::ValidateSystemRequirements => GeneralStep::ValidateSystemRequirements,
-            events::GeneralStep::UnderMigration => GeneralStep::UnderMigration,
-            events::GeneralStep::ValidateApiInput => GeneralStep::ValidateApiInput,
         }
     }
 }
@@ -139,6 +119,13 @@ pub enum InfrastructureStep {
     Delete,
     Deleted,
     DeleteError,
+    ValidateApiInput,
+    ValidateSystemRequirements,
+    RetrieveClusterConfig,
+    RetrieveClusterResources,
+    UnderMigration,
+    Start,
+    Terminated,
 }
 
 impl From<events::InfrastructureStep> for InfrastructureStep {
@@ -158,6 +145,13 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
             events::InfrastructureStep::CreateError => InfrastructureStep::CreateError,
             events::InfrastructureStep::PauseError => InfrastructureStep::PauseError,
             events::InfrastructureStep::DeleteError => InfrastructureStep::DeleteError,
+            events::InfrastructureStep::ValidateApiInput => InfrastructureStep::ValidateApiInput,
+            events::InfrastructureStep::ValidateSystemRequirements => InfrastructureStep::ValidateSystemRequirements,
+            events::InfrastructureStep::RetrieveClusterConfig => InfrastructureStep::RetrieveClusterConfig,
+            events::InfrastructureStep::RetrieveClusterResources => InfrastructureStep::RetrieveClusterResources,
+            events::InfrastructureStep::UnderMigration => InfrastructureStep::UnderMigration,
+            events::InfrastructureStep::Start => InfrastructureStep::Start,
+            events::InfrastructureStep::Terminated => InfrastructureStep::Terminated,
         }
     }
 }
@@ -181,6 +175,11 @@ pub enum EnvironmentStep {
     LoadConfiguration,
     Start,
     Terminated,
+    ValidateApiInput,
+    ValidateSystemRequirements,
+    RetrieveClusterConfig,
+    RetrieveClusterResources,
+    UnderMigration,
 }
 
 impl From<events::EnvironmentStep> for EnvironmentStep {
@@ -203,72 +202,33 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
             events::EnvironmentStep::DeployedError => EnvironmentStep::DeployedError,
             events::EnvironmentStep::PausedError => EnvironmentStep::PausedError,
             events::EnvironmentStep::DeletedError => EnvironmentStep::DeletedError,
+            events::EnvironmentStep::ValidateApiInput => EnvironmentStep::ValidateApiInput,
+            events::EnvironmentStep::ValidateSystemRequirements => EnvironmentStep::ValidateSystemRequirements,
+            events::EnvironmentStep::RetrieveClusterConfig => EnvironmentStep::RetrieveClusterConfig,
+            events::EnvironmentStep::RetrieveClusterResources => EnvironmentStep::RetrieveClusterResources,
+            events::EnvironmentStep::UnderMigration => EnvironmentStep::UnderMigration,
         }
     }
 }
 
 type TransmitterId = Uuid;
 type TransmitterName = String;
-type TransmitterType = String;
-type TransmitterVersion = String;
 
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type")]
 pub enum Transmitter {
-    TaskManager {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    BuildPlatform {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    ContainerRegistry {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    CloudProvider {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    Kubernetes {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    DnsProvider {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    ObjectStorage {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    Environment {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    Database {
-        id: TransmitterId,
-        db_type: TransmitterType,
-        name: TransmitterName,
-    },
-    Application {
-        id: TransmitterId,
-        name: TransmitterName,
-        commit: TransmitterVersion,
-    },
-    Container {
-        id: TransmitterId,
-        name: TransmitterName,
-        image: TransmitterVersion,
-    },
-    Router {
-        id: TransmitterId,
-        name: TransmitterName,
-    },
-    SecretManager {
-        name: TransmitterName,
-    },
+    TaskManager { id: TransmitterId, name: TransmitterName },
+    BuildPlatform { id: TransmitterId, name: TransmitterName },
+    ContainerRegistry { id: TransmitterId, name: TransmitterName },
+    CloudProvider { id: TransmitterId, name: TransmitterName },
+    Kubernetes { id: TransmitterId, name: TransmitterName },
+    DnsProvider { id: TransmitterId, name: TransmitterName },
+    ObjectStorage { id: TransmitterId, name: TransmitterName },
+    Environment { id: TransmitterId, name: TransmitterName },
+    Database { id: TransmitterId, name: TransmitterName },
+    Application { id: TransmitterId, name: TransmitterName },
+    Container { id: TransmitterId, name: TransmitterName },
+    Router { id: TransmitterId, name: TransmitterName },
 }
 
 impl From<events::Transmitter> for Transmitter {
@@ -282,14 +242,10 @@ impl From<events::Transmitter> for Transmitter {
             events::Transmitter::DnsProvider(id, name) => Transmitter::DnsProvider { id, name },
             events::Transmitter::ObjectStorage(id, name) => Transmitter::ObjectStorage { id, name },
             events::Transmitter::Environment(id, name) => Transmitter::Environment { id, name },
-            events::Transmitter::Database(id, db_type, name) => Transmitter::Database { id, db_type, name },
-            events::Transmitter::Application(id, name, commit) => Transmitter::Application { id, name, commit },
+            events::Transmitter::Database(id, name) => Transmitter::Database { id, name },
+            events::Transmitter::Application(id, name) => Transmitter::Application { id, name },
             events::Transmitter::Router(id, name) => Transmitter::Router { id, name },
-            events::Transmitter::Container(id, name, version) => Transmitter::Container {
-                id,
-                name,
-                image: version,
-            },
+            events::Transmitter::Container(id, name) => Transmitter::Container { id, name },
         }
     }
 }
@@ -349,7 +305,7 @@ mod test {
         match serde_json::to_string(&event_io) {
             Ok(json) => {
                 // validate:
-                assert!(json.contains("{\"infrastructure\":\"CreateError\"}"))
+                assert!(json.contains(r#"{"type":"infrastructure","step":"CreateError"}"#))
             }
             Err(e) => {
                 panic!("Panic ! Error: {}", e)

@@ -219,7 +219,6 @@ impl Container {
         logger: Box<dyn Logger>,
     ) -> Result<Box<dyn ContainerService>, ContainerError> {
         let environment_variables = to_environment_variable(&self.environment_vars);
-        let listeners = cloud_provider.listeners().clone();
 
         // Default registry is a bit special as the core does not knows its url/credentials as it is retrieved
         // by us with some tags
@@ -252,7 +251,6 @@ impl Container {
                         environment_variables,
                         self.advanced_settings,
                         AwsAppExtraSettings {},
-                        listeners,
                         logger.clone(),
                     )?)
                 } else {
@@ -277,7 +275,6 @@ impl Container {
                         environment_variables,
                         self.advanced_settings,
                         AwsEc2AppExtraSettings {},
-                        listeners,
                         logger.clone(),
                     )?)
                 }
@@ -309,7 +306,6 @@ impl Container {
                 environment_variables,
                 self.advanced_settings,
                 ScwAppExtraSettings {},
-                listeners,
                 logger.clone(),
             )?),
         };

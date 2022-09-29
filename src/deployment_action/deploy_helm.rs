@@ -133,7 +133,7 @@ mod tests {
     use crate::cloud_provider::helm::ChartInfo;
     use crate::cmd::helm::Helm;
     use crate::deployment_action::deploy_helm::HelmDeployment;
-    use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
+    use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
     use function_name::named;
 
@@ -155,7 +155,7 @@ mod tests {
             QoveryIdentifier::new_random(),
             QoveryIdentifier::new_random(),
             Uuid::new_v4().to_string(),
-            Stage::General(GeneralStep::RetrieveClusterConfig),
+            Stage::Infrastructure(InfrastructureStep::RetrieveClusterConfig),
             Transmitter::TaskManager(Uuid::new_v4(), "engine".to_string()),
         );
 

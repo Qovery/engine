@@ -8,9 +8,8 @@ use uuid::Uuid;
 use crate::cloud_provider::{kubernetes::Kind as KubernetesKind, CloudProvider, Kind, TerraformStateCredentials};
 use crate::constants::DIGITAL_OCEAN_TOKEN;
 use crate::errors::EngineError;
-use crate::events::{EventDetails, GeneralStep, Stage, Transmitter};
+use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::Context;
-use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::io_models::QoveryIdentifier;
 use crate::utilities::to_short_id;
 
@@ -31,7 +30,6 @@ pub struct DO {
     spaces_secret_key: String,
     region: String,
     terraform_state_credentials: TerraformStateCredentials,
-    listeners: Listeners,
 }
 
 impl DO {
@@ -59,7 +57,6 @@ impl DO {
             spaces_secret_key: spaces_secret_key.to_string(),
             region: region.to_string(),
             terraform_state_credentials,
-            listeners: vec![],
         }
     }
 
@@ -109,12 +106,16 @@ impl CloudProvider for DO {
         self.region.to_string()
     }
 
+    fn aws_sdk_client(&self) -> Option<aws_config::SdkConfig> {
+        None
+    }
+
     fn token(&self) -> &str {
         self.token.as_str()
     }
 
     fn is_valid(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::General(GeneralStep::RetrieveClusterConfig));
+        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::RetrieveClusterConfig));
         let client = DigitalOcean::new(&self.token);
         match client {
             Ok(_x) => Ok(()),
@@ -154,19 +155,7 @@ impl CloudProvider for DO {
         )
     }
 
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
-
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::CloudProvider(self.long_id, self.name.to_string())
-    }
-
-    fn aws_sdk_client(&self) -> Option<aws_config::SdkConfig> {
-        None
     }
 }

@@ -9,8 +9,8 @@ use url::Url;
 // Credentials callback is called endlessly until the server return Auth Ok (or a definitive error)
 // If auth is denied, it up to us to return a new credential to try different auth method
 // or an error to specify that we have exhausted everything we are able to provide
-fn authentication_callback<'a>(
-    get_credentials: &'a impl Fn(&str) -> Vec<(CredentialType, Cred)>,
+fn authentication_callback(
+    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
 ) -> impl FnMut(&str, Option<&str>, CredentialType) -> Result<Cred, Error> + '_ {
     let mut current_credentials: (String, Vec<(CredentialType, Cred)>) = ("".into(), vec![]);
 

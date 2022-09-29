@@ -370,18 +370,10 @@ impl Kapsule {
             };
 
         // ensure there is no missing info
-        if let Err(e) = self.check_missing_nodegroup_info(&pool.name, "name") {
-            return Err(e);
-        };
-        if let Err(e) = self.check_missing_nodegroup_info(&pool.min_size, "min_size") {
-            return Err(e);
-        };
-        if let Err(e) = self.check_missing_nodegroup_info(&pool.max_size, "max_size") {
-            return Err(e);
-        };
-        if let Err(e) = self.check_missing_nodegroup_info(&pool.status, "status") {
-            return Err(e);
-        };
+        self.check_missing_nodegroup_info(&pool.name, "name")?;
+        self.check_missing_nodegroup_info(&pool.min_size, "min_size")?;
+        self.check_missing_nodegroup_info(&pool.max_size, "max_size")?;
+        self.check_missing_nodegroup_info(&pool.status, "status")?;
 
         match ScwNodeGroup::new(
             pool.id,

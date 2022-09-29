@@ -6,7 +6,6 @@ use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::application::Port;
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
-use crate::io_models::progress_listener::{Listener, Listeners};
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::types::{CloudProvider, ToTeraContext};
@@ -44,7 +43,6 @@ pub struct Container<T: CloudProvider> {
     pub(super) ports: Vec<Port>,
     pub(super) storages: Vec<Storage<T::StorageTypes>>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
-    pub(super) listeners: Listeners,
     pub(super) logger: Box<dyn Logger>,
     pub(super) advanced_settings: ContainerAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
@@ -75,7 +73,6 @@ impl<T: CloudProvider> Container<T> {
         environment_variables: Vec<EnvironmentVariable>,
         advanced_settings: ContainerAdvancedSettings,
         extra_settings: T::AppExtraSettings,
-        listeners: Listeners,
         logger: Box<dyn Logger>,
     ) -> Result<Self, ContainerError> {
         if min_instances > max_instances {
@@ -135,7 +132,6 @@ impl<T: CloudProvider> Container<T> {
             ports,
             storages,
             environment_variables,
-            listeners,
             logger,
             advanced_settings,
             _extra_settings: extra_settings,
@@ -323,16 +319,8 @@ impl<T: CloudProvider> Service for Container<T> {
         self.logger()
     }
 
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
-
     fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Container(self.long_id, self.name.to_string(), self.image_with_tag())
+        Transmitter::Container(self.long_id, self.name.to_string())
     }
 
     fn as_service(&self) -> &dyn Service {

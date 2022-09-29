@@ -3,7 +3,6 @@ use crate::cloud_provider::models::StorageDataTemplate;
 use crate::cloud_provider::DeploymentTarget;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
-use crate::io_models::progress_listener::ListenersHelper;
 use crate::models::application::Application;
 use crate::models::aws_ec2::AwsEc2StorageType;
 use crate::models::types::{AWSEc2, ToTeraContext};
@@ -15,9 +14,6 @@ impl ToTeraContext for Application<AWSEc2> {
         let mut context = self.default_tera_context(target.kubernetes, target.environment);
 
         let cpu_limits = match validate_k8s_required_cpu_and_burstable(
-            &ListenersHelper::new(&self.listeners),
-            self.context.execution_id(),
-            &self.id,
             self.total_cpus(),
             self.cpu_burst(),
             event_details.clone(),

@@ -176,8 +176,6 @@ impl Display for EventMessage {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Stage: represents an engine event stage, can be General, Infrastructure or Environment.
 pub enum Stage {
-    /// GeneralStep: general stage in the engine, usually used across all stages.
-    General(GeneralStep),
     /// Infrastructure: infrastructure stage in the engine (clusters operations).
     Infrastructure(InfrastructureStep),
     /// Environment: environment stage in the engine (applications operations).
@@ -190,7 +188,6 @@ impl Stage {
         match &self {
             Stage::Infrastructure(step) => step.to_string(),
             Stage::Environment(step) => step.to_string(),
-            Stage::General(step) => step.to_string(),
         }
     }
 }
@@ -203,15 +200,17 @@ impl Display for Stage {
             match &self {
                 Stage::Infrastructure(_) => "infrastructure",
                 Stage::Environment(_) => "environment",
-                Stage::General(_) => "general",
             },
         )
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-/// GeneralStep: represents an engine general step usually shared across all engine stages
-pub enum GeneralStep {
+/// InfrastructureStep: represents an engine infrastructure step.
+pub enum InfrastructureStep {
+    // general steps
+    /// LoadConfiguration: first step in environment, aiming to load all configuration (from Terraform, etc).
+    LoadConfiguration,
     /// ValidateApiInput: validating Engine's API input
     ValidateApiInput,
     /// ValidateSystemRequirements: validating system requirements
@@ -222,29 +221,11 @@ pub enum GeneralStep {
     RetrieveClusterResources,
     /// UnderMigration: error migration hasn't been completed yet.
     UnderMigration,
-}
+    /// Deployment has started. It is the first message sent by the engine.
+    Start,
+    /// Deployment is terminated. It is the terminal message sent by the engine
+    Terminated,
 
-impl Display for GeneralStep {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match &self {
-                GeneralStep::ValidateApiInput => "validate-api-input",
-                GeneralStep::RetrieveClusterConfig => "retrieve-cluster-config",
-                GeneralStep::RetrieveClusterResources => "retrieve-cluster-resources",
-                GeneralStep::ValidateSystemRequirements => "validate-system-requirements",
-                GeneralStep::UnderMigration => "under-migration",
-            }
-        )
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-/// InfrastructureStep: represents an engine infrastructure step.
-pub enum InfrastructureStep {
-    /// LoadConfiguration: first step in infrastructure, aiming to load all configuration (from Terraform, etc).
-    LoadConfiguration,
     /// Create: creating a cluster.
     Create,
     /// Created: cluster creation is ok.
@@ -293,6 +274,13 @@ impl Display for InfrastructureStep {
                 InfrastructureStep::CreateError => "create-error",
                 InfrastructureStep::PauseError => "pause-error",
                 InfrastructureStep::DeleteError => "delete-error",
+                InfrastructureStep::ValidateApiInput => "validate-api-input",
+                InfrastructureStep::ValidateSystemRequirements => "validate-system-requirements",
+                InfrastructureStep::RetrieveClusterConfig => "retrieve-cluster-config",
+                InfrastructureStep::RetrieveClusterResources => "retrieve-cluster-resources",
+                InfrastructureStep::UnderMigration => "under-migration",
+                InfrastructureStep::Start => "start",
+                InfrastructureStep::Terminated => "terminated",
             },
         )
     }
@@ -301,12 +289,25 @@ impl Display for InfrastructureStep {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// EnvironmentStep: represents an engine environment step.
 pub enum EnvironmentStep {
+    // general steps
+    /// LoadConfiguration: first step in environment, aiming to load all configuration (from Terraform, etc).
+    LoadConfiguration,
+    /// ValidateApiInput: validating Engine's API input
+    ValidateApiInput,
+    /// ValidateSystemRequirements: validating system requirements
+    ValidateSystemRequirements,
+    /// RetrieveClusterConfig: retrieving cluster configuration
+    RetrieveClusterConfig,
+    /// RetrieveClusterResources: retrieving cluster resources
+    RetrieveClusterResources,
+    /// UnderMigration: error migration hasn't been completed yet.
+    UnderMigration,
     /// Deployment has started. It is the first message sent by the engine.
     Start,
     /// Deployment is terminated. It is the terminal message sent by the engine
     Terminated,
-    /// LoadConfiguration: first step in environment, aiming to load all configuration (from Terraform, etc).
-    LoadConfiguration,
+
+    // Env specific steps
     /// Build: building an application (docker or build packs).
     Build,
     /// Built: env is built.
@@ -360,6 +361,11 @@ impl Display for EnvironmentStep {
                 EnvironmentStep::DeployedError => "deployed-error",
                 EnvironmentStep::PausedError => "paused-error",
                 EnvironmentStep::DeletedError => "deleted-error",
+                EnvironmentStep::ValidateApiInput => "validate-api-input",
+                EnvironmentStep::ValidateSystemRequirements => "validate-system-requirements",
+                EnvironmentStep::RetrieveClusterConfig => "retrieve-cluster-config",
+                EnvironmentStep::RetrieveClusterResources => "retrieve-cluster-resources",
+                EnvironmentStep::UnderMigration => "under-migration",
             },
         )
     }
@@ -369,10 +375,6 @@ impl Display for EnvironmentStep {
 type TransmitterId = Uuid;
 /// TransmitterName: represents a transmitter name.
 type TransmitterName = String;
-/// TransmitterType: represents a transmitter type.
-type TransmitterType = String; // TODO(benjaminch): makes it a real enum / type
-/// TransmitterVersion: represents a transmitter version.
-type TransmitterVersion = String;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Transmitter: represents the event's source caller (transmitter).
@@ -394,11 +396,11 @@ pub enum Transmitter {
     /// Environment: environment engine part.
     Environment(TransmitterId, TransmitterName),
     /// Database: database engine part.
-    Database(TransmitterId, TransmitterType, TransmitterName),
+    Database(TransmitterId, TransmitterName),
     /// Application: application engine part.
-    Application(TransmitterId, TransmitterName, TransmitterVersion),
+    Application(TransmitterId, TransmitterName),
     /// Application: application engine part.
-    Container(TransmitterId, TransmitterName, TransmitterVersion),
+    Container(TransmitterId, TransmitterName),
     /// Router: router engine part.
     Router(TransmitterId, TransmitterName),
 }
@@ -417,12 +419,10 @@ impl Display for Transmitter {
                 Transmitter::DnsProvider(id, name) => format!("dns_provider({}, {})", id, name),
                 Transmitter::ObjectStorage(id, name) => format!("object_strorage({}, {})", id, name),
                 Transmitter::Environment(id, name) => format!("environment({}, {})", id, name),
-                Transmitter::Database(id, db_type, name) => format!("database({}, {}, {})", id, db_type, name),
-                Transmitter::Application(id, name, version) =>
-                    format!("application({}, {}, commit: {})", id, name, version),
+                Transmitter::Database(id, name) => format!("database({}, {})", id, name),
+                Transmitter::Application(id, name) => format!("application({}, {})", id, name),
                 Transmitter::Router(id, name) => format!("router({}, {})", id, name),
-                Transmitter::Container(id, name, version) =>
-                    format!("container({}, {}, version: {})", id, name, version),
+                Transmitter::Container(id, name) => format!("container({}, {})", id, name),
             }
         )
     }

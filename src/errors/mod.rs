@@ -11,7 +11,6 @@ use crate::cmd::helm::HelmError;
 use crate::cmd::terraform::{QuotaExceededError, TerraformError};
 use crate::container_registry::errors::ContainerRegistryError;
 
-use crate::error::{EngineError as LegacyEngineError, EngineErrorCause, EngineErrorScope};
 use crate::events::{EventDetails, Stage};
 use crate::models::types::VersionsNumber;
 use crate::object_storage::errors::ObjectStorageError;
@@ -914,18 +913,6 @@ impl EngineError {
             link: self.link.as_ref().cloned(),
             hint_message: self.hint_message.as_ref().cloned(),
         }
-    }
-
-    /// Converts to legacy engine error easing migration.
-    pub fn to_legacy_engine_error(&self) -> LegacyEngineError {
-        LegacyEngineError::new(
-            EngineErrorCause::Internal,
-            EngineErrorScope::from(self.event_details.transmitter()),
-            self.event_details.execution_id().to_string(),
-            // Note: Since legacy EngineError is read directly as is in the Core, not all details are exposed
-            // since it can lead to expose secrets, hence not exposing env vars which may contains secrets.
-            Some(self.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-        )
     }
 
     /// Creates new unknown error.

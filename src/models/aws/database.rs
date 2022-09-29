@@ -1,5 +1,5 @@
 use crate::cloud_provider::service::{
-    check_service_version, default_tera_context, get_tfstate_name, get_tfstate_suffix, Service,
+    check_service_version, default_tera_context, get_tfstate_name, get_tfstate_suffix, Action, Service,
     ServiceVersionCheckResult,
 };
 use crate::cloud_provider::{service, DeploymentTarget};
@@ -240,7 +240,7 @@ where
             service::DatabaseType::Redis => get_managed_redis_version,
         };
 
-        check_service_version(fn_version(self.version.to_string()), self, event_details, self.logger())
+        check_service_version(fn_version(self.version.to_string()), self, event_details)
     }
 
     fn to_tera_context_for_aws_managed(
@@ -248,7 +248,13 @@ where
         target: &DeploymentTarget,
         options: &DatabaseOptions,
     ) -> Result<TeraContext, EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
+        let step = match self.action {
+            Action::Create => EnvironmentStep::Deploy,
+            Action::Pause => EnvironmentStep::Pause,
+            Action::Delete => EnvironmentStep::Delete,
+            Action::Nothing => EnvironmentStep::Deploy,
+        };
+        let event_details = self.get_event_details(Stage::Environment(step));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);

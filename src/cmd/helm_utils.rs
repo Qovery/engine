@@ -388,16 +388,13 @@ where
     let root_dir_path = std::env::temp_dir();
 
     if chart.backup_resources.is_some() && installed_version.le(&get_common_helm_chart_version(&chart)?) {
-        if let Err(e) = prepare_chart_backup(
+        prepare_chart_backup(
             kubernetes_config,
             root_dir_path.as_path(),
             &chart,
             envs,
             chart.backup_resources.as_ref().unwrap().to_vec(),
-        ) {
-            return Err(e);
-        };
-
+        )?;
         need_backup = true;
     }
 

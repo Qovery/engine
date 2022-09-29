@@ -91,7 +91,6 @@ mod tests {
         let execution_id = QoveryIdentifier::new(Uuid::new_v4());
         let app_id = QoveryIdentifier::new(Uuid::new_v4());
         let app_name = format!("simple-app-{}", app_id);
-        let app_version = Uuid::new_v4();
         let user_message = "User message";
         let safe_message = "Safe message";
         let raw_message = "Raw message";
@@ -145,7 +144,7 @@ mod tests {
                         cluster_id.clone(),
                         execution_id.to_string(),
                         Stage::Environment(EnvironmentStep::Pause),
-                        Transmitter::Application(Uuid::new_v4(), app_name.to_string(), app_version.to_string()),
+                        Transmitter::Application(Uuid::new_v4(), app_name.to_string()),
                     ),
                     EventMessage::new(raw_message.to_string(), Some(safe_message.to_string())),
                 ),
@@ -159,7 +158,7 @@ mod tests {
                         cluster_id.clone(),
                         execution_id.to_string(),
                         Stage::Environment(EnvironmentStep::Delete),
-                        Transmitter::Application(Uuid::new_v4(), app_name, app_version.to_string()),
+                        Transmitter::Application(Uuid::new_v4(), app_name),
                     ),
                     EventMessage::new(raw_message.to_string(), Some(safe_message.to_string())),
                 ),

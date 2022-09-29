@@ -16,11 +16,8 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 use crate::build_platform::Image;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
-use crate::events::{EngineEvent, EventMessage, GeneralStep, Stage};
+use crate::events::{EngineEvent, EventMessage, InfrastructureStep, Stage};
 use crate::io_models::context::Context;
-use crate::io_models::progress_listener::{
-    Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-};
 use crate::logger::Logger;
 use crate::runtime::block_on;
 use retry::delay::Fixed;
@@ -39,7 +36,6 @@ pub struct ECR {
     secret_access_key: String,
     region: Region,
     registry_info: Option<ContainerRegistryInfo>,
-    listeners: Listeners,
     logger: Box<dyn Logger>,
     tags: HashMap<String, String>,
 }
@@ -53,7 +49,6 @@ impl ECR {
         access_key_id: &str,
         secret_access_key: &str,
         region: &str,
-        listener: Listener,
         logger: Box<dyn Logger>,
         tags: HashMap<String, String>,
     ) -> Result<Self, ContainerRegistryError> {
@@ -66,7 +61,6 @@ impl ECR {
             secret_access_key: secret_access_key.to_string(),
             region: Region::from_str(region).unwrap(),
             registry_info: None,
-            listeners: vec![listener],
             logger,
             tags,
         };
@@ -97,18 +91,8 @@ impl ECR {
 
     pub fn log_info(&self, msg: String) {
         self.logger.log(EngineEvent::Info(
-            self.get_event_details(Stage::General(GeneralStep::ValidateSystemRequirements)),
-            EventMessage::new_from_safe(msg.clone()),
-        ));
-
-        let lh = ListenersHelper::new(&self.listeners);
-        lh.deployment_in_progress(ProgressInfo::new(
-            ProgressScope::Environment {
-                id: self.context.execution_id().to_string(),
-            },
-            ProgressLevel::Info,
-            Some(msg),
-            self.context.execution_id(),
+            self.get_event_details(Stage::Infrastructure(InfrastructureStep::ValidateSystemRequirements)),
+            EventMessage::new_from_safe(msg),
         ));
     }
 
@@ -290,16 +274,14 @@ impl ECR {
                         ..Default::default()
                     };
 
-                    if let Err(e) = match block_on(self.ecr_client().put_lifecycle_policy(plp)) {
+                    match block_on(self.ecr_client().put_lifecycle_policy(plp)) {
                         Err(err) => Err(ContainerRegistryError::CannotSetRepositoryLifecyclePolicy {
                             registry_name: self.name.to_string(),
                             repository_name: repository_name.to_string(),
                             raw_error_message: err.to_string(),
                         }),
                         _ => Ok(self.get_repository(repository_name).expect("cannot get repository")),
-                    } {
-                        return Err(e);
-                    }
+                    }?;
 
                     if let Some(repository_arn) = &repos[0].repository_arn {
                         let mut ecr_tags: Vec<Tag> = vec![];
@@ -314,16 +296,14 @@ impl ECR {
                             tags: ecr_tags,
                         };
 
-                        if let Err(e) = match block_on(self.ecr_client().tag_resource(trr)) {
+                        match block_on(self.ecr_client().tag_resource(trr)) {
                             Err(err) => Err(ContainerRegistryError::CannotSetRepositoryTags {
                                 registry_name: self.name.to_string(),
                                 repository_name: repository_name.to_string(),
                                 raw_error_message: err.to_string(),
                             }),
                             _ => Ok(self.get_repository(repository_name).expect("cannot get repository")),
-                        } {
-                            return Err(e);
-                        }
+                        }?;
                     }
 
                     Ok(repos[0].clone())

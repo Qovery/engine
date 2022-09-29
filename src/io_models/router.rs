@@ -67,7 +67,6 @@ impl Router {
             })
             .collect::<Vec<_>>();
 
-        let listeners = cloud_provider.listeners().clone();
         let advanced_settings = RouterAdvancedSettings {
             custom_domain_check_enabled,
             whitelist_source_range,
@@ -90,7 +89,6 @@ impl Router {
                         self.sticky_sessions_enabled,
                         AwsRouterExtraSettings {},
                         advanced_settings,
-                        listeners,
                         logger,
                     )?))
                 } else {
@@ -105,7 +103,6 @@ impl Router {
                         self.sticky_sessions_enabled,
                         AwsEc2RouterExtraSettings {},
                         advanced_settings,
-                        listeners,
                         logger,
                     )?))
                 }
@@ -122,7 +119,6 @@ impl Router {
                     self.sticky_sessions_enabled,
                     DoRouterExtraSettings {},
                     advanced_settings,
-                    listeners,
                     logger,
                 )?);
                 Ok(router)
@@ -139,7 +135,6 @@ impl Router {
                     self.sticky_sessions_enabled,
                     ScwRouterExtraSettings {},
                     advanced_settings,
-                    listeners,
                     logger,
                 )?);
                 Ok(router)

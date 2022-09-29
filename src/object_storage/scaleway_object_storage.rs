@@ -255,9 +255,7 @@ impl ObjectStorage for ScalewayOS {
         let s3_client = self.get_s3_client();
 
         // make sure to delete all bucket content before trying to delete the bucket
-        if let Err(e) = self.empty_bucket(bucket_name) {
-            return Err(e);
-        }
+        self.empty_bucket(bucket_name)?;
 
         // Note: Do not delete the bucket entirely but empty its content.
         // Bucket deletion might take up to 24 hours and during this time we are not able to create a bucket with the same name.

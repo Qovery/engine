@@ -33,11 +33,10 @@ use crate::cmd::structs::KubernetesNodeCondition;
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter};
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::fs::{delete_file_if_exists, workspace_directory};
 use crate::io_models::context::Context;
 use crate::io_models::domain::StringPath;
-use crate::io_models::progress_listener::{ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::models::types::VersionsNumber;
@@ -84,7 +83,7 @@ pub trait Kubernetes {
 
         block_on(get_kube_client(kubeconfig_path, kube_credentials.as_slice())).map_err(|err| {
             EngineError::new_cannot_connect_to_k8s_cluster(
-                self.get_event_details(Stage::General(GeneralStep::RetrieveClusterResources)),
+                self.get_event_details(Infrastructure(InfrastructureStep::RetrieveClusterResources)),
                 err,
             )
         })
@@ -148,7 +147,7 @@ pub trait Kubernetes {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let object_key = self.get_kubeconfig_filename();
         let bucket_name = self.get_bucket_name();
-        let stage = Stage::General(GeneralStep::RetrieveClusterConfig);
+        let stage = Infrastructure(InfrastructureStep::RetrieveClusterConfig);
 
         // check if kubeconfig locally exists
         let local_kubeconfig = match self.kubeconfig_local_file_path() {
@@ -295,7 +294,7 @@ pub trait Kubernetes {
 
     fn resources(&self, _environment: &Environment) -> Result<Resources, EngineError> {
         let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
-        let stage = Stage::General(GeneralStep::RetrieveClusterResources);
+        let stage = Infrastructure(InfrastructureStep::RetrieveClusterResources);
 
         let nodes = match kubectl_exec_get_node(
             kubernetes_config_file_path,
@@ -1182,9 +1181,6 @@ where
 }
 
 pub fn validate_k8s_required_cpu_and_burstable(
-    listener_helper: &ListenersHelper,
-    execution_id: &str,
-    context_id: &str,
     total_cpu: String,
     cpu_burst: String,
     event_details: EventDetails,
@@ -1199,15 +1195,6 @@ pub fn validate_k8s_required_cpu_and_burstable(
             "CPU burst value '{}' was lower than the desired total of CPUs {}, using burstable value.",
             cpu_burst, total_cpu,
         );
-
-        listener_helper.error(ProgressInfo::new(
-            ProgressScope::Environment {
-                id: execution_id.to_string(),
-            },
-            ProgressLevel::Warn,
-            Some(message.to_string()),
-            context_id,
-        ));
 
         logger.log(EngineEvent::Warning(event_details, EventMessage::new_from_safe(message)));
 
@@ -1369,7 +1356,6 @@ mod tests {
     use crate::cloud_provider::models::CpuLimits;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
-    use crate::io_models::progress_listener::ListenersHelper;
     use crate::io_models::QoveryIdentifier;
     use crate::logger::StdIoLogger;
     use crate::models::types::VersionsNumber;
@@ -2036,11 +2022,7 @@ mod tests {
 
     #[test]
     pub fn test_cpu_set() {
-        let v = vec![];
-        let listener_helper = ListenersHelper::new(&v);
         let logger = StdIoLogger::new();
-        let execution_id = "execution_id";
-        let context_id = "context_id";
         let cluster_id = "cluster_id";
 
         let event_details = EventDetails::new(
@@ -2055,16 +2037,7 @@ mod tests {
         let mut total_cpu = "0.25".to_string();
         let mut cpu_burst = "1".to_string();
         assert_eq!(
-            validate_k8s_required_cpu_and_burstable(
-                &listener_helper,
-                execution_id,
-                context_id,
-                total_cpu,
-                cpu_burst,
-                event_details.clone(),
-                &logger
-            )
-            .unwrap(),
+            validate_k8s_required_cpu_and_burstable(total_cpu, cpu_burst, event_details.clone(), &logger).unwrap(),
             CpuLimits {
                 cpu_request: "0.25".to_string(),
                 cpu_limit: "1".to_string()
@@ -2074,16 +2047,7 @@ mod tests {
         total_cpu = "1".to_string();
         cpu_burst = "0.5".to_string();
         assert_eq!(
-            validate_k8s_required_cpu_and_burstable(
-                &listener_helper,
-                execution_id,
-                context_id,
-                total_cpu,
-                cpu_burst,
-                event_details,
-                &logger
-            )
-            .unwrap(),
+            validate_k8s_required_cpu_and_burstable(total_cpu, cpu_burst, event_details, &logger).unwrap(),
             CpuLimits {
                 cpu_request: "1".to_string(),
                 cpu_limit: "1".to_string()

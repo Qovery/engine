@@ -40,10 +40,9 @@ use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_mana
 use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventDetails, EventMessage, GeneralStep, InfrastructureStep, Stage, Transmitter};
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::{Context, Features};
 use crate::io_models::domain::{StringPath, ToHelmString};
-use crate::io_models::progress_listener::{Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope};
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::models::digital_ocean::DoRegion;
@@ -107,7 +106,6 @@ pub struct DOKS {
     spaces: Spaces,
     template_directory: String,
     options: DoksOptions,
-    listeners: Listeners,
     logger: Box<dyn Logger>,
     advanced_settings: ClusterAdvancedSettings,
 }
@@ -159,7 +157,6 @@ impl DOKS {
             BucketDeleteStrategy::HardDelete,
         );
 
-        let listeners = cloud_provider.listeners().clone();
         Ok(DOKS {
             context,
             id: to_short_id(&long_id),
@@ -174,7 +171,6 @@ impl DOKS {
             nodes_groups,
             template_directory,
             logger,
-            listeners,
             advanced_settings,
         })
     }
@@ -445,20 +441,6 @@ impl DOKS {
 
     fn create(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
-        let listeners_helper = ListenersHelper::new(&self.listeners);
-
-        listeners_helper.deployment_in_progress(ProgressInfo::new(
-            ProgressScope::Infrastructure {
-                execution_id: self.context.execution_id().to_string(),
-            },
-            ProgressLevel::Info,
-            Some(format!(
-                "start to create Digital Ocean Kubernetes cluster {} with id {}",
-                self.name(),
-                self.id()
-            )),
-            self.context.execution_id(),
-        ));
         self.logger().log(EngineEvent::Info(
             event_details.clone(),
             EventMessage::new_from_safe("Preparing cluster deployment.".to_string()),
@@ -1128,7 +1110,7 @@ impl Kubernetes for DOKS {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let bucket_name = format!("qovery-kubeconfigs-{}", self.id());
         let object_key = self.get_kubeconfig_filename();
-        let stage = Stage::General(GeneralStep::RetrieveClusterConfig);
+        let stage = Stage::Infrastructure(InfrastructureStep::RetrieveClusterConfig);
 
         // check if kubeconfig locally exists
         let local_kubeconfig = match self.get_temp_dir(event_details.clone()) {
@@ -1325,7 +1307,7 @@ impl Kubernetes for DOKS {
             }
         };
 
-        context.insert("doks_version", (&upgrade_doks_version).to_string().as_str());
+        context.insert("doks_version", upgrade_doks_version.as_str());
 
         if let Err(e) = crate::template::generate_and_copy_all_files_into_dir(
             self.template_directory.as_str(),

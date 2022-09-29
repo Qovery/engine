@@ -439,9 +439,7 @@ pub fn deploy_charts_levels(
             continue;
         }
 
-        if let Err(e) = deploy_parallel_charts(kubernetes_config, envs, level) {
-            return Err(e);
-        }
+        deploy_parallel_charts(kubernetes_config, envs, level)?
     }
 
     Ok(())
@@ -583,10 +581,7 @@ impl HelmChart for CoreDNSConfigChart {
             )?;
             Ok(())
         };
-        if let Err(e) = steps() {
-            return Err(e);
-        };
-
+        steps()?;
         Ok(Some(payload))
     }
 

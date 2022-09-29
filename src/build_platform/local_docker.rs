@@ -18,15 +18,12 @@ use crate::events::{EngineEvent, EventMessage, Transmitter};
 use crate::fs::workspace_directory;
 use crate::git;
 use crate::io_models::context::Context;
-use crate::io_models::progress_listener::{
-    Listener, Listeners, ListenersHelper, ProgressInfo, ProgressLevel, ProgressScope,
-};
 use crate::logger::Logger;
 use crate::utilities::to_short_id;
 
-/// https://buildpacks.io/
+/// https://github.com/heroku/builder
 const BUILDPACKS_BUILDERS: [&str; 1] = [
-    "heroku/buildpacks:20",
+    "heroku/builder-classic:22",
     // removed because it does not support dynamic port binding
     //"gcr.io/buildpacks/builder:v1",
     //"paketobuildpacks/builder:base",
@@ -38,7 +35,6 @@ pub struct LocalDocker {
     id: String,
     long_id: Uuid,
     name: String,
-    listeners: Listeners,
     logger: Box<dyn Logger>,
 }
 
@@ -49,7 +45,6 @@ impl LocalDocker {
             id: to_short_id(&long_id),
             long_id,
             name: name.to_string(),
-            listeners: vec![],
             logger,
         })
     }
@@ -117,26 +112,16 @@ impl LocalDocker {
         build: &mut Build,
         dockerfile_complete_path: &str,
         into_dir_docker_style: &str,
-        lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<BuildResult, BuildError> {
         // logger
         let log_info = {
-            let app_id = build.image.application_id.clone();
             let app_long_id = build.image.application_long_id;
             let app_name = build.image.application_name.clone();
-            let app_commit = build.image.commit_id.clone();
             move |msg: String| {
                 self.logger.log(EngineEvent::Info(
-                    self.get_event_details(app_long_id, app_name.clone(), app_commit.clone()),
-                    EventMessage::new_from_safe(msg.clone()),
-                ));
-
-                lh.deployment_in_progress(ProgressInfo::new(
-                    ProgressScope::Application { id: app_id.clone() },
-                    ProgressLevel::Info,
-                    Some(msg),
-                    self.context.execution_id(),
+                    self.get_event_details(app_long_id, app_name.clone()),
+                    EventMessage::new_from_safe(msg),
                 ));
             }
         };
@@ -229,7 +214,6 @@ impl LocalDocker {
         build: &Build,
         into_dir_docker_style: &str,
         use_build_cache: bool,
-        lh: &ListenersHelper,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<BuildResult, BuildError> {
         const LATEST_TAG: &str = "latest";
@@ -317,40 +301,14 @@ impl LocalDocker {
             exit_status = cmd.exec_with_abort(
                 &mut |line| {
                     self.logger.log(EngineEvent::Info(
-                        self.get_event_details(
-                            build.image.application_long_id,
-                            build.image.application_name.clone(),
-                            build.image.commit_id.clone(),
-                        ),
-                        EventMessage::new_from_safe(line.to_string()),
-                    ));
-
-                    lh.deployment_in_progress(ProgressInfo::new(
-                        ProgressScope::Application {
-                            id: build.image.application_id.clone(),
-                        },
-                        ProgressLevel::Info,
-                        Some(line),
-                        self.context.execution_id(),
+                        self.get_event_details(build.image.application_long_id, build.image.application_name.clone()),
+                        EventMessage::new_from_safe(line),
                     ));
                 },
                 &mut |line| {
                     self.logger.log(EngineEvent::Warning(
-                        self.get_event_details(
-                            build.image.application_long_id,
-                            build.image.application_name.clone(),
-                            build.image.commit_id.clone(),
-                        ),
-                        EventMessage::new_from_safe(line.to_string()),
-                    ));
-
-                    lh.deployment_in_progress(ProgressInfo::new(
-                        ProgressScope::Application {
-                            id: build.image.application_id.clone(),
-                        },
-                        ProgressLevel::Warn,
-                        Some(line),
-                        self.context.execution_id(),
+                        self.get_event_details(build.image.application_long_id, build.image.application_name.clone()),
+                        EventMessage::new_from_safe(line),
                     ));
                 },
                 &cmd_killer,
@@ -413,12 +371,8 @@ impl BuildPlatform for LocalDocker {
     }
 
     fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<BuildResult, BuildError> {
-        let event_details = self.get_event_details(
-            build.image.application_long_id,
-            build.image.application_name.clone(),
-            build.image.commit_id.clone(),
-        );
-        let listeners_helper = ListenersHelper::new(&self.listeners);
+        let event_details =
+            self.get_event_details(build.image.application_long_id, build.image.application_name.clone());
         let app_id = build.image.application_id.clone();
 
         // check if we should already abort the task
@@ -435,14 +389,8 @@ impl BuildPlatform for LocalDocker {
             build.git_repository.url,
             repository_root_path.to_string_lossy()
         );
-        listeners_helper.deployment_in_progress(ProgressInfo::new(
-            ProgressScope::Application { id: app_id.clone() },
-            ProgressLevel::Info,
-            Some(msg.clone()),
-            self.context.execution_id(),
-        ));
         self.logger
-            .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
+            .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(msg)));
 
         // Create callback that will be called by git to provide credentials per user
         // If people use submodule, they need to provide us their ssh key
@@ -531,7 +479,7 @@ impl BuildPlatform for LocalDocker {
 
         // now we have to decide if we use buildpack or docker to build our application
         // If no Dockerfile specified, we should use BuildPacks
-        let result = if let Some(dockerfile_path) = &build.git_repository.dockerfile_path {
+        if let Some(dockerfile_path) = &build.git_repository.dockerfile_path {
             // build container from the provided Dockerfile
 
             let dockerfile_absolute_path = repository_root_path.join(dockerfile_path);
@@ -551,7 +499,6 @@ impl BuildPlatform for LocalDocker {
                 build,
                 dockerfile_absolute_path.to_str().unwrap_or_default(),
                 build_context_path.to_str().unwrap_or_default(),
-                &listeners_helper,
                 is_task_canceled,
             )
         } else {
@@ -560,39 +507,14 @@ impl BuildPlatform for LocalDocker {
                 build,
                 build_context_path.to_str().unwrap_or_default(),
                 !build.disable_cache,
-                &listeners_helper,
                 is_task_canceled,
             )
-        };
-
-        // log image building infos
-        if let Ok(build_result) = &result {
-            listeners_helper.deployment_in_progress(ProgressInfo::new(
-                ProgressScope::Application { id: app_id },
-                ProgressLevel::Info,
-                Some(build_result.to_string()),
-                self.context.execution_id(),
-            ));
-            self.logger.log(EngineEvent::Info(
-                event_details,
-                EventMessage::new_from_safe(build_result.to_string()),
-            ));
         }
-
-        result
     }
 
     fn logger(&self) -> Box<dyn Logger> {
         self.logger.clone()
     }
-    fn listeners(&self) -> &Listeners {
-        &self.listeners
-    }
-
-    fn add_listener(&mut self, listener: Listener) {
-        self.listeners.push(listener);
-    }
-
     fn to_transmitter(&self) -> Transmitter {
         Transmitter::BuildPlatform(self.long_id, self.name().to_string())
     }

@@ -195,7 +195,6 @@ impl Application {
         logger: Box<dyn Logger>,
     ) -> Result<Box<dyn ApplicationService>, ApplicationError> {
         let environment_variables = to_environment_variable(&self.environment_vars);
-        let listeners = cloud_provider.listeners().clone();
 
         match cloud_provider.kind() {
             CPKind::Aws => {
@@ -219,7 +218,6 @@ impl Application {
                         environment_variables,
                         self.advanced_settings.clone(),
                         AwsAppExtraSettings {},
-                        listeners,
                         logger.clone(),
                     )?))
                 } else {
@@ -239,7 +237,6 @@ impl Application {
                         environment_variables,
                         self.advanced_settings.clone(),
                         AwsEc2AppExtraSettings {},
-                        listeners,
                         logger.clone(),
                     )?))
                 }
@@ -260,7 +257,6 @@ impl Application {
                 environment_variables,
                 self.advanced_settings.clone(),
                 DoAppExtraSettings {},
-                listeners,
                 logger.clone(),
             )?)),
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
@@ -279,7 +275,6 @@ impl Application {
                 environment_variables,
                 self.advanced_settings.clone(),
                 ScwAppExtraSettings {},
-                listeners,
                 logger.clone(),
             )?)),
         }
