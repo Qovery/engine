@@ -238,7 +238,7 @@ where
             service::DatabaseType::Redis => get_managed_redis_version,
         };
 
-        check_service_version(fn_version(self.version.to_string()), self, event_details, self.logger())
+        check_service_version(fn_version(self.version.to_string()), self, event_details)
     }
 
     fn to_tera_context_for_aws_managed(

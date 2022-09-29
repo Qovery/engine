@@ -284,7 +284,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
             service::DatabaseType::Redis => get_self_hosted_redis_version,
         };
 
-        check_service_version(fn_version(self.version.to_string()), self, event_details, self.logger())
+        check_service_version(fn_version(self.version.to_string()), self, event_details)
     }
 }
 
