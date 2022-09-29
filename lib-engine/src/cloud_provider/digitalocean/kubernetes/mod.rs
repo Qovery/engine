@@ -741,19 +741,6 @@ impl DOKS {
         Ok(())
     }
 
-    fn downgrade(&self) -> Result<(), EngineError> {
-        Ok(())
-    }
-
-    fn downgrade_error(&self) -> Result<(), EngineError> {
-        self.logger().log(EngineEvent::Warning(
-            self.get_event_details(Infrastructure(InfrastructureStep::Downgrade)),
-            EventMessage::new_from_safe("DOKS.downgrade_error() called.".to_string()),
-        ));
-
-        Ok(())
-    }
-
     fn pause(&self) -> Result<(), EngineError> {
         todo!()
     }
@@ -1408,34 +1395,6 @@ impl Kubernetes for DOKS {
             self.logger(),
         );
         send_progress_on_long_task(self, Action::Create, || self.upgrade_error())
-    }
-
-    #[named]
-    fn on_downgrade(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.downgrade())
-    }
-
-    #[named]
-    fn on_downgrade_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || self.downgrade_error())
     }
 
     #[named]

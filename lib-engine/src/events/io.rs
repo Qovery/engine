@@ -59,13 +59,16 @@ impl From<events::EngineEvent> for EngineEvent {
                 details: EventDetails::from(d),
                 message: EventMessage::from(m),
             },
-            events::EngineEvent::Error(e, m) => EngineEvent::Error {
-                r#type: "error".to_string(),
-                timestamp,
-                details: EventDetails::from(e.event_details().clone()),
-                error: EngineError::from(e),
-                message: m.map(EventMessage::from),
-            },
+            events::EngineEvent::Error(e, m) => {
+                let (engine_error, details) = EngineError::from(e);
+                EngineEvent::Error {
+                    r#type: "error".to_string(),
+                    timestamp,
+                    details: EventDetails::from(details),
+                    error: engine_error,
+                    message: m.map(EventMessage::from),
+                }
+            }
         }
     }
 }
@@ -112,10 +115,9 @@ pub enum InfrastructureStep {
     Pause,
     Paused,
     PauseError,
-    Downgrade,
-    Downgraded,
     Upgrade,
     Upgraded,
+    UpgradeError,
     Delete,
     Deleted,
     DeleteError,
@@ -123,7 +125,6 @@ pub enum InfrastructureStep {
     ValidateSystemRequirements,
     RetrieveClusterConfig,
     RetrieveClusterResources,
-    UnderMigration,
     Start,
     Terminated,
 }
@@ -136,11 +137,9 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
             events::InfrastructureStep::Pause => InfrastructureStep::Pause,
             events::InfrastructureStep::Upgrade => InfrastructureStep::Upgrade,
             events::InfrastructureStep::Delete => InfrastructureStep::Delete,
-            events::InfrastructureStep::Downgrade => InfrastructureStep::Downgrade,
             events::InfrastructureStep::Created => InfrastructureStep::Created,
             events::InfrastructureStep::Paused => InfrastructureStep::Paused,
             events::InfrastructureStep::Upgraded => InfrastructureStep::Upgraded,
-            events::InfrastructureStep::Downgraded => InfrastructureStep::Downgraded,
             events::InfrastructureStep::Deleted => InfrastructureStep::Deleted,
             events::InfrastructureStep::CreateError => InfrastructureStep::CreateError,
             events::InfrastructureStep::PauseError => InfrastructureStep::PauseError,
@@ -149,9 +148,9 @@ impl From<events::InfrastructureStep> for InfrastructureStep {
             events::InfrastructureStep::ValidateSystemRequirements => InfrastructureStep::ValidateSystemRequirements,
             events::InfrastructureStep::RetrieveClusterConfig => InfrastructureStep::RetrieveClusterConfig,
             events::InfrastructureStep::RetrieveClusterResources => InfrastructureStep::RetrieveClusterResources,
-            events::InfrastructureStep::UnderMigration => InfrastructureStep::UnderMigration,
             events::InfrastructureStep::Start => InfrastructureStep::Start,
             events::InfrastructureStep::Terminated => InfrastructureStep::Terminated,
+            events::InfrastructureStep::UpgradeError => InfrastructureStep::UpgradeError,
         }
     }
 }

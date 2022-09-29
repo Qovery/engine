@@ -876,13 +876,14 @@ impl EngineError {
     /// * `link`: Link documenting the given error.
     /// * `hint_message`: hint message aiming to give an hint to the user. For example: "Happens when application port has been changed but application hasn't been restarted.".
     fn new(
-        event_details: EventDetails,
+        mut event_details: EventDetails,
         tag: Tag,
         user_log_message: String,
         underlying_error: Option<CommandError>,
         link: Option<Url>,
         hint_message: Option<String>,
     ) -> Self {
+        event_details.mut_to_error_stage();
         EngineError {
             event_details,
             tag,
