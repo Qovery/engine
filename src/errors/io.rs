@@ -1,4 +1,5 @@
 use crate::errors;
+use crate::events::EventDetails;
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
@@ -371,14 +372,17 @@ pub struct EngineError {
     hint_message: Option<String>,
 }
 
-impl From<errors::EngineError> for EngineError {
-    fn from(error: errors::EngineError) -> Self {
-        EngineError {
-            tag: Tag::from(error.tag),
-            user_log_message: error.user_log_message,
-            underlying_error: error.underlying_error.map(CommandError::from),
-            link: error.link.map(|url| url.to_string()),
-            hint_message: error.hint_message,
-        }
+impl EngineError {
+    pub fn from(error: errors::EngineError) -> (Self, EventDetails) {
+        (
+            EngineError {
+                tag: Tag::from(error.tag),
+                user_log_message: error.user_log_message,
+                underlying_error: error.underlying_error.map(CommandError::from),
+                link: error.link.map(|url| url.to_string()),
+                hint_message: error.hint_message,
+            },
+            error.event_details,
+        )
     }
 }

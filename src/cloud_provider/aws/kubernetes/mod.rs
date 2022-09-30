@@ -1209,19 +1209,6 @@ fn upgrade_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
     Ok(())
 }
 
-fn downgrade() -> Result<(), EngineError> {
-    Ok(())
-}
-
-fn downgrade_error(kubernetes: &dyn Kubernetes) -> Result<(), EngineError> {
-    kubernetes.logger().log(EngineEvent::Warning(
-        kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Downgrade)),
-        EventMessage::new_from_safe(format!("{}.downgrade_error() called.", kubernetes.kind())),
-    ));
-
-    Ok(())
-}
-
 fn pause(
     kubernetes: &dyn Kubernetes,
     template_directory: &str,

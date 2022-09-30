@@ -517,34 +517,6 @@ impl Kubernetes for EKS {
     }
 
     #[named]
-    fn on_downgrade(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Downgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, kubernetes::downgrade)
-    }
-
-    #[named]
-    fn on_downgrade_error(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Downgrade));
-        print_action(
-            self.cloud_provider_name(),
-            self.struct_name(),
-            function_name!(),
-            self.name(),
-            event_details,
-            self.logger(),
-        );
-        send_progress_on_long_task(self, Action::Create, || kubernetes::downgrade_error(self))
-    }
-
-    #[named]
     fn on_pause(&self) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         print_action(

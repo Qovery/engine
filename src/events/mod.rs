@@ -219,8 +219,6 @@ pub enum InfrastructureStep {
     RetrieveClusterConfig,
     /// RetrieveClusterResources: retrieving cluster resources
     RetrieveClusterResources,
-    /// UnderMigration: error migration hasn't been completed yet.
-    UnderMigration,
     /// Deployment has started. It is the first message sent by the engine.
     Start,
     /// Deployment is terminated. It is the terminal message sent by the engine
@@ -242,10 +240,8 @@ pub enum InfrastructureStep {
     Upgrade,
     /// Upgraded: cluster upgrade is ok.
     Upgraded,
-    /// Downgrade: downgrade a cluster.
-    Downgrade,
-    /// Downgraded: cluster downgrade is ok.
-    Downgraded,
+    /// UpgradedError: cluster upgrade is in error.
+    UpgradeError,
     /// Delete: delete a cluster.
     Delete,
     /// Deleted: cluster deletion is ok.
@@ -264,12 +260,11 @@ impl Display for InfrastructureStep {
                 InfrastructureStep::Create => "create",
                 InfrastructureStep::Pause => "pause",
                 InfrastructureStep::Upgrade => "upgrade",
-                InfrastructureStep::Downgrade => "downgrade",
                 InfrastructureStep::Delete => "delete",
                 InfrastructureStep::Created => "created",
                 InfrastructureStep::Paused => "paused",
                 InfrastructureStep::Upgraded => "upgraded",
-                InfrastructureStep::Downgraded => "downgraded",
+                InfrastructureStep::UpgradeError => "upgrade-error",
                 InfrastructureStep::Deleted => "deleted",
                 InfrastructureStep::CreateError => "create-error",
                 InfrastructureStep::PauseError => "pause-error",
@@ -278,7 +273,6 @@ impl Display for InfrastructureStep {
                 InfrastructureStep::ValidateSystemRequirements => "validate-system-requirements",
                 InfrastructureStep::RetrieveClusterConfig => "retrieve-cluster-config",
                 InfrastructureStep::RetrieveClusterResources => "retrieve-cluster-resources",
-                InfrastructureStep::UnderMigration => "under-migration",
                 InfrastructureStep::Start => "start",
                 InfrastructureStep::Terminated => "terminated",
             },
@@ -472,6 +466,35 @@ impl EventDetails {
             stage,
             transmitter,
         }
+    }
+
+    pub(super) fn mut_to_error_stage(&mut self) {
+        self.stage = match &self.stage {
+            Stage::Infrastructure(step) => match step {
+                InfrastructureStep::Create | InfrastructureStep::Created => {
+                    Stage::Infrastructure(InfrastructureStep::CreateError)
+                }
+                InfrastructureStep::Pause | InfrastructureStep::Paused => {
+                    Stage::Infrastructure(InfrastructureStep::PauseError)
+                }
+                InfrastructureStep::Upgrade | InfrastructureStep::Upgraded => {
+                    Stage::Infrastructure(InfrastructureStep::UpgradeError)
+                }
+                InfrastructureStep::Delete | InfrastructureStep::Deleted => {
+                    Stage::Infrastructure(InfrastructureStep::DeleteError)
+                }
+                _ => return,
+            },
+            Stage::Environment(step) => match step {
+                EnvironmentStep::Build | EnvironmentStep::Built => Stage::Environment(EnvironmentStep::BuiltError),
+                EnvironmentStep::Deploy | EnvironmentStep::Deployed => {
+                    Stage::Environment(EnvironmentStep::DeployedError)
+                }
+                EnvironmentStep::Pause | EnvironmentStep::Paused => Stage::Environment(EnvironmentStep::PausedError),
+                EnvironmentStep::Delete | EnvironmentStep::Deleted => Stage::Environment(EnvironmentStep::DeletedError),
+                _ => return,
+            },
+        };
     }
 
     /// TODO(benjaminch): remove this dirty hack
