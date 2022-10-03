@@ -87,6 +87,18 @@ pub struct ApplicationAdvancedSettings {
     pub network_ingress_cors_allow_methods: String,
     #[serde(alias = "network.ingress.cors_allowed_headers")]
     pub network_ingress_cors_allow_headers: String,
+    #[serde(alias = "network.ingress.keepalive_time_seconds")]
+    pub network_ingress_keepalive_time_seconds: u32,
+    #[serde(alias = "network.ingress.keepalive_timeout_seconds")]
+    pub network_ingress_keepalive_timeout_seconds: u32,
+    #[serde(alias = "network.ingress.send_timeout_seconds")]
+    pub network_ingress_send_timeout_seconds: u32,
+    #[serde(alias = "network.ingress.proxy_connect_timeout_seconds")]
+    pub network_ingress_proxy_connect_timeout_seconds: u32,
+    #[serde(alias = "network.ingress.proxy_send_timeout_seconds")]
+    pub network_ingress_proxy_send_timeout_seconds: u32,
+    #[serde(alias = "network.ingress.proxy_read_timeout_seconds")]
+    pub network_ingress_proxy_read_timeout_seconds: u32,
     #[serde(alias = "network.ingress.proxy_buffer_size_kb")]
     pub network_ingress_proxy_buffer_size_kb: u32,
     #[serde(alias = "network.ingress.whitelist_source_range")]
@@ -134,6 +146,12 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_cors_allow_origin: "*".to_string(),
             network_ingress_cors_allow_methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS".to_string(),
             network_ingress_cors_allow_headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization".to_string(),
+            network_ingress_keepalive_time_seconds: 3600,
+            network_ingress_keepalive_timeout_seconds: 60,
+            network_ingress_send_timeout_seconds: 60,
+            network_ingress_proxy_connect_timeout_seconds: 60,
+            network_ingress_proxy_send_timeout_seconds: 60,
+            network_ingress_proxy_read_timeout_seconds: 60,
             network_ingress_proxy_buffer_size_kb: 4,
             network_ingress_whitelist_source_range: "0.0.0.0/0".to_string(),
             readiness_probe_type: AdvancedSettingsProbeType::Tcp,

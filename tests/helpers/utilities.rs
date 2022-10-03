@@ -861,11 +861,11 @@ pub fn generate_cluster_id(region: &str) -> Uuid {
         Ok(current_name) => {
             let mut bytes: [u8; 16] = [0; 16];
             for byte in current_name.as_bytes() {
-                bytes[*byte as usize % 16] += byte;
+                bytes[*byte as usize % 16] = bytes[*byte as usize % 16].wrapping_add(*byte);
             }
 
             for byte in region.bytes() {
-                bytes[byte as usize % 16] += byte;
+                bytes[byte as usize % 16] = bytes[byte as usize % 16].wrapping_add(byte);
             }
             Uuid::from_bytes(bytes)
         }

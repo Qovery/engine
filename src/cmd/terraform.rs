@@ -249,6 +249,25 @@ impl TerraformError {
                 }
             }
         }
+        if let Ok(aws_quotas_exceeded_re) = Regex::new(
+            r"InvalidParameterException: Limit of (?P<max_resource_count>[\d]+) (?P<resource_type>[\w?\s]+) exceeded",
+        ) {
+            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str()) {
+                if let (Some(max_resource_count), Some(resource_type)) = (
+                    cap.name("max_resource_count")
+                        .map(|e| e.as_str().parse::<u32>().unwrap_or(0)),
+                    cap.name("resource_type").map(|e| e.as_str()),
+                ) {
+                    return TerraformError::QuotasExceeded {
+                        sub_type: QuotaExceededError::ResourceLimitExceeded {
+                            resource_type: resource_type.to_string(),
+                            max_resource_count: Some(max_resource_count),
+                        },
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
 
         // State issue
         // AWS
@@ -1248,6 +1267,16 @@ terraform {
                         max_resource_count: None,
                     },
                     raw_message: "AsgInstanceLaunchFailures: You've reached your quota for maximum Fleet Requests for this account. Launching EC2 instance failed.".to_string(),
+                },
+            },
+            TestCase {
+                input_raw_message: "InvalidParameterException: Limit of 30 nodegroups exceeded.",
+                expected_terraform_error: TerraformError::QuotasExceeded {
+                    sub_type: QuotaExceededError::ResourceLimitExceeded {
+                        resource_type: "nodegroups".to_string(),
+                        max_resource_count: Some(30),
+                    },
+                    raw_message: "InvalidParameterException: Limit of 30 nodegroups exceeded.".to_string(),
                 },
             },
         ];

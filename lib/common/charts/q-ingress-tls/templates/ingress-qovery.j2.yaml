@@ -47,9 +47,16 @@ metadata:
     nginx.ingress.kubernetes.io/session-cookie-expires: "85400" # 1 day
     nginx.ingress.kubernetes.io/session-cookie-samesite: "Lax"
     {%- endif %}
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "{{ advanced_settings.network_ingress_proxy_connect_timeout_seconds }}s"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "{{ advanced_settings.network_ingress_proxy_send_timeout_seconds }}s"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "{{ advanced_settings.network_ingress_proxy_read_timeout_seconds }}s"
     {%- if whitelist_source_range_enabled == true %}
     nginx.ingress.kubernetes.io/whitelist-source-range: "{{ advanced_settings.network_ingress_whitelist_source_range }}"
     {%- endif %}
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      send_timeout "{{ advanced_settings.network_ingress_send_timeout_seconds }}s";
+      keepalive_time "{{ advanced_settings.network_ingress_keepalive_time_seconds }}s";
+      keepalive_timeout "{{ advanced_settings.network_ingress_keepalive_timeout_seconds }}s";
 spec:
   tls:
     {%- if custom_domains|length > 0 %}

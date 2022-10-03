@@ -246,7 +246,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let database_port = 5432;
         let database_db_name = "postgres".to_string();
         let database_username = "superuser".to_string();
-        let database_password = generate_id();
+        let database_password = generate_id().to_string();
         environment.databases = vec![Database {
             kind: DatabaseKind::Postgresql,
             action: Action::Create,
@@ -289,7 +289,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                      "PG_HOST".to_string() => base64::encode(database_host.clone()),
                      "PG_PORT".to_string() => base64::encode(database_port.to_string()),
                      "PG_USERNAME".to_string() => base64::encode(database_username.clone()),
-                     "PG_PASSWORD".to_string() => base64::encode(database_password),
+                     "PG_PASSWORD".to_string() => base64::encode(database_password.clone()),
                 };
                 app
             })
