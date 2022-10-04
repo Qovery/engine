@@ -28,7 +28,6 @@ impl Display for QoveryStorageType {
 }
 
 pub struct QoveryStorageClassChart {
-    chart_name: String,
     chart_path: String,
     storage_types_to_be_checked_after_install: HashSet<QoveryStorageType>,
 }
@@ -38,12 +37,18 @@ impl QoveryStorageClassChart {
         chart_prefix_path: Option<&str>,
         storage_types_to_be_checked_after_install: HashSet<QoveryStorageType>,
     ) -> Self {
-        let chart_name = "q-storageclass".to_string();
         QoveryStorageClassChart {
-            chart_path: format!("{}/charts/{}", chart_prefix_path.unwrap_or("./"), chart_name),
-            chart_name,
+            chart_path: format!(
+                "{}/charts/{}",
+                chart_prefix_path.unwrap_or("./"),
+                QoveryStorageClassChart::chart_name()
+            ),
             storage_types_to_be_checked_after_install,
         }
+    }
+
+    fn chart_name() -> String {
+        "q-storageclass".to_string()
     }
 }
 
@@ -51,7 +56,7 @@ impl ToCommonHelmChart for QoveryStorageClassChart {
     fn to_common_helm_chart(&self) -> CommonChart {
         CommonChart {
             chart_info: ChartInfo {
-                name: self.chart_name.to_string(),
+                name: QoveryStorageClassChart::chart_name(),
                 path: self.chart_path.to_string(),
                 ..Default::default()
             },

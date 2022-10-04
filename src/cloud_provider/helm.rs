@@ -479,6 +479,7 @@ impl HelmChart for CommonChart {
     fn get_chart_info(&self) -> &ChartInfo {
         &self.chart_info
     }
+
     fn post_exec(
         &self,
         kube_client: &kube::Client,

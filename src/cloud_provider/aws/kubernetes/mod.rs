@@ -61,6 +61,7 @@ pub mod ec2;
 mod ec2_helm_charts;
 pub mod eks;
 pub mod eks_helm_charts;
+pub mod helm_charts;
 pub mod node;
 pub mod roles;
 mod vault;
