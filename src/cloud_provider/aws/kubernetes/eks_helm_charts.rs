@@ -115,7 +115,7 @@ pub fn eks_aws_helm_charts(
 
     // AWS CNI
     let aws_vpc_cni_chart = AwsVpcCniChart::new(
-        "1.1.16".to_string(),
+        "1.1.21".to_string(),
         chart_prefix_path,
         chart_config_prerequisites.region.to_string(),
         is_cni_old_version_installed(kubernetes_config, envs, HelmChartNamespaces::KubeSystem)?,
