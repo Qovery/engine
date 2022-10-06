@@ -12,6 +12,7 @@ use crate::cmd::helm_utils::CRDSUpdate;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 
+use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper::AwsIamEksUserMapperChart;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -122,52 +123,18 @@ pub fn eks_aws_helm_charts(
         chart_config_prerequisites.cluster_name.to_string(),
     );
 
-    let aws_iam_eks_user_mapper = CommonChart {
-        chart_info: ChartInfo {
-            name: "iam-eks-user-mapper".to_string(),
-            path: chart_path("charts/iam-eks-user-mapper"),
-            values: vec![
-                ChartSetValue {
-                    key: "aws.accessKey".to_string(),
-                    value: qovery_terraform_config.aws_iam_eks_user_mapper_key,
-                },
-                ChartSetValue {
-                    key: "aws.secretKey".to_string(),
-                    value: qovery_terraform_config.aws_iam_eks_user_mapper_secret,
-                },
-                ChartSetValue {
-                    key: "aws.region".to_string(),
-                    value: chart_config_prerequisites.region.clone(),
-                },
-                ChartSetValue {
-                    key: "syncIamGroup".to_string(),
-                    value: chart_config_prerequisites
-                        .cluster_advanced_settings
-                        .aws_iam_user_mapper_group_name
-                        .clone(),
-                },
-                // resources limits
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "20m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "10m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "32Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "32Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // AWS IAM EKS user mapper
+    let aws_iam_eks_user_mapper = AwsIamEksUserMapperChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.region.to_string(),
+        qovery_terraform_config.aws_iam_eks_user_mapper_key,
+        qovery_terraform_config.aws_iam_eks_user_mapper_secret,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .aws_iam_user_mapper_group_name
+            .to_string(),
+    )
+    .to_common_helm_chart();
 
     let aws_node_term_handler = CommonChart {
         chart_info: ChartInfo {
