@@ -15,8 +15,11 @@ use crate::deployment_report::execute_long_deployment;
 use crate::deployment_report::logger::get_loggers;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
+use crate::kubers_utils::kube_delete_all_from_selector;
 use crate::models::database::{Container, Database, DatabaseService, DatabaseType, Managed};
 use crate::models::types::{CloudProvider, ToTeraContext};
+use crate::runtime::block_on;
+use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::thread;
@@ -591,8 +594,24 @@ where
                 chart,
             );
 
-            helm.on_delete(target)
-            // FIXME delete pvc
+            helm.on_delete(target)?;
+
+            // TODO: Remove once we migrate to kube 1.23, it will done automatically
+            let logger = get_loggers(self, Action::Delete);
+            (logger.send_progress)("🪓 Terminating network volume of the database".to_string());
+            if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
+                &target.kube,
+                &format!("app={}", self.sanitized_name()), //FIXME: legacy labels ;(
+                target.environment.namespace(),
+            )) {
+                return Err(EngineError::new_k8s_cannot_delete_pvcs(
+                    event_details.clone(),
+                    self.selector(),
+                    CommandError::new_from_safe_message(err.to_string()),
+                ));
+            }
+
+            Ok(())
         })
     }
 }
