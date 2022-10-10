@@ -151,6 +151,9 @@ spec:
               value: "false"
             - name: UPTIME_FROM_FILE
               value: {{ .Values.procUptimeFile | quote }}
+            {{- with .Values.extraEnv }}
+              {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- if or .Values.enablePrometheusServer .Values.enableProbesServer }}
           ports:
           {{- if .Values.enableProbesServer }}
