@@ -12,7 +12,8 @@ use crate::cmd::helm_utils::CRDSUpdate;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 
-use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper::AwsIamEksUserMapperChart;
+use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper_chart::AwsIamEksUserMapperChart;
+use crate::cloud_provider::aws::kubernetes::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -136,48 +137,8 @@ pub fn eks_aws_helm_charts(
     )
     .to_common_helm_chart();
 
-    let aws_node_term_handler = CommonChart {
-        chart_info: ChartInfo {
-            name: "aws-node-term-handler".to_string(),
-            path: chart_path("charts/aws-node-termination-handler"),
-            values: vec![
-                ChartSetValue {
-                    key: "nameOverride".to_string(),
-                    value: "aws-node-term-handler".to_string(),
-                },
-                ChartSetValue {
-                    key: "fullnameOverride".to_string(),
-                    value: "aws-node-term-handler".to_string(),
-                },
-                ChartSetValue {
-                    key: "enableSpotInterruptionDraining".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "enableScheduledEventDraining".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "deleteLocalData".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "ignoreDaemonSets".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "podTerminationGracePeriod".to_string(),
-                    value: "300".to_string(),
-                },
-                ChartSetValue {
-                    key: "nodeTerminationGracePeriod".to_string(),
-                    value: "120".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // AWS nodes term handler
+    let aws_node_term_handler = AwsNodeTermHandlerChart::new(chart_prefix_path).to_common_helm_chart();
 
     let aws_ui_view = CommonChart {
         chart_info: ChartInfo {
