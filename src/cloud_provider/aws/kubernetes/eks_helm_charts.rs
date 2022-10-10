@@ -14,6 +14,7 @@ use crate::errors::CommandError;
 
 use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper_chart::AwsIamEksUserMapperChart;
 use crate::cloud_provider::aws::kubernetes::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
+use crate::cloud_provider::aws::kubernetes::helm_charts::aws_ui_view_chart::AwsUiViewChart;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -140,15 +141,8 @@ pub fn eks_aws_helm_charts(
     // AWS nodes term handler
     let aws_node_term_handler = AwsNodeTermHandlerChart::new(chart_prefix_path).to_common_helm_chart();
 
-    let aws_ui_view = CommonChart {
-        chart_info: ChartInfo {
-            name: "aws-ui-view".to_string(),
-            path: chart_path("charts/aws-ui-view"),
-            namespace: HelmChartNamespaces::KubeSystem,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // AWS UI view
+    let aws_ui_view = AwsUiViewChart::new(chart_prefix_path).to_common_helm_chart();
 
     let cluster_autoscaler = CommonChart {
         chart_info: ChartInfo {
