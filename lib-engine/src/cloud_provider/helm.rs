@@ -6,14 +6,10 @@ use crate::cmd::helm_utils::{
     apply_chart_backup, delete_unused_chart_backup, prepare_chart_backup_on_upgrade, update_crds_on_upgrade,
     BackupStatus, CRDSUpdate,
 };
-use crate::cmd::kubectl::{
-    kubectl_delete_crash_looping_pods, kubectl_exec_delete_crd, kubectl_exec_get_configmap, kubectl_exec_get_events,
-    kubectl_exec_rollout_restart_deployment, kubectl_exec_with_output,
-};
+use crate::cmd::kubectl::{kubectl_delete_crash_looping_pods, kubectl_exec_delete_crd, kubectl_exec_get_events};
 use crate::cmd::structs::HelmHistoryRow;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::{CommandError, ErrorMessageVerbosity};
-use crate::utilities::calculate_hash;
 
 use semver::Version;
 use std::collections::HashMap;
@@ -479,6 +475,16 @@ pub struct ChartPayload {
     data: HashMap<String, String>,
 }
 
+impl ChartPayload {
+    pub fn new(data: HashMap<String, String>) -> ChartPayload {
+        ChartPayload { data }
+    }
+
+    pub fn data(&self) -> &HashMap<String, String> {
+        &self.data
+    }
+}
+
 impl HelmChart for CommonChart {
     fn get_chart_info(&self) -> &ChartInfo {
         &self.chart_info
@@ -499,203 +505,6 @@ impl HelmChart for CommonChart {
             // If no checker set, then consider it's ok
             None => Ok(payload),
         }
-    }
-}
-
-// CoreDNS config
-#[derive(Default)]
-pub struct CoreDNSConfigChart {
-    pub chart_info: ChartInfo,
-}
-
-impl HelmChart for CoreDNSConfigChart {
-    fn get_chart_info(&self) -> &ChartInfo {
-        &self.chart_info
-    }
-
-    fn pre_exec(
-        &self,
-        kubernetes_config: &Path,
-        envs: &[(String, String)],
-        _payload: Option<ChartPayload>,
-    ) -> Result<Option<ChartPayload>, CommandError> {
-        let kind = "configmap";
-        let mut environment_variables: Vec<(&str, &str)> = envs.iter().map(|x| (x.0.as_str(), x.1.as_str())).collect();
-        environment_variables.push(("KUBECONFIG", kubernetes_config.to_str().unwrap()));
-
-        let chart_infos = self.get_chart_info();
-
-        // Cleaning any existing crash looping pod for this helm chart
-        if let Some(selector) = self.get_selector() {
-            kubectl_delete_crash_looping_pods(
-                &kubernetes_config,
-                Some(chart_infos.get_namespace_string().as_str()),
-                Some(selector.as_str()),
-                environment_variables.clone(),
-            )?;
-        }
-
-        // calculate current configmap checksum
-        let current_configmap_hash = match kubectl_exec_get_configmap(
-            &kubernetes_config,
-            &self.chart_info.get_namespace_string(),
-            &self.chart_info.name,
-            environment_variables.clone(),
-        ) {
-            Ok(cm) => {
-                if cm.data.corefile.is_none() {
-                    return Err(CommandError::new_from_safe_message(
-                        "Corefile data structure is not found in CoreDNS configmap".to_string(),
-                    ));
-                };
-                calculate_hash(&cm.data.corefile.unwrap())
-            }
-            Err(e) => return Err(e),
-        };
-        let mut configmap_hash = HashMap::new();
-        configmap_hash.insert("checksum".to_string(), current_configmap_hash.to_string());
-        let payload = ChartPayload { data: configmap_hash };
-
-        // set labels and annotations to give helm ownership
-        info!("setting annotations and labels on {}/{}", &kind, &self.chart_info.name);
-        let steps = || -> Result<(), CommandError> {
-            kubectl_exec_with_output(
-                vec![
-                    "-n",
-                    "kube-system",
-                    "annotate",
-                    "--overwrite",
-                    kind,
-                    &self.chart_info.name,
-                    format!("meta.helm.sh/release-name={}", self.chart_info.name).as_str(),
-                ],
-                environment_variables.clone(),
-                &mut |_| {},
-                &mut |_| {},
-            )?;
-            kubectl_exec_with_output(
-                vec![
-                    "-n",
-                    "kube-system",
-                    "annotate",
-                    "--overwrite",
-                    kind,
-                    &self.chart_info.name,
-                    "meta.helm.sh/release-namespace=kube-system",
-                ],
-                environment_variables.clone(),
-                &mut |_| {},
-                &mut |_| {},
-            )?;
-            kubectl_exec_with_output(
-                vec![
-                    "-n",
-                    "kube-system",
-                    "label",
-                    "--overwrite",
-                    kind,
-                    &self.chart_info.name,
-                    "app.kubernetes.io/managed-by=Helm",
-                ],
-                environment_variables.clone(),
-                &mut |_| {},
-                &mut |_| {},
-            )?;
-            Ok(())
-        };
-        steps()?;
-        Ok(Some(payload))
-    }
-
-    fn run(
-        &self,
-        kube_client: &kube::Client,
-        kubernetes_config: &Path,
-        envs: &[(String, String)],
-    ) -> Result<Option<ChartPayload>, CommandError> {
-        info!("prepare and deploy chart {}", &self.get_chart_info().name);
-        self.check_prerequisites()?;
-        let payload = match self.pre_exec(kubernetes_config, envs, None) {
-            Ok(p) => match p {
-                None => {
-                    return Err(CommandError::new_from_safe_message(
-                        "CoreDNS configmap checksum couldn't be get, can't deploy CoreDNS chart".to_string(),
-                    ))
-                }
-                Some(p) => p,
-            },
-            Err(e) => return Err(e),
-        };
-        if let Err(e) = self.exec(kubernetes_config, envs, None) {
-            error!(
-                "Error while deploying chart: {:?}",
-                e.message(ErrorMessageVerbosity::FullDetails)
-            );
-            self.on_deploy_failure(kubernetes_config, envs, None)?;
-            return Err(e);
-        };
-        self.post_exec(kube_client, kubernetes_config, envs, Some(payload))?;
-        Ok(None)
-    }
-
-    fn post_exec(
-        &self,
-        _kube_client: &kube::Client,
-        kubernetes_config: &Path,
-        envs: &[(String, String)],
-        payload: Option<ChartPayload>,
-    ) -> Result<Option<ChartPayload>, CommandError> {
-        let mut environment_variables = Vec::new();
-        for env in envs {
-            environment_variables.push((env.0.as_str(), env.1.as_str()));
-        }
-
-        // detect configmap data change
-        let previous_configmap_checksum = match &payload {
-            None => {
-                return Err(CommandError::new_from_safe_message(
-                    "Missing payload, can't check coredns update".to_string(),
-                ))
-            }
-            Some(x) => match x.data.get("checksum") {
-                None => {
-                    return Err(CommandError::new_from_safe_message(
-                        "Missing configmap checksum, can't check coredns diff".to_string(),
-                    ))
-                }
-                Some(c) => c.clone(),
-            },
-        };
-        let current_configmap_checksum = match kubectl_exec_get_configmap(
-            &kubernetes_config,
-            &self.chart_info.get_namespace_string(),
-            &self.chart_info.name,
-            environment_variables.clone(),
-        ) {
-            Ok(cm) => {
-                if cm.data.corefile.is_none() {
-                    return Err(CommandError::new_from_safe_message(
-                        "Corefile data structure is not found in CoreDNS configmap".to_string(),
-                    ));
-                };
-                calculate_hash(&cm.data.corefile.unwrap()).to_string()
-            }
-            Err(e) => return Err(e),
-        };
-        if previous_configmap_checksum == current_configmap_checksum {
-            info!("no coredns config change detected, nothing to restart");
-            return Ok(None);
-        }
-
-        // avoid rebooting coredns on every run
-        info!("coredns config change detected, proceed to config reload");
-        kubectl_exec_rollout_restart_deployment(
-            kubernetes_config,
-            &self.chart_info.name,
-            self.namespace().as_str(),
-            &environment_variables,
-        )?;
-        Ok(None)
     }
 }
 
