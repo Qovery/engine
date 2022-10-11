@@ -20,6 +20,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 
+use crate::cmd::command::CommandKiller;
 use std::{fs, thread};
 use uuid::Uuid;
 
@@ -286,7 +287,10 @@ pub trait HelmChart: Send {
                 update_crds_on_upgrade(kubernetes_config, chart_info.clone(), environment_variables.as_slice(), &helm)
                     .map_err(to_command_error)?;
 
-                match helm.upgrade(chart_info, &[]).map_err(to_command_error) {
+                match helm
+                    .upgrade(chart_info, &[], &CommandKiller::never())
+                    .map_err(to_command_error)
+                {
                     Ok(_) => {
                         if upgrade_status.is_backupable {
                             if let Err(e) = apply_chart_backup(

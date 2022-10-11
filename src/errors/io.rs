@@ -94,6 +94,7 @@ pub enum Tag {
     CloudProviderClientInvalidCredentials,
     VersionNumberParsingError,
     NotImplementedError,
+    TaskCancelled,
     BuilderError,
     BuilderDockerCannotFindAnyDockerfile,
     BuilderDockerCannotReadDockerfile,
@@ -259,7 +260,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CloudProviderClientInvalidCredentials => Tag::CloudProviderClientInvalidCredentials,
             errors::Tag::VersionNumberParsingError => Tag::VersionNumberParsingError,
             errors::Tag::NotImplementedError => Tag::NotImplementedError,
-            errors::Tag::TaskCancellationRequested => Tag::CannotPauseClusterTasksAreRunning,
+            errors::Tag::TaskCancellationRequested => Tag::TaskCancelled,
             errors::Tag::BuilderDockerCannotFindAnyDockerfile => Tag::BuilderDockerCannotFindAnyDockerfile,
             errors::Tag::BuilderDockerCannotReadDockerfile => Tag::BuilderDockerCannotReadDockerfile,
             errors::Tag::BuilderDockerCannotExtractEnvVarsFromDockerfile => {

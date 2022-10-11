@@ -106,17 +106,7 @@ where
                         path,
                     });
                 }
-                Err(e) => {
-                    return Err(CmdError(
-                        chart.name.clone(),
-                        HelmCommand::UPGRADE,
-                        CommandError::new(
-                            format!("Error while creating YAML backup file for {}.", backup.name),
-                            Some(e.to_string()),
-                            None,
-                        ),
-                    ))
-                }
+                Err(e) => return Err(CmdError(chart.name.clone(), HelmCommand::UPGRADE, e)),
             }
         }
     }

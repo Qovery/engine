@@ -313,11 +313,16 @@ impl<'a> Transaction<'a> {
                             .kubernetes()
                             .get_event_details(Stage::Environment(EnvironmentStep::Deploy));
 
-                        let mut env_deployment = EnvironmentDeployment::new(self.engine, qe_env, event_details)
-                            .map_err(|err| {
-                                error!("Error while creating environment: {:?}", err);
-                                (HashSet::new(), err)
-                            })?;
+                        let mut env_deployment = EnvironmentDeployment::new(
+                            self.engine,
+                            qe_env,
+                            event_details,
+                            &self.is_transaction_aborted,
+                        )
+                        .map_err(|err| {
+                            error!("Error while creating environment: {:?}", err);
+                            (HashSet::new(), err)
+                        })?;
 
                         env_deployment.on_create().map_err(|err| {
                             error!("Error while deploying environment: {:?}", err);
@@ -343,11 +348,16 @@ impl<'a> Transaction<'a> {
                             .kubernetes()
                             .get_event_details(Stage::Environment(EnvironmentStep::Pause));
 
-                        let mut env_deployment = EnvironmentDeployment::new(self.engine, qe_env, event_details)
-                            .map_err(|err| {
-                                error!("Error while creating environment: {:?}", err);
-                                (HashSet::new(), err)
-                            })?;
+                        let mut env_deployment = EnvironmentDeployment::new(
+                            self.engine,
+                            qe_env,
+                            event_details,
+                            &self.is_transaction_aborted,
+                        )
+                        .map_err(|err| {
+                            error!("Error while creating environment: {:?}", err);
+                            (HashSet::new(), err)
+                        })?;
 
                         env_deployment.on_pause().map_err(|err| {
                             error!("Error while pausing environment: {:?}", err);
@@ -373,11 +383,16 @@ impl<'a> Transaction<'a> {
                             .kubernetes()
                             .get_event_details(Stage::Environment(EnvironmentStep::Delete));
 
-                        let mut env_deployment = EnvironmentDeployment::new(self.engine, qe_env, event_details)
-                            .map_err(|err| {
-                                error!("Error while creating environment: {:?}", err);
-                                (HashSet::new(), err)
-                            })?;
+                        let mut env_deployment = EnvironmentDeployment::new(
+                            self.engine,
+                            qe_env,
+                            event_details,
+                            &self.is_transaction_aborted,
+                        )
+                        .map_err(|err| {
+                            error!("Error while creating environment: {:?}", err);
+                            (HashSet::new(), err)
+                        })?;
 
                         env_deployment.on_delete().map_err(|err| {
                             error!("Error while deleting environment: {:?}", err);
@@ -426,11 +441,16 @@ impl<'a> Transaction<'a> {
     {
         // send back the right progress status
         if let Err((deployed_services, err)) = action_fn(environment) {
-            let rollback_result = match self.rollback() {
-                Ok(_) => TransactionResult::Error(Box::new(err)),
-                Err(rollback_err) => {
-                    error!("ROLLBACK FAILED! fatal error: {:?}", rollback_err);
-                    TransactionResult::Error(Box::new(err))
+            let to_stage = |action: &Action| -> Stage {
+                if err.tag().is_cancel() {
+                    return Stage::Environment(EnvironmentStep::Cancelled);
+                }
+
+                match action {
+                    Action::Create => Stage::Environment(EnvironmentStep::DeployedError),
+                    Action::Pause => Stage::Environment(EnvironmentStep::PausedError),
+                    Action::Delete => Stage::Environment(EnvironmentStep::DeletedError),
+                    Action::Nothing => Stage::Environment(EnvironmentStep::DeployedError),
                 }
             };
 
@@ -440,21 +460,37 @@ impl<'a> Transaction<'a> {
                 if deployed_services.contains(service.long_id()) {
                     continue;
                 }
+                service.logger().log(EngineEvent::Info(
+                    service.get_event_details(to_stage(service.action())),
+                    EventMessage::new_from_safe("".to_string()),
+                ));
             }
 
             for service in &environment.applications {
                 if deployed_services.contains(service.long_id()) {
                     continue;
                 }
+                service.logger().log(EngineEvent::Info(
+                    service.get_event_details(to_stage(service.action())),
+                    EventMessage::new_from_safe("".to_string()),
+                ));
             }
 
             for service in &environment.routers {
                 if deployed_services.contains(service.long_id()) {
                     continue;
                 }
+                service.logger().log(EngineEvent::Info(
+                    service.get_event_details(to_stage(service.action())),
+                    EventMessage::new_from_safe("".to_string()),
+                ));
             }
 
-            return rollback_result;
+            return if err.tag().is_cancel() {
+                TransactionResult::Canceled
+            } else {
+                TransactionResult::Error(Box::new(err))
+            };
         };
 
         TransactionResult::Ok
@@ -485,9 +521,9 @@ impl StepName {
             StepName::CreateKubernetes => false,
             StepName::DeleteKubernetes => false,
             StepName::PauseKubernetes => false,
-            StepName::DeployEnvironment => false,
-            StepName::PauseEnvironment => false,
-            StepName::DeleteEnvironment => false,
+            StepName::DeployEnvironment => true,
+            StepName::PauseEnvironment => true,
+            StepName::DeleteEnvironment => true,
             StepName::BuildEnvironment => true,
             StepName::Waiting => true,
         }

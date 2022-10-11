@@ -497,6 +497,13 @@ impl EventDetails {
         };
     }
 
+    pub(super) fn mut_to_cancel_stage(&mut self) {
+        // We don't support cancel for infrastructure
+        if let Stage::Environment(_) = &self.stage {
+            self.stage = Stage::Environment(EnvironmentStep::Cancelled)
+        }
+    }
+
     /// TODO(benjaminch): remove this dirty hack
     pub fn clone_changing_stage(event_details: EventDetails, stage: Stage) -> Self {
         let mut event_details = event_details;
