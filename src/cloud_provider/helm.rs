@@ -14,12 +14,13 @@ use crate::cmd::structs::HelmHistoryRow;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::{CommandError, ErrorMessageVerbosity};
 use crate::utilities::calculate_hash;
+
 use semver::Version;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
+
 use std::{fs, thread};
-use thread::spawn;
 use uuid::Uuid;
 
 #[derive(Clone, PartialEq, Eq)]
@@ -90,7 +91,6 @@ pub struct ChartInfo {
     pub k8s_selector: Option<String>,
     pub backup_resources: Option<Vec<String>>,
     pub crds_update: Option<CRDSUpdate>,
-    pub verify: Option<Result<(), CommandError>>,
 }
 
 impl ChartInfo {
@@ -163,7 +163,6 @@ impl Default for ChartInfo {
             k8s_selector: None,
             backup_resources: None,
             crds_update: None,
-            verify: None,
         }
     }
 }
@@ -212,7 +211,12 @@ pub trait HelmChart: Send {
         Ok(payload)
     }
 
-    fn run(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<Option<ChartPayload>, CommandError> {
+    fn run(
+        &self,
+        kube_client: &kube::Client,
+        kubernetes_config: &Path,
+        envs: &[(String, String)],
+    ) -> Result<Option<ChartPayload>, CommandError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         let payload = self.check_prerequisites()?;
         let payload = self.pre_exec(kubernetes_config, envs, payload)?;
@@ -224,7 +228,7 @@ pub trait HelmChart: Send {
                 return Err(e);
             }
         };
-        let payload = self.post_exec(kubernetes_config, envs, payload)?;
+        let payload = self.post_exec(kube_client, kubernetes_config, envs, payload)?;
         Ok(payload)
     }
 
@@ -331,6 +335,7 @@ pub trait HelmChart: Send {
 
     fn post_exec(
         &self,
+        _kube_client: &kube::Client,
         _kubernetes_config: &Path,
         _envs: &[(String, String)],
         payload: Option<ChartPayload>,
@@ -362,59 +367,64 @@ pub trait HelmChart: Send {
 }
 
 fn deploy_parallel_charts(
+    kube_client: &kube::Client,
     kubernetes_config: &Path,
     envs: &[(String, String)],
     charts: Vec<Box<dyn HelmChart>>,
 ) -> Result<(), CommandError> {
-    let mut handles = vec![];
+    thread::scope(|s| {
+        let mut handles = vec![];
 
-    for chart in charts.into_iter() {
-        let environment_variables = envs.to_owned();
-        let path = kubernetes_config.to_path_buf();
-        let current_span = tracing::Span::current();
-        let handle = spawn(move || {
-            // making sure to pass the current span to the new thread not to lose any tracing info
-            let _ = current_span.enter();
-            chart.run(path.as_path(), &environment_variables)
-        });
-        handles.push(handle);
-    }
+        for chart in charts.into_iter() {
+            let environment_variables = envs.to_owned();
+            let path = kubernetes_config.to_path_buf();
+            let current_span = tracing::Span::current();
+            let handle = s.spawn(move || {
+                // making sure to pass the current span to the new thread not to lose any tracing info
+                let _ = current_span.enter();
+                chart.run(kube_client, path.as_path(), &environment_variables)
+            });
 
-    let mut errors: Vec<Result<(), CommandError>> = vec![];
-    for handle in handles {
-        match handle.join() {
-            Ok(helm_run_ret) => {
-                if let Err(e) = helm_run_ret {
-                    errors.push(Err(e));
+            handles.push(handle);
+        }
+
+        let mut errors: Vec<Result<(), CommandError>> = vec![];
+        for handle in handles {
+            match handle.join() {
+                Ok(helm_run_ret) => {
+                    if let Err(e) = helm_run_ret {
+                        errors.push(Err(e));
+                    }
+                }
+                Err(e) => {
+                    let err = match e.downcast_ref::<&'static str>() {
+                        None => match e.downcast_ref::<String>() {
+                            None => "Unable to get error.",
+                            Some(s) => s.as_str(),
+                        },
+                        Some(s) => *s,
+                    };
+                    let error = Err(CommandError::new(
+                        "Thread panicked during parallel charts deployments.".to_string(),
+                        Some(err.to_string()),
+                        None,
+                    ));
+                    errors.push(error);
                 }
             }
-            Err(e) => {
-                let err = match e.downcast_ref::<&'static str>() {
-                    None => match e.downcast_ref::<String>() {
-                        None => "Unable to get error.",
-                        Some(s) => s.as_str(),
-                    },
-                    Some(s) => *s,
-                };
-                let error = Err(CommandError::new(
-                    "Thread panicked during parallel charts deployments.".to_string(),
-                    Some(err.to_string()),
-                    None,
-                ));
-                errors.push(error);
-            }
         }
-    }
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        error!("Deployments of charts failed with: {:?}", errors);
-        errors.remove(0)
-    }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            error!("Deployments of charts failed with: {:?}", errors);
+            errors.remove(0)
+        }
+    })
 }
 
 pub fn deploy_charts_levels(
+    kube_client: &kube::Client,
     kubernetes_config: &Path,
     envs: &[(String, String)],
     charts: Vec<Vec<Box<dyn HelmChart>>>,
@@ -439,7 +449,7 @@ pub fn deploy_charts_levels(
             continue;
         }
 
-        deploy_parallel_charts(kubernetes_config, envs, level)?
+        deploy_parallel_charts(kube_client, kubernetes_config, envs, level)?
     }
 
     Ok(())
@@ -449,9 +459,14 @@ pub fn deploy_charts_levels(
 // Common charts
 //
 
-#[derive(Default, Clone)]
+pub trait ChartInstallationChecker: Send {
+    fn verify_installation(&self, kube_client: &kube::Client) -> Result<(), CommandError>;
+}
+
+#[derive(Default)]
 pub struct CommonChart {
     pub chart_info: ChartInfo,
+    pub chart_installation_checker: Option<Box<dyn ChartInstallationChecker>>,
 }
 
 /// using ChartPayload to pass random kind of data between each deployment steps against a chart deployment
@@ -464,18 +479,21 @@ impl HelmChart for CommonChart {
     fn get_chart_info(&self) -> &ChartInfo {
         &self.chart_info
     }
+
     fn post_exec(
         &self,
+        kube_client: &kube::Client,
         _kubernetes_config: &Path,
         _envs: &[(String, String)],
         payload: Option<ChartPayload>,
     ) -> Result<Option<ChartPayload>, CommandError> {
-        match &self.get_chart_info().verify {
-            None => Ok(payload),
-            Some(check) => match check {
+        match &self.chart_installation_checker {
+            Some(checker) => match checker.verify_installation(kube_client) {
                 Ok(_) => Ok(payload),
-                Err(e) => Err(e.clone()),
+                Err(e) => Err(e),
             },
+            // If no checker set, then consider it's ok
+            None => Ok(payload),
         }
     }
 }
@@ -585,7 +603,12 @@ impl HelmChart for CoreDNSConfigChart {
         Ok(Some(payload))
     }
 
-    fn run(&self, kubernetes_config: &Path, envs: &[(String, String)]) -> Result<Option<ChartPayload>, CommandError> {
+    fn run(
+        &self,
+        kube_client: &kube::Client,
+        kubernetes_config: &Path,
+        envs: &[(String, String)],
+    ) -> Result<Option<ChartPayload>, CommandError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         self.check_prerequisites()?;
         let payload = match self.pre_exec(kubernetes_config, envs, None) {
@@ -607,12 +630,13 @@ impl HelmChart for CoreDNSConfigChart {
             self.on_deploy_failure(kubernetes_config, envs, None)?;
             return Err(e);
         };
-        self.post_exec(kubernetes_config, envs, Some(payload))?;
+        self.post_exec(kube_client, kubernetes_config, envs, Some(payload))?;
         Ok(None)
     }
 
     fn post_exec(
         &self,
+        _kube_client: &kube::Client,
         kubernetes_config: &Path,
         envs: &[(String, String)],
         payload: Option<ChartPayload>,
@@ -737,7 +761,7 @@ pub fn get_chart_for_shell_agent(
                 },
                 ChartSetValue {
                     key: "environmentVariables.RUST_LOG".to_string(),
-                    value: "DEBUG".to_string(),
+                    value: "h2::codec::framed_write=INFO,DEBUG".to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.GRPC_SERVER".to_string(),
@@ -758,6 +782,7 @@ pub fn get_chart_for_shell_agent(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     // resources limits
@@ -837,7 +862,7 @@ pub fn get_chart_for_cluster_agent(
                 },
                 ChartSetValue {
                     key: "environmentVariables.RUST_LOG".to_string(),
-                    value: "DEBUG".to_string(),
+                    value: "h2::codec::framed_write=INFO,DEBUG".to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.GRPC_SERVER".to_string(),
@@ -858,6 +883,7 @@ pub fn get_chart_for_cluster_agent(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     // If log history is enabled, add the loki url to the values
@@ -935,6 +961,7 @@ pub fn get_chart_for_cert_manager_config(
             ],
             ..Default::default()
         },
+        ..Default::default()
     };
 
     // add specific provider config

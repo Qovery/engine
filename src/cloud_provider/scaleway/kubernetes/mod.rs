@@ -926,6 +926,7 @@ impl Kapsule {
         .map_err(|e| EngineError::new_helm_charts_setup_error(event_details.clone(), e))?;
 
         deploy_charts_levels(
+            &self.kube_client()?,
             kubeconfig_path,
             &credentials_environment_variables,
             helm_charts_to_deploy,

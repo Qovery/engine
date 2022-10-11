@@ -54,7 +54,7 @@ pub fn to_short_id(id: &Uuid) -> String {
     format!("z{}", id.to_string().split_at(8).0)
 }
 
-pub async fn get_kube_client<P: AsRef<Path>>(
+pub async fn create_kube_client<P: AsRef<Path>>(
     kubeconfig_path: P,
     envs: &[(String, String)],
 ) -> Result<kube::Client, kube::Error> {

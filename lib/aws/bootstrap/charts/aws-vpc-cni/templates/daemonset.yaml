@@ -110,6 +110,9 @@ spec:
             name: run-dir
           - mountPath: /run/xtables.lock
             name: xtables-lock
+          {{- with .Values.extraVolumeMounts  }}
+          {{- toYaml .| nindent 10 }}
+          {{- end }}
       volumes:
       - name: cni-bin-dir
         hostPath:
@@ -142,6 +145,9 @@ spec:
       - name: xtables-lock
         hostPath:
           path: /run/xtables.lock
+      {{- with .Values.extraVolumes  }}
+      {{- toYaml .| nindent 6 }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

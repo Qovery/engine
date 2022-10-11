@@ -8,7 +8,7 @@ nameOverride: aws-node
 
 init:
   image:
-    tag: v1.11.0
+    tag: v1.11.4
     region: us-west-2
     account: "602401143452"   
     pullPolicy: Always
@@ -23,7 +23,7 @@ init:
 
 image:
   region: us-west-2
-  tag: v1.11.0
+  tag: v1.11.4
   account: "602401143452"   
   domain: "amazonaws.com"  
   pullPolicy: Always
@@ -116,7 +116,7 @@ readinessProbeTimeoutSeconds: 10
 
 resources:
   requests:
-    cpu: 10m
+    cpu: 25m
 
 updateStrategy:
   type: RollingUpdate
