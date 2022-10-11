@@ -1,5 +1,6 @@
 use crate::cloud_provider::helm::ChartInfo;
 use crate::cloud_provider::DeploymentTarget;
+use crate::cmd::command::CommandKiller;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
 use crate::events::EventDetails;
@@ -88,7 +89,7 @@ impl DeploymentAction for HelmDeployment {
         //upgrade
         target
             .helm
-            .upgrade(&self.helm_chart, &[])
+            .upgrade(&self.helm_chart, &[], &CommandKiller::from_cancelable(target.should_abort))
             .map_err(|e| EngineError::new_helm_error(self.event_details.clone(), e))
     }
 

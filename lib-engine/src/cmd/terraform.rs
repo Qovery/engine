@@ -999,6 +999,7 @@ mod tests {
     };
     use std::fs;
     use std::process::Child;
+
     use tracing::{span, Level};
     use tracing_test::traced_test;
 
@@ -1014,7 +1015,7 @@ mod tests {
             vec![]
         }
 
-        fn kill(_cmd_handle: &mut Child) {
+        fn kill(&self, _cmd_handle: &mut Child) {
             todo!()
         }
 

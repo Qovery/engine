@@ -461,7 +461,12 @@ impl Task for EnvironmentTask {
 
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::Cancel),
-                    EventMessage::new("Cancel request received, aborting the deployment".to_string(), None),
+                    EventMessage::new(r#"
+                    🚫 Cancel received, deployment is going to stop.
+                    This may take a while, as a safe point need to be reached.
+                    Some operation cannot be stopped (i.e: terraform actions) and need to be completed before stopping the deployment
+                    "#.trim().to_string()
+                        , None),
                 ));
                 return true;
             }

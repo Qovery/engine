@@ -51,6 +51,18 @@ impl DeploymentReporter for RouterDeploymentReporter {
             Err(err) => err,
         };
 
+        if error.tag().is_cancel() {
+            (self.send_error)(EngineError::new_engine_error(
+                error.clone(),
+                r#"
+                🚫 Deployment has been cancelled. Router has been rollback to previous version if rollout was on-going
+                "#
+                .trim()
+                .to_string(),
+                None,
+            ));
+            return;
+        }
         (self.send_error)(error.clone());
         (self.send_error)(EngineError::new_engine_error(
             error.clone(),

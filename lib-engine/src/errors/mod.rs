@@ -11,6 +11,7 @@ use crate::cmd::helm::HelmError;
 use crate::cmd::terraform::{QuotaExceededError, TerraformError};
 use crate::container_registry::errors::ContainerRegistryError;
 
+use crate::cmd::command;
 use crate::events::{EventDetails, Stage};
 use crate::models::types::VersionsNumber;
 use crate::object_storage::errors::ObjectStorageError;
@@ -42,6 +43,12 @@ pub struct CommandError {
     /// env_vars field is ignored from any wild Debug printing because of it touchy data it carries.
     #[derivative(Debug = "ignore")]
     env_vars: Option<Vec<(String, String)>>,
+}
+
+impl From<command::CommandError> for CommandError {
+    fn from(err: command::CommandError) -> Self {
+        CommandError::new(err.to_string(), None, None)
+    }
 }
 
 impl CommandError {
@@ -809,6 +816,12 @@ pub enum Tag {
     ObjectStorageCannotGetObjectFile,
 }
 
+impl Tag {
+    pub fn is_cancel(&self) -> bool {
+        matches!(self, Tag::TaskCancellationRequested)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 /// EngineError: represents an engine error. Engine will always returns such errors carrying context infos easing monitoring and debugging.
 pub struct EngineError {
@@ -883,7 +896,12 @@ impl EngineError {
         link: Option<Url>,
         hint_message: Option<String>,
     ) -> Self {
-        event_details.mut_to_error_stage();
+        if tag.is_cancel() {
+            event_details.mut_to_cancel_stage()
+        } else {
+            event_details.mut_to_error_stage()
+        }
+
         EngineError {
             event_details,
             tag,
@@ -2615,6 +2633,7 @@ impl EngineError {
     /// * `error`: Raw error message.
     pub fn new_helm_error(event_details: EventDetails, error: HelmError) -> EngineError {
         let cmd_error = match &error {
+            HelmError::Killed(_, _) => return EngineError::new_task_cancellation_requested(event_details),
             HelmError::CmdError(_, _, cmd_error) => Some(cmd_error.clone()),
             _ => None,
         };

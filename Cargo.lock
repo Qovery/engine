@@ -3233,6 +3233,7 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "lazy_static",
+ "libc",
  "maplit",
  "passwords",
  "rand 0.8.5",

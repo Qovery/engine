@@ -4,11 +4,12 @@ use std::path::{Path, PathBuf};
 use tracing::{error, info};
 
 use crate::cloud_provider::helm::ChartInfo;
-use crate::cmd::command::{ExecutableCommand, QoveryCommand};
+use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::helm::HelmCommand::{LIST, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{CannotRollback, CmdError, InvalidKubeConfig, ReleaseDoesNotExist};
 use crate::cmd::structs::{HelmChart, HelmChartVersions, HelmListItem};
-use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::errors;
+use crate::errors::EngineError;
 use crate::events::EventDetails;
 use semver::Version;
 use serde_derive::Deserialize;
@@ -52,8 +53,11 @@ pub enum HelmError {
     #[error("Helm timed out for release `{0}` during helm {1:?}: {2}")]
     Timeout(String, HelmCommand, String),
 
+    #[error("Command killed by user request: {0}")]
+    Killed(String, HelmCommand),
+
     #[error("Helm command `{1:?}` for release {0} terminated with an error: {2:?}")]
-    CmdError(String, HelmCommand, CommandError),
+    CmdError(String, HelmCommand, errors::CommandError),
 }
 
 #[derive(Debug)]
@@ -141,16 +145,12 @@ impl Helm {
             &self.get_all_envs(envs),
             &mut |line| stdout.push_str(&line),
             &mut |line| stderr.push_str(&line),
+            &CommandKiller::never(),
         ) {
             Err(_) if stderr.contains("release: not found") => Err(ReleaseDoesNotExist(chart.name.clone())),
             Err(err) => {
-                stderr.push_str(&err.message(ErrorMessageVerbosity::FullDetails));
-                let error = CommandError::new(
-                    err.message_safe(),
-                    Some(stderr),
-                    Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-                );
-                Err(CmdError(chart.name.clone(), STATUS, error))
+                stderr.push_str(err.to_string().as_str());
+                Err(CmdError(chart.name.clone(), STATUS, err.into()))
             }
             Ok(_) => {
                 let status: ReleaseStatus = serde_json::from_str(&stdout).unwrap_or_default();
@@ -183,15 +183,16 @@ impl Helm {
         ];
 
         let mut stderr = String::new();
-        match helm_exec_with_output(&args, &self.get_all_envs(envs), &mut |_| {}, &mut |line| stderr.push_str(&line)) {
+        match helm_exec_with_output(
+            &args,
+            &self.get_all_envs(envs),
+            &mut |_| {},
+            &mut |line| stderr.push_str(&line),
+            &CommandKiller::never(),
+        ) {
             Err(err) => {
-                stderr.push_str(&err.message(ErrorMessageVerbosity::FullDetails));
-                let error = CommandError::new(
-                    err.message_safe(),
-                    Some(stderr),
-                    Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-                );
-                Err(CmdError(chart.name.clone(), ROLLBACK, error))
+                stderr.push_str(err.to_string().as_str());
+                Err(CmdError(chart.name.clone(), ROLLBACK, err.into()))
             }
             Ok(_) => Ok(()),
         }
@@ -220,15 +221,16 @@ impl Helm {
         ];
 
         let mut stderr = String::new();
-        match helm_exec_with_output(&args, &self.get_all_envs(envs), &mut |_| {}, &mut |line| stderr.push_str(&line)) {
+        match helm_exec_with_output(
+            &args,
+            &self.get_all_envs(envs),
+            &mut |_| {},
+            &mut |line| stderr.push_str(&line),
+            &CommandKiller::never(),
+        ) {
             Err(err) => {
-                stderr.push_str(&err.message(ErrorMessageVerbosity::FullDetails));
-                let error = CommandError::new(
-                    err.message_safe(),
-                    Some(stderr),
-                    Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-                );
-                Err(CmdError(chart.name.clone(), UNINSTALL, error))
+                stderr.push_str(&err.to_string());
+                Err(CmdError(chart.name.clone(), UNINSTALL, err.into()))
             }
             Ok(_) => Ok(()),
         }
@@ -280,8 +282,9 @@ impl Helm {
             &self.get_all_envs(envs),
             &mut |line| output_string.push(line),
             &mut |line| error!("{}", line),
+            &CommandKiller::never(),
         ) {
-            return Err(CmdError("none".to_string(), LIST, cmd_error));
+            return Err(CmdError("none".to_string(), LIST, cmd_error.into()));
         }
 
         let values = serde_json::from_str::<Vec<HelmListItem>>(&output_string.join(""));
@@ -315,7 +318,7 @@ impl Helm {
             Err(e) => Err(CmdError(
                 "none".to_string(),
                 LIST,
-                CommandError::new(
+                errors::CommandError::new(
                     "Error while deserializing all helms names".to_string(),
                     Some(e.to_string()),
                     Some(
@@ -379,7 +382,7 @@ impl Helm {
 
             // no need to validate yaml as it will be done by helm
             if let Err(e) = file_create() {
-                let cmd_err = CommandError::new(
+                let cmd_err = errors::CommandError::new(
                     format!("Error while writing yaml content to file `{}`", &file_path),
                     Some(format!("Content\n{}\nError: {}", value_file.yaml_content, e)),
                     Some(
@@ -410,6 +413,7 @@ impl Helm {
                 stderr_msg.push_str(&line);
                 warn!("chart {}: {}", chart.name, line);
             },
+            &CommandKiller::never(),
         );
 
         match helm_ret {
@@ -417,20 +421,17 @@ impl Helm {
             Ok(_) => Ok(()),
             Err(err) => {
                 error!("Helm error: {:?}", err);
-                Err(CmdError(
-                    chart.name.clone(),
-                    HelmCommand::DIFF,
-                    CommandError::new(
-                        "Helm error".to_string(),
-                        Some(stderr_msg),
-                        Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-                    ),
-                ))
+                Err(CmdError(chart.name.clone(), HelmCommand::DIFF, err.into()))
             }
         }
     }
 
-    pub fn upgrade(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
+    pub fn upgrade(
+        &self,
+        chart: &ChartInfo,
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+    ) -> Result<(), HelmError> {
         // Due to crash or error it is possible that the release is under an helm lock
         // Try to un-stuck the situation first if needed
         // We don't care if the rollback failed, as it is a best effort to remove the lock
@@ -502,7 +503,7 @@ impl Helm {
 
             // no need to validate yaml as it will be done by helm
             if let Err(e) = file_create() {
-                let cmd_err = CommandError::new(
+                let cmd_err = errors::CommandError::new(
                     format!("Error while writing yaml content to file `{}`", &file_path),
                     Some(format!("Content\n{}\nError: {}", value_file.yaml_content, e)),
                     Some(
@@ -538,6 +539,7 @@ impl Helm {
                 }
                 error_message.push(line);
             },
+            cmd_killer,
         );
 
         if let Err(err) = helm_ret {
@@ -545,11 +547,19 @@ impl Helm {
 
             // Try do define/specify a bit more the message
             let stderr_msg: String = error_message.into_iter().collect();
-            let stderr_msg = format!(
-                "{}: {}",
-                stderr_msg,
-                err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
-            );
+            let stderr_msg = format!("{}: {}", stderr_msg, err,);
+
+            // If the helm command has been canceled by the user, propagate correctly the killed error
+            match err {
+                CommandError::TimeoutError(_) => {
+                    return Err(HelmError::Timeout(chart.name.clone(), UPGRADE, stderr_msg));
+                }
+                CommandError::Killed(_) => {
+                    return Err(HelmError::Killed(chart.name.clone(), UPGRADE));
+                }
+                _ => {}
+            }
+
             let error = if stderr_msg.contains("another operation (install/upgrade/rollback) is in progress") {
                 HelmError::ReleaseLocked(chart.name.clone())
             } else if stderr_msg.contains("has been rolled back") {
@@ -560,8 +570,8 @@ impl Helm {
                 CmdError(
                     chart.name.clone(),
                     UPGRADE,
-                    CommandError::new(
-                        "Helm error".to_string(),
+                    errors::CommandError::new(
+                        "Helm upgrade error".to_string(),
                         Some(stderr_msg),
                         Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
                     ),
@@ -632,7 +642,7 @@ impl Helm {
 
             // no need to validate yaml as it will be done by helm
             if let Err(e) = file_create() {
-                let cmd_err = CommandError::new(
+                let cmd_err = errors::CommandError::new(
                     format!("Error while writing yaml content to file `{}`", &file_path),
                     Some(format!("Content\n{}\nError: {}", value_file.yaml_content, e)),
                     Some(
@@ -663,6 +673,7 @@ impl Helm {
                 stderr_msg.push_str(&line);
                 warn!("chart {}: {}", chart.name, line);
             },
+            &CommandKiller::never(),
         );
 
         match helm_ret {
@@ -670,15 +681,7 @@ impl Helm {
             Ok(_) => Ok(()),
             Err(err) => {
                 error!("Helm error: {:?}", err);
-                Err(CmdError(
-                    chart.name.clone(),
-                    HelmCommand::TEMPLATE,
-                    CommandError::new(
-                        "Helm error".to_string(),
-                        Some(stderr_msg),
-                        Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-                    ),
-                ))
+                Err(CmdError(chart.name.clone(), HelmCommand::TEMPLATE, err.into()))
             }
         }
     }
@@ -689,6 +692,7 @@ fn helm_exec_with_output<STDOUT, STDERR>(
     envs: &[(&str, &str)],
     stdout_output: &mut STDOUT,
     stderr_output: &mut STDERR,
+    cmd_killer: &CommandKiller,
 ) -> Result<(), CommandError>
 where
     STDOUT: FnMut(String),
@@ -698,22 +702,14 @@ where
     // Helm returns an error each time a command does not succeed as they want. Which leads to handling error with status code 1
     // It means that the command successfully ran, but it didn't terminate as expected
     let mut cmd = QoveryCommand::new("helm", args, envs);
-    match cmd.exec_with_output(stdout_output, stderr_output) {
-        Err(err) => Err(CommandError::new(
-            "Error while executing Helm command.".to_string(),
-            Some(format!("{:?}", err)),
-            Some(
-                envs.iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<Vec<(String, String)>>(),
-            ),
-        )),
+    match cmd.exec_with_abort(stdout_output, stderr_output, cmd_killer) {
+        Err(err) => Err(err),
         _ => Ok(()),
     }
 }
 
-pub fn to_command_error(error: HelmError) -> CommandError {
-    CommandError::new_from_safe_message(error.to_string())
+pub fn to_command_error(error: HelmError) -> errors::CommandError {
+    errors::CommandError::new("Error while executing Helm command.".to_string(), Some(error.to_string()), None)
 }
 
 pub fn to_engine_error(event_details: &EventDetails, error: HelmError) -> EngineError {
@@ -724,7 +720,7 @@ pub fn to_engine_error(event_details: &EventDetails, error: HelmError) -> Engine
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::helm::{ChartInfo, ChartSetValue};
-    use crate::cmd::command::{ExecutableCommand, QoveryCommand};
+    use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
     use crate::cmd::helm::{helm_exec_with_output, Helm, HelmError};
     use semver::Version;
     use std::sync::{Arc, Barrier};
@@ -775,7 +771,13 @@ mod tests {
     #[test]
     fn check_version() {
         let mut output = String::new();
-        let _ = helm_exec_with_output(&["version"], &[], &mut |line| output.push_str(&line), &mut |_line| {});
+        let _ = helm_exec_with_output(
+            &["version"],
+            &[],
+            &mut |line| output.push_str(&line),
+            &mut |_line| {},
+            &CommandKiller::never(),
+        );
         assert!(output.contains("Version:\"v3.7.2\""));
     }
 
@@ -800,7 +802,7 @@ mod tests {
         assert!(matches!(ret, Ok(vec) if vec.is_empty()));
 
         // install something
-        let ret = helm.upgrade(&charts[0], &[]);
+        let ret = helm.upgrade(&charts[0], &[], &CommandKiller::never());
         assert!(matches!(ret, Ok(())));
 
         // We should have at least one release in all the release
@@ -817,7 +819,7 @@ mod tests {
             ref mut charts,
         } = HelmTestCtx::new("test-list-release-2");
         charts[0].custom_namespace = Some("hello-my-friend-this-is-a-test".to_string());
-        let ret = helm.upgrade(&charts[0], &[]);
+        let ret = helm.upgrade(&charts[0], &[], &CommandKiller::never());
         assert!(matches!(ret, Ok(())));
 
         let ret = helm.list_release(Some(&charts[0].get_namespace_string()), &[]);
@@ -841,7 +843,7 @@ mod tests {
         assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == charts[0].name));
 
         // install it
-        let ret = helm.upgrade(&charts[0], &[]);
+        let ret = helm.upgrade(&charts[0], &[], &CommandKiller::never());
         assert!(matches!(ret, Ok(())));
 
         // First revision cannot be rollback
@@ -849,7 +851,7 @@ mod tests {
         assert!(matches!(ret, Err(HelmError::CannotRollback(_))));
 
         // 2nd upgrade
-        let ret = helm.upgrade(&charts[0], &[]);
+        let ret = helm.upgrade(&charts[0], &[], &CommandKiller::never());
         assert!(matches!(ret, Ok(())));
 
         // Rollback should be ok now
@@ -866,7 +868,7 @@ mod tests {
         assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == charts[0].name));
 
         // install it
-        let ret = helm.upgrade(&charts[0], &[]);
+        let ret = helm.upgrade(&charts[0], &[], &CommandKiller::never());
         assert!(matches!(ret, Ok(())));
 
         // check now it exists
@@ -887,7 +889,7 @@ mod tests {
         assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == charts[0].name));
 
         // install it
-        let ret = helm.upgrade(&charts[0], &[]);
+        let ret = helm.upgrade(&charts[0], &[], &CommandKiller::never());
         assert!(matches!(ret, Err(HelmError::Timeout(_, _, _))));
 
         // Release should not exist if it fails
@@ -926,7 +928,7 @@ mod tests {
             value: "10".to_string(),
         }];
         barrier.wait();
-        let ret = helm.upgrade(&charts[0], &[]);
+        let ret = helm.upgrade(&charts[0], &[], &CommandKiller::never());
         assert!(matches!(ret, Err(_)));
 
         // Release should be locked
@@ -934,7 +936,7 @@ mod tests {
         assert!(matches!(ret, Ok(release) if release.is_locked()));
 
         // New installation should work even if a lock is present
-        let ret = helm.upgrade(&charts[0], &[]);
+        let ret = helm.upgrade(&charts[0], &[], &CommandKiller::never());
         assert!(matches!(ret, Ok(())));
 
         // Release should not be locked anymore
@@ -955,7 +957,7 @@ mod tests {
         assert!(matches!(ret, Err(HelmError::ReleaseDoesNotExist(test)) if test == charts[0].name));
 
         // First install
-        let ret = helm.upgrade(&charts[0], &[]);
+        let ret = helm.upgrade(&charts[0], &[], &CommandKiller::never());
         assert!(matches!(ret, Ok(())));
 
         // Spawn our task killer
@@ -976,7 +978,7 @@ mod tests {
             value: "10".to_string(),
         }];
         barrier.wait();
-        let ret = helm.upgrade(&charts[0], &[]);
+        let ret = helm.upgrade(&charts[0], &[], &CommandKiller::never());
         assert!(matches!(ret, Err(_)));
 
         // Release should be locked
@@ -984,7 +986,7 @@ mod tests {
         assert!(matches!(ret, Ok(release) if release.is_locked() && release.version == 2));
 
         // New installation should work even if a lock is present
-        let ret = helm.upgrade(&charts[0], &[]);
+        let ret = helm.upgrade(&charts[0], &[], &CommandKiller::never());
         assert!(matches!(ret, Ok(())));
 
         // Release should not be locked anymore
@@ -1005,7 +1007,7 @@ mod tests {
         assert!(matches!(ret, Ok(())));
 
         // install it
-        let ret = helm.upgrade(&charts[0], &[]);
+        let ret = helm.upgrade(&charts[0], &[], &CommandKiller::never());
         assert!(matches!(ret, Ok(())));
 
         // check now it exists
@@ -1027,7 +1029,7 @@ mod tests {
             ref helm,
             ref mut charts,
         } = HelmTestCtx::new("test-version-release");
-        let _ = helm.upgrade(&charts[0], &[]);
+        let _ = helm.upgrade(&charts[0], &[], &CommandKiller::never());
         let releases = helm.list_release(Some(&charts[0].get_namespace_string()), &[]).unwrap();
         assert_eq!(releases[0].clone().chart_version.unwrap(), Version::new(0, 1, 0))
     }
