@@ -50,6 +50,9 @@ impl ClusterAutoscalerChart {
 
 impl ToCommonHelmChart for ClusterAutoscalerChart {
     fn to_common_helm_chart(&self) -> CommonChart {
+        let test = self.chart_path.to_string();
+        info!("BENJAMIN {}", test);
+        info!("BENJAMIN {}", self.chart_image_region.to_string());
         CommonChart {
             chart_info: ChartInfo {
                 name: ClusterAutoscalerChart::chart_name(),
