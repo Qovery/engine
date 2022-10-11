@@ -4,17 +4,26 @@ metadata:
   name: coredns
   namespace: kube-system
   labels:
-    eks.amazonaws.com/component: coredns
-    k8s-app: kube-dns
+    {{ range .Values.labels }}
+    {{ . }}
+    {{ end }}
 data:
   Corefile: |
     .:53 {
         errors
         health
+        ready
         kubernetes cluster.local in-addr.arpa ip6.arpa {
           pods insecure
           fallthrough in-addr.arpa ip6.arpa
         }
+        {{ if .Values.declare_node_hosts }}
+        hosts /etc/coredns/NodeHosts {
+          ttl 60
+          reload 15s
+          fallthrough
+        }
+        {{ end }}
         prometheus :9153
         forward . /etc/resolv.conf
         cache 30
