@@ -26,6 +26,7 @@ use std::path::Path;
 use crate::cloud_provider::aws::kubernetes::helm_charts::aws_vpc_cni_chart::{
     is_cni_old_version_installed, AwsVpcCniChart,
 };
+use crate::cloud_provider::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AwsEksQoveryTerraformConfig {
@@ -144,72 +145,18 @@ pub fn eks_aws_helm_charts(
     // AWS UI view
     let aws_ui_view = AwsUiViewChart::new(chart_prefix_path).to_common_helm_chart();
 
-    let cluster_autoscaler = CommonChart {
-        chart_info: ChartInfo {
-            name: "cluster-autoscaler".to_string(),
-            path: chart_path("common/charts/cluster-autoscaler"),
-            values: vec![
-                ChartSetValue {
-                    key: "cloudProvider".to_string(),
-                    value: chart_config_prerequisites.cloud_provider.clone(),
-                },
-                ChartSetValue {
-                    key: "awsRegion".to_string(),
-                    value: chart_config_prerequisites.region.clone(),
-                },
-                ChartSetValue {
-                    key: "autoDiscovery.clusterName".to_string(),
-                    value: chart_config_prerequisites.cluster_name.clone(),
-                },
-                ChartSetValue {
-                    key: "awsAccessKeyID".to_string(),
-                    value: qovery_terraform_config.aws_iam_cluster_autoscaler_key,
-                },
-                ChartSetValue {
-                    key: "awsSecretAccessKey".to_string(),
-                    value: qovery_terraform_config.aws_iam_cluster_autoscaler_secret,
-                },
-                // It's mandatory to get this class to ensure paused infra will behave properly on restore
-                ChartSetValue {
-                    key: "priorityClassName".to_string(),
-                    value: "system-cluster-critical".to_string(),
-                },
-                // cluster autoscaler options
-                ChartSetValue {
-                    key: "extraArgs.balance-similar-node-groups".to_string(),
-                    value: "true".to_string(),
-                },
-                // observability
-                ChartSetValue {
-                    key: "serviceMonitor.enabled".to_string(),
-                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
-                },
-                ChartSetValue {
-                    key: "serviceMonitor.namespace".to_string(),
-                    value: prometheus_namespace.to_string(),
-                },
-                // resources limits
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "640Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "640Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // Cluster autoscaler
+    let cluster_autoscaler = ClusterAutoscalerChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.cloud_provider.to_string(),
+        chart_config_prerequisites.region.to_string(),
+        chart_config_prerequisites.cluster_name.to_string(),
+        qovery_terraform_config.aws_iam_cluster_autoscaler_key.to_string(),
+        qovery_terraform_config.aws_iam_cluster_autoscaler_secret.to_string(),
+        prometheus_namespace,
+        chart_config_prerequisites.ff_metrics_history_enabled,
+    )
+    .to_common_helm_chart();
 
     let coredns_config = CoreDNSConfigChart {
         chart_info: ChartInfo {
