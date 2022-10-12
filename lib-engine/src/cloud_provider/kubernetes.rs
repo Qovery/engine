@@ -1031,6 +1031,7 @@ pub fn compare_kubernetes_cluster_versions_for_upgrade(
 
 pub trait InstanceType {
     fn to_cloud_provider_format(&self) -> String;
+    fn is_instance_allowed(&self) -> bool;
 }
 
 impl NodeGroups {

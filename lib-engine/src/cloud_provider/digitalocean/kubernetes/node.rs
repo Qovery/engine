@@ -45,6 +45,10 @@ impl InstanceType for DoInstancesType {
         }
         .to_string()
     }
+
+    fn is_instance_allowed(&self) -> bool {
+        true
+    }
 }
 
 impl DoInstancesType {

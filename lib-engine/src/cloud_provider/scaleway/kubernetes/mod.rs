@@ -5,7 +5,7 @@ use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
-    is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
+    is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, InstanceType, Kind, Kubernetes,
     KubernetesUpgradeStatus, ProviderOptions,
 };
 use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
@@ -166,23 +166,45 @@ impl Kapsule {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
 
         for node_group in &nodes_groups {
-            if let Err(e) = ScwInstancesType::from_str(node_group.instance_type.as_str()) {
-                let err = EngineError::new_unsupported_instance_type(
-                    EventDetails::new(
-                        Some(cloud_provider.kind()),
-                        QoveryIdentifier::new(*context.organization_long_id()),
-                        QoveryIdentifier::new(*context.cluster_long_id()),
-                        context.execution_id().to_string(),
-                        Infrastructure(InfrastructureStep::LoadConfiguration),
-                        Transmitter::Kubernetes(long_id, name),
-                    ),
-                    node_group.instance_type.as_str(),
-                    e,
-                );
+            match ScwInstancesType::from_str(node_group.instance_type.as_str()) {
+                Err(e) => {
+                    let err = EngineError::new_unsupported_instance_type(
+                        EventDetails::new(
+                            Some(cloud_provider.kind()),
+                            QoveryIdentifier::new(*context.organization_long_id()),
+                            QoveryIdentifier::new(*context.cluster_long_id()),
+                            context.execution_id().to_string(),
+                            Infrastructure(InfrastructureStep::LoadConfiguration),
+                            Transmitter::Kubernetes(long_id, name),
+                        ),
+                        node_group.instance_type.as_str(),
+                        e,
+                    );
+                    logger.log(EngineEvent::Error(err.clone(), None));
 
-                logger.log(EngineEvent::Error(err.clone(), None));
+                    return Err(err);
+                }
+                Ok(instance_type) => {
+                    if !instance_type.is_instance_allowed() {
+                        let err = EngineError::new_unsupported_instance_type(
+                            EventDetails::new(
+                                Some(cloud_provider.kind()),
+                                QoveryIdentifier::new(*context.organization_long_id()),
+                                QoveryIdentifier::new(*context.cluster_long_id()),
+                                context.execution_id().to_string(),
+                                Infrastructure(InfrastructureStep::LoadConfiguration),
+                                Transmitter::Kubernetes(long_id, name),
+                            ),
+                            node_group.instance_type.as_str(),
+                            CommandError::new_from_safe_message(format!(
+                                "`{}` instance type is not supported",
+                                instance_type
+                            )),
+                        );
 
-                return Err(err);
+                        return Err(err);
+                    }
+                }
             }
         }
 
