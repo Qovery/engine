@@ -761,7 +761,7 @@ pub fn get_chart_for_shell_agent(
                 },
                 ChartSetValue {
                     key: "environmentVariables.RUST_LOG".to_string(),
-                    value: "h2::codec::framed_write=INFO,DEBUG".to_string(),
+                    value: "h2::codec::framed_write=INFO\\,DEBUG".to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.GRPC_SERVER".to_string(),
@@ -862,7 +862,7 @@ pub fn get_chart_for_cluster_agent(
                 },
                 ChartSetValue {
                     key: "environmentVariables.RUST_LOG".to_string(),
-                    value: "h2::codec::framed_write=INFO,DEBUG".to_string(),
+                    value: "h2::codec::framed_write=INFO\\,DEBUG".to_string(),
                 },
                 ChartSetValue {
                     key: "environmentVariables.GRPC_SERVER".to_string(),
