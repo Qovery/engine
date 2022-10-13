@@ -1,5 +1,5 @@
 use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart};
-use crate::cloud_provider::helm_charts::ToCommonHelmChart;
+use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
 use crate::errors::CommandError;
 use crate::runtime::block_on;
 use k8s_openapi::api::rbac::v1::RoleBinding;
@@ -7,7 +7,7 @@ use kube::core::params::ListParams;
 use kube::{Api, Client};
 
 pub struct AwsIamEksUserMapperChart {
-    chart_path: String,
+    chart_path: HelmChartPath,
     chart_image_region: String,
     aws_iam_eks_user_mapper_key: String,
     aws_iam_eks_user_mapper_secret: String,
@@ -27,10 +27,10 @@ impl AwsIamEksUserMapperChart {
             aws_iam_eks_user_mapper_key,
             aws_iam_eks_user_mapper_secret,
             aws_iam_user_mapper_group_name,
-            chart_path: format!(
-                "{}/charts/{}",
-                chart_prefix_path.unwrap_or("./"),
-                AwsIamEksUserMapperChart::chart_name()
+            chart_path: HelmChartPath::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CloudProviderFolder,
+                AwsIamEksUserMapperChart::chart_name(),
             ),
         }
     }

@@ -1,11 +1,11 @@
 use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart};
-use crate::cloud_provider::helm_charts::ToCommonHelmChart;
+use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 use kube::Client;
 
 pub struct ExternalDNSChart {
-    chart_path: String,
+    chart_path: HelmChartPath,
     dns_provider_configuration: DnsProviderConfiguration,
     managed_dns_domains_root_helm_format: String,
     proxied: bool,
@@ -21,10 +21,10 @@ impl ExternalDNSChart {
         cluster_id: String,
     ) -> ExternalDNSChart {
         ExternalDNSChart {
-            chart_path: format!(
-                "{}/common/charts/{}",
-                chart_prefix_path.unwrap_or("./"),
-                ExternalDNSChart::chart_name()
+            chart_path: HelmChartPath::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CommonFolder,
+                ExternalDNSChart::chart_name(),
             ),
             dns_provider_configuration,
             managed_dns_domains_root_helm_format,
