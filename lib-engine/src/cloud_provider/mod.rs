@@ -125,9 +125,9 @@ impl<'a> DeploymentTarget<'a> {
     pub fn new(
         engine_config: &'a EngineConfig,
         environment: &'a Environment,
-        event_details: &EventDetails,
         should_abort: &'a dyn Fn() -> bool,
     ) -> Result<DeploymentTarget<'a>, EngineError> {
+        let event_details = environment.event_details();
         let kubernetes = engine_config.kubernetes();
         let kubeconfig_path = kubernetes.get_kubeconfig_file_path().unwrap_or_default();
         let kube_credentials: Vec<(String, String)> = kubernetes

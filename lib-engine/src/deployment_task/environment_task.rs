@@ -10,10 +10,10 @@ use crate::deployment_action::deploy_environment::EnvironmentDeployment;
 use crate::deployment_task::Task;
 use crate::engine::EngineConfig;
 use crate::errors::EngineError;
-use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, Transmitter};
+use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::EngineRequest;
-use crate::io_models::{Action, QoveryIdentifier};
+use crate::io_models::Action;
 use crate::logger::Logger;
 use crate::models::application::ApplicationService;
 use crate::transaction::DeploymentOption;
@@ -90,21 +90,7 @@ impl EnvironmentTask {
     }
 
     fn get_event_details(&self, step: EnvironmentStep) -> EventDetails {
-        // TODO: Add environment name inside EnvironmentRequest
-        let env_id = self
-            .request
-            .target_environment
-            .as_ref()
-            .map(|target| target.long_id)
-            .unwrap_or_default();
-        EventDetails::new(
-            Some(self.request.cloud_provider.kind.clone()),
-            QoveryIdentifier::new(self.request.organization_long_id),
-            QoveryIdentifier::new(self.request.cloud_provider.kubernetes.long_id),
-            self.request.id.to_string(),
-            Stage::Environment(step),
-            Transmitter::Environment(env_id, "environment".to_string()),
-        )
+        EventDetails::clone_changing_stage(self.request.event_details(), Stage::Environment(step))
     }
 
     pub fn build_and_push_applications(
@@ -187,11 +173,11 @@ impl EnvironmentTask {
 
     pub fn deploy_environment(
         mut environment: Environment,
-        event_details: EventDetails,
         engine: &EngineConfig,
         should_abort: &dyn Fn() -> bool,
     ) -> Result<(), EngineError> {
         let mut deployed_services: HashSet<Uuid> = HashSet::new();
+        let event_details = environment.event_details().clone();
         let run_deploy = || -> Result<(), EngineError> {
             // Build applications if needed
             if environment.action == service::Action::Create {
@@ -215,7 +201,7 @@ impl EnvironmentTask {
                 return Err(EngineError::new_task_cancellation_requested(event_details));
             }
 
-            let mut env_deployment = EnvironmentDeployment::new(engine, &environment, event_details, should_abort)?;
+            let mut env_deployment = EnvironmentDeployment::new(engine, &environment, should_abort)?;
             let deployment_ret = match environment.action {
                 service::Action::Create => env_deployment.on_create(),
                 service::Action::Pause => env_deployment.on_pause(),
@@ -334,8 +320,7 @@ impl Task for EnvironmentTask {
         };
 
         // run the actions
-        let deployment_ret =
-            EnvironmentTask::deploy_environment(environment, event_details, &engine_config, &self.cancel_checker());
+        let deployment_ret = EnvironmentTask::deploy_environment(environment, &engine_config, &self.cancel_checker());
         match (&self.request.action, deployment_ret) {
             (Action::Create, Ok(())) => self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Deployed),

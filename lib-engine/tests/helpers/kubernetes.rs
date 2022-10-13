@@ -18,7 +18,6 @@ use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
 use qovery_engine::deployment_task::environment_task::EnvironmentTask;
 use qovery_engine::dns_provider::DnsProvider;
-use qovery_engine::events::{EnvironmentStep, Stage};
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::Logger;
@@ -211,11 +210,7 @@ pub fn cluster_test(
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Create;
-        let event_details = engine
-            .cloud_provider()
-            .get_event_details(Stage::Environment(EnvironmentStep::Delete));
-
-        if let Err(ret) = EnvironmentTask::deploy_environment(env, event_details, &engine, &|| false) {
+        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, &|| false) {
             panic!("{:?}", ret)
         }
     }
@@ -341,11 +336,7 @@ pub fn cluster_test(
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Delete;
-        let event_details = engine
-            .cloud_provider()
-            .get_event_details(Stage::Environment(EnvironmentStep::Delete));
-
-        if let Err(ret) = EnvironmentTask::deploy_environment(env, event_details, &engine, &|| false) {
+        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, &|| false) {
             panic!("{:?}", ret)
         }
     }
