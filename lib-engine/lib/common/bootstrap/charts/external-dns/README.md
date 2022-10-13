@@ -17,9 +17,9 @@ $ helm install my-release bitnami/external-dns
 
 ## Introduction
 
-This chart bootstraps a [ExternalDNS](https://github.com/bitnami/bitnami-docker-external-dns) deployment on a [Kubernetes](https://kubernetes.io) cluster using the [Helm](https://helm.sh) package manager.
+This chart bootstraps a [ExternalDNS](https://github.com/bitnami/containers/tree/main/bitnami/external-dns) deployment on a [Kubernetes](https://kubernetes.io) cluster using the [Helm](https://helm.sh) package manager.
 
-Bitnami charts can be used with [Kubeapps](https://kubeapps.com/) for deployment and management of Helm Charts in clusters. This chart has been tested to work with NGINX Ingress, cert-manager, fluentd and Prometheus on top of the [BKPR](https://kubeprod.io/).
+Bitnami charts can be used with [Kubeapps](https://kubeapps.dev/) for deployment and management of Helm Charts in clusters.
 
 ## Prerequisites
 
@@ -60,15 +60,16 @@ The command removes all the Kubernetes components associated with the chart and 
 
 ### Common parameters
 
-| Name                | Description                                                                                  | Value           |
-| ------------------- | -------------------------------------------------------------------------------------------- | --------------- |
-| `nameOverride`      | String to partially override external-dns.fullname template (will maintain the release name) | `""`            |
-| `fullnameOverride`  | String to fully override external-dns.fullname template                                      | `""`            |
-| `clusterDomain`     | Kubernetes Cluster Domain                                                                    | `cluster.local` |
-| `commonLabels`      | Labels to add to all deployed objects                                                        | `{}`            |
-| `commonAnnotations` | Annotations to add to all deployed objects                                                   | `{}`            |
-| `extraDeploy`       | Array of extra objects to deploy with the release (evaluated as a template).                 | `[]`            |
-| `kubeVersion`       | Force target Kubernetes version (using Helm capabilities if not set)                         | `""`            |
+| Name                    | Description                                                                                  | Value           |
+| ----------------------- | -------------------------------------------------------------------------------------------- | --------------- |
+| `nameOverride`          | String to partially override external-dns.fullname template (will maintain the release name) | `""`            |
+| `fullnameOverride`      | String to fully override external-dns.fullname template                                      | `""`            |
+| `clusterDomain`         | Kubernetes Cluster Domain                                                                    | `cluster.local` |
+| `commonLabels`          | Labels to add to all deployed objects                                                        | `{}`            |
+| `commonAnnotations`     | Annotations to add to all deployed objects                                                   | `{}`            |
+| `extraDeploy`           | Array of extra objects to deploy with the release (evaluated as a template).                 | `[]`            |
+| `kubeVersion`           | Force target Kubernetes version (using Helm capabilities if not set)                         | `""`            |
+| `watchReleaseNamespace` | Watch only namepsace used for the release                                                    | `false`         |
 
 
 ### external-dns parameters
@@ -77,7 +78,8 @@ The command removes all the Kubernetes components associated with the chart and 
 | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
 | `image.registry`                              | ExternalDNS image registry                                                                                                                                                   | `docker.io`               |
 | `image.repository`                            | ExternalDNS image repository                                                                                                                                                 | `bitnami/external-dns`    |
-| `image.tag`                                   | ExternalDNS Image tag (immutable tags are recommended)                                                                                                                       | `0.12.0-debian-10-r0`     |
+| `image.tag`                                   | ExternalDNS Image tag (immutable tags are recommended)                                                                                                                       | `0.12.2-debian-11-r22`    |
+| `image.digest`                                | ExternalDNS image digest in the way sha256:aa.... Please note this parameter, if set, will override the tag                                                                  | `""`                      |
 | `image.pullPolicy`                            | ExternalDNS image pull policy                                                                                                                                                | `IfNotPresent`            |
 | `image.pullSecrets`                           | ExternalDNS image pull secrets                                                                                                                                               | `[]`                      |
 | `hostAliases`                                 | Deployment pod host aliases                                                                                                                                                  | `[]`                      |
@@ -96,6 +98,11 @@ The command removes all the Kubernetes components associated with the chart and 
 | `publishInternalServices`                     | Allow external-dns to publish DNS records for ClusterIP services                                                                                                             | `false`                   |
 | `publishHostIP`                               | Allow external-dns to publish host-ip for headless services                                                                                                                  | `false`                   |
 | `serviceTypeFilter`                           | The service types to take care about (default: all, options: ClusterIP, NodePort, LoadBalancer, ExternalName)                                                                | `[]`                      |
+| `akamai.host`                                 | Hostname to use for EdgeGrid auth                                                                                                                                            | `""`                      |
+| `akamai.accessToken`                          | Access Token to use for EdgeGrid auth                                                                                                                                        | `""`                      |
+| `akamai.clientToken`                          | Client Token to use for EdgeGrid auth                                                                                                                                        | `""`                      |
+| `akamai.clientSecret`                         | When using the Akamai provider, `AKAMAI_CLIENT_SECRET` to set (optional)                                                                                                     | `""`                      |
+| `akamai.secretName`                           | Use an existing secret with key "akamai_api_seret" defined.                                                                                                                  | `""`                      |
 | `alibabacloud.accessKeyId`                    | When using the Alibaba Cloud provider, set `accessKeyId` in the Alibaba Cloud configuration file (optional)                                                                  | `""`                      |
 | `alibabacloud.accessKeySecret`                | When using the Alibaba Cloud provider, set `accessKeySecret` in the Alibaba Cloud configuration file (optional)                                                              | `""`                      |
 | `alibabacloud.regionId`                       | When using the Alibaba Cloud provider, set `regionId` in the Alibaba Cloud configuration file (optional)                                                                     | `""`                      |
@@ -275,6 +282,7 @@ The command removes all the Kubernetes components associated with the chart and 
 | `serviceAccount.name`                         | ServiceAccount to use. A name is generated using the external-dns.fullname template if it is not set                                                                         | `""`                      |
 | `serviceAccount.annotations`                  | Additional Service Account annotations                                                                                                                                       | `{}`                      |
 | `serviceAccount.automountServiceAccountToken` | Automount API credentials for a service account.                                                                                                                             | `true`                    |
+| `serviceAccount.labels`                       | Additional labels to be included on the service account                                                                                                                      | `{}`                      |
 | `rbac.create`                                 | Whether to create & use RBAC resources or not                                                                                                                                | `true`                    |
 | `rbac.clusterRole`                            | Whether to create Cluster Role. When set to false creates a Role in `namespace`                                                                                              | `true`                    |
 | `rbac.apiVersion`                             | Version of the RBAC API                                                                                                                                                      | `v1`                      |
@@ -321,6 +329,10 @@ The command removes all the Kubernetes components associated with the chart and 
 | `metrics.serviceMonitor.honorLabels`          | Specify honorLabels parameter to add the scrape endpoint                                                                                                                     | `false`                   |
 | `metrics.serviceMonitor.labels`               | Used to pass Labels that are required by the installed Prometheus Operator                                                                                                   | `{}`                      |
 | `metrics.serviceMonitor.jobLabel`             | The name of the label on the target service to use as the job name in prometheus.                                                                                            | `""`                      |
+| `metrics.googlePodMonitor.enabled`            | Create Google Managed Prometheus PodMonitoring object                                                                                                                        | `false`                   |
+| `metrics.googlePodMonitor.namespace`          | Namespace in which PodMonitoring created                                                                                                                                     | `""`                      |
+| `metrics.googlePodMonitor.interval`           | Interval at which metrics should be scraped by Google Managed Prometheus                                                                                                     | `60s`                     |
+| `metrics.googlePodMonitor.endpoint`           | The endpoint for Google Managed Prometheus scraping the metrics                                                                                                              | `/metrics`                |
 
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`. For example,
