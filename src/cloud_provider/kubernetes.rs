@@ -337,30 +337,35 @@ pub trait Kubernetes {
     fn on_create_error(&self) -> Result<(), EngineError>;
 
     fn upgrade(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
+        // since we doesn't handle upgrade for Ec2 and getting version for them make engine bug, only check upgrade for other kinds.
+        if self.kind() != Kind::Ec2 {
+            let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
 
-        let kubeconfig = match self.get_kubeconfig_file() {
-            Ok((path, _)) => path,
-            Err(e) => return Err(e),
+            let kubeconfig = match self.get_kubeconfig_file() {
+                Ok((path, _)) => path,
+                Err(e) => return Err(e),
+            };
+
+            return match is_kubernetes_upgradable(
+                kubeconfig.clone(),
+                self.cloud_provider().credentials_environment_variables(),
+                event_details.clone(),
+            ) {
+                Err(e) => Err(e),
+                Ok(..) => match is_kubernetes_upgrade_required(
+                    kubeconfig,
+                    self.version(),
+                    self.cloud_provider().credentials_environment_variables(),
+                    event_details,
+                    self.logger(),
+                ) {
+                    Ok(x) => self.upgrade_with_status(x),
+                    Err(e) => Err(e),
+                },
+            };
         };
 
-        match is_kubernetes_upgradable(
-            kubeconfig.clone(),
-            self.cloud_provider().credentials_environment_variables(),
-            event_details.clone(),
-        ) {
-            Err(e) => Err(e),
-            Ok(..) => match is_kubernetes_upgrade_required(
-                kubeconfig,
-                self.version(),
-                self.cloud_provider().credentials_environment_variables(),
-                event_details,
-                self.logger(),
-            ) {
-                Ok(x) => self.upgrade_with_status(x),
-                Err(e) => Err(e),
-            },
-        }
+        Ok(())
     }
 
     fn check_workers_on_upgrade(&self, targeted_version: String) -> Result<(), CommandError>
