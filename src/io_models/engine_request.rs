@@ -158,31 +158,46 @@ impl EngineRequest {
     }
 
     pub fn event_details(&self) -> EventDetails {
-        let stage = match &self.target_environment {
-            // It means it is an infra deployment request
-            None => match self.action {
-                Action::Create => Stage::Infrastructure(InfrastructureStep::Create),
-                Action::Pause => Stage::Infrastructure(InfrastructureStep::Pause),
-                Action::Delete => Stage::Infrastructure(InfrastructureStep::Delete),
-                Action::Nothing => Stage::Infrastructure(InfrastructureStep::Create),
-            },
-            // It means it is an environment deployment request
-            Some(_) => match self.action {
-                Action::Create => Stage::Environment(EnvironmentStep::Deploy),
-                Action::Pause => Stage::Environment(EnvironmentStep::Pause),
-                Action::Delete => Stage::Environment(EnvironmentStep::Delete),
-                Action::Nothing => Stage::Infrastructure(InfrastructureStep::Create),
-            },
-        };
         let kubernetes = &self.cloud_provider.kubernetes;
-        EventDetails::new(
-            Some(self.cloud_provider.kind.clone()),
-            QoveryIdentifier::new(self.organization_long_id),
-            QoveryIdentifier::new(kubernetes.long_id),
-            self.id.to_string(),
-            stage,
-            Transmitter::Kubernetes(kubernetes.long_id, kubernetes.name.to_string()),
-        )
+        match &self.target_environment {
+            // It means it is an infra deployment request
+            None => {
+                let stage = match self.action {
+                    Action::Create => Stage::Infrastructure(InfrastructureStep::Create),
+                    Action::Pause => Stage::Infrastructure(InfrastructureStep::Pause),
+                    Action::Delete => Stage::Infrastructure(InfrastructureStep::Delete),
+                    Action::Nothing => Stage::Infrastructure(InfrastructureStep::Create),
+                };
+
+                EventDetails::new(
+                    Some(self.cloud_provider.kind.clone()),
+                    QoveryIdentifier::new(self.organization_long_id),
+                    QoveryIdentifier::new(kubernetes.long_id),
+                    self.id.to_string(),
+                    stage,
+                    Transmitter::Kubernetes(kubernetes.long_id, kubernetes.name.to_string()),
+                )
+            }
+
+            // It means it is an environment deployment request
+            Some(env) => {
+                let stage = match self.action {
+                    Action::Create => Stage::Environment(EnvironmentStep::Deploy),
+                    Action::Pause => Stage::Environment(EnvironmentStep::Pause),
+                    Action::Delete => Stage::Environment(EnvironmentStep::Delete),
+                    Action::Nothing => Stage::Environment(EnvironmentStep::Deploy),
+                };
+
+                EventDetails::new(
+                    Some(self.cloud_provider.kind.clone()),
+                    QoveryIdentifier::new(self.organization_long_id),
+                    QoveryIdentifier::new(kubernetes.long_id),
+                    self.id.to_string(),
+                    stage,
+                    Transmitter::Environment(env.long_id, "environment".to_string()),
+                )
+            }
+        }
     }
 }
 

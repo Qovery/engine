@@ -88,11 +88,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Create;
-        let event_details = engine_config
-            .cloud_provider()
-            .get_event_details(Stage::Environment(EnvironmentStep::Pause));
-
-        let ret = EnvironmentTask::deploy_environment(env, event_details, engine_config, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, engine_config, &|| false);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(Box::new(err)),
@@ -115,11 +111,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Pause;
-        let event_details = engine_config
-            .cloud_provider()
-            .get_event_details(Stage::Environment(EnvironmentStep::Pause));
-
-        let ret = EnvironmentTask::deploy_environment(env, event_details, engine_config, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, engine_config, &|| false);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(Box::new(err)),
@@ -142,11 +134,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Delete;
-        let event_details = engine_config
-            .cloud_provider()
-            .get_event_details(Stage::Environment(EnvironmentStep::Delete));
-
-        let ret = EnvironmentTask::deploy_environment(env, event_details, engine_config, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, engine_config, &|| false);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(Box::new(err)),

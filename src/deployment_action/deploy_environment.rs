@@ -6,7 +6,7 @@ use crate::deployment_action::deploy_namespace::NamespaceDeployment;
 use crate::deployment_action::DeploymentAction;
 use crate::engine::EngineConfig;
 use crate::errors::EngineError;
-use crate::events::EventDetails;
+use crate::events::EnvironmentStep;
 use std::collections::HashSet;
 use std::time::Duration;
 use uuid::Uuid;
@@ -14,28 +14,28 @@ use uuid::Uuid;
 pub struct EnvironmentDeployment<'a> {
     pub deployed_services: HashSet<Uuid>,
     deployment_target: DeploymentTarget<'a>,
-    event_details: EventDetails,
 }
 
 impl<'a> EnvironmentDeployment<'a> {
     pub fn new(
         engine_config: &'a EngineConfig,
         environment: &'a Environment,
-        event_details: EventDetails,
         should_abort: &'a dyn Fn() -> bool,
     ) -> Result<EnvironmentDeployment<'a>, EngineError> {
-        let deployment_target = DeploymentTarget::new(engine_config, environment, &event_details, should_abort)?;
+        let deployment_target = DeploymentTarget::new(engine_config, environment, should_abort)?;
         Ok(EnvironmentDeployment {
             deployed_services: Default::default(),
             deployment_target,
-            event_details,
         })
     }
 
     pub fn on_create(&mut self) -> Result<(), EngineError> {
         let target = &self.deployment_target;
         let environment = &target.environment;
-        let event_details = &self.event_details;
+        let event_details = self
+            .deployment_target
+            .environment
+            .event_details_with_step(EnvironmentStep::Deploy);
         let should_abort = || -> Result<(), EngineError> {
             if (target.should_abort)() {
                 Err(EngineError::new_task_cancellation_requested(event_details.clone()))
@@ -52,7 +52,7 @@ impl<'a> EnvironmentDeployment<'a> {
                 .context()
                 .resource_expiration_in_seconds()
                 .map(|ttl| Duration::from_secs(ttl as u64)),
-            event_details: self.event_details.clone(),
+            event_details: event_details.clone(),
         };
         ns.exec_action(target, environment.action)?;
 
@@ -88,15 +88,18 @@ impl<'a> EnvironmentDeployment<'a> {
         }
 
         // clean up nlb
-        clean_up_deleted_k8s_nlb(self.event_details.clone(), target)?;
+        clean_up_deleted_k8s_nlb(event_details, target)?;
 
         Ok(())
     }
 
     pub fn on_pause(&mut self) -> Result<(), EngineError> {
+        let event_details = self
+            .deployment_target
+            .environment
+            .event_details_with_step(EnvironmentStep::Pause);
         let target = &mut self.deployment_target;
         let environment = &target.environment;
-        let event_details = &self.event_details;
         let should_abort = || -> Result<(), EngineError> {
             if (target.should_abort)() {
                 Err(EngineError::new_task_cancellation_requested(event_details.clone()))
@@ -139,7 +142,7 @@ impl<'a> EnvironmentDeployment<'a> {
                 .context()
                 .resource_expiration_in_seconds()
                 .map(|ttl| Duration::from_secs(ttl as u64)),
-            event_details: self.event_details.clone(),
+            event_details,
         };
         ns.on_pause(target)?;
 
@@ -149,7 +152,10 @@ impl<'a> EnvironmentDeployment<'a> {
     pub fn on_delete(&mut self) -> Result<(), EngineError> {
         let target = &self.deployment_target;
         let environment = &target.environment;
-        let event_details = &self.event_details;
+        let event_details = self
+            .deployment_target
+            .environment
+            .event_details_with_step(EnvironmentStep::Delete);
         let should_abort = || -> Result<(), EngineError> {
             if (target.should_abort)() {
                 Err(EngineError::new_task_cancellation_requested(event_details.clone()))
@@ -207,7 +213,7 @@ impl<'a> EnvironmentDeployment<'a> {
                 .context()
                 .resource_expiration_in_seconds()
                 .map(|ttl| Duration::from_secs(ttl as u64)),
-            event_details: self.event_details.clone(),
+            event_details,
         };
         ns.on_delete(target)?;
 
