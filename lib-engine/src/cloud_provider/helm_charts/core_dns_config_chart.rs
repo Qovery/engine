@@ -267,9 +267,7 @@ impl HelmChart for CoreDNSConfigChart {
             &environment_variables,
         )?;
 
-        if let Err(e) = self.chart_installation_checker.verify_installation(kube_client) {
-            return Err(e);
-        }
+        self.chart_installation_checker.verify_installation(kube_client)?;
 
         Ok(None)
     }

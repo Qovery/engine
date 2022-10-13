@@ -1,34 +1,35 @@
 use chrono::{DateTime, Utc};
-use qovery_engine::errors::{CommandError, EngineError as IoEngineError, EngineError};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::build_platform::local_docker::LocalDocker;
+use crate::cloud_provider::aws::kubernetes::{ec2::EC2, eks::EKS};
+use crate::cloud_provider::aws::regions::AwsRegion;
+use crate::cloud_provider::aws::AWS;
+use crate::cloud_provider::digitalocean::kubernetes::DOKS;
+use crate::cloud_provider::digitalocean::DO;
+use crate::cloud_provider::io::ClusterAdvancedSettings;
+use crate::cloud_provider::models::NodeGroups;
+use crate::cloud_provider::scaleway::kubernetes::Kapsule;
+use crate::cloud_provider::scaleway::Scaleway;
+use crate::container_registry::docr::DOCR;
+use crate::container_registry::ecr::ECR;
+use crate::container_registry::scaleway_container_registry::ScalewayCR;
+use crate::dns_provider::cloudflare::Cloudflare;
+use crate::dns_provider::io::Kind;
+use crate::dns_provider::qoverydns::QoveryDns;
+use crate::engine::EngineConfig;
+use crate::errors::{CommandError, EngineError as IoEngineError, EngineError};
+use crate::events::{EnvironmentStep, EventDetails, InfrastructureStep, Stage, Transmitter};
+use crate::io_models::context::{Context, Features, Metadata};
+use crate::io_models::domain::Domain;
+use crate::io_models::environment::EnvironmentRequest;
+use crate::io_models::{Action, QoveryIdentifier};
+use crate::logger::Logger;
+use crate::models::digital_ocean::DoRegion;
+use crate::models::scaleway::ScwZone;
+use crate::{build_platform, cloud_provider, container_registry, dns_provider};
 use derivative::Derivative;
-use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::cloud_provider::aws::kubernetes::{ec2::EC2, eks::EKS};
-use qovery_engine::cloud_provider::aws::regions::AwsRegion;
-use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::digitalocean::kubernetes::DOKS;
-use qovery_engine::cloud_provider::digitalocean::DO;
-use qovery_engine::cloud_provider::io::ClusterAdvancedSettings;
-use qovery_engine::cloud_provider::models::NodeGroups;
-use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
-use qovery_engine::cloud_provider::scaleway::Scaleway;
-use qovery_engine::container_registry::docr::DOCR;
-use qovery_engine::container_registry::ecr::ECR;
-use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
-use qovery_engine::dns_provider::cloudflare::Cloudflare;
-use qovery_engine::dns_provider::io::Kind;
-use qovery_engine::dns_provider::qoverydns::QoveryDns;
-use qovery_engine::engine::EngineConfig;
-use qovery_engine::events::{EnvironmentStep, EventDetails, InfrastructureStep, Stage, Transmitter};
-use qovery_engine::io_models::context::{Context, Features, Metadata};
-use qovery_engine::io_models::domain::Domain;
-use qovery_engine::io_models::environment::EnvironmentRequest;
-use qovery_engine::io_models::QoveryIdentifier;
-use qovery_engine::logger::Logger;
-use qovery_engine::models::digital_ocean::DoRegion;
-use qovery_engine::models::scaleway::ScwZone;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -163,12 +164,14 @@ impl EngineRequest {
                 Action::Create => Stage::Infrastructure(InfrastructureStep::Create),
                 Action::Pause => Stage::Infrastructure(InfrastructureStep::Pause),
                 Action::Delete => Stage::Infrastructure(InfrastructureStep::Delete),
+                Action::Nothing => Stage::Infrastructure(InfrastructureStep::Create),
             },
             // It means it is an environment deployment request
             Some(_) => match self.action {
                 Action::Create => Stage::Environment(EnvironmentStep::Deploy),
                 Action::Pause => Stage::Environment(EnvironmentStep::Pause),
                 Action::Delete => Stage::Environment(EnvironmentStep::Delete),
+                Action::Nothing => Stage::Infrastructure(InfrastructureStep::Create),
             },
         };
         let kubernetes = &self.cloud_provider.kubernetes;
@@ -184,16 +187,8 @@ impl EngineRequest {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum Action {
-    Create,
-    Pause,
-    Delete,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BuildPlatform {
-    pub kind: qovery_engine::build_platform::Kind,
+    pub kind: build_platform::Kind,
     pub id: String,
     pub long_id: Uuid,
     pub name: String,
@@ -205,9 +200,9 @@ impl BuildPlatform {
         &self,
         context: &Context,
         logger: Box<dyn Logger>,
-    ) -> Box<dyn qovery_engine::build_platform::BuildPlatform> {
+    ) -> Box<dyn build_platform::BuildPlatform> {
         Box::new(match self.kind {
-            qovery_engine::build_platform::Kind::LocalDocker => {
+            build_platform::Kind::LocalDocker => {
                 // FIXME: Remove the unwrap by propagating errors above
                 LocalDocker::new(context.clone(), self.long_id, self.name.as_str(), logger).unwrap()
             }
@@ -217,7 +212,7 @@ impl BuildPlatform {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CloudProvider {
-    pub kind: qovery_engine::cloud_provider::Kind,
+    pub kind: cloud_provider::Kind,
     pub id: String,
     pub long_id: Uuid,
     pub name: String,
@@ -233,15 +228,15 @@ impl CloudProvider {
         context: Context,
         organization_id: &str,
         organization_long_id: Uuid,
-    ) -> Option<Box<dyn qovery_engine::cloud_provider::CloudProvider>> {
-        let terraform_state_credentials = qovery_engine::cloud_provider::TerraformStateCredentials {
+    ) -> Option<Box<dyn cloud_provider::CloudProvider>> {
+        let terraform_state_credentials = cloud_provider::TerraformStateCredentials {
             access_key_id: self.terraform_state_credentials.access_key_id.clone(),
             secret_access_key: self.terraform_state_credentials.secret_access_key.clone(),
             region: self.terraform_state_credentials.region.clone(),
         };
 
         match self.kind {
-            qovery_engine::cloud_provider::Kind::Aws => Some(Box::new(AWS::new(
+            cloud_provider::Kind::Aws => Some(Box::new(AWS::new(
                 context,
                 self.long_id,
                 organization_id,
@@ -254,7 +249,7 @@ impl CloudProvider {
                 self.kubernetes.kind.clone(),
                 terraform_state_credentials,
             ))),
-            qovery_engine::cloud_provider::Kind::Do => Some(Box::new(DO::new(
+            cloud_provider::Kind::Do => Some(Box::new(DO::new(
                 context,
                 self.long_id,
                 organization_id,
@@ -266,7 +261,7 @@ impl CloudProvider {
                 self.name.as_str(),
                 terraform_state_credentials,
             ))),
-            qovery_engine::cloud_provider::Kind::Scw => Some(Box::new(Scaleway::new(
+            cloud_provider::Kind::Scw => Some(Box::new(Scaleway::new(
                 context,
                 self.long_id,
                 organization_id,
@@ -291,7 +286,7 @@ pub struct TerraformStateCredentials {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Kubernetes {
-    pub kind: qovery_engine::cloud_provider::kubernetes::Kind,
+    pub kind: cloud_provider::kubernetes::Kind,
     pub id: String,
     pub long_id: Uuid,
     pub name: String,
@@ -306,12 +301,12 @@ impl Kubernetes {
     pub fn to_engine_kubernetes<'a>(
         &self,
         context: &Context,
-        cloud_provider: Arc<Box<dyn qovery_engine::cloud_provider::CloudProvider>>,
-        dns_provider: Arc<Box<dyn qovery_engine::dns_provider::DnsProvider>>,
+        cloud_provider: Arc<Box<dyn cloud_provider::CloudProvider>>,
+        dns_provider: Arc<Box<dyn dns_provider::DnsProvider>>,
         logger: Box<dyn Logger>,
-    ) -> Result<Box<dyn qovery_engine::cloud_provider::kubernetes::Kubernetes + 'a>, EngineError> {
+    ) -> Result<Box<dyn cloud_provider::kubernetes::Kubernetes + 'a>, EngineError> {
         match self.kind {
-            qovery_engine::cloud_provider::kubernetes::Kind::Eks => match EKS::new(
+            cloud_provider::kubernetes::Kind::Eks => match EKS::new(
                 context.clone(),
                 self.id.as_str(),
                 self.long_id,
@@ -321,7 +316,7 @@ impl Kubernetes {
                 cloud_provider.zones().clone(),
                 cloud_provider,
                 dns_provider,
-                serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(self.options.clone())
+                serde_json::from_value::<cloud_provider::aws::kubernetes::Options>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 self.nodes_groups.clone(),
                 logger,
@@ -330,7 +325,7 @@ impl Kubernetes {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e),
             },
-            qovery_engine::cloud_provider::kubernetes::Kind::Doks => match DOKS::new(
+            cloud_provider::kubernetes::Kind::Doks => match DOKS::new(
                 context.clone(),
                 self.long_id,
                 self.name.clone(),
@@ -339,17 +334,15 @@ impl Kubernetes {
                 cloud_provider,
                 dns_provider,
                 self.nodes_groups.clone(),
-                serde_json::from_value::<qovery_engine::cloud_provider::digitalocean::kubernetes::DoksOptions>(
-                    self.options.clone(),
-                )
-                .expect("What's wronnnnng -- JSON Options for digital ocean DOKS payload is not the expected one"),
+                serde_json::from_value::<cloud_provider::digitalocean::kubernetes::DoksOptions>(self.options.clone())
+                    .expect("What's wronnnnng -- JSON Options for digital ocean DOKS payload is not the expected one"),
                 logger,
                 self.advanced_settings.clone(),
             ) {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e),
             },
-            qovery_engine::cloud_provider::kubernetes::Kind::ScwKapsule => match Kapsule::new(
+            cloud_provider::kubernetes::Kind::ScwKapsule => match Kapsule::new(
                 context.clone(),
                 self.long_id,
                 self.name.clone(),
@@ -363,17 +356,15 @@ impl Kubernetes {
                 cloud_provider,
                 dns_provider,
                 self.nodes_groups.clone(),
-                serde_json::from_value::<qovery_engine::cloud_provider::scaleway::kubernetes::KapsuleOptions>(
-                    self.options.clone(),
-                )
-                .expect("What's wronnnnng -- JSON Options payload for Scaleway is not the expected one"),
+                serde_json::from_value::<cloud_provider::scaleway::kubernetes::KapsuleOptions>(self.options.clone())
+                    .expect("What's wronnnnng -- JSON Options payload for Scaleway is not the expected one"),
                 logger,
                 self.advanced_settings.clone(),
             ) {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e),
             },
-            qovery_engine::cloud_provider::kubernetes::Kind::Ec2 => {
+            cloud_provider::kubernetes::Kind::Ec2 => {
                 let ec2_instance = match self.nodes_groups.len() != 1 {
                     true => {
                         return Err(EngineError::new_missing_nodegroup_information_error(
@@ -393,10 +384,8 @@ impl Kubernetes {
                     cloud_provider.zones().clone(),
                     cloud_provider,
                     dns_provider,
-                    serde_json::from_value::<qovery_engine::cloud_provider::aws::kubernetes::Options>(
-                        self.options.clone(),
-                    )
-                    .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
+                    serde_json::from_value::<cloud_provider::aws::kubernetes::Options>(self.options.clone())
+                        .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                     ec2_instance,
                     logger,
                     self.advanced_settings.clone(),
@@ -411,7 +400,7 @@ impl Kubernetes {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ContainerRegistry {
-    pub kind: qovery_engine::container_registry::Kind,
+    pub kind: container_registry::Kind,
     pub id: String,
     pub long_id: Uuid,
     pub name: String,
@@ -424,9 +413,9 @@ impl ContainerRegistry {
         context: Context,
         logger: Box<dyn Logger>,
         tags: HashMap<String, String>,
-    ) -> Option<Box<dyn qovery_engine::container_registry::ContainerRegistry>> {
+    ) -> Option<Box<dyn container_registry::ContainerRegistry>> {
         match self.kind {
-            qovery_engine::container_registry::Kind::Ecr => Some(Box::new(
+            container_registry::Kind::Ecr => Some(Box::new(
                 ECR::new(
                     context,
                     self.id.as_str(),
@@ -440,7 +429,7 @@ impl ContainerRegistry {
                 )
                 .ok()?,
             )),
-            qovery_engine::container_registry::Kind::Docr => Some(Box::new(
+            container_registry::Kind::Docr => Some(Box::new(
                 DOCR::new(
                     context,
                     self.id.as_str(),
@@ -450,7 +439,7 @@ impl ContainerRegistry {
                 )
                 .ok()?,
             )),
-            qovery_engine::container_registry::Kind::ScalewayCr => Some(Box::new(
+            container_registry::Kind::ScalewayCr => Some(Box::new(
                 ScalewayCR::new(
                     context,
                     self.id.as_str(),
@@ -485,7 +474,7 @@ impl DnsProvider {
         &self,
         context: Context,
         cluster_jwt_token: String,
-    ) -> Option<Box<dyn qovery_engine::dns_provider::DnsProvider>> {
+    ) -> Option<Box<dyn dns_provider::DnsProvider>> {
         match self.kind {
             Kind::Cloudflare => {
                 let token = self.options.get("cloudflare_api_token")?;

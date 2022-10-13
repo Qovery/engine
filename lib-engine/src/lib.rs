@@ -14,6 +14,7 @@ pub mod container_registry;
 mod deletion_utilities;
 pub mod deployment_action;
 mod deployment_report;
+pub mod deployment_task;
 pub mod dns_provider;
 pub mod engine;
 pub mod errors;

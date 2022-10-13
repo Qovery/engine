@@ -1,22 +1,23 @@
-use crate::task_manager::models::{Action, EngineRequest};
-use crate::task_manager::scheduler::Task;
+use crate::build_platform;
+use crate::build_platform::BuildError;
+use crate::cloud_provider::aws::regions::AwsRegion;
+use crate::cloud_provider::environment::Environment;
+use crate::cloud_provider::service;
+use crate::cmd::docker::Docker;
+use crate::container_registry::errors::ContainerRegistryError;
+use crate::container_registry::to_engine_error;
+use crate::deployment_action::deploy_environment::EnvironmentDeployment;
+use crate::deployment_task::Task;
+use crate::engine::EngineConfig;
+use crate::errors::EngineError;
+use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, Transmitter};
+use crate::io_models::context::Context;
+use crate::io_models::engine_request::EngineRequest;
+use crate::io_models::{Action, QoveryIdentifier};
+use crate::logger::Logger;
+use crate::models::application::ApplicationService;
+use crate::transaction::DeploymentOption;
 use chrono::{DateTime, Utc};
-use qovery_engine::build_platform;
-use qovery_engine::build_platform::BuildError;
-use qovery_engine::cloud_provider::aws::regions::AwsRegion;
-use qovery_engine::cloud_provider::service;
-use qovery_engine::cmd::docker::Docker;
-use qovery_engine::container_registry::errors::ContainerRegistryError;
-use qovery_engine::container_registry::to_engine_error;
-use qovery_engine::deployment_action::deploy_environment::EnvironmentDeployment;
-use qovery_engine::engine::EngineConfig;
-use qovery_engine::errors::EngineError;
-use qovery_engine::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage, Transmitter};
-use qovery_engine::io_models::context::Context;
-use qovery_engine::io_models::QoveryIdentifier;
-use qovery_engine::logger::Logger;
-use qovery_engine::models::application::ApplicationService;
-use qovery_engine::transaction::DeploymentOption;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -106,11 +107,12 @@ impl EnvironmentTask {
         )
     }
 
-    fn build_and_push_applications(
-        &self,
+    pub fn build_and_push_applications(
         applications: &mut [Box<dyn ApplicationService>],
         option: &DeploymentOption,
         engine_config: &EngineConfig,
+        event_details: EventDetails,
+        should_abort: &dyn Fn() -> bool,
     ) -> Result<(), EngineError> {
         // do the same for applications
         let mut apps_to_build = applications
@@ -126,7 +128,8 @@ impl EnvironmentTask {
 
         // To convert ContainerError to EngineError
         let cr_to_engine_error = |err: ContainerRegistryError| -> EngineError {
-            let event_details = self.get_event_details(EnvironmentStep::Build);
+            let event_details =
+                EventDetails::clone_changing_stage(event_details.clone(), Stage::Environment(EnvironmentStep::Build));
             to_engine_error(event_details, err)
         };
 
@@ -152,9 +155,7 @@ impl EnvironmentTask {
                 .map_err(cr_to_engine_error)?;
 
             // Ok now everything is setup, we can try to build the app
-            let build_result = engine_config
-                .build_platform()
-                .build(app.get_build_mut(), &self.cancel_checker());
+            let build_result = engine_config.build_platform().build(app.get_build_mut(), should_abort);
 
             // logging
             let image_name = app.get_build().image.full_image_name_with_tag();
@@ -174,7 +175,7 @@ impl EnvironmentTask {
             };
 
             let event_details = app.get_event_details(Stage::Environment(step));
-            self.logger
+            app.logger()
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
 
             // Abort if it was an error
@@ -184,53 +185,37 @@ impl EnvironmentTask {
         Ok(())
     }
 
-    fn build_and_deploy_environment(&self, engine: &EngineConfig) -> Result<(), EngineError> {
-        let env_step = match self
-            .request
-            .target_environment
-            .as_ref()
-            .map(|x| &x.action)
-            .unwrap_or(&qovery_engine::io_models::Action::Create)
-        {
-            qovery_engine::io_models::Action::Create => EnvironmentStep::Deploy,
-            qovery_engine::io_models::Action::Pause => EnvironmentStep::Pause,
-            qovery_engine::io_models::Action::Delete => EnvironmentStep::Delete,
-            qovery_engine::io_models::Action::Nothing => EnvironmentStep::Deploy,
-        };
-        let event_details = self.get_event_details(env_step);
-
-        let environment_action = match &self.request.target_environment {
-            None => Err(EngineError::new_invalid_engine_payload(
-                event_details.clone(),
-                "failed to get environment action, self.request.environment_action() returned None variant",
-            )),
-            Some(ea) => Ok(ea),
-        }?;
-
-        let mut environment = environment_action
-            .to_environment_domain(
-                engine.context(),
-                engine.cloud_provider(),
-                engine.container_registry(),
-                self.logger.clone(),
-            )
-            .map_err(|err| EngineError::new_invalid_engine_payload(event_details.clone(), err.to_string().as_str()))?;
-
+    pub fn deploy_environment(
+        mut environment: Environment,
+        event_details: EventDetails,
+        engine: &EngineConfig,
+        should_abort: &dyn Fn() -> bool,
+    ) -> Result<(), EngineError> {
         let mut deployed_services: HashSet<Uuid> = HashSet::new();
-        let should_abort = self.cancel_checker();
         let run_deploy = || -> Result<(), EngineError> {
-            // Build applications
-            self.build_and_push_applications(
-                &mut environment.applications,
-                &DeploymentOption {
-                    force_build: false,
-                    force_push: false,
-                },
-                engine,
-            )?;
+            // Build applications if needed
+            if environment.action == service::Action::Create {
+                if (should_abort)() {
+                    return Err(EngineError::new_task_cancellation_requested(event_details));
+                }
 
-            // Deploy environment now that everything is built
-            let mut env_deployment = EnvironmentDeployment::new(&engine, &environment, event_details, &should_abort)?;
+                Self::build_and_push_applications(
+                    &mut environment.applications,
+                    &DeploymentOption {
+                        force_build: false,
+                        force_push: false,
+                    },
+                    engine,
+                    event_details.clone(),
+                    should_abort,
+                )?;
+            }
+
+            if (should_abort)() {
+                return Err(EngineError::new_task_cancellation_requested(event_details));
+            }
+
+            let mut env_deployment = EnvironmentDeployment::new(engine, &environment, event_details, should_abort)?;
             let deployment_ret = match environment.action {
                 service::Action::Create => env_deployment.on_create(),
                 service::Action::Pause => env_deployment.on_pause(),
@@ -304,9 +289,53 @@ impl Task for EnvironmentTask {
             ));
         });
 
-        // run the actions
         let engine_config = self.engine_config();
-        let deployment_ret = self.build_and_deploy_environment(&engine_config);
+        let env_step = match self
+            .request
+            .target_environment
+            .as_ref()
+            .map(|x| &x.action)
+            .unwrap_or(&Action::Create)
+        {
+            Action::Create => EnvironmentStep::Deploy,
+            Action::Pause => EnvironmentStep::Pause,
+            Action::Delete => EnvironmentStep::Delete,
+            Action::Nothing => EnvironmentStep::Deploy,
+        };
+        let event_details = self.get_event_details(env_step);
+        let environment_action = match &self.request.target_environment {
+            Some(ea) => ea,
+            None => {
+                self.logger.log(EngineEvent::Error(
+                    EngineError::new_invalid_engine_payload(
+                        event_details,
+                        "failed to get environment action, self.request.environment_action() returned None variant",
+                    ),
+                    None,
+                ));
+                return;
+            }
+        };
+
+        let environment = match environment_action.to_environment_domain(
+            engine_config.context(),
+            engine_config.cloud_provider(),
+            engine_config.container_registry(),
+            self.logger.clone(),
+        ) {
+            Ok(env) => env,
+            Err(err) => {
+                self.logger.log(EngineEvent::Error(
+                    EngineError::new_invalid_engine_payload(event_details, err.to_string().as_str()),
+                    None,
+                ));
+                return;
+            }
+        };
+
+        // run the actions
+        let deployment_ret =
+            EnvironmentTask::deploy_environment(environment, event_details, &engine_config, &self.cancel_checker());
         match (&self.request.action, deployment_ret) {
             (Action::Create, Ok(())) => self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Deployed),
@@ -345,6 +374,7 @@ impl Task for EnvironmentTask {
                     EventMessage::new("💣 Environment failed to be deleted".to_string(), None),
                 ));
             }
+            (Action::Nothing, _) => {}
         };
 
         // Uploading to S3 can take a lot of time, and might hit the core timeout
@@ -353,12 +383,12 @@ impl Task for EnvironmentTask {
 
         // only store if not running on a workstation
         if env::var("DEPLOY_FROM_FILE_KIND").is_err() {
-            match qovery_engine::fs::create_workspace_archive(
+            match crate::fs::create_workspace_archive(
                 engine_config.context().workspace_root_dir(),
                 engine_config.context().execution_id(),
             ) {
-                Ok(file) => match super::infrastructure_task::upload_s3_file(
-                    &self.info_context(),
+                Ok(file) => match super::upload_s3_file(
+                    engine_config.context(),
                     self.request.archive.as_ref(),
                     file.as_str(),
                     AwsRegion::EuWest3, // TODO(benjaminch): make it customizable

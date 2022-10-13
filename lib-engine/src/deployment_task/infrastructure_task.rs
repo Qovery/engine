@@ -1,19 +1,16 @@
-use crate::task_manager::models::{Action, Archive, EngineRequest};
-use crate::task_manager::scheduler::Task;
+use crate::cloud_provider::aws::regions::AwsRegion;
+use crate::cmd::docker::Docker;
+use crate::deployment_task::Task;
+use crate::engine::EngineConfigError;
+use crate::errors::EngineError;
+use crate::events::Stage::Infrastructure;
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
+use crate::io_models::context::Context;
+use crate::io_models::engine_request::EngineRequest;
+use crate::io_models::{Action, QoveryIdentifier};
+use crate::logger::Logger;
+use crate::transaction::{Transaction, TransactionResult};
 use chrono::{DateTime, Utc};
-use qovery_engine::cloud_provider::aws::regions::AwsRegion;
-use qovery_engine::cmd::docker::Docker;
-use qovery_engine::engine::EngineConfigError;
-use qovery_engine::errors::EngineError;
-use qovery_engine::events::Stage::Infrastructure;
-use qovery_engine::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
-use qovery_engine::io_models::context::Context;
-use qovery_engine::io_models::QoveryIdentifier;
-use qovery_engine::logger::Logger;
-use qovery_engine::object_storage::errors::ObjectStorageError;
-use qovery_engine::object_storage::ObjectStorage;
-use qovery_engine::transaction::{Transaction, TransactionResult};
-use std::borrow::Cow;
 use std::{env, fs};
 use url::Url;
 
@@ -83,6 +80,7 @@ impl InfrastructureTask {
                 Action::Create => InfrastructureStep::CreateError,
                 Action::Pause => InfrastructureStep::PauseError,
                 Action::Delete => InfrastructureStep::DeleteError,
+                Action::Nothing => InfrastructureStep::CreateError,
             };
             let event_message =
                 EventMessage::new_from_safe(format!("Kubernetes cluster failure {}", &infrastructure_step));
@@ -98,6 +96,7 @@ impl InfrastructureTask {
                 Action::Create => InfrastructureStep::Created,
                 Action::Pause => InfrastructureStep::Paused,
                 Action::Delete => InfrastructureStep::Deleted,
+                Action::Nothing => InfrastructureStep::CreateError,
             };
             let event_message =
                 EventMessage::new_from_safe(format!("Kubernetes cluster successfully {}", &infrastructure_step));
@@ -145,7 +144,7 @@ impl Task for InfrastructureTask {
         };
 
         // check and init the connection to all services
-        let mut tx = match Transaction::new(&engine, self.logger.clone(), self.cancel_checker(), Box::new(|_| {})) {
+        let mut tx = match Transaction::new(&engine) {
             Ok(transaction) => transaction,
             Err(err) => {
                 let engine_error = match err {
@@ -163,17 +162,18 @@ impl Task for InfrastructureTask {
             Action::Create => tx.create_kubernetes(),
             Action::Pause => tx.pause_kubernetes(),
             Action::Delete => tx.delete_kubernetes(),
+            Action::Nothing => Ok(()),
         };
 
         self.handle_transaction_result(self.logger.clone(), tx.commit());
 
         // only store if not running on a workstation
         if env::var("DEPLOY_FROM_FILE_KIND").is_err() {
-            match qovery_engine::fs::create_workspace_archive(
+            match crate::fs::create_workspace_archive(
                 engine.context().workspace_root_dir(),
                 engine.context().execution_id(),
             ) {
-                Ok(file) => match upload_s3_file(
+                Ok(file) => match super::upload_s3_file(
                     &self.info_context(),
                     self.request.archive.as_ref(),
                     file.as_str(),
@@ -202,67 +202,5 @@ impl Task for InfrastructureTask {
 
     fn cancel_checker(&self) -> Box<dyn Fn() -> bool> {
         Box::new(|| false)
-    }
-}
-
-fn basename(path: &str, sep: char) -> Cow<str> {
-    let pieces = path.split(sep);
-    match pieces.last() {
-        Some(p) => p.into(),
-        None => path.into(),
-    }
-}
-
-pub fn upload_s3_file(
-    context: &Context,
-    archive: Option<&Archive>,
-    file_path: &str,
-    region: AwsRegion,
-    bucket_ttl: i32,
-) -> Result<(), ObjectStorageError> {
-    let archive = match archive {
-        Some(archive) => archive,
-        None => {
-            info!("no archive upload (request.archive is None)");
-            return Ok(());
-        }
-    };
-
-    let object_key = format!("{}/{}", context.organization_short_id(), basename(file_path, '/'));
-
-    info!(
-        "Sending file {} to bucket {} object {} with access_key_id '{}' and secret_access_key '{}'",
-        file_path,
-        archive.bucket_name.as_str(),
-        object_key.as_str(),
-        archive.access_key_id.as_str(),
-        archive.secret_access_key.as_str(),
-    );
-
-    // I am using this s3 object directly to avoid reinventing the wheel.
-    let ttl = match bucket_ttl {
-        0 => None,
-        _ => Some(bucket_ttl),
-    };
-    let s3 = qovery_engine::object_storage::s3::S3::new(
-        context.clone(),
-        "archive-123abc".to_string(),
-        "archive-s3".to_string(),
-        archive.access_key_id.to_string(),
-        archive.secret_access_key.to_string(),
-        region,
-        true,
-        ttl,
-    );
-
-    match s3.put(archive.bucket_name.as_str(), object_key.as_str(), file_path) {
-        Ok(_) => {
-            info!("Archive successfully pushed to Qovery S3");
-            Ok(())
-        }
-        Err(err) => {
-            warn!("Error while pushing archive to s3, {}", err);
-            Err(err)
-        }
     }
 }

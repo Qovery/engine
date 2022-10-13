@@ -265,8 +265,7 @@ fn test_ec2_database(
             EngineLocation::QoverySide,
         );
 
-        let mut deploy_tx =
-            Transaction::new(&engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+        let mut deploy_tx = Transaction::new(&engine_config).unwrap();
         assert!(deploy_tx.create_kubernetes().is_ok());
         assert!(matches!(deploy_tx.commit(), TransactionResult::Ok));
 
@@ -314,7 +313,7 @@ fn test_ec2_database(
         };
 
         // Delete
-        let mut delete_tx = Transaction::new(&engine_config, logger, Box::new(|| false), Box::new(|_| {})).unwrap();
+        let mut delete_tx = Transaction::new(&engine_config).unwrap();
         assert!(delete_tx.delete_kubernetes().is_ok());
         assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
 

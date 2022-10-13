@@ -4,11 +4,13 @@ use std::time::{Duration, Instant};
 
 use crate::utils::log_no_spam_builder;
 use crate::utils::LogErrorOnDrop;
-use chrono::{DateTime, Utc};
 use core::fmt;
 use core::fmt::Formatter;
 use crossbeam_channel::{unbounded, Receiver, RecvError, RecvTimeoutError, Sender};
 use prometheus::{self, IntGauge};
+
+use qovery_engine::deployment_task::Task;
+
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 use std::thread::JoinHandle;
@@ -165,14 +167,6 @@ impl TaskManager {
         self.threads_handle.lock().unwrap().push((thread_name.to_string(), th));
         Ok(())
     }
-}
-
-pub trait Task: Send + Sync {
-    fn created_at(&self) -> &DateTime<Utc>;
-    fn id(&self) -> &str;
-    fn run(&self);
-    fn cancel(&self) -> bool;
-    fn cancel_checker(&self) -> Box<dyn Fn() -> bool>;
 }
 
 #[derive(Debug)]

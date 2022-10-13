@@ -28,9 +28,13 @@ use url::Url;
 use uuid::Uuid;
 
 use qovery_engine::cmd;
+use qovery_engine::deployment_task::environment_task::EnvironmentTask;
+use qovery_engine::deployment_task::infrastructure_task::InfrastructureTask;
+use qovery_engine::deployment_task::Task;
 use qovery_engine::errors::EngineError;
 use qovery_engine::events::InfrastructureStep::ValidateApiInput;
 use qovery_engine::events::{EngineEvent, EventDetails, EventMessage, Stage, Transmitter};
+use qovery_engine::io_models::engine_request::EngineRequest;
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use utils::Mode;
@@ -44,10 +48,7 @@ use crate::logger::nats_logger::NatsLogger;
 use crate::models::TaskSelector;
 use crate::nats::subjects::{Subject, SubjectInfo};
 use crate::nats::{Connection, Message};
-use crate::task_manager::environment_task::EnvironmentTask;
-use crate::task_manager::infrastructure_task::InfrastructureTask;
-use crate::task_manager::models::EngineRequest;
-use crate::task_manager::scheduler::{Task, TaskManager};
+use crate::task_manager::scheduler::TaskManager;
 use crate::utils::{log_no_spam_builder, LogErrorOnDrop};
 
 mod constants;

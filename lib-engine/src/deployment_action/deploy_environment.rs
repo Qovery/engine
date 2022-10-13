@@ -96,26 +96,38 @@ impl<'a> EnvironmentDeployment<'a> {
     pub fn on_pause(&mut self) -> Result<(), EngineError> {
         let target = &mut self.deployment_target;
         let environment = &target.environment;
+        let event_details = &self.event_details;
+        let should_abort = || -> Result<(), EngineError> {
+            if (target.should_abort)() {
+                Err(EngineError::new_task_cancellation_requested(event_details.clone()))
+            } else {
+                Ok(())
+            }
+        };
 
         for service in &environment.routers {
+            should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_pause(target)?;
             service.on_pause_check()?;
         }
 
         for service in &environment.applications {
+            should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_pause(target)?;
             service.on_pause_check()?;
         }
 
         for service in &environment.containers {
+            should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_pause(target)?;
             service.on_pause_check()?;
         }
 
         for service in &environment.databases {
+            should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_pause(target)?;
             service.on_pause_check()?;
@@ -137,6 +149,14 @@ impl<'a> EnvironmentDeployment<'a> {
     pub fn on_delete(&mut self) -> Result<(), EngineError> {
         let target = &self.deployment_target;
         let environment = &target.environment;
+        let event_details = &self.event_details;
+        let should_abort = || -> Result<(), EngineError> {
+            if (target.should_abort)() {
+                Err(EngineError::new_task_cancellation_requested(event_details.clone()))
+            } else {
+                Ok(())
+            }
+        };
 
         let kubeconfig = target.kubernetes.get_kubeconfig_file_path()?;
 
@@ -153,18 +173,21 @@ impl<'a> EnvironmentDeployment<'a> {
 
         // delete all stateless services (router, application...)
         for service in &environment.routers {
+            should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_delete(target)?;
             service.on_delete_check()?;
         }
 
         for service in &environment.applications {
+            should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_delete(target)?;
             service.on_delete_check()?;
         }
 
         for service in &environment.containers {
+            should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_delete(target)?;
             service.on_delete_check()?;
@@ -172,6 +195,7 @@ impl<'a> EnvironmentDeployment<'a> {
 
         // delete all stateful services (database)
         for service in &environment.databases {
+            should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_delete(target)?;
             service.on_delete_check()?
