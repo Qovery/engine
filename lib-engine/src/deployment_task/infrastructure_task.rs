@@ -46,7 +46,7 @@ impl InfrastructureTask {
     fn info_context(&self) -> Context {
         Context::new(
             self.request.organization_long_id,
-            self.request.cloud_provider.kubernetes.long_id,
+            self.request.kubernetes.long_id,
             self.request.id.to_string(),
             self.workspace_root_dir.to_string(),
             self.lib_root_dir.to_string(),
@@ -74,7 +74,7 @@ impl InfrastructureTask {
     }
 
     fn send_infrastructure_progress(&self, logger: Box<dyn Logger>, option_engine_error: Option<EngineError>) {
-        let kubernetes = &self.request.cloud_provider.kubernetes;
+        let kubernetes = &self.request.kubernetes;
         if let Some(engine_error) = option_engine_error {
             let infrastructure_step = match self.request.action {
                 Action::Create => InfrastructureStep::CreateError,
@@ -178,11 +178,7 @@ impl Task for InfrastructureTask {
                     self.request.archive.as_ref(),
                     file.as_str(),
                     AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
-                    self.request
-                        .cloud_provider
-                        .kubernetes
-                        .advanced_settings
-                        .pleco_resources_ttl,
+                    self.request.kubernetes.advanced_settings.pleco_resources_ttl,
                 ) {
                     Ok(_) => {
                         let _ = fs::remove_file(file).map_err(|err| error!("Cannot delete file {}", err));

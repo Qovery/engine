@@ -133,8 +133,6 @@ impl Cluster<AWS, Options> for AWS {
                 .as_ref()
                 .expect("AWS_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
-            uuid::Uuid::new_v4(),
-            "QoveryTest",
             secrets
                 .AWS_ACCESS_KEY_ID
                 .expect("AWS_ACCESS_KEY_ID is not set")
