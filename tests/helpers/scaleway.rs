@@ -132,9 +132,6 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
 
     fn cloud_provider(context: &Context, _kubernetes_kind: KubernetesKind) -> Box<Scaleway> {
         let secrets = FuncTestsSecrets::new();
-        let cluster_id = secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .expect("SCALEWAY_TEST_CLUSTER_ID is not set");
         Box::new(Scaleway::new(
             context.clone(),
             *context.cluster_long_id(),
@@ -143,8 +140,6 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
-            uuid::Uuid::new_v4(),
-            format!("qovery-{}", cluster_id).as_str(),
             secrets
                 .SCALEWAY_ACCESS_KEY
                 .expect("SCALEWAY_ACCESS_KEY is not set in secrets")

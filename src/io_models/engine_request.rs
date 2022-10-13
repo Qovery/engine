@@ -49,13 +49,10 @@ pub struct EngineRequest {
     pub cloud_provider: CloudProvider,
     pub dns_provider: DnsProvider,
     pub container_registry: ContainerRegistry,
+    pub kubernetes: Kubernetes,
     pub target_environment: Option<EnvironmentRequest>,
-    pub failover_environment: Option<EnvironmentRequest>,
     pub metadata: Option<Metadata>,
     pub archive: Option<Archive>,
-    // this field is used to store the data bytes from the current request send through NATS.
-    #[serde(skip_serializing, skip_deserializing)]
-    pub bytes_payload: Vec<u8>,
 }
 
 impl EngineRequest {
@@ -63,7 +60,7 @@ impl EngineRequest {
         let build_platform = self.build_platform.to_engine_build_platform(context, logger.clone());
         let cloud_provider = self
             .cloud_provider
-            .to_engine_cloud_provider(context.clone(), self.organization_id.as_str(), self.organization_long_id)
+            .to_engine_cloud_provider(context.clone(), &self.kubernetes.region, self.kubernetes.kind.clone())
             .ok_or_else(|| {
                 let event_details = self.event_details();
                 IoEngineError::new_error_on_cloud_provider_information(
@@ -78,19 +75,14 @@ impl EngineRequest {
         let cloud_provider = Arc::new(cloud_provider);
 
         let mut tags = self
-            .cloud_provider
             .kubernetes
             .advanced_settings
             .cloud_provider_container_registry_tags
             .clone();
-        if self.cloud_provider.kubernetes.advanced_settings.pleco_resources_ttl > -1 {
+        if self.kubernetes.advanced_settings.pleco_resources_ttl > -1 {
             tags.insert(
                 "ttl".to_string(),
-                self.cloud_provider
-                    .kubernetes
-                    .advanced_settings
-                    .pleco_resources_ttl
-                    .to_string(),
+                self.kubernetes.advanced_settings.pleco_resources_ttl.to_string(),
             );
         };
 
@@ -110,7 +102,6 @@ impl EngineRequest {
             })?;
 
         let cluster_jwt_token: String = self
-            .cloud_provider
             .kubernetes
             .options
             .get("jwt_token")
@@ -134,7 +125,7 @@ impl EngineRequest {
             })?;
         let dns_provider = Arc::new(dns_provider);
 
-        let kubernetes = match self.cloud_provider.kubernetes.to_engine_kubernetes(
+        let kubernetes = match self.kubernetes.to_engine_kubernetes(
             context,
             cloud_provider.clone(),
             dns_provider.clone(),
@@ -158,7 +149,7 @@ impl EngineRequest {
     }
 
     pub fn event_details(&self) -> EventDetails {
-        let kubernetes = &self.cloud_provider.kubernetes;
+        let kubernetes = &self.kubernetes;
         match &self.target_environment {
             // It means it is an infra deployment request
             None => {
@@ -233,7 +224,6 @@ pub struct CloudProvider {
     pub name: String,
     pub zones: Vec<String>,
     pub options: Options,
-    pub kubernetes: Kubernetes,
     pub terraform_state_credentials: TerraformStateCredentials,
 }
 
@@ -241,8 +231,8 @@ impl CloudProvider {
     pub fn to_engine_cloud_provider(
         &self,
         context: Context,
-        organization_id: &str,
-        organization_long_id: Uuid,
+        region: &str,
+        cluster_kind: cloud_provider::kubernetes::Kind,
     ) -> Option<Box<dyn cloud_provider::CloudProvider>> {
         let terraform_state_credentials = cloud_provider::TerraformStateCredentials {
             access_key_id: self.terraform_state_credentials.access_key_id.clone(),
@@ -254,38 +244,32 @@ impl CloudProvider {
             cloud_provider::Kind::Aws => Some(Box::new(AWS::new(
                 context,
                 self.long_id,
-                organization_id,
-                organization_long_id,
                 self.name.as_str(),
                 self.options.access_key_id.as_ref()?.as_str(),
                 self.options.secret_access_key.as_ref()?.as_str(),
-                self.kubernetes.region.as_str(),
+                region,
                 self.zones.clone(),
-                self.kubernetes.kind.clone(),
+                cluster_kind,
                 terraform_state_credentials,
             ))),
             cloud_provider::Kind::Do => Some(Box::new(DO::new(
                 context,
                 self.long_id,
-                organization_id,
-                organization_long_id,
                 self.options.token.as_ref()?.as_str(),
                 self.options.spaces_access_id.as_ref()?.as_str(),
                 self.options.spaces_secret_key.as_ref()?.as_str(),
-                self.kubernetes.region.as_str(),
+                region,
                 self.name.as_str(),
                 terraform_state_credentials,
             ))),
             cloud_provider::Kind::Scw => Some(Box::new(Scaleway::new(
                 context,
                 self.long_id,
-                organization_id,
-                organization_long_id,
                 self.name.as_str(),
                 self.options.scaleway_access_key.as_ref()?.as_str(),
                 self.options.scaleway_secret_key.as_ref()?.as_str(),
                 self.options.scaleway_project_id.as_ref()?.as_str(),
-                self.kubernetes.region.as_str(),
+                region,
                 terraform_state_credentials,
             ))),
         }
