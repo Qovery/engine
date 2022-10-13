@@ -1103,6 +1103,11 @@ fn create(
                 managed_dns_resolvers_terraform_format: managed_dns_resolvers_terraform_format(
                     kubernetes.dns_provider(),
                 ),
+                managed_dns_root_domain_helm_format: kubernetes
+                    .dns_provider()
+                    .domain()
+                    .root_domain()
+                    .to_helm_format_string(),
                 external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
                 dns_email_report: options.tls_email_report.clone(),
                 acme_url: lets_encrypt_url(kubernetes.context()),
@@ -1142,6 +1147,11 @@ fn create(
                 managed_dns_resolvers_terraform_format: managed_dns_resolvers_terraform_format(
                     kubernetes.dns_provider(),
                 ),
+                managed_dns_root_domain_helm_format: kubernetes
+                    .dns_provider()
+                    .domain()
+                    .root_domain()
+                    .to_helm_format_string(),
                 external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
                 dns_email_report: options.tls_email_report.clone(),
                 acme_url: lets_encrypt_url(kubernetes.context()),
