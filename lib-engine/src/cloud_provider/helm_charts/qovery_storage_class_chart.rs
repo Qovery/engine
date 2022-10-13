@@ -1,5 +1,5 @@
 use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, CommonChart};
-use crate::cloud_provider::helm_charts::ToCommonHelmChart;
+use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
 use crate::errors::CommandError;
 use crate::runtime::block_on;
 use k8s_openapi::api::storage::v1::StorageClass;
@@ -28,7 +28,7 @@ impl Display for QoveryStorageType {
 }
 
 pub struct QoveryStorageClassChart {
-    chart_path: String,
+    chart_path: HelmChartPath,
     storage_types_to_be_checked_after_install: HashSet<QoveryStorageType>,
 }
 
@@ -38,10 +38,10 @@ impl QoveryStorageClassChart {
         storage_types_to_be_checked_after_install: HashSet<QoveryStorageType>,
     ) -> Self {
         QoveryStorageClassChart {
-            chart_path: format!(
-                "{}/charts/{}",
-                chart_prefix_path.unwrap_or("./"),
-                QoveryStorageClassChart::chart_name()
+            chart_path: HelmChartPath::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CloudProviderFolder,
+                QoveryStorageClassChart::chart_name(),
             ),
             storage_types_to_be_checked_after_install,
         }
