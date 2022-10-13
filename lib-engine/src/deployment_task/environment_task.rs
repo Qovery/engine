@@ -208,7 +208,7 @@ impl EnvironmentTask {
                 service::Action::Delete => env_deployment.on_delete(),
                 service::Action::Nothing => Ok(()),
             };
-            deployed_services.extend(env_deployment.deployed_services);
+            deployed_services = env_deployment.deployed_services;
 
             deployment_ret
         };
@@ -338,22 +338,22 @@ impl Task for EnvironmentTask {
                 self.get_event_details(EnvironmentStep::Cancelled),
                 EventMessage::new("🚫 Deployment has been canceled at user request 🚫".to_string(), None),
             )),
-            (Action::Create, Err(err)) => {
-                self.logger.log(EngineEvent::Error(err, None));
+            (Action::Create, Err(_err)) => {
+                //self.logger.log(EngineEvent::Error(err, None));
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::DeployedError),
                     EventMessage::new("💣 Deployment failed".to_string(), None),
                 ));
             }
-            (Action::Pause, Err(err)) => {
-                self.logger.log(EngineEvent::Error(err, None));
+            (Action::Pause, Err(_err)) => {
+                //self.logger.log(EngineEvent::Error(err, None));
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::PausedError),
                     EventMessage::new("💣 Environment failed to be paused".to_string(), None),
                 ));
             }
-            (Action::Delete, Err(err)) => {
-                self.logger.log(EngineEvent::Error(err, None));
+            (Action::Delete, Err(_err)) => {
+                //self.logger.log(EngineEvent::Error(err, None));
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::DeletedError),
                     EventMessage::new("💣 Environment failed to be deleted".to_string(), None),
