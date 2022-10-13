@@ -6,6 +6,7 @@ extern crate lazy_static;
 extern crate prometheus;
 #[macro_use]
 extern crate tracing;
+extern crate core;
 
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error};
@@ -43,9 +44,10 @@ use crate::logger::nats_logger::NatsLogger;
 use crate::models::TaskSelector;
 use crate::nats::subjects::{Subject, SubjectInfo};
 use crate::nats::{Connection, Message};
+use crate::task_manager::environment_task::EnvironmentTask;
+use crate::task_manager::infrastructure_task::InfrastructureTask;
 use crate::task_manager::models::EngineRequest;
 use crate::task_manager::scheduler::{Task, TaskManager};
-use crate::task_manager::tasks::{EnvironmentTask, InfrastructureTask};
 use crate::utils::{log_no_spam_builder, LogErrorOnDrop};
 
 mod constants;

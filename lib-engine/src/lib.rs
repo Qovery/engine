@@ -12,7 +12,7 @@ pub mod cmd;
 pub mod constants;
 pub mod container_registry;
 mod deletion_utilities;
-mod deployment_action;
+pub mod deployment_action;
 mod deployment_report;
 pub mod dns_provider;
 pub mod engine;
