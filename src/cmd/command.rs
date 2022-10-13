@@ -31,6 +31,12 @@ pub enum AbortReason {
     Canceled(String),
 }
 
+impl AbortReason {
+    pub fn is_cancel(&self) -> bool {
+        matches!(self, AbortReason::Canceled(_))
+    }
+}
+
 pub enum CommandKillerTrigger<'a> {
     Timeout(Instant, Duration),
     Cancelable(&'a dyn Fn() -> bool),
@@ -95,7 +101,7 @@ impl<'a> CommandKiller<'a> {
 pub trait ExecutableCommand {
     fn get_args(&self) -> Vec<String>;
 
-    fn kill(cmd_handle: &mut Child);
+    fn kill(&self, cmd_handle: &mut Child);
 
     fn exec(&mut self) -> Result<(), CommandError>;
 
@@ -121,6 +127,7 @@ pub trait ExecutableCommand {
 
 pub struct QoveryCommand {
     command: Command,
+    kill_grace_period: Duration,
 }
 
 impl QoveryCommand {
@@ -132,7 +139,14 @@ impl QoveryCommand {
             command.env(k, v);
         });
 
-        QoveryCommand { command }
+        QoveryCommand {
+            command,
+            kill_grace_period: Duration::from_secs(60 * 5),
+        }
+    }
+
+    pub fn set_kill_grace_period(&mut self, grace_period: Duration) {
+        self.kill_grace_period = grace_period;
     }
 
     pub fn set_current_dir<P: AsRef<Path>>(&mut self, root_dir: P) {
@@ -148,11 +162,28 @@ impl ExecutableCommand for QoveryCommand {
             .collect()
     }
 
-    fn kill(cmd_handle: &mut Child) {
-        let _ = cmd_handle
-            .kill() //Fire
-            .map(|_| cmd_handle.wait())
-            .map_err(|err| error!("Cannot kill process {:?} {}", cmd_handle, err));
+    fn kill(&self, cmd_handle: &mut Child) {
+        info!("Killing command: {:?}", cmd_handle);
+
+        // cmd handle kill() send a SIGKILL which is a bit hard
+        // First send a SIGINT and allow the process to gracefully shutdown
+        unsafe {
+            let pid = cmd_handle.id() as i32;
+            let _ = libc::kill(pid, libc::SIGINT);
+        }
+
+        // We wait for the process to gracefully shutdown
+        // or else we send a SIGKILL to force kill it
+        let killed_since = Instant::now();
+        while let Ok(None) = cmd_handle.try_wait() {
+            if killed_since.elapsed() > self.kill_grace_period {
+                info!("Command still running after grace period, hard killing it");
+                let _ = cmd_handle.kill();
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        }
+
+        let _ = cmd_handle.wait();
     }
 
     fn exec(&mut self) -> Result<(), CommandError> {
@@ -291,21 +322,24 @@ impl ExecutableCommand for QoveryCommand {
                     // Does the process should be killed ?
                     match abort_notifier.should_abort() {
                         None => {}
-                        Some(AbortReason::Timeout(timeout)) => {
-                            let msg = format!(
-                                "Killing process {:?} due to timeout {}s reached",
-                                self.command,
-                                timeout.as_secs()
-                            );
+                        Some(reason @ AbortReason::Timeout(_)) | Some(reason @ AbortReason::Canceled(_)) => {
+                            let msg = format!("Killing process {:?} due to {:?}", self.command, reason);
                             warn!("{}", msg);
-                            Self::kill(&mut cmd_handle);
-                            return Err(TimeoutError(msg));
-                        }
-                        Some(AbortReason::Canceled(_)) => {
-                            let msg = format!("Killing process {:?}", self.command);
-                            warn!("{}", msg);
-                            Self::kill(&mut cmd_handle);
-                            return Err(Killed(msg));
+                            self.kill(&mut cmd_handle);
+
+                            // Drain output
+                            while let Some(Ok(line)) = stdout_reader.next() {
+                                stdout_output(line);
+                            }
+                            while let Some(Ok(line)) = stderr_reader.next() {
+                                stderr_output(line);
+                            }
+
+                            return if reason.is_cancel() {
+                                Err(Killed(msg))
+                            } else {
+                                Err(TimeoutError(msg))
+                            };
                         }
                     }
                 }
@@ -399,6 +433,7 @@ mod tests {
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));
 
         let mut cmd = QoveryCommand::new("sh", &["-c", "cat /dev/urandom | grep -a --null-data ."], &[]);
+        cmd.kill_grace_period = Duration::from_secs(2);
         let ret = cmd.exec_with_abort(&mut |_| {}, &mut |_| {}, &CommandKiller::from_timeout(Duration::from_secs(2)));
 
         assert!(matches!(ret, Err(CommandError::TimeoutError(_))));

@@ -2,6 +2,7 @@
 
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use std::{env, fs};
 
 use git2::{Cred, CredentialType};
@@ -297,6 +298,7 @@ impl LocalDocker {
 
             // buildpacks build
             let mut cmd = QoveryCommand::new("pack", &buildpacks_args, &self.get_docker_host_envs());
+            cmd.set_kill_grace_period(Duration::from_secs(0));
             let cmd_killer = CommandKiller::from(build.timeout, is_task_canceled);
             exit_status = cmd.exec_with_abort(
                 &mut |line| {

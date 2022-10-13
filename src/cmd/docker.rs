@@ -4,6 +4,7 @@ use std::fmt::{Display, Formatter};
 use std::path::Path;
 use std::process::ExitStatus;
 use std::sync::Mutex;
+use std::time::Duration;
 use url::Url;
 
 #[derive(thiserror::Error, Debug)]
@@ -644,6 +645,7 @@ where
     X: FnMut(String),
 {
     let mut cmd = QoveryCommand::new("docker", args, envs);
+    cmd.set_kill_grace_period(Duration::from_secs(0));
     let ret = cmd.exec_with_abort(stdout_output, stderr_output, cmd_killer);
 
     match ret {

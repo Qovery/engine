@@ -149,7 +149,20 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
         };
 
         // Special case for app, as if helm timeout this is most likely an issue coming from the user
-        if error.tag() == &HelmDeployTimeout {
+        if error.tag().is_cancel() {
+            (self.send_error)(EngineError::new_engine_error(
+                error.clone(),
+                format!(
+                    r#"
+                🚫 Deployment has been cancelled. {} has been rollback to previous version if rollout was on-going
+                "#,
+                    self.service_type.to_string()
+                )
+                .trim()
+                .to_string(),
+                None,
+            ));
+        } else if error.tag() == &HelmDeployTimeout {
             (self.send_error)(EngineError::new_engine_error(
                 error.clone(),
                 format!(r#"

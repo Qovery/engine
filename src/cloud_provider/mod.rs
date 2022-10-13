@@ -118,6 +118,7 @@ pub struct DeploymentTarget<'a> {
     pub docker: &'a Docker,
     pub kube: kube::Client,
     pub helm: Helm,
+    pub should_abort: &'a dyn Fn() -> bool,
 }
 
 impl<'a> DeploymentTarget<'a> {
@@ -125,6 +126,7 @@ impl<'a> DeploymentTarget<'a> {
         engine_config: &'a EngineConfig,
         environment: &'a Environment,
         event_details: &EventDetails,
+        should_abort: &'a dyn Fn() -> bool,
     ) -> Result<DeploymentTarget<'a>, EngineError> {
         let kubernetes = engine_config.kubernetes();
         let kubeconfig_path = kubernetes.get_kubeconfig_file_path().unwrap_or_default();
@@ -153,6 +155,7 @@ impl<'a> DeploymentTarget<'a> {
             docker: &engine_config.context().docker,
             kube: kube_client,
             helm,
+            should_abort,
         })
     }
 }

@@ -52,7 +52,7 @@ spec:
       {{- end }}
       containers:
         - name: aws-node-termination-handler
-          {{- with .Values.securityContext }}
+          {{- with unset .Values.securityContext "runAsUser" }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
@@ -149,6 +149,9 @@ spec:
               value: {{ .Values.enableRebalanceDraining | quote }}
             - name: ENABLE_SQS_TERMINATION_DRAINING
               value: "false"
+            {{- with .Values.extraEnv }}
+              {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- if or .Values.enablePrometheusServer .Values.enableProbesServer }}
           ports:
           {{- if .Values.enableProbesServer }}

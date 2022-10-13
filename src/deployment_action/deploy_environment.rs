@@ -22,8 +22,9 @@ impl<'a> EnvironmentDeployment<'a> {
         engine_config: &'a EngineConfig,
         environment: &'a Environment,
         event_details: EventDetails,
+        should_abort: &'a dyn Fn() -> bool,
     ) -> Result<EnvironmentDeployment<'a>, EngineError> {
-        let deployment_target = DeploymentTarget::new(engine_config, environment, &event_details)?;
+        let deployment_target = DeploymentTarget::new(engine_config, environment, &event_details, should_abort)?;
         Ok(EnvironmentDeployment {
             deployed_services: Default::default(),
             deployment_target,
@@ -34,8 +35,17 @@ impl<'a> EnvironmentDeployment<'a> {
     pub fn on_create(&mut self) -> Result<(), EngineError> {
         let target = &self.deployment_target;
         let environment = &target.environment;
+        let event_details = &self.event_details;
+        let should_abort = || -> Result<(), EngineError> {
+            if (target.should_abort)() {
+                Err(EngineError::new_task_cancellation_requested(event_details.clone()))
+            } else {
+                Ok(())
+            }
+        };
 
         // deploy namespace first
+        should_abort()?;
         let ns = NamespaceDeployment {
             resource_expiration: target
                 .kubernetes
@@ -48,12 +58,14 @@ impl<'a> EnvironmentDeployment<'a> {
 
         // create all stateful services (database)
         for service in &environment.databases {
+            should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.exec_action(target, *service.action())?;
             service.exec_check_action(*service.action())?;
         }
 
         for service in &environment.containers {
+            should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.exec_action(target, *service.action())?;
             service.exec_check_action(*service.action())?;
@@ -61,6 +73,7 @@ impl<'a> EnvironmentDeployment<'a> {
 
         // create all applications
         for service in &environment.applications {
+            should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.exec_action(target, *service.action())?;
             service.exec_check_action(*service.action())?;
@@ -68,6 +81,7 @@ impl<'a> EnvironmentDeployment<'a> {
 
         // create all routers
         for service in &environment.routers {
+            should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.exec_action(target, *service.action())?;
             service.exec_check_action(*service.action())?;

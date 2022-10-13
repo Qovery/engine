@@ -100,6 +100,9 @@ nodeTerminationGracePeriod: 120
 # emitKubernetesEvents If true, Kubernetes events will be emitted when interruption events are received and when actions are taken on Kubernetes nodes. In IMDS Processor mode a default set of annotations with all the node metadata gathered from IMDS will be attached to each event
 emitKubernetesEvents: false
 
+# completeLifecycleActionDelaySeconds will pause for the configured duration after draining the node before completing the EC2 Autoscaling lifecycle action. This may be helpful if Pods on the node have Persistent Volume Claims.
+completeLifecycleActionDelaySeconds: -1
+
 # kubernetesEventsExtraAnnotations A comma-separated list of key=value extra annotations to attach to all emitted Kubernetes events
 # Example: "first=annotation,sample.annotation/number=two"
 kubernetesEventsExtraAnnotations: ""
@@ -170,12 +173,17 @@ queueURL: ""
 # The maximum amount of parallel event processors to handle concurrent events
 workers: 10
 
-# If true, check that the instance is tagged with "aws-node-termination-handler/managed" as the key before draining the node
-# If false, disables calls to ASG API.
+# [DEPRECATED] Use checkTagBeforeDraining instead
 checkASGTagBeforeDraining: true
 
-# The tag to ensure is on a node if checkASGTagBeforeDraining is true
+# If true, check that the instance is tagged with "aws-node-termination-handler/managed" as the key before draining the node
+checkTagBeforeDraining: true
+
+# [DEPRECATED] Use managedTag instead
 managedAsgTag: "aws-node-termination-handler/managed"
+
+# The tag to ensure is on a node if checkTagBeforeDraining is true
+managedTag: "aws-node-termination-handler/managed"
 
 # If true, fetch node name through Kubernetes node spec ProviderID instead of AWS event PrivateDnsHostname.
 useProviderId: false

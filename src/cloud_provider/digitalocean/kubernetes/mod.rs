@@ -28,6 +28,7 @@ use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd;
+use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::cmd::kubectl::{
     do_kubectl_exec_get_loadbalancer_id, kubectl_exec_get_all_namespaces, kubectl_exec_get_events,
@@ -703,7 +704,7 @@ impl DOKS {
 
         // This will ony print the diff on stdout
         let _ = helm.upgrade_diff(&load_balancer_dns_hostname, &[]);
-        helm.upgrade(&load_balancer_dns_hostname, &[])
+        helm.upgrade(&load_balancer_dns_hostname, &[], &CommandKiller::never())
             .map_err(|e| EngineError::new_helm_error(event_details.clone(), e))
     }
 
