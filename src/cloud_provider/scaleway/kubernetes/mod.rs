@@ -903,6 +903,7 @@ impl Kapsule {
             self.dns_provider.domain().root_domain().to_string(),
             self.dns_provider.domain().to_helm_format_string(),
             self.managed_dns_resolvers_terraform_format(),
+            self.dns_provider.domain().root_domain().to_helm_format_string(),
             self.dns_provider.provider_name().to_string(),
             self.options.tls_email_report.clone(),
             self.lets_encrypt_url(),

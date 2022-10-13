@@ -22,6 +22,7 @@ pub enum Kind {
     QoveryDns,
 }
 
+#[derive(Clone, Debug)]
 pub enum DnsProviderConfiguration {
     Cloudflare(CloudflareDnsConfig),
     QoveryDns(QoveryDnsConfig),

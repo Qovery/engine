@@ -603,6 +603,7 @@ impl DOKS {
             managed_dns_name: self.dns_provider.domain().to_string(),
             managed_dns_helm_format: self.dns_provider.domain().to_helm_format_string(),
             managed_dns_resolvers_terraform_format: self.managed_dns_resolvers_terraform_format(),
+            managed_dns_root_domain_helm_format: self.dns_provider().domain().root_domain().to_helm_format_string(),
             external_dns_provider: self.dns_provider.provider_name().to_string(),
             dns_email_report: self.options.tls_email_report.clone(),
             acme_url: self.lets_encrypt_url(),
