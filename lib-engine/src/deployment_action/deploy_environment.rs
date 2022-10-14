@@ -145,7 +145,6 @@ impl<'a> EnvironmentDeployment<'a> {
             .deployment_target
             .environment
             .event_details_with_step(EnvironmentStep::Delete);
-        let should_abort = Self::should_abort_wrapper(target, &event_details);
 
         // check if environment is not already deleted
         // speed up delete env because of terraform requiring apply + destroy
@@ -155,10 +154,14 @@ impl<'a> EnvironmentDeployment<'a> {
             target.kubernetes.cloud_provider().credentials_environment_variables(),
         ) {
             info!("no need to delete environment {}, already absent", environment.namespace());
+            Self::services_iter(target.environment).for_each(|(id, _, _)| {
+                self.deployed_services.insert(id);
+            });
             return Ok(());
         };
 
         // reverse order of the deployment
+        let should_abort = Self::should_abort_wrapper(target, &event_details);
         let services = Self::services_iter(target.environment).rev();
         for (service_id, service, _) in services {
             should_abort()?;
