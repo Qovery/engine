@@ -27,6 +27,7 @@ pub fn working_environment(
     let mut req = EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         long_id: application_id,
+        name: "env".to_string(),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -66,7 +67,6 @@ pub fn working_environment(
         containers: vec![],
         routers: vec![],
         databases: vec![],
-        clone_from_environment_id: None,
     };
 
     if with_router {
@@ -116,6 +116,7 @@ pub fn environment_2_app_2_routers_1_psql(
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         long_id: Uuid::new_v4(),
+        name: "env".to_string(),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -250,7 +251,6 @@ pub fn environment_2_app_2_routers_1_psql(
                 sticky_sessions_enabled: false,
             },
         ],
-        clone_from_environment_id: None,
     }
 }
 
@@ -278,6 +278,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         long_id: application_id,
+        name: "env".to_string(),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -332,7 +333,6 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             sticky_sessions_enabled: false,
         }],
         databases: vec![],
-        clone_from_environment_id: None,
     }
 }
 
@@ -351,6 +351,7 @@ pub fn environment_only_http_server(
     let mut req = EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         long_id: Uuid::new_v4(),
+        name: "env".to_string(),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -391,7 +392,6 @@ pub fn environment_only_http_server(
         containers: vec![],
         routers: vec![],
         databases: vec![],
-        clone_from_environment_id: None,
     };
 
     if with_router {

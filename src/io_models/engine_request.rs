@@ -36,8 +36,11 @@ use std::sync::Arc;
 use url::Url;
 use uuid::Uuid;
 
+pub type EnvironmentEngineRequest = EngineRequest<EnvironmentRequest>;
+pub type InfrastructureEngineRequest = EngineRequest<Option<()>>;
+
 #[derive(Serialize, Deserialize, Clone)]
-pub struct EngineRequest {
+pub struct EngineRequest<T> {
     pub id: String,
     pub organization_id: String,
     pub organization_long_id: Uuid,
@@ -50,21 +53,25 @@ pub struct EngineRequest {
     pub dns_provider: DnsProvider,
     pub container_registry: ContainerRegistry,
     pub kubernetes: Kubernetes,
-    pub target_environment: Option<EnvironmentRequest>,
+    pub target_environment: T,
     pub metadata: Option<Metadata>,
     pub archive: Option<Archive>,
 }
 
-impl EngineRequest {
-    pub fn engine(&self, context: &Context, logger: Box<dyn Logger>) -> Result<EngineConfig, IoEngineError> {
+impl<T> EngineRequest<T> {
+    pub fn engine(
+        &self,
+        context: &Context,
+        event_details: EventDetails,
+        logger: Box<dyn Logger>,
+    ) -> Result<EngineConfig, IoEngineError> {
         let build_platform = self.build_platform.to_engine_build_platform(context, logger.clone());
         let cloud_provider = self
             .cloud_provider
             .to_engine_cloud_provider(context.clone(), &self.kubernetes.region, self.kubernetes.kind.clone())
             .ok_or_else(|| {
-                let event_details = self.event_details();
                 IoEngineError::new_error_on_cloud_provider_information(
-                    event_details,
+                    event_details.clone(),
                     CommandError::new(
                         "Invalid cloud provider information".to_string(),
                         Some(format!("Invalid cloud provider information: {:?}", self.cloud_provider)),
@@ -90,9 +97,8 @@ impl EngineRequest {
             .container_registry
             .to_engine_container_registry(context.clone(), logger.clone(), tags)
             .ok_or_else(|| {
-                let event_details = self.event_details();
                 IoEngineError::new_error_on_container_registry_information(
-                    event_details,
+                    event_details.clone(),
                     CommandError::new(
                         "Invalid container registry information".to_string(),
                         Some(format!("Invalid container registry information: {:?}", self.container_registry)),
@@ -113,7 +119,6 @@ impl EngineRequest {
             .dns_provider
             .to_engine_dns_provider(context.clone(), cluster_jwt_token)
             .ok_or_else(|| {
-                let event_details = self.event_details();
                 IoEngineError::new_error_on_dns_provider_information(
                     event_details,
                     CommandError::new(
@@ -147,48 +152,48 @@ impl EngineRequest {
             kubernetes,
         ))
     }
+}
 
+impl InfrastructureEngineRequest {
     pub fn event_details(&self) -> EventDetails {
         let kubernetes = &self.kubernetes;
-        match &self.target_environment {
-            // It means it is an infra deployment request
-            None => {
-                let stage = match self.action {
-                    Action::Create => Stage::Infrastructure(InfrastructureStep::Create),
-                    Action::Pause => Stage::Infrastructure(InfrastructureStep::Pause),
-                    Action::Delete => Stage::Infrastructure(InfrastructureStep::Delete),
-                    Action::Nothing => Stage::Infrastructure(InfrastructureStep::Create),
-                };
+        let stage = match self.action {
+            Action::Create => Stage::Infrastructure(InfrastructureStep::Create),
+            Action::Pause => Stage::Infrastructure(InfrastructureStep::Pause),
+            Action::Delete => Stage::Infrastructure(InfrastructureStep::Delete),
+            Action::Nothing => Stage::Infrastructure(InfrastructureStep::Create),
+        };
 
-                EventDetails::new(
-                    Some(self.cloud_provider.kind.clone()),
-                    QoveryIdentifier::new(self.organization_long_id),
-                    QoveryIdentifier::new(kubernetes.long_id),
-                    self.id.to_string(),
-                    stage,
-                    Transmitter::Kubernetes(kubernetes.long_id, kubernetes.name.to_string()),
-                )
-            }
+        EventDetails::new(
+            Some(self.cloud_provider.kind.clone()),
+            QoveryIdentifier::new(self.organization_long_id),
+            QoveryIdentifier::new(kubernetes.long_id),
+            self.id.to_string(),
+            stage,
+            Transmitter::Kubernetes(kubernetes.long_id, kubernetes.name.to_string()),
+        )
+    }
+}
 
-            // It means it is an environment deployment request
-            Some(env) => {
-                let stage = match self.action {
-                    Action::Create => Stage::Environment(EnvironmentStep::Deploy),
-                    Action::Pause => Stage::Environment(EnvironmentStep::Pause),
-                    Action::Delete => Stage::Environment(EnvironmentStep::Delete),
-                    Action::Nothing => Stage::Environment(EnvironmentStep::Deploy),
-                };
+impl EnvironmentEngineRequest {
+    pub fn event_details(&self) -> EventDetails {
+        let kubernetes = &self.kubernetes;
+        // It means it is an environment deployment request
+        let stage = match self.action {
+            Action::Create => Stage::Environment(EnvironmentStep::Deploy),
+            Action::Pause => Stage::Environment(EnvironmentStep::Pause),
+            Action::Delete => Stage::Environment(EnvironmentStep::Delete),
+            Action::Nothing => Stage::Environment(EnvironmentStep::Deploy),
+        };
 
-                EventDetails::new(
-                    Some(self.cloud_provider.kind.clone()),
-                    QoveryIdentifier::new(self.organization_long_id),
-                    QoveryIdentifier::new(kubernetes.long_id),
-                    self.id.to_string(),
-                    stage,
-                    Transmitter::Environment(env.long_id, "environment".to_string()),
-                )
-            }
-        }
+        EventDetails::new(
+            Some(self.cloud_provider.kind.clone()),
+            QoveryIdentifier::new(self.organization_long_id),
+            QoveryIdentifier::new(kubernetes.long_id),
+            self.id.to_string(),
+            stage,
+            Transmitter::Environment(self.target_environment.long_id, self.target_environment.name.clone()),
+        )
     }
 }
 

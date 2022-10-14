@@ -6,7 +6,7 @@ use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
 use crate::io_models::context::Context;
-use crate::io_models::engine_request::EngineRequest;
+use crate::io_models::engine_request::InfrastructureEngineRequest;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::transaction::{Transaction, TransactionResult};
@@ -20,13 +20,13 @@ pub struct InfrastructureTask {
     lib_root_dir: String,
     docker_host: Option<Url>,
     docker: Docker,
-    request: EngineRequest,
+    request: InfrastructureEngineRequest,
     logger: Box<dyn Logger>,
 }
 
 impl InfrastructureTask {
     pub fn new(
-        request: EngineRequest,
+        request: InfrastructureEngineRequest,
         workspace_root_dir: String,
         lib_root_dir: String,
         docker_host: Option<Url>,
@@ -135,7 +135,10 @@ impl Task for InfrastructureTask {
             self.request.build_platform.id.as_str()
         );
 
-        let engine = match self.request.engine(&self.info_context(), self.logger.clone()) {
+        let engine = match self
+            .request
+            .engine(&self.info_context(), self.request.event_details(), self.logger.clone())
+        {
             Ok(engine) => engine,
             Err(err) => {
                 self.send_infrastructure_progress(self.logger.clone(), Some(err));

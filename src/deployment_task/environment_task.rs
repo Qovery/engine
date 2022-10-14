@@ -12,7 +12,7 @@ use crate::engine::EngineConfig;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::io_models::context::Context;
-use crate::io_models::engine_request::EngineRequest;
+use crate::io_models::engine_request::EnvironmentEngineRequest;
 use crate::io_models::Action;
 use crate::logger::Logger;
 use crate::models::application::ApplicationService;
@@ -31,14 +31,14 @@ pub struct EnvironmentTask {
     lib_root_dir: String,
     docker_host: Option<Url>,
     docker: Docker,
-    request: EngineRequest,
+    request: EnvironmentEngineRequest,
     cancel_requested: Arc<AtomicBool>,
     logger: Box<dyn Logger>,
 }
 
 impl EnvironmentTask {
     pub fn new(
-        request: EngineRequest,
+        request: EnvironmentEngineRequest,
         workspace_root_dir: String,
         lib_root_dir: String,
         docker_host: Option<Url>,
@@ -77,7 +77,7 @@ impl EnvironmentTask {
     // merge it with DeploymentTarget type
     fn engine_config(&self) -> EngineConfig {
         self.request
-            .engine(&self.info_context(), self.logger.clone())
+            .engine(&self.info_context(), self.request.event_details(), self.logger.clone())
             .map_err(|err| {
                 self.logger.log(EngineEvent::Error(err.clone(), None));
                 err
@@ -276,34 +276,14 @@ impl Task for EnvironmentTask {
         });
 
         let engine_config = self.engine_config();
-        let env_step = match self
-            .request
-            .target_environment
-            .as_ref()
-            .map(|x| &x.action)
-            .unwrap_or(&Action::Create)
-        {
+        let env_step = match self.request.target_environment.action {
             Action::Create => EnvironmentStep::Deploy,
             Action::Pause => EnvironmentStep::Pause,
             Action::Delete => EnvironmentStep::Delete,
             Action::Nothing => EnvironmentStep::Deploy,
         };
         let event_details = self.get_event_details(env_step);
-        let environment_action = match &self.request.target_environment {
-            Some(ea) => ea,
-            None => {
-                self.logger.log(EngineEvent::Error(
-                    EngineError::new_invalid_engine_payload(
-                        event_details,
-                        "failed to get environment action, self.request.environment_action() returned None variant",
-                    ),
-                    None,
-                ));
-                return;
-            }
-        };
-
-        let environment = match environment_action.to_environment_domain(
+        let environment = match self.request.target_environment.to_environment_domain(
             engine_config.context(),
             engine_config.cloud_provider(),
             engine_config.container_registry(),
