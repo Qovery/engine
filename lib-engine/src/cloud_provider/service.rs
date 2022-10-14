@@ -20,7 +20,6 @@ use crate::logger::Logger;
 
 use crate::models::types::VersionsNumber;
 
-// todo: delete this useless trait
 pub trait Service {
     fn context(&self) -> &Context;
     fn service_type(&self) -> ServiceType;
