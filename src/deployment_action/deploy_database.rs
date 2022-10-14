@@ -395,7 +395,7 @@ where
         })
     }
 
-    fn on_create_check(&self) -> Result<(), EngineError> {
+    fn on_create_check(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         if self.publicly_accessible {
             let logger = get_loggers(self, self.action);
             let domain_checker = CheckDnsForDomains {
@@ -404,7 +404,12 @@ where
                 log: logger.send_success,
             };
 
-            let _ = domain_checker.on_create_check();
+            let _ = domain_checker.on_create_check(target);
+            if (target.should_abort)() {
+                return Err(EngineError::new_task_cancellation_requested(
+                    self.get_event_details(Stage::Environment(EnvironmentStep::Cancelled)),
+                ));
+            }
         }
 
         Ok(())
@@ -548,7 +553,7 @@ where
         })
     }
 
-    fn on_create_check(&self) -> Result<(), EngineError> {
+    fn on_create_check(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         if self.publicly_accessible {
             let logger = get_loggers(self, self.action);
             let domain_checker = CheckDnsForDomains {
@@ -557,7 +562,12 @@ where
                 log: logger.send_success,
             };
 
-            let _ = domain_checker.on_create_check();
+            let _ = domain_checker.on_create_check(target);
+            if (target.should_abort)() {
+                return Err(EngineError::new_task_cancellation_requested(
+                    self.get_event_details(Stage::Environment(EnvironmentStep::Cancelled)),
+                ));
+            }
         }
 
         Ok(())

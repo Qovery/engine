@@ -1,5 +1,6 @@
 #![allow(clippy::field_reassign_with_default)]
 
+use crate::cmd::command::CommandKiller;
 use crate::events::{EngineEvent, EventDetails, EventMessage};
 use crate::logger::Logger;
 use core::option::Option::{None, Some};
@@ -9,7 +10,7 @@ use retry::delay::Fixed;
 use retry::{Error, OperationResult};
 use std::net::ToSocketAddrs;
 use std::net::{SocketAddr, TcpStream as NetTcpStream};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::{fmt, thread};
 use trust_dns_resolver::config::*;
 use trust_dns_resolver::error::ResolveError;
@@ -45,7 +46,7 @@ fn dns_resolvers() -> Vec<Resolver> {
 pub fn await_domain_resolve_cname<'a>(
     domain_to_check: impl Fn() -> &'a str,
     check_frequency: Duration,
-    timeout: Duration,
+    should_abort: CommandKiller,
 ) -> Result<Name, ResolveError> {
     await_resolve(
         &|resolver| {
@@ -64,24 +65,27 @@ pub fn await_domain_resolve_cname<'a>(
                 .ok_or_else(|| ResolveError::from("no CNAME record available for this domain"))
         },
         check_frequency,
-        timeout,
+        &should_abort,
     )
 }
 
 pub fn await_domain_resolve_ip<'a>(
     domain_to_check: impl Fn() -> &'a str,
     check_frequency: Duration,
-    timeout: Duration,
+    should_abort: CommandKiller,
 ) -> Result<LookupIp, ResolveError> {
-    await_resolve(&|resolver| resolver.lookup_ip(domain_to_check()), check_frequency, timeout)
+    await_resolve(
+        &|resolver| resolver.lookup_ip(domain_to_check()),
+        check_frequency,
+        &should_abort,
+    )
 }
 
 fn await_resolve<R>(
     with_resolver: &impl Fn(&Resolver) -> Result<R, ResolveError>,
     check_frequency: Duration,
-    timeout: Duration,
+    should_abort: &CommandKiller,
 ) -> Result<R, ResolveError> {
-    let now = Instant::now();
     let resolvers = dns_resolvers();
 
     let mut ix: usize = 0;
@@ -95,7 +99,7 @@ fn await_resolve<R>(
         match with_resolver(next_resolver()) {
             Ok(ip) => break Ok(ip),
             Err(err) => {
-                if now.elapsed() >= timeout {
+                if should_abort.should_abort().is_some() {
                     break Err(err);
                 }
 
@@ -210,6 +214,7 @@ mod tests {
     use crate::cloud_provider::utilities::{
         await_domain_resolve_cname, check_tcp_port_is_open, TcpCheckErrors, TcpCheckSource,
     };
+    use crate::cmd::command::CommandKiller;
     use crate::errors::CommandError;
     use crate::models::types::VersionsNumber;
     use std::str::FromStr;
@@ -238,7 +243,7 @@ mod tests {
         let cname = await_domain_resolve_cname(
             || "ci-test-no-delete.qovery.io",
             Duration::from_secs(10),
-            Duration::from_secs(30),
+            CommandKiller::from_timeout(Duration::from_secs(30)),
         );
 
         assert_eq!(cname.unwrap().to_utf8(), String::from("qovery.io."));
