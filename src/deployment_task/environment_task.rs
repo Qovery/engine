@@ -392,7 +392,7 @@ impl Task for EnvironmentTask {
     }
 
     fn cancel(&self) -> bool {
-        self.cancel_requested.store(true, Ordering::Release);
+        self.cancel_requested.store(true, Ordering::Relaxed);
         self.logger.log(EngineEvent::Info(
             self.get_event_details(EnvironmentStep::Cancel),
             EventMessage::new(r#"
@@ -407,6 +407,6 @@ impl Task for EnvironmentTask {
 
     fn cancel_checker(&self) -> Box<dyn Fn() -> bool> {
         let cancel_requested = self.cancel_requested.clone();
-        Box::new(move || cancel_requested.load(Ordering::Acquire))
+        Box::new(move || cancel_requested.load(Ordering::Relaxed))
     }
 }

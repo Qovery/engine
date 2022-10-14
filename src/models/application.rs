@@ -414,6 +414,8 @@ pub trait ApplicationService: Service + DeploymentAction + ToTeraContext {
         let startup_timeout = std::cmp::max(probe_timeout /* * 10 rolling restart percent */, 60 * 10);
         std::time::Duration::from_secs(startup_timeout as u64)
     }
+
+    fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
 impl<T: CloudProvider> ApplicationService for Application<T>
@@ -434,5 +436,9 @@ where
 
     fn advanced_settings(&self) -> &ApplicationAdvancedSettings {
         &self.advanced_settings
+    }
+
+    fn as_deployment_action(&self) -> &dyn DeploymentAction {
+        self
     }
 }

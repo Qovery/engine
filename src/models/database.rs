@@ -312,6 +312,8 @@ pub trait DatabaseService: Service + DeploymentAction + ToTeraContext {
     fn is_managed_service(&self) -> bool;
 
     fn db_type(&self) -> service::DatabaseType;
+
+    fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> DatabaseService for Database<C, M, T>
@@ -324,5 +326,9 @@ where
 
     fn db_type(&self) -> service::DatabaseType {
         T::db_type()
+    }
+
+    fn as_deployment_action(&self) -> &dyn DeploymentAction {
+        self
     }
 }
