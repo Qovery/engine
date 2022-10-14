@@ -17,15 +17,15 @@ mod test_utils;
 
 pub trait DeploymentAction {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_create_check(&self) -> Result<(), EngineError> {
+    fn on_create_check(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         Ok(())
     }
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_pause_check(&self) -> Result<(), EngineError> {
+    fn on_pause_check(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         Ok(())
     }
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError>;
-    fn on_delete_check(&self) -> Result<(), EngineError> {
+    fn on_delete_check(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
         Ok(())
     }
 
@@ -38,11 +38,11 @@ pub trait DeploymentAction {
         }
     }
 
-    fn exec_check_action(&self, action: Action) -> Result<(), EngineError> {
+    fn exec_check_action(&self, action: Action, target: &DeploymentTarget) -> Result<(), EngineError> {
         match action {
-            Action::Create => self.on_create_check(),
-            Action::Delete => self.on_delete_check(),
-            Action::Pause => self.on_pause_check(),
+            Action::Create => self.on_create_check(target),
+            Action::Delete => self.on_delete_check(target),
+            Action::Pause => self.on_pause_check(target),
             Action::Nothing => Ok(()),
         }
     }

@@ -61,14 +61,14 @@ impl<'a> EnvironmentDeployment<'a> {
             should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.exec_action(target, *service.action())?;
-            service.exec_check_action(*service.action())?;
+            service.exec_check_action(*service.action(), target)?;
         }
 
         for service in &environment.containers {
             should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.exec_action(target, *service.action())?;
-            service.exec_check_action(*service.action())?;
+            service.exec_check_action(*service.action(), target)?;
         }
 
         // create all applications
@@ -76,7 +76,7 @@ impl<'a> EnvironmentDeployment<'a> {
             should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.exec_action(target, *service.action())?;
-            service.exec_check_action(*service.action())?;
+            service.exec_check_action(*service.action(), target)?;
         }
 
         // create all routers
@@ -84,7 +84,7 @@ impl<'a> EnvironmentDeployment<'a> {
             should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.exec_action(target, *service.action())?;
-            service.exec_check_action(*service.action())?;
+            service.exec_check_action(*service.action(), target)?;
         }
 
         // clean up nlb
@@ -112,28 +112,28 @@ impl<'a> EnvironmentDeployment<'a> {
             should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_pause(target)?;
-            service.on_pause_check()?;
+            service.on_pause_check(target)?;
         }
 
         for service in &environment.applications {
             should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_pause(target)?;
-            service.on_pause_check()?;
+            service.on_pause_check(target)?;
         }
 
         for service in &environment.containers {
             should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_pause(target)?;
-            service.on_pause_check()?;
+            service.on_pause_check(target)?;
         }
 
         for service in &environment.databases {
             should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_pause(target)?;
-            service.on_pause_check()?;
+            service.on_pause_check(target)?;
         }
 
         let ns = NamespaceDeployment {
@@ -182,21 +182,21 @@ impl<'a> EnvironmentDeployment<'a> {
             should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_delete(target)?;
-            service.on_delete_check()?;
+            service.on_delete_check(target)?;
         }
 
         for service in &environment.applications {
             should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_delete(target)?;
-            service.on_delete_check()?;
+            service.on_delete_check(target)?;
         }
 
         for service in &environment.containers {
             should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_delete(target)?;
-            service.on_delete_check()?;
+            service.on_delete_check(target)?;
         }
 
         // delete all stateful services (database)
@@ -204,7 +204,7 @@ impl<'a> EnvironmentDeployment<'a> {
             should_abort()?;
             self.deployed_services.insert(*service.long_id());
             service.on_delete(target)?;
-            service.on_delete_check()?
+            service.on_delete_check(target)?
         }
 
         let ns = NamespaceDeployment {
