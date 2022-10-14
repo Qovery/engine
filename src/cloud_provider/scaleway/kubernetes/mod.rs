@@ -1300,12 +1300,21 @@ impl Kapsule {
                 .map_err(|e| to_engine_error(&event_details, e))?;
 
             // required to avoid namespace stuck on deletion
-            uninstall_cert_manager(
+            if let Err(e) = uninstall_cert_manager(
                 &kubeconfig_path,
                 self.cloud_provider().credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
-            )?;
+            ) {
+                // this error is not blocking, logging a warning and move on
+                self.logger().log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new(
+                        "An error occurred while trying to uninstall cert-manager. This is not blocking.".to_string(),
+                        Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                    ),
+                ));
+            }
 
             self.logger().log(EngineEvent::Info(
                 event_details.clone(),
