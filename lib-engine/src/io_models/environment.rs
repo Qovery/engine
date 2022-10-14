@@ -111,13 +111,8 @@ impl EnvironmentRequest {
                 }
             }
 
-            match router.to_router_domain(
-                context,
-                custom_domain_check_enabled,
-                whitelist_source_range,
-                cloud_provider,
-                logger.clone(),
-            ) {
+            match router.to_router_domain(context, custom_domain_check_enabled, whitelist_source_range, cloud_provider)
+            {
                 Ok(router) => routers.push(router),
                 Err(err) => {
                     return Err(DomainError::RouterError(err));
@@ -127,7 +122,7 @@ impl EnvironmentRequest {
 
         let mut databases = Vec::with_capacity(self.databases.len());
         for db in &self.databases {
-            match db.to_database_domain(context, cloud_provider, logger.clone()) {
+            match db.to_database_domain(context, cloud_provider) {
                 Ok(router) => databases.push(router),
                 Err(err) => {
                     return Err(DomainError::DatabaseError(err));

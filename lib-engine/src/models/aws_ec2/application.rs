@@ -10,7 +10,7 @@ use tera::Context as TeraContext;
 
 impl ToTeraContext for Application<AWSEc2> {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
+        let event_details = (self.mk_event_details)(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let mut context = self.default_tera_context(target.kubernetes, target.environment);
 
         let cpu_limits = match validate_k8s_required_cpu_and_burstable(

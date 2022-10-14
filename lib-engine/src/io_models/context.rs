@@ -1,4 +1,5 @@
 use crate::cmd::docker::Docker;
+use crate::events::{EventDetails, Transmitter};
 use crate::utilities::to_short_id;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
@@ -20,6 +21,7 @@ pub struct Context {
     features: Vec<Features>,
     metadata: Option<Metadata>,
     pub docker: Docker,
+    event_details: EventDetails,
 }
 
 impl Context {
@@ -34,6 +36,7 @@ impl Context {
         features: Vec<Features>,
         metadata: Option<Metadata>,
         docker: Docker,
+        event_details: EventDetails,
     ) -> Self {
         Context {
             organization_id,
@@ -48,6 +51,7 @@ impl Context {
             features,
             metadata,
             docker,
+            event_details,
         }
     }
 
@@ -134,6 +138,10 @@ impl Context {
             }
         }
         false
+    }
+
+    pub fn get_event_details(&self, transmitter: Transmitter) -> EventDetails {
+        EventDetails::clone_changing_transmitter(self.event_details.clone(), transmitter)
     }
 }
 
