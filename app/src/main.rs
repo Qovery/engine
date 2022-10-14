@@ -34,7 +34,7 @@ use qovery_engine::deployment_task::Task;
 use qovery_engine::errors::EngineError;
 use qovery_engine::events::InfrastructureStep::ValidateApiInput;
 use qovery_engine::events::{EngineEvent, EventDetails, EventMessage, Stage, Transmitter};
-use qovery_engine::io_models::engine_request::EngineRequest;
+use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use utils::Mode;
@@ -68,14 +68,39 @@ fn to_engine_task(
     task_selector: &TaskSelector,
     logger: Box<dyn Logger>,
 ) -> Result<Box<dyn Task>, EngineError> {
-    let request = match serde_json::from_slice::<EngineRequest>(&msg.data) {
-        Ok(req) => req,
+    let mk_task = || -> Result<Box<dyn Task>, serde_json::Error> {
+        match task_selector {
+            TaskSelector::Infrastructure(_) => {
+                let request = serde_json::from_slice::<InfrastructureEngineRequest>(&msg.data)?;
+                Ok(Box::new(InfrastructureTask::new(
+                    request,
+                    workspace_root_dir.to_string(),
+                    lib_root_dir.to_string(),
+                    docker_tcp_socket.clone(),
+                    logger,
+                )))
+            }
+            TaskSelector::Environment(_) => {
+                let request = serde_json::from_slice::<EnvironmentEngineRequest>(&msg.data)?;
+                Ok(Box::new(EnvironmentTask::new(
+                    request,
+                    workspace_root_dir.to_string(),
+                    lib_root_dir.to_string(),
+                    docker_tcp_socket.clone(),
+                    logger,
+                )))
+            }
+        }
+    };
+
+    match mk_task() {
+        Ok(task) => Ok(task),
         Err(err) => {
             error!("{}", msg);
             error!("receiving request but JSON decoding error occurred: {:?}", err);
             let subject_info = SubjectInfo::try_parse(msg.subject);
 
-            return Err(EngineError::new_invalid_engine_api_input_cannot_be_deserialized(
+            Err(EngineError::new_invalid_engine_api_input_cannot_be_deserialized(
                 match subject_info {
                     Some(info) => EventDetails::new(
                         match info.cloud_provider {
@@ -110,28 +135,9 @@ fn to_engine_task(
                     ),
                 },
                 err,
-            ));
+            ))
         }
-    };
-
-    let task: Box<dyn Task> = match task_selector {
-        TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(
-            request,
-            workspace_root_dir.to_string(),
-            lib_root_dir.to_string(),
-            docker_tcp_socket.clone(),
-            logger,
-        )),
-        TaskSelector::Environment(_) => Box::new(EnvironmentTask::new(
-            request,
-            workspace_root_dir.to_string(),
-            lib_root_dir.to_string(),
-            docker_tcp_socket.clone(),
-            logger,
-        )),
-    };
-
-    Ok(task)
+    }
 }
 
 pub fn check_libs_directory(path: String) -> Result<(), EngineInitError> {
@@ -388,26 +394,35 @@ pub fn using_json_path_parameter(
     info!("Using {} configuration file", deploy_from_file);
 
     let file = BufReader::new(File::open(deploy_from_file)?);
-    let mut req: EngineRequest = serde_json::from_reader(file)
-        .map_err(|err| {
-            error!("Impossible to parse json file: {}", err);
-            process::exit(1);
-        })
-        .unwrap();
-    req.test_cluster = test_cluster;
 
     let mut task_manager = TaskManager::new();
     let task: Box<dyn Task> = match deployment_type {
         TaskSelector::Environment(_) => {
+            let mut req: EnvironmentEngineRequest = serde_json::from_reader(file)
+                .map_err(|err| {
+                    error!("Impossible to parse json file: {}", err);
+                    process::exit(1);
+                })
+                .unwrap();
+            req.test_cluster = test_cluster;
             Box::new(EnvironmentTask::new(req, workspace_root_dir, lib_root_dir, docker_host, logger))
         }
-        TaskSelector::Infrastructure(_) => Box::new(InfrastructureTask::new(
-            req,
-            workspace_root_dir,
-            lib_root_dir,
-            docker_host,
-            logger,
-        )),
+        TaskSelector::Infrastructure(_) => {
+            let mut req: InfrastructureEngineRequest = serde_json::from_reader(file)
+                .map_err(|err| {
+                    error!("Impossible to parse json file: {}", err);
+                    process::exit(1);
+                })
+                .unwrap();
+            req.test_cluster = test_cluster;
+            Box::new(InfrastructureTask::new(
+                req,
+                workspace_root_dir,
+                lib_root_dir,
+                docker_host,
+                logger,
+            ))
+        }
     };
 
     task_manager.add_task(task);

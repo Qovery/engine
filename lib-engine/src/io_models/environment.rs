@@ -19,6 +19,7 @@ use uuid::Uuid;
 pub struct EnvironmentRequest {
     pub execution_id: String,
     pub long_id: Uuid,
+    pub name: String,
     pub project_long_id: Uuid,
     pub organization_long_id: Uuid,
     pub action: Action,
@@ -26,7 +27,6 @@ pub struct EnvironmentRequest {
     pub containers: Vec<Container>,
     pub routers: Vec<Router>,
     pub databases: Vec<Database>,
-    pub clone_from_environment_id: Option<String>,
 }
 
 #[derive(thiserror::Error, Debug)]

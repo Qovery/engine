@@ -183,6 +183,7 @@ pub fn environment_3_apps_3_databases(
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         long_id: Uuid::new_v4(),
+        name: "env".to_string(),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -388,7 +389,6 @@ pub fn environment_3_apps_3_databases(
                 mode: CONTAINER,
             },
         ],
-        clone_from_environment_id: None,
     }
 }
 
@@ -399,6 +399,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         long_id: Uuid::new_v4(),
+        name: "env".to_string(),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -430,7 +431,6 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
         containers: vec![],
         routers: vec![],
         databases: vec![],
-        clone_from_environment_id: None,
     }
 }
 
@@ -441,6 +441,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         long_id: suffix,
+        name: "env".to_string(),
         project_long_id: suffix,
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -472,7 +473,6 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
         containers: vec![],
         routers: vec![],
         databases: vec![],
-        clone_from_environment_id: None,
     }
 }
 
