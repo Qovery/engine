@@ -55,6 +55,7 @@ impl InfrastructureTask {
             self.request.features.clone(),
             self.request.metadata.clone(),
             self.docker.clone(),
+            self.request.event_details(),
         )
     }
 

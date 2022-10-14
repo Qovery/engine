@@ -2,7 +2,6 @@ use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::io_models::context::Context;
 use crate::io_models::Action;
-use crate::logger::Logger;
 use crate::models;
 use crate::models::aws::AwsRouterExtraSettings;
 use crate::models::aws_ec2::AwsEc2RouterExtraSettings;
@@ -47,7 +46,6 @@ impl Router {
         custom_domain_check_enabled: bool,
         whitelist_source_range: String,
         cloud_provider: &dyn CloudProvider,
-        logger: Box<dyn Logger>,
     ) -> Result<Box<dyn RouterService>, RouterError> {
         let custom_domains = self
             .custom_domains
@@ -79,7 +77,7 @@ impl Router {
                 // But for the time being, it does the trick since we are already in AWS
                 if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
                     Ok(Box::new(models::router::Router::<AWS>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.name.as_str(),
                         self.action.to_service_action(),
@@ -89,11 +87,11 @@ impl Router {
                         self.sticky_sessions_enabled,
                         AwsRouterExtraSettings {},
                         advanced_settings,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 } else {
                     Ok(Box::new(models::router::Router::<AWSEc2>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.name.as_str(),
                         self.action.to_service_action(),
@@ -103,13 +101,13 @@ impl Router {
                         self.sticky_sessions_enabled,
                         AwsEc2RouterExtraSettings {},
                         advanced_settings,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 }
             }
             CPKind::Do => {
                 let router = Box::new(models::router::Router::<DO>::new(
-                    context.clone(),
+                    context,
                     self.long_id,
                     self.name.as_str(),
                     self.action.to_service_action(),
@@ -119,13 +117,13 @@ impl Router {
                     self.sticky_sessions_enabled,
                     DoRouterExtraSettings {},
                     advanced_settings,
-                    logger,
+                    |transmitter| context.get_event_details(transmitter),
                 )?);
                 Ok(router)
             }
             CPKind::Scw => {
                 let router = Box::new(models::router::Router::<SCW>::new(
-                    context.clone(),
+                    context,
                     self.long_id,
                     self.name.as_str(),
                     self.action.to_service_action(),
@@ -135,7 +133,7 @@ impl Router {
                     self.sticky_sessions_enabled,
                     ScwRouterExtraSettings {},
                     advanced_settings,
-                    logger,
+                    |transmitter| context.get_event_details(transmitter),
                 )?);
                 Ok(router)
             }

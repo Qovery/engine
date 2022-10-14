@@ -10,6 +10,7 @@ use crate::utilities::to_short_id;
 use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
 use kube::api::ListParams;
 use kube::Api;
+use std::borrow::Borrow;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -106,7 +107,7 @@ impl DatabaseDeploymentReporter {
             send_progress,
             send_success,
             send_error,
-        } = get_loggers(db, action);
+        } = get_loggers(db, action, deployment_target.logger.borrow());
 
         DatabaseDeploymentReporter {
             long_id: *db.long_id(),

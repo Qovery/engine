@@ -70,6 +70,7 @@ impl EnvironmentTask {
             self.request.features.clone(),
             self.request.metadata.clone(),
             self.docker.clone(),
+            self.request.event_details(),
         )
     }
 
@@ -161,7 +162,9 @@ impl EnvironmentTask {
             };
 
             let event_details = app.get_event_details(Stage::Environment(step));
-            app.logger()
+            infra_ctx
+                .build_platform()
+                .logger()
                 .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
 
             // Abort if it was an error
@@ -242,7 +245,7 @@ impl EnvironmentTask {
             if deployed_services.contains(service.long_id()) {
                 continue;
             }
-            service.logger().log(EngineEvent::Info(
+            infra_ctx.build_platform().logger().log(EngineEvent::Info(
                 service.get_event_details(to_stage(service.action())),
                 EventMessage::new_from_safe("".to_string()),
             ));

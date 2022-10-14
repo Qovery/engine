@@ -864,13 +864,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
             .routers
             .first()
             .unwrap()
-            .to_router_domain(
-                infra_ctx.context(),
-                true,
-                "0.0.0.0/0".to_string(),
-                infra_ctx.cloud_provider(),
-                logger.clone(),
-            )
+            .to_router_domain(infra_ctx.context(), true, "0.0.0.0/0".to_string(), infra_ctx.cloud_provider())
             .unwrap();
         let environment_domain = environment
             .to_environment_domain(

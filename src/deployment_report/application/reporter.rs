@@ -12,6 +12,7 @@ use crate::utilities::to_short_id;
 use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
 use kube::api::ListParams;
 use kube::Api;
+use std::borrow::Borrow;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
@@ -40,7 +41,7 @@ impl ApplicationDeploymentReporter {
             send_progress,
             send_success,
             send_error,
-        } = get_loggers(app, action);
+        } = get_loggers(app, action, deployment_target.logger.borrow());
 
         ApplicationDeploymentReporter {
             long_id: *app.long_id(),
@@ -65,7 +66,7 @@ impl ApplicationDeploymentReporter {
             send_progress,
             send_success,
             send_error,
-        } = get_loggers(container, action);
+        } = get_loggers(container, action, deployment_target.logger.borrow());
 
         ApplicationDeploymentReporter {
             long_id: *container.long_id(),

@@ -249,7 +249,7 @@ impl Container {
             CPKind::Aws => {
                 if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
                     Box::new(models::container::Container::<AWS>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.name,
                         self.action.to_service_action(),
@@ -270,10 +270,11 @@ impl Container {
                         self.advanced_settings,
                         AwsAppExtraSettings {},
                         logger.clone(),
+                        |transmitter| context.get_event_details(transmitter),
                     )?)
                 } else {
                     Box::new(models::container::Container::<AWSEc2>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.name,
                         self.action.to_service_action(),
@@ -294,6 +295,7 @@ impl Container {
                         self.advanced_settings,
                         AwsEc2AppExtraSettings {},
                         logger.clone(),
+                        |transmitter| context.get_event_details(transmitter),
                     )?)
                 }
             }
@@ -304,7 +306,7 @@ impl Container {
                 )));
             }
             CPKind::Scw => Box::new(models::container::Container::<SCW>::new(
-                context.clone(),
+                context,
                 self.long_id,
                 self.name,
                 self.action.to_service_action(),
@@ -325,6 +327,7 @@ impl Container {
                 self.advanced_settings,
                 ScwAppExtraSettings {},
                 logger.clone(),
+                |transmitter| context.get_event_details(transmitter),
             )?),
         };
 

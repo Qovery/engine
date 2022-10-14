@@ -221,7 +221,7 @@ impl Application {
                 // But for the time being, it does the trick since we are already in AWS
                 if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
                     Ok(Box::new(models::application::Application::<AWS>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -237,10 +237,11 @@ impl Application {
                         self.advanced_settings.clone(),
                         AwsAppExtraSettings {},
                         logger.clone(),
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 } else {
                     Ok(Box::new(models::application::Application::<AWSEc2>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -256,11 +257,12 @@ impl Application {
                         self.advanced_settings.clone(),
                         AwsEc2AppExtraSettings {},
                         logger.clone(),
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 }
             }
             CPKind::Do => Ok(Box::new(models::application::Application::<DO>::new(
-                context.clone(),
+                context,
                 self.long_id,
                 self.action.to_service_action(),
                 self.name.as_str(),
@@ -276,9 +278,10 @@ impl Application {
                 self.advanced_settings.clone(),
                 DoAppExtraSettings {},
                 logger.clone(),
+                |transmitter| context.get_event_details(transmitter),
             )?)),
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
-                context.clone(),
+                context,
                 self.long_id,
                 self.action.to_service_action(),
                 self.name.as_str(),
@@ -294,6 +297,7 @@ impl Application {
                 self.advanced_settings.clone(),
                 ScwAppExtraSettings {},
                 logger.clone(),
+                |transmitter| context.get_event_details(transmitter),
             )?)),
         }
     }
