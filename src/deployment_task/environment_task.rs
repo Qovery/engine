@@ -181,7 +181,7 @@ impl EnvironmentTask {
         let run_deploy = || -> Result<(), EngineError> {
             // Build applications if needed
             if environment.action == service::Action::Create {
-                if (should_abort)() {
+                if should_abort() {
                     return Err(EngineError::new_task_cancellation_requested(event_details));
                 }
 
@@ -197,7 +197,7 @@ impl EnvironmentTask {
                 )?;
             }
 
-            if (should_abort)() {
+            if should_abort() {
                 return Err(EngineError::new_task_cancellation_requested(event_details));
             }
 
