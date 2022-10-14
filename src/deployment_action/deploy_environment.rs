@@ -5,7 +5,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::kubectl::kubectl_exec_is_namespace_present;
 use crate::deployment_action::deploy_namespace::NamespaceDeployment;
 use crate::deployment_action::DeploymentAction;
-use crate::engine::EngineConfig;
+use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails};
 use std::collections::HashSet;
@@ -19,13 +19,13 @@ pub struct EnvironmentDeployment<'a> {
 
 impl<'a> EnvironmentDeployment<'a> {
     pub fn new(
-        engine_config: &'a EngineConfig,
+        infra_ctx: &'a InfrastructureContext,
         environment: &'a Environment,
         should_abort: &'a dyn Fn() -> bool,
     ) -> Result<EnvironmentDeployment<'a>, EngineError> {
-        let deployment_target = DeploymentTarget::new(engine_config, environment, should_abort)?;
+        let deployment_target = DeploymentTarget::new(infra_ctx, environment, should_abort)?;
         Ok(EnvironmentDeployment {
-            deployed_services: Default::default(),
+            deployed_services: HashSet::with_capacity(Self::services_iter(environment).count()),
             deployment_target,
         })
     }

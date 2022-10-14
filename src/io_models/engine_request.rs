@@ -18,7 +18,7 @@ use crate::container_registry::scaleway_container_registry::ScalewayCR;
 use crate::dns_provider::cloudflare::Cloudflare;
 use crate::dns_provider::io::Kind;
 use crate::dns_provider::qoverydns::QoveryDns;
-use crate::engine::EngineConfig;
+use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError as IoEngineError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::{Context, Features, Metadata};
@@ -64,7 +64,7 @@ impl<T> EngineRequest<T> {
         context: &Context,
         event_details: EventDetails,
         logger: Box<dyn Logger>,
-    ) -> Result<EngineConfig, IoEngineError> {
+    ) -> Result<InfrastructureContext, IoEngineError> {
         let build_platform = self.build_platform.to_engine_build_platform(context, logger.clone());
         let cloud_provider = self
             .cloud_provider
@@ -143,7 +143,7 @@ impl<T> EngineRequest<T> {
             }
         };
 
-        Ok(EngineConfig::new(
+        Ok(InfrastructureContext::new(
             context.clone(),
             build_platform,
             container_registry,

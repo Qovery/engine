@@ -1,14 +1,14 @@
-use crate::engine::{EngineConfig, EngineConfigError};
+use crate::engine::{EngineConfigError, InfrastructureContext};
 use crate::errors::EngineError;
 
 pub struct Transaction<'a> {
-    engine: &'a EngineConfig,
+    engine: &'a InfrastructureContext,
     steps: Vec<Step>,
     executed_steps: Vec<Step>,
 }
 
 impl<'a> Transaction<'a> {
-    pub fn new(engine: &'a EngineConfig) -> Result<Self, EngineConfigError> {
+    pub fn new(engine: &'a InfrastructureContext) -> Result<Self, EngineConfigError> {
         engine.is_valid()?;
         if let Err(e) = engine.kubernetes().is_valid() {
             return Err(EngineConfigError::KubernetesNotValid(e));

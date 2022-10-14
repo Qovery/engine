@@ -33,7 +33,7 @@ impl EngineConfigError {
     }
 }
 
-pub struct EngineConfig {
+pub struct InfrastructureContext {
     context: Context,
     build_platform: Box<dyn BuildPlatform>,
     container_registry: Box<dyn ContainerRegistry>,
@@ -42,7 +42,7 @@ pub struct EngineConfig {
     kubernetes: Box<dyn Kubernetes>,
 }
 
-impl EngineConfig {
+impl InfrastructureContext {
     pub fn new(
         context: Context,
         build_platform: Box<dyn BuildPlatform>,
@@ -50,8 +50,8 @@ impl EngineConfig {
         cloud_provider: Arc<Box<dyn CloudProvider>>,
         dns_provider: Arc<Box<dyn DnsProvider>>,
         kubernetes: Box<dyn Kubernetes>,
-    ) -> EngineConfig {
-        EngineConfig {
+    ) -> InfrastructureContext {
+        InfrastructureContext {
             context,
             build_platform,
             container_registry,
