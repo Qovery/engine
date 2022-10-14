@@ -8,7 +8,7 @@ use qovery_engine::cloud_provider::environment::Environment;
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
-use qovery_engine::engine::EngineConfig;
+use qovery_engine::engine::InfrastructureContext;
 
 use qovery_engine::io_models::context::Context;
 
@@ -40,7 +40,7 @@ pub trait Cluster<T, U> {
         min_nodes: i32,
         max_nodes: i32,
         engine_location: EngineLocation,
-    ) -> EngineConfig;
+    ) -> InfrastructureContext;
     fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind) -> Box<T>;
     fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups>;
     fn kubernetes_cluster_options(
@@ -55,28 +55,28 @@ pub trait Infrastructure {
         &self,
         environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
-        engine_config: &EngineConfig,
+        infra_ctx: &InfrastructureContext,
     ) -> (Environment, TransactionResult);
 
     fn deploy_environment(
         &self,
         environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
-        engine_config: &EngineConfig,
+        infra_ctx: &InfrastructureContext,
     ) -> TransactionResult;
 
     fn pause_environment(
         &self,
         environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
-        engine_config: &EngineConfig,
+        infra_ctx: &InfrastructureContext,
     ) -> TransactionResult;
 
     fn delete_environment(
         &self,
         environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
-        engine_config: &EngineConfig,
+        infra_ctx: &InfrastructureContext,
     ) -> TransactionResult;
 }
 

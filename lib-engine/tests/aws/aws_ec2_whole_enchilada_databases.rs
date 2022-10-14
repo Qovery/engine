@@ -5,7 +5,7 @@ use ::function_name::named;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
-use qovery_engine::engine::EngineConfig;
+use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 use qovery_engine::logger::Logger;
@@ -38,7 +38,7 @@ fn test_ec2_postgres(
     db_versions_to_test: &DbVersionsToTest,
     secrets: FuncTestsSecrets,
     cluster_domain: ClusterDomain,
-    engine_config: &EngineConfig,
+    infra_ctx: &InfrastructureContext,
 ) {
     let environment = helpers::database::database_test_environment(&context);
 
@@ -73,7 +73,7 @@ fn test_ec2_postgres(
             database_mode.clone(),
             is_public,
             cluster_domain.clone(),
-            Some(engine_config),
+            Some(infra_ctx),
         );
     }
 }
@@ -87,7 +87,7 @@ fn test_ec2_mongo(
     db_versions_to_test: &DbVersionsToTest,
     secrets: FuncTestsSecrets,
     cluster_domain: ClusterDomain,
-    engine_config: &EngineConfig,
+    infra_ctx: &InfrastructureContext,
 ) {
     let environment = helpers::database::database_test_environment(&context);
 
@@ -122,7 +122,7 @@ fn test_ec2_mongo(
             database_mode.clone(),
             is_public,
             cluster_domain.clone(),
-            Some(engine_config),
+            Some(infra_ctx),
         );
     }
 }
@@ -136,7 +136,7 @@ fn test_ec2_mysql(
     db_versions_to_test: &DbVersionsToTest,
     secrets: FuncTestsSecrets,
     cluster_domain: ClusterDomain,
-    engine_config: &EngineConfig,
+    infra_ctx: &InfrastructureContext,
 ) {
     let environment = helpers::database::database_test_environment(&context);
 
@@ -171,7 +171,7 @@ fn test_ec2_mysql(
             database_mode.clone(),
             is_public,
             cluster_domain.clone(),
-            Some(engine_config),
+            Some(infra_ctx),
         );
     }
 }
@@ -185,7 +185,7 @@ fn test_ec2_redis(
     db_versions_to_test: &DbVersionsToTest,
     secrets: FuncTestsSecrets,
     cluster_domain: ClusterDomain,
-    engine_config: &EngineConfig,
+    infra_ctx: &InfrastructureContext,
 ) {
     let environment = helpers::database::database_test_environment(&context);
 
@@ -220,7 +220,7 @@ fn test_ec2_redis(
             database_mode.clone(),
             is_public,
             cluster_domain.clone(),
-            Some(engine_config),
+            Some(infra_ctx),
         );
     }
 }
@@ -252,7 +252,7 @@ fn test_ec2_database(
             domain: attributed_domain,
         };
 
-        let engine_config = AWS::docker_cr_engine(
+        let infra_ctx = AWS::docker_cr_engine(
             &context,
             logger.clone(),
             AWS_TEST_REGION.to_aws_format(),
@@ -265,7 +265,7 @@ fn test_ec2_database(
             EngineLocation::QoverySide,
         );
 
-        let mut deploy_tx = Transaction::new(&engine_config).unwrap();
+        let mut deploy_tx = Transaction::new(&infra_ctx).unwrap();
         assert!(deploy_tx.create_kubernetes().is_ok());
         assert!(matches!(deploy_tx.commit(), TransactionResult::Ok));
 
@@ -278,7 +278,7 @@ fn test_ec2_database(
                 &db_versions_to_test,
                 secrets,
                 cluster_domain,
-                &engine_config,
+                &infra_ctx,
             ),
             DatabaseKind::Mysql => test_ec2_mysql(
                 context,
@@ -288,7 +288,7 @@ fn test_ec2_database(
                 &db_versions_to_test,
                 secrets,
                 cluster_domain,
-                &engine_config,
+                &infra_ctx,
             ),
             DatabaseKind::Mongodb => test_ec2_mongo(
                 context,
@@ -298,7 +298,7 @@ fn test_ec2_database(
                 &db_versions_to_test,
                 secrets,
                 cluster_domain,
-                &engine_config,
+                &infra_ctx,
             ),
             DatabaseKind::Redis => test_ec2_redis(
                 context,
@@ -308,12 +308,12 @@ fn test_ec2_database(
                 &db_versions_to_test,
                 secrets,
                 cluster_domain,
-                &engine_config,
+                &infra_ctx,
             ),
         };
 
         // Delete
-        let mut delete_tx = Transaction::new(&engine_config).unwrap();
+        let mut delete_tx = Transaction::new(&infra_ctx).unwrap();
         assert!(delete_tx.delete_kubernetes().is_ok());
         assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
 
