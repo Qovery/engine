@@ -2,7 +2,6 @@ use crate::helpers::aws_ec2::ec2_kubernetes_instance;
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::utilities::{init, FuncTestsSecrets};
 
-use core::cell::RefCell;
 use core::option::Option;
 use core::option::Option::{None, Some};
 use core::result::Result::Err;
@@ -17,13 +16,13 @@ use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::{CloudProvider, Kind};
+use qovery_engine::deployment_task::environment_task::EnvironmentTask;
 use qovery_engine::dns_provider::DnsProvider;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::Logger;
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::transaction::{Transaction, TransactionResult};
-use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 use tracing::{span, Level};
@@ -188,8 +187,8 @@ pub fn cluster_test(
             EngineLocation::ClientSide,
         ),
     };
-    let mut deploy_tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-    let mut delete_tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+    let mut deploy_tx = Transaction::new(&engine).unwrap();
+    let mut delete_tx = Transaction::new(&engine).unwrap();
 
     let mut aws_zones_string: Vec<String> = Vec::with_capacity(3);
     if let Some(aws_zones) = aws_zones {
@@ -206,28 +205,22 @@ pub fn cluster_test(
 
     // Deploy env if any
     if let Some(env) = environment_to_deploy {
-        let mut deploy_env_tx =
-            Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-
-        // Deploy env
-        let env = env
+        let mut env = env
             .to_environment_domain(&context, engine.cloud_provider(), engine.container_registry(), logger.clone())
             .unwrap();
-        let env = Rc::new(RefCell::new(env));
-        if let Err(err) = deploy_env_tx.deploy_environment(&env) {
-            panic!("{:?}", err)
-        }
 
-        assert!(matches!(deploy_env_tx.commit(), TransactionResult::Ok));
+        env.action = qovery_engine::cloud_provider::service::Action::Create;
+        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, &|| false) {
+            panic!("{:?}", ret)
+        }
     }
 
     match test_type {
         // TODO new test type
         ClusterTestType::Classic => {}
         ClusterTestType::WithPause => {
-            let mut pause_tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-            let mut resume_tx =
-                Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+            let mut pause_tx = Transaction::new(&engine).unwrap();
+            let mut resume_tx = Transaction::new(&engine).unwrap();
 
             // Pause
             if let Err(err) = pause_tx.pause_kubernetes() {
@@ -271,10 +264,8 @@ pub fn cluster_test(
                     EngineLocation::ClientSide,
                 ),
             };
-            let mut upgrade_tx =
-                Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-            let mut delete_tx =
-                Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+            let mut upgrade_tx = Transaction::new(&engine).unwrap();
+            let mut delete_tx = Transaction::new(&engine).unwrap();
 
             // Upgrade
             if let Err(err) = upgrade_tx.create_kubernetes() {
@@ -321,10 +312,8 @@ pub fn cluster_test(
                     EngineLocation::ClientSide,
                 ),
             };
-            let mut upgrade_tx =
-                Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-            let mut delete_tx =
-                Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+            let mut upgrade_tx = Transaction::new(&engine).unwrap();
+            let mut delete_tx = Transaction::new(&engine).unwrap();
             // Upgrade
             if let Err(err) = upgrade_tx.create_kubernetes() {
                 panic!("{:?}", err)
@@ -342,18 +331,14 @@ pub fn cluster_test(
 
     // Destroy env if any
     if let Some(env) = environment_to_deploy {
-        let mut destroy_env_tx =
-            Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-
-        // Deploy env
-        let env = env
+        let mut env = env
             .to_environment_domain(&context, engine.cloud_provider(), engine.container_registry(), logger.clone())
             .unwrap();
-        let env = Rc::new(RefCell::new(env));
-        if let Err(err) = destroy_env_tx.delete_environment(&env) {
-            panic!("{:?}", err)
+
+        env.action = qovery_engine::cloud_provider::service::Action::Delete;
+        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, &|| false) {
+            panic!("{:?}", ret)
         }
-        assert!(matches!(destroy_env_tx.commit(), TransactionResult::Ok));
     }
 
     // Delete

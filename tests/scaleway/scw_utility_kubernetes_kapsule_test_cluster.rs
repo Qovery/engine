@@ -32,7 +32,7 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
         let logger = logger();
         let context = context(organization_id, cluster_id);
         let engine = scw_default_engine_config(&context, logger.clone());
-        let mut tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+        let mut tx = Transaction::new(&engine).unwrap();
 
         // Deploy
         if let Err(err) = tx.create_kubernetes() {
@@ -72,7 +72,7 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
         let logger = logger();
         let context = context(organization_id, cluster_id);
         let engine = scw_default_engine_config(&context, logger.clone());
-        let mut tx = Transaction::new(&engine, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
+        let mut tx = Transaction::new(&engine).unwrap();
 
         // Destroy
         if let Err(err) = tx.delete_kubernetes() {

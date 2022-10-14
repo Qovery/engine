@@ -140,6 +140,7 @@ impl EnvironmentRequest {
             self.project_long_id,
             self.organization_long_id,
             self.action.to_service_action(),
+            context,
             applications,
             containers,
             routers,

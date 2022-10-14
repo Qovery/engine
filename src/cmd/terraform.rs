@@ -609,6 +609,7 @@ fn terraform_plugins_failed_load(
 
     if error_string.contains("Failed to install provider from shared cache")
         || error_string.contains("Failed to install provider")
+        || (error_string.contains("The specified plugin cache dir") && error_string.contains("cannot be opened"))
     {
         if let Err(e) = fs::remove_file(&terraform_provider_lock) {
             return Err(TerraformError::CannotDeleteLockFile {

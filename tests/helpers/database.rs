@@ -7,7 +7,6 @@ use crate::helpers::utilities::{
     FuncTestsSecrets,
 };
 use chrono::Utc;
-use core::cell::RefCell;
 use core::default::Default;
 use core::option::Option;
 use core::option::Option::{None, Some};
@@ -19,18 +18,21 @@ use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::structs::SVCItem;
+
 use qovery_engine::engine::EngineConfig;
 use qovery_engine::io_models::application::{Application, GitCredentials, Port, Protocol, Storage, StorageType};
 use qovery_engine::io_models::context::{CloneForTest, Context};
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
+
+use qovery_engine::deployment_task::environment_task::EnvironmentTask;
+use qovery_engine::events::{EnvironmentStep, Stage};
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::Action;
 use qovery_engine::logger::Logger;
-use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
+use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use qovery_engine::utilities::to_short_id;
 use std::collections::BTreeMap;
-use std::rc::Rc;
 use std::str::FromStr;
 use tracing::{span, Level};
 use uuid::Uuid;
@@ -42,8 +44,7 @@ impl Infrastructure for EnvironmentRequest {
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> (Environment, TransactionResult) {
-        let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let env = environment
+        let mut env = environment
             .to_environment_domain(
                 engine_config.context(),
                 engine_config.cloud_provider(),
@@ -52,17 +53,23 @@ impl Infrastructure for EnvironmentRequest {
             )
             .unwrap();
 
-        let env = Rc::new(RefCell::new(env));
-        let _ = tx.build_environment(
-            &env,
-            DeploymentOption {
-                force_build: true,
-                force_push: true,
-            },
+        let deployment_option = DeploymentOption {
+            force_build: true,
+            force_push: true,
+        };
+        let event_details = engine_config
+            .cloud_provider()
+            .get_event_details(Stage::Environment(EnvironmentStep::Build));
+        let ret = EnvironmentTask::build_and_push_applications(
+            &mut env.applications,
+            &deployment_option,
+            engine_config,
+            event_details,
+            &|| false,
         );
+        ret.unwrap();
 
-        let ret = tx.commit();
-        (Rc::try_unwrap(env).ok().unwrap().into_inner(), ret)
+        (env, TransactionResult::Ok)
     }
 
     fn deploy_environment(
@@ -71,8 +78,7 @@ impl Infrastructure for EnvironmentRequest {
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult {
-        let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let env = environment
+        let mut env = environment
             .to_environment_domain(
                 engine_config.context(),
                 engine_config.cloud_provider(),
@@ -81,16 +87,12 @@ impl Infrastructure for EnvironmentRequest {
             )
             .unwrap();
 
-        let env = Rc::new(RefCell::new(env));
-        let _ = tx.deploy_environment_with_options(
-            &env,
-            DeploymentOption {
-                force_build: true,
-                force_push: true,
-            },
-        );
-
-        tx.commit()
+        env.action = qovery_engine::cloud_provider::service::Action::Create;
+        let ret = EnvironmentTask::deploy_environment(env, engine_config, &|| false);
+        match ret {
+            Ok(_) => TransactionResult::Ok,
+            Err(err) => TransactionResult::Error(Box::new(err)),
+        }
     }
 
     fn pause_environment(
@@ -99,8 +101,7 @@ impl Infrastructure for EnvironmentRequest {
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult {
-        let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let env = environment
+        let mut env = environment
             .to_environment_domain(
                 engine_config.context(),
                 engine_config.cloud_provider(),
@@ -108,10 +109,13 @@ impl Infrastructure for EnvironmentRequest {
                 logger,
             )
             .unwrap();
-        let env = Rc::new(RefCell::new(env));
-        let _ = tx.pause_environment(&env);
 
-        tx.commit()
+        env.action = qovery_engine::cloud_provider::service::Action::Pause;
+        let ret = EnvironmentTask::deploy_environment(env, engine_config, &|| false);
+        match ret {
+            Ok(_) => TransactionResult::Ok,
+            Err(err) => TransactionResult::Error(Box::new(err)),
+        }
     }
 
     fn delete_environment(
@@ -120,8 +124,7 @@ impl Infrastructure for EnvironmentRequest {
         logger: Box<dyn Logger>,
         engine_config: &EngineConfig,
     ) -> TransactionResult {
-        let mut tx = Transaction::new(engine_config, logger.clone(), Box::new(|| false), Box::new(|_| {})).unwrap();
-        let env = environment
+        let mut env = environment
             .to_environment_domain(
                 engine_config.context(),
                 engine_config.cloud_provider(),
@@ -129,10 +132,13 @@ impl Infrastructure for EnvironmentRequest {
                 logger,
             )
             .unwrap();
-        let env = Rc::new(RefCell::new(env));
-        let _ = tx.delete_environment(&env);
 
-        tx.commit()
+        env.action = qovery_engine::cloud_provider::service::Action::Delete;
+        let ret = EnvironmentTask::deploy_environment(env, engine_config, &|| false);
+        match ret {
+            Ok(_) => TransactionResult::Ok,
+            Err(err) => TransactionResult::Error(Box::new(err)),
+        }
     }
 }
 

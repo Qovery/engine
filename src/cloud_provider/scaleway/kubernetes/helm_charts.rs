@@ -1,7 +1,7 @@
 use crate::cloud_provider::helm::{
     get_chart_for_cert_manager_config, get_chart_for_cluster_agent, get_chart_for_shell_agent,
     get_engine_helm_action_from_location, ChartInfo, ChartSetValue, ChartValuesGenerated, ClusterAgentContext,
-    CommonChart, CoreDNSConfigChart, HelmAction, HelmChart, HelmChartNamespaces, ShellAgentContext,
+    CommonChart, HelmAction, HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::ToCommonHelmChart;
@@ -13,6 +13,7 @@ use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 use crate::models::scaleway::{ScwRegion, ScwZone};
 
+use crate::cloud_provider::helm_charts::core_dns_config_chart::CoreDNSConfigChart;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -155,25 +156,21 @@ pub fn scw_helm_charts(
         QoveryStorageClassChart::new(chart_prefix_path, HashSet::from_iter(vec![QoveryStorageType::Ssd]))
             .to_common_helm_chart();
 
-    let coredns_config = CoreDNSConfigChart {
-        chart_info: ChartInfo {
-            name: "coredns".to_string(),
-            path: chart_path("/charts/coredns-config"),
-            values: vec![
-                ChartSetValue {
-                    key: "managed_dns".to_string(),
-                    value: chart_config_prerequisites.managed_dns_helm_format.clone(),
-                },
-                ChartSetValue {
-                    key: "managed_dns_resolvers".to_string(),
-                    value: chart_config_prerequisites
-                        .managed_dns_resolvers_terraform_format
-                        .clone(),
-                },
-            ],
-            ..Default::default()
-        },
-    };
+    // CoreDNS config
+    let coredns_config = CoreDNSConfigChart::new(
+        chart_prefix_path,
+        vec![
+            "addonmanager.kubernetes.io/mode: EnsureExists".to_string(),
+            "k8s.scw.cloud/object: ConfigMap".to_string(),
+            "k8s.scw.cloud/system: coredns".to_string(),
+            "k8s-app: kube-dns".to_string(),
+        ],
+        false,
+        chart_config_prerequisites.managed_dns_helm_format.to_string(),
+        chart_config_prerequisites
+            .managed_dns_resolvers_terraform_format
+            .to_string(),
+    );
 
     let external_dns = CommonChart {
         chart_info: ChartInfo {
