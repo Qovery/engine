@@ -635,6 +635,8 @@ pub enum Tag {
     TerraformResourceDependencyViolation,
     /// TerraformInstanceTypeDoesntExist: terraform issue due to instance type doesn't exist in the current region
     TerraformInstanceTypeDoesntExist,
+    /// TerraformInstanceVolumeCannotBeReduced: terraform issue due to instance volume cannot be downsized
+    TerraformInstanceVolumeCannotBeReduced,
     /// TerraformConfigFileNotFound: terraform config file cannot be found
     TerraformConfigFileNotFound,
     /// TerraformConfigFileInvalidContent: terraform config file has invalid content
@@ -2430,6 +2432,14 @@ impl EngineError {
                 Some(terraform_error.into()),
                 None,
                 Some("Select a different instance type in your cluster settings and re-launch the installation process".to_string()),
+            ),
+            TerraformError::InstanceVolumeCannotBeDownSized { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformInstanceVolumeCannotBeReduced,
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()),
+                None,
+                Some("An existing instance volume cannot be downsized, you can only increase its volume.".to_string()),
             ),
         }
     }
