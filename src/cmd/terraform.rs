@@ -125,6 +125,12 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    InstanceVolumeCannotBeDownSized {
+        instance_id: String,
+        volume_id: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
     MultipleInterruptsReceived {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
@@ -375,6 +381,23 @@ impl TerraformError {
                 raw_message: raw_terraform_error_output,
             };
         }
+        // InvalidParameterValue: New size cannot be smaller than existing size
+        if let Ok(aws_wrong_instance_type_re) = Regex::new(
+            r"Error: updating EC2 Instance \((?P<instance_id>.+?)\) volume \((?P<volume_id>.+?)\): InvalidParameterValue: New size cannot be smaller than existing size",
+        ) {
+            if let Some(cap) = aws_wrong_instance_type_re.captures(raw_terraform_error_output.as_str()) {
+                if let (Some(instance_id), Some(volume_id)) = (
+                    cap.name("instance_id").map(|e| e.as_str()),
+                    cap.name("volume_id").map(|e| e.as_str()),
+                ) {
+                    return TerraformError::InstanceVolumeCannotBeDownSized {
+                        instance_id: instance_id.to_string(),
+                        volume_id: volume_id.to_string(),
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
 
         // SCW
         if raw_terraform_error_output.contains("scaleway-sdk-go: waiting for")
@@ -520,7 +543,10 @@ impl TerraformError {
             TerraformError::InstanceTypeDoesntExist { instance_type, ..} => format!("Error, requested instance type{} doesn't exist in cluster region.", match instance_type {
                 Some(instance_type) => format!(" `{}`", instance_type),
                 None => "".to_string(),
-            })
+            }),
+            TerraformError::InstanceVolumeCannotBeDownSized { instance_id, volume_id, .. } => {
+                format!("Error, instance (`{}`) volume (`{}`) cannot be smaller than existing size.", instance_id, volume_id)
+            }
         }
     }
 }
@@ -577,6 +603,9 @@ impl Display for TerraformError {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::InstanceTypeDoesntExist { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::InstanceVolumeCannotBeDownSized { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
         };
@@ -1441,6 +1470,26 @@ terraform {
             // validate:
             assert_eq!(tc.expected_terraform_error, result);
         }
+    }
+
+    #[test]
+    fn test_terraform_error_aws_instance_volume_cannot_be_downsized() {
+        // setup:
+        let raw_terraform_error_str = "Error: updating EC2 Instance (i-0c2ba371783e941e9) volume (vol-0c43352a3d601dc59): InvalidParameterValue: New size cannot be smaller than existing size";
+
+        // execute:
+        let result =
+            TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_terraform_error_str.to_string());
+
+        // validate:
+        assert_eq!(
+            TerraformError::InstanceVolumeCannotBeDownSized {
+                instance_id: "i-0c2ba371783e941e9".to_string(),
+                volume_id: "vol-0c43352a3d601dc59".to_string(),
+                raw_message: raw_terraform_error_str.to_string(),
+            },
+            result
+        );
     }
 
     #[test]
