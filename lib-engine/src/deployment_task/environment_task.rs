@@ -215,7 +215,6 @@ impl EnvironmentTask {
                 service::Action::Create => env_deployment.on_create(),
                 service::Action::Pause => env_deployment.on_pause(),
                 service::Action::Delete => env_deployment.on_delete(),
-                service::Action::Nothing => Ok(()),
             };
             deployed_services = env_deployment.deployed_services;
 
@@ -233,12 +232,7 @@ impl EnvironmentTask {
                 return Stage::Environment(EnvironmentStep::Cancelled);
             }
 
-            match action {
-                service::Action::Create => Stage::Environment(EnvironmentStep::DeployedError),
-                service::Action::Pause => Stage::Environment(EnvironmentStep::PausedError),
-                service::Action::Delete => Stage::Environment(EnvironmentStep::DeletedError),
-                service::Action::Nothing => Stage::Environment(EnvironmentStep::DeployedError),
-            }
+            Stage::Environment(action.to_environment_step())
         };
 
         let services = std::iter::empty()
@@ -285,12 +279,12 @@ impl Task for EnvironmentTask {
         });
 
         let infra_context = self.infrastructure_context();
-        let env_step = match self.request.target_environment.action {
-            Action::Create => EnvironmentStep::Deploy,
-            Action::Pause => EnvironmentStep::Pause,
-            Action::Delete => EnvironmentStep::Delete,
-            Action::Nothing => EnvironmentStep::Deploy,
-        };
+        let env_step = self
+            .request
+            .target_environment
+            .action
+            .to_service_action()
+            .to_environment_step();
         let event_details = self.get_event_details(env_step);
         let environment = match self.request.target_environment.to_environment_domain(
             infra_context.context(),
@@ -348,7 +342,6 @@ impl Task for EnvironmentTask {
                     EventMessage::new("💣 Environment failed to be deleted".to_string(), None),
                 ));
             }
-            (Action::Nothing, _) => {}
         };
 
         // Uploading to S3 can take a lot of time, and might hit the core timeout
