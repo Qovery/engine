@@ -92,7 +92,7 @@ impl Cluster<AWS, Options> for AWS {
         let container_registry = Box::new(container_registry_ecr(context, logger.clone()));
 
         // use LocalDocker
-        let build_platform = Box::new(build_platform_local_docker(context, logger.clone()));
+        let build_platform = Box::new(build_platform_local_docker(context));
 
         // use AWS
         let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(AWS::cloud_provider(context, kubernetes_kind));

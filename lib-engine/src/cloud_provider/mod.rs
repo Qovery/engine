@@ -1,19 +1,22 @@
 use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
+use std::sync::Arc;
 
 use aws_config::SdkConfig;
 use serde::{Deserialize, Serialize};
 
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::service::Service;
 use crate::cmd::docker::Docker;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::container_registry::ContainerRegistry;
+use crate::deployment_report::logger::EnvLogger;
 use crate::dns_provider::DnsProvider;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
-use crate::events::{EventDetails, Stage, Transmitter};
+use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::logger::Logger;
 use crate::runtime::block_on;
@@ -120,7 +123,7 @@ pub struct DeploymentTarget<'a> {
     pub kube: kube::Client,
     pub helm: Helm,
     pub should_abort: &'a dyn Fn() -> bool,
-    pub logger: Box<dyn Logger>,
+    logger: Arc<Box<dyn Logger>>,
     pub is_dry_run_deploy: bool,
     pub is_test_cluster: bool,
 }
@@ -160,10 +163,14 @@ impl<'a> DeploymentTarget<'a> {
             kube: kube_client,
             helm,
             should_abort,
-            logger: infra_ctx.kubernetes().logger().clone_dyn(),
+            logger: Arc::new(infra_ctx.kubernetes().logger().clone_dyn()),
             is_dry_run_deploy: kubernetes.context().is_dry_run_deploy(),
             is_test_cluster: kubernetes.context().is_test_cluster(),
         })
+    }
+
+    pub fn env_logger(&self, service: &impl Service, step: EnvironmentStep) -> EnvLogger {
+        EnvLogger::new(service, step, self.logger.clone())
     }
 }
 

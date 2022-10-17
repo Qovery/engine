@@ -1,7 +1,7 @@
 use crate::cloud_provider::service::{Action, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_report::application::renderer::render_app_deployment_report;
-use crate::deployment_report::logger::{get_loggers, Loggers};
+use crate::deployment_report::logger::EnvLogger;
 use crate::deployment_report::DeploymentReporter;
 use crate::errors::EngineError;
 use crate::errors::Tag::HelmDeployTimeout;
@@ -12,7 +12,7 @@ use crate::utilities::to_short_id;
 use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
 use kube::api::ListParams;
 use kube::Api;
-use std::borrow::Borrow;
+
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
@@ -26,9 +26,7 @@ pub struct ApplicationDeploymentReporter {
     kube_client: kube::Client,
     selector: String,
     last_report: (String, Instant),
-    send_progress: Box<dyn Fn(String) + Send>,
-    send_success: Box<dyn Fn(String) + Send>,
-    send_error: Box<dyn Fn(EngineError) + Send>,
+    logger: EnvLogger,
 }
 
 impl ApplicationDeploymentReporter {
@@ -37,12 +35,6 @@ impl ApplicationDeploymentReporter {
         deployment_target: &DeploymentTarget,
         action: Action,
     ) -> ApplicationDeploymentReporter {
-        let Loggers {
-            send_progress,
-            send_success,
-            send_error,
-        } = get_loggers(app, action, deployment_target.logger.borrow());
-
         ApplicationDeploymentReporter {
             long_id: *app.long_id(),
             service_type: ServiceType::Application,
@@ -51,9 +43,7 @@ impl ApplicationDeploymentReporter {
             kube_client: deployment_target.kube.clone(),
             selector: app.selector().unwrap_or_default(),
             last_report: ("".to_string(), Instant::now()),
-            send_progress,
-            send_success,
-            send_error,
+            logger: deployment_target.env_logger(app, action.to_environment_step()),
         }
     }
 
@@ -62,12 +52,6 @@ impl ApplicationDeploymentReporter {
         deployment_target: &DeploymentTarget,
         action: Action,
     ) -> ApplicationDeploymentReporter {
-        let Loggers {
-            send_progress,
-            send_success,
-            send_error,
-        } = get_loggers(container, action, deployment_target.logger.borrow());
-
         ApplicationDeploymentReporter {
             long_id: *container.long_id(),
             service_type: ServiceType::Container,
@@ -76,9 +60,7 @@ impl ApplicationDeploymentReporter {
             kube_client: deployment_target.kube.clone(),
             selector: container.selector().unwrap_or_default(),
             last_report: ("".to_string(), Instant::now()),
-            send_progress,
-            send_success,
-            send_error,
+            logger: deployment_target.env_logger(container, action.to_environment_step()),
         }
     }
 }
@@ -93,7 +75,7 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
             &self.selector,
             &self.namespace,
         )) {
-            (self.send_progress)(format!(
+            self.logger.send_progress(format!(
                 "🚀 Deployment of {} `{}` at tag/commit {} is starting: You have {} pod(s) running, {} service(s) running, {} network volume(s)",
                 self.service_type.to_string(),
                 to_short_id(&self.long_id),
@@ -115,7 +97,8 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
         )) {
             Ok(deployment_info) => deployment_info,
             Err(err) => {
-                (self.send_progress)(format!("Error while retrieving deployment information: {}", err));
+                self.logger
+                    .send_progress(format!("Error while retrieving deployment information: {}", err));
                 return;
             }
         };
@@ -124,7 +107,8 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
         let rendered_report = match render_app_deployment_report(self.service_type, &self.tag, &report) {
             Ok(deployment_status_report) => deployment_status_report,
             Err(err) => {
-                (self.send_progress)(format!("Cannot render deployment status report. Please contact us: {}", err));
+                self.logger
+                    .send_progress(format!("Cannot render deployment status report. Please contact us: {}", err));
                 return;
             }
         };
@@ -137,13 +121,14 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
 
         // Send it to user
         for line in self.last_report.0.trim_end().split('\n').map(str::to_string) {
-            (self.send_progress)(line);
+            self.logger.send_progress(line);
         }
     }
     fn deployment_terminated(&mut self, result: &Self::DeploymentResult) {
         let error = match result {
             Ok(_) => {
-                (self.send_success)(format!("✅ Deployment of {} succeeded", self.service_type.to_string()));
+                self.logger
+                    .send_success(format!("✅ Deployment of {} succeeded", self.service_type.to_string()));
                 return;
             }
             Err(err) => err,
@@ -151,7 +136,7 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
 
         // Special case for app, as if helm timeout this is most likely an issue coming from the user
         if error.tag().is_cancel() {
-            (self.send_error)(EngineError::new_engine_error(
+            self.logger.send_error(EngineError::new_engine_error(
                 error.clone(),
                 format!(
                     r#"
@@ -164,7 +149,7 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
                 None,
             ));
         } else if error.tag() == &HelmDeployTimeout {
-            (self.send_error)(EngineError::new_engine_error(
+            self.logger.send_error(EngineError::new_engine_error(
                 error.clone(),
                 format!(r#"
 ❌ {} failed to be deployed in the given time frame.
@@ -176,8 +161,8 @@ Look at the report from above to understand why, and check your applications log
                 None,
             ));
         } else {
-            (self.send_error)(error.clone());
-            (self.send_error)(EngineError::new_engine_error(
+            self.logger.send_error(error.clone());
+            self.logger.send_error(EngineError::new_engine_error(
                 error.clone(),
                 format!(r#"
 ❌ Deployment of {} failed ! Look at the report above and to understand why.

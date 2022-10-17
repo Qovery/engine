@@ -10,7 +10,6 @@ use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::application::reporter::ApplicationDeploymentReporter;
 use crate::deployment_report::execute_long_deployment;
-use crate::deployment_report::logger::get_loggers;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, Stage};
 use crate::io_models::container::Registry;
@@ -25,7 +24,7 @@ use kube::Api;
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::EcrClient;
-use std::borrow::Borrow;
+
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
@@ -38,12 +37,11 @@ where
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
 
-        let loggers = get_loggers(self, *self.action(), target.logger.borrow());
-
+        let logger = target.env_logger(self, EnvironmentStep::Deploy);
         // We need to login to the registry to get access to the image
         let url = get_url_with_credentials(&self.registry);
         if url.password().is_some() {
-            (loggers.send_progress)(format!(
+            logger.send_progress(format!(
                 "🔓 Login to registry {} as user {}",
                 url.host_str().unwrap_or_default(),
                 url.username()
@@ -55,7 +53,7 @@ where
                     format!("❌ Failed to login to registry {}", url.host_str().unwrap_or_default()),
                     None,
                 );
-                (loggers.send_error)(user_err);
+                logger.send_error(user_err);
 
                 return Err(err);
             }
@@ -63,7 +61,7 @@ where
 
         // Once we are logged to the registry, we mirror the user image into our cluster private registry
         // This is required only to avoid to manage rotating credentials
-        (loggers.send_progress)("🪞 Mirroring image to private cluster registry to ensure reproducibility".to_string());
+        logger.send_progress("🪞 Mirroring image to private cluster registry to ensure reproducibility".to_string());
         let registry_info = target.container_registry.registry_info();
 
         target
@@ -93,7 +91,7 @@ where
                 format!("❌ Failed to mirror image {}: {}", self.image_with_tag(), err),
                 None,
             );
-            (loggers.send_error)(user_err);
+            logger.send_error(user_err);
 
             return Err(err);
         }
@@ -149,8 +147,8 @@ where
                 // Delete previous image from cache to cleanup resources
                 if let Some(last_image_tag) = last_image.and_then(|img| img.split(':').last().map(str::to_string)) {
                     if last_image_tag != self.tag_for_mirror() {
-                        let logger = get_loggers(self, Action::Create, target.logger.borrow());
-                        (logger.send_progress)(format!("🪓 Deleting previous cached image {}", last_image_tag));
+                        let logger = target.env_logger(self, EnvironmentStep::Deploy);
+                        logger.send_progress(format!("🪓 Deleting previous cached image {}", last_image_tag));
 
                         let image = Image {
                             name: Self::QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
@@ -210,11 +208,11 @@ where
 
                 helm.on_delete(target)?;
 
-                let logger = get_loggers(self, Action::Delete, target.logger.borrow());
+                let logger = target.env_logger(self, EnvironmentStep::Delete);
                 // Delete pvc of statefulset if needed
                 // FIXME: Remove this after kubernetes 1.23 is deployed, at it should be done by kubernetes
                 if self.is_stateful() {
-                    (logger.send_progress)("🪓 Terminating network volume of the container".to_string());
+                    logger.send_progress("🪓 Terminating network volume of the container".to_string());
                     if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
                         &target.kube,
                         &self.selector(),
@@ -240,8 +238,8 @@ where
             ..Default::default()
         };
 
-        let logger = get_loggers(self, Action::Delete, target.logger.borrow());
-        (logger.send_success)("🪓 Deleting cached image of the container".to_string());
+        let logger = target.env_logger(self, EnvironmentStep::Delete);
+        logger.send_success("🪓 Deleting cached image of the container".to_string());
         target
             .container_registry
             .delete_image(&image)

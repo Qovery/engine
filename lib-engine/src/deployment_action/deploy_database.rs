@@ -12,7 +12,6 @@ use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::database::reporter::DatabaseDeploymentReporter;
 use crate::deployment_report::execute_long_deployment;
-use crate::deployment_report::logger::get_loggers;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::kubers_utils::kube_delete_all_from_selector;
@@ -21,7 +20,7 @@ use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use serde::Deserialize;
-use std::borrow::Borrow;
+
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -398,11 +397,11 @@ where
 
     fn on_create_check(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         if self.publicly_accessible {
-            let logger = get_loggers(self, self.action, target.logger.borrow());
+            let logger = target.env_logger(self, EnvironmentStep::Deploy);
             let domain_checker = CheckDnsForDomains {
                 resolve_to_ip: vec![self.fqdn.to_string()],
                 resolve_to_cname: vec![],
-                log: logger.send_success,
+                log: Box::new(move |msg| logger.send_success(msg)),
             };
 
             let _ = domain_checker.on_create_check(target);
@@ -556,11 +555,11 @@ where
 
     fn on_create_check(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         if self.publicly_accessible {
-            let logger = get_loggers(self, self.action, target.logger.borrow());
+            let logger = target.env_logger(self, EnvironmentStep::Deploy);
             let domain_checker = CheckDnsForDomains {
                 resolve_to_ip: vec![self.fqdn.to_string()],
                 resolve_to_cname: vec![],
-                log: logger.send_success,
+                log: Box::new(move |msg| logger.send_success(msg)),
             };
 
             let _ = domain_checker.on_create_check(target);
@@ -608,8 +607,8 @@ where
             helm.on_delete(target)?;
 
             // TODO: Remove once we migrate to kube 1.23, it will done automatically
-            let logger = get_loggers(self, Action::Delete, target.logger.borrow());
-            (logger.send_progress)("🪓 Terminating network volume of the database".to_string());
+            let logger = target.env_logger(self, EnvironmentStep::Delete);
+            logger.send_progress("🪓 Terminating network volume of the database".to_string());
             if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
                 &target.kube,
                 &format!("app={}", self.sanitized_name()), //FIXME: legacy labels ;(
