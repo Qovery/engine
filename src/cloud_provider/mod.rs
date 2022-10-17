@@ -11,10 +11,11 @@ use crate::cmd::docker::Docker;
 use crate::cmd::helm::{to_engine_error, Helm};
 use crate::container_registry::ContainerRegistry;
 use crate::dns_provider::DnsProvider;
-use crate::engine::EngineConfig;
+use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
+use crate::logger::Logger;
 use crate::runtime::block_on;
 use crate::utilities::create_kube_client;
 
@@ -119,16 +120,19 @@ pub struct DeploymentTarget<'a> {
     pub kube: kube::Client,
     pub helm: Helm,
     pub should_abort: &'a dyn Fn() -> bool,
+    pub logger: Box<dyn Logger>,
+    pub is_dry_run_deploy: bool,
+    pub is_test_cluster: bool,
 }
 
 impl<'a> DeploymentTarget<'a> {
     pub fn new(
-        engine_config: &'a EngineConfig,
+        infra_ctx: &'a InfrastructureContext,
         environment: &'a Environment,
         should_abort: &'a dyn Fn() -> bool,
     ) -> Result<DeploymentTarget<'a>, EngineError> {
         let event_details = environment.event_details();
-        let kubernetes = engine_config.kubernetes();
+        let kubernetes = infra_ctx.kubernetes();
         let kubeconfig_path = kubernetes.get_kubeconfig_file_path().unwrap_or_default();
         let kube_credentials: Vec<(String, String)> = kubernetes
             .cloud_provider()
@@ -148,14 +152,17 @@ impl<'a> DeploymentTarget<'a> {
 
         Ok(DeploymentTarget {
             kubernetes,
-            container_registry: engine_config.container_registry(),
-            cloud_provider: engine_config.cloud_provider(),
-            dns_provider: engine_config.dns_provider(),
+            container_registry: infra_ctx.container_registry(),
+            cloud_provider: infra_ctx.cloud_provider(),
+            dns_provider: infra_ctx.dns_provider(),
             environment,
-            docker: &engine_config.context().docker,
+            docker: &infra_ctx.context().docker,
             kube: kube_client,
             helm,
             should_abort,
+            logger: infra_ctx.kubernetes().logger().clone_dyn(),
+            is_dry_run_deploy: kubernetes.context().is_dry_run_deploy(),
+            is_test_cluster: kubernetes.context().is_test_cluster(),
         })
     }
 }

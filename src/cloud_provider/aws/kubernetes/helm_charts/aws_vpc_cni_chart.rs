@@ -1,6 +1,7 @@
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartPayload, ChartSetValue, HelmChart, HelmChartNamespaces,
 };
+use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath};
 use crate::cmd::kubectl::{kubectl_delete_crash_looping_pods, kubectl_exec_get_daemonset, kubectl_exec_with_output};
 use crate::errors::{CommandError, ErrorMessageVerbosity};
 use crate::runtime::block_on;
@@ -28,7 +29,12 @@ impl AwsVpcCniChart {
         AwsVpcCniChart {
             chart_info: ChartInfo {
                 name: AwsVpcCniChart::chart_name(),
-                path: format!("{}/charts/{}", chart_prefix_path.unwrap_or("./"), AwsVpcCniChart::chart_name()),
+                path: HelmChartPath::new(
+                    chart_prefix_path,
+                    HelmChartDirectoryLocation::CloudProviderFolder,
+                    AwsVpcCniChart::chart_name(),
+                )
+                .to_string(),
                 namespace: HelmChartNamespaces::KubeSystem,
                 values: vec![
                     ChartSetValue {

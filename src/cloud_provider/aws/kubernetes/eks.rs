@@ -4,7 +4,7 @@ use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
-    send_progress_on_long_task, Kind, Kubernetes, KubernetesNodesType, KubernetesUpgradeStatus,
+    send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesNodesType, KubernetesUpgradeStatus,
 };
 use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
 use crate::cloud_provider::utilities::print_action;
@@ -125,24 +125,7 @@ impl EKS {
     }
 
     pub fn is_instance_allowed(instance_type: AwsInstancesType) -> bool {
-        match instance_type {
-            AwsInstancesType::T2Large => true,
-            AwsInstancesType::T2Xlarge => true,
-            AwsInstancesType::T3Small => false,
-            AwsInstancesType::T3Medium => true,
-            AwsInstancesType::T3Large => true,
-            AwsInstancesType::T3Xlarge => true,
-            AwsInstancesType::T32xlarge => true,
-            AwsInstancesType::T3aSmall => false,
-            AwsInstancesType::T3aMedium => true,
-            AwsInstancesType::T3aLarge => true,
-            AwsInstancesType::T3aXlarge => true,
-            AwsInstancesType::T3a2xlarge => true,
-            AwsInstancesType::M5large => true,
-            AwsInstancesType::M5Xlarge => true,
-            AwsInstancesType::M52Xlarge => true,
-            AwsInstancesType::M54Xlarge => true,
-        }
+        instance_type.is_instance_allowed()
     }
 
     fn set_cluster_autoscaler_replicas(

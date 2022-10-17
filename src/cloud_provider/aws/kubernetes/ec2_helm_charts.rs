@@ -12,6 +12,7 @@ use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 
 use crate::cloud_provider::helm_charts::core_dns_config_chart::CoreDNSConfigChart;
+use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::File;
@@ -57,6 +58,7 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub managed_dns_name_wildcarded: String,
     pub managed_dns_helm_format: String,
     pub managed_dns_resolvers_terraform_format: String,
+    pub managed_dns_root_domain_helm_format: String,
     pub external_dns_provider: String,
     pub dns_email_report: String,
     pub acme_url: String,
@@ -189,26 +191,17 @@ pub fn ec2_aws_helm_charts(
         ..Default::default()
     };
 
-    let external_dns = CommonChart {
-        chart_info: ChartInfo {
-            name: "externaldns".to_string(),
-            path: chart_path("common/charts/external-dns"),
-            values_files: vec![chart_path("chart_values/external-dns.yaml")],
-            values: vec![
-                // resources limits
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "30Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "30Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // External DNS
+    let external_dns = ExternalDNSChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.dns_provider_config.clone(),
+        chart_config_prerequisites
+            .managed_dns_root_domain_helm_format
+            .to_string(),
+        false,
+        chart_config_prerequisites.cluster_id.to_string(),
+    )
+    .to_common_helm_chart();
 
     let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
     if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {

@@ -2,7 +2,6 @@ use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::{service, CloudProvider, Kind as CPKind};
 use crate::io_models::context::Context;
 use crate::io_models::Action;
-use crate::logger::Logger;
 use crate::models;
 use crate::models::database::{Container, DatabaseError, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis};
 use crate::models::types::CloudProvider as CloudProviderTrait;
@@ -50,7 +49,6 @@ impl Database {
         &self,
         context: &Context,
         cloud_provider: &dyn CloudProvider,
-        logger: Box<dyn Logger>,
     ) -> Result<Box<dyn DatabaseService>, DatabaseError> {
         let database_options = DatabaseOptions {
             mode: self.mode.clone(),
@@ -76,7 +74,7 @@ impl Database {
                 // But for the time being, it does the trick since we are already in AWS
                 if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
                     Ok(Box::new(models::database::Database::<AWS, Managed, PostgresSQL>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -89,11 +87,11 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Managed, PostgresSQL>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -106,7 +104,7 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 }
             }
@@ -116,7 +114,7 @@ impl Database {
                 // But for the time being, it does the trick since we are already in AWS
                 if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
                     Ok(Box::new(models::database::Database::<AWS, Container, PostgresSQL>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -129,11 +127,11 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Container, PostgresSQL>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -146,7 +144,7 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 }
             }
@@ -157,7 +155,7 @@ impl Database {
                 // But for the time being, it does the trick since we are already in AWS
                 if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
                     Ok(Box::new(models::database::Database::<AWS, Managed, MySQL>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -170,11 +168,11 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Managed, MySQL>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -187,7 +185,7 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 }
             }
@@ -197,7 +195,7 @@ impl Database {
                 // But for the time being, it does the trick since we are already in AWS
                 if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
                     Ok(Box::new(models::database::Database::<AWS, Container, MySQL>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -210,11 +208,11 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Container, MySQL>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -227,7 +225,7 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 }
             }
@@ -237,7 +235,7 @@ impl Database {
                 // But for the time being, it does the trick since we are already in AWS
                 if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
                     Ok(Box::new(models::database::Database::<AWS, Managed, Redis>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -250,11 +248,11 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Managed, Redis>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -267,7 +265,7 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 }
             }
@@ -277,7 +275,7 @@ impl Database {
                 // But for the time being, it does the trick since we are already in AWS
                 if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
                     Ok(Box::new(models::database::Database::<AWS, Container, Redis>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -290,11 +288,11 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Container, Redis>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -307,7 +305,7 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 }
             }
@@ -317,7 +315,7 @@ impl Database {
                 // But for the time being, it does the trick since we are already in AWS
                 if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
                     Ok(Box::new(models::database::Database::<AWS, Managed, MongoDB>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -330,11 +328,11 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Managed, MongoDB>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -347,7 +345,7 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 }
             }
@@ -357,7 +355,7 @@ impl Database {
                 // But for the time being, it does the trick since we are already in AWS
                 if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
                     Ok(Box::new(models::database::Database::<AWS, Container, MongoDB>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -370,11 +368,11 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 } else {
                     Ok(Box::new(models::database::Database::<AWSEc2, Container, MongoDB>::new(
-                        context.clone(),
+                        context,
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
@@ -387,14 +385,14 @@ impl Database {
                         database_options.publicly_accessible,
                         database_options.port,
                         database_options,
-                        logger,
+                        |transmitter| context.get_event_details(transmitter),
                     )?))
                 }
             }
 
             (CPKind::Do, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, PostgresSQL>::new(
-                    context.clone(),
+                    context,
                     self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
@@ -407,14 +405,14 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    logger,
+                    |transmitter| context.get_event_details(transmitter),
                 )?;
 
                 Ok(Box::new(db))
             }
             (CPKind::Do, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, MySQL>::new(
-                    context.clone(),
+                    context,
                     self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
@@ -427,14 +425,14 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    logger,
+                    |transmitter| context.get_event_details(transmitter),
                 )?;
 
                 Ok(Box::new(db))
             }
             (CPKind::Do, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, Redis>::new(
-                    context.clone(),
+                    context,
                     self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
@@ -447,14 +445,14 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    logger,
+                    |transmitter| context.get_event_details(transmitter),
                 )?;
 
                 Ok(Box::new(db))
             }
             (CPKind::Do, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<DO, Container, MongoDB>::new(
-                    context.clone(),
+                    context,
                     self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
@@ -467,7 +465,7 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    logger,
+                    |transmitter| context.get_event_details(transmitter),
                 )?;
 
                 Ok(Box::new(db))
@@ -490,7 +488,7 @@ impl Database {
 
             (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<SCW, Managed, PostgresSQL>::new(
-                    context.clone(),
+                    context,
                     self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
@@ -503,14 +501,14 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    logger,
+                    |transmitter| context.get_event_details(transmitter),
                 )?;
 
                 Ok(Box::new(db))
             }
             (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, PostgresSQL>::new(
-                    context.clone(),
+                    context,
                     self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
@@ -523,14 +521,14 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    logger,
+                    |transmitter| context.get_event_details(transmitter),
                 )?;
 
                 Ok(Box::new(db))
             }
             (CPKind::Scw, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<SCW, Managed, MySQL>::new(
-                    context.clone(),
+                    context,
                     self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
@@ -543,14 +541,14 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    logger,
+                    |transmitter| context.get_event_details(transmitter),
                 )?;
 
                 Ok(Box::new(db))
             }
             (CPKind::Scw, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, MySQL>::new(
-                    context.clone(),
+                    context,
                     self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
@@ -563,14 +561,14 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    logger,
+                    |transmitter| context.get_event_details(transmitter),
                 )?;
 
                 Ok(Box::new(db))
             }
             (CPKind::Scw, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, Redis>::new(
-                    context.clone(),
+                    context,
                     self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
@@ -583,14 +581,14 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    logger,
+                    |transmitter| context.get_event_details(transmitter),
                 )?;
 
                 Ok(Box::new(db))
             }
             (CPKind::Scw, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
                 let db = models::database::Database::<SCW, Container, MongoDB>::new(
-                    context.clone(),
+                    context,
                     self.long_id,
                     self.action.to_service_action(),
                     self.name.as_str(),
@@ -603,7 +601,7 @@ impl Database {
                     database_options.publicly_accessible,
                     database_options.port,
                     database_options,
-                    logger,
+                    |transmitter| context.get_event_details(transmitter),
                 )?;
 
                 Ok(Box::new(db))

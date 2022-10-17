@@ -1,6 +1,8 @@
 use crate::cloud_provider::service::{Action, Service};
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
+use crate::logger::Logger;
+use std::sync::Arc;
 
 pub struct Loggers {
     pub send_progress: Box<dyn Fn(String) + Send>,
@@ -9,13 +11,14 @@ pub struct Loggers {
 }
 
 // All that for the logger, lol ...
-pub fn get_loggers<Srv>(service: &Srv, action: Action) -> Loggers
+pub fn get_loggers<Srv>(service: &Srv, action: Action, logger: &dyn Logger) -> Loggers
 where
     Srv: Service,
 {
+    let logger = Arc::new(logger.clone_dyn());
     let log_progress = {
         let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        let logger = service.logger().clone_dyn();
+        let logger = logger.clone();
         let step = match action {
             Action::Create => EnvironmentStep::Deploy,
             Action::Pause => EnvironmentStep::Pause,
@@ -31,12 +34,12 @@ where
 
     let log_success = {
         let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Deployed));
-        let logger = service.logger().clone_dyn();
+        let logger = logger.clone();
         let step = match action {
             Action::Create => EnvironmentStep::Deployed,
             Action::Pause => EnvironmentStep::Paused,
             Action::Delete => EnvironmentStep::Deleted,
-            Action::Nothing => EnvironmentStep::Deployed, // should not hserviceen
+            Action::Nothing => EnvironmentStep::Deployed, // should not happens
         };
         let event_details = EventDetails::clone_changing_stage(event_details, Stage::Environment(step));
 
@@ -46,7 +49,7 @@ where
     };
 
     let log_error = {
-        let logger = service.logger().clone_dyn();
+        let logger = logger.clone();
         move |err: EngineError| {
             let msg = err.user_log_message().to_string();
             logger.log(EngineEvent::Error(err, Some(EventMessage::new_from_safe(msg))));

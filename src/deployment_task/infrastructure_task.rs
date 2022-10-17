@@ -6,7 +6,7 @@ use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
 use crate::io_models::context::Context;
-use crate::io_models::engine_request::EngineRequest;
+use crate::io_models::engine_request::InfrastructureEngineRequest;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::transaction::{Transaction, TransactionResult};
@@ -20,13 +20,13 @@ pub struct InfrastructureTask {
     lib_root_dir: String,
     docker_host: Option<Url>,
     docker: Docker,
-    request: EngineRequest,
+    request: InfrastructureEngineRequest,
     logger: Box<dyn Logger>,
 }
 
 impl InfrastructureTask {
     pub fn new(
-        request: EngineRequest,
+        request: InfrastructureEngineRequest,
         workspace_root_dir: String,
         lib_root_dir: String,
         docker_host: Option<Url>,
@@ -46,7 +46,7 @@ impl InfrastructureTask {
     fn info_context(&self) -> Context {
         Context::new(
             self.request.organization_long_id,
-            self.request.cloud_provider.kubernetes.long_id,
+            self.request.kubernetes.long_id,
             self.request.id.to_string(),
             self.workspace_root_dir.to_string(),
             self.lib_root_dir.to_string(),
@@ -55,6 +55,7 @@ impl InfrastructureTask {
             self.request.features.clone(),
             self.request.metadata.clone(),
             self.docker.clone(),
+            self.request.event_details(),
         )
     }
 
@@ -74,7 +75,7 @@ impl InfrastructureTask {
     }
 
     fn send_infrastructure_progress(&self, logger: Box<dyn Logger>, option_engine_error: Option<EngineError>) {
-        let kubernetes = &self.request.cloud_provider.kubernetes;
+        let kubernetes = &self.request.kubernetes;
         if let Some(engine_error) = option_engine_error {
             let infrastructure_step = match self.request.action {
                 Action::Create => InfrastructureStep::CreateError,
@@ -135,7 +136,10 @@ impl Task for InfrastructureTask {
             self.request.build_platform.id.as_str()
         );
 
-        let engine = match self.request.engine(&self.info_context(), self.logger.clone()) {
+        let engine = match self
+            .request
+            .engine(&self.info_context(), self.request.event_details(), self.logger.clone())
+        {
             Ok(engine) => engine,
             Err(err) => {
                 self.send_infrastructure_progress(self.logger.clone(), Some(err));
@@ -178,11 +182,7 @@ impl Task for InfrastructureTask {
                     self.request.archive.as_ref(),
                     file.as_str(),
                     AwsRegion::EuWest3, // TODO(benjaminch): make it customizable
-                    self.request
-                        .cloud_provider
-                        .kubernetes
-                        .advanced_settings
-                        .pleco_resources_ttl,
+                    self.request.kubernetes.advanced_settings.pleco_resources_ttl,
                 ) {
                     Ok(_) => {
                         let _ = fs::remove_file(file).map_err(|err| error!("Cannot delete file {}", err));

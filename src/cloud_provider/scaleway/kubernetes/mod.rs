@@ -5,7 +5,7 @@ use crate::cloud_provider::aws::regions::AwsZones;
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
-    is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, Kind, Kubernetes,
+    is_kubernetes_upgrade_required, send_progress_on_long_task, uninstall_cert_manager, InstanceType, Kind, Kubernetes,
     KubernetesUpgradeStatus, ProviderOptions,
 };
 use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
@@ -166,23 +166,45 @@ impl Kapsule {
         let template_directory = format!("{}/scaleway/bootstrap", context.lib_root_dir());
 
         for node_group in &nodes_groups {
-            if let Err(e) = ScwInstancesType::from_str(node_group.instance_type.as_str()) {
-                let err = EngineError::new_unsupported_instance_type(
-                    EventDetails::new(
-                        Some(cloud_provider.kind()),
-                        QoveryIdentifier::new(*context.organization_long_id()),
-                        QoveryIdentifier::new(*context.cluster_long_id()),
-                        context.execution_id().to_string(),
-                        Infrastructure(InfrastructureStep::LoadConfiguration),
-                        Transmitter::Kubernetes(long_id, name),
-                    ),
-                    node_group.instance_type.as_str(),
-                    e,
-                );
+            match ScwInstancesType::from_str(node_group.instance_type.as_str()) {
+                Err(e) => {
+                    let err = EngineError::new_unsupported_instance_type(
+                        EventDetails::new(
+                            Some(cloud_provider.kind()),
+                            QoveryIdentifier::new(*context.organization_long_id()),
+                            QoveryIdentifier::new(*context.cluster_long_id()),
+                            context.execution_id().to_string(),
+                            Infrastructure(InfrastructureStep::LoadConfiguration),
+                            Transmitter::Kubernetes(long_id, name),
+                        ),
+                        node_group.instance_type.as_str(),
+                        e,
+                    );
+                    logger.log(EngineEvent::Error(err.clone(), None));
 
-                logger.log(EngineEvent::Error(err.clone(), None));
+                    return Err(err);
+                }
+                Ok(instance_type) => {
+                    if !instance_type.is_instance_allowed() {
+                        let err = EngineError::new_unsupported_instance_type(
+                            EventDetails::new(
+                                Some(cloud_provider.kind()),
+                                QoveryIdentifier::new(*context.organization_long_id()),
+                                QoveryIdentifier::new(*context.cluster_long_id()),
+                                context.execution_id().to_string(),
+                                Infrastructure(InfrastructureStep::LoadConfiguration),
+                                Transmitter::Kubernetes(long_id, name),
+                            ),
+                            node_group.instance_type.as_str(),
+                            CommandError::new_from_safe_message(format!(
+                                "`{}` instance type is not supported",
+                                instance_type
+                            )),
+                        );
 
-                return Err(err);
+                        return Err(err);
+                    }
+                }
             }
         }
 
@@ -903,6 +925,7 @@ impl Kapsule {
             self.dns_provider.domain().root_domain().to_string(),
             self.dns_provider.domain().to_helm_format_string(),
             self.managed_dns_resolvers_terraform_format(),
+            self.dns_provider.domain().root_domain().to_helm_format_string(),
             self.dns_provider.provider_name().to_string(),
             self.options.tls_email_report.clone(),
             self.lets_encrypt_url(),
@@ -1277,12 +1300,21 @@ impl Kapsule {
                 .map_err(|e| to_engine_error(&event_details, e))?;
 
             // required to avoid namespace stuck on deletion
-            uninstall_cert_manager(
+            if let Err(e) = uninstall_cert_manager(
                 &kubeconfig_path,
                 self.cloud_provider().credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
-            )?;
+            ) {
+                // this error is not blocking, logging a warning and move on
+                self.logger().log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new(
+                        "An error occurred while trying to uninstall cert-manager. This is not blocking.".to_string(),
+                        Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                    ),
+                ));
+            }
 
             self.logger().log(EngineEvent::Info(
                 event_details.clone(),

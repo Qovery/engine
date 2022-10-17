@@ -1,6 +1,7 @@
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartPayload, ChartSetValue, HelmAction, HelmChart, HelmChartNamespaces,
 };
+use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath};
 use crate::cmd::kubectl::{
     kubectl_delete_crash_looping_pods, kubectl_exec_get_configmap, kubectl_exec_rollout_restart_deployment,
     kubectl_exec_with_output,
@@ -29,11 +30,12 @@ impl CoreDNSConfigChart {
         CoreDNSConfigChart {
             chart_info: ChartInfo {
                 name: CoreDNSConfigChart::chart_name(),
-                path: format!(
-                    "{}/common/charts/{}-config",
-                    chart_prefix_path.unwrap_or("./"),
-                    CoreDNSConfigChart::chart_name()
-                ),
+                path: HelmChartPath::new(
+                    chart_prefix_path,
+                    HelmChartDirectoryLocation::CommonFolder,
+                    format!("{}-config", CoreDNSConfigChart::chart_name()),
+                )
+                .to_string(),
                 namespace: HelmChartNamespaces::KubeSystem,
                 custom_namespace: None,
                 action: HelmAction::Deploy,

@@ -45,9 +45,11 @@ use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::errors::CommandError;
+use qovery_engine::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use qovery_engine::io_models::context::{Context, Features, Metadata};
 use qovery_engine::io_models::database::DatabaseMode::MANAGED;
 use qovery_engine::io_models::environment::EnvironmentRequest;
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::runtime::block_on;
@@ -85,7 +87,7 @@ pub fn context(organization_id: Uuid, cluster_id: Uuid) -> Context {
     Context::new(
         organization_id,
         cluster_id,
-        execution_id,
+        execution_id.to_string(),
         home_dir,
         lib_root_dir,
         true,
@@ -93,6 +95,14 @@ pub fn context(organization_id: Uuid, cluster_id: Uuid) -> Context {
         enabled_features,
         Option::from(metadata),
         docker,
+        EventDetails::new(
+            None,
+            QoveryIdentifier::new(organization_id),
+            QoveryIdentifier::new(cluster_id),
+            execution_id,
+            Stage::Environment(EnvironmentStep::LoadConfiguration),
+            Transmitter::TaskManager(Uuid::new_v4(), "".to_string()),
+        ),
     )
 }
 

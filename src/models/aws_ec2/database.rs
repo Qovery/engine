@@ -313,7 +313,7 @@ where
         context.insert("tfstate_name", &get_tfstate_name(self));
         context.insert("skip_final_snapshot", &false);
         context.insert("final_snapshot_name", &format!("qovery-{}-final-snap", self.id));
-        context.insert("delete_automated_backups", &self.context().is_test_cluster());
+        context.insert("delete_automated_backups", &target.kubernetes.context().is_test_cluster());
         context.insert("publicly_accessible", &options.publicly_accessible);
 
         context.insert(

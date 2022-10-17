@@ -6,7 +6,6 @@ use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::application::Port;
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
-use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::string::cut;
@@ -24,7 +23,7 @@ pub enum ContainerError {
 
 pub struct Container<T: CloudProvider> {
     _marker: PhantomData<T>,
-    pub(super) context: Context,
+    pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails>,
     pub(super) id: String,
     pub(super) long_id: Uuid,
     pub(super) name: String,
@@ -46,6 +45,8 @@ pub struct Container<T: CloudProvider> {
     pub(super) logger: Box<dyn Logger>,
     pub(super) advanced_settings: ContainerAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
+    pub(super) workspace_directory: String,
+    pub(super) lib_root_directory: String,
 }
 
 // Here we define the common behavior among all providers
@@ -53,7 +54,7 @@ impl<T: CloudProvider> Container<T> {
     pub const QOVERY_MIRROR_REPOSITORY_NAME: &'static str = "qovery-mirror";
 
     pub fn new(
-        context: Context,
+        context: &Context,
         long_id: Uuid,
         name: String,
         action: Action,
@@ -74,6 +75,7 @@ impl<T: CloudProvider> Container<T> {
         advanced_settings: ContainerAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         logger: Box<dyn Logger>,
+        mk_event_details: impl Fn(Transmitter) -> EventDetails,
     ) -> Result<Self, ContainerError> {
         if min_instances > max_instances {
             return Err(ContainerError::InvalidConfig(
@@ -111,9 +113,18 @@ impl<T: CloudProvider> Container<T> {
             ));
         }
 
+        let workspace_directory = crate::fs::workspace_directory(
+            context.workspace_root_dir(),
+            context.execution_id(),
+            format!("containers/{}", long_id),
+        )
+        .map_err(|_| ContainerError::InvalidConfig("Can't create workspace directory".to_string()))?;
+
+        let event_details = mk_event_details(Transmitter::Container(long_id, name.to_string()));
+        let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
         Ok(Self {
             _marker: PhantomData,
-            context,
+            mk_event_details: Box::new(mk_event_details),
             id: to_short_id(&long_id),
             long_id,
             action,
@@ -135,6 +146,8 @@ impl<T: CloudProvider> Container<T> {
             logger,
             advanced_settings,
             _extra_settings: extra_settings,
+            workspace_directory,
+            lib_root_directory: context.lib_root_dir().to_string(),
         })
     }
 
@@ -147,7 +160,7 @@ impl<T: CloudProvider> Container<T> {
     }
 
     pub fn helm_chart_dir(&self) -> String {
-        format!("{}/common/charts/q-container", self.context.lib_root_dir())
+        format!("{}/common/charts/q-container", self.lib_root_directory)
     }
 
     fn kube_service_name(&self) -> String {
@@ -223,10 +236,6 @@ impl<T: CloudProvider> Container<T> {
         !self.storages.is_empty()
     }
 
-    pub fn context(&self) -> &Context {
-        &self.context
-    }
-
     pub fn service_type(&self) -> ServiceType {
         ServiceType::Container
     }
@@ -265,24 +274,12 @@ impl<T: CloudProvider> Container<T> {
         format!("qovery.com/service-id={}", self.long_id)
     }
 
-    pub(crate) fn get_event_details(&self, stage: Stage) -> EventDetails {
-        let context = self.context();
-        EventDetails::new(
-            None,
-            QoveryIdentifier::new(*context.organization_long_id()),
-            QoveryIdentifier::new(*context.cluster_long_id()),
-            context.execution_id().to_string(),
-            stage,
-            self.to_transmitter(),
-        )
+    pub fn workspace_directory(&self) -> &str {
+        &self.workspace_directory
     }
 }
 
 impl<T: CloudProvider> Service for Container<T> {
-    fn context(&self) -> &Context {
-        self.context()
-    }
-
     fn service_type(&self) -> ServiceType {
         self.service_type()
     }
@@ -303,8 +300,8 @@ impl<T: CloudProvider> Service for Container<T> {
         self.name.to_string()
     }
 
-    fn version(&self) -> String {
-        "1".to_string()
+    fn get_event_details(&self, stage: Stage) -> EventDetails {
+        (self.mk_event_details)(stage)
     }
 
     fn action(&self) -> &Action {
@@ -313,14 +310,6 @@ impl<T: CloudProvider> Service for Container<T> {
 
     fn selector(&self) -> Option<String> {
         Some(self.selector())
-    }
-
-    fn logger(&self) -> &dyn Logger {
-        self.logger()
-    }
-
-    fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Container(self.long_id, self.name.to_string())
     }
 
     fn as_service(&self) -> &dyn Service {
@@ -345,6 +334,8 @@ pub trait ContainerService: Service + DeploymentAction + ToTeraContext {
         let startup_timeout = std::cmp::max(probe_timeout /* * 10 rolling restart percent */, 60 * 10);
         std::time::Duration::from_secs(startup_timeout as u64)
     }
+
+    fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
 impl<T: CloudProvider> ContainerService for Container<T>
@@ -370,6 +361,10 @@ where
 
     fn kube_service_name(&self) -> String {
         self.kube_service_name()
+    }
+
+    fn as_deployment_action(&self) -> &dyn DeploymentAction {
+        self
     }
 }
 

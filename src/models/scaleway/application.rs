@@ -10,7 +10,7 @@ use tera::Context as TeraContext;
 
 impl ToTeraContext for Application<SCW> {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
+        let event_details = (self.mk_event_details)(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
         let mut context = self.default_tera_context(kubernetes, environment);

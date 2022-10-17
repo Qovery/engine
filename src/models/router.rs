@@ -4,13 +4,11 @@ use crate::cloud_provider::utilities::sanitize_name;
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::EngineError;
-use crate::events::{EnvironmentStep, Stage, Transmitter};
+use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
-use crate::logger::Logger;
 use crate::models::types::CloudProvider;
 use crate::models::types::ToTeraContext;
 use crate::utilities::to_short_id;
-use std::borrow::Borrow;
 use std::marker::PhantomData;
 use tera::Context as TeraContext;
 use uuid::Uuid;
@@ -28,7 +26,7 @@ pub struct RouterAdvancedSettings {
 
 pub struct Router<T: CloudProvider> {
     _marker: PhantomData<T>,
-    pub(crate) context: Context,
+    pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails>,
     pub(crate) id: String,
     pub(crate) long_id: Uuid,
     pub(crate) action: Action,
@@ -37,14 +35,15 @@ pub struct Router<T: CloudProvider> {
     pub(crate) custom_domains: Vec<CustomDomain>,
     pub(crate) sticky_sessions_enabled: bool,
     pub(crate) routes: Vec<Route>,
-    pub(crate) logger: Box<dyn Logger>,
     pub(crate) _extra_settings: T::RouterExtraSettings,
     pub(crate) advanced_settings: RouterAdvancedSettings,
+    pub(super) workspace_directory: String,
+    pub(super) lib_root_directory: String,
 }
 
 impl<T: CloudProvider> Router<T> {
     pub fn new(
-        context: Context,
+        context: &Context,
         long_id: Uuid,
         name: &str,
         action: Action,
@@ -54,11 +53,20 @@ impl<T: CloudProvider> Router<T> {
         sticky_sessions_enabled: bool,
         extra_settings: T::RouterExtraSettings,
         advanced_settings: RouterAdvancedSettings,
-        logger: Box<dyn Logger>,
+        mk_event_details: impl Fn(Transmitter) -> EventDetails,
     ) -> Result<Self, RouterError> {
+        let workspace_directory = crate::fs::workspace_directory(
+            context.workspace_root_dir(),
+            context.execution_id(),
+            format!("databases/{}", long_id),
+        )
+        .map_err(|_| RouterError::InvalidConfig("Can't create workspace directory".to_string()))?;
+
+        let event_details = mk_event_details(Transmitter::Router(long_id, name.to_string()));
+        let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
         Ok(Self {
             _marker: PhantomData,
-            context,
+            mk_event_details: Box::new(mk_event_details),
             id: to_short_id(&long_id),
             long_id,
             name: name.to_string(),
@@ -67,14 +75,19 @@ impl<T: CloudProvider> Router<T> {
             custom_domains,
             sticky_sessions_enabled,
             routes,
-            logger,
             _extra_settings: extra_settings,
             advanced_settings,
+            workspace_directory,
+            lib_root_directory: context.lib_root_dir().to_string(),
         })
     }
 
     fn selector(&self) -> Option<String> {
         Some(format!("routerId={}", self.id))
+    }
+
+    pub fn workspace_directory(&self) -> &str {
+        &self.workspace_directory
     }
 
     pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError>
@@ -187,7 +200,7 @@ impl<T: CloudProvider> Router<T> {
         context.insert("spec_acme_email", "tls@qovery.com"); // TODO CHANGE ME
         context.insert("metadata_annotations_cert_manager_cluster_issuer", "letsencrypt-qovery");
 
-        let lets_encrypt_url = match self.context.is_test_cluster() {
+        let lets_encrypt_url = match target.is_test_cluster {
             true => "https://acme-staging-v02.api.letsencrypt.org/directory",
             false => "https://acme-v02.api.letsencrypt.org/directory",
         };
@@ -226,15 +239,11 @@ impl<T: CloudProvider> Router<T> {
     }
 
     pub fn helm_chart_dir(&self) -> String {
-        format!("{}/common/charts/q-ingress-tls", self.context.lib_root_dir(),)
+        format!("{}/common/charts/q-ingress-tls", self.lib_root_directory,)
     }
 }
 
 impl<T: CloudProvider> Service for Router<T> {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
     fn service_type(&self) -> ServiceType {
         ServiceType::Router
     }
@@ -255,8 +264,8 @@ impl<T: CloudProvider> Service for Router<T> {
         sanitize_name("router", self.id())
     }
 
-    fn version(&self) -> String {
-        "1.0".to_string()
+    fn get_event_details(&self, stage: Stage) -> EventDetails {
+        (self.mk_event_details)(stage)
     }
 
     fn action(&self) -> &Action {
@@ -267,14 +276,6 @@ impl<T: CloudProvider> Service for Router<T> {
         self.selector()
     }
 
-    fn logger(&self) -> &dyn Logger {
-        self.logger.borrow()
-    }
-
-    fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Router(self.long_id, self.name.to_string())
-    }
-
     fn as_service(&self) -> &dyn Service {
         self
     }
@@ -283,6 +284,8 @@ impl<T: CloudProvider> Service for Router<T> {
 pub trait RouterService: Service + DeploymentAction + ToTeraContext {
     /// all domains (auto-generated by Qovery and user custom domains) associated to the router
     fn has_custom_domains(&self) -> bool;
+
+    fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
 impl<T: CloudProvider> RouterService for Router<T>
@@ -291,5 +294,9 @@ where
 {
     fn has_custom_domains(&self) -> bool {
         !self.custom_domains.is_empty()
+    }
+
+    fn as_deployment_action(&self) -> &dyn DeploymentAction {
+        self
     }
 }

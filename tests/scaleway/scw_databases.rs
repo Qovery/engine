@@ -14,7 +14,7 @@ use crate::helpers::common::ClusterDomain;
 use crate::helpers::common::Infrastructure;
 use crate::helpers::database::{database_test_environment, test_db};
 use crate::helpers::scaleway::{
-    clean_environments, scw_default_engine_config, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
+    clean_environments, scw_default_infra_config, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
     SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,
 };
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
@@ -53,9 +53,9 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             cluster_id,
         );
-        let engine_config = scw_default_engine_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let engine_config_for_deletion = scw_default_engine_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion = scw_default_infra_config(&context_for_deletion, logger.clone());
         let environment = helpers::database::environment_3_apps_3_databases(
             &context,
             SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE,
@@ -68,10 +68,10 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let env_action = environment.clone();
         let env_action_delete = environment_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result = environment_delete.delete_environment(&env_action_delete, logger, &engine_config_for_deletion);
+        let result = environment_delete.delete_environment(&env_action_delete, logger, &infra_ctx_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
         // delete images created during test from registries
@@ -105,9 +105,9 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             cluster_id,
         );
-        let engine_config = scw_default_engine_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let engine_config_for_deletion = scw_default_engine_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion = scw_default_infra_config(&context_for_deletion, logger.clone());
         let environment = helpers::environment::environment_2_app_2_routers_1_psql(
             &context,
             secrets
@@ -125,10 +125,10 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let env_action = environment.clone();
         let env_action_delete = environment_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result = environment.pause_environment(&env_action, logger.clone(), &engine_config);
+        let result = environment.pause_environment(&env_action, logger.clone(), &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this db
@@ -143,8 +143,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
-        let result =
-            environment_delete.delete_environment(&env_action_delete, logger.clone(), &engine_config_for_deletion);
+        let result = environment_delete.delete_environment(&env_action_delete, logger.clone(), &infra_ctx_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
         // delete images created during test from registries
@@ -180,9 +179,9 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             cluster_id,
         );
 
-        let engine_config = scw_default_engine_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let engine_config_for_deletion = scw_default_engine_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion = scw_default_infra_config(&context_for_deletion, logger.clone());
         let test_domain = secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -208,11 +207,10 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let env_action = environment.clone();
         let env_action_for_deletion = environment_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result =
-            environment_delete.delete_environment(&env_action_for_deletion, logger, &engine_config_for_deletion);
+        let result = environment_delete.delete_environment(&env_action_for_deletion, logger, &infra_ctx_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
         // delete images created during test from registries
@@ -250,11 +248,11 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             cluster_id,
         );
 
-        let engine_config = scw_default_engine_config(&context, logger.clone());
+        let infra_ctx = scw_default_infra_config(&context, logger.clone());
         let context_for_redeploy = context.clone_not_same_execution_id();
-        let engine_config_for_redeploy = scw_default_engine_config(&context_for_redeploy, logger.clone());
+        let infra_ctx_for_redeploy = scw_default_infra_config(&context_for_redeploy, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let engine_config_for_delete = scw_default_engine_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete = scw_default_infra_config(&context_for_delete, logger.clone());
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -334,14 +332,11 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let env_action = environment.clone();
         let env_action_delete = environment_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &engine_config);
+        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result = environment_to_redeploy.deploy_environment(
-            &env_action_redeploy,
-            logger.clone(),
-            &engine_config_for_redeploy,
-        );
+        let result =
+            environment_to_redeploy.deploy_environment(&env_action_redeploy, logger.clone(), &infra_ctx_for_redeploy);
         assert!(matches!(result, TransactionResult::Ok));
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
@@ -355,7 +350,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         );
         assert!(ret);
 
-        let result = environment_delete.delete_environment(&env_action_delete, logger, &engine_config_for_delete);
+        let result = environment_delete.delete_environment(&env_action_delete, logger, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok | TransactionResult::Error(_)));
 
         // delete images created during test from registries

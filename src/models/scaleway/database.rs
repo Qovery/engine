@@ -165,7 +165,7 @@ impl<M: DatabaseMode, T: DatabaseType<SCW, M>> Database<SCW, M, T> {
         context.insert("publicly_accessible", &options.publicly_accessible);
         context.insert("activate_high_availability", &options.activate_high_availability);
         context.insert("activate_backups", &options.activate_backups);
-        context.insert("delete_automated_backups", &self.context().is_test_cluster());
+        context.insert("delete_automated_backups", &target.kubernetes.context().is_test_cluster());
         context.insert(
             "resource_expiration_in_seconds",
             &kubernetes.advanced_settings().pleco_resources_ttl,

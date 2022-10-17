@@ -337,30 +337,35 @@ pub trait Kubernetes {
     fn on_create_error(&self) -> Result<(), EngineError>;
 
     fn upgrade(&self) -> Result<(), EngineError> {
-        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
+        // since we doesn't handle upgrade for Ec2 and getting version for them make engine bug, only check upgrade for other kinds.
+        if self.kind() != Kind::Ec2 {
+            let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
 
-        let kubeconfig = match self.get_kubeconfig_file() {
-            Ok((path, _)) => path,
-            Err(e) => return Err(e),
+            let kubeconfig = match self.get_kubeconfig_file() {
+                Ok((path, _)) => path,
+                Err(e) => return Err(e),
+            };
+
+            return match is_kubernetes_upgradable(
+                kubeconfig.clone(),
+                self.cloud_provider().credentials_environment_variables(),
+                event_details.clone(),
+            ) {
+                Err(e) => Err(e),
+                Ok(..) => match is_kubernetes_upgrade_required(
+                    kubeconfig,
+                    self.version(),
+                    self.cloud_provider().credentials_environment_variables(),
+                    event_details,
+                    self.logger(),
+                ) {
+                    Ok(x) => self.upgrade_with_status(x),
+                    Err(e) => Err(e),
+                },
+            };
         };
 
-        match is_kubernetes_upgradable(
-            kubeconfig.clone(),
-            self.cloud_provider().credentials_environment_variables(),
-            event_details.clone(),
-        ) {
-            Err(e) => Err(e),
-            Ok(..) => match is_kubernetes_upgrade_required(
-                kubeconfig,
-                self.version(),
-                self.cloud_provider().credentials_environment_variables(),
-                event_details,
-                self.logger(),
-            ) {
-                Ok(x) => self.upgrade_with_status(x),
-                Err(e) => Err(e),
-            },
-        }
+        Ok(())
     }
 
     fn check_workers_on_upgrade(&self, targeted_version: String) -> Result<(), CommandError>
@@ -581,24 +586,32 @@ where
             },
         ) {
             Ok(_) => {}
-            Err(Operation { error, .. }) => logger.log(EngineEvent::Error(
-                EngineError::new_cannot_uninstall_helm_chart(
+            Err(Operation { error, .. }) => {
+                let engine_error = EngineError::new_cannot_uninstall_helm_chart(
                     event_details.clone(),
                     "Cert-Manager".to_string(),
                     object.to_string(),
                     error,
-                ),
-                None,
-            )),
-            Err(retry::Error::Internal(msg)) => logger.log(EngineEvent::Error(
-                EngineError::new_cannot_uninstall_helm_chart(
+                );
+
+                logger.log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new_from_engine_error(engine_error),
+                ));
+            }
+            Err(retry::Error::Internal(msg)) => {
+                let engine_error = EngineError::new_cannot_uninstall_helm_chart(
                     event_details.clone(),
                     "Cert-Manager".to_string(),
                     object.to_string(),
                     CommandError::new_from_safe_message(msg),
-                ),
-                None,
-            )),
+                );
+
+                logger.log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new_from_engine_error(engine_error),
+                ));
+            }
         }
     }
 
@@ -1026,6 +1039,7 @@ pub fn compare_kubernetes_cluster_versions_for_upgrade(
 
 pub trait InstanceType {
     fn to_cloud_provider_format(&self) -> String;
+    fn is_instance_allowed(&self) -> bool;
 }
 
 impl NodeGroups {

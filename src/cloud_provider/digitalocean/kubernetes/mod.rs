@@ -603,6 +603,7 @@ impl DOKS {
             managed_dns_name: self.dns_provider.domain().to_string(),
             managed_dns_helm_format: self.dns_provider.domain().to_helm_format_string(),
             managed_dns_resolvers_terraform_format: self.managed_dns_resolvers_terraform_format(),
+            managed_dns_root_domain_helm_format: self.dns_provider().domain().root_domain().to_helm_format_string(),
             external_dns_provider: self.dns_provider.provider_name().to_string(),
             dns_email_report: self.options.tls_email_report.clone(),
             acme_url: self.lets_encrypt_url(),
@@ -904,12 +905,21 @@ impl DOKS {
                 .map_err(|e| to_engine_error(&event_details, e))?;
 
             // required to avoid namespace stuck on deletion
-            uninstall_cert_manager(
+            if let Err(e) = uninstall_cert_manager(
                 &kubeconfig_path,
                 self.cloud_provider().credentials_environment_variables(),
                 event_details.clone(),
                 self.logger(),
-            )?;
+            ) {
+                // this error is not blocking, logging a warning and move on
+                self.logger().log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new(
+                        "An error occurred while trying to uninstall cert-manager. This is not blocking.".to_string(),
+                        Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                    ),
+                ));
+            }
 
             self.logger().log(EngineEvent::Info(
                 event_details.clone(),

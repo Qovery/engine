@@ -10,7 +10,7 @@ use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::ecr::ECR;
-use qovery_engine::engine::EngineConfig;
+use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::logger::Logger;
 use std::str::FromStr;
@@ -58,7 +58,7 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
     .unwrap()
 }
 
-pub fn aws_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
+pub fn aws_default_infra_config(context: &Context, logger: Box<dyn Logger>) -> InfrastructureContext {
     AWS::docker_cr_engine(
         context,
         logger,
@@ -87,7 +87,7 @@ impl Cluster<AWS, Options> for AWS {
         min_nodes: i32,
         max_nodes: i32,
         engine_location: EngineLocation,
-    ) -> EngineConfig {
+    ) -> InfrastructureContext {
         // use ECR
         let container_registry = Box::new(container_registry_ecr(context, logger.clone()));
 
@@ -111,7 +111,7 @@ impl Cluster<AWS, Options> for AWS {
             engine_location,
         );
 
-        EngineConfig::new(
+        InfrastructureContext::new(
             context.clone(),
             build_platform,
             container_registry,
@@ -133,8 +133,6 @@ impl Cluster<AWS, Options> for AWS {
                 .as_ref()
                 .expect("AWS_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
-            uuid::Uuid::new_v4(),
-            "QoveryTest",
             secrets
                 .AWS_ACCESS_KEY_ID
                 .expect("AWS_ACCESS_KEY_ID is not set")

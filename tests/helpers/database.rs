@@ -19,7 +19,7 @@ use qovery_engine::cloud_provider::scaleway::Scaleway;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::structs::SVCItem;
 
-use qovery_engine::engine::EngineConfig;
+use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::io_models::application::{Application, GitCredentials, Port, Protocol, Storage, StorageType};
 use qovery_engine::io_models::context::{CloneForTest, Context};
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
@@ -42,13 +42,13 @@ impl Infrastructure for EnvironmentRequest {
         &self,
         environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
-        engine_config: &EngineConfig,
+        infra_ctx: &InfrastructureContext,
     ) -> (Environment, TransactionResult) {
         let mut env = environment
             .to_environment_domain(
-                engine_config.context(),
-                engine_config.cloud_provider(),
-                engine_config.container_registry(),
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
                 logger,
             )
             .unwrap();
@@ -57,13 +57,13 @@ impl Infrastructure for EnvironmentRequest {
             force_build: true,
             force_push: true,
         };
-        let event_details = engine_config
+        let event_details = infra_ctx
             .cloud_provider()
             .get_event_details(Stage::Environment(EnvironmentStep::Build));
         let ret = EnvironmentTask::build_and_push_applications(
             &mut env.applications,
             &deployment_option,
-            engine_config,
+            infra_ctx,
             event_details,
             &|| false,
         );
@@ -76,19 +76,19 @@ impl Infrastructure for EnvironmentRequest {
         &self,
         environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
-        engine_config: &EngineConfig,
+        infra_ctx: &InfrastructureContext,
     ) -> TransactionResult {
         let mut env = environment
             .to_environment_domain(
-                engine_config.context(),
-                engine_config.cloud_provider(),
-                engine_config.container_registry(),
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
                 logger,
             )
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Create;
-        let ret = EnvironmentTask::deploy_environment(env, engine_config, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, &|| false);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(Box::new(err)),
@@ -99,19 +99,19 @@ impl Infrastructure for EnvironmentRequest {
         &self,
         environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
-        engine_config: &EngineConfig,
+        infra_ctx: &InfrastructureContext,
     ) -> TransactionResult {
         let mut env = environment
             .to_environment_domain(
-                engine_config.context(),
-                engine_config.cloud_provider(),
-                engine_config.container_registry(),
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
                 logger,
             )
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Pause;
-        let ret = EnvironmentTask::deploy_environment(env, engine_config, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, &|| false);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(Box::new(err)),
@@ -122,19 +122,19 @@ impl Infrastructure for EnvironmentRequest {
         &self,
         environment: &EnvironmentRequest,
         logger: Box<dyn Logger>,
-        engine_config: &EngineConfig,
+        infra_ctx: &InfrastructureContext,
     ) -> TransactionResult {
         let mut env = environment
             .to_environment_domain(
-                engine_config.context(),
-                engine_config.cloud_provider(),
-                engine_config.container_registry(),
+                infra_ctx.context(),
+                infra_ctx.cloud_provider(),
+                infra_ctx.container_registry(),
                 logger,
             )
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Delete;
-        let ret = EnvironmentTask::deploy_environment(env, engine_config, &|| false);
+        let ret = EnvironmentTask::deploy_environment(env, infra_ctx, &|| false);
         match ret {
             Ok(_) => TransactionResult::Ok,
             Err(err) => TransactionResult::Error(Box::new(err)),
@@ -183,6 +183,7 @@ pub fn environment_3_apps_3_databases(
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         long_id: Uuid::new_v4(),
+        name: "env".to_string(),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -388,7 +389,6 @@ pub fn environment_3_apps_3_databases(
                 mode: CONTAINER,
             },
         ],
-        clone_from_environment_id: None,
     }
 }
 
@@ -399,6 +399,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         long_id: Uuid::new_v4(),
+        name: "env".to_string(),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -430,7 +431,6 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
         containers: vec![],
         routers: vec![],
         databases: vec![],
-        clone_from_environment_id: None,
     }
 }
 
@@ -441,6 +441,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         long_id: suffix,
+        name: "env".to_string(),
         project_long_id: suffix,
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -472,7 +473,6 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
         containers: vec![],
         routers: vec![],
         databases: vec![],
-        clone_from_environment_id: None,
     }
 }
 
@@ -488,7 +488,7 @@ pub fn test_db(
     database_mode: DatabaseMode,
     is_public: bool,
     cluster_domain: ClusterDomain,
-    existing_engine_config: Option<&EngineConfig>,
+    existing_infra_ctx: Option<&InfrastructureContext>,
 ) -> String {
     init();
 
@@ -607,11 +607,11 @@ pub fn test_db(
         Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
     };
 
-    let computed_engine_config: EngineConfig;
-    let engine_config = match existing_engine_config {
+    let computed_infra_ctx: InfrastructureContext;
+    let infra_ctx = match existing_infra_ctx {
         Some(c) => c,
         None => {
-            computed_engine_config = match kubernetes_kind {
+            computed_infra_ctx = match kubernetes_kind {
                 KubernetesKind::Eks => AWS::docker_cr_engine(
                     &context,
                     logger.clone(),
@@ -650,11 +650,11 @@ pub fn test_db(
                     EngineLocation::ClientSide,
                 ),
             };
-            &computed_engine_config
+            &computed_infra_ctx
         }
     };
 
-    let ret = environment.deploy_environment(&ea, logger.clone(), engine_config);
+    let ret = environment.deploy_environment(&ea, logger.clone(), infra_ctx);
     assert!(matches!(ret, TransactionResult::Ok));
 
     match database_mode {
@@ -710,11 +710,11 @@ pub fn test_db(
         }
     }
 
-    let computed_engine_config_for_delete: EngineConfig;
-    let engine_config_for_delete = match existing_engine_config {
+    let computed_infra_ctx_for_delete: InfrastructureContext;
+    let infra_ctx_for_delete = match existing_infra_ctx {
         Some(c) => c,
         None => {
-            computed_engine_config_for_delete = match kubernetes_kind {
+            computed_infra_ctx_for_delete = match kubernetes_kind {
                 KubernetesKind::Eks => AWS::docker_cr_engine(
                     &context_for_delete,
                     logger.clone(),
@@ -753,11 +753,11 @@ pub fn test_db(
                     EngineLocation::ClientSide,
                 ),
             };
-            &computed_engine_config_for_delete
+            &computed_infra_ctx_for_delete
         }
     };
 
-    let ret = environment_delete.delete_environment(&ea_delete, logger, engine_config_for_delete);
+    let ret = environment_delete.delete_environment(&ea_delete, logger, infra_ctx_for_delete);
     assert!(matches!(ret, TransactionResult::Ok));
 
     test_name.to_string()
@@ -775,7 +775,7 @@ pub fn test_pause_managed_db(
     database_mode: DatabaseMode,
     is_public: bool,
     cluster_domain: ClusterDomain,
-    existing_engine_config: Option<&EngineConfig>,
+    existing_infra_ctx: Option<&InfrastructureContext>,
 ) -> String {
     init();
 
@@ -862,11 +862,11 @@ pub fn test_pause_managed_db(
         Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
     };
 
-    let computed_engine_config: EngineConfig;
-    let engine_config = match existing_engine_config {
+    let computed_infra_ctx: InfrastructureContext;
+    let infra_ctx = match existing_infra_ctx {
         Some(c) => c,
         None => {
-            computed_engine_config = match kubernetes_kind {
+            computed_infra_ctx = match kubernetes_kind {
                 KubernetesKind::Eks => AWS::docker_cr_engine(
                     &context,
                     logger.clone(),
@@ -905,11 +905,11 @@ pub fn test_pause_managed_db(
                     EngineLocation::ClientSide,
                 ),
             };
-            &computed_engine_config
+            &computed_infra_ctx
         }
     };
 
-    let ret = environment.deploy_environment(&environment, logger.clone(), engine_config);
+    let ret = environment.deploy_environment(&environment, logger.clone(), infra_ctx);
     assert!(matches!(ret, TransactionResult::Ok));
 
     match database_mode {
@@ -961,11 +961,11 @@ pub fn test_pause_managed_db(
         }
     }
 
-    let computed_engine_config_for_delete: EngineConfig;
-    let engine_config_for_delete = match existing_engine_config {
+    let computed_infra_ctx_for_delete: InfrastructureContext;
+    let infra_ctx_for_delete = match existing_infra_ctx {
         Some(c) => c,
         None => {
-            computed_engine_config_for_delete = match kubernetes_kind {
+            computed_infra_ctx_for_delete = match kubernetes_kind {
                 KubernetesKind::Eks => AWS::docker_cr_engine(
                     &context_for_delete,
                     logger.clone(),
@@ -1004,14 +1004,14 @@ pub fn test_pause_managed_db(
                     EngineLocation::ClientSide,
                 ),
             };
-            &computed_engine_config_for_delete
+            &computed_infra_ctx_for_delete
         }
     };
 
-    let ret = environment_pause.pause_environment(&environment_pause, logger.clone(), engine_config);
+    let ret = environment_pause.pause_environment(&environment_pause, logger.clone(), infra_ctx);
     assert!(matches!(ret, TransactionResult::Ok));
 
-    let ret = environment_delete.delete_environment(&environment_delete, logger, engine_config_for_delete);
+    let ret = environment_delete.delete_environment(&environment_delete, logger, infra_ctx_for_delete);
     assert!(matches!(ret, TransactionResult::Ok));
 
     test_name.to_string()
@@ -1127,7 +1127,7 @@ pub fn test_db_on_upgrade(
         Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
     };
 
-    let engine_config = match provider_kind {
+    let infra_ctx = match provider_kind {
         Kind::Aws => AWS::docker_cr_engine(
             &context,
             logger.clone(),
@@ -1159,7 +1159,7 @@ pub fn test_db_on_upgrade(
         ),
     };
 
-    let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
+    let ret = environment.deploy_environment(&ea, logger.clone(), &infra_ctx);
     assert!(matches!(ret, TransactionResult::Ok));
 
     match database_mode {
@@ -1211,7 +1211,7 @@ pub fn test_db_on_upgrade(
         }
     }
 
-    let engine_config_for_delete = match provider_kind {
+    let infra_ctx_for_delete = match provider_kind {
         Kind::Aws => AWS::docker_cr_engine(
             &context_for_delete,
             logger.clone(),
@@ -1243,7 +1243,7 @@ pub fn test_db_on_upgrade(
         ),
     };
 
-    let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
+    let ret = environment_delete.delete_environment(&ea_delete, logger, &infra_ctx_for_delete);
     assert!(matches!(ret, TransactionResult::Ok));
 
     test_name.to_string()

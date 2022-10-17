@@ -22,8 +22,6 @@ pub struct DO {
     context: Context,
     id: String,
     long_id: Uuid,
-    organization_id: String,
-    organization_long_id: Uuid,
     name: String,
     pub token: String,
     spaces_access_id: String,
@@ -36,8 +34,6 @@ impl DO {
     pub fn new(
         context: Context,
         long_id: Uuid,
-        organization_id: &str,
-        organization_long_id: Uuid,
         token: &str,
         spaces_access_id: &str,
         spaces_secret_key: &str,
@@ -49,8 +45,6 @@ impl DO {
             context,
             id: to_short_id(&long_id),
             long_id,
-            organization_id: organization_id.to_string(),
-            organization_long_id,
             name: name.to_string(),
             token: token.to_string(),
             spaces_access_id: spaces_access_id.to_string(),
@@ -83,11 +77,11 @@ impl CloudProvider for DO {
     }
 
     fn organization_id(&self) -> &str {
-        self.organization_id.as_str()
+        self.context.organization_short_id()
     }
 
     fn organization_long_id(&self) -> Uuid {
-        self.organization_long_id
+        *self.context.organization_long_id()
     }
 
     fn name(&self) -> &str {

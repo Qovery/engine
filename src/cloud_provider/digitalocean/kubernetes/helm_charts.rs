@@ -14,6 +14,7 @@ use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 
 use crate::cloud_provider::helm_charts::core_dns_config_chart::CoreDNSConfigChart;
+use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -52,6 +53,7 @@ pub struct ChartsConfigPrerequisites {
     pub managed_dns_name: String,
     pub managed_dns_helm_format: String,
     pub managed_dns_resolvers_terraform_format: String,
+    pub managed_dns_root_domain_helm_format: String,
     pub external_dns_provider: String,
     pub dns_email_report: String,
     pub acme_url: String,
@@ -84,6 +86,7 @@ impl ChartsConfigPrerequisites {
         managed_dns_name: String,
         managed_dns_helm_format: String,
         managed_dns_resolvers_terraform_format: String,
+        managed_dns_root_domain_helm_format: String,
         external_dns_provider: String,
         dns_email_report: String,
         acme_url: String,
@@ -113,6 +116,7 @@ impl ChartsConfigPrerequisites {
             managed_dns_name,
             managed_dns_helm_format,
             managed_dns_resolvers_terraform_format,
+            managed_dns_root_domain_helm_format,
             external_dns_provider,
             dns_email_report,
             acme_url,
@@ -176,34 +180,17 @@ pub fn do_helm_charts(
             .to_string(),
     );
 
-    let external_dns = CommonChart {
-        chart_info: ChartInfo {
-            name: "externaldns".to_string(),
-            path: chart_path("common/charts/external-dns"),
-            values_files: vec![chart_path("chart_values/external-dns.yaml")],
-            values: vec![
-                // resources limits
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "50m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "50m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "50Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "50Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // External DNS
+    let external_dns = ExternalDNSChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.dns_provider_config.clone(),
+        chart_config_prerequisites
+            .managed_dns_root_domain_helm_format
+            .to_string(),
+        false,
+        chart_config_prerequisites.cluster_id.to_string(),
+    )
+    .to_common_helm_chart();
 
     let promtail = CommonChart {
         chart_info: ChartInfo {

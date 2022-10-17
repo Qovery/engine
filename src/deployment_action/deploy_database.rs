@@ -21,6 +21,7 @@ use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use serde::Deserialize;
+use std::borrow::Borrow;
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -264,7 +265,7 @@ where
         PathBuf::from(db.terraform_resource_dir_path()),
         PathBuf::from(&workspace_dir),
         event_details.clone(),
-        db.context.is_dry_run_deploy(),
+        target.is_dry_run_deploy,
     );
     terraform_deploy.on_create(target)?;
 
@@ -395,16 +396,21 @@ where
         })
     }
 
-    fn on_create_check(&self) -> Result<(), EngineError> {
+    fn on_create_check(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         if self.publicly_accessible {
-            let logger = get_loggers(self, self.action);
+            let logger = get_loggers(self, self.action, target.logger.borrow());
             let domain_checker = CheckDnsForDomains {
                 resolve_to_ip: vec![self.fqdn.to_string()],
                 resolve_to_cname: vec![],
                 log: logger.send_success,
             };
 
-            let _ = domain_checker.on_create_check();
+            let _ = domain_checker.on_create_check(target);
+            if (target.should_abort)() {
+                return Err(EngineError::new_task_cancellation_requested(
+                    self.get_event_details(Stage::Environment(EnvironmentStep::Cancelled)),
+                ));
+            }
         }
 
         Ok(())
@@ -483,7 +489,7 @@ where
                 PathBuf::from(self.terraform_resource_dir_path()),
                 PathBuf::from(&workspace_dir),
                 event_details.clone(),
-                self.context.is_dry_run_deploy(),
+                target.is_dry_run_deploy,
             );
             terraform_deploy.on_delete(target)?;
 
@@ -519,7 +525,7 @@ where
         execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
             let chart = ChartInfo {
                 name: self.helm_release_name(),
-                path: self.workspace_directory(),
+                path: self.workspace_directory().to_string(),
                 namespace: HelmChartNamespaces::Custom,
                 custom_namespace: Some(target.environment.namespace().to_string()),
                 k8s_selector: Some(self.selector()),
@@ -548,16 +554,21 @@ where
         })
     }
 
-    fn on_create_check(&self) -> Result<(), EngineError> {
+    fn on_create_check(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         if self.publicly_accessible {
-            let logger = get_loggers(self, self.action);
+            let logger = get_loggers(self, self.action, target.logger.borrow());
             let domain_checker = CheckDnsForDomains {
                 resolve_to_ip: vec![self.fqdn.to_string()],
                 resolve_to_cname: vec![],
                 log: logger.send_success,
             };
 
-            let _ = domain_checker.on_create_check();
+            let _ = domain_checker.on_create_check(target);
+            if (target.should_abort)() {
+                return Err(EngineError::new_task_cancellation_requested(
+                    self.get_event_details(Stage::Environment(EnvironmentStep::Cancelled)),
+                ));
+            }
         }
 
         Ok(())
@@ -597,7 +608,7 @@ where
             helm.on_delete(target)?;
 
             // TODO: Remove once we migrate to kube 1.23, it will done automatically
-            let logger = get_loggers(self, Action::Delete);
+            let logger = get_loggers(self, Action::Delete, target.logger.borrow());
             (logger.send_progress)("🪓 Terminating network volume of the database".to_string());
             if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
                 &target.kube,

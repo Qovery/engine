@@ -14,6 +14,7 @@ use crate::models::application::{Application, ApplicationService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
+use std::borrow::Borrow;
 use std::path::PathBuf;
 use std::time::Duration;
 use tera::Context;
@@ -36,7 +37,7 @@ where
 
             let chart = ChartInfo {
                 name: self.helm_release_name(),
-                path: self.workspace_directory(),
+                path: self.workspace_directory().to_string(),
                 namespace: HelmChartNamespaces::Custom,
                 custom_namespace: Some(target.environment.namespace().to_string()),
                 timeout_in_seconds: self.startup_timeout().as_secs() as i64,
@@ -99,7 +100,7 @@ where
 
             helm.on_delete(target)?;
 
-            let logger = get_loggers(self, Action::Delete);
+            let logger = get_loggers(self, Action::Delete, target.logger.borrow());
             // Delete pvc of statefulset if needed
             // FIXME: Remove this after kubernetes 1.23 is deployed, at it should be done by kubernetes
             if self.is_stateful() {

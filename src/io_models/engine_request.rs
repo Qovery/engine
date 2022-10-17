@@ -18,7 +18,7 @@ use crate::container_registry::scaleway_container_registry::ScalewayCR;
 use crate::dns_provider::cloudflare::Cloudflare;
 use crate::dns_provider::io::Kind;
 use crate::dns_provider::qoverydns::QoveryDns;
-use crate::engine::EngineConfig;
+use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError as IoEngineError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::{Context, Features, Metadata};
@@ -36,8 +36,11 @@ use std::sync::Arc;
 use url::Url;
 use uuid::Uuid;
 
+pub type EnvironmentEngineRequest = EngineRequest<EnvironmentRequest>;
+pub type InfrastructureEngineRequest = EngineRequest<Option<()>>;
+
 #[derive(Serialize, Deserialize, Clone)]
-pub struct EngineRequest {
+pub struct EngineRequest<T> {
     pub id: String,
     pub organization_id: String,
     pub organization_long_id: Uuid,
@@ -49,25 +52,26 @@ pub struct EngineRequest {
     pub cloud_provider: CloudProvider,
     pub dns_provider: DnsProvider,
     pub container_registry: ContainerRegistry,
-    pub target_environment: Option<EnvironmentRequest>,
-    pub failover_environment: Option<EnvironmentRequest>,
+    pub kubernetes: Kubernetes,
+    pub target_environment: T,
     pub metadata: Option<Metadata>,
     pub archive: Option<Archive>,
-    // this field is used to store the data bytes from the current request send through NATS.
-    #[serde(skip_serializing, skip_deserializing)]
-    pub bytes_payload: Vec<u8>,
 }
 
-impl EngineRequest {
-    pub fn engine(&self, context: &Context, logger: Box<dyn Logger>) -> Result<EngineConfig, IoEngineError> {
+impl<T> EngineRequest<T> {
+    pub fn engine(
+        &self,
+        context: &Context,
+        event_details: EventDetails,
+        logger: Box<dyn Logger>,
+    ) -> Result<InfrastructureContext, IoEngineError> {
         let build_platform = self.build_platform.to_engine_build_platform(context, logger.clone());
         let cloud_provider = self
             .cloud_provider
-            .to_engine_cloud_provider(context.clone(), self.organization_id.as_str(), self.organization_long_id)
+            .to_engine_cloud_provider(context.clone(), &self.kubernetes.region, self.kubernetes.kind.clone())
             .ok_or_else(|| {
-                let event_details = self.event_details();
                 IoEngineError::new_error_on_cloud_provider_information(
-                    event_details,
+                    event_details.clone(),
                     CommandError::new(
                         "Invalid cloud provider information".to_string(),
                         Some(format!("Invalid cloud provider information: {:?}", self.cloud_provider)),
@@ -78,19 +82,14 @@ impl EngineRequest {
         let cloud_provider = Arc::new(cloud_provider);
 
         let mut tags = self
-            .cloud_provider
             .kubernetes
             .advanced_settings
             .cloud_provider_container_registry_tags
             .clone();
-        if self.cloud_provider.kubernetes.advanced_settings.pleco_resources_ttl > -1 {
+        if self.kubernetes.advanced_settings.pleco_resources_ttl > -1 {
             tags.insert(
                 "ttl".to_string(),
-                self.cloud_provider
-                    .kubernetes
-                    .advanced_settings
-                    .pleco_resources_ttl
-                    .to_string(),
+                self.kubernetes.advanced_settings.pleco_resources_ttl.to_string(),
             );
         };
 
@@ -98,9 +97,8 @@ impl EngineRequest {
             .container_registry
             .to_engine_container_registry(context.clone(), logger.clone(), tags)
             .ok_or_else(|| {
-                let event_details = self.event_details();
                 IoEngineError::new_error_on_container_registry_information(
-                    event_details,
+                    event_details.clone(),
                     CommandError::new(
                         "Invalid container registry information".to_string(),
                         Some(format!("Invalid container registry information: {:?}", self.container_registry)),
@@ -110,7 +108,6 @@ impl EngineRequest {
             })?;
 
         let cluster_jwt_token: String = self
-            .cloud_provider
             .kubernetes
             .options
             .get("jwt_token")
@@ -122,7 +119,6 @@ impl EngineRequest {
             .dns_provider
             .to_engine_dns_provider(context.clone(), cluster_jwt_token)
             .ok_or_else(|| {
-                let event_details = self.event_details();
                 IoEngineError::new_error_on_dns_provider_information(
                     event_details,
                     CommandError::new(
@@ -134,7 +130,7 @@ impl EngineRequest {
             })?;
         let dns_provider = Arc::new(dns_provider);
 
-        let kubernetes = match self.cloud_provider.kubernetes.to_engine_kubernetes(
+        let kubernetes = match self.kubernetes.to_engine_kubernetes(
             context,
             cloud_provider.clone(),
             dns_provider.clone(),
@@ -147,7 +143,7 @@ impl EngineRequest {
             }
         };
 
-        Ok(EngineConfig::new(
+        Ok(InfrastructureContext::new(
             context.clone(),
             build_platform,
             container_registry,
@@ -156,48 +152,48 @@ impl EngineRequest {
             kubernetes,
         ))
     }
+}
 
+impl InfrastructureEngineRequest {
     pub fn event_details(&self) -> EventDetails {
-        let kubernetes = &self.cloud_provider.kubernetes;
-        match &self.target_environment {
-            // It means it is an infra deployment request
-            None => {
-                let stage = match self.action {
-                    Action::Create => Stage::Infrastructure(InfrastructureStep::Create),
-                    Action::Pause => Stage::Infrastructure(InfrastructureStep::Pause),
-                    Action::Delete => Stage::Infrastructure(InfrastructureStep::Delete),
-                    Action::Nothing => Stage::Infrastructure(InfrastructureStep::Create),
-                };
+        let kubernetes = &self.kubernetes;
+        let stage = match self.action {
+            Action::Create => Stage::Infrastructure(InfrastructureStep::Create),
+            Action::Pause => Stage::Infrastructure(InfrastructureStep::Pause),
+            Action::Delete => Stage::Infrastructure(InfrastructureStep::Delete),
+            Action::Nothing => Stage::Infrastructure(InfrastructureStep::Create),
+        };
 
-                EventDetails::new(
-                    Some(self.cloud_provider.kind.clone()),
-                    QoveryIdentifier::new(self.organization_long_id),
-                    QoveryIdentifier::new(kubernetes.long_id),
-                    self.id.to_string(),
-                    stage,
-                    Transmitter::Kubernetes(kubernetes.long_id, kubernetes.name.to_string()),
-                )
-            }
+        EventDetails::new(
+            Some(self.cloud_provider.kind.clone()),
+            QoveryIdentifier::new(self.organization_long_id),
+            QoveryIdentifier::new(kubernetes.long_id),
+            self.id.to_string(),
+            stage,
+            Transmitter::Kubernetes(kubernetes.long_id, kubernetes.name.to_string()),
+        )
+    }
+}
 
-            // It means it is an environment deployment request
-            Some(env) => {
-                let stage = match self.action {
-                    Action::Create => Stage::Environment(EnvironmentStep::Deploy),
-                    Action::Pause => Stage::Environment(EnvironmentStep::Pause),
-                    Action::Delete => Stage::Environment(EnvironmentStep::Delete),
-                    Action::Nothing => Stage::Environment(EnvironmentStep::Deploy),
-                };
+impl EnvironmentEngineRequest {
+    pub fn event_details(&self) -> EventDetails {
+        let kubernetes = &self.kubernetes;
+        // It means it is an environment deployment request
+        let stage = match self.action {
+            Action::Create => Stage::Environment(EnvironmentStep::Deploy),
+            Action::Pause => Stage::Environment(EnvironmentStep::Pause),
+            Action::Delete => Stage::Environment(EnvironmentStep::Delete),
+            Action::Nothing => Stage::Environment(EnvironmentStep::Deploy),
+        };
 
-                EventDetails::new(
-                    Some(self.cloud_provider.kind.clone()),
-                    QoveryIdentifier::new(self.organization_long_id),
-                    QoveryIdentifier::new(kubernetes.long_id),
-                    self.id.to_string(),
-                    stage,
-                    Transmitter::Environment(env.long_id, "environment".to_string()),
-                )
-            }
-        }
+        EventDetails::new(
+            Some(self.cloud_provider.kind.clone()),
+            QoveryIdentifier::new(self.organization_long_id),
+            QoveryIdentifier::new(kubernetes.long_id),
+            self.id.to_string(),
+            stage,
+            Transmitter::Environment(self.target_environment.long_id, self.target_environment.name.clone()),
+        )
     }
 }
 
@@ -233,7 +229,6 @@ pub struct CloudProvider {
     pub name: String,
     pub zones: Vec<String>,
     pub options: Options,
-    pub kubernetes: Kubernetes,
     pub terraform_state_credentials: TerraformStateCredentials,
 }
 
@@ -241,8 +236,8 @@ impl CloudProvider {
     pub fn to_engine_cloud_provider(
         &self,
         context: Context,
-        organization_id: &str,
-        organization_long_id: Uuid,
+        region: &str,
+        cluster_kind: cloud_provider::kubernetes::Kind,
     ) -> Option<Box<dyn cloud_provider::CloudProvider>> {
         let terraform_state_credentials = cloud_provider::TerraformStateCredentials {
             access_key_id: self.terraform_state_credentials.access_key_id.clone(),
@@ -254,38 +249,32 @@ impl CloudProvider {
             cloud_provider::Kind::Aws => Some(Box::new(AWS::new(
                 context,
                 self.long_id,
-                organization_id,
-                organization_long_id,
                 self.name.as_str(),
                 self.options.access_key_id.as_ref()?.as_str(),
                 self.options.secret_access_key.as_ref()?.as_str(),
-                self.kubernetes.region.as_str(),
+                region,
                 self.zones.clone(),
-                self.kubernetes.kind.clone(),
+                cluster_kind,
                 terraform_state_credentials,
             ))),
             cloud_provider::Kind::Do => Some(Box::new(DO::new(
                 context,
                 self.long_id,
-                organization_id,
-                organization_long_id,
                 self.options.token.as_ref()?.as_str(),
                 self.options.spaces_access_id.as_ref()?.as_str(),
                 self.options.spaces_secret_key.as_ref()?.as_str(),
-                self.kubernetes.region.as_str(),
+                region,
                 self.name.as_str(),
                 terraform_state_credentials,
             ))),
             cloud_provider::Kind::Scw => Some(Box::new(Scaleway::new(
                 context,
                 self.long_id,
-                organization_id,
-                organization_long_id,
                 self.name.as_str(),
                 self.options.scaleway_access_key.as_ref()?.as_str(),
                 self.options.scaleway_secret_key.as_ref()?.as_str(),
                 self.options.scaleway_project_id.as_ref()?.as_str(),
-                self.kubernetes.region.as_str(),
+                region,
                 terraform_state_credentials,
             ))),
         }

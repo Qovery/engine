@@ -1,12 +1,12 @@
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces,
 };
-use crate::cloud_provider::helm_charts::ToCommonHelmChart;
+use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
 use crate::errors::CommandError;
 use kube::Client;
 
 pub struct ClusterAutoscalerChart {
-    chart_path: String,
+    chart_path: HelmChartPath,
     cloud_provider: String, // TODO(benjaminch): Pass cloud provider type here instead of string
     chart_image_region: String,
     cluster_name: String,
@@ -28,10 +28,10 @@ impl ClusterAutoscalerChart {
         ff_metrics_history_enabled: bool,
     ) -> Self {
         ClusterAutoscalerChart {
-            chart_path: format!(
-                "{}/common/charts/{}",
-                chart_prefix_path.unwrap_or("./"),
-                ClusterAutoscalerChart::chart_name()
+            chart_path: HelmChartPath::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CommonFolder,
+                ClusterAutoscalerChart::chart_name(),
             ),
             cloud_provider,
             chart_image_region,

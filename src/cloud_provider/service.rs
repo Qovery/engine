@@ -13,53 +13,22 @@ use crate::cmd::kubectl::{kubectl_exec_delete_pod, kubectl_exec_get_pods};
 use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::cmd::terraform::TerraformError;
 use crate::errors::{CommandError, EngineError};
-use crate::events::{EventDetails, Stage, Transmitter};
-use crate::io_models::context::Context;
-use crate::io_models::QoveryIdentifier;
-use crate::logger::Logger;
+use crate::events::{EventDetails, Stage};
+use crate::models;
+use crate::models::database::{Database, DatabaseMode};
 
-use crate::models::types::VersionsNumber;
+use crate::models::types::{CloudProvider, VersionsNumber};
 
-// todo: delete this useless trait
 pub trait Service {
-    fn context(&self) -> &Context;
     fn service_type(&self) -> ServiceType;
     fn id(&self) -> &str;
     fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
     fn sanitized_name(&self) -> String;
-    fn workspace_directory(&self) -> String {
-        let dir_root = match self.service_type() {
-            ServiceType::Application => "applications",
-            ServiceType::Database(_) => "databases",
-            ServiceType::Router => "routers",
-            ServiceType::Container => "containers",
-        };
-
-        crate::fs::workspace_directory(
-            self.context().workspace_root_dir(),
-            self.context().execution_id(),
-            format!("{}/{}", dir_root, self.long_id()),
-        )
-        .unwrap()
-    }
-    fn get_event_details(&self, stage: Stage) -> EventDetails {
-        let context = self.context();
-        EventDetails::new(
-            None,
-            QoveryIdentifier::new(*context.organization_long_id()),
-            QoveryIdentifier::new(*context.cluster_long_id()),
-            context.execution_id().to_string(),
-            stage,
-            self.to_transmitter(),
-        )
-    }
-    fn version(&self) -> String;
+    fn get_event_details(&self, stage: Stage) -> EventDetails;
     fn action(&self) -> &Action;
     // used to retrieve logs by using Kubernetes labels (selector)
     fn selector(&self) -> Option<String>;
-    fn logger(&self) -> &dyn Logger;
-    fn to_transmitter(&self) -> Transmitter;
     fn as_service(&self) -> &dyn Service;
 }
 
@@ -136,7 +105,6 @@ pub fn default_tera_context(
     context.insert("sanitized_name", &service.sanitized_name());
     context.insert("namespace", environment.namespace());
     context.insert("cluster_name", kubernetes.name());
-    context.insert("version", &service.version());
 
     context
 }
@@ -204,38 +172,38 @@ impl ServiceVersionCheckResult {
     }
 }
 
-pub fn check_service_version<T>(
+pub fn check_service_version<C: CloudProvider, M: DatabaseMode, T: models::database::DatabaseType<C, M>>(
     result: Result<String, CommandError>,
-    service: &T,
+    service: &Database<C, M, T>,
     event_details: EventDetails,
 ) -> Result<ServiceVersionCheckResult, EngineError>
 where
-    T: Service,
 {
+    let srv_version = service.version.to_string();
     match result {
         Ok(version) => {
-            if service.version() != version.as_str() {
+            if srv_version != version.as_str() {
                 let message = format!(
                     "{} version `{}` has been requested by the user; but matching version is `{}`",
                     service.service_type().name(),
-                    service.version(),
+                    srv_version,
                     version.as_str()
                 );
 
                 return Ok(ServiceVersionCheckResult::new(
-                    VersionsNumber::from_str(&service.version()).map_err(|e| {
-                        EngineError::new_version_number_parsing_error(event_details.clone(), service.version(), e)
+                    VersionsNumber::from_str(&srv_version).map_err(|e| {
+                        EngineError::new_version_number_parsing_error(event_details.clone(), srv_version.clone(), e)
                     })?,
                     VersionsNumber::from_str(&version).map_err(|e| {
-                        EngineError::new_version_number_parsing_error(event_details.clone(), version.to_string(), e)
+                        EngineError::new_version_number_parsing_error(event_details.clone(), srv_version, e)
                     })?,
                     Some(message),
                 ));
             }
 
             Ok(ServiceVersionCheckResult::new(
-                VersionsNumber::from_str(&service.version()).map_err(|e| {
-                    EngineError::new_version_number_parsing_error(event_details.clone(), service.version(), e)
+                VersionsNumber::from_str(&srv_version).map_err(|e| {
+                    EngineError::new_version_number_parsing_error(event_details.clone(), srv_version, e)
                 })?,
                 VersionsNumber::from_str(&version).map_err(|e| {
                     EngineError::new_version_number_parsing_error(event_details.clone(), version.to_string(), e)
@@ -244,11 +212,8 @@ where
             ))
         }
         Err(_err) => {
-            let error = EngineError::new_unsupported_version_error(
-                event_details,
-                service.service_type().name(),
-                service.version(),
-            );
+            let error =
+                EngineError::new_unsupported_version_error(event_details, service.service_type().name(), srv_version);
             Err(error)
         }
     }

@@ -1,16 +1,20 @@
 use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, CommonChart, HelmChartNamespaces};
-use crate::cloud_provider::helm_charts::ToCommonHelmChart;
+use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
 use crate::errors::CommandError;
 use kube::Client;
 
 pub struct AwsUiViewChart {
-    chart_path: String,
+    chart_path: HelmChartPath,
 }
 
 impl AwsUiViewChart {
     pub fn new(chart_prefix_path: Option<&str>) -> AwsUiViewChart {
         AwsUiViewChart {
-            chart_path: format!("{}/charts/{}", chart_prefix_path.unwrap_or("./"), AwsUiViewChart::chart_name()),
+            chart_path: HelmChartPath::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CloudProviderFolder,
+                AwsUiViewChart::chart_name(),
+            ),
         }
     }
 

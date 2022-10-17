@@ -16,7 +16,7 @@ use qovery_engine::container_registry::errors::ContainerRegistryError;
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::container_registry::ContainerRegistry;
 use qovery_engine::dns_provider::DnsProvider;
-use qovery_engine::engine::EngineConfig;
+use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::Logger;
@@ -67,7 +67,7 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
     .unwrap()
 }
 
-pub fn scw_default_engine_config(context: &Context, logger: Box<dyn Logger>) -> EngineConfig {
+pub fn scw_default_infra_config(context: &Context, logger: Box<dyn Logger>) -> InfrastructureContext {
     Scaleway::docker_cr_engine(
         context,
         logger,
@@ -96,7 +96,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         min_nodes: i32,
         max_nodes: i32,
         engine_location: EngineLocation,
-    ) -> EngineConfig {
+    ) -> InfrastructureContext {
         // use Scaleway CR
         let container_registry = Box::new(container_registry_scw(context));
 
@@ -120,7 +120,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             engine_location,
         );
 
-        EngineConfig::new(
+        InfrastructureContext::new(
             context.clone(),
             build_platform,
             container_registry,
@@ -132,9 +132,6 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
 
     fn cloud_provider(context: &Context, _kubernetes_kind: KubernetesKind) -> Box<Scaleway> {
         let secrets = FuncTestsSecrets::new();
-        let cluster_id = secrets
-            .SCALEWAY_TEST_CLUSTER_ID
-            .expect("SCALEWAY_TEST_CLUSTER_ID is not set");
         Box::new(Scaleway::new(
             context.clone(),
             *context.cluster_long_id(),
@@ -143,8 +140,6 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
                 .as_ref()
                 .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
-            uuid::Uuid::new_v4(),
-            format!("qovery-{}", cluster_id).as_str(),
             secrets
                 .SCALEWAY_ACCESS_KEY
                 .expect("SCALEWAY_ACCESS_KEY is not set in secrets")

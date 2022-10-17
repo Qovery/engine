@@ -12,6 +12,7 @@ use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
 use crate::models::router::{Router, RouterService};
 use crate::models::types::{CloudProvider, ToTeraContext};
+use std::borrow::Borrow;
 use std::path::PathBuf;
 
 impl<T: CloudProvider> DeploymentAction for Router<T>
@@ -23,7 +24,7 @@ where
         execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Create), || {
             let chart = ChartInfo {
                 name: self.helm_release_name(),
-                path: self.workspace_directory(),
+                path: self.workspace_directory().to_string(),
                 namespace: HelmChartNamespaces::Custom,
                 custom_namespace: Some(target.environment.namespace().to_string()),
                 ..Default::default()
@@ -41,9 +42,9 @@ where
         })
     }
 
-    fn on_create_check(&self) -> Result<(), EngineError> {
+    fn on_create_check(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         // check non custom domains
-        let logger = get_loggers(self, self.action);
+        let logger = get_loggers(self, self.action, target.logger.borrow());
         let custom_domains_to_check: Vec<CustomDomain> = if self.advanced_settings.custom_domain_check_enabled {
             self.custom_domains.clone()
         } else {
@@ -56,8 +57,14 @@ where
             log: logger.send_success,
         };
 
-        let _ = domain_checker.on_create_check();
-        Ok(())
+        let _ = domain_checker.on_create_check(target);
+        if (target.should_abort)() {
+            Err(EngineError::new_task_cancellation_requested(
+                self.get_event_details(Stage::Environment(EnvironmentStep::Cancelled)),
+            ))
+        } else {
+            Ok(())
+        }
     }
 
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {

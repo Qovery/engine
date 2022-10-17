@@ -9,7 +9,7 @@ use crate::dns_provider::{DnsProvider, DnsProviderConfiguration};
 use crate::io_models::context::Context;
 use crate::io_models::domain::Domain;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct QoveryDnsConfig {
     pub api_url: Url,
     pub api_key: String,

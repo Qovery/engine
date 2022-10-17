@@ -127,6 +127,19 @@ impl EventMessage {
         }
     }
 
+    /// Creates e new EventMessage from engine error.
+    ///
+    /// Arguments
+    ///
+    /// * `engine_error`: Engine error.
+    pub fn new_from_engine_error(engine_error: EngineError) -> Self {
+        EventMessage {
+            safe_message: engine_error.message(ErrorMessageVerbosity::SafeOnly),
+            full_details: Some(engine_error.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+            env_vars: None,
+        }
+    }
+
     /// Returns message for event message.
     ///
     /// Arguments

@@ -1,16 +1,20 @@
 use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart};
-use crate::cloud_provider::helm_charts::ToCommonHelmChart;
+use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
 use crate::errors::CommandError;
 use kube::Client;
 
 pub struct AwsNodeTermHandlerChart {
-    chart_path: String,
+    chart_path: HelmChartPath,
 }
 
 impl AwsNodeTermHandlerChart {
     pub fn new(chart_prefix_path: Option<&str>) -> AwsNodeTermHandlerChart {
         AwsNodeTermHandlerChart {
-            chart_path: format!("{}/charts/aws-node-termination-handler", chart_prefix_path.unwrap_or("./"),),
+            chart_path: HelmChartPath::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CloudProviderFolder,
+                "aws-node-termination-handler".to_string(),
+            ),
         }
     }
 

@@ -7,6 +7,7 @@ use crate::dns_provider::{DnsProvider, DnsProviderConfiguration, Kind};
 use crate::io_models::context::Context;
 use crate::io_models::domain::Domain;
 
+#[derive(Clone, Debug)]
 pub struct CloudflareDnsConfig {
     pub cloudflare_email: String,
     pub cloudflare_api_token: String,

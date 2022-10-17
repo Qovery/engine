@@ -17,8 +17,6 @@ pub struct Scaleway {
     id: String,
     long_id: Uuid,
     name: String,
-    organization_id: String,
-    organization_long_id: Uuid,
     access_key: String,
     secret_key: String,
     project_id: String,
@@ -30,8 +28,6 @@ impl Scaleway {
     pub fn new(
         context: Context,
         long_id: Uuid,
-        organization_id: &str,
-        organization_long_id: Uuid,
         name: &str,
         access_key: &str,
         secret_key: &str,
@@ -43,8 +39,6 @@ impl Scaleway {
             context,
             id: to_short_id(&long_id),
             long_id,
-            organization_id: organization_id.to_string(),
-            organization_long_id,
             name: name.to_string(),
             access_key: access_key.to_string(),
             secret_key: secret_key.to_string(),
@@ -73,11 +67,11 @@ impl CloudProvider for Scaleway {
     }
 
     fn organization_id(&self) -> &str {
-        self.organization_id.as_str()
+        self.context.organization_short_id()
     }
 
     fn organization_long_id(&self) -> Uuid {
-        self.organization_long_id
+        *self.context.organization_long_id()
     }
 
     fn name(&self) -> &str {

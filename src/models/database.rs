@@ -8,14 +8,12 @@ use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::io_models::database::DatabaseOptions;
-use crate::logger::Logger;
 use crate::models::database_utils::{
     get_self_hosted_mongodb_version, get_self_hosted_mysql_version, get_self_hosted_postgres_version,
     get_self_hosted_redis_version,
 };
 use crate::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
 use crate::utilities::to_short_id;
-use std::borrow::Borrow;
 use std::marker::PhantomData;
 use tera::Context as TeraContext;
 use uuid::Uuid;
@@ -79,7 +77,7 @@ pub enum DatabaseError {
 
 pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     _marker: PhantomData<(C, M, T)>,
-    pub(crate) context: Context,
+    pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails>,
     pub(crate) id: String,
     pub(crate) long_id: Uuid,
     pub(crate) action: Action,
@@ -93,12 +91,13 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     pub(crate) publicly_accessible: bool,
     pub(crate) private_port: u16,
     pub(crate) options: T::DatabaseOptions,
-    pub(crate) logger: Box<dyn Logger>,
+    pub(crate) workspace_directory: String,
+    pub(crate) lib_root_directory: String,
 }
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T> {
     pub fn new(
-        context: Context,
+        context: &Context,
         long_id: Uuid,
         action: Action,
         name: &str,
@@ -111,13 +110,22 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
         publicly_accessible: bool,
         private_port: u16,
         options: T::DatabaseOptions,
-        logger: Box<dyn Logger>,
+        mk_event_details: impl Fn(Transmitter) -> EventDetails,
     ) -> Result<Self, DatabaseError> {
         // TODO: Implement domain constraint logic
 
+        let workspace_directory = crate::fs::workspace_directory(
+            context.workspace_root_dir(),
+            context.execution_id(),
+            format!("databases/{}", long_id),
+        )
+        .map_err(|_| DatabaseError::InvalidConfig("Can't create workspace directory".to_string()))?;
+
+        let event_details = mk_event_details(Transmitter::Database(long_id, name.to_string()));
+        let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
         Ok(Self {
             _marker: PhantomData,
-            context,
+            mk_event_details: Box::new(mk_event_details),
             action,
             id: to_short_id(&long_id),
             long_id,
@@ -131,12 +139,17 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
             publicly_accessible,
             private_port,
             options,
-            logger,
+            workspace_directory,
+            lib_root_directory: context.lib_root_dir().to_string(),
         })
     }
 
     pub fn selector(&self) -> String {
         format!("databaseId={}", self.id)
+    }
+
+    pub fn workspace_directory(&self) -> &str {
+        &self.workspace_directory
     }
 
     pub(super) fn fqdn(&self, target: &DeploymentTarget, fqdn: &str) -> String {
@@ -151,10 +164,6 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
 }
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Database<C, M, T> {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
     fn service_type(&self) -> ServiceType {
         ServiceType::Database(T::db_type())
     }
@@ -182,8 +191,8 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Datab
         }
     }
 
-    fn version(&self) -> String {
-        self.version.to_string()
+    fn get_event_details(&self, stage: Stage) -> EventDetails {
+        (self.mk_event_details)(stage)
     }
 
     fn action(&self) -> &Action {
@@ -192,14 +201,6 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Service for Datab
 
     fn selector(&self) -> Option<String> {
         Some(self.selector())
-    }
-
-    fn logger(&self) -> &dyn Logger {
-        self.logger.borrow()
-    }
-
-    fn to_transmitter(&self) -> Transmitter {
-        Transmitter::Database(self.long_id, self.name.to_string())
     }
 
     fn as_service(&self) -> &dyn Service {
@@ -214,13 +215,13 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
     }
 
     pub fn helm_chart_dir(&self) -> String {
-        format!("{}/common/services/{}", self.context.lib_root_dir(), T::lib_directory_name())
+        format!("{}/common/services/{}", self.lib_root_directory, T::lib_directory_name())
     }
 
     pub fn helm_chart_values_dir(&self) -> String {
         format!(
             "{}/{}/chart_values/{}",
-            self.context.lib_root_dir(),
+            self.lib_root_directory,
             C::lib_directory_name(),
             T::lib_directory_name()
         )
@@ -254,7 +255,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn(target, &self.fqdn).as_str());
         context.insert("service_name", self.fqdn_id.as_str());
-        context.insert("database_db_name", self.name());
+        context.insert("database_db_name", &self.name);
         context.insert("database_login", options.login.as_str());
         context.insert("database_password", options.password.as_str());
         context.insert("database_port", &self.private_port);
@@ -291,17 +292,17 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
 // methods for all Managed databases
 impl<C: CloudProvider, T: DatabaseType<C, Managed>> Database<C, Managed, T> {
     pub fn helm_chart_external_name_service_dir(&self) -> String {
-        format!("{}/common/charts/external-name-svc", self.context.lib_root_dir())
+        format!("{}/common/charts/external-name-svc", self.lib_root_directory)
     }
 
     pub fn terraform_common_resource_dir_path(&self) -> String {
-        format!("{}/{}/services/common", self.context.lib_root_dir(), C::lib_directory_name())
+        format!("{}/{}/services/common", self.lib_root_directory, C::lib_directory_name())
     }
 
     pub fn terraform_resource_dir_path(&self) -> String {
         format!(
             "{}/{}/services/{}",
-            self.context.lib_root_dir(),
+            self.lib_root_directory,
             C::lib_directory_name(),
             T::lib_directory_name()
         )
@@ -312,6 +313,10 @@ pub trait DatabaseService: Service + DeploymentAction + ToTeraContext {
     fn is_managed_service(&self) -> bool;
 
     fn db_type(&self) -> service::DatabaseType;
+
+    fn version(&self) -> String;
+
+    fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
 impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> DatabaseService for Database<C, M, T>
@@ -324,5 +329,13 @@ where
 
     fn db_type(&self) -> service::DatabaseType {
         T::db_type()
+    }
+
+    fn version(&self) -> String {
+        self.version.to_string()
+    }
+
+    fn as_deployment_action(&self) -> &dyn DeploymentAction {
+        self
     }
 }

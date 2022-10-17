@@ -1,5 +1,5 @@
 use crate::helpers;
-use crate::helpers::aws::{aws_default_engine_config, AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
+use crate::helpers::aws::{aws_default_infra_config, AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
 use crate::helpers::common::{ClusterDomain, Infrastructure};
 use crate::helpers::database::{test_db, test_pause_managed_db};
 use crate::helpers::utilities::{context, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
@@ -48,9 +48,9 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             cluster_id,
         );
-        let engine_config = aws_default_engine_config(&context, logger.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion = aws_default_infra_config(&context_for_deletion, logger.clone());
         let environment = helpers::database::environment_3_apps_3_databases(
             &context,
             AWS_DATABASE_INSTANCE_TYPE,
@@ -63,10 +63,10 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let ea = environment.clone();
         let ea_delete = environment_delete.clone();
 
-        let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
+        let ret = environment.deploy_environment(&ea, logger.clone(), &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
+        let ret = environment_delete.delete_environment(&ea_delete, logger, &infra_ctx_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()
@@ -95,9 +95,9 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             cluster_id,
         );
-        let engine_config = aws_default_engine_config(&context, logger.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion = aws_default_infra_config(&context_for_deletion, logger.clone());
         let environment = helpers::environment::environment_2_app_2_routers_1_psql(
             &context,
             secrets
@@ -115,10 +115,10 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let ea = environment.clone();
         let ea_delete = environment_delete.clone();
 
-        let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
+        let ret = environment.deploy_environment(&ea, logger.clone(), &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment.pause_environment(&ea, logger.clone(), &engine_config);
+        let ret = environment.pause_environment(&ea, logger.clone(), &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this db
@@ -127,7 +127,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
-        let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_deletion);
+        let ret = environment_delete.delete_environment(&ea_delete, logger, &infra_ctx_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()
@@ -157,9 +157,9 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             cluster_id,
         );
-        let engine_config = aws_default_engine_config(&context, logger.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let engine_config_for_deletion = aws_default_engine_config(&context_for_deletion, logger.clone());
+        let infra_ctx_for_deletion = aws_default_infra_config(&context_for_deletion, logger.clone());
         let test_domain = secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -186,7 +186,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let ea = environment.clone();
         let ea_for_deletion = environment_delete.clone();
 
-        let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
+        let ret = environment.deploy_environment(&ea, logger.clone(), &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
         // TODO: should be uncommented as soon as cert-manager is fixed
@@ -196,7 +196,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             assert_eq!(con, true);
         }*/
 
-        let ret = environment_delete.delete_environment(&ea_for_deletion, logger, &engine_config_for_deletion);
+        let ret = environment_delete.delete_environment(&ea_for_deletion, logger, &infra_ctx_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()
@@ -226,11 +226,11 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             cluster_id,
         );
-        let engine_config = aws_default_engine_config(&context, logger.clone());
+        let infra_ctx = aws_default_infra_config(&context, logger.clone());
         let context_for_redeploy = context.clone_not_same_execution_id();
-        let engine_config_for_redeploy = aws_default_engine_config(&context_for_redeploy, logger.clone());
+        let infra_ctx_for_redeploy = aws_default_infra_config(&context_for_redeploy, logger.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let engine_config_for_delete = aws_default_engine_config(&context_for_delete, logger.clone());
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone());
 
         let mut environment = helpers::environment::working_minimal_environment_with_router(
             &context,
@@ -304,12 +304,12 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let ea = environment.clone();
         let ea_delete = environment_delete.clone();
 
-        let ret = environment.deploy_environment(&ea, logger.clone(), &engine_config);
+        let ret = environment.deploy_environment(&ea, logger.clone(), &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
         sleep(Duration::from_secs(60));
 
-        let ret = environment_to_redeploy.deploy_environment(&ea_redeploy, logger.clone(), &engine_config_for_redeploy);
+        let ret = environment_to_redeploy.deploy_environment(&ea_redeploy, logger.clone(), &infra_ctx_for_redeploy);
         assert!(matches!(ret, TransactionResult::Ok));
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
@@ -317,7 +317,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let (ret, _) = is_pod_restarted_env(context, Kind::Aws, environment_check, database_name.as_str(), secrets);
         assert!(ret);
 
-        let ret = environment_delete.delete_environment(&ea_delete, logger, &engine_config_for_delete);
+        let ret = environment_delete.delete_environment(&ea_delete, logger, &infra_ctx_for_delete);
         assert!(matches!(ret, TransactionResult::Ok | TransactionResult::Error(_)));
 
         test_name.to_string()

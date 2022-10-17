@@ -5,6 +5,7 @@ use crate::deployment_report::DeploymentReporter;
 use crate::errors::EngineError;
 use crate::models::router::RouterService;
 use crate::utilities::to_short_id;
+use std::borrow::Borrow;
 use uuid::Uuid;
 
 pub struct RouterDeploymentReporter {
@@ -15,12 +16,12 @@ pub struct RouterDeploymentReporter {
 }
 
 impl RouterDeploymentReporter {
-    pub fn new(router: &impl RouterService, _deployment_target: &DeploymentTarget, action: Action) -> Self {
+    pub fn new(router: &impl RouterService, deployment_target: &DeploymentTarget, action: Action) -> Self {
         let Loggers {
             send_progress,
             send_success,
             send_error,
-        } = get_loggers(router, action);
+        } = get_loggers(router, action, deployment_target.logger.borrow());
 
         RouterDeploymentReporter {
             long_id: *router.long_id(),

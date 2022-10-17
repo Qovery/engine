@@ -1103,6 +1103,11 @@ fn create(
                 managed_dns_resolvers_terraform_format: managed_dns_resolvers_terraform_format(
                     kubernetes.dns_provider(),
                 ),
+                managed_dns_root_domain_helm_format: kubernetes
+                    .dns_provider()
+                    .domain()
+                    .root_domain()
+                    .to_helm_format_string(),
                 external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
                 dns_email_report: options.tls_email_report.clone(),
                 acme_url: lets_encrypt_url(kubernetes.context()),
@@ -1142,6 +1147,11 @@ fn create(
                 managed_dns_resolvers_terraform_format: managed_dns_resolvers_terraform_format(
                     kubernetes.dns_provider(),
                 ),
+                managed_dns_root_domain_helm_format: kubernetes
+                    .dns_provider()
+                    .domain()
+                    .root_domain()
+                    .to_helm_format_string(),
                 external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
                 dns_email_report: options.tls_email_report.clone(),
                 acme_url: lets_encrypt_url(kubernetes.context()),
@@ -1501,9 +1511,12 @@ fn delete(
 
     if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), false) {
         // An issue occurred during the apply before destroy of Terraform, it may be expected if you're resuming a destroy
-        kubernetes.logger().log(EngineEvent::Error(
-            EngineError::new_terraform_error(event_details.clone(), e),
-            None,
+        kubernetes.logger().log(EngineEvent::Warning(
+            event_details.clone(),
+            EventMessage::new(
+                "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
+                Some(e.to_string()),
+            ),
         ));
     };
 
