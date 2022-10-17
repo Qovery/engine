@@ -12,6 +12,7 @@ use crate::deployment_report::logger::EnvLogger;
 use crate::deployment_task::Task;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
+use crate::events::Stage::Environment;
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::EnvironmentEngineRequest;
@@ -232,7 +233,11 @@ impl EnvironmentTask {
                 return Stage::Environment(EnvironmentStep::Cancelled);
             }
 
-            Stage::Environment(action.to_environment_step())
+            match action {
+                service::Action::Create => Stage::Environment(EnvironmentStep::DeployedError),
+                service::Action::Pause => Stage::Environment(EnvironmentStep::PausedError),
+                service::Action::Delete => Stage::Environment(EnvironmentStep::DeletedError),
+            }
         };
 
         let services = std::iter::empty()
