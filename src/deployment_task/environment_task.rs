@@ -12,7 +12,6 @@ use crate::deployment_report::logger::EnvLogger;
 use crate::deployment_task::Task;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
-use crate::events::Stage::Environment;
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::EnvironmentEngineRequest;
