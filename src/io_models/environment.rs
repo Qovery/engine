@@ -132,6 +132,7 @@ impl EnvironmentRequest {
 
         Ok(Environment::new(
             self.long_id,
+            self.name.clone(),
             self.project_long_id,
             self.organization_long_id,
             self.action.to_service_action(),

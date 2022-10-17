@@ -34,7 +34,6 @@ pub trait DeploymentAction {
             Action::Create => self.on_create(deployment_target),
             Action::Delete => self.on_delete(deployment_target),
             Action::Pause => self.on_pause(deployment_target),
-            Action::Nothing => Ok(()),
         }
     }
 
@@ -43,7 +42,6 @@ pub trait DeploymentAction {
             Action::Create => self.on_create_check(target),
             Action::Delete => self.on_delete_check(target),
             Action::Pause => self.on_pause_check(target),
-            Action::Nothing => Ok(()),
         }
     }
 }
