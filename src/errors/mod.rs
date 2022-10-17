@@ -2612,17 +2612,10 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `error`: Raw error message.
-    pub fn new_build_error(event_details: EventDetails, error: BuildError) -> EngineError {
+    pub fn new_build_error(event_details: EventDetails, error: BuildError, user_message: String) -> EngineError {
         let command_error = CommandError::from(error);
 
-        EngineError::new(
-            event_details,
-            Tag::BuilderError,
-            command_error.message_safe(),
-            Some(command_error),
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::BuilderError, user_message, Some(command_error), None, None)
     }
 
     /// Creates new error from an Container Registry error

@@ -1,7 +1,7 @@
 use crate::cloud_provider::service::{Action, DatabaseType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_report::database::renderer::render_database_deployment_report;
-use crate::deployment_report::logger::{get_loggers, Loggers};
+use crate::deployment_report::logger::EnvLogger;
 use crate::deployment_report::DeploymentReporter;
 use crate::errors::EngineError;
 use crate::models::database::DatabaseService;
@@ -10,7 +10,7 @@ use crate::utilities::to_short_id;
 use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
 use kube::api::ListParams;
 use kube::Api;
-use std::borrow::Borrow;
+
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -92,9 +92,7 @@ pub struct DatabaseDeploymentReporter {
     version: String,
     last_report: String,
     kube_client: kube::Client,
-    send_progress: Box<dyn Fn(String) + Send>,
-    send_success: Box<dyn Fn(String) + Send>,
-    send_error: Box<dyn Fn(EngineError) + Send>,
+    logger: EnvLogger,
 }
 
 impl DatabaseDeploymentReporter {
@@ -103,12 +101,6 @@ impl DatabaseDeploymentReporter {
         deployment_target: &DeploymentTarget,
         action: Action,
     ) -> DatabaseDeploymentReporter {
-        let Loggers {
-            send_progress,
-            send_success,
-            send_error,
-        } = get_loggers(db, action, deployment_target.logger.borrow());
-
         DatabaseDeploymentReporter {
             long_id: *db.long_id(),
             namespace: deployment_target.environment.namespace().to_string(),
@@ -117,9 +109,7 @@ impl DatabaseDeploymentReporter {
             version: db.version(),
             last_report: "".to_string(),
             kube_client: deployment_target.kube.clone(),
-            send_progress,
-            send_success,
-            send_error,
+            logger: deployment_target.env_logger(db, action.to_environment_step()),
         }
     }
 }
@@ -130,7 +120,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
     fn before_deployment_start(&mut self) {
         // managed db
         if self.is_managed {
-            (self.send_progress)(format!(
+            self.logger.send_progress(format!(
                 "🚀 Deployment of managed database `{}` is starting",
                 to_short_id(&self.long_id)
             ));
@@ -146,7 +136,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             self.version.clone(),
             &self.namespace,
         )) {
-            (self.send_progress)(format!(
+            self.logger.send_progress(format!(
                 "🚀 Deployment of container database `{}` is starting: You have {} pod(s) running, {} service(s) running, {} network volume(s)",
                 to_short_id(&self.long_id),
                 deployment_info.pods.len(),
@@ -168,7 +158,8 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         )) {
             Ok(deployment_info) => deployment_info,
             Err(err) => {
-                (self.send_progress)(format!("Error while retrieving deployment information: {}", err));
+                self.logger
+                    .send_progress(format!("Error while retrieving deployment information: {}", err));
                 return;
             }
         };
@@ -177,7 +168,8 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         let rendered_report = match render_database_deployment_report(&report) {
             Ok(deployment_status_report) => deployment_status_report,
             Err(err) => {
-                (self.send_progress)(format!("Cannot render deployment status report. Please contact us: {}", err));
+                self.logger
+                    .send_progress(format!("Cannot render deployment status report. Please contact us: {}", err));
                 return;
             }
         };
@@ -190,16 +182,18 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
 
         // Send it to user
         for line in self.last_report.trim_end().split('\n').map(str::to_string) {
-            (self.send_progress)(line);
+            self.logger.send_progress(line);
         }
     }
     fn deployment_terminated(&mut self, result: &Self::DeploymentResult) {
         let error = match result {
             Ok(_) => {
                 if self.is_managed {
-                    (self.send_success)("✅ Deployment of managed database succeeded".to_string());
+                    self.logger
+                        .send_success("✅ Deployment of managed database succeeded".to_string());
                 } else {
-                    (self.send_success)("✅ Deployment of container database succeeded".to_string());
+                    self.logger
+                        .send_success("✅ Deployment of container database succeeded".to_string());
                 }
                 return;
             }
@@ -207,7 +201,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         };
 
         if error.tag().is_cancel() {
-            (self.send_error)(EngineError::new_engine_error(
+            self.logger.send_error(EngineError::new_engine_error(
                 error.clone(),
                 r#"
                 🚫 Deployment has been cancelled. Database has been rollback to previous version if rollout was on-going
@@ -219,8 +213,8 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             return;
         }
 
-        (self.send_error)(error.clone());
-        (self.send_error)(EngineError::new_engine_error(
+        self.logger.send_error(error.clone());
+        self.logger.send_error(EngineError::new_engine_error(
             error.clone(),
             r#"
 ❌ Deployment of database failed ! Look at the report above and to understand why.

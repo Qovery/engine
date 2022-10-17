@@ -65,7 +65,7 @@ impl<T> EngineRequest<T> {
         event_details: EventDetails,
         logger: Box<dyn Logger>,
     ) -> Result<InfrastructureContext, IoEngineError> {
-        let build_platform = self.build_platform.to_engine_build_platform(context, logger.clone());
+        let build_platform = self.build_platform.to_engine_build_platform(context);
         let cloud_provider = self
             .cloud_provider
             .to_engine_cloud_provider(context.clone(), &self.kubernetes.region, self.kubernetes.kind.clone())
@@ -207,15 +207,11 @@ pub struct BuildPlatform {
 }
 
 impl BuildPlatform {
-    pub fn to_engine_build_platform(
-        &self,
-        context: &Context,
-        logger: Box<dyn Logger>,
-    ) -> Box<dyn build_platform::BuildPlatform> {
+    pub fn to_engine_build_platform(&self, context: &Context) -> Box<dyn build_platform::BuildPlatform> {
         Box::new(match self.kind {
             build_platform::Kind::LocalDocker => {
                 // FIXME: Remove the unwrap by propagating errors above
-                LocalDocker::new(context.clone(), self.long_id, self.name.as_str(), logger).unwrap()
+                LocalDocker::new(context.clone(), self.long_id, self.name.as_str()).unwrap()
             }
         })
     }

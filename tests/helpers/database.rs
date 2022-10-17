@@ -25,8 +25,10 @@ use qovery_engine::io_models::context::{CloneForTest, Context};
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 
+use qovery_engine::cloud_provider::service::Service;
+use qovery_engine::deployment_report::logger::EnvLogger;
 use qovery_engine::deployment_task::environment_task::EnvironmentTask;
-use qovery_engine::events::{EnvironmentStep, Stage};
+use qovery_engine::events::EnvironmentStep;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::Action;
 use qovery_engine::logger::Logger;
@@ -34,6 +36,7 @@ use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use qovery_engine::utilities::to_short_id;
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use std::sync::Arc;
 use tracing::{span, Level};
 use uuid::Uuid;
 
@@ -57,14 +60,12 @@ impl Infrastructure for EnvironmentRequest {
             force_build: true,
             force_push: true,
         };
-        let event_details = infra_ctx
-            .cloud_provider()
-            .get_event_details(Stage::Environment(EnvironmentStep::Build));
+        let logger = Arc::new(infra_ctx.kubernetes().logger().clone_dyn());
         let ret = EnvironmentTask::build_and_push_applications(
             &mut env.applications,
             &deployment_option,
             infra_ctx,
-            event_details,
+            |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
             &|| false,
         );
         ret.unwrap();

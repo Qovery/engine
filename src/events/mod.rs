@@ -345,6 +345,19 @@ pub enum EnvironmentStep {
     DeletedError,
 }
 
+impl EnvironmentStep {
+    pub fn is_error_step(&self) -> bool {
+        matches!(
+            self,
+            EnvironmentStep::BuiltError
+                | EnvironmentStep::Cancelled
+                | EnvironmentStep::DeployedError
+                | EnvironmentStep::PausedError
+                | EnvironmentStep::DeletedError
+        )
+    }
+}
+
 impl Display for EnvironmentStep {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(

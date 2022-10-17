@@ -6,7 +6,6 @@ use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::application::reporter::ApplicationDeploymentReporter;
 use crate::deployment_report::execute_long_deployment;
-use crate::deployment_report::logger::get_loggers;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, Stage};
 use crate::kubers_utils::kube_delete_all_from_selector;
@@ -14,7 +13,7 @@ use crate::models::application::{Application, ApplicationService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
-use std::borrow::Borrow;
+
 use std::path::PathBuf;
 use std::time::Duration;
 use tera::Context;
@@ -100,11 +99,11 @@ where
 
             helm.on_delete(target)?;
 
-            let logger = get_loggers(self, Action::Delete, target.logger.borrow());
+            let logger = target.env_logger(self, EnvironmentStep::Delete);
             // Delete pvc of statefulset if needed
             // FIXME: Remove this after kubernetes 1.23 is deployed, at it should be done by kubernetes
             if self.is_stateful() {
-                (logger.send_progress)("🪓 Terminating network volume of the application".to_string());
+                logger.send_progress("🪓 Terminating network volume of the application".to_string());
                 if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
                     &target.kube,
                     &self.selector(),
@@ -119,7 +118,7 @@ where
             }
 
             // Delete container repository created for this application
-            (logger.send_progress)("🪓 Terminating container registry of the application".to_string());
+            logger.send_progress("🪓 Terminating container registry of the application".to_string());
             if let Err(err) = target
                 .container_registry
                 .delete_repository(self.build().image.repository_name())
@@ -131,7 +130,7 @@ where
                     format!("❌ Failed to delete container registry of the application: {}", err),
                     None,
                 );
-                (logger.send_error)(user_error);
+                logger.send_error(user_error);
 
                 return Err(engine_err);
             }
