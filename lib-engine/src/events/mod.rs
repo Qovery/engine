@@ -423,6 +423,8 @@ pub enum Transmitter {
     Container(TransmitterId, TransmitterName),
     /// Router: router engine part.
     Router(TransmitterId, TransmitterName),
+    /// Job: job engine part.
+    Job(TransmitterId, TransmitterName),
 }
 
 impl Display for Transmitter {
@@ -443,6 +445,7 @@ impl Display for Transmitter {
                 Transmitter::Application(id, name) => format!("application({}, {})", id, name),
                 Transmitter::Router(id, name) => format!("router({}, {})", id, name),
                 Transmitter::Container(id, name) => format!("container({}, {})", id, name),
+                Transmitter::Job(id, name) => format!("job({}, {})", id, name),
             }
         )
     }

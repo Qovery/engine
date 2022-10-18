@@ -44,16 +44,10 @@ impl Infrastructure for EnvironmentRequest {
     fn build_environment(
         &self,
         environment: &EnvironmentRequest,
-        logger: Box<dyn Logger>,
         infra_ctx: &InfrastructureContext,
     ) -> (Environment, TransactionResult) {
         let mut env = environment
-            .to_environment_domain(
-                infra_ctx.context(),
-                infra_ctx.cloud_provider(),
-                infra_ctx.container_registry(),
-                logger,
-            )
+            .to_environment_domain(infra_ctx.context(), infra_ctx.cloud_provider(), infra_ctx.container_registry())
             .unwrap();
 
         let deployment_option = DeploymentOption {
@@ -76,16 +70,10 @@ impl Infrastructure for EnvironmentRequest {
     fn deploy_environment(
         &self,
         environment: &EnvironmentRequest,
-        logger: Box<dyn Logger>,
         infra_ctx: &InfrastructureContext,
     ) -> TransactionResult {
         let mut env = environment
-            .to_environment_domain(
-                infra_ctx.context(),
-                infra_ctx.cloud_provider(),
-                infra_ctx.container_registry(),
-                logger,
-            )
+            .to_environment_domain(infra_ctx.context(), infra_ctx.cloud_provider(), infra_ctx.container_registry())
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Create;
@@ -99,16 +87,10 @@ impl Infrastructure for EnvironmentRequest {
     fn pause_environment(
         &self,
         environment: &EnvironmentRequest,
-        logger: Box<dyn Logger>,
         infra_ctx: &InfrastructureContext,
     ) -> TransactionResult {
         let mut env = environment
-            .to_environment_domain(
-                infra_ctx.context(),
-                infra_ctx.cloud_provider(),
-                infra_ctx.container_registry(),
-                logger,
-            )
+            .to_environment_domain(infra_ctx.context(), infra_ctx.cloud_provider(), infra_ctx.container_registry())
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Pause;
@@ -122,16 +104,10 @@ impl Infrastructure for EnvironmentRequest {
     fn delete_environment(
         &self,
         environment: &EnvironmentRequest,
-        logger: Box<dyn Logger>,
         infra_ctx: &InfrastructureContext,
     ) -> TransactionResult {
         let mut env = environment
-            .to_environment_domain(
-                infra_ctx.context(),
-                infra_ctx.cloud_provider(),
-                infra_ctx.container_registry(),
-                logger,
-            )
+            .to_environment_domain(infra_ctx.context(), infra_ctx.cloud_provider(), infra_ctx.container_registry())
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Delete;
@@ -658,7 +634,7 @@ pub fn test_db(
         }
     };
 
-    let ret = environment.deploy_environment(&ea, logger.clone(), infra_ctx);
+    let ret = environment.deploy_environment(&ea, infra_ctx);
     assert!(matches!(ret, TransactionResult::Ok));
 
     match database_mode {
@@ -761,7 +737,7 @@ pub fn test_db(
         }
     };
 
-    let ret = environment_delete.delete_environment(&ea_delete, logger, infra_ctx_for_delete);
+    let ret = environment_delete.delete_environment(&ea_delete, infra_ctx_for_delete);
     assert!(matches!(ret, TransactionResult::Ok));
 
     test_name.to_string()
@@ -913,7 +889,7 @@ pub fn test_pause_managed_db(
         }
     };
 
-    let ret = environment.deploy_environment(&environment, logger.clone(), infra_ctx);
+    let ret = environment.deploy_environment(&environment, infra_ctx);
     assert!(matches!(ret, TransactionResult::Ok));
 
     match database_mode {
@@ -1012,10 +988,10 @@ pub fn test_pause_managed_db(
         }
     };
 
-    let ret = environment_pause.pause_environment(&environment_pause, logger.clone(), infra_ctx);
+    let ret = environment_pause.pause_environment(&environment_pause, infra_ctx);
     assert!(matches!(ret, TransactionResult::Ok));
 
-    let ret = environment_delete.delete_environment(&environment_delete, logger, infra_ctx_for_delete);
+    let ret = environment_delete.delete_environment(&environment_delete, infra_ctx_for_delete);
     assert!(matches!(ret, TransactionResult::Ok));
 
     test_name.to_string()
@@ -1163,7 +1139,7 @@ pub fn test_db_on_upgrade(
         ),
     };
 
-    let ret = environment.deploy_environment(&ea, logger.clone(), &infra_ctx);
+    let ret = environment.deploy_environment(&ea, &infra_ctx);
     assert!(matches!(ret, TransactionResult::Ok));
 
     match database_mode {
@@ -1247,7 +1223,7 @@ pub fn test_db_on_upgrade(
         ),
     };
 
-    let ret = environment_delete.delete_environment(&ea_delete, logger, &infra_ctx_for_delete);
+    let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);
     assert!(matches!(ret, TransactionResult::Ok));
 
     test_name.to_string()

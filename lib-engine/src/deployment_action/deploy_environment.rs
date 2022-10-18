@@ -42,6 +42,12 @@ impl<'a> EnvironmentDeployment<'a> {
             )
             .chain(
                 environment
+                    .jobs
+                    .iter()
+                    .map(|s| (*s.long_id(), s.as_deployment_action(), *s.action())),
+            )
+            .chain(
+                environment
                     .containers
                     .iter()
                     .map(|s| (*s.long_id(), s.as_deployment_action(), *s.action())),

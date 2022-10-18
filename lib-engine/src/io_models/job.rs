@@ -1,15 +1,20 @@
-
-use crate::cloud_provider::{CloudProvider};
+use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
+use crate::cloud_provider::{CloudProvider, Kind};
 use crate::container_registry::ContainerRegistry;
-use crate::io_models::application::{AdvancedSettingsProbeType, GitCredentials};
+use crate::io_models::application::{to_environment_variable, AdvancedSettingsProbeType, GitCredentials};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::Action;
-use crate::logger::Logger;
-use crate::models::container::{ContainerError, ContainerService};
+use crate::models;
+use crate::models::aws::AwsAppExtraSettings;
+use crate::models::aws_ec2::AwsEc2AppExtraSettings;
+use crate::models::job::{JobError, JobService};
+use crate::models::scaleway::ScwAppExtraSettings;
+use crate::models::types::{AWSEc2, AWS, SCW};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::time::Duration;
+use url::Url;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -106,8 +111,9 @@ pub struct Job {
     pub action: Action,
     pub schedule: JobSchedule,
     pub source: JobSource,
-    pub nb_restart_limit: u32,         // .spec.backoffLimit
+    pub max_nb_restart: u32,           // .spec.backoffLimit
     pub max_duration_in_sec: Duration, // .spec.activeDeadlineSeconds
+    pub default_port: Option<u16>,     // for probes
     pub command_args: Vec<String>,
     pub entrypoint: Option<String>,
     pub force_trigger: bool,
@@ -125,11 +131,121 @@ pub struct Job {
 impl Job {
     pub fn to_job_domain(
         self,
-        _context: &Context,
-        _cloud_provider: &dyn CloudProvider,
-        _default_container_registry: &dyn ContainerRegistry,
-        _logger: Box<dyn Logger>,
-    ) -> Result<Box<dyn ContainerService>, ContainerError> {
-        todo!()
+        context: &Context,
+        cloud_provider: &dyn CloudProvider,
+        default_container_registry: &dyn ContainerRegistry,
+    ) -> Result<Box<dyn JobService>, JobError> {
+        let environment_variables = to_environment_variable(self.environment_vars);
+
+        // FIXME: Remove this after we support launching job with something else than an already built container
+        let mut registry_ = Registry::DockerHub {
+            long_id: Default::default(),
+            url: Url::parse("https://default.com").unwrap(),
+            credentials: None,
+        };
+        let mut image_ = "".to_string();
+        let mut tag_ = "".to_string();
+
+        match self.source {
+            JobSource::Docker { .. } => {}
+            JobSource::Image {
+                mut registry,
+                image,
+                tag,
+            } => {
+                // Default registry is a bit special as the core does not knows its url/credentials as it is retrieved by us with some tags
+                if registry.id() == default_container_registry.long_id() {
+                    registry.set_url(default_container_registry.registry_info().endpoint.clone());
+                }
+                registry_ = registry;
+                image_ = image;
+                tag_ = tag;
+            }
+        }
+
+        let service: Box<dyn JobService> = match cloud_provider.kind() {
+            Kind::Aws => {
+                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
+                    Box::new(models::job::Job::<AWS>::new(
+                        context,
+                        self.long_id,
+                        self.name,
+                        self.action.to_service_action(),
+                        registry_,
+                        image_,
+                        tag_,
+                        self.schedule,
+                        self.max_nb_restart,
+                        self.max_duration_in_sec,
+                        self.default_port,
+                        self.command_args,
+                        self.entrypoint,
+                        self.force_trigger,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
+                        environment_variables,
+                        self.advanced_settings,
+                        AwsAppExtraSettings {},
+                        |transmitter| context.get_event_details(transmitter),
+                    )?)
+                } else {
+                    Box::new(models::job::Job::<AWSEc2>::new(
+                        context,
+                        self.long_id,
+                        self.name,
+                        self.action.to_service_action(),
+                        registry_,
+                        image_,
+                        tag_,
+                        self.schedule,
+                        self.max_nb_restart,
+                        self.max_duration_in_sec,
+                        self.default_port,
+                        self.command_args,
+                        self.entrypoint,
+                        self.force_trigger,
+                        self.cpu_request_in_milli,
+                        self.cpu_limit_in_milli,
+                        self.ram_request_in_mib,
+                        self.ram_limit_in_mib,
+                        environment_variables,
+                        self.advanced_settings,
+                        AwsEc2AppExtraSettings {},
+                        |transmitter| context.get_event_details(transmitter),
+                    )?)
+                }
+            }
+            Kind::Scw => Box::new(models::job::Job::<SCW>::new(
+                context,
+                self.long_id,
+                self.name,
+                self.action.to_service_action(),
+                registry_,
+                image_,
+                tag_,
+                self.schedule,
+                self.max_nb_restart,
+                self.max_duration_in_sec,
+                self.default_port,
+                self.command_args,
+                self.entrypoint,
+                self.force_trigger,
+                self.cpu_request_in_milli,
+                self.cpu_limit_in_milli,
+                self.ram_request_in_mib,
+                self.ram_limit_in_mib,
+                environment_variables,
+                self.advanced_settings,
+                ScwAppExtraSettings {},
+                |transmitter| context.get_event_details(transmitter),
+            )?),
+            Kind::Do => {
+                unimplemented!("DO is not implemented")
+            }
+        };
+
+        Ok(service)
     }
 }

@@ -6,6 +6,7 @@ use crate::io_models::context::Context;
 use crate::models::application::ApplicationService;
 use crate::models::container::ContainerService;
 use crate::models::database::DatabaseService;
+use crate::models::job::JobService;
 use crate::models::router::RouterService;
 use crate::utilities::to_short_id;
 use uuid::Uuid;
@@ -25,6 +26,7 @@ pub struct Environment {
     pub containers: Vec<Box<dyn ContainerService>>,
     pub routers: Vec<Box<dyn RouterService>>,
     pub databases: Vec<Box<dyn DatabaseService>>,
+    pub jobs: Vec<Box<dyn JobService>>,
 }
 
 impl Environment {
@@ -39,6 +41,7 @@ impl Environment {
         containers: Vec<Box<dyn ContainerService>>,
         routers: Vec<Box<dyn RouterService>>,
         databases: Vec<Box<dyn DatabaseService>>,
+        jobs: Vec<Box<dyn JobService>>,
     ) -> Self {
         let project_id = to_short_id(&project_long_id);
         let env_id = to_short_id(&long_id);
@@ -62,6 +65,7 @@ impl Environment {
             containers,
             routers,
             databases,
+            jobs,
         }
     }
 
