@@ -1347,8 +1347,6 @@ mod tests {
     use k8s_openapi::api::core::v1::{Service, ServiceSpec};
     use kube::core::{ListMeta, ObjectList, ObjectMeta};
 
-    use crate::cloud_provider::Kind::Aws;
-
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, convert_k8s_cpu_value_to_f32,
         filter_svc_loadbalancers, kube_create_namespace_if_not_exists, kube_does_secret_exists, kube_list_services,
@@ -2023,18 +2021,6 @@ mod tests {
 
     #[test]
     pub fn test_cpu_set() {
-        let _logger = StdIoLogger::new();
-        let cluster_id = "cluster_id";
-
-        let _event_details = EventDetails::new(
-            Some(Aws),
-            QoveryIdentifier::new_random(),
-            QoveryIdentifier::new_random(),
-            Uuid::new_v4().to_string(),
-            Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
-            Transmitter::Kubernetes(Uuid::new_v4(), format!("{}-name", cluster_id)),
-        );
-
         let mut total_cpu = "0.25".to_string();
         let mut cpu_burst = "1".to_string();
         assert_eq!(

@@ -68,10 +68,10 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let env_action = environment.clone();
         let env_action_delete = environment_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result = environment_delete.delete_environment(&env_action_delete, logger, &infra_ctx_for_deletion);
+        let result = environment_delete.delete_environment(&env_action_delete, &infra_ctx_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
         // delete images created during test from registries
@@ -125,10 +125,10 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let env_action = environment.clone();
         let env_action_delete = environment_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result = environment.pause_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.pause_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this db
@@ -143,7 +143,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
-        let result = environment_delete.delete_environment(&env_action_delete, logger.clone(), &infra_ctx_for_deletion);
+        let result = environment_delete.delete_environment(&env_action_delete, &infra_ctx_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
         // delete images created during test from registries
@@ -207,10 +207,10 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let env_action = environment.clone();
         let env_action_for_deletion = environment_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result = environment_delete.delete_environment(&env_action_for_deletion, logger, &infra_ctx_for_deletion);
+        let result = environment_delete.delete_environment(&env_action_for_deletion, &infra_ctx_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
         // delete images created during test from registries
@@ -332,11 +332,10 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let env_action = environment.clone();
         let env_action_delete = environment_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result =
-            environment_to_redeploy.deploy_environment(&env_action_redeploy, logger.clone(), &infra_ctx_for_redeploy);
+        let result = environment_to_redeploy.deploy_environment(&env_action_redeploy, &infra_ctx_for_redeploy);
         assert!(matches!(result, TransactionResult::Ok));
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
@@ -350,7 +349,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         );
         assert!(ret);
 
-        let result = environment_delete.delete_environment(&env_action_delete, logger, &infra_ctx_for_delete);
+        let result = environment_delete.delete_environment(&env_action_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok | TransactionResult::Error(_)));
 
         // delete images created during test from registries

@@ -63,10 +63,10 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let ea = environment.clone();
         let ea_delete = environment_delete.clone();
 
-        let ret = environment.deploy_environment(&ea, logger.clone(), &infra_ctx);
+        let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment_delete.delete_environment(&ea_delete, logger, &infra_ctx_for_deletion);
+        let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()
@@ -115,10 +115,10 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let ea = environment.clone();
         let ea_delete = environment_delete.clone();
 
-        let ret = environment.deploy_environment(&ea, logger.clone(), &infra_ctx);
+        let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment.pause_environment(&ea, logger.clone(), &infra_ctx);
+        let ret = environment.pause_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this db
@@ -127,7 +127,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
-        let ret = environment_delete.delete_environment(&ea_delete, logger, &infra_ctx_for_deletion);
+        let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()
@@ -186,7 +186,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let ea = environment.clone();
         let ea_for_deletion = environment_delete.clone();
 
-        let ret = environment.deploy_environment(&ea, logger.clone(), &infra_ctx);
+        let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
         // TODO: should be uncommented as soon as cert-manager is fixed
@@ -196,7 +196,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             assert_eq!(con, true);
         }*/
 
-        let ret = environment_delete.delete_environment(&ea_for_deletion, logger, &infra_ctx_for_deletion);
+        let ret = environment_delete.delete_environment(&ea_for_deletion, &infra_ctx_for_deletion);
         assert!(matches!(ret, TransactionResult::Ok));
 
         test_name.to_string()
@@ -304,12 +304,12 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let ea = environment.clone();
         let ea_delete = environment_delete.clone();
 
-        let ret = environment.deploy_environment(&ea, logger.clone(), &infra_ctx);
+        let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
         sleep(Duration::from_secs(60));
 
-        let ret = environment_to_redeploy.deploy_environment(&ea_redeploy, logger.clone(), &infra_ctx_for_redeploy);
+        let ret = environment_to_redeploy.deploy_environment(&ea_redeploy, &infra_ctx_for_redeploy);
         assert!(matches!(ret, TransactionResult::Ok));
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
@@ -317,7 +317,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let (ret, _) = is_pod_restarted_env(context, Kind::Aws, environment_check, database_name.as_str(), secrets);
         assert!(ret);
 
-        let ret = environment_delete.delete_environment(&ea_delete, logger, &infra_ctx_for_delete);
+        let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);
         assert!(matches!(ret, TransactionResult::Ok | TransactionResult::Error(_)));
 
         test_name.to_string()
