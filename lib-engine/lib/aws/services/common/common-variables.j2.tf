@@ -91,6 +91,12 @@ variable "multi_az" {
   type = bool
 }
 
+variable "kubernetes_cluster_az_list" {
+  description = "Kubernetes availability zones"
+  default = {{ kubernetes_cluster_az_list }}
+  type = list(string)
+}
+
 # Upgrades
 
 variable "auto_minor_version_upgrade" {

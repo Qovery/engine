@@ -9,18 +9,6 @@ data "aws_vpc" "selected" {
   }
 }
 
-data "aws_subnet_ids" "k8s_subnet_ids" {
-  vpc_id = data.aws_vpc.selected.id
-  filter {
-    name = "tag:ClusterId"
-    values = [var.kubernetes_cluster_id]
-  }
-  filter {
-    name = "tag:Service"
-    values = ["DocumentDB"]
-  }
-}
-
 data "aws_security_group" "selected" {
   name = "qovery-ec2-${var.kubernetes_cluster_id}"
   filter {
@@ -66,6 +54,7 @@ resource "aws_docdb_cluster" "documentdb_cluster" {
     update = "120m"
     delete = "60m"
   }
+
   master_password = var.password
   {%- if snapshot is defined and snapshot["snapshot_id"] %}
   # Snapshot
@@ -77,7 +66,7 @@ resource "aws_docdb_cluster" "documentdb_cluster" {
   storage_encrypted = var.encrypt_disk
 
   # Network
-  db_subnet_group_name = data.aws_subnet_ids.k8s_subnet_ids.id
+  db_subnet_group_name = data.aws_vpc.selected.id
   vpc_security_group_ids = data.aws_security_group.selected.*.id
 
   # Maintenance and upgrades

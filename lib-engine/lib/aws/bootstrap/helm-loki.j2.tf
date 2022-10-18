@@ -40,23 +40,21 @@ resource "aws_kms_key" "s3_logs_kms_encryption" {
   )
 }
 
+resource "aws_s3_bucket_server_side_encryption_configuration" "lok_bucket_enryption" {
+  bucket = aws_s3_bucket.loki_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.s3_logs_kms_encryption.arn
+      sse_algorithm = "aws:kms"
+    }
+  }
+}
+
 // S3 bucket to store indexes and logs
 resource "aws_s3_bucket" "loki_bucket" {
   bucket = aws_iam_user.iam_eks_loki.name
-  acl    = "private"
   force_destroy = true
-  versioning {
-    enabled = false
-  }
-
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        kms_master_key_id = aws_kms_key.s3_logs_kms_encryption.arn
-        sse_algorithm = "aws:kms"
-      }
-    }
-  }
 
   tags = merge(
     local.tags_eks,
@@ -64,6 +62,18 @@ resource "aws_s3_bucket" "loki_bucket" {
       "Name" = "Applications logs"
     }
   )
+}
+
+resource "aws_s3_bucket_versioning" "loki_bucket_versioning" {
+  bucket = aws_s3_bucket.loki_bucket.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_acl" "loki_bucket_acl" {
+  bucket = aws_s3_bucket.loki_bucket.id
+  acl    = "private"
 }
 
 resource "aws_s3_bucket_public_access_block" "loki_access" {

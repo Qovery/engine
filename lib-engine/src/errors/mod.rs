@@ -566,6 +566,8 @@ pub enum Tag {
     CloudProviderGetLoadBalancerTags,
     /// CloudProviderDeleteLoadBalancer: represents an issue while trying to delete load balancer from the cloud provider API
     CloudProviderDeleteLoadBalancer,
+    // DoNotRespectCloudProviderBestPractices: represents an error, the user is trying to do something that is not recommended by the cloud provider
+    DoNotRespectCloudProviderBestPractices,
     /// K8sCannotConnectToApi: represents an error when trying to contact K8s API.
     K8sCannotReachToApi,
     /// K8sPodDisruptionBudgetInInvalidState: represents an error where pod disruption budget is in an invalid state.
@@ -3654,6 +3656,26 @@ impl EngineError {
             None,
             None,
             Some("Check your DNS provider api url".to_string()),
+        )
+    }
+
+    /// Creates new error to match Cloud Provider best practices
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    pub fn new_error_do_not_respect_cloud_provider_best_practices(
+        event_details: EventDetails,
+        raw_error: CommandError,
+        url: Option<Url>,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::DoNotRespectCloudProviderBestPractices,
+            raw_error.message_safe.clone(),
+            Some(raw_error),
+            url,
+            None,
         )
     }
 
