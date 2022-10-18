@@ -34,20 +34,25 @@ config:
           period: 24h
   storage_config:
     aws:
-      s3: ""                              # qovery setting
-      region: ""                          # qovery setting
-      access_key_id: ""                   # qovery setting
-      secret_access_key: ""               # qovery setting
+      s3: set-by-engine-code                 # qovery setting
+      endpoint: set-by-engine-code           # qovery setting
+      region: set-by-engine-code             # qovery setting
+      access_key_id: set-by-engine-code      # qovery setting
+      secret_access_key: set-by-engine-code  # qovery setting
+      s3forcepathstyle: set-by-engine-code   # qovery setting
+      bucketnames: set-by-engine-code        # qovery setting
+      sse_encryption: set-by-engine-code     # qovery setting
+      insecure: set-by-engine-code           # qovery setting
     boltdb_shipper:
       active_index_directory: /data/loki/index
       shared_store: s3
       resync_interval: 5s
       cache_location: /data/loki/boltdb-cache
   chunk_store_config:
-    max_look_back_period: ""             # qovery setting (default 12 week)
+    max_look_back_period: 12w            # qovery setting (default 12 week)
   table_manager:
     retention_deletes_enabled: true
-    retention_period: ""                 # qovery setting (default 12 week)
+    retention_period: 12w                 # qovery setting (default 12 week)
   memberlist:
     abort_if_cluster_join_fails: false    # qovery setting
     bind_port: 7946                       # qovery setting
@@ -62,3 +67,11 @@ extraPorts:
     port: 7946
     protocol: TCP
     targetPort: 7946
+
+resources:
+  limits:
+    cpu: 1
+    memory: 2Gi
+  requests:
+    cpu: 300m
+    memory: 1Gi
