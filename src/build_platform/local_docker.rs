@@ -15,11 +15,11 @@ use crate::cmd::command;
 use crate::cmd::command::CommandError::Killed;
 use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::docker::{BuildResult, ContainerImage, DockerError};
-use crate::events::{EngineEvent, EventMessage, Transmitter};
+use crate::deployment_report::logger::EnvLogger;
+
 use crate::fs::workspace_directory;
 use crate::git;
 use crate::io_models::context::Context;
-use crate::logger::Logger;
 use crate::utilities::to_short_id;
 
 /// https://github.com/heroku/builder
@@ -36,17 +36,15 @@ pub struct LocalDocker {
     id: String,
     long_id: Uuid,
     name: String,
-    logger: Box<dyn Logger>,
 }
 
 impl LocalDocker {
-    pub fn new(context: Context, long_id: Uuid, name: &str, logger: Box<dyn Logger>) -> Result<Self, BuildError> {
+    pub fn new(context: Context, long_id: Uuid, name: &str) -> Result<Self, BuildError> {
         Ok(LocalDocker {
             context,
             id: to_short_id(&long_id),
             long_id,
             name: name.to_string(),
-            logger,
         })
     }
 
@@ -113,20 +111,9 @@ impl LocalDocker {
         build: &mut Build,
         dockerfile_complete_path: &str,
         into_dir_docker_style: &str,
+        logger: &EnvLogger,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<BuildResult, BuildError> {
-        // logger
-        let log_info = {
-            let app_long_id = build.image.application_long_id;
-            let app_name = build.image.application_name.clone();
-            move |msg: String| {
-                self.logger.log(EngineEvent::Info(
-                    self.get_event_details(app_long_id, app_name.clone()),
-                    EventMessage::new_from_safe(msg),
-                ));
-            }
-        };
-
         // Going to inject only env var that are used by the dockerfile
         // so extracting it and modifying the image tag and env variables
         let dockerfile_content = fs::read(dockerfile_complete_path).map_err(|err| BuildError::IoError {
@@ -168,16 +155,16 @@ impl LocalDocker {
 
         // Check if the image does not exist already remotely, if yes, we skip the build
         let image_name = image_to_build.image_name();
-        log_info(format!("🕵️ Checking if image already exist remotely {}", image_name));
+        logger.send_progress(format!("🕵️ Checking if image already exist remotely {}", image_name));
         if let Ok(true) = self.context.docker.does_image_exist_remotely(&image_to_build) {
-            log_info(format!("🎯 Skipping build. Image already exist in the registry {}", image_name));
+            logger.send_progress(format!("🎯 Skipping build. Image already exist in the registry {}", image_name));
 
             // skip build
             build_result.image_exists_remotely(true);
             return Ok(build_result);
         }
 
-        log_info(format!("⛏️ Building image. It does not exist remotely {}", image_name));
+        logger.send_progress(format!("⛏️ Building image. It does not exist remotely {}", image_name));
 
         // Actually do the build of the image
         let env_vars: Vec<(&str, &str)> = build
@@ -193,8 +180,8 @@ impl LocalDocker {
             &env_vars,
             &image_cache,
             true,
-            &mut |line| log_info(line),
-            &mut |line| log_info(line),
+            &mut |line| logger.send_progress(line),
+            &mut |line| logger.send_progress(line),
             &CommandKiller::from(build.timeout, is_task_canceled),
         );
 
@@ -215,6 +202,7 @@ impl LocalDocker {
         build: &Build,
         into_dir_docker_style: &str,
         use_build_cache: bool,
+        logger: &EnvLogger,
         is_task_canceled: &dyn Fn() -> bool,
     ) -> Result<BuildResult, BuildError> {
         const LATEST_TAG: &str = "latest";
@@ -301,18 +289,8 @@ impl LocalDocker {
             cmd.set_kill_grace_period(Duration::from_secs(0));
             let cmd_killer = CommandKiller::from(build.timeout, is_task_canceled);
             exit_status = cmd.exec_with_abort(
-                &mut |line| {
-                    self.logger.log(EngineEvent::Info(
-                        self.get_event_details(build.image.application_long_id, build.image.application_name.clone()),
-                        EventMessage::new_from_safe(line),
-                    ));
-                },
-                &mut |line| {
-                    self.logger.log(EngineEvent::Warning(
-                        self.get_event_details(build.image.application_long_id, build.image.application_name.clone()),
-                        EventMessage::new_from_safe(line),
-                    ));
-                },
+                &mut |line| logger.send_progress(line),
+                &mut |line| logger.send_progress(line),
                 &cmd_killer,
             );
 
@@ -352,10 +330,6 @@ impl LocalDocker {
 }
 
 impl BuildPlatform for LocalDocker {
-    fn context(&self) -> &Context {
-        &self.context
-    }
-
     fn kind(&self) -> Kind {
         Kind::LocalDocker
     }
@@ -372,11 +346,12 @@ impl BuildPlatform for LocalDocker {
         self.name.as_str()
     }
 
-    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<BuildResult, BuildError> {
-        let event_details =
-            self.get_event_details(build.image.application_long_id, build.image.application_name.clone());
-        let app_id = build.image.application_id.clone();
-
+    fn build(
+        &self,
+        build: &mut Build,
+        logger: &EnvLogger,
+        is_task_canceled: &dyn Fn() -> bool,
+    ) -> Result<BuildResult, BuildError> {
         // check if we should already abort the task
         if is_task_canceled() {
             return Err(BuildError::Aborted {
@@ -386,13 +361,12 @@ impl BuildPlatform for LocalDocker {
 
         // LOGGING
         let repository_root_path = PathBuf::from(self.get_repository_build_root_path(build)?);
-        let msg = format!(
+
+        logger.send_progress(format!(
             "📥 Cloning repository: {} to {}",
             build.git_repository.url,
             repository_root_path.to_string_lossy()
-        );
-        self.logger
-            .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(msg)));
+        ));
 
         // Create callback that will be called by git to provide credentials per user
         // If people use submodule, they need to provide us their ssh key
@@ -419,7 +393,7 @@ impl BuildPlatform for LocalDocker {
         // Cleanup, mono repo can require to clone multiple time the same repo
         // FIXME: re-use the same repo and just checkout at the correct commit
         if repository_root_path.exists() {
-            let app_id = app_id;
+            let app_id = build.image.application_id.clone();
             fs::remove_dir_all(&repository_root_path).map_err(|err| BuildError::IoError {
                 application: app_id,
                 action_description: "cleaning old repository".to_string(),
@@ -501,6 +475,7 @@ impl BuildPlatform for LocalDocker {
                 build,
                 dockerfile_absolute_path.to_str().unwrap_or_default(),
                 build_context_path.to_str().unwrap_or_default(),
+                logger,
                 is_task_canceled,
             )
         } else {
@@ -509,15 +484,9 @@ impl BuildPlatform for LocalDocker {
                 build,
                 build_context_path.to_str().unwrap_or_default(),
                 !build.disable_cache,
+                logger,
                 is_task_canceled,
             )
         }
-    }
-
-    fn logger(&self) -> Box<dyn Logger> {
-        self.logger.clone()
-    }
-    fn to_transmitter(&self) -> Transmitter {
-        Transmitter::BuildPlatform(self.long_id, self.name().to_string())
     }
 }

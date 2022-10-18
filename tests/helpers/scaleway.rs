@@ -101,7 +101,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         let container_registry = Box::new(container_registry_scw(context));
 
         // use LocalDocker
-        let build_platform = Box::new(build_platform_local_docker(context, logger.clone()));
+        let build_platform = Box::new(build_platform_local_docker(context));
 
         // use Scaleway
         let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(Self::cloud_provider(context, kubernetes_kind));

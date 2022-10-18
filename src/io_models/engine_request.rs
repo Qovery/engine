@@ -20,7 +20,7 @@ use crate::dns_provider::io::Kind;
 use crate::dns_provider::qoverydns::QoveryDns;
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError as IoEngineError, EngineError};
-use crate::events::{EnvironmentStep, EventDetails, InfrastructureStep, Stage, Transmitter};
+use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::{Context, Features, Metadata};
 use crate::io_models::domain::Domain;
 use crate::io_models::environment::EnvironmentRequest;
@@ -65,7 +65,7 @@ impl<T> EngineRequest<T> {
         event_details: EventDetails,
         logger: Box<dyn Logger>,
     ) -> Result<InfrastructureContext, IoEngineError> {
-        let build_platform = self.build_platform.to_engine_build_platform(context, logger.clone());
+        let build_platform = self.build_platform.to_engine_build_platform(context);
         let cloud_provider = self
             .cloud_provider
             .to_engine_cloud_provider(context.clone(), &self.kubernetes.region, self.kubernetes.kind.clone())
@@ -161,7 +161,6 @@ impl InfrastructureEngineRequest {
             Action::Create => Stage::Infrastructure(InfrastructureStep::Create),
             Action::Pause => Stage::Infrastructure(InfrastructureStep::Pause),
             Action::Delete => Stage::Infrastructure(InfrastructureStep::Delete),
-            Action::Nothing => Stage::Infrastructure(InfrastructureStep::Create),
         };
 
         EventDetails::new(
@@ -179,19 +178,12 @@ impl EnvironmentEngineRequest {
     pub fn event_details(&self) -> EventDetails {
         let kubernetes = &self.kubernetes;
         // It means it is an environment deployment request
-        let stage = match self.action {
-            Action::Create => Stage::Environment(EnvironmentStep::Deploy),
-            Action::Pause => Stage::Environment(EnvironmentStep::Pause),
-            Action::Delete => Stage::Environment(EnvironmentStep::Delete),
-            Action::Nothing => Stage::Environment(EnvironmentStep::Deploy),
-        };
-
         EventDetails::new(
             Some(self.cloud_provider.kind.clone()),
             QoveryIdentifier::new(self.organization_long_id),
             QoveryIdentifier::new(kubernetes.long_id),
             self.id.to_string(),
-            stage,
+            Stage::Environment(self.action.to_service_action().to_environment_step()),
             Transmitter::Environment(self.target_environment.long_id, self.target_environment.name.clone()),
         )
     }
@@ -207,15 +199,11 @@ pub struct BuildPlatform {
 }
 
 impl BuildPlatform {
-    pub fn to_engine_build_platform(
-        &self,
-        context: &Context,
-        logger: Box<dyn Logger>,
-    ) -> Box<dyn build_platform::BuildPlatform> {
+    pub fn to_engine_build_platform(&self, context: &Context) -> Box<dyn build_platform::BuildPlatform> {
         Box::new(match self.kind {
             build_platform::Kind::LocalDocker => {
                 // FIXME: Remove the unwrap by propagating errors above
-                LocalDocker::new(context.clone(), self.long_id, self.name.as_str(), logger).unwrap()
+                LocalDocker::new(context.clone(), self.long_id, self.name.as_str()).unwrap()
             }
         })
     }

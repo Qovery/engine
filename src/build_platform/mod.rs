@@ -4,11 +4,10 @@ use std::collections::BTreeMap;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cmd::command::CommandError;
 use crate::cmd::docker::{BuildResult, DockerError};
+use crate::deployment_report::logger::EnvLogger;
 use crate::errors::EngineError;
-use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
-use crate::io_models::context::Context;
-use crate::io_models::QoveryIdentifier;
-use crate::logger::Logger;
+use crate::events::EventDetails;
+
 use crate::utilities::compute_image_tag;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::hash::Hash;
@@ -57,36 +56,24 @@ pub enum BuildError {
     },
 }
 
-pub fn to_engine_error(event_details: EventDetails, err: BuildError) -> EngineError {
+pub fn to_engine_error(event_details: EventDetails, err: BuildError, user_message: String) -> EngineError {
     match err {
         BuildError::Aborted { .. } => EngineError::new_task_cancellation_requested(event_details),
-        _ => EngineError::new_build_error(event_details, err),
+        _ => EngineError::new_build_error(event_details, err, user_message),
     }
 }
 
 pub trait BuildPlatform {
-    fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
     fn long_id(&self) -> &Uuid;
     fn name(&self) -> &str;
-    fn name_with_id(&self) -> String {
-        format!("{} ({})", self.name(), self.id())
-    }
-    fn build(&self, build: &mut Build, is_task_canceled: &dyn Fn() -> bool) -> Result<BuildResult, BuildError>;
-    fn logger(&self) -> Box<dyn Logger>;
-    fn to_transmitter(&self) -> Transmitter;
-    fn get_event_details(&self, app_id: Uuid, app_name: String) -> EventDetails {
-        let context = self.context();
-        EventDetails::new(
-            None,
-            QoveryIdentifier::new(*context.organization_long_id()),
-            QoveryIdentifier::new(*context.cluster_long_id()),
-            context.execution_id().to_string(),
-            Stage::Environment(EnvironmentStep::Build),
-            Transmitter::Application(app_id, app_name),
-        )
-    }
+    fn build(
+        &self,
+        build: &mut Build,
+        logger: &EnvLogger,
+        is_task_canceled: &dyn Fn() -> bool,
+    ) -> Result<BuildResult, BuildError>;
 }
 
 pub struct Build {

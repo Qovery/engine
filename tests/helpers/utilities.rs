@@ -424,8 +424,8 @@ impl FuncTestsSecrets {
     }
 }
 
-pub fn build_platform_local_docker(context: &Context, logger: Box<dyn Logger>) -> LocalDocker {
-    LocalDocker::new(context.clone(), Uuid::new_v4(), "qovery-local-docker", logger).unwrap()
+pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
+    LocalDocker::new(context.clone(), Uuid::new_v4(), "qovery-local-docker").unwrap()
 }
 
 pub fn init() -> Instant {

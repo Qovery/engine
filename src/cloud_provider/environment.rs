@@ -2,7 +2,7 @@ use crate::cloud_provider::service::Action;
 
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
-use crate::io_models::QoveryIdentifier;
+
 use crate::models::application::ApplicationService;
 use crate::models::container::ContainerService;
 use crate::models::database::DatabaseService;
@@ -30,6 +30,7 @@ pub struct Environment {
 impl Environment {
     pub fn new(
         long_id: Uuid,
+        name: String,
         project_long_id: Uuid,
         organization_long_id: Uuid,
         action: Action,
@@ -42,20 +43,9 @@ impl Environment {
         let project_id = to_short_id(&project_long_id);
         let env_id = to_short_id(&long_id);
 
-        let stage = match action {
-            Action::Create => Stage::Environment(EnvironmentStep::Deploy),
-            Action::Pause => Stage::Environment(EnvironmentStep::Pause),
-            Action::Delete => Stage::Environment(EnvironmentStep::Delete),
-            Action::Nothing => Stage::Environment(EnvironmentStep::Deploy),
-        };
-        let event_details = EventDetails::new(
-            None,
-            QoveryIdentifier::new(*context.organization_long_id()),
-            QoveryIdentifier::new(*context.cluster_long_id()),
-            context.execution_id().to_string(),
-            stage,
-            Transmitter::Environment(long_id, "environment".to_string()),
-        );
+        let event_details = context.get_event_details(Transmitter::Environment(long_id, name));
+        let event_details =
+            EventDetails::clone_changing_stage(event_details, Stage::Environment(action.to_environment_step()));
 
         Environment {
             event_details,

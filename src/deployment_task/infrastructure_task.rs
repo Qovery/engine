@@ -81,7 +81,6 @@ impl InfrastructureTask {
                 Action::Create => InfrastructureStep::CreateError,
                 Action::Pause => InfrastructureStep::PauseError,
                 Action::Delete => InfrastructureStep::DeleteError,
-                Action::Nothing => InfrastructureStep::CreateError,
             };
             let event_message =
                 EventMessage::new_from_safe(format!("Kubernetes cluster failure {}", &infrastructure_step));
@@ -97,7 +96,6 @@ impl InfrastructureTask {
                 Action::Create => InfrastructureStep::Created,
                 Action::Pause => InfrastructureStep::Paused,
                 Action::Delete => InfrastructureStep::Deleted,
-                Action::Nothing => InfrastructureStep::CreateError,
             };
             let event_message =
                 EventMessage::new_from_safe(format!("Kubernetes cluster successfully {}", &infrastructure_step));
@@ -166,7 +164,6 @@ impl Task for InfrastructureTask {
             Action::Create => tx.create_kubernetes(),
             Action::Pause => tx.pause_kubernetes(),
             Action::Delete => tx.delete_kubernetes(),
-            Action::Nothing => Ok(()),
         };
 
         self.handle_transaction_result(self.logger.clone(), tx.commit());

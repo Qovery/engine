@@ -1,64 +1,104 @@
-use crate::cloud_provider::service::{Action, Service};
+use crate::cloud_provider::service::Service;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::logger::Logger;
 use std::sync::Arc;
 
-pub struct Loggers {
-    pub send_progress: Box<dyn Fn(String) + Send>,
-    pub send_success: Box<dyn Fn(String) + Send>,
-    pub send_error: Box<dyn Fn(EngineError) + Send>,
+#[cfg(feature = "env-logger-check")]
+use std::cell::Cell;
+
+pub struct EnvLogger {
+    logger: Arc<Box<dyn Logger>>,
+    event_details_progress: EventDetails,
+    event_details_success: EventDetails,
+    #[cfg(feature = "env-logger-check")]
+    state: Cell<LoggerState>,
 }
 
-// All that for the logger, lol ...
-pub fn get_loggers<Srv>(service: &Srv, action: Action, logger: &dyn Logger) -> Loggers
-where
-    Srv: Service,
-{
-    let logger = Arc::new(logger.clone_dyn());
-    let log_progress = {
-        let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        let logger = logger.clone();
-        let step = match action {
-            Action::Create => EnvironmentStep::Deploy,
-            Action::Pause => EnvironmentStep::Pause,
-            Action::Delete => EnvironmentStep::Delete,
-            Action::Nothing => EnvironmentStep::Deploy, // should not hserviceen
+impl EnvLogger {
+    pub fn new(service: &(impl Service + ?Sized), step: EnvironmentStep, logger: Arc<Box<dyn Logger>>) -> Self {
+        let (progress_step, success_step) = match step {
+            EnvironmentStep::Deploy => (EnvironmentStep::Deploy, EnvironmentStep::Deployed),
+            EnvironmentStep::Pause => (EnvironmentStep::Pause, EnvironmentStep::Paused),
+            EnvironmentStep::Delete => (EnvironmentStep::Delete, EnvironmentStep::Deleted),
+            EnvironmentStep::Build => (EnvironmentStep::Build, EnvironmentStep::Built),
+            _ => panic!("Invalid environment step for logger"),
         };
-        let event_details = EventDetails::clone_changing_stage(event_details, Stage::Environment(step));
+        let event_details_progress = service.get_event_details(Stage::Environment(progress_step));
+        let event_details_success =
+            EventDetails::clone_changing_stage(event_details_progress.clone(), Stage::Environment(success_step));
 
-        move |msg: String| {
-            logger.log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
+        EnvLogger {
+            logger,
+            event_details_progress,
+            event_details_success,
+            #[cfg(feature = "env-logger-check")]
+            state: Cell::new(LoggerState::Progress),
         }
-    };
-
-    let log_success = {
-        let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Deployed));
-        let logger = logger.clone();
-        let step = match action {
-            Action::Create => EnvironmentStep::Deployed,
-            Action::Pause => EnvironmentStep::Paused,
-            Action::Delete => EnvironmentStep::Deleted,
-            Action::Nothing => EnvironmentStep::Deployed, // should not happens
-        };
-        let event_details = EventDetails::clone_changing_stage(event_details, Stage::Environment(step));
-
-        move |msg: String| {
-            logger.log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
-        }
-    };
-
-    let log_error = {
-        let logger = logger.clone();
-        move |err: EngineError| {
-            let msg = err.user_log_message().to_string();
-            logger.log(EngineEvent::Error(err, Some(EventMessage::new_from_safe(msg))));
-        }
-    };
-
-    Loggers {
-        send_progress: Box::new(log_progress),
-        send_success: Box::new(log_success),
-        send_error: Box::new(log_error),
     }
+
+    pub fn send_progress(&self, msg: String) {
+        #[cfg(feature = "env-logger-check")]
+        {
+            assert!(
+                self.state.get() == LoggerState::Progress,
+                "cannot send progress while a final state has been reached"
+            );
+        }
+
+        self.logger.log(EngineEvent::Info(
+            self.event_details_progress.clone(),
+            EventMessage::new_from_safe(msg),
+        ));
+    }
+
+    pub fn send_success(&self, msg: String) {
+        #[cfg(feature = "env-logger-check")]
+        {
+            assert!(
+                self.state.get() != LoggerState::Error,
+                "cannot send success while an error state has been reached"
+            );
+            self.state.set(LoggerState::Success);
+        }
+
+        self.logger.log(EngineEvent::Info(
+            self.event_details_success.clone(),
+            EventMessage::new_from_safe(msg),
+        ));
+    }
+
+    pub fn send_error(&self, err: EngineError) {
+        #[cfg(feature = "env-logger-check")]
+        {
+            assert!(
+                self.state.get() != LoggerState::Success,
+                "cannot send error while an success state has been reached"
+            );
+            assert!(matches!(err.event_details().stage(), Stage::Environment(step) if step.is_error_step()));
+            self.state.set(LoggerState::Error);
+        }
+
+        let msg = err.user_log_message().to_string();
+        self.logger
+            .log(EngineEvent::Error(err, Some(EventMessage::new_from_safe(msg))));
+    }
+}
+
+//#[cfg(feature = "env-logger-check")]
+//impl Drop for EnvLogger {
+//    fn drop(&mut self) {
+//        assert!(
+//            self.state.get() == LoggerState::Success || self.state.get() == LoggerState::Error,
+//            "env logger dropped before reaching a final state"
+//        );
+//    }
+//}
+
+#[cfg(feature = "env-logger-check")]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LoggerState {
+    Progress,
+    Success,
+    Error,
 }

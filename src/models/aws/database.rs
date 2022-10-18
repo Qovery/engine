@@ -1,10 +1,10 @@
 use crate::cloud_provider::service::{
-    check_service_version, default_tera_context, get_tfstate_name, get_tfstate_suffix, Action, Service,
+    check_service_version, default_tera_context, get_tfstate_name, get_tfstate_suffix, Service,
     ServiceVersionCheckResult,
 };
 use crate::cloud_provider::{service, DeploymentTarget};
 use crate::errors::EngineError;
-use crate::events::{EnvironmentStep, EventDetails, Stage};
+use crate::events::{EventDetails, Stage};
 use crate::models::aws::database_utils::{
     get_managed_mongodb_version, get_managed_mysql_version, get_managed_postgres_version, get_managed_redis_version,
 };
@@ -248,13 +248,7 @@ where
         target: &DeploymentTarget,
         options: &DatabaseOptions,
     ) -> Result<TeraContext, EngineError> {
-        let step = match self.action {
-            Action::Create => EnvironmentStep::Deploy,
-            Action::Pause => EnvironmentStep::Pause,
-            Action::Delete => EnvironmentStep::Delete,
-            Action::Nothing => EnvironmentStep::Deploy,
-        };
-        let event_details = self.get_event_details(Stage::Environment(step));
+        let event_details = self.get_event_details(Stage::Environment(self.action.to_environment_step()));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);

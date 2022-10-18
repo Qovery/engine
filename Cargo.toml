@@ -107,26 +107,28 @@ dotenv = "0.15.0"
 
 [features]
 default = []
+# Check that env logger is in a correct state when emitting logs
+env-logger-check = []
 test-all = ["test-all-minimal", "test-all-self-hosted", "test-all-infra", "test-all-managed-services", "test-all-whole-enchilada"]
 
 # Minimal depencies test (i.e: build, deploy nothing managed)
-test-aws-minimal = []
-test-aws-ec2-minimal = []
-test-do-minimal = []
-test-scw-minimal = []
+test-aws-minimal = ["env-logger-check"]
+test-aws-ec2-minimal = ["env-logger-check"]
+test-do-minimal = ["env-logger-check"]
+test-scw-minimal = ["env-logger-check"]
 test-all-minimal = ["test-aws-minimal", "test-aws-ec2-minimal", "test-do-minimal", "test-scw-minimal"]
 
 # functionnal tests by type
-test-aws-self-hosted = []
-test-aws-ec2-self-hosted = []
-test-do-self-hosted = []
-test-scw-self-hosted = []
+test-aws-self-hosted = ["env-logger-check"]
+test-aws-ec2-self-hosted = ["env-logger-check"]
+test-do-self-hosted = ["env-logger-check"]
+test-scw-self-hosted = ["env-logger-check"]
 test-all-self-hosted = ["test-aws-self-hosted", "test-aws-ec2-self-hosted", "test-do-self-hosted", "test-scw-self-hosted"]
 
-test-aws-managed-services = []
-test-aws-ec2-managed-services = []
-test-do-managed-services = []
-test-scw-managed-services = []
+test-aws-managed-services = ["env-logger-check"]
+test-aws-ec2-managed-services = ["env-logger-check"]
+test-do-managed-services = ["env-logger-check"]
+test-scw-managed-services = ["env-logger-check"]
 test-all-managed-services = ["test-aws-managed-services", "test-aws-ec2-managed-services", "test-do-managed-services", "test-scw-managed-services"]
 
 test-aws-infra = []

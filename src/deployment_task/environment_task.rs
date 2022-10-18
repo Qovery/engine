@@ -3,10 +3,12 @@ use crate::build_platform::BuildError;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::environment::Environment;
 use crate::cloud_provider::service;
+use crate::cloud_provider::service::Service;
 use crate::cmd::docker::Docker;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::to_engine_error;
 use crate::deployment_action::deploy_environment::EnvironmentDeployment;
+use crate::deployment_report::logger::EnvLogger;
 use crate::deployment_task::Task;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
@@ -98,7 +100,7 @@ impl EnvironmentTask {
         applications: &mut [Box<dyn ApplicationService>],
         option: &DeploymentOption,
         infra_ctx: &InfrastructureContext,
-        event_details: EventDetails,
+        mk_logger: impl Fn(&dyn Service) -> EnvLogger,
         should_abort: &dyn Fn() -> bool,
     ) -> Result<(), EngineError> {
         // do the same for applications
@@ -115,8 +117,9 @@ impl EnvironmentTask {
 
         // To convert ContainerError to EngineError
         let cr_to_engine_error = |err: ContainerRegistryError| -> EngineError {
-            let event_details =
-                EventDetails::clone_changing_stage(event_details.clone(), Stage::Environment(EnvironmentStep::Build));
+            let event_details = infra_ctx
+                .container_registry()
+                .get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
             to_engine_error(event_details, err)
         };
 
@@ -142,33 +145,35 @@ impl EnvironmentTask {
                 .map_err(cr_to_engine_error)?;
 
             // Ok now everything is setup, we can try to build the app
-            let build_result = infra_ctx.build_platform().build(app.get_build_mut(), should_abort);
+            let logger = mk_logger(app.as_service());
+            let build_result = infra_ctx
+                .build_platform()
+                .build(app.get_build_mut(), &logger, should_abort);
 
             // logging
             let image_name = app.get_build().image.full_image_name_with_tag();
-            let (msg, step) = match &build_result {
-                Ok(_) => (
-                    format!("✅ Container image {} is built and ready to use", &image_name),
-                    EnvironmentStep::Built,
-                ),
-                Err(BuildError::Aborted { .. }) => (
-                    format!("🚫 Container image {} build has been canceled", &image_name),
-                    EnvironmentStep::Cancelled,
-                ),
-                Err(err) => (
-                    format!("❌ Container image {} failed to be build: {}", &image_name, err),
-                    EnvironmentStep::BuiltError,
-                ),
-            };
 
-            let event_details = app.get_event_details(Stage::Environment(step));
-            infra_ctx
-                .build_platform()
-                .logger()
-                .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(msg)));
-
-            // Abort if it was an error
-            let _ = build_result.map_err(|err| build_platform::to_engine_error(event_details, err))?;
+            match build_result {
+                Ok(_) => {
+                    let msg = format!("✅ Container image {} is built and ready to use", &image_name);
+                    logger.send_success(msg);
+                    Ok(())
+                }
+                Err(err @ BuildError::Aborted { .. }) => {
+                    let msg = format!("🚫 Container image {} build has been canceled", &image_name);
+                    let event_details = app.get_event_details(Stage::Environment(EnvironmentStep::Cancelled));
+                    let build_result = build_platform::to_engine_error(event_details, err, msg);
+                    logger.send_error(build_result.clone());
+                    Err(build_result)
+                }
+                Err(err) => {
+                    let msg = format!("❌ Container image {} failed to be build: {}", &image_name, err);
+                    let event_details = app.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
+                    let build_result = build_platform::to_engine_error(event_details, err, msg);
+                    logger.send_error(build_result.clone());
+                    Err(build_result)
+                }
+            }?;
         }
 
         Ok(())
@@ -188,6 +193,7 @@ impl EnvironmentTask {
                     return Err(EngineError::new_task_cancellation_requested(event_details));
                 }
 
+                let logger = Arc::new(infra_ctx.kubernetes().logger().clone_dyn());
                 Self::build_and_push_applications(
                     &mut environment.applications,
                     &DeploymentOption {
@@ -195,7 +201,7 @@ impl EnvironmentTask {
                         force_push: false,
                     },
                     infra_ctx,
-                    event_details.clone(),
+                    |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
                     should_abort,
                 )?;
             }
@@ -209,7 +215,6 @@ impl EnvironmentTask {
                 service::Action::Create => env_deployment.on_create(),
                 service::Action::Pause => env_deployment.on_pause(),
                 service::Action::Delete => env_deployment.on_delete(),
-                service::Action::Nothing => Ok(()),
             };
             deployed_services = env_deployment.deployed_services;
 
@@ -231,7 +236,6 @@ impl EnvironmentTask {
                 service::Action::Create => Stage::Environment(EnvironmentStep::DeployedError),
                 service::Action::Pause => Stage::Environment(EnvironmentStep::PausedError),
                 service::Action::Delete => Stage::Environment(EnvironmentStep::DeletedError),
-                service::Action::Nothing => Stage::Environment(EnvironmentStep::DeployedError),
             }
         };
 
@@ -245,7 +249,7 @@ impl EnvironmentTask {
             if deployed_services.contains(service.long_id()) {
                 continue;
             }
-            infra_ctx.build_platform().logger().log(EngineEvent::Info(
+            infra_ctx.kubernetes().logger().log(EngineEvent::Info(
                 service.get_event_details(to_stage(service.action())),
                 EventMessage::new_from_safe("".to_string()),
             ));
@@ -279,12 +283,12 @@ impl Task for EnvironmentTask {
         });
 
         let infra_context = self.infrastructure_context();
-        let env_step = match self.request.target_environment.action {
-            Action::Create => EnvironmentStep::Deploy,
-            Action::Pause => EnvironmentStep::Pause,
-            Action::Delete => EnvironmentStep::Delete,
-            Action::Nothing => EnvironmentStep::Deploy,
-        };
+        let env_step = self
+            .request
+            .target_environment
+            .action
+            .to_service_action()
+            .to_environment_step();
         let event_details = self.get_event_details(env_step);
         let environment = match self.request.target_environment.to_environment_domain(
             infra_context.context(),
@@ -342,7 +346,6 @@ impl Task for EnvironmentTask {
                     EventMessage::new("💣 Environment failed to be deleted".to_string(), None),
                 ));
             }
-            (Action::Nothing, _) => {}
         };
 
         // Uploading to S3 can take a lot of time, and might hit the core timeout

@@ -6,18 +6,17 @@ use crate::deployment_action::check_dns::CheckDnsForDomains;
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::execute_long_deployment;
-use crate::deployment_report::logger::get_loggers;
 use crate::deployment_report::router::reporter::RouterDeploymentReporter;
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
-use crate::models::router::{Router, RouterService};
+use crate::models::router::Router;
 use crate::models::types::{CloudProvider, ToTeraContext};
-use std::borrow::Borrow;
+
 use std::path::PathBuf;
 
 impl<T: CloudProvider> DeploymentAction for Router<T>
 where
-    Router<T>: RouterService,
+    Router<T>: ToTeraContext,
 {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
@@ -44,17 +43,17 @@ where
 
     fn on_create_check(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         // check non custom domains
-        let logger = get_loggers(self, self.action, target.logger.borrow());
         let custom_domains_to_check: Vec<CustomDomain> = if self.advanced_settings.custom_domain_check_enabled {
             self.custom_domains.clone()
         } else {
             vec![]
         };
 
+        let logger = target.env_logger(self, EnvironmentStep::Deploy);
         let domain_checker = CheckDnsForDomains {
             resolve_to_ip: vec![self.default_domain.clone()],
             resolve_to_cname: custom_domains_to_check,
-            log: logger.send_success,
+            log: Box::new(move |msg| logger.send_success(msg)),
         };
 
         let _ = domain_checker.on_create_check(target);

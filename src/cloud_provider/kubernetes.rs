@@ -1118,7 +1118,6 @@ where
             "Infrastructure '{}' deletion is in progress...",
             kubernetes.name_with_id()
         )),
-        Action::Nothing => None,
     };
 
     send_progress_on_long_task_with_message(kubernetes, waiting_message, action, long_task)
@@ -1172,7 +1171,6 @@ where
                         event_message,
                     ));
                 }
-                Action::Nothing => {} // should not happens
             };
 
             thread::sleep(Duration::from_secs(30));

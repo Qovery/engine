@@ -114,26 +114,26 @@ impl ToCommonHelmChart for ClusterAutoscalerChart {
                 ],
                 ..Default::default()
             },
-            chart_installation_checker: Some(Box::new(ClusterAutoscalerChecker::new())),
+            chart_installation_checker: Some(Box::new(ClusterAutoscalerChartChecker::new())),
         }
     }
 }
 
-pub struct ClusterAutoscalerChecker {}
+pub struct ClusterAutoscalerChartChecker {}
 
-impl ClusterAutoscalerChecker {
-    pub fn new() -> ClusterAutoscalerChecker {
-        ClusterAutoscalerChecker {}
+impl ClusterAutoscalerChartChecker {
+    pub fn new() -> ClusterAutoscalerChartChecker {
+        ClusterAutoscalerChartChecker {}
     }
 }
 
-impl Default for ClusterAutoscalerChecker {
+impl Default for ClusterAutoscalerChartChecker {
     fn default() -> Self {
-        ClusterAutoscalerChecker::new()
+        ClusterAutoscalerChartChecker::new()
     }
 }
 
-impl ChartInstallationChecker for ClusterAutoscalerChecker {
+impl ChartInstallationChecker for ClusterAutoscalerChartChecker {
     fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
         // TODO(ENG-1366): Implement chart install verification
         Ok(())

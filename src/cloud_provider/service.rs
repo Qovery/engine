@@ -13,7 +13,7 @@ use crate::cmd::kubectl::{kubectl_exec_delete_pod, kubectl_exec_get_pods};
 use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::cmd::terraform::TerraformError;
 use crate::errors::{CommandError, EngineError};
-use crate::events::{EventDetails, Stage};
+use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::models;
 use crate::models::database::{Database, DatabaseMode};
 
@@ -37,7 +37,16 @@ pub enum Action {
     Create,
     Pause,
     Delete,
-    Nothing,
+}
+
+impl Action {
+    pub fn to_environment_step(&self) -> EnvironmentStep {
+        match self {
+            Action::Create => EnvironmentStep::Deploy,
+            Action::Pause => EnvironmentStep::Pause,
+            Action::Delete => EnvironmentStep::Delete,
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize)]

@@ -29,6 +29,7 @@ use crate::cloud_provider::aws::kubernetes::helm_charts::aws_vpc_cni_chart::{
 use crate::cloud_provider::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
 use crate::cloud_provider::helm_charts::core_dns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
+use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AwsEksQoveryTerraformConfig {
@@ -187,46 +188,8 @@ pub fn eks_aws_helm_charts(
     )
     .to_common_helm_chart();
 
-    let promtail = CommonChart {
-        chart_info: ChartInfo {
-            name: "promtail".to_string(),
-            last_breaking_version_requiring_restart: Some(Version::new(5, 1, 0)),
-            path: chart_path("common/charts/promtail"),
-            values_files: vec![chart_path("chart_values/promtail.yaml")],
-            // because of priorityClassName, we need to add it to kube-system
-            namespace: HelmChartNamespaces::KubeSystem,
-            values: vec![
-                ChartSetValue {
-                    key: "config.clients[0].url".to_string(),
-                    value: format!("http://{}/loki/api/v1/push", &loki_kube_dns_name),
-                },
-                // it's mandatory to get this class to ensure paused infra will behave properly on restore
-                ChartSetValue {
-                    key: "priorityClassName".to_string(),
-                    value: "system-node-critical".to_string(),
-                },
-                // resources limits
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "128Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "128Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // Promtail
+    let promtail = PromtailChart::new(chart_prefix_path, loki_kube_dns_name).to_common_helm_chart();
 
     let loki = CommonChart {
         chart_info: ChartInfo {
