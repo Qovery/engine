@@ -5,18 +5,6 @@ data "aws_vpc" "selected" {
   }
 }
 
-data "aws_subnet_ids" "selected" {
-  vpc_id = data.aws_vpc.selected.id
-  filter {
-    name = "tag:ClusterId"
-    values = [var.kubernetes_cluster_id]
-  }
-  filter {
-    name = "tag:Service"
-    values = ["Elasticache"]
-  }
-}
-
 data "aws_security_group" "selected" {
   {% if not user_provided_network %}
   filter {
@@ -84,7 +72,7 @@ resource "aws_elasticache_cluster" "elasticache_cluster" {
 {%- else %}
 resource "aws_elasticache_replication_group" "elasticache_cluster" {
   replication_group_id          = var.elasticache_identifier
-  replication_group_description = "Qovery's elasticache"
+  description = "Qovery's elasticache"
 
   # Elasticache instance basics
   node_type = var.instance_class
@@ -97,7 +85,7 @@ resource "aws_elasticache_replication_group" "elasticache_cluster" {
   num_node_groups = var.elasticache_instances_number
   replicas_per_node_group = 1
 {%- else %}
-  number_cache_clusters       =  var.elasticache_instances_number
+  num_cache_clusters       =  var.elasticache_instances_number
 {%- endif %}
 
   tags = local.redis_database_tags
@@ -107,7 +95,7 @@ resource "aws_elasticache_replication_group" "elasticache_cluster" {
   auth_token = var.password
 
   # Network
-  # WARNING: this value cna't get fetch from data sources and is linked to the bootstrap phase
+  # WARNING: this value can't get fetch from data sources and is linked to the bootstrap phase
   subnet_group_name = "elasticache-${data.aws_vpc.selected.id}"
 
   # Security

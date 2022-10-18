@@ -9,22 +9,22 @@ terraform {
   required_providers {
     scaleway = {
       source = "scaleway/scaleway"
-      version = "~> 2.2.6"
+      version = "2.4.0"
     }
     aws = {
       source = "hashicorp/aws"
-      version = "~> 3.66.0"
+      version    = "4.34.0"
     }
     local = {
       source = "hashicorp/local"
-      version = "~> 1.4"
+      version = "2.2.3"
     }
     time = {
       source  = "hashicorp/time"
-      version = "~> 0.3"
+      version = "0.9.0"
     }
   }
-  required_version = ">= 0.14"
+  required_version = "1.3.3"
 }
 
 

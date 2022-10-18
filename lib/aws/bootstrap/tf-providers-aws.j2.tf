@@ -2,34 +2,33 @@ terraform {
   required_providers {
     aws = {
       source = "hashicorp/aws"
-      version    = "~> 3.66.0"
+      version    = "4.36.1"
     }
     external = {
       source = "hashicorp/external"
-      version = "~> 1.2"
+      version = "2.2.2"
     }
     local = {
       source = "hashicorp/local"
-      version = "~> 1.4"
+      version = "2.2.3"
     }
     null = {
       source = "hashicorp/null"
-      version = "~> 2.1"
+      version = "3.1.1"
     }
     random = {
       source = "hashicorp/random"
-      version = "~> 2.3"
+      version = "3.4.3"
     }
     time = {
       source  = "hashicorp/time"
-      version = "~> 0.3"
+      version = "0.9.0"
     }
   }
-  required_version = ">= 0.13"
+  required_version = "1.3.3"
 }
 
 provider "aws" {
-  profile    = "default"
   access_key = "{{ aws_access_key }}"
   secret_key = "{{ aws_secret_key }}"
   region     = "{{ aws_region }}"

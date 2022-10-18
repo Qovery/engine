@@ -849,7 +849,7 @@ datasources:
                 },
                 ChartSetValue {
                     key: "environmentVariables.ORGANIZATION".to_string(),
-                    value: chart_config_prerequisites.organization_id.clone(),
+                    value: chart_config_prerequisites.cluster_id.clone(), // cluster id should be used here, not org id (to be fixed when reming nats)
                 },
                 ChartSetValue {
                     key: "environmentVariables.CLOUD_PROVIDER".to_string(),

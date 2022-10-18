@@ -5,18 +5,6 @@ data "aws_vpc" "selected" {
   }
 }
 
-data "aws_subnet_ids" "k8s_subnet_ids" {
-  vpc_id = data.aws_vpc.selected.id
-  filter {
-    name = "tag:ClusterId"
-    values = [var.kubernetes_cluster_id]
-  }
-  filter {
-    name = "tag:Service"
-    values = ["RDS"]
-  }
-}
-
 data "aws_security_group" "selected" {
   {% if not user_provided_network %}
   filter {
@@ -69,7 +57,7 @@ resource "aws_db_instance" "mysql_instance" {
     delete = "60m"
   }
   password = var.password
-  name = var.database_name
+  db_name = var.database_name
   parameter_group_name = aws_db_parameter_group.mysql_parameter_group.name
   storage_encrypted = var.encrypt_disk
   {%- if snapshot is defined and snapshot["snapshot_id"] %}
@@ -85,7 +73,8 @@ resource "aws_db_instance" "mysql_instance" {
   {%- endif %}
 
   # Network
-  db_subnet_group_name = data.aws_subnet_ids.k8s_subnet_ids.id
+  # WARNING: this value can't get fetch from data sources and is linked to the bootstrap phase
+  db_subnet_group_name = data.aws_vpc.selected.id
   vpc_security_group_ids = data.aws_security_group.selected.*.id
   publicly_accessible = var.publicly_accessible
   multi_az = var.multi_az
