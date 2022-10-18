@@ -210,7 +210,7 @@ impl Application {
         context: &Context,
         build: Build,
         cloud_provider: &dyn CloudProvider,
-        logger: Box<dyn Logger>,
+        _logger: Box<dyn Logger>,
     ) -> Result<Box<dyn ApplicationService>, ApplicationError> {
         let environment_variables = to_environment_variable(&self.environment_vars);
 
@@ -236,7 +236,6 @@ impl Application {
                         environment_variables,
                         self.advanced_settings.clone(),
                         AwsAppExtraSettings {},
-                        logger.clone(),
                         |transmitter| context.get_event_details(transmitter),
                     )?))
                 } else {
@@ -256,7 +255,6 @@ impl Application {
                         environment_variables,
                         self.advanced_settings.clone(),
                         AwsEc2AppExtraSettings {},
-                        logger.clone(),
                         |transmitter| context.get_event_details(transmitter),
                     )?))
                 }
@@ -277,7 +275,6 @@ impl Application {
                 environment_variables,
                 self.advanced_settings.clone(),
                 DoAppExtraSettings {},
-                logger.clone(),
                 |transmitter| context.get_event_details(transmitter),
             )?)),
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
@@ -296,7 +293,6 @@ impl Application {
                 environment_variables,
                 self.advanced_settings.clone(),
                 ScwAppExtraSettings {},
-                logger.clone(),
                 |transmitter| context.get_event_details(transmitter),
             )?)),
         }

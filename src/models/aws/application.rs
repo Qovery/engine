@@ -13,12 +13,7 @@ impl ToTeraContext for Application<AWS> {
         let event_details = (self.mk_event_details)(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let mut context = self.default_tera_context(target.kubernetes, target.environment);
 
-        let cpu_limits = match validate_k8s_required_cpu_and_burstable(
-            self.total_cpus(),
-            self.cpu_burst(),
-            event_details.clone(),
-            self.logger(),
-        ) {
+        let cpu_limits = match validate_k8s_required_cpu_and_burstable(self.total_cpus(), self.cpu_burst()) {
             Ok(l) => l,
             Err(e) => {
                 return Err(EngineError::new_k8s_validate_required_cpu_and_burstable_error(

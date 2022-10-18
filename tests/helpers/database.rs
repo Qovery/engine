@@ -321,6 +321,7 @@ pub fn environment_3_apps_3_databases(
             },
         ],
         containers: vec![],
+        jobs: vec![],
         routers: vec![],
         databases: vec![
             Database {
@@ -430,6 +431,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             advanced_settings: Default::default(),
         }],
         containers: vec![],
+        jobs: vec![],
         routers: vec![],
         databases: vec![],
     }
@@ -472,6 +474,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             advanced_settings: Default::default(),
         }],
         containers: vec![],
+        jobs: vec![],
         routers: vec![],
         databases: vec![],
     }

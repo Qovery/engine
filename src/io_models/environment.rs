@@ -5,6 +5,7 @@ use crate::io_models::application::Application;
 use crate::io_models::container::Container;
 use crate::io_models::context::Context;
 use crate::io_models::database::Database;
+use crate::io_models::job::Job;
 use crate::io_models::router::Router;
 use crate::io_models::Action;
 use crate::logger::Logger;
@@ -25,6 +26,7 @@ pub struct EnvironmentRequest {
     pub action: Action,
     pub applications: Vec<Application>,
     pub containers: Vec<Container>,
+    pub jobs: Vec<Job>,
     pub routers: Vec<Router>,
     pub databases: Vec<Database>,
 }
@@ -39,6 +41,8 @@ pub enum DomainError {
     RouterError(RouterError),
     #[error("Invalid database: {0}")]
     DatabaseError(DatabaseError),
+    #[error("Invalid job: {0}")]
+    JobError(DatabaseError),
 }
 
 impl EnvironmentRequest {

@@ -11,6 +11,7 @@ pub mod database;
 pub mod domain;
 pub mod engine_request;
 pub mod environment;
+pub mod job;
 pub mod router;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
