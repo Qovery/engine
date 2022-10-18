@@ -5,6 +5,7 @@ pub mod container;
 pub mod database;
 pub(crate) mod database_utils;
 pub mod digital_ocean;
+pub mod job;
 pub mod router;
 pub mod scaleway;
 pub mod types;

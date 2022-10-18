@@ -8,7 +8,7 @@ use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::application::{AdvancedSettingsProbeType, ApplicationAdvancedSettings, Port};
 use crate::io_models::context::Context;
-use crate::logger::Logger;
+
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::utilities::to_short_id;
 use itertools::Itertools;
@@ -38,7 +38,6 @@ pub struct Application<T: CloudProvider> {
     pub(super) build: Build,
     pub(super) storage: Vec<Storage<T::StorageTypes>>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
-    pub(super) logger: Box<dyn Logger>,
     pub(super) advanced_settings: ApplicationAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
     pub(super) workspace_directory: String,
@@ -63,7 +62,6 @@ impl<T: CloudProvider> Application<T> {
         environment_variables: Vec<EnvironmentVariable>,
         advanced_settings: ApplicationAdvancedSettings,
         extra_settings: T::AppExtraSettings,
-        logger: Box<dyn Logger>,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
     ) -> Result<Self, ApplicationError> {
         // TODO: Check that the information provided are coherent
@@ -93,7 +91,6 @@ impl<T: CloudProvider> Application<T> {
             build,
             storage,
             environment_variables,
-            logger,
             advanced_settings,
             _extra_settings: extra_settings,
             workspace_directory,
@@ -317,10 +314,6 @@ impl<T: CloudProvider> Application<T> {
 
     pub fn publicly_accessible(&self) -> bool {
         self.public_ports().count() > 0
-    }
-
-    pub fn logger(&self) -> &dyn Logger {
-        &*self.logger
     }
 
     pub fn selector(&self) -> String {

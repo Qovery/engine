@@ -15,12 +15,7 @@ impl ToTeraContext for Application<DO> {
         let environment = target.environment;
         let mut context = self.default_tera_context(kubernetes, environment);
 
-        let cpu_limits = match validate_k8s_required_cpu_and_burstable(
-            self.total_cpus(),
-            self.cpu_burst(),
-            event_details.clone(),
-            self.logger(),
-        ) {
+        let cpu_limits = match validate_k8s_required_cpu_and_burstable(self.total_cpus(), self.cpu_burst()) {
             Ok(l) => l,
             Err(e) => {
                 return Err(EngineError::new_k8s_validate_required_cpu_and_burstable_error(

@@ -1,26 +1,27 @@
-use crate::cloud_provider::models::{EnvironmentVariable, Storage, StorageDataTemplate};
+use crate::cloud_provider::models::{EnvironmentVariable, StorageDataTemplate};
 use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::application::Port;
-use crate::io_models::container::{ContainerAdvancedSettings, Registry};
+use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
+use crate::io_models::job::JobAdvancedSettings;
+use crate::models::container::RegistryTeraContext;
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::string::cut;
 use crate::utilities::to_short_id;
-use itertools::Itertools;
 use serde::Serialize;
 use std::marker::PhantomData;
 use uuid::Uuid;
 
 #[derive(thiserror::Error, Debug)]
-pub enum ContainerError {
-    #[error("Container invalid configuration: {0}")]
+pub enum JobError {
+    #[error("Job invalid configuration: {0}")]
     InvalidConfig(String),
 }
 
-pub struct Container<T: CloudProvider> {
+pub struct Job<T: CloudProvider> {
     _marker: PhantomData<T>,
     pub(super) mk_event_details: Box<dyn Fn(Stage) -> EventDetails>,
     pub(super) id: String,
@@ -38,17 +39,15 @@ pub struct Container<T: CloudProvider> {
     pub(super) ram_limit_in_mib: u32,
     pub(super) min_instances: u32,
     pub(super) max_instances: u32,
-    pub(super) ports: Vec<Port>,
-    pub(super) storages: Vec<Storage<T::StorageTypes>>,
     pub(super) environment_variables: Vec<EnvironmentVariable>,
-    pub(super) advanced_settings: ContainerAdvancedSettings,
+    pub(super) advanced_settings: JobAdvancedSettings,
     pub(super) _extra_settings: T::AppExtraSettings,
     pub(super) workspace_directory: String,
     pub(super) lib_root_directory: String,
 }
 
 // Here we define the common behavior among all providers
-impl<T: CloudProvider> Container<T> {
+impl<T: CloudProvider> Job<T> {
     pub const QOVERY_MIRROR_REPOSITORY_NAME: &'static str = "qovery-mirror";
 
     pub fn new(
@@ -67,47 +66,41 @@ impl<T: CloudProvider> Container<T> {
         ram_limit_in_mib: u32,
         min_instances: u32,
         max_instances: u32,
-        ports: Vec<Port>,
-        storages: Vec<Storage<T::StorageTypes>>,
         environment_variables: Vec<EnvironmentVariable>,
-        advanced_settings: ContainerAdvancedSettings,
+        advanced_settings: JobAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
-    ) -> Result<Self, ContainerError> {
+    ) -> Result<Self, JobError> {
         if min_instances > max_instances {
-            return Err(ContainerError::InvalidConfig(
+            return Err(JobError::InvalidConfig(
                 "min_instances must be less or equal to max_instances".to_string(),
             ));
         }
 
         if min_instances == 0 {
-            return Err(ContainerError::InvalidConfig(
-                "min_instances must be greater than 0".to_string(),
-            ));
+            return Err(JobError::InvalidConfig("min_instances must be greater than 0".to_string()));
         }
 
         if cpu_request_in_mili > cpu_limit_in_mili {
-            return Err(ContainerError::InvalidConfig(
+            return Err(JobError::InvalidConfig(
                 "cpu_request_in_mili must be less or equal to cpu_limit_in_mili".to_string(),
             ));
         }
 
         if cpu_request_in_mili == 0 {
-            return Err(ContainerError::InvalidConfig(
+            return Err(JobError::InvalidConfig(
                 "cpu_request_in_mili must be greater than 0".to_string(),
             ));
         }
 
         if ram_request_in_mib > ram_limit_in_mib {
-            return Err(ContainerError::InvalidConfig(
+            return Err(JobError::InvalidConfig(
                 "ram_request_in_mib must be less or equal to ram_limit_in_mib".to_string(),
             ));
         }
 
         if ram_request_in_mib == 0 {
-            return Err(ContainerError::InvalidConfig(
-                "ram_request_in_mib must be greater than 0".to_string(),
-            ));
+            return Err(JobError::InvalidConfig("ram_request_in_mib must be greater than 0".to_string()));
         }
 
         let workspace_directory = crate::fs::workspace_directory(
@@ -115,7 +108,7 @@ impl<T: CloudProvider> Container<T> {
             context.execution_id(),
             format!("containers/{}", long_id),
         )
-        .map_err(|_| ContainerError::InvalidConfig("Can't create workspace directory".to_string()))?;
+        .map_err(|_| JobError::InvalidConfig("Can't create workspace directory".to_string()))?;
 
         let event_details = mk_event_details(Transmitter::Container(long_id, name.to_string()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
@@ -137,8 +130,6 @@ impl<T: CloudProvider> Container<T> {
             ram_limit_in_mib,
             min_instances,
             max_instances,
-            ports,
-            storages,
             environment_variables,
             advanced_settings,
             _extra_settings: extra_settings,
@@ -167,16 +158,12 @@ impl<T: CloudProvider> Container<T> {
         &self.registry
     }
 
-    fn public_ports(&self) -> impl Iterator<Item = &Port> + '_ {
-        self.ports.iter().filter(|port| port.publicly_accessible)
-    }
-
-    pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> ContainerTeraContext {
+    pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> JobTeraContext {
         let environment = &target.environment;
         let kubernetes = &target.kubernetes;
         let registry_info = target.container_registry.registry_info();
 
-        let ctx = ContainerTeraContext {
+        let ctx = JobTeraContext {
             organization_long_id: environment.organization_long_id,
             project_long_id: environment.project_long_id,
             environment_short_id: to_short_id(&environment.long_id),
@@ -209,8 +196,8 @@ impl<T: CloudProvider> Container<T> {
                 ram_limit_in_mib: format!("{}Mi", self.ram_limit_in_mib),
                 min_instances: self.min_instances,
                 max_instances: self.max_instances,
-                ports: self.ports.clone(),
-                default_port: self.ports.iter().find_or_first(|p| p.is_default).cloned(),
+                ports: vec![],
+                default_port: None,
                 storages: vec![],
                 advanced_settings: self.advanced_settings.clone(),
             },
@@ -228,10 +215,6 @@ impl<T: CloudProvider> Container<T> {
         ctx
     }
 
-    pub fn is_stateful(&self) -> bool {
-        !self.storages.is_empty()
-    }
-
     pub fn service_type(&self) -> ServiceType {
         ServiceType::Container
     }
@@ -246,10 +229,6 @@ impl<T: CloudProvider> Container<T> {
 
     pub fn action(&self) -> &Action {
         &self.action
-    }
-
-    pub fn publicly_accessible(&self) -> bool {
-        self.public_ports().count() > 0
     }
 
     pub fn image_with_tag(&self) -> String {
@@ -271,7 +250,7 @@ impl<T: CloudProvider> Container<T> {
     }
 }
 
-impl<T: CloudProvider> Service for Container<T> {
+impl<T: CloudProvider> Service for Job<T> {
     fn service_type(&self) -> ServiceType {
         self.service_type()
     }
@@ -309,9 +288,8 @@ impl<T: CloudProvider> Service for Container<T> {
     }
 }
 
-pub trait ContainerService: Service + DeploymentAction + ToTeraContext {
-    fn public_ports(&self) -> Vec<&Port>;
-    fn advanced_settings(&self) -> &ContainerAdvancedSettings;
+pub trait JobService: Service + DeploymentAction + ToTeraContext {
+    fn advanced_settings(&self) -> &JobAdvancedSettings;
     fn image_full(&self) -> String;
     fn kube_service_name(&self) -> String;
     fn startup_timeout(&self) -> std::time::Duration {
@@ -330,15 +308,11 @@ pub trait ContainerService: Service + DeploymentAction + ToTeraContext {
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
-impl<T: CloudProvider> ContainerService for Container<T>
+impl<T: CloudProvider> JobService for Job<T>
 where
-    Container<T>: Service + ToTeraContext + DeploymentAction,
+    Job<T>: Service + ToTeraContext + DeploymentAction,
 {
-    fn public_ports(&self) -> Vec<&Port> {
-        self.public_ports().collect_vec()
-    }
-
-    fn advanced_settings(&self) -> &ContainerAdvancedSettings {
+    fn advanced_settings(&self) -> &JobAdvancedSettings {
         &self.advanced_settings
     }
 
@@ -387,17 +361,11 @@ pub(super) struct ServiceTeraContext {
     pub(super) ports: Vec<Port>,
     pub(super) default_port: Option<Port>,
     pub(super) storages: Vec<StorageDataTemplate>,
-    pub(super) advanced_settings: ContainerAdvancedSettings,
+    pub(super) advanced_settings: JobAdvancedSettings,
 }
 
 #[derive(Serialize, Debug, Clone)]
-pub(super) struct RegistryTeraContext {
-    pub(super) secret_name: String,
-    pub(super) docker_json_config: String,
-}
-
-#[derive(Serialize, Debug, Clone)]
-pub(super) struct ContainerTeraContext {
+pub(super) struct JobTeraContext {
     pub(super) organization_long_id: Uuid,
     pub(super) project_long_id: Uuid,
     pub(super) environment_short_id: String,
