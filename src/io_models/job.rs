@@ -22,7 +22,7 @@ use uuid::Uuid;
 pub struct JobAdvancedSettings {
     // Job specific
     #[serde(alias = "job.delete_ttl_seconds_after_finished")]
-    pub delete_ttl_seconds_after_finished: Duration,
+    pub delete_ttl_seconds_after_finished: u32,
 
     // Readiness Probes
     #[serde(alias = "readiness_probe.type")]
@@ -60,21 +60,21 @@ pub struct JobAdvancedSettings {
 impl Default for JobAdvancedSettings {
     fn default() -> Self {
         Self {
-            delete_ttl_seconds_after_finished: Duration::from_secs(0),
+            delete_ttl_seconds_after_finished: 3600 * 24 * 3, // 72 hours
             readiness_probe_type: AdvancedSettingsProbeType::Tcp,
             readiness_probe_http_get_path: "/".to_string(),
             readiness_probe_initial_delay_seconds: 30,
             readiness_probe_period_seconds: 10,
-            readiness_probe_timeout_seconds: 1,
+            readiness_probe_timeout_seconds: 5,
             readiness_probe_success_threshold: 1,
-            readiness_probe_failure_threshold: 9,
+            readiness_probe_failure_threshold: 3,
             liveness_probe_type: AdvancedSettingsProbeType::Tcp,
             liveness_probe_http_get_path: "/".to_string(),
             liveness_probe_initial_delay_seconds: 30,
             liveness_probe_period_seconds: 10,
             liveness_probe_timeout_seconds: 5,
             liveness_probe_success_threshold: 1,
-            liveness_probe_failure_threshold: 9,
+            liveness_probe_failure_threshold: 3,
         }
     }
 }

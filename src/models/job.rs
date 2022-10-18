@@ -31,9 +31,9 @@ pub struct Job<T: CloudProvider> {
     pub(super) long_id: Uuid,
     pub(super) name: String,
     pub(super) action: Action,
-    pub(super) registry: Registry,
-    pub(super) image: String,
-    pub(super) tag: String,
+    pub registry: Registry,
+    pub image: String,
+    pub tag: String,
     pub(super) schedule: JobSchedule,
     pub(super) max_nb_restart: u32,
     pub(super) max_duration_in_sec: Duration,
@@ -200,7 +200,7 @@ impl<T: CloudProvider> Job<T> {
                 ram_limit_in_mib: format!("{}Mi", self.ram_limit_in_mib),
                 default_port: self.default_port,
                 max_nb_restart: self.max_nb_restart,
-                max_duration_in_sec: self.max_duration_in_sec,
+                max_duration_in_sec: self.max_duration_in_sec.as_secs(),
                 advanced_settings: self.advanced_settings.clone(),
             },
             registry: registry_info
@@ -370,7 +370,7 @@ pub(super) struct ServiceTeraContext {
     pub(super) ram_limit_in_mib: String,
     pub(super) default_port: Option<u16>,
     pub(super) max_nb_restart: u32,
-    pub(super) max_duration_in_sec: Duration,
+    pub(super) max_duration_in_sec: u64,
     pub(super) advanced_settings: JobAdvancedSettings,
 }
 
