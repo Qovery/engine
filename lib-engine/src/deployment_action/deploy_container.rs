@@ -83,7 +83,7 @@ where
             &dest_image,
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
-            &CommandKiller::from_timeout(Duration::from_secs(60 * 10)),
+            &CommandKiller::from(Duration::from_secs(60 * 10), target.should_abort),
         ) {
             let err = EngineError::new_docker_error(event_details, err);
             let user_err = EngineError::new_engine_error(
@@ -247,7 +247,7 @@ where
     }
 }
 
-fn get_url_with_credentials(registry: &Registry) -> Url {
+pub fn get_url_with_credentials(registry: &Registry) -> Url {
     let url = match registry {
         Registry::DockerHub { url, credentials, .. } => {
             let mut url = url.clone();
@@ -297,7 +297,7 @@ fn get_url_with_credentials(registry: &Registry) -> Url {
     url
 }
 
-async fn get_last_deployed_image(
+pub async fn get_last_deployed_image(
     client: kube::Client,
     selector: &str,
     is_statefulset: bool,
