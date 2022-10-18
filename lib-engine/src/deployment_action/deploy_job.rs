@@ -84,7 +84,7 @@ where
         }
 
         execute_long_deployment(JobDeploymentReporter::new(self, target, Action::Create), || {
-            let last_image = block_on(get_last_deployed_image(
+            let _last_image = block_on(get_last_deployed_image(
                 target.kube.clone(),
                 &self.selector(),
                 false,
