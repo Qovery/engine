@@ -115,4 +115,4 @@ DEPLOY_FROM_FILE_KIND=<env|infra> # choose between infra (infrastructure deploym
 
 ## Contribute
 
-To activate the debugger add the `RUST_LOG=qovery_engine=debug` env var
+To activate the debugger add the `RUST_LOG=qovery_engine=debug` env variable
