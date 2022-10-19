@@ -5,7 +5,6 @@ use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ContainerRegistryInfo;
 use crate::io_models::context::Context;
 use crate::io_models::Action;
-use crate::logger::Logger;
 use crate::models;
 use crate::models::application::{ApplicationError, ApplicationService};
 use crate::models::aws::{AwsAppExtraSettings, AwsStorageType};
@@ -48,13 +47,10 @@ pub enum AdvancedSettingsProbeType {
     Http,
 }
 
-pub fn to_environment_variable(env_vars: &BTreeMap<String, String>) -> Vec<EnvironmentVariable> {
+pub fn to_environment_variable(env_vars: BTreeMap<String, String>) -> Vec<EnvironmentVariable> {
     env_vars
-        .iter()
-        .map(|(k, v)| EnvironmentVariable {
-            key: k.clone(),
-            value: v.clone(),
-        })
+        .into_iter()
+        .map(|(k, v)| EnvironmentVariable { key: k, value: v })
         .collect()
 }
 
@@ -206,13 +202,12 @@ fn default_root_path_value() -> String {
 
 impl Application {
     pub fn to_application_domain(
-        &self,
+        self,
         context: &Context,
         build: Build,
         cloud_provider: &dyn CloudProvider,
-        logger: Box<dyn Logger>,
     ) -> Result<Box<dyn ApplicationService>, ApplicationError> {
-        let environment_variables = to_environment_variable(&self.environment_vars);
+        let environment_variables = to_environment_variable(self.environment_vars);
 
         match cloud_provider.kind() {
             CPKind::Aws => {
@@ -225,18 +220,17 @@ impl Application {
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
-                        self.ports.clone(),
-                        self.total_cpus.clone(),
-                        self.cpu_burst.clone(),
+                        self.ports,
+                        self.total_cpus,
+                        self.cpu_burst,
                         self.total_ram_in_mib,
                         self.min_instances,
                         self.max_instances,
                         build,
                         self.storage.iter().map(|s| s.to_aws_storage()).collect::<Vec<_>>(),
                         environment_variables,
-                        self.advanced_settings.clone(),
+                        self.advanced_settings,
                         AwsAppExtraSettings {},
-                        logger.clone(),
                         |transmitter| context.get_event_details(transmitter),
                     )?))
                 } else {
@@ -245,18 +239,17 @@ impl Application {
                         self.long_id,
                         self.action.to_service_action(),
                         self.name.as_str(),
-                        self.ports.clone(),
-                        self.total_cpus.clone(),
-                        self.cpu_burst.clone(),
+                        self.ports,
+                        self.total_cpus,
+                        self.cpu_burst,
                         self.total_ram_in_mib,
                         self.min_instances,
                         self.max_instances,
                         build,
                         self.storage.iter().map(|s| s.to_aws_ec2_storage()).collect::<Vec<_>>(),
                         environment_variables,
-                        self.advanced_settings.clone(),
+                        self.advanced_settings,
                         AwsEc2AppExtraSettings {},
-                        logger.clone(),
                         |transmitter| context.get_event_details(transmitter),
                     )?))
                 }
@@ -266,18 +259,17 @@ impl Application {
                 self.long_id,
                 self.action.to_service_action(),
                 self.name.as_str(),
-                self.ports.clone(),
-                self.total_cpus.clone(),
-                self.cpu_burst.clone(),
+                self.ports,
+                self.total_cpus,
+                self.cpu_burst,
                 self.total_ram_in_mib,
                 self.min_instances,
                 self.max_instances,
                 build,
                 self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
                 environment_variables,
-                self.advanced_settings.clone(),
+                self.advanced_settings,
                 DoAppExtraSettings {},
-                logger.clone(),
                 |transmitter| context.get_event_details(transmitter),
             )?)),
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
@@ -285,18 +277,17 @@ impl Application {
                 self.long_id,
                 self.action.to_service_action(),
                 self.name.as_str(),
-                self.ports.clone(),
-                self.total_cpus.clone(),
-                self.cpu_burst.clone(),
+                self.ports,
+                self.total_cpus,
+                self.cpu_burst,
                 self.total_ram_in_mib,
                 self.min_instances,
                 self.max_instances,
                 build,
                 self.storage.iter().map(|s| s.to_scw_storage()).collect::<Vec<_>>(),
                 environment_variables,
-                self.advanced_settings.clone(),
+                self.advanced_settings,
                 ScwAppExtraSettings {},
-                logger.clone(),
                 |transmitter| context.get_event_details(transmitter),
             )?)),
         }

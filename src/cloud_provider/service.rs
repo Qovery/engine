@@ -74,6 +74,7 @@ pub enum ServiceType {
     Database(DatabaseType),
     Router,
     Container,
+    Job,
 }
 
 impl ServiceType {
@@ -83,6 +84,7 @@ impl ServiceType {
             ServiceType::Database(db_type) => format!("{} database", db_type.to_string()),
             ServiceType::Router => "Router".to_string(),
             ServiceType::Container => "Container".to_string(),
+            ServiceType::Job => "Job".to_string(),
         }
     }
 }

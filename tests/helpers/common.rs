@@ -54,28 +54,24 @@ pub trait Infrastructure {
     fn build_environment(
         &self,
         environment: &EnvironmentRequest,
-        logger: Box<dyn Logger>,
         infra_ctx: &InfrastructureContext,
     ) -> (Environment, TransactionResult);
 
     fn deploy_environment(
         &self,
         environment: &EnvironmentRequest,
-        logger: Box<dyn Logger>,
         infra_ctx: &InfrastructureContext,
     ) -> TransactionResult;
 
     fn pause_environment(
         &self,
         environment: &EnvironmentRequest,
-        logger: Box<dyn Logger>,
         infra_ctx: &InfrastructureContext,
     ) -> TransactionResult;
 
     fn delete_environment(
         &self,
         environment: &EnvironmentRequest,
-        logger: Box<dyn Logger>,
         infra_ctx: &InfrastructureContext,
     ) -> TransactionResult;
 }

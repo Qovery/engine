@@ -14,7 +14,7 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, Stage};
 use crate::io_models::container::Registry;
 use crate::kubers_utils::kube_delete_all_from_selector;
-use crate::models::container::{Container, ContainerService};
+use crate::models::container::{Container, ContainerService, QOVERY_MIRROR_REPOSITORY_NAME};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
@@ -67,7 +67,7 @@ where
         target
             .container_registry
             .create_repository(
-                Self::QOVERY_MIRROR_REPOSITORY_NAME,
+                QOVERY_MIRROR_REPOSITORY_NAME,
                 target.kubernetes.advanced_settings().registry_image_retention_time_sec,
             )
             .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
@@ -75,7 +75,7 @@ where
         let source_image = ContainerImage::new(self.registry.url().clone(), self.image.clone(), vec![self.tag.clone()]);
         let dest_image = ContainerImage::new(
             target.container_registry.registry_info().endpoint.clone(),
-            (registry_info.get_image_name)(Self::QOVERY_MIRROR_REPOSITORY_NAME),
+            (registry_info.get_image_name)(QOVERY_MIRROR_REPOSITORY_NAME),
             vec![self.tag_for_mirror()],
         );
         if let Err(err) = target.docker.mirror(
@@ -83,7 +83,7 @@ where
             &dest_image,
             &mut |line| info!("{}", line),
             &mut |line| warn!("{}", line),
-            &CommandKiller::from_timeout(Duration::from_secs(60 * 10)),
+            &CommandKiller::from(Duration::from_secs(60 * 10), target.should_abort),
         ) {
             let err = EngineError::new_docker_error(event_details, err);
             let user_err = EngineError::new_engine_error(
@@ -151,10 +151,10 @@ where
                         logger.send_progress(format!("🪓 Deleting previous cached image {}", last_image_tag));
 
                         let image = Image {
-                            name: Self::QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
+                            name: QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
                             tag: last_image_tag,
                             registry_url: target.container_registry.registry_info().endpoint.clone(),
-                            repository_name: Self::QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
+                            repository_name: QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
                             ..Default::default()
                         };
 
@@ -231,10 +231,10 @@ where
         )?;
 
         let image = Image {
-            name: Self::QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
+            name: QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
             tag: self.tag_for_mirror(),
             registry_url: target.container_registry.registry_info().endpoint.clone(),
-            repository_name: Self::QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
+            repository_name: QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
             ..Default::default()
         };
 
@@ -247,7 +247,7 @@ where
     }
 }
 
-fn get_url_with_credentials(registry: &Registry) -> Url {
+pub fn get_url_with_credentials(registry: &Registry) -> Url {
     let url = match registry {
         Registry::DockerHub { url, credentials, .. } => {
             let mut url = url.clone();
@@ -297,7 +297,7 @@ fn get_url_with_credentials(registry: &Registry) -> Url {
     url
 }
 
-async fn get_last_deployed_image(
+pub async fn get_last_deployed_image(
     client: kube::Client,
     selector: &str,
     is_statefulset: bool,

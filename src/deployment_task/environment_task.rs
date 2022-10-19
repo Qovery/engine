@@ -294,7 +294,6 @@ impl Task for EnvironmentTask {
             infra_context.context(),
             infra_context.cloud_provider(),
             infra_context.container_registry(),
-            self.logger.clone(),
         ) {
             Ok(env) => env,
             Err(err) => {
@@ -325,21 +324,24 @@ impl Task for EnvironmentTask {
                 self.get_event_details(EnvironmentStep::Cancelled),
                 EventMessage::new("🚫 Deployment has been canceled at user request 🚫".to_string(), None),
             )),
-            (Action::Create, Err(_err)) => {
+            (Action::Create, Err(err)) => {
+                info!("{}", err);
                 //self.logger.log(EngineEvent::Error(err, None));
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::DeployedError),
                     EventMessage::new("💣 Deployment failed".to_string(), None),
                 ));
             }
-            (Action::Pause, Err(_err)) => {
+            (Action::Pause, Err(err)) => {
+                info!("{}", err);
                 //self.logger.log(EngineEvent::Error(err, None));
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::PausedError),
                     EventMessage::new("💣 Environment failed to be paused".to_string(), None),
                 ));
             }
-            (Action::Delete, Err(_err)) => {
+            (Action::Delete, Err(err)) => {
+                info!("{}", err);
                 //self.logger.log(EngineEvent::Error(err, None));
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(EnvironmentStep::DeletedError),

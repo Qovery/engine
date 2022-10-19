@@ -50,7 +50,7 @@ fn scaleway_test_build_phase() {
 
         let env_action = environment.clone();
 
-        let (env, ret) = environment.build_environment(&env_action, logger.clone(), &infra_ctx);
+        let (env, ret) = environment.build_environment(&env_action, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
         // Check the the image exist in the registry
@@ -95,10 +95,10 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
         let env_action = environment.clone();
         let env_action_for_delete = environment_for_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result = environment_for_delete.delete_environment(&env_action_for_delete, logger, &infra_ctx_for_delete);
+        let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
@@ -143,10 +143,10 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
         let env_action = environment.clone();
         let env_action_for_delete = environment_for_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Error(_)));
 
-        let result = environment_for_delete.delete_environment(&env_action_for_delete, logger, &infra_ctx_for_delete);
+        let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok | TransactionResult::Error(_)));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
@@ -186,7 +186,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         let env_action = environment.clone();
         let selector = format!("appId={}", to_short_id(&environment.applications[0].long_id));
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
         let ret = get_pods(
@@ -199,7 +199,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
-        let result = environment.pause_environment(&env_action, logger.clone(), &infra_ctx_for_delete);
+        let result = environment.pause_environment(&env_action, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
@@ -216,7 +216,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
         let infra_ctx_resume = scw_default_infra_config(&ctx_resume, logger.clone());
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx_resume);
+        let result = environment.deploy_environment(&env_action, &infra_ctx_resume);
         assert!(matches!(result, TransactionResult::Ok));
 
         let ret = get_pods(
@@ -230,7 +230,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         assert!(!ret.unwrap().items.is_empty());
 
         // Cleanup
-        let result = environment.delete_environment(&env_action, logger, &infra_ctx_for_delete);
+        let result = environment.delete_environment(&env_action, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
@@ -292,10 +292,10 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
         let env_action = environment.clone();
         let env_action_for_delete = environment_for_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result = environment_for_delete.delete_environment(&env_action_for_delete, logger, &infra_ctx_for_delete);
+        let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
@@ -338,10 +338,10 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
         let env_action = environment.clone();
         let env_action_for_delete = environment_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result = environment_delete.delete_environment(&env_action_for_delete, logger, &infra_ctx_for_delete);
+        let result = environment_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
@@ -404,7 +404,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
         let env_action = environment.clone();
         let env_action_delete = environment_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
         match get_pvc(context.clone(), Kind::Scw, environment.clone(), secrets.clone()) {
@@ -415,7 +415,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
             Err(_) => panic!(),
         };
 
-        let result = environment_delete.delete_environment(&env_action_delete, logger, &infra_ctx_for_deletion);
+        let result = environment_delete.delete_environment(&env_action_delete, &infra_ctx_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
@@ -454,7 +454,7 @@ fn deploy_a_working_environment_and_pause_it() {
         let ea = environment.clone();
         let selector = format!("appId={}", to_short_id(&environment.applications[0].long_id));
 
-        let result = environment.deploy_environment(&ea, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
         let ret = get_pods(
@@ -467,7 +467,7 @@ fn deploy_a_working_environment_and_pause_it() {
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
-        let result = environment.pause_environment(&ea, logger.clone(), &infra_ctx_for_delete);
+        let result = environment.pause_environment(&ea, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
@@ -484,7 +484,7 @@ fn deploy_a_working_environment_and_pause_it() {
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
         let infra_ctx_resume = scw_default_infra_config(&ctx_resume, logger.clone());
-        let result = environment.deploy_environment(&ea, logger.clone(), &infra_ctx_resume);
+        let result = environment.deploy_environment(&ea, &infra_ctx_resume);
         assert!(matches!(result, TransactionResult::Ok));
 
         let ret = get_pods(context, Kind::Scw, environment.clone(), selector.as_str(), secrets);
@@ -492,7 +492,7 @@ fn deploy_a_working_environment_and_pause_it() {
         assert!(!ret.unwrap().items.is_empty());
 
         // Cleanup
-        let result = environment.delete_environment(&ea, logger, &infra_ctx_for_delete);
+        let result = environment.delete_environment(&ea, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
         test_name.to_string()
     })
@@ -556,7 +556,7 @@ fn scaleway_kapsule_redeploy_same_app() {
         let env_action_redeploy = environment_redeploy.clone();
         let env_action_delete = environment_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
         match get_pvc(context.clone(), Kind::Scw, environment.clone(), secrets.clone()) {
@@ -576,7 +576,7 @@ fn scaleway_kapsule_redeploy_same_app() {
             secrets.clone(),
         );
 
-        let result = environment_redeploy.deploy_environment(&env_action_redeploy, logger.clone(), &infra_ctx_bis);
+        let result = environment_redeploy.deploy_environment(&env_action_redeploy, &infra_ctx_bis);
         assert!(matches!(result, TransactionResult::Ok));
 
         let (_, number2) = is_pod_restarted_env(
@@ -590,7 +590,7 @@ fn scaleway_kapsule_redeploy_same_app() {
         // nothing changed in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
 
-        let result = environment_delete.delete_environment(&env_action_delete, logger, &infra_ctx_for_deletion);
+        let result = environment_delete.delete_environment(&env_action_delete, &infra_ctx_for_deletion);
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
@@ -652,17 +652,14 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
         let env_action_not_working = environment_for_not_working.clone();
         let env_action_delete = environment_for_delete.clone();
 
-        let result = environment_for_not_working.deploy_environment(
-            &env_action_not_working,
-            logger.clone(),
-            &infra_ctx_for_not_working,
-        );
+        let result =
+            environment_for_not_working.deploy_environment(&env_action_not_working, &infra_ctx_for_not_working);
         assert!(matches!(result, TransactionResult::Error(_)));
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result = environment_for_delete.delete_environment(&env_action_delete, logger, &infra_ctx_for_delete);
+        let result = environment_for_delete.delete_environment(&env_action_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
@@ -734,30 +731,22 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
         let env_action_delete = delete_env.clone();
 
         // OK
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
         // FAIL and rollback
-        let result = not_working_env_1.deploy_environment(
-            &env_action_not_working_1,
-            logger.clone(),
-            &infra_ctx_for_not_working_1,
-        );
+        let result = not_working_env_1.deploy_environment(&env_action_not_working_1, &infra_ctx_for_not_working_1);
         assert!(matches!(result, TransactionResult::Error(_)));
 
         // FAIL and Rollback again
-        let result = not_working_env_2.deploy_environment(
-            &env_action_not_working_2,
-            logger.clone(),
-            &infra_ctx_for_not_working_2,
-        );
+        let result = not_working_env_2.deploy_environment(&env_action_not_working_2, &infra_ctx_for_not_working_2);
         assert!(matches!(result, TransactionResult::Error(_)));
 
         // Should be working
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let result = delete_env.delete_environment(&env_action_delete, logger, &infra_ctx_for_delete);
+        let result = delete_env.delete_environment(&env_action_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
@@ -801,10 +790,10 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
         let env_action = environment.clone();
         let env_action_delete = delete_env.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Error(_)));
 
-        let result = delete_env.delete_environment(&env_action_delete, logger, &infra_ctx_for_delete);
+        let result = delete_env.delete_environment(&env_action_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
@@ -854,7 +843,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
         let env_action = environment.clone();
         let env_action_for_delete = environment_for_delete.clone();
 
-        let result = environment.deploy_environment(&env_action, logger.clone(), &infra_ctx);
+        let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
         // checking cookie is properly set on the app
@@ -867,12 +856,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
             .to_router_domain(infra_ctx.context(), true, "0.0.0.0/0".to_string(), infra_ctx.cloud_provider())
             .unwrap();
         let environment_domain = environment
-            .to_environment_domain(
-                infra_ctx.context(),
-                infra_ctx.cloud_provider(),
-                infra_ctx.container_registry(),
-                logger.clone(),
-            )
+            .to_environment_domain(infra_ctx.context(), infra_ctx.cloud_provider(), infra_ctx.container_registry())
             .unwrap();
 
         // let some time for ingress to get its IP or hostname
@@ -907,7 +891,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
             }
         }
 
-        let result = environment_for_delete.delete_environment(&env_action_for_delete, logger, &infra_ctx_for_delete);
+        let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
         assert!(matches!(result, TransactionResult::Ok));
 
         if let Err(e) = clean_environments(&context, vec![environment], secrets, SCW_TEST_ZONE) {
@@ -997,10 +981,10 @@ fn deploy_container_with_no_router_on_scw() {
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
 
-        let ret = environment.deploy_environment(&environment, logger.clone(), &infra_ctx);
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment_for_delete.delete_environment(&environment_for_delete, logger, &infra_ctx_for_delete);
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
 
         "".to_string()
@@ -1095,10 +1079,10 @@ fn deploy_container_with_router_on_scw() {
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
 
-        let ret = environment.deploy_environment(&environment, logger.clone(), &infra_ctx);
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = environment_for_delete.delete_environment(&environment_for_delete, logger, &infra_ctx_for_delete);
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
         assert!(matches!(ret, TransactionResult::Ok));
 
         "".to_string()

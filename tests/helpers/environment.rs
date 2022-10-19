@@ -65,6 +65,7 @@ pub fn working_environment(
             advanced_settings: Default::default(),
         }],
         containers: vec![],
+        jobs: vec![],
         routers: vec![],
         databases: vec![],
     };
@@ -223,6 +224,7 @@ pub fn environment_2_app_2_routers_1_psql(
             },
         ],
         containers: vec![],
+        jobs: vec![],
         routers: vec![
             Router {
                 long_id: Uuid::new_v4(),
@@ -319,6 +321,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             advanced_settings: Default::default(),
         }],
         containers: vec![],
+        jobs: vec![],
         routers: vec![Router {
             long_id: Uuid::new_v4(),
             name: "main".to_string(),
@@ -390,6 +393,7 @@ pub fn environment_only_http_server(
             advanced_settings: Default::default(),
         }],
         containers: vec![],
+        jobs: vec![],
         routers: vec![],
         databases: vec![],
     };

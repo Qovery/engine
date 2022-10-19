@@ -4,7 +4,6 @@ use crate::container_registry::ContainerRegistry;
 use crate::io_models::application::{to_environment_variable, AdvancedSettingsProbeType, Port, Storage};
 use crate::io_models::context::Context;
 use crate::io_models::Action;
-use crate::logger::Logger;
 use crate::models;
 use crate::models::aws::AwsAppExtraSettings;
 use crate::models::aws_ec2::AwsEc2AppExtraSettings;
@@ -234,9 +233,8 @@ impl Container {
         context: &Context,
         cloud_provider: &dyn CloudProvider,
         default_container_registry: &dyn ContainerRegistry,
-        logger: Box<dyn Logger>,
     ) -> Result<Box<dyn ContainerService>, ContainerError> {
-        let environment_variables = to_environment_variable(&self.environment_vars);
+        let environment_variables = to_environment_variable(self.environment_vars);
 
         // Default registry is a bit special as the core does not knows its url/credentials as it is retrieved
         // by us with some tags
@@ -269,7 +267,6 @@ impl Container {
                         environment_variables,
                         self.advanced_settings,
                         AwsAppExtraSettings {},
-                        logger.clone(),
                         |transmitter| context.get_event_details(transmitter),
                     )?)
                 } else {
@@ -294,7 +291,6 @@ impl Container {
                         environment_variables,
                         self.advanced_settings,
                         AwsEc2AppExtraSettings {},
-                        logger.clone(),
                         |transmitter| context.get_event_details(transmitter),
                     )?)
                 }
@@ -326,7 +322,6 @@ impl Container {
                 environment_variables,
                 self.advanced_settings,
                 ScwAppExtraSettings {},
-                logger.clone(),
                 |transmitter| context.get_event_details(transmitter),
             )?),
         };

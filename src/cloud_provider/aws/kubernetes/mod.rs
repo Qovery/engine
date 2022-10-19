@@ -1603,8 +1603,13 @@ fn delete(
         )
         .map_err(|e| to_engine_error(&event_details, e))?;
         let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
-        helm.uninstall(&chart, &[])
-            .map_err(|e| to_engine_error(&event_details, e))?;
+        if let Err(e) = helm.uninstall(&chart, &[]) {
+            // this error is not blocking
+            kubernetes.logger().log(EngineEvent::Warning(
+                event_details.clone(),
+                EventMessage::new_from_engine_error(to_engine_error(&event_details, e)),
+            ));
+        }
 
         // required to avoid namespace stuck on deletion
         if let Err(e) = uninstall_cert_manager(

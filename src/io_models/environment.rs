@@ -5,12 +5,13 @@ use crate::io_models::application::Application;
 use crate::io_models::container::Container;
 use crate::io_models::context::Context;
 use crate::io_models::database::Database;
+use crate::io_models::job::Job;
 use crate::io_models::router::Router;
 use crate::io_models::Action;
-use crate::logger::Logger;
 use crate::models::application::ApplicationError;
 use crate::models::container::ContainerError;
 use crate::models::database::DatabaseError;
+use crate::models::job::JobError;
 use crate::models::router::RouterError;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -25,6 +26,7 @@ pub struct EnvironmentRequest {
     pub action: Action,
     pub applications: Vec<Application>,
     pub containers: Vec<Container>,
+    pub jobs: Vec<Job>,
     pub routers: Vec<Router>,
     pub databases: Vec<Database>,
 }
@@ -39,6 +41,8 @@ pub enum DomainError {
     RouterError(RouterError),
     #[error("Invalid database: {0}")]
     DatabaseError(DatabaseError),
+    #[error("Invalid job: {0}")]
+    JobError(JobError),
 }
 
 impl EnvironmentRequest {
@@ -47,15 +51,13 @@ impl EnvironmentRequest {
         context: &Context,
         cloud_provider: &dyn CloudProvider,
         container_registry: &dyn ContainerRegistry,
-        logger: Box<dyn Logger>,
     ) -> Result<Environment, DomainError> {
         let mut applications = Vec::with_capacity(self.applications.len());
         for app in &self.applications {
-            match app.to_application_domain(
+            match app.clone().to_application_domain(
                 context,
                 app.to_build(container_registry.registry_info()),
                 cloud_provider,
-                logger.clone(),
             ) {
                 Ok(app) => applications.push(app),
                 Err(err) => {
@@ -68,7 +70,7 @@ impl EnvironmentRequest {
         for container in &self.containers {
             match container
                 .clone()
-                .to_container_domain(context, cloud_provider, container_registry, logger.clone())
+                .to_container_domain(context, cloud_provider, container_registry)
             {
                 Ok(app) => containers.push(app),
                 Err(err) => {
@@ -130,6 +132,14 @@ impl EnvironmentRequest {
             }
         }
 
+        let mut jobs = Vec::with_capacity(self.jobs.len());
+        for job in &self.jobs {
+            match job.clone().to_job_domain(context, cloud_provider, container_registry) {
+                Ok(job) => jobs.push(job),
+                Err(err) => return Err(DomainError::JobError(err)),
+            }
+        }
+
         Ok(Environment::new(
             self.long_id,
             self.name.clone(),
@@ -141,6 +151,7 @@ impl EnvironmentRequest {
             containers,
             routers,
             databases,
+            jobs,
         ))
     }
 }

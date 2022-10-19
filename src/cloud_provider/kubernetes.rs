@@ -1193,21 +1193,12 @@ where
 pub fn validate_k8s_required_cpu_and_burstable(
     total_cpu: String,
     cpu_burst: String,
-    event_details: EventDetails,
-    logger: &dyn Logger,
 ) -> Result<CpuLimits, CommandError> {
     let total_cpu_float = convert_k8s_cpu_value_to_f32(total_cpu.clone())?;
     let cpu_burst_float = convert_k8s_cpu_value_to_f32(cpu_burst.clone())?;
-    let mut set_cpu_burst = cpu_burst.clone();
+    let mut set_cpu_burst = cpu_burst;
 
     if cpu_burst_float < total_cpu_float {
-        let message = format!(
-            "CPU burst value '{}' was lower than the desired total of CPUs {}, using burstable value.",
-            cpu_burst, total_cpu,
-        );
-
-        logger.log(EngineEvent::Warning(event_details, EventMessage::new_from_safe(message)));
-
         set_cpu_burst = total_cpu.clone();
     }
 
@@ -1355,8 +1346,6 @@ mod tests {
 
     use k8s_openapi::api::core::v1::{Service, ServiceSpec};
     use kube::core::{ListMeta, ObjectList, ObjectMeta};
-
-    use crate::cloud_provider::Kind::Aws;
 
     use crate::cloud_provider::kubernetes::{
         check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, convert_k8s_cpu_value_to_f32,
@@ -2032,22 +2021,10 @@ mod tests {
 
     #[test]
     pub fn test_cpu_set() {
-        let logger = StdIoLogger::new();
-        let cluster_id = "cluster_id";
-
-        let event_details = EventDetails::new(
-            Some(Aws),
-            QoveryIdentifier::new_random(),
-            QoveryIdentifier::new_random(),
-            Uuid::new_v4().to_string(),
-            Stage::Infrastructure(InfrastructureStep::LoadConfiguration),
-            Transmitter::Kubernetes(Uuid::new_v4(), format!("{}-name", cluster_id)),
-        );
-
         let mut total_cpu = "0.25".to_string();
         let mut cpu_burst = "1".to_string();
         assert_eq!(
-            validate_k8s_required_cpu_and_burstable(total_cpu, cpu_burst, event_details.clone(), &logger).unwrap(),
+            validate_k8s_required_cpu_and_burstable(total_cpu, cpu_burst).unwrap(),
             CpuLimits {
                 cpu_request: "0.25".to_string(),
                 cpu_limit: "1".to_string()
@@ -2057,7 +2034,7 @@ mod tests {
         total_cpu = "1".to_string();
         cpu_burst = "0.5".to_string();
         assert_eq!(
-            validate_k8s_required_cpu_and_burstable(total_cpu, cpu_burst, event_details, &logger).unwrap(),
+            validate_k8s_required_cpu_and_burstable(total_cpu, cpu_burst).unwrap(),
             CpuLimits {
                 cpu_request: "1".to_string(),
                 cpu_limit: "1".to_string()
