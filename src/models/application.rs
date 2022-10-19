@@ -152,6 +152,7 @@ impl<T: CloudProvider> Application<T> {
         let commit_id = self.build.image.commit_id.as_str();
         context.insert("helm_app_version", &commit_id[..7]);
         context.insert("image_name_with_tag", &self.build.image.full_image_name_with_tag());
+        context.insert("termination_grace_period_seconds", &self.advanced_settings.deployment_termination_grace_period_seconds);
 
         let mut liveness_probe_initial_delay_seconds = self.advanced_settings.liveness_probe_initial_delay_seconds;
         let mut readiness_probe_initial_delay_seconds = self.advanced_settings.readiness_probe_initial_delay_seconds;

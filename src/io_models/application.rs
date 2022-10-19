@@ -71,6 +71,8 @@ pub struct ApplicationAdvancedSettings {
     pub deployment_delay_start_time_sec: u32,
     #[serde(alias = "deployment.custom_domain_check_enabled")]
     pub deployment_custom_domain_check_enabled: bool,
+    #[serde(alias = "deployment.termination_grace_period_seconds")]
+    pub deployment_termination_grace_period_seconds: u32,
     #[serde(alias = "build.timeout_max_sec")]
     pub build_timeout_max_sec: u32,
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
@@ -137,6 +139,7 @@ impl Default for ApplicationAdvancedSettings {
             deployment_delay_start_time_sec: 30,
             build_timeout_max_sec: 30 * 60, // 30min
             deployment_custom_domain_check_enabled: true,
+            deployment_termination_grace_period_seconds: 60,
             network_ingress_proxy_body_size_mb: 100,
             network_ingress_cors_enable: false,
             network_ingress_cors_allow_origin: "*".to_string(),

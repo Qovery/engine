@@ -41,7 +41,7 @@ spec:
         checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
     spec:
       automountServiceAccountToken: false
-      terminationGracePeriodSeconds: 60
+      terminationGracePeriodSeconds: {{ termination_grace_period_seconds }}
       securityContext:
         fsGroup: 1000
         fsGroupChangePolicy: "OnRootMismatch"

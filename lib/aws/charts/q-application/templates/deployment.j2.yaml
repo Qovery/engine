@@ -64,7 +64,7 @@ spec:
                       - {{ long_id }}
                 topologyKey: "kubernetes.io/hostname"
       automountServiceAccountToken: false
-      terminationGracePeriodSeconds: 60
+      terminationGracePeriodSeconds: {{ termination_grace_period_seconds }}
       securityContext: {}
       {%- if is_registry_secret %}
       imagePullSecrets:
