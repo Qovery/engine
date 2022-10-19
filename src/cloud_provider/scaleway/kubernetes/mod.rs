@@ -185,7 +185,7 @@ impl Kapsule {
                     return Err(err);
                 }
                 Ok(instance_type) => {
-                    if !instance_type.is_instance_allowed() {
+                    if !instance_type.is_instance_cluster_allowed() {
                         let err = EngineError::new_unsupported_instance_type(
                             EventDetails::new(
                                 Some(cloud_provider.kind()),
