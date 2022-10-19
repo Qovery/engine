@@ -4,7 +4,6 @@ use std::fmt::{Display, Formatter};
 pub mod cluster_autoscaler_chart;
 pub mod core_dns_config_chart;
 pub mod external_dns_chart;
-pub mod kube_prometheus_stack_chart;
 pub mod promtail_chart;
 pub mod qovery_storage_class_chart;
 
