@@ -3,7 +3,7 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::docker::ContainerImage;
 use crate::container_registry::errors::ContainerRegistryError;
-use crate::deployment_report::logger::EnvLogger;
+use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::errors::EngineError;
 use crate::events::EventDetails;
 use crate::io_models::container::Registry;
@@ -17,13 +17,14 @@ use std::time::Duration;
 pub fn delete_cached_image(
     current_image_tag: String,
     last_image: Option<String>,
+    force_delete: bool,
     target: &DeploymentTarget,
-    logger: &EnvLogger,
+    logger: &EnvSuccessLogger,
 ) -> Result<(), ContainerRegistryError> {
     // Delete previous image from cache to cleanup resources
     if let Some(last_image_tag) = last_image.and_then(|img| img.split(':').last().map(str::to_string)) {
-        if last_image_tag != current_image_tag {
-            logger.send_progress(format!("🪓 Deleting previous cached image {}", last_image_tag));
+        if force_delete || last_image_tag != current_image_tag {
+            logger.send_success(format!("🪓 Deleting previous cached image {}", last_image_tag));
 
             let image = Image {
                 name: QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
@@ -46,13 +47,13 @@ pub fn mirror_image(
     tag: &str,
     tag_for_mirror: String,
     target: &DeploymentTarget,
-    logger: &EnvLogger,
+    logger: &EnvProgressLogger,
     event_details: EventDetails,
 ) -> Result<(), EngineError> {
     // We need to login to the registry to get access to the image
     let url = registry.get_url_with_credentials();
     if url.password().is_some() {
-        logger.send_progress(format!(
+        logger.info(format!(
             "🔓 Login to registry {} as user {}",
             url.host_str().unwrap_or_default(),
             url.username()
@@ -60,19 +61,17 @@ pub fn mirror_image(
         if let Err(err) = target.docker.login(&url) {
             let err = EngineError::new_docker_error(event_details, err);
             let user_err = EngineError::new_engine_error(
-                err.clone(),
+                err,
                 format!("❌ Failed to login to registry {}", url.host_str().unwrap_or_default()),
                 None,
             );
-            logger.send_error(user_err);
-
-            return Err(err);
+            return Err(user_err);
         }
     }
 
     // Once we are logged to the registry, we mirror the user image into our cluster private registry
     // This is required only to avoid to manage rotating credentials
-    logger.send_progress("🪞 Mirroring image to private cluster registry to ensure reproducibility".to_string());
+    logger.info("🪞 Mirroring image to private cluster registry to ensure reproducibility".to_string());
     let registry_info = target.container_registry.registry_info();
 
     target
@@ -102,9 +101,8 @@ pub fn mirror_image(
             format!("❌ Failed to mirror image {}/{}: {}", image_name, tag, err),
             None,
         );
-        logger.send_error(user_err);
 
-        return Err(err);
+        return Err(user_err);
     }
     Ok(())
 }

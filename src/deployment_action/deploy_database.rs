@@ -21,6 +21,7 @@ use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use serde::Deserialize;
 
+use crate::deployment_report::logger::EnvProgressLogger;
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -390,9 +391,12 @@ where
 {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
-            on_create_managed_impl(self, event_details.clone(), target)
-        })
+        execute_long_deployment(
+            DatabaseDeploymentReporter::new(self, target, Action::Create),
+            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+                on_create_managed_impl(self, event_details.clone(), target)
+            },
+        )
     }
 
     fn on_create_check(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -417,100 +421,106 @@ where
 
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
-        execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Pause), || {
-            // We don't manage PAUSE for managed database elsewhere than for AWS
-            if target.kubernetes.cloud_provider().kind() != Aws {
-                return Ok(());
-            }
+        execute_long_deployment(
+            DatabaseDeploymentReporter::new(self, target, Action::Pause),
+            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+                // We don't manage PAUSE for managed database elsewhere than for AWS
+                if target.kubernetes.cloud_provider().kind() != Aws {
+                    return Ok(());
+                }
 
-            // Elasticache does not support being stopped/paused
-            if self.db_type() == service::DatabaseType::Redis {
-                return Ok(());
-            }
+                // Elasticache does not support being stopped/paused
+                if self.db_type() == service::DatabaseType::Redis {
+                    return Ok(());
+                }
 
-            // Terraform does not ensure that the database is correctly started
-            // So we must force it ourselves in case
-            let credentials = {
-                let mut credentials = target.kubernetes.cloud_provider().credentials_environment_variables();
-                credentials.push((AWS_DEFAULT_REGION, target.kubernetes.region()));
-                credentials
-            };
-            // We use the fqdn_id as db identifier, why not id or name like everything else ¯\_(ツ)_/¯
-            start_stop_managed_database(self.db_type(), &self.fqdn_id, &credentials, true).map_err(
-                |(cmd_error, msg)| {
-                    EngineError::new_cannot_pause_managed_database(
+                // Terraform does not ensure that the database is correctly started
+                // So we must force it ourselves in case
+                let credentials = {
+                    let mut credentials = target.kubernetes.cloud_provider().credentials_environment_variables();
+                    credentials.push((AWS_DEFAULT_REGION, target.kubernetes.region()));
+                    credentials
+                };
+                // We use the fqdn_id as db identifier, why not id or name like everything else ¯\_(ツ)_/¯
+                start_stop_managed_database(self.db_type(), &self.fqdn_id, &credentials, true).map_err(
+                    |(cmd_error, msg)| {
+                        EngineError::new_cannot_pause_managed_database(
+                            event_details.clone(),
+                            CommandError::new_from_legacy_command_error(cmd_error, Some(msg)),
+                        )
+                    },
+                )?;
+
+                let ret = await_db_state(
+                    Duration::from_secs(60 * 30),
+                    self.db_type(),
+                    &self.fqdn_id,
+                    &credentials,
+                    DB_STOPPED_STATE,
+                );
+
+                match ret {
+                    Ok(_) => Ok(()),
+                    // timeout
+                    Err(None) => Err(EngineError::new_cannot_pause_managed_database(
                         event_details.clone(),
-                        CommandError::new_from_legacy_command_error(cmd_error, Some(msg)),
-                    )
-                },
-            )?;
-
-            let ret = await_db_state(
-                Duration::from_secs(60 * 30),
-                self.db_type(),
-                &self.fqdn_id,
-                &credentials,
-                DB_STOPPED_STATE,
-            );
-
-            match ret {
-                Ok(_) => Ok(()),
-                // timeout
-                Err(None) => Err(EngineError::new_cannot_pause_managed_database(
-                    event_details.clone(),
-                    CommandError::new_from_safe_message(format!(
-                        "Timeout reached waiting for the database to be in {} state",
-                        DB_STOPPED_STATE
+                        CommandError::new_from_safe_message(format!(
+                            "Timeout reached waiting for the database to be in {} state",
+                            DB_STOPPED_STATE
+                        )),
                     )),
-                )),
-                // Error ;'(
-                Err(Some((cmd_err, msg))) => Err(EngineError::new_cannot_pause_managed_database(
-                    event_details.clone(),
-                    CommandError::new_from_legacy_command_error(cmd_err, Some(msg)),
-                )),
-            }
-        })
+                    // Error ;'(
+                    Err(Some((cmd_err, msg))) => Err(EngineError::new_cannot_pause_managed_database(
+                        event_details.clone(),
+                        CommandError::new_from_legacy_command_error(cmd_err, Some(msg)),
+                    )),
+                }
+            },
+        )
     }
 
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Delete), || {
-            // First we must ensure the DB is created and in a ready state
-            // because if not, the deletion is going to fail (i.e: cannot snapshot paused db)
-            on_create_managed_impl(self, event_details.clone(), target)?;
+        execute_long_deployment(
+            DatabaseDeploymentReporter::new(self, target, Action::Delete),
+            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+                // First we must ensure the DB is created and in a ready state
+                // because if not, the deletion is going to fail (i.e: cannot snapshot paused db)
+                on_create_managed_impl(self, event_details.clone(), target)?;
 
-            let workspace_dir = self.workspace_directory();
+                let workspace_dir = self.workspace_directory();
 
-            // Ok now delete it
-            let terraform_deploy = TerraformDeployment::new(
-                self.to_tera_context(target)?,
-                PathBuf::from(self.terraform_common_resource_dir_path()),
-                PathBuf::from(self.terraform_resource_dir_path()),
-                PathBuf::from(&workspace_dir),
-                event_details.clone(),
-                target.is_dry_run_deploy,
-            );
-            terraform_deploy.on_delete(target)?;
+                // Ok now delete it
+                let terraform_deploy = TerraformDeployment::new(
+                    self.to_tera_context(target)?,
+                    PathBuf::from(self.terraform_common_resource_dir_path()),
+                    PathBuf::from(self.terraform_resource_dir_path()),
+                    PathBuf::from(&workspace_dir),
+                    event_details.clone(),
+                    target.is_dry_run_deploy,
+                );
+                terraform_deploy.on_delete(target)?;
 
-            // Delete the service attached
-            let chart = ChartInfo {
-                name: format!("{}-externalname", self.fqdn_id), // here it is the fqdn id :O
-                path: format!("{}/{}", &workspace_dir, "service-chart"),
-                namespace: HelmChartNamespaces::Custom,
-                custom_namespace: Some(target.environment.namespace().to_string()),
-                action: HelmAction::Destroy,
-                ..Default::default()
-            };
-            let helm = HelmDeployment::new(
-                event_details.clone(),
-                tera::Context::default(),
-                PathBuf::from(self.helm_chart_external_name_service_dir()),
-                None,
-                chart,
-            );
+                // Delete the service attached
+                let chart = ChartInfo {
+                    name: format!("{}-externalname", self.fqdn_id), // here it is the fqdn id :O
+                    path: format!("{}/{}", &workspace_dir, "service-chart"),
+                    namespace: HelmChartNamespaces::Custom,
+                    custom_namespace: Some(target.environment.namespace().to_string()),
+                    action: HelmAction::Destroy,
+                    ..Default::default()
+                };
+                let helm = HelmDeployment::new(
+                    event_details.clone(),
+                    tera::Context::default(),
+                    PathBuf::from(self.helm_chart_external_name_service_dir()),
+                    None,
+                    chart,
+                );
 
-            helm.on_delete(target)
-        })
+                helm.on_delete(target)
+            },
+        )
     }
 }
 
@@ -521,36 +531,39 @@ where
 {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Create), || {
-            let chart = ChartInfo {
-                name: self.helm_release_name(),
-                path: self.workspace_directory().to_string(),
-                namespace: HelmChartNamespaces::Custom,
-                custom_namespace: Some(target.environment.namespace().to_string()),
-                k8s_selector: Some(self.selector()),
-                values_files: vec![format!("{}/qovery-values.yaml", self.workspace_directory())],
-                ..Default::default()
-            };
-            let helm = HelmDeployment::new(
-                event_details.clone(),
-                self.to_tera_context(target)?,
-                PathBuf::from(self.helm_chart_dir()),
-                Some(PathBuf::from(format!("{}/qovery-values.j2.yaml", self.helm_chart_values_dir()))),
-                chart,
-            );
+        execute_long_deployment(
+            DatabaseDeploymentReporter::new(self, target, Action::Create),
+            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+                let chart = ChartInfo {
+                    name: self.helm_release_name(),
+                    path: self.workspace_directory().to_string(),
+                    namespace: HelmChartNamespaces::Custom,
+                    custom_namespace: Some(target.environment.namespace().to_string()),
+                    k8s_selector: Some(self.selector()),
+                    values_files: vec![format!("{}/qovery-values.yaml", self.workspace_directory())],
+                    ..Default::default()
+                };
+                let helm = HelmDeployment::new(
+                    event_details.clone(),
+                    self.to_tera_context(target)?,
+                    PathBuf::from(self.helm_chart_dir()),
+                    Some(PathBuf::from(format!("{}/qovery-values.j2.yaml", self.helm_chart_values_dir()))),
+                    chart,
+                );
 
-            helm.on_create(target)?;
+                helm.on_create(target)?;
 
-            delete_pending_service(
-                target.kubernetes.get_kubeconfig_file_path()?.as_str(),
-                target.environment.namespace(),
-                self.selector().as_str(),
-                target.kubernetes.cloud_provider().credentials_environment_variables(),
-                event_details.clone(),
-            )?;
+                delete_pending_service(
+                    target.kubernetes.get_kubeconfig_file_path()?.as_str(),
+                    target.environment.namespace(),
+                    self.selector().as_str(),
+                    target.kubernetes.cloud_provider().credentials_environment_variables(),
+                    event_details.clone(),
+                )?;
 
-            Ok(())
-        })
+                Ok(())
+            },
+        )
     }
 
     fn on_create_check(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -574,54 +587,59 @@ where
     }
 
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Pause), || {
-            let pause_service = PauseServiceAction::new(
-                self.selector(),
-                true,
-                Duration::from_secs(5 * 60),
-                self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
-            );
-            pause_service.on_pause(target)
-        })
+        execute_long_deployment(
+            DatabaseDeploymentReporter::new(self, target, Action::Pause),
+            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+                let pause_service = PauseServiceAction::new(
+                    self.selector(),
+                    true,
+                    Duration::from_secs(5 * 60),
+                    self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
+                );
+                pause_service.on_pause(target)
+            },
+        )
     }
 
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        execute_long_deployment(DatabaseDeploymentReporter::new(self, target, Action::Delete), || {
-            let chart = ChartInfo {
-                name: self.helm_release_name(),
-                action: HelmAction::Destroy,
-                namespace: HelmChartNamespaces::Custom,
-                custom_namespace: Some(target.environment.namespace().to_string()),
-                k8s_selector: Some(self.selector()),
-                ..Default::default()
-            };
-            let helm = HelmDeployment::new(
-                event_details.clone(),
-                self.to_tera_context(target)?,
-                PathBuf::from(self.helm_chart_dir()),
-                None,
-                chart,
-            );
-
-            helm.on_delete(target)?;
-
-            // TODO: Remove once we migrate to kube 1.23, it will done automatically
-            let logger = target.env_logger(self, EnvironmentStep::Delete);
-            logger.send_progress("🪓 Terminating network volume of the database".to_string());
-            if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
-                &target.kube,
-                &format!("app={}", self.sanitized_name()), //FIXME: legacy labels ;(
-                target.environment.namespace(),
-            )) {
-                return Err(EngineError::new_k8s_cannot_delete_pvcs(
+        execute_long_deployment(
+            DatabaseDeploymentReporter::new(self, target, Action::Delete),
+            |logger: &EnvProgressLogger| {
+                let chart = ChartInfo {
+                    name: self.helm_release_name(),
+                    action: HelmAction::Destroy,
+                    namespace: HelmChartNamespaces::Custom,
+                    custom_namespace: Some(target.environment.namespace().to_string()),
+                    k8s_selector: Some(self.selector()),
+                    ..Default::default()
+                };
+                let helm = HelmDeployment::new(
                     event_details.clone(),
-                    self.selector(),
-                    CommandError::new_from_safe_message(err.to_string()),
-                ));
-            }
+                    self.to_tera_context(target)?,
+                    PathBuf::from(self.helm_chart_dir()),
+                    None,
+                    chart,
+                );
 
-            Ok(())
-        })
+                helm.on_delete(target)?;
+
+                // TODO: Remove once we migrate to kube 1.23, it will done automatically
+                logger.info("🪓 Terminating network volume of the database".to_string());
+                if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
+                    &target.kube,
+                    &format!("app={}", self.sanitized_name()), //FIXME: legacy labels ;(
+                    target.environment.namespace(),
+                )) {
+                    return Err(EngineError::new_k8s_cannot_delete_pvcs(
+                        event_details.clone(),
+                        self.selector(),
+                        CommandError::new_from_safe_message(err.to_string()),
+                    ));
+                }
+
+                Ok(())
+            },
+        )
     }
 }
