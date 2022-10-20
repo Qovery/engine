@@ -1,5 +1,6 @@
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
+use crate::container_registry::ecr::ECR;
 use crate::container_registry::ContainerRegistry;
 use crate::io_models::application::{to_environment_variable, AdvancedSettingsProbeType, Port, Storage};
 use crate::io_models::context::Context;
@@ -11,8 +12,12 @@ use crate::models::container::{ContainerError, ContainerService};
 use crate::models::scaleway::ScwAppExtraSettings;
 use crate::models::types::CloudProvider as CP;
 use crate::models::types::{AWSEc2, AWS, DO, SCW};
+use rusoto_core::{Client, HttpClient, Region};
+use rusoto_credential::StaticProvider;
+use rusoto_ecr::EcrClient;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::str::FromStr;
 use url::Url;
 use uuid::Uuid;
 
@@ -91,6 +96,58 @@ impl Registry {
             Registry::PrivateEcr { long_id, .. } => long_id,
             Registry::PublicEcr { long_id, .. } => long_id,
         }
+    }
+
+    // Does some network calls for AWS/ECR
+    pub fn get_url_with_credentials(&self) -> Url {
+        let url = match self {
+            Registry::DockerHub { url, credentials, .. } => {
+                let mut url = url.clone();
+                if let Some(credentials) = credentials {
+                    let _ = url.set_username(&credentials.login);
+                    let _ = url.set_password(Some(&credentials.password));
+                }
+                url
+            }
+            Registry::DoCr { url, token, .. } => {
+                let mut url = url.clone();
+                let _ = url.set_username(token);
+                let _ = url.set_password(Some(token));
+                url
+            }
+            Registry::ScalewayCr {
+                url,
+                scaleway_access_key: _,
+                scaleway_secret_key,
+                ..
+            } => {
+                let mut url = url.clone();
+                let _ = url.set_username("nologin");
+                let _ = url.set_password(Some(scaleway_secret_key));
+                url
+            }
+            Registry::PrivateEcr {
+                url: _,
+                region,
+                access_key_id,
+                secret_access_key,
+                ..
+            } => {
+                let creds = StaticProvider::new(access_key_id.to_string(), secret_access_key.to_string(), None, None);
+                let region = Region::from_str(region).unwrap_or_default();
+                let ecr_client =
+                    EcrClient::new_with_client(Client::new_with(creds, HttpClient::new().unwrap()), region);
+
+                let credentials = ECR::get_credentials(&ecr_client).unwrap();
+                let mut url = Url::parse(credentials.endpoint_url.as_str()).unwrap();
+                let _ = url.set_username(&credentials.access_token);
+                let _ = url.set_password(Some(&credentials.password));
+                url
+            }
+            Registry::PublicEcr { url, .. } => url.clone(),
+        };
+
+        url
     }
 }
 

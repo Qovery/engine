@@ -150,6 +150,10 @@ impl<T: CloudProvider> Job<T> {
         format!("{}/common/charts/q-job", self.lib_root_directory)
     }
 
+    pub fn schedule(&self) -> &JobSchedule {
+        &self.schedule
+    }
+
     fn kube_service_name(&self) -> String {
         format!("job-{}", to_short_id(&self.long_id))
     }
@@ -201,6 +205,10 @@ impl<T: CloudProvider> Job<T> {
                 default_port: self.default_port,
                 max_nb_restart: self.max_nb_restart,
                 max_duration_in_sec: self.max_duration_in_sec.as_secs(),
+                cronjob_schedule: match &self.schedule {
+                    JobSchedule::OnStart | JobSchedule::OnPause | JobSchedule::OnDelete => None,
+                    JobSchedule::Cron(schedule) => Some(schedule.to_string()),
+                },
                 advanced_settings: self.advanced_settings.clone(),
             },
             registry: registry_info
@@ -371,6 +379,7 @@ pub(super) struct ServiceTeraContext {
     pub(super) default_port: Option<u16>,
     pub(super) max_nb_restart: u32,
     pub(super) max_duration_in_sec: u64,
+    pub(super) cronjob_schedule: Option<String>,
     pub(super) advanced_settings: JobAdvancedSettings,
 }
 

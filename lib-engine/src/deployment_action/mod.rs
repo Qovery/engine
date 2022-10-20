@@ -15,6 +15,7 @@ mod deploy_terraform;
 mod pause_service;
 #[cfg(test)]
 mod test_utils;
+mod utils;
 
 pub trait DeploymentAction {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError>;

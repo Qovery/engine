@@ -2,9 +2,6 @@ use crate::build_platform::Image;
 use crate::cloud_provider::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::cloud_provider::service::{delete_pending_service, Action, Service};
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd::command::CommandKiller;
-use crate::cmd::docker::ContainerImage;
-use crate::container_registry::ecr::ECR;
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
@@ -12,23 +9,15 @@ use crate::deployment_report::application::reporter::ApplicationDeploymentReport
 use crate::deployment_report::execute_long_deployment;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, Stage};
-use crate::io_models::container::Registry;
 use crate::kubers_utils::kube_delete_all_from_selector;
 use crate::models::container::{Container, ContainerService, QOVERY_MIRROR_REPOSITORY_NAME};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
-use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
-use kube::api::ListParams;
-use kube::Api;
-use rusoto_core::{Client, HttpClient, Region};
-use rusoto_credential::StaticProvider;
-use rusoto_ecr::EcrClient;
 
+use crate::deployment_action::utils::{delete_cached_image, get_last_deployed_image, mirror_image, KubeObjectKind};
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::time::Duration;
-use url::Url;
 
 impl<T: CloudProvider> DeploymentAction for Container<T>
 where
@@ -36,65 +25,17 @@ where
 {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-
         let logger = target.env_logger(self, EnvironmentStep::Deploy);
-        // We need to login to the registry to get access to the image
-        let url = get_url_with_credentials(&self.registry);
-        if url.password().is_some() {
-            logger.send_progress(format!(
-                "🔓 Login to registry {} as user {}",
-                url.host_str().unwrap_or_default(),
-                url.username()
-            ));
-            if let Err(err) = target.docker.login(&url) {
-                let err = EngineError::new_docker_error(event_details, err);
-                let user_err = EngineError::new_engine_error(
-                    err.clone(),
-                    format!("❌ Failed to login to registry {}", url.host_str().unwrap_or_default()),
-                    None,
-                );
-                logger.send_error(user_err);
 
-                return Err(err);
-            }
-        }
-
-        // Once we are logged to the registry, we mirror the user image into our cluster private registry
-        // This is required only to avoid to manage rotating credentials
-        logger.send_progress("🪞 Mirroring image to private cluster registry to ensure reproducibility".to_string());
-        let registry_info = target.container_registry.registry_info();
-
-        target
-            .container_registry
-            .create_repository(
-                QOVERY_MIRROR_REPOSITORY_NAME,
-                target.kubernetes.advanced_settings().registry_image_retention_time_sec,
-            )
-            .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
-
-        let source_image = ContainerImage::new(self.registry.url().clone(), self.image.clone(), vec![self.tag.clone()]);
-        let dest_image = ContainerImage::new(
-            target.container_registry.registry_info().endpoint.clone(),
-            (registry_info.get_image_name)(QOVERY_MIRROR_REPOSITORY_NAME),
-            vec![self.tag_for_mirror()],
-        );
-        if let Err(err) = target.docker.mirror(
-            &source_image,
-            &dest_image,
-            &mut |line| info!("{}", line),
-            &mut |line| warn!("{}", line),
-            &CommandKiller::from(Duration::from_secs(60 * 10), target.should_abort),
-        ) {
-            let err = EngineError::new_docker_error(event_details, err);
-            let user_err = EngineError::new_engine_error(
-                err.clone(),
-                format!("❌ Failed to mirror image {}: {}", self.image_with_tag(), err),
-                None,
-            );
-            logger.send_error(user_err);
-
-            return Err(err);
-        }
+        mirror_image(
+            &self.registry,
+            &self.image,
+            &self.tag,
+            self.tag_for_mirror(),
+            target,
+            &logger,
+            event_details.clone(),
+        )?;
 
         // At last we deploy our container
         execute_long_deployment(
@@ -112,7 +53,11 @@ where
                 let last_image = block_on(get_last_deployed_image(
                     target.kube.clone(),
                     &self.selector(),
-                    self.is_stateful(),
+                    if self.is_stateful() {
+                        KubeObjectKind::Statefulset
+                    } else {
+                        KubeObjectKind::Deployment
+                    },
                     target.environment.namespace(),
                 ));
 
@@ -145,25 +90,8 @@ where
                 )?;
 
                 // Delete previous image from cache to cleanup resources
-                if let Some(last_image_tag) = last_image.and_then(|img| img.split(':').last().map(str::to_string)) {
-                    if last_image_tag != self.tag_for_mirror() {
-                        let logger = target.env_logger(self, EnvironmentStep::Deploy);
-                        logger.send_progress(format!("🪓 Deleting previous cached image {}", last_image_tag));
-
-                        let image = Image {
-                            name: QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
-                            tag: last_image_tag,
-                            registry_url: target.container_registry.registry_info().endpoint.clone(),
-                            repository_name: QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
-                            ..Default::default()
-                        };
-
-                        target
-                            .container_registry
-                            .delete_image(&image)
-                            .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
-                    }
-                }
+                delete_cached_image(self.tag_for_mirror(), last_image, target, &logger)
+                    .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
 
                 Ok(())
             },
@@ -244,104 +172,5 @@ where
             .container_registry
             .delete_image(&image)
             .map_err(|err| EngineError::new_container_registry_error(event_details, err))
-    }
-}
-
-pub fn get_url_with_credentials(registry: &Registry) -> Url {
-    let url = match registry {
-        Registry::DockerHub { url, credentials, .. } => {
-            let mut url = url.clone();
-            if let Some(credentials) = credentials {
-                let _ = url.set_username(&credentials.login);
-                let _ = url.set_password(Some(&credentials.password));
-            }
-            url
-        }
-        Registry::DoCr { url, token, .. } => {
-            let mut url = url.clone();
-            let _ = url.set_username(token);
-            let _ = url.set_password(Some(token));
-            url
-        }
-        Registry::ScalewayCr {
-            url,
-            scaleway_access_key: _,
-            scaleway_secret_key,
-            ..
-        } => {
-            let mut url = url.clone();
-            let _ = url.set_username("nologin");
-            let _ = url.set_password(Some(scaleway_secret_key));
-            url
-        }
-        Registry::PrivateEcr {
-            url: _,
-            region,
-            access_key_id,
-            secret_access_key,
-            ..
-        } => {
-            let creds = StaticProvider::new(access_key_id.to_string(), secret_access_key.to_string(), None, None);
-            let region = Region::from_str(region).unwrap_or_default();
-            let ecr_client = EcrClient::new_with_client(Client::new_with(creds, HttpClient::new().unwrap()), region);
-
-            let credentials = ECR::get_credentials(&ecr_client).unwrap();
-            let mut url = Url::parse(credentials.endpoint_url.as_str()).unwrap();
-            let _ = url.set_username(&credentials.access_token);
-            let _ = url.set_password(Some(&credentials.password));
-            url
-        }
-        Registry::PublicEcr { url, .. } => url.clone(),
-    };
-
-    url
-}
-
-pub async fn get_last_deployed_image(
-    client: kube::Client,
-    selector: &str,
-    is_statefulset: bool,
-    namespace: &str,
-) -> Option<String> {
-    let list_params = ListParams::default().labels(selector);
-
-    if is_statefulset {
-        let api: Api<StatefulSet> = Api::namespaced(client, namespace);
-        Some(
-            api.list(&list_params)
-                .await
-                .ok()?
-                .items
-                .first()?
-                .spec
-                .as_ref()?
-                .template
-                .spec
-                .as_ref()?
-                .containers
-                .first()?
-                .image
-                .as_ref()?
-                .to_string(),
-        )
-    } else {
-        let api: Api<Deployment> = Api::namespaced(client, namespace);
-        Some(
-            api.list(&list_params)
-                .await
-                .ok()?
-                .items
-                .first()?
-                .spec
-                .as_ref()?
-                .template
-                .spec
-                .as_ref()?
-                .containers
-                .first()?
-                .image
-                .as_ref()?
-                .to_string(),
-        )
     }
 }
