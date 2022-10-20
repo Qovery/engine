@@ -23,23 +23,35 @@ impl RouterDeploymentReporter {
 }
 
 impl DeploymentReporter for RouterDeploymentReporter {
-    type DeploymentResult = Result<(), EngineError>;
+    type DeploymentResult = ();
+    type DeploymentState = ();
+    type Logger = EnvLogger;
 
-    fn before_deployment_start(&mut self) {
+    fn logger(&self) -> &Self::Logger {
+        &self.logger
+    }
+
+    fn new_state(&self) -> Self::DeploymentState {}
+
+    fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
         self.logger
             .send_progress(format!("🚀 Deployment of router `{}` is starting", to_short_id(&self.long_id)));
     }
 
-    fn deployment_in_progress(&mut self) {
+    fn deployment_in_progress(&self, _: &mut Self::DeploymentState) {
         self.logger
             .send_progress("⌛️ Deployment of router in progress ...".to_string());
     }
 
-    fn deployment_terminated(&mut self, result: &Self::DeploymentResult) {
+    fn deployment_terminated(
+        &self,
+        result: &Result<Self::DeploymentResult, EngineError>,
+        _: &mut Self::DeploymentState,
+    ) {
         let error = match result {
             Ok(_) => {
                 self.logger
-                    .send_success("✅ Deployment of router succeeded".to_string());
+                    .send_warning("✅ Deployment of router succeeded".to_string());
                 return;
             }
             Err(err) => err,

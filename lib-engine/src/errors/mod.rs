@@ -816,6 +816,8 @@ pub enum Tag {
     ObjectStorageCannotTagBucket,
     /// ObjectStorageCannotGetObjectFile: represents an error while trying to get a file from object storage bucket.
     ObjectStorageCannotGetObjectFile,
+    /// JobFailure: represents an error while indicating that the job failed to terminate properly
+    JobFailure,
 }
 
 impl Tag {
@@ -1023,6 +1025,10 @@ impl EngineError {
             None,
             Some("This is a Qovery issue, please contact our support team".to_string()),
         )
+    }
+
+    pub fn new_job_error(event_details: EventDetails, message: String) -> EngineError {
+        EngineError::new(event_details, Tag::JobFailure, message, None, None, None)
     }
 
     /// Creates new error for missing required env variable.
