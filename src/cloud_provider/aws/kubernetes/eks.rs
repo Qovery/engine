@@ -125,7 +125,7 @@ impl EKS {
     }
 
     pub fn is_instance_allowed(instance_type: AwsInstancesType) -> bool {
-        instance_type.is_instance_allowed()
+        instance_type.is_instance_cluster_allowed()
     }
 
     fn set_cluster_autoscaler_replicas(

@@ -3,7 +3,9 @@ use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::kubernetes::{send_progress_on_long_task, Kind, Kubernetes, KubernetesUpgradeStatus};
+use crate::cloud_provider::kubernetes::{
+    send_progress_on_long_task, InstanceType, Kind, Kubernetes, KubernetesUpgradeStatus,
+};
 use crate::cloud_provider::models::{InstanceEc2, NodeGroups};
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
@@ -61,11 +63,19 @@ impl EC2 {
 
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
         let s3 = kubernetes::s3(&context, &region, &**cloud_provider, advanced_settings.pleco_resources_ttl);
-        if let Err(e) = AwsInstancesType::from_str(instance.instance_type.as_str()) {
-            let err = EngineError::new_unsupported_instance_type(event_details, instance.instance_type.as_str(), e);
-            logger.log(EngineEvent::Error(err.clone(), None));
+        match AwsInstancesType::from_str(instance.instance_type.as_str()) {
+            Err(e) => {
+                let err = EngineError::new_unsupported_instance_type(event_details, instance.instance_type.as_str(), e);
+                logger.log(EngineEvent::Error(err.clone(), None));
 
-            return Err(err);
+                return Err(err);
+            }
+            Ok(instance_type) => {
+                if !EC2::is_instance_allowed(instance_type.clone()) {
+                    let err = EngineError::new_not_allowed_instance_type(event_details, instance_type.as_str());
+                    return Err(err);
+                }
+            }
         }
 
         // copy listeners from CloudProvider
@@ -105,6 +115,10 @@ impl EC2 {
             self.instance.disk_size_in_gib,
         )
         .expect("wrong instance type for EC2") // using expect here as it has already been validated during instantiation
+    }
+
+    pub fn is_instance_allowed(instance_type: AwsInstancesType) -> bool {
+        instance_type.is_instance_allowed()
     }
 }
 

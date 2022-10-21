@@ -49,6 +49,10 @@ impl InstanceType for DoInstancesType {
     fn is_instance_allowed(&self) -> bool {
         true
     }
+
+    fn is_instance_cluster_allowed(&self) -> bool {
+        true
+    }
 }
 
 impl DoInstancesType {
