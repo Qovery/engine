@@ -135,16 +135,16 @@ impl<'a> EnvSuccessLogger<'a> {
 }
 
 // One day ;"(
-//#[cfg(feature = "env-logger-check")]
-//impl Drop for EnvLogger {
-//    fn drop(&mut self) {
-//        let state = LoggerState::from_usize(self.state.load(Ordering::Relaxed));
-//        assert!(
-//            state == LoggerState::Success || state == LoggerState::Error,
-//            "env logger dropped before reaching a final state"
-//        );
-//    }
-//}
+#[cfg(feature = "env-logger-check")]
+impl Drop for EnvLogger {
+    fn drop(&mut self) {
+        let state = LoggerState::from_usize(self.state.load(Ordering::Relaxed));
+        assert!(
+            state == LoggerState::Success || state == LoggerState::Error,
+            "env logger dropped before reaching a final state"
+        );
+    }
+}
 
 #[cfg(feature = "env-logger-check")]
 #[derive(Clone, Copy, PartialEq, Eq)]

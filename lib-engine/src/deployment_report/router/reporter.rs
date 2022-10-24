@@ -51,7 +51,7 @@ impl DeploymentReporter for RouterDeploymentReporter {
         let error = match result {
             Ok(_) => {
                 self.logger
-                    .send_warning("✅ Deployment of router succeeded".to_string());
+                    .send_success("✅ Deployment of router succeeded".to_string());
                 return;
             }
             Err(err) => err,
