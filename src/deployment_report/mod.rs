@@ -12,10 +12,6 @@ pub mod logger;
 pub mod router;
 mod utils;
 
-pub trait ProgressLogger {
-    fn send_progress(&self, msg: String);
-}
-
 // Object responsible to log the progress of a deployment
 // This object is going to live in his own thread and is responsible to
 // 1. Fetch information of the deployment
@@ -192,7 +188,7 @@ pub fn execute_long_deployment<Log, TaskRet>(
 
 #[cfg(test)]
 mod test {
-    use crate::deployment_report::{execute_long_deployment, DeploymentReporter, DeploymentTask, ProgressLogger};
+    use crate::deployment_report::{execute_long_deployment, DeploymentReporter, DeploymentTask};
     use crate::errors::EngineError;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
@@ -211,10 +207,6 @@ mod test {
         fn drop(&mut self) {
             self.thread_dead.store(true, Ordering::SeqCst)
         }
-    }
-
-    impl ProgressLogger for () {
-        fn send_progress(&self, _msg: String) {}
     }
 
     impl DeploymentReporter for DeploymentReporterTest {
