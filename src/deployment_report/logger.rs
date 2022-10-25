@@ -5,14 +5,16 @@ use crate::logger::Logger;
 use std::sync::Arc;
 
 #[cfg(feature = "env-logger-check")]
-use std::cell::Cell;
+use std::sync::atomic::AtomicUsize;
+#[cfg(feature = "env-logger-check")]
+use std::sync::atomic::Ordering;
 
 pub struct EnvLogger {
     logger: Arc<Box<dyn Logger>>,
     event_details_progress: EventDetails,
     event_details_success: EventDetails,
     #[cfg(feature = "env-logger-check")]
-    state: Cell<LoggerState>,
+    state: AtomicUsize,
 }
 
 impl EnvLogger {
@@ -33,7 +35,7 @@ impl EnvLogger {
             event_details_progress,
             event_details_success,
             #[cfg(feature = "env-logger-check")]
-            state: Cell::new(LoggerState::Progress),
+            state: AtomicUsize::new(LoggerState::Progress as usize),
         }
     }
 
@@ -41,7 +43,7 @@ impl EnvLogger {
         #[cfg(feature = "env-logger-check")]
         {
             assert!(
-                self.state.get() == LoggerState::Progress,
+                LoggerState::from_usize(self.state.load(Ordering::Acquire)) == LoggerState::Progress,
                 "cannot send progress while a final state has been reached"
             );
         }
@@ -52,14 +54,29 @@ impl EnvLogger {
         ));
     }
 
+    pub fn send_warning(&self, msg: String) {
+        #[cfg(feature = "env-logger-check")]
+        {
+            assert!(
+                LoggerState::from_usize(self.state.load(Ordering::Acquire)) == LoggerState::Progress,
+                "cannot send warning while a final state has been reached"
+            );
+        }
+
+        self.logger.log(EngineEvent::Warning(
+            self.event_details_progress.clone(),
+            EventMessage::new_from_safe(msg),
+        ));
+    }
+
     pub fn send_success(&self, msg: String) {
         #[cfg(feature = "env-logger-check")]
         {
             assert!(
-                self.state.get() != LoggerState::Error,
+                LoggerState::from_usize(self.state.load(Ordering::Acquire)) != LoggerState::Error,
                 "cannot send success while an error state has been reached"
             );
-            self.state.set(LoggerState::Success);
+            self.state.store(LoggerState::Success as usize, Ordering::Release);
         }
 
         self.logger.log(EngineEvent::Info(
@@ -72,11 +89,11 @@ impl EnvLogger {
         #[cfg(feature = "env-logger-check")]
         {
             assert!(
-                self.state.get() != LoggerState::Success,
+                LoggerState::from_usize(self.state.load(Ordering::Acquire)) != LoggerState::Success,
                 "cannot send error while an success state has been reached"
             );
             assert!(matches!(err.event_details().stage(), Stage::Environment(step) if step.is_error_step()));
-            self.state.set(LoggerState::Error);
+            self.state.store(LoggerState::Error as usize, Ordering::Release);
         }
 
         let msg = err.user_log_message().to_string();
@@ -85,20 +102,66 @@ impl EnvLogger {
     }
 }
 
-//#[cfg(feature = "env-logger-check")]
-//impl Drop for EnvLogger {
-//    fn drop(&mut self) {
-//        assert!(
-//            self.state.get() == LoggerState::Success || self.state.get() == LoggerState::Error,
-//            "env logger dropped before reaching a final state"
-//        );
-//    }
-//}
+pub struct EnvProgressLogger<'a> {
+    logger: &'a EnvLogger,
+}
+
+impl<'a> EnvProgressLogger<'a> {
+    pub fn new(env_logger: &EnvLogger) -> EnvProgressLogger {
+        EnvProgressLogger { logger: env_logger }
+    }
+
+    pub fn info(&self, msg: String) {
+        self.logger.send_progress(msg);
+    }
+
+    pub fn warning(&self, msg: String) {
+        self.logger.send_warning(msg);
+    }
+}
+
+pub struct EnvSuccessLogger<'a> {
+    logger: &'a EnvLogger,
+}
+
+impl<'a> EnvSuccessLogger<'a> {
+    pub fn new(env_logger: &EnvLogger) -> EnvSuccessLogger {
+        EnvSuccessLogger { logger: env_logger }
+    }
+
+    pub fn send_success(&self, msg: String) {
+        self.logger.send_success(msg);
+    }
+}
+
+// One day ;"(
+#[cfg(feature = "env-logger-check")]
+impl Drop for EnvLogger {
+    fn drop(&mut self) {
+        let state = LoggerState::from_usize(self.state.load(Ordering::Relaxed));
+        assert!(
+            state == LoggerState::Success || state == LoggerState::Error,
+            "env logger dropped before reaching a final state"
+        );
+    }
+}
 
 #[cfg(feature = "env-logger-check")]
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum LoggerState {
-    Progress,
-    Success,
-    Error,
+    Progress = 0,
+    Success = 1,
+    Error = 2,
+}
+
+#[cfg(feature = "env-logger-check")]
+impl LoggerState {
+    fn from_usize(value: usize) -> LoggerState {
+        match value {
+            0 => LoggerState::Progress,
+            1 => LoggerState::Success,
+            2 => LoggerState::Error,
+            _ => panic!("invalid usize value for LoggerState"),
+        }
+    }
 }

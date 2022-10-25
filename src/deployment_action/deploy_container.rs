@@ -1,34 +1,23 @@
-use crate::build_platform::Image;
 use crate::cloud_provider::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::cloud_provider::service::{delete_pending_service, Action, Service};
 use crate::cloud_provider::DeploymentTarget;
-use crate::cmd::command::CommandKiller;
-use crate::cmd::docker::ContainerImage;
-use crate::container_registry::ecr::ECR;
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::application::reporter::ApplicationDeploymentReporter;
-use crate::deployment_report::execute_long_deployment;
+use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, Stage};
-use crate::io_models::container::Registry;
 use crate::kubers_utils::kube_delete_all_from_selector;
-use crate::models::container::{Container, ContainerService, QOVERY_MIRROR_REPOSITORY_NAME};
+use crate::models::container::{Container, ContainerService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
-use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
-use kube::api::ListParams;
-use kube::Api;
-use rusoto_core::{Client, HttpClient, Region};
-use rusoto_credential::StaticProvider;
-use rusoto_ecr::EcrClient;
 
+use crate::deployment_action::utils::{delete_cached_image, get_last_deployed_image, mirror_image, KubeObjectKind};
+use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::time::Duration;
-use url::Url;
 
 impl<T: CloudProvider> DeploymentAction for Container<T>
 where
@@ -36,136 +25,95 @@ where
 {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+        struct TaskContext {
+            last_deployed_image: Option<String>,
+        }
 
-        let logger = target.env_logger(self, EnvironmentStep::Deploy);
-        // We need to login to the registry to get access to the image
-        let url = get_url_with_credentials(&self.registry);
-        if url.password().is_some() {
-            logger.send_progress(format!(
-                "🔓 Login to registry {} as user {}",
-                url.host_str().unwrap_or_default(),
-                url.username()
+        // We first mirror the image if needed
+        let pre_task = |logger: &EnvProgressLogger| -> Result<TaskContext, EngineError> {
+            mirror_image(
+                &self.registry,
+                &self.image,
+                &self.tag,
+                self.tag_for_mirror(),
+                target,
+                logger,
+                event_details.clone(),
+            )?;
+
+            let last_image = block_on(get_last_deployed_image(
+                target.kube.clone(),
+                &self.selector(),
+                if self.is_stateful() {
+                    KubeObjectKind::Statefulset
+                } else {
+                    KubeObjectKind::Deployment
+                },
+                target.environment.namespace(),
             ));
-            if let Err(err) = target.docker.login(&url) {
-                let err = EngineError::new_docker_error(event_details, err);
-                let user_err = EngineError::new_engine_error(
-                    err.clone(),
-                    format!("❌ Failed to login to registry {}", url.host_str().unwrap_or_default()),
-                    None,
-                );
-                logger.send_error(user_err);
 
-                return Err(err);
-            }
-        }
+            Ok(TaskContext {
+                last_deployed_image: last_image,
+            })
+        };
 
-        // Once we are logged to the registry, we mirror the user image into our cluster private registry
-        // This is required only to avoid to manage rotating credentials
-        logger.send_progress("🪞 Mirroring image to private cluster registry to ensure reproducibility".to_string());
-        let registry_info = target.container_registry.registry_info();
-
-        target
-            .container_registry
-            .create_repository(
-                QOVERY_MIRROR_REPOSITORY_NAME,
-                target.kubernetes.advanced_settings().registry_image_retention_time_sec,
+        let long_task = |_logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, EngineError> {
+            // If the service have been paused, we must ensure we un-pause it first as hpa will not kick in
+            let _ = PauseServiceAction::new(
+                self.selector(),
+                self.is_stateful(),
+                Duration::from_secs(5 * 60),
+                event_details.clone(),
             )
-            .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
+            .unpause_if_needed(target);
 
-        let source_image = ContainerImage::new(self.registry.url().clone(), self.image.clone(), vec![self.tag.clone()]);
-        let dest_image = ContainerImage::new(
-            target.container_registry.registry_info().endpoint.clone(),
-            (registry_info.get_image_name)(QOVERY_MIRROR_REPOSITORY_NAME),
-            vec![self.tag_for_mirror()],
-        );
-        if let Err(err) = target.docker.mirror(
-            &source_image,
-            &dest_image,
-            &mut |line| info!("{}", line),
-            &mut |line| warn!("{}", line),
-            &CommandKiller::from(Duration::from_secs(60 * 10), target.should_abort),
-        ) {
-            let err = EngineError::new_docker_error(event_details, err);
-            let user_err = EngineError::new_engine_error(
-                err.clone(),
-                format!("❌ Failed to mirror image {}: {}", self.image_with_tag(), err),
+            let chart = ChartInfo {
+                name: self.helm_release_name(),
+                path: self.workspace_directory().to_string(),
+                namespace: HelmChartNamespaces::Custom,
+                custom_namespace: Some(target.environment.namespace().to_string()),
+                timeout_in_seconds: self.startup_timeout().as_secs() as i64,
+                k8s_selector: Some(self.selector()),
+                ..Default::default()
+            };
+
+            let helm = HelmDeployment::new(
+                event_details.clone(),
+                self.to_tera_context(target)?,
+                PathBuf::from(self.helm_chart_dir()),
                 None,
+                chart,
             );
-            logger.send_error(user_err);
 
-            return Err(err);
-        }
+            helm.on_create(target)?;
+
+            delete_pending_service(
+                target.kubernetes.get_kubeconfig_file_path()?.as_str(),
+                target.environment.namespace(),
+                self.selector().as_str(),
+                target.kubernetes.cloud_provider().credentials_environment_variables(),
+                event_details.clone(),
+            )?;
+
+            Ok(state)
+        };
+
+        let post_task = |logger: &EnvSuccessLogger, state: TaskContext| {
+            // Delete previous image from cache to cleanup resources
+            let _ = delete_cached_image(self.tag_for_mirror(), state.last_deployed_image, false, target, logger)
+                .map_err(|err| {
+                    error!("Error while deleting cached image: {}", err);
+                    EngineError::new_container_registry_error(event_details.clone(), err)
+                });
+        };
 
         // At last we deploy our container
         execute_long_deployment(
             ApplicationDeploymentReporter::new_for_container(self, target, Action::Create),
-            || {
-                // If the service have been paused, we must ensure we un-pause it first as hpa will not kick in
-                let _ = PauseServiceAction::new(
-                    self.selector(),
-                    self.is_stateful(),
-                    Duration::from_secs(5 * 60),
-                    event_details.clone(),
-                )
-                .unpause_if_needed(target);
-
-                let last_image = block_on(get_last_deployed_image(
-                    target.kube.clone(),
-                    &self.selector(),
-                    self.is_stateful(),
-                    target.environment.namespace(),
-                ));
-
-                let chart = ChartInfo {
-                    name: self.helm_release_name(),
-                    path: self.workspace_directory().to_string(),
-                    namespace: HelmChartNamespaces::Custom,
-                    custom_namespace: Some(target.environment.namespace().to_string()),
-                    timeout_in_seconds: self.startup_timeout().as_secs() as i64,
-                    k8s_selector: Some(self.selector()),
-                    ..Default::default()
-                };
-
-                let helm = HelmDeployment::new(
-                    event_details.clone(),
-                    self.to_tera_context(target)?,
-                    PathBuf::from(self.helm_chart_dir()),
-                    None,
-                    chart,
-                );
-
-                helm.on_create(target)?;
-
-                delete_pending_service(
-                    target.kubernetes.get_kubeconfig_file_path()?.as_str(),
-                    target.environment.namespace(),
-                    self.selector().as_str(),
-                    target.kubernetes.cloud_provider().credentials_environment_variables(),
-                    event_details.clone(),
-                )?;
-
-                // Delete previous image from cache to cleanup resources
-                if let Some(last_image_tag) = last_image.and_then(|img| img.split(':').last().map(str::to_string)) {
-                    if last_image_tag != self.tag_for_mirror() {
-                        let logger = target.env_logger(self, EnvironmentStep::Deploy);
-                        logger.send_progress(format!("🪓 Deleting previous cached image {}", last_image_tag));
-
-                        let image = Image {
-                            name: QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
-                            tag: last_image_tag,
-                            registry_url: target.container_registry.registry_info().endpoint.clone(),
-                            repository_name: QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
-                            ..Default::default()
-                        };
-
-                        target
-                            .container_registry
-                            .delete_image(&image)
-                            .map_err(|err| EngineError::new_container_registry_error(event_details.clone(), err))?;
-                    }
-                }
-
-                Ok(())
+            DeploymentTaskImpl {
+                pre_run: &pre_task,
+                run: &long_task,
+                post_run_success: &post_task,
             },
         )
     }
@@ -173,7 +121,7 @@ where
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         execute_long_deployment(
             ApplicationDeploymentReporter::new_for_container(self, target, Action::Pause),
-            || {
+            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
                 let pause_service = PauseServiceAction::new(
                     self.selector(),
                     self.is_stateful(),
@@ -187,161 +135,91 @@ where
 
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
+        struct TaskContext {
+            last_deployed_image: Option<String>,
+        }
 
-        execute_long_deployment(
-            ApplicationDeploymentReporter::new_for_container(self, target, Action::Delete),
-            || {
-                let chart = ChartInfo {
-                    name: self.helm_release_name(),
-                    namespace: HelmChartNamespaces::Custom,
-                    custom_namespace: Some(target.environment.namespace().to_string()),
-                    action: HelmAction::Destroy,
-                    ..Default::default()
-                };
-                let helm = HelmDeployment::new(
-                    event_details.clone(),
-                    self.to_tera_context(target)?,
-                    PathBuf::from(self.helm_chart_dir().as_str()),
-                    None,
-                    chart,
-                );
-
-                helm.on_delete(target)?;
-
-                let logger = target.env_logger(self, EnvironmentStep::Delete);
-                // Delete pvc of statefulset if needed
-                // FIXME: Remove this after kubernetes 1.23 is deployed, at it should be done by kubernetes
+        // We first mirror the image if needed
+        let pre_task = |_logger: &EnvProgressLogger| -> Result<TaskContext, EngineError> {
+            let last_image = block_on(get_last_deployed_image(
+                target.kube.clone(),
+                &self.selector(),
                 if self.is_stateful() {
-                    logger.send_progress("🪓 Terminating network volume of the container".to_string());
-                    if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
-                        &target.kube,
-                        &self.selector(),
-                        target.environment.namespace(),
-                    )) {
-                        return Err(EngineError::new_k8s_cannot_delete_pvcs(
-                            event_details.clone(),
-                            self.selector(),
-                            CommandError::new_from_safe_message(err.to_string()),
-                        ));
-                    }
-                }
+                    KubeObjectKind::Statefulset
+                } else {
+                    KubeObjectKind::Deployment
+                },
+                target.environment.namespace(),
+            ));
 
-                Ok(())
-            },
-        )?;
-
-        let image = Image {
-            name: QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
-            tag: self.tag_for_mirror(),
-            registry_url: target.container_registry.registry_info().endpoint.clone(),
-            repository_name: QOVERY_MIRROR_REPOSITORY_NAME.to_string(),
-            ..Default::default()
+            Ok(TaskContext {
+                last_deployed_image: last_image,
+            })
         };
 
-        let logger = target.env_logger(self, EnvironmentStep::Delete);
-        logger.send_success("🪓 Deleting cached image of the container".to_string());
-        target
-            .container_registry
-            .delete_image(&image)
-            .map_err(|err| EngineError::new_container_registry_error(event_details, err))
-    }
-}
+        // Execute the deployment
+        let long_task = |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, EngineError> {
+            let chart = ChartInfo {
+                name: self.helm_release_name(),
+                namespace: HelmChartNamespaces::Custom,
+                custom_namespace: Some(target.environment.namespace().to_string()),
+                action: HelmAction::Destroy,
+                ..Default::default()
+            };
+            let helm = HelmDeployment::new(
+                event_details.clone(),
+                self.to_tera_context(target)?,
+                PathBuf::from(self.helm_chart_dir().as_str()),
+                None,
+                chart,
+            );
 
-pub fn get_url_with_credentials(registry: &Registry) -> Url {
-    let url = match registry {
-        Registry::DockerHub { url, credentials, .. } => {
-            let mut url = url.clone();
-            if let Some(credentials) = credentials {
-                let _ = url.set_username(&credentials.login);
-                let _ = url.set_password(Some(&credentials.password));
+            helm.on_delete(target)?;
+
+            // Delete pvc of statefulset if needed
+            // FIXME: Remove this after kubernetes 1.23 is deployed, at it should be done by kubernetes
+            if self.is_stateful() {
+                logger.info("🪓 Terminating network volume of the container".to_string());
+                if let Err(err) = block_on(kube_delete_all_from_selector::<PersistentVolumeClaim>(
+                    &target.kube,
+                    &self.selector(),
+                    target.environment.namespace(),
+                )) {
+                    return Err(EngineError::new_k8s_cannot_delete_pvcs(
+                        event_details.clone(),
+                        self.selector(),
+                        CommandError::new_from_safe_message(err.to_string()),
+                    ));
+                }
             }
-            url
-        }
-        Registry::DoCr { url, token, .. } => {
-            let mut url = url.clone();
-            let _ = url.set_username(token);
-            let _ = url.set_password(Some(token));
-            url
-        }
-        Registry::ScalewayCr {
-            url,
-            scaleway_access_key: _,
-            scaleway_secret_key,
-            ..
-        } => {
-            let mut url = url.clone();
-            let _ = url.set_username("nologin");
-            let _ = url.set_password(Some(scaleway_secret_key));
-            url
-        }
-        Registry::PrivateEcr {
-            url: _,
-            region,
-            access_key_id,
-            secret_access_key,
-            ..
-        } => {
-            let creds = StaticProvider::new(access_key_id.to_string(), secret_access_key.to_string(), None, None);
-            let region = Region::from_str(region).unwrap_or_default();
-            let ecr_client = EcrClient::new_with_client(Client::new_with(creds, HttpClient::new().unwrap()), region);
 
-            let credentials = ECR::get_credentials(&ecr_client).unwrap();
-            let mut url = Url::parse(credentials.endpoint_url.as_str()).unwrap();
-            let _ = url.set_username(&credentials.access_token);
-            let _ = url.set_password(Some(&credentials.password));
-            url
-        }
-        Registry::PublicEcr { url, .. } => url.clone(),
-    };
+            Ok(state)
+        };
 
-    url
-}
+        // Cleanup the image from the cache
+        let post_task = |logger: &EnvSuccessLogger, state: TaskContext| {
+            // Delete previous image from cache to cleanup resources
+            let last_deployed_image = if state.last_deployed_image.is_none() {
+                Some(self.tag_for_mirror())
+            } else {
+                state.last_deployed_image
+            };
 
-pub async fn get_last_deployed_image(
-    client: kube::Client,
-    selector: &str,
-    is_statefulset: bool,
-    namespace: &str,
-) -> Option<String> {
-    let list_params = ListParams::default().labels(selector);
+            let _ =
+                delete_cached_image(self.tag_for_mirror(), last_deployed_image, true, target, logger).map_err(|err| {
+                    error!("Error while deleting cached image: {}", err);
+                    EngineError::new_container_registry_error(event_details.clone(), err)
+                });
+        };
 
-    if is_statefulset {
-        let api: Api<StatefulSet> = Api::namespaced(client, namespace);
-        Some(
-            api.list(&list_params)
-                .await
-                .ok()?
-                .items
-                .first()?
-                .spec
-                .as_ref()?
-                .template
-                .spec
-                .as_ref()?
-                .containers
-                .first()?
-                .image
-                .as_ref()?
-                .to_string(),
-        )
-    } else {
-        let api: Api<Deployment> = Api::namespaced(client, namespace);
-        Some(
-            api.list(&list_params)
-                .await
-                .ok()?
-                .items
-                .first()?
-                .spec
-                .as_ref()?
-                .template
-                .spec
-                .as_ref()?
-                .containers
-                .first()?
-                .image
-                .as_ref()?
-                .to_string(),
+        // Trigger deployment
+        execute_long_deployment(
+            ApplicationDeploymentReporter::new_for_container(self, target, Action::Delete),
+            DeploymentTaskImpl {
+                pre_run: &pre_task,
+                run: &long_task,
+                post_run_success: &post_task,
+            },
         )
     }
 }

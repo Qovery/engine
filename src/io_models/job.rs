@@ -22,7 +22,16 @@ use uuid::Uuid;
 pub struct JobAdvancedSettings {
     // Job specific
     #[serde(alias = "job.delete_ttl_seconds_after_finished")]
-    pub delete_ttl_seconds_after_finished: u32,
+    pub job_delete_ttl_seconds_after_finished: Option<u32>,
+
+    #[serde(alias = "cronjob.concurrency_policy")]
+    pub cronjob_concurrency_policy: String,
+
+    #[serde(alias = "cronjob.failed_jobs_history_limit")]
+    pub cronjob_failed_jobs_history_limit: u32,
+
+    #[serde(alias = "cronjob.success_jobs_history_limit")]
+    pub cronjob_success_jobs_history_limit: u32,
 
     // Readiness Probes
     #[serde(alias = "readiness_probe.type")]
@@ -60,7 +69,10 @@ pub struct JobAdvancedSettings {
 impl Default for JobAdvancedSettings {
     fn default() -> Self {
         Self {
-            delete_ttl_seconds_after_finished: 3600 * 24 * 3, // 72 hours
+            job_delete_ttl_seconds_after_finished: None,
+            cronjob_concurrency_policy: "Forbid".to_string(),
+            cronjob_failed_jobs_history_limit: 1,
+            cronjob_success_jobs_history_limit: 1,
             readiness_probe_type: AdvancedSettingsProbeType::Tcp,
             readiness_probe_http_get_path: "/".to_string(),
             readiness_probe_initial_delay_seconds: 30,
@@ -85,6 +97,11 @@ pub enum JobSchedule {
     OnPause,
     OnDelete,
     Cron(String),
+}
+impl JobSchedule {
+    pub fn is_cronjob(&self) -> bool {
+        matches!(self, JobSchedule::Cron(_))
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]

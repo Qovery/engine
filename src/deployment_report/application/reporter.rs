@@ -18,23 +18,23 @@ use uuid::Uuid;
 
 const MAX_ELASPED_TIME_WITHOUT_REPORT: Duration = Duration::from_secs(60 * 2);
 
-pub struct ApplicationDeploymentReporter {
+pub struct ApplicationDeploymentReporter<T> {
     long_id: Uuid,
     service_type: ServiceType,
     tag: String,
     namespace: String,
     kube_client: kube::Client,
     selector: String,
-    last_report: (String, Instant),
     logger: EnvLogger,
+    _tag: std::marker::PhantomData<T>,
 }
 
-impl ApplicationDeploymentReporter {
+impl<T> ApplicationDeploymentReporter<T> {
     pub fn new(
         app: &impl ApplicationService,
         deployment_target: &DeploymentTarget,
         action: Action,
-    ) -> ApplicationDeploymentReporter {
+    ) -> ApplicationDeploymentReporter<T> {
         ApplicationDeploymentReporter {
             long_id: *app.long_id(),
             service_type: ServiceType::Application,
@@ -42,8 +42,8 @@ impl ApplicationDeploymentReporter {
             namespace: deployment_target.environment.namespace().to_string(),
             kube_client: deployment_target.kube.clone(),
             selector: app.selector().unwrap_or_default(),
-            last_report: ("".to_string(), Instant::now()),
             logger: deployment_target.env_logger(app, action.to_environment_step()),
+            _tag: Default::default(),
         }
     }
 
@@ -51,7 +51,7 @@ impl ApplicationDeploymentReporter {
         container: &impl ContainerService,
         deployment_target: &DeploymentTarget,
         action: Action,
-    ) -> ApplicationDeploymentReporter {
+    ) -> ApplicationDeploymentReporter<T> {
         ApplicationDeploymentReporter {
             long_id: *container.long_id(),
             service_type: ServiceType::Container,
@@ -59,16 +59,26 @@ impl ApplicationDeploymentReporter {
             namespace: deployment_target.environment.namespace().to_string(),
             kube_client: deployment_target.kube.clone(),
             selector: container.selector().unwrap_or_default(),
-            last_report: ("".to_string(), Instant::now()),
             logger: deployment_target.env_logger(container, action.to_environment_step()),
+            _tag: Default::default(),
         }
     }
 }
 
-impl DeploymentReporter for ApplicationDeploymentReporter {
-    type DeploymentResult = Result<(), EngineError>;
+impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
+    type DeploymentResult = T;
+    type DeploymentState = (String, Instant);
+    type Logger = EnvLogger;
 
-    fn before_deployment_start(&mut self) {
+    fn logger(&self) -> &Self::Logger {
+        &self.logger
+    }
+
+    fn new_state(&self) -> Self::DeploymentState {
+        ("".to_string(), Instant::now())
+    }
+
+    fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
         if let Ok(deployment_info) = block_on(fetch_app_deployment_report(
             &self.kube_client,
             &self.long_id,
@@ -87,7 +97,7 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
         }
     }
 
-    fn deployment_in_progress(&mut self) {
+    fn deployment_in_progress(&self, last_report: &mut Self::DeploymentState) {
         // Fetch deployment information from kube api
         let report = match block_on(fetch_app_deployment_report(
             &self.kube_client,
@@ -114,17 +124,21 @@ impl DeploymentReporter for ApplicationDeploymentReporter {
         };
 
         // don't spam log same report unless it has been too long time elapsed without one
-        if rendered_report == self.last_report.0 && self.last_report.1.elapsed() < MAX_ELASPED_TIME_WITHOUT_REPORT {
+        if rendered_report == last_report.0 && last_report.1.elapsed() < MAX_ELASPED_TIME_WITHOUT_REPORT {
             return;
         }
-        self.last_report = (rendered_report, Instant::now());
+        *last_report = (rendered_report, Instant::now());
 
         // Send it to user
-        for line in self.last_report.0.trim_end().split('\n').map(str::to_string) {
+        for line in last_report.0.trim_end().split('\n').map(str::to_string) {
             self.logger.send_progress(line);
         }
     }
-    fn deployment_terminated(&mut self, result: &Self::DeploymentResult) {
+    fn deployment_terminated(
+        &self,
+        result: &Result<Self::DeploymentResult, EngineError>,
+        _: &mut Self::DeploymentState,
+    ) {
         let error = match result {
             Ok(_) => {
                 self.logger

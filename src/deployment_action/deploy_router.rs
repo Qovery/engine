@@ -12,6 +12,7 @@ use crate::events::{EnvironmentStep, Stage};
 use crate::models::router::Router;
 use crate::models::types::{CloudProvider, ToTeraContext};
 
+use crate::deployment_report::logger::EnvProgressLogger;
 use std::path::PathBuf;
 
 impl<T: CloudProvider> DeploymentAction for Router<T>
@@ -20,25 +21,28 @@ where
 {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Create), || {
-            let chart = ChartInfo {
-                name: self.helm_release_name(),
-                path: self.workspace_directory().to_string(),
-                namespace: HelmChartNamespaces::Custom,
-                custom_namespace: Some(target.environment.namespace().to_string()),
-                ..Default::default()
-            };
+        execute_long_deployment(
+            RouterDeploymentReporter::new(self, target, Action::Create),
+            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+                let chart = ChartInfo {
+                    name: self.helm_release_name(),
+                    path: self.workspace_directory().to_string(),
+                    namespace: HelmChartNamespaces::Custom,
+                    custom_namespace: Some(target.environment.namespace().to_string()),
+                    ..Default::default()
+                };
 
-            let helm = HelmDeployment::new(
-                event_details.clone(),
-                self.to_tera_context(target)?,
-                PathBuf::from(self.helm_chart_dir()),
-                None,
-                chart,
-            );
+                let helm = HelmDeployment::new(
+                    event_details.clone(),
+                    self.to_tera_context(target)?,
+                    PathBuf::from(self.helm_chart_dir()),
+                    None,
+                    chart,
+                );
 
-            helm.on_create(target)
-        })
+                helm.on_create(target)
+            },
+        )
     }
 
     fn on_create_check(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -67,28 +71,34 @@ where
     }
 
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Pause), || Ok(()))
+        execute_long_deployment(
+            RouterDeploymentReporter::new(self, target, Action::Pause),
+            |_logger: &EnvProgressLogger| -> Result<(), EngineError> { Ok(()) },
+        )
     }
 
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        execute_long_deployment(RouterDeploymentReporter::new(self, target, Action::Delete), || {
-            let chart = ChartInfo {
-                name: self.helm_release_name(),
-                namespace: HelmChartNamespaces::Custom,
-                custom_namespace: Some(target.environment.namespace().to_string()),
-                action: HelmAction::Destroy,
-                ..Default::default()
-            };
-            let helm = HelmDeployment::new(
-                self.get_event_details(Stage::Environment(EnvironmentStep::Delete)),
-                self.to_tera_context(target)?,
-                PathBuf::from(self.helm_chart_dir().as_str()),
-                None,
-                chart,
-            );
+        execute_long_deployment(
+            RouterDeploymentReporter::new(self, target, Action::Delete),
+            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+                let chart = ChartInfo {
+                    name: self.helm_release_name(),
+                    namespace: HelmChartNamespaces::Custom,
+                    custom_namespace: Some(target.environment.namespace().to_string()),
+                    action: HelmAction::Destroy,
+                    ..Default::default()
+                };
+                let helm = HelmDeployment::new(
+                    self.get_event_details(Stage::Environment(EnvironmentStep::Delete)),
+                    self.to_tera_context(target)?,
+                    PathBuf::from(self.helm_chart_dir().as_str()),
+                    None,
+                    chart,
+                );
 
-            helm.on_delete(target)
-            // FIXME: Delete also certificates
-        })
+                helm.on_delete(target)
+                // FIXME: Delete also certificates
+            },
+        )
     }
 }

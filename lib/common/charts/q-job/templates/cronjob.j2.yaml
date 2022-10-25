@@ -1,0 +1,22 @@
+{%- if service.cronjob_schedule %}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ service.name }}
+  namespace: {{ namespace }}
+  labels:
+    envId: {{ environment_short_id }}
+    qovery.com/service-id: {{ service.long_id }}
+    qovery.com/service-type: job
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+spec:
+  schedule: "{{ service.cronjob_schedule }}"
+  concurrencyPolicy: {{ service.advanced_settings.cronjob_concurrency_policy }}
+  failedJobsHistoryLimit: {{ service.advanced_settings.cronjob_failed_jobs_history_limit }}
+  successfulJobsHistoryLimit: {{ service.advanced_settings.cronjob_success_jobs_history_limit }}
+  jobTemplate:
+{% raw %}{{ include "job" . | indent 4 }}{% endraw %}
+
+{%- endif %}

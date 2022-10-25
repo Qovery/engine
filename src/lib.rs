@@ -4,6 +4,7 @@ extern crate bitflags;
 extern crate tera;
 #[macro_use]
 extern crate tracing;
+extern crate core;
 extern crate trust_dns_resolver;
 
 pub mod build_platform;

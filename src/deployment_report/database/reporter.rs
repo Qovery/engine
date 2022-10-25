@@ -90,7 +90,6 @@ pub struct DatabaseDeploymentReporter {
     is_managed: bool,
     type_: DatabaseType,
     version: String,
-    last_report: String,
     kube_client: kube::Client,
     logger: EnvLogger,
 }
@@ -107,7 +106,6 @@ impl DatabaseDeploymentReporter {
             is_managed: db.is_managed_service(),
             type_: db.db_type(),
             version: db.version(),
-            last_report: "".to_string(),
             kube_client: deployment_target.kube.clone(),
             logger: deployment_target.env_logger(db, action.to_environment_step()),
         }
@@ -115,9 +113,19 @@ impl DatabaseDeploymentReporter {
 }
 
 impl DeploymentReporter for DatabaseDeploymentReporter {
-    type DeploymentResult = Result<(), EngineError>;
+    type DeploymentResult = ();
+    type DeploymentState = String;
+    type Logger = EnvLogger;
 
-    fn before_deployment_start(&mut self) {
+    fn logger(&self) -> &Self::Logger {
+        &self.logger
+    }
+
+    fn new_state(&self) -> Self::DeploymentState {
+        String::new()
+    }
+
+    fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
         // managed db
         if self.is_managed {
             self.logger.send_progress(format!(
@@ -146,7 +154,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         }
     }
 
-    fn deployment_in_progress(&mut self) {
+    fn deployment_in_progress(&self, last_report: &mut Self::DeploymentState) {
         // Fetch deployment information from kube api
         let report = match block_on(fetch_database_deployment_report(
             &self.kube_client,
@@ -159,7 +167,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             Ok(deployment_info) => deployment_info,
             Err(err) => {
                 self.logger
-                    .send_progress(format!("Error while retrieving deployment information: {}", err));
+                    .send_warning(format!("Error while retrieving deployment information: {}", err));
                 return;
             }
         };
@@ -175,17 +183,21 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         };
 
         // Managed database don't make any progress, so display the message from time to time
-        if !self.is_managed && rendered_report == self.last_report {
+        if !self.is_managed && &rendered_report == last_report {
             return;
         }
-        self.last_report = rendered_report;
+        *last_report = rendered_report;
 
         // Send it to user
-        for line in self.last_report.trim_end().split('\n').map(str::to_string) {
+        for line in last_report.trim_end().split('\n').map(str::to_string) {
             self.logger.send_progress(line);
         }
     }
-    fn deployment_terminated(&mut self, result: &Self::DeploymentResult) {
+    fn deployment_terminated(
+        &self,
+        result: &Result<Self::DeploymentResult, EngineError>,
+        _: &mut Self::DeploymentState,
+    ) {
         let error = match result {
             Ok(_) => {
                 if self.is_managed {
