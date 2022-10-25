@@ -1,7 +1,7 @@
 use crate::models::TaskSelector;
 use crate::utils::Mode;
 use lazy_static::lazy_static;
-use qovery_engine::deployment_task::Task;
+use qovery_engine::engine_task::Task;
 use qovery_engine::events::EngineEvent;
 use regex::Regex;
 use std::fmt::{Display, Formatter};

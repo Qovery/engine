@@ -9,7 +9,7 @@ use core::fmt::Formatter;
 use crossbeam_channel::{unbounded, Receiver, RecvError, RecvTimeoutError, Sender};
 use prometheus::{self, IntGauge};
 
-use qovery_engine::deployment_task::Task;
+use qovery_engine::engine_task::Task;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};

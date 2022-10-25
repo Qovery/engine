@@ -28,9 +28,9 @@ use url::Url;
 use uuid::Uuid;
 
 use qovery_engine::cmd;
-use qovery_engine::deployment_task::environment_task::EnvironmentTask;
-use qovery_engine::deployment_task::infrastructure_task::InfrastructureTask;
-use qovery_engine::deployment_task::Task;
+use qovery_engine::engine_task::environment_task::EnvironmentTask;
+use qovery_engine::engine_task::infrastructure_task::InfrastructureTask;
+use qovery_engine::engine_task::Task;
 use qovery_engine::errors::EngineError;
 use qovery_engine::events::InfrastructureStep::ValidateApiInput;
 use qovery_engine::events::{EngineEvent, EventDetails, EventMessage, Stage, Transmitter};
