@@ -1,6 +1,6 @@
+use super::Task;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cmd::docker::Docker;
-use crate::deployment_task::Task;
 use crate::engine::EngineConfigError;
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
