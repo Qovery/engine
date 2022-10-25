@@ -7,10 +7,10 @@ use crate::errors::EngineError;
 use std::net::IpAddr;
 use std::time::Duration;
 
-pub struct CheckDnsForDomains {
+pub struct CheckDnsForDomains<'a> {
     pub resolve_to_ip: Vec<String>,
     pub resolve_to_cname: Vec<CustomDomain>,
-    pub log: Box<dyn Fn(String)>,
+    pub log: Box<dyn Fn(String) + 'a>,
 }
 
 const DEFAULT_CHECK_FREQUENCY: Duration = Duration::from_secs(30);
@@ -85,12 +85,8 @@ fn check_domain_resolve_cname(custom_domain: &CustomDomain, log: &impl Fn(String
     }
 }
 
-impl DeploymentAction for CheckDnsForDomains {
-    fn on_create(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
-        Ok(())
-    }
-
-    fn on_create_check(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+impl<'a> DeploymentAction for CheckDnsForDomains<'a> {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         for domain in &self.resolve_to_ip {
             check_domain_resolve_ip(domain, &self.log, target.should_abort);
         }

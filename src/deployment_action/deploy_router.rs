@@ -5,14 +5,14 @@ use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::check_dns::CheckDnsForDomains;
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::DeploymentAction;
-use crate::deployment_report::execute_long_deployment;
 use crate::deployment_report::router::reporter::RouterDeploymentReporter;
+use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
 use crate::models::router::Router;
 use crate::models::types::{CloudProvider, ToTeraContext};
 
-use crate::deployment_report::logger::EnvProgressLogger;
+use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use std::path::PathBuf;
 
 impl<T: CloudProvider> DeploymentAction for Router<T>
@@ -21,53 +21,52 @@ where
 {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+        let pre_run = |_: &EnvProgressLogger| -> Result<(), EngineError> { Ok(()) };
+        let run = |_logger: &EnvProgressLogger, _: ()| -> Result<(), EngineError> {
+            let chart = ChartInfo {
+                name: self.helm_release_name(),
+                path: self.workspace_directory().to_string(),
+                namespace: HelmChartNamespaces::Custom,
+                custom_namespace: Some(target.environment.namespace().to_string()),
+                ..Default::default()
+            };
+
+            let helm = HelmDeployment::new(
+                event_details.clone(),
+                self.to_tera_context(target)?,
+                PathBuf::from(self.helm_chart_dir()),
+                None,
+                chart,
+            );
+
+            helm.on_create(target)
+        };
+
+        let post_run = |logger: &EnvSuccessLogger, _: ()| {
+            // check non custom domains
+            let custom_domains_to_check: Vec<CustomDomain> = if self.advanced_settings.custom_domain_check_enabled {
+                self.custom_domains.clone()
+            } else {
+                vec![]
+            };
+
+            let domain_checker = CheckDnsForDomains {
+                resolve_to_ip: vec![self.default_domain.clone()],
+                resolve_to_cname: custom_domains_to_check,
+                log: Box::new(move |msg| logger.send_success(msg)),
+            };
+
+            let _ = domain_checker.on_create(target);
+        };
+
         execute_long_deployment(
             RouterDeploymentReporter::new(self, target, Action::Create),
-            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
-                let chart = ChartInfo {
-                    name: self.helm_release_name(),
-                    path: self.workspace_directory().to_string(),
-                    namespace: HelmChartNamespaces::Custom,
-                    custom_namespace: Some(target.environment.namespace().to_string()),
-                    ..Default::default()
-                };
-
-                let helm = HelmDeployment::new(
-                    event_details.clone(),
-                    self.to_tera_context(target)?,
-                    PathBuf::from(self.helm_chart_dir()),
-                    None,
-                    chart,
-                );
-
-                helm.on_create(target)
+            DeploymentTaskImpl {
+                pre_run: &pre_run,
+                run: &run,
+                post_run_success: &post_run,
             },
         )
-    }
-
-    fn on_create_check(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        // check non custom domains
-        let custom_domains_to_check: Vec<CustomDomain> = if self.advanced_settings.custom_domain_check_enabled {
-            self.custom_domains.clone()
-        } else {
-            vec![]
-        };
-
-        let logger = target.env_logger(self, EnvironmentStep::Deploy);
-        let domain_checker = CheckDnsForDomains {
-            resolve_to_ip: vec![self.default_domain.clone()],
-            resolve_to_cname: custom_domains_to_check,
-            log: Box::new(move |msg| logger.send_success(msg)),
-        };
-
-        let _ = domain_checker.on_create_check(target);
-        if (target.should_abort)() {
-            Err(EngineError::new_task_cancellation_requested(
-                self.get_event_details(Stage::Environment(EnvironmentStep::Cancelled)),
-            ))
-        } else {
-            Ok(())
-        }
     }
 
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
