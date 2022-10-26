@@ -105,7 +105,6 @@ impl<'a> EnvironmentDeployment<'a> {
             should_abort()?;
             self.deployed_services.insert(service_id);
             service.exec_action(target, service_action)?;
-            service.exec_check_action(service_action, target)?;
         }
 
         // clean up nlb
@@ -128,7 +127,6 @@ impl<'a> EnvironmentDeployment<'a> {
             should_abort()?;
             self.deployed_services.insert(service_id);
             service.on_pause(target)?;
-            service.on_pause_check(target)?;
         }
 
         let ns = NamespaceDeployment {
@@ -173,7 +171,6 @@ impl<'a> EnvironmentDeployment<'a> {
             should_abort()?;
             self.deployed_services.insert(service_id);
             service.on_delete(target)?;
-            service.on_delete_check(target)?;
         }
 
         let ns = NamespaceDeployment {

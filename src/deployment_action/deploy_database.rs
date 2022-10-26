@@ -11,7 +11,7 @@ use crate::deployment_action::deploy_terraform::TerraformDeployment;
 use crate::deployment_action::pause_service::PauseServiceAction;
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::database::reporter::DatabaseDeploymentReporter;
-use crate::deployment_report::execute_long_deployment;
+use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::kubers_utils::kube_delete_all_from_selector;
@@ -21,7 +21,7 @@ use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use serde::Deserialize;
 
-use crate::deployment_report::logger::EnvProgressLogger;
+use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -391,32 +391,30 @@ where
 {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+        let pre_run = |_: &EnvProgressLogger| -> Result<(), EngineError> { Ok(()) };
+        let run = |_logger: &EnvProgressLogger, _: ()| -> Result<(), EngineError> {
+            on_create_managed_impl(self, event_details.clone(), target)
+        };
+        let post_run = |logger: &EnvSuccessLogger, _: ()| {
+            if self.publicly_accessible {
+                let domain_checker = CheckDnsForDomains {
+                    resolve_to_ip: vec![self.fqdn.to_string()],
+                    resolve_to_cname: vec![],
+                    log: Box::new(move |msg| logger.send_success(msg)),
+                };
+
+                let _ = domain_checker.on_create(target);
+            }
+        };
+
         execute_long_deployment(
             DatabaseDeploymentReporter::new(self, target, Action::Create),
-            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
-                on_create_managed_impl(self, event_details.clone(), target)
+            DeploymentTaskImpl {
+                pre_run: &pre_run,
+                run: &run,
+                post_run_success: &post_run,
             },
         )
-    }
-
-    fn on_create_check(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        if self.publicly_accessible {
-            let logger = target.env_logger(self, EnvironmentStep::Deploy);
-            let domain_checker = CheckDnsForDomains {
-                resolve_to_ip: vec![self.fqdn.to_string()],
-                resolve_to_cname: vec![],
-                log: Box::new(move |msg| logger.send_success(msg)),
-            };
-
-            let _ = domain_checker.on_create_check(target);
-            if (target.should_abort)() {
-                return Err(EngineError::new_task_cancellation_requested(
-                    self.get_event_details(Stage::Environment(EnvironmentStep::Cancelled)),
-                ));
-            }
-        }
-
-        Ok(())
     }
 
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -531,59 +529,59 @@ where
 {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+        let pre_run = |_: &EnvProgressLogger| -> Result<(), EngineError> { Ok(()) };
+        let run = |_logger: &EnvProgressLogger, _: ()| -> Result<(), EngineError> {
+            let chart = ChartInfo {
+                name: self.helm_release_name(),
+                path: self.workspace_directory().to_string(),
+                namespace: HelmChartNamespaces::Custom,
+                custom_namespace: Some(target.environment.namespace().to_string()),
+                k8s_selector: Some(self.selector()),
+                values_files: vec![format!("{}/qovery-values.yaml", self.workspace_directory())],
+                ..Default::default()
+            };
+            let helm = HelmDeployment::new(
+                event_details.clone(),
+                self.to_tera_context(target)?,
+                PathBuf::from(self.helm_chart_dir()),
+                Some(PathBuf::from(format!("{}/qovery-values.j2.yaml", self.helm_chart_values_dir()))),
+                chart,
+            );
+
+            helm.on_create(target)?;
+
+            delete_pending_service(
+                target.kubernetes.get_kubeconfig_file_path()?.as_str(),
+                target.environment.namespace(),
+                self.selector().as_str(),
+                target.kubernetes.cloud_provider().credentials_environment_variables(),
+                event_details.clone(),
+            )?;
+
+            Ok(())
+        };
+
+        let post_run = |logger: &EnvSuccessLogger, _: ()| {
+            // check non custom domains
+            if self.publicly_accessible {
+                let domain_checker = CheckDnsForDomains {
+                    resolve_to_ip: vec![self.fqdn.to_string()],
+                    resolve_to_cname: vec![],
+                    log: Box::new(move |msg| logger.send_success(msg)),
+                };
+
+                let _ = domain_checker.on_create(target);
+            }
+        };
+
         execute_long_deployment(
             DatabaseDeploymentReporter::new(self, target, Action::Create),
-            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
-                let chart = ChartInfo {
-                    name: self.helm_release_name(),
-                    path: self.workspace_directory().to_string(),
-                    namespace: HelmChartNamespaces::Custom,
-                    custom_namespace: Some(target.environment.namespace().to_string()),
-                    k8s_selector: Some(self.selector()),
-                    values_files: vec![format!("{}/qovery-values.yaml", self.workspace_directory())],
-                    ..Default::default()
-                };
-                let helm = HelmDeployment::new(
-                    event_details.clone(),
-                    self.to_tera_context(target)?,
-                    PathBuf::from(self.helm_chart_dir()),
-                    Some(PathBuf::from(format!("{}/qovery-values.j2.yaml", self.helm_chart_values_dir()))),
-                    chart,
-                );
-
-                helm.on_create(target)?;
-
-                delete_pending_service(
-                    target.kubernetes.get_kubeconfig_file_path()?.as_str(),
-                    target.environment.namespace(),
-                    self.selector().as_str(),
-                    target.kubernetes.cloud_provider().credentials_environment_variables(),
-                    event_details.clone(),
-                )?;
-
-                Ok(())
+            DeploymentTaskImpl {
+                pre_run: &pre_run,
+                run: &run,
+                post_run_success: &post_run,
             },
         )
-    }
-
-    fn on_create_check(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        if self.publicly_accessible {
-            let logger = target.env_logger(self, EnvironmentStep::Deploy);
-            let domain_checker = CheckDnsForDomains {
-                resolve_to_ip: vec![self.fqdn.to_string()],
-                resolve_to_cname: vec![],
-                log: Box::new(move |msg| logger.send_success(msg)),
-            };
-
-            let _ = domain_checker.on_create_check(target);
-            if (target.should_abort)() {
-                return Err(EngineError::new_task_cancellation_requested(
-                    self.get_event_details(Stage::Environment(EnvironmentStep::Cancelled)),
-                ));
-            }
-        }
-
-        Ok(())
     }
 
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {

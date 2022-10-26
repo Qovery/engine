@@ -26,7 +26,14 @@ where
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(self.action().to_environment_step()));
 
-        match self.schedule() {
+        // Force job to run, if force trigger is requested
+        let job_schedule = if self.should_force_trigger() {
+            &JobSchedule::OnStart
+        } else {
+            self.schedule()
+        };
+
+        match job_schedule {
             JobSchedule::OnStart | JobSchedule::Cron(_) => {
                 let (pre_run, run, post_run) = run_job(self, target, &event_details);
                 let task = DeploymentTaskImpl {

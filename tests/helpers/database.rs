@@ -27,7 +27,7 @@ use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 
 use qovery_engine::cloud_provider::service::Service;
 use qovery_engine::deployment_report::logger::EnvLogger;
-use qovery_engine::deployment_task::environment_task::EnvironmentTask;
+use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::events::EnvironmentStep;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::Action;

@@ -1,3 +1,4 @@
+use super::Task;
 use crate::build_platform;
 use crate::build_platform::BuildError;
 use crate::cloud_provider::aws::regions::AwsRegion;
@@ -9,7 +10,6 @@ use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::to_engine_error;
 use crate::deployment_action::deploy_environment::EnvironmentDeployment;
 use crate::deployment_report::logger::EnvLogger;
-use crate::deployment_task::Task;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};

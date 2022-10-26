@@ -27,8 +27,7 @@ impl EnvLogger {
             _ => panic!("Invalid environment step for logger"),
         };
         let event_details_progress = service.get_event_details(Stage::Environment(progress_step));
-        let event_details_success =
-            EventDetails::clone_changing_stage(event_details_progress.clone(), Stage::Environment(success_step));
+        let event_details_success = service.get_event_details(Stage::Environment(success_step));
 
         EnvLogger {
             logger,
@@ -134,7 +133,6 @@ impl<'a> EnvSuccessLogger<'a> {
     }
 }
 
-// One day ;"(
 #[cfg(feature = "env-logger-check")]
 impl Drop for EnvLogger {
     fn drop(&mut self) {

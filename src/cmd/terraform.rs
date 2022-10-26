@@ -131,6 +131,11 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    InvalidCIDRBlock {
+        cidr: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
     MultipleInterruptsReceived {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
@@ -398,6 +403,19 @@ impl TerraformError {
                 }
             }
         }
+        // InvalidParameterValue: The destination CIDR block x.x.x.x/x is equal to or more specific than one of this VPC's CIDR blocks.
+        if let Ok(aws_wrong_cidr) = Regex::new(
+            r"InvalidParameterValue: The destination CIDR block \((?P<cidr>.+?)\) is equal to or more specific than one of this VPC's CIDR blocks. This route can target only an interface or an instance",
+        ) {
+            if let Some(cap) = aws_wrong_cidr.captures(raw_terraform_error_output.as_str()) {
+                if let Some(wrong_cidr) = cap.name("cidr").map(|e| e.as_str()) {
+                    return TerraformError::InvalidCIDRBlock {
+                        cidr: wrong_cidr.to_string(),
+                        raw_message: raw_terraform_error_output.to_string(),
+                    };
+                }
+            }
+        }
 
         // SCW
         if raw_terraform_error_output.contains("scaleway-sdk-go: waiting for")
@@ -546,6 +564,9 @@ impl TerraformError {
             }),
             TerraformError::InstanceVolumeCannotBeDownSized { instance_id, volume_id, .. } => {
                 format!("Error, instance (`{}`) volume (`{}`) cannot be smaller than existing size.", instance_id, volume_id)
+            },
+            TerraformError::InvalidCIDRBlock {cidr,..} => {
+                format!("Error, the CIDR block `{}` can't be used.", cidr)
             }
         }
     }
@@ -606,6 +627,9 @@ impl Display for TerraformError {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::InstanceVolumeCannotBeDownSized { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::InvalidCIDRBlock { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
         };

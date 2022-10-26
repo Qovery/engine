@@ -672,6 +672,8 @@ pub enum Tag {
     TerraformWaitingTimeoutResource,
     /// TerraformAlreadyExistingResource: represents an error due to resource already present in tf state while trying to create it.
     TerraformAlreadyExistingResource,
+    /// TerraformInvalidCIDRBlock: represents an error due to an unusable CIDR block already used in the target VPC.
+    TerraformInvalidCIDRBlock,
     /// HelmChartsSetupError: represents an error while trying to setup helm charts.
     HelmChartsSetupError,
     /// HelmChartsDeployError: represents an error while trying to deploy helm charts.
@@ -2446,6 +2448,14 @@ impl EngineError {
                 Some(terraform_error.into()),
                 None,
                 Some("An existing instance volume cannot be downsized, you can only increase its volume.".to_string()),
+            ),
+            TerraformError::InvalidCIDRBlock { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformInvalidCIDRBlock,
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()),
+                None,
+                Some("The CIDR block is equal to or more specific than one of this VPC's CIDR blocks.".to_string()),
             ),
         }
     }
