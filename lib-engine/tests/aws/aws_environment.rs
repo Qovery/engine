@@ -1119,7 +1119,7 @@ fn deploy_job_on_aws_eks() {
             long_id: Uuid::default(),
             name: "job test #####".to_string(),
             action: Action::Create,
-            schedule: JobSchedule::OnStart, //JobSchedule::Cron("* * * * *".to_string()),
+            schedule: JobSchedule::OnStart {}, //JobSchedule::Cron("* * * * *".to_string()),
             source: JobSource::Image {
                 registry: DockerHub {
                     long_id: Uuid::new_v4(),
@@ -1190,7 +1190,9 @@ fn deploy_cronjob_on_aws_eks() {
             long_id: Uuid::default(),
             name: "job test #####||||*_-(".to_string(),
             action: Action::Create,
-            schedule: JobSchedule::Cron("* * * * *".to_string()),
+            schedule: JobSchedule::Cron {
+                schedule: "* * * * *".to_string(),
+            },
             source: JobSource::Image {
                 registry: DockerHub {
                     long_id: Uuid::new_v4(),
