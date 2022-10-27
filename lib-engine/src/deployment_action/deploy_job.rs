@@ -34,7 +34,7 @@ where
         };
 
         match job_schedule {
-            JobSchedule::OnStart | JobSchedule::Cron(_) => {
+            JobSchedule::OnStart | JobSchedule::Cron { .. } => {
                 let (pre_run, run, post_run) = run_job(self, target, &event_details);
                 let task = DeploymentTaskImpl {
                     pre_run: &pre_run,
@@ -56,7 +56,7 @@ where
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(self.action().to_environment_step()));
         match self.schedule() {
-            JobSchedule::Cron(_) => {
+            JobSchedule::Cron { .. } => {
                 let (pre_run, run, post_run) = delete_job(self, target, &event_details);
                 let task = DeploymentTaskImpl {
                     pre_run: &pre_run,
@@ -97,7 +97,7 @@ where
 
                 execute_long_deployment(JobDeploymentReporter::new(self, target, Action::Delete), task)
             }
-            JobSchedule::Cron(_) | JobSchedule::OnStart | JobSchedule::OnPause => Ok(()),
+            JobSchedule::Cron { .. } | JobSchedule::OnStart | JobSchedule::OnPause => Ok(()),
         }?;
 
         let (pre_run, run, post_run) = delete_job(self, target, &event_details);
