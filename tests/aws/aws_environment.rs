@@ -18,7 +18,6 @@ use qovery_engine::utilities::to_short_id;
 use retry::delay::Fibonacci;
 use std::borrow::BorrowMut;
 use std::collections::BTreeMap;
-use std::time::Duration;
 use tracing::{span, Level};
 use url::Url;
 use uuid::Uuid;
@@ -1130,7 +1129,7 @@ fn deploy_job_on_aws_eks() {
                 tag: "bullseye".to_string(),
             },
             max_nb_restart: 2,
-            max_duration_in_sec: Duration::from_secs(30),
+            max_duration_in_sec: 30,
             default_port: Some(8080),
             //command_args: vec![],
             command_args: vec![
@@ -1203,7 +1202,7 @@ fn deploy_cronjob_on_aws_eks() {
                 tag: "bullseye".to_string(),
             },
             max_nb_restart: 2,
-            max_duration_in_sec: Duration::from_secs(30),
+            max_duration_in_sec: 30,
             default_port: Some(8080),
             command_args: vec![
                 "/bin/sh".to_string(),
