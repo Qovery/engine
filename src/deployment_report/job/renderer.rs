@@ -55,6 +55,7 @@ pub(super) fn render_job_deployment_report(
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::cloud_provider::service::Action;
     use crate::deployment_report::utils::{fmt_event_type, DeploymentState, PodRenderContext};
     use crate::utilities::to_short_id;
     use tera::Tera;
@@ -65,7 +66,7 @@ mod test {
         let app_id = Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap();
         let render_ctx = JobDeploymentRenderContext {
             name: to_short_id(&app_id),
-            job_type: JobType::Job.to_string(),
+            job_type: JobType::Job(Action::Create).to_string(),
             tag: "docker.io/debian:bullseye".to_string(),
             nb_pods: 1,
             pods_failing: vec![PodRenderContext {
