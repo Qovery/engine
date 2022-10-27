@@ -134,6 +134,11 @@ impl EnvironmentTask {
             }
 
             // Be sure that our repository exist before trying to pull/push images from it
+            let logger = mk_logger(app.as_service());
+            logger.send_progress(format!(
+                "🗂️ Provisioning container repository {}",
+                app.get_build().image.repository_name()
+            ));
             cr_registry
                 .create_repository(
                     app.get_build().image.repository_name(),
@@ -145,7 +150,6 @@ impl EnvironmentTask {
                 .map_err(cr_to_engine_error)?;
 
             // Ok now everything is setup, we can try to build the app
-            let logger = mk_logger(app.as_service());
             let build_result = infra_ctx
                 .build_platform()
                 .build(app.get_build_mut(), &logger, should_abort);
