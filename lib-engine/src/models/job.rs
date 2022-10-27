@@ -326,7 +326,7 @@ pub trait JobService: Service + DeploymentAction + ToTeraContext {
     }
 
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
-    fn cronjob_schedule(&self) -> Option<&str>;
+    fn job_schedule(&self) -> &JobSchedule;
 }
 
 impl<T: CloudProvider> JobService for Job<T>
@@ -354,13 +354,8 @@ where
         self
     }
 
-    fn cronjob_schedule(&self) -> Option<&str> {
-        match &self.schedule {
-            JobSchedule::OnStart {} => None,
-            JobSchedule::OnPause {} => None,
-            JobSchedule::OnDelete {} => None,
-            JobSchedule::Cron { schedule } => Some(schedule),
-        }
+    fn job_schedule(&self) -> &JobSchedule {
+        &self.schedule
     }
 }
 
