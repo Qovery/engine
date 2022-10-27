@@ -91,7 +91,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
     fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
         match &self.job_type {
             JobType::Job(trigger_on_action) => {
-                if self.action == trigger_on_action {
+                if self.action == *trigger_on_action {
                     self.logger
                         .send_progress(format!("🚀 Deployment of Job at tag {} is starting", self.tag));
                 } else {
