@@ -321,8 +321,6 @@ impl ECR {
         repository_name: &str,
         image_retention_time_in_seconds: u32,
     ) -> Result<Repository, ContainerRegistryError> {
-        self.log_info(format!("🗂️ Provisioning container repository {}", repository_name));
-
         // check if the repository already exists
         let repository = self.get_repository(repository_name);
         if let Some(repo) = repository {
