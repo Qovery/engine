@@ -58,7 +58,7 @@ pub(super) fn render_app_deployment_report(
     deployment_info: &AppDeploymentReport,
 ) -> Result<String, tera::Error> {
     let services_ctx = to_services_render_context(&deployment_info.services, &deployment_info.events);
-    let (pods_starting, pods_terminating, pods_failing) =
+    let (pods_starting, pods_terminating, pods_failing, _) =
         to_pods_render_context(&deployment_info.pods, &deployment_info.events);
     let pvcs_ctx = to_pvc_render_context(&deployment_info.pvcs, &deployment_info.events);
     let render_ctx = AppDeploymentRenderContext {

@@ -39,6 +39,7 @@ impl Display for JobType {
 pub struct JobDeploymentReporter<T> {
     long_id: Uuid,
     job_type: JobType,
+    max_duraction: Duration,
     action: Action,
     tag: String,
     namespace: String,
@@ -65,6 +66,7 @@ impl<T> JobDeploymentReporter<T> {
             long_id: *job.long_id(),
             job_type,
             action,
+            max_duraction: *job.max_duration(),
             tag: job.image_full(),
             namespace: deployment_target.environment.namespace().to_string(),
             kube_client: deployment_target.kube.clone(),
@@ -92,8 +94,11 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
         match &self.job_type {
             JobType::Job(trigger_on_action) => {
                 if self.action == *trigger_on_action {
-                    self.logger
-                        .send_progress(format!("🚀 Deployment of Job at tag {} is starting", self.tag));
+                    self.logger.send_progress(format!(
+                        "🚀 Deployment of Job at tag {} is starting with a timeout/max duration of {} seconds",
+                        self.tag,
+                        self.max_duraction.as_secs()
+                    ));
                 } else {
                     self.logger.send_progress(format!(
                         "🚀 Skipping deployment of Job as it should trigger on {:?}",
@@ -172,7 +177,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
                 format!(r#"
 ❌ {} failed to be executed in the given time frame.
 This most likely an issue with its configuration/code.
-Increase max duration timeout or look at your logs in order to understand what went wrong.
+Look at your logs in order to understand what went wrong or increase its max duration timeout
 
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
                 "#, self.job_type).trim().to_string(),
@@ -195,7 +200,7 @@ Increase max duration timeout or look at your logs in order to understand what w
 #[derive(Debug)]
 pub(super) struct JobDeploymentReport {
     pub id: Uuid,
-    pub _job: Option<K8sJob>,
+    pub job: Option<K8sJob>,
     pub pods: Vec<Pod>,
     pub events: Vec<Event>,
 }
@@ -220,7 +225,7 @@ async fn fetch_job_deployment_report(
     Ok(JobDeploymentReport {
         id: *service_id,
         pods: pods.items,
-        _job: jobs.items.into_iter().find_or_first(|_| true),
+        job: jobs.items.into_iter().find_or_first(|_| true),
         events: events.items,
     })
 }

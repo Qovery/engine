@@ -1,5 +1,7 @@
 use crate::deployment_report::job::reporter::{JobDeploymentReport, JobType};
-use crate::deployment_report::utils::{get_tera_instance, to_pods_render_context, PodRenderContext};
+use crate::deployment_report::utils::{
+    get_tera_instance, to_job_render_context, to_pods_render_context, JobRenderContext, PodRenderContext,
+};
 use crate::utilities::to_short_id;
 use serde::Serialize;
 
@@ -9,16 +11,18 @@ pub struct JobDeploymentRenderContext {
     pub job_type: String,
     pub tag: String,
     pub nb_pods: usize,
+    pub job: Option<JobRenderContext>,
     pub pods_failing: Vec<PodRenderContext>,
     pub pods_starting: Vec<PodRenderContext>,
     pub pods_terminating: Vec<PodRenderContext>,
+    pub pods_running: Vec<PodRenderContext>,
 }
 
 const REPORT_TEMPLATE: &str = r#"
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ┃ {{ job_type | capitalize }} at tag {{ tag }} execution is in progress ⏳, below the current status:
 ┃
-{% set all_pods = pods_failing | concat(with=pods_starting) -%}
+{% set all_pods = pods_failing | concat(with=pods_starting) | concat(with=pods_running) -%}
 ┃ 🛰 {{ job_type | capitalize }} has {{ nb_pods }} pods. {{ pods_starting | length }} starting, {{ pods_terminating | length }} terminating and {{ pods_failing | length }} in error
 {%- for pod in all_pods %}
 ┃  |__ Pod {{ pod.name }} is {{ pod.state | upper }} {{ pod.message }}{%- if pod.restart_count > 0 %}
@@ -37,16 +41,21 @@ pub(super) fn render_job_deployment_report(
     service_tag: &str,
     deployment_info: &JobDeploymentReport,
 ) -> Result<String, tera::Error> {
-    let (pods_starting, pods_terminating, pods_failing) =
+    let (pods_starting, pods_terminating, pods_failing, pods_running) =
         to_pods_render_context(&deployment_info.pods, &deployment_info.events);
+
+    let job_ctx = deployment_info.job.as_ref().map(|job| to_job_render_context(job, &deployment_info.events));
+
     let render_ctx = JobDeploymentRenderContext {
         name: to_short_id(&deployment_info.id),
         job_type: job_type.to_string(),
         tag: service_tag.to_string(),
         nb_pods: deployment_info.pods.len(),
+        job: job_ctx,
         pods_failing,
         pods_starting,
         pods_terminating,
+        pods_running,
     };
     let ctx = tera::Context::from_serialize(render_ctx)?;
     get_tera_instance().render_str(REPORT_TEMPLATE, &ctx)
@@ -69,6 +78,7 @@ mod test {
             job_type: JobType::Job(Action::Create).to_string(),
             tag: "docker.io/debian:bullseye".to_string(),
             nb_pods: 1,
+            job: None,
             pods_failing: vec![PodRenderContext {
                 name: "app-pod-1".to_string(),
                 state: DeploymentState::Failing,
@@ -78,6 +88,7 @@ mod test {
             }],
             pods_starting: vec![],
             pods_terminating: vec![],
+            pods_running: vec![],
         };
 
         let ctx = tera::Context::from_serialize(render_ctx).unwrap();

@@ -1115,7 +1115,7 @@ fn deploy_job_on_aws_eks() {
         //environment.project_long_id = Uuid::default();
         environment.applications = vec![];
         environment.jobs = vec![Job {
-            long_id: Uuid::default(),
+            long_id: Uuid::new_v4(), //Uuid::default(),
             name: "job test #####".to_string(),
             action: Action::Create,
             schedule: JobSchedule::OnStart {}, //JobSchedule::Cron("* * * * *".to_string()),
