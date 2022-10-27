@@ -12,6 +12,7 @@ use kube::Api;
 
 use crate::deployment_report::job::renderer::render_job_deployment_report;
 use crate::errors::Tag::JobFailure;
+use crate::io_models::job::JobSchedule;
 use crate::models::job::JobService;
 use crate::runtime::block_on;
 use itertools::Itertools;
@@ -23,14 +24,14 @@ const MAX_ELASPED_TIME_WITHOUT_REPORT: Duration = Duration::from_secs(60 * 2);
 
 pub(super) enum JobType {
     CronJob(String),
-    Job,
+    Job(Action),
 }
 
 impl Display for JobType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             JobType::CronJob(_) => f.write_str("cron-job"),
-            JobType::Job => f.write_str("job"),
+            JobType::Job(_) => f.write_str("job"),
         }
     }
 }
@@ -38,6 +39,7 @@ impl Display for JobType {
 pub struct JobDeploymentReporter<T> {
     long_id: Uuid,
     job_type: JobType,
+    action: Action,
     tag: String,
     namespace: String,
     kube_client: kube::Client,
@@ -52,14 +54,17 @@ impl<T> JobDeploymentReporter<T> {
         deployment_target: &DeploymentTarget,
         action: Action,
     ) -> JobDeploymentReporter<T> {
-        let job_type = match job.cronjob_schedule() {
-            None => JobType::Job,
-            Some(schedule) => JobType::CronJob(schedule.to_string()),
+        let job_type = match job.job_schedule() {
+            JobSchedule::OnStart { .. } => JobType::Job(Action::Create),
+            JobSchedule::OnPause { .. } => JobType::Job(Action::Pause),
+            JobSchedule::OnDelete { .. } => JobType::Job(Action::Delete),
+            JobSchedule::Cron { schedule } => JobType::CronJob(schedule.to_string()),
         };
 
         JobDeploymentReporter {
             long_id: *job.long_id(),
             job_type,
+            action,
             tag: job.image_full(),
             namespace: deployment_target.environment.namespace().to_string(),
             kube_client: deployment_target.kube.clone(),
@@ -85,11 +90,19 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
 
     fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
         match &self.job_type {
-            JobType::Job => self
-                .logger
-                .send_progress(format!("🚀 Going to deploy job using tag {}", self.tag)),
+            JobType::Job(trigger_on_action) => {
+                if self.action == trigger_on_action {
+                    self.logger
+                        .send_progress(format!("🚀 Deployment of Job at tag {} is starting", self.tag));
+                } else {
+                    self.logger.send_progress(format!(
+                        "🚀 Skipping deployment of Job as it should trigger on {:?}",
+                        trigger_on_action
+                    ));
+                }
+            }
             JobType::CronJob(schedule) => self.logger.send_progress(format!(
-                "🚀 Going to deploy cronjob with schedule `{}` using tag {}",
+                "🚀 Deployment of cronjob with schedule `{}` at tag {} is starting",
                 schedule, self.tag
             )),
         }

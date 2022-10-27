@@ -32,7 +32,7 @@ pub trait Service {
     fn as_service(&self) -> &dyn Service;
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub enum Action {
     Create,
     Pause,
