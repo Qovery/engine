@@ -97,11 +97,11 @@ pub enum JobSchedule {
     OnStart,
     OnPause,
     OnDelete,
-    Cron(String),
+    Cron { schedule: String },
 }
 impl JobSchedule {
     pub fn is_cronjob(&self) -> bool {
-        matches!(self, JobSchedule::Cron(_))
+        matches!(self, JobSchedule::Cron { .. })
     }
 }
 

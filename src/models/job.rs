@@ -207,7 +207,7 @@ impl<T: CloudProvider> Job<T> {
                 max_duration_in_sec: self.max_duration_in_sec.as_secs(),
                 cronjob_schedule: match &self.schedule {
                     JobSchedule::OnStart | JobSchedule::OnPause | JobSchedule::OnDelete => None,
-                    JobSchedule::Cron(schedule) => Some(schedule.to_string()),
+                    JobSchedule::Cron { schedule } => Some(schedule.to_string()),
                 },
                 advanced_settings: self.advanced_settings.clone(),
             },
@@ -246,7 +246,7 @@ impl<T: CloudProvider> Job<T> {
     }
 
     pub fn is_cron_job(&self) -> bool {
-        matches!(self.schedule, JobSchedule::Cron(_))
+        matches!(self.schedule, JobSchedule::Cron { .. })
     }
 
     pub fn tag_for_mirror(&self) -> String {
@@ -359,7 +359,7 @@ where
             JobSchedule::OnStart => None,
             JobSchedule::OnPause => None,
             JobSchedule::OnDelete => None,
-            JobSchedule::Cron(schedule) => Some(schedule),
+            JobSchedule::Cron { schedule } => Some(schedule),
         }
     }
 }
