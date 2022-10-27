@@ -106,6 +106,7 @@ impl JobSchedule {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "snake_case")]
 pub enum JobSource {
     Image {
         registry: Registry,
