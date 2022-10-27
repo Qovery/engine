@@ -44,7 +44,10 @@ pub(super) fn render_job_deployment_report(
     let (pods_starting, pods_terminating, pods_failing, pods_running) =
         to_pods_render_context(&deployment_info.pods, &deployment_info.events);
 
-    let job_ctx = deployment_info.job.as_ref().map(|job| to_job_render_context(job, &deployment_info.events));
+    let job_ctx = deployment_info
+        .job
+        .as_ref()
+        .map(|job| to_job_render_context(job, &deployment_info.events));
 
     let render_ctx = JobDeploymentRenderContext {
         name: to_short_id(&deployment_info.id),

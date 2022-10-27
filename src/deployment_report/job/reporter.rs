@@ -11,6 +11,7 @@ use kube::api::ListParams;
 use kube::Api;
 
 use crate::deployment_report::job::renderer::render_job_deployment_report;
+use crate::deployment_report::utils::to_job_render_context;
 use crate::errors::Tag::JobFailure;
 use crate::io_models::job::JobSchedule;
 use crate::models::job::JobService;
@@ -171,16 +172,37 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
                 "🚫 Deployment has been cancelled.".to_string(),
                 None,
             ));
-        } else if error.tag() == &JobFailure {
+            return;
+        }
+
+        // Retrieve last state of the job to display it in the final message.
+        let job_failure_message = match block_on(fetch_job_deployment_report(
+            &self.kube_client,
+            &self.long_id,
+            &self.selector,
+            &self.namespace,
+        )) {
+            Ok(deployment_info) => {
+                if let Some(job) = &deployment_info.job {
+                    let job_ctx = to_job_render_context(job, &deployment_info.events);
+                    job_ctx.message
+                } else {
+                    None
+                }
+            }
+            Err(_) => None,
+        };
+
+        if error.tag() == &JobFailure {
             self.logger.send_error(EngineError::new_engine_error(
                 error.clone(),
                 format!(r#"
-❌ {} failed to be executed in the given time frame.
+❌ {} failed to be executed in the given time frame due to `{}`.
 This most likely an issue with its configuration/code.
 Look at your logs in order to understand what went wrong or increase its max duration timeout
 
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
-                "#, self.job_type).trim().to_string(),
+                "#, self.job_type, job_failure_message.unwrap_or_default()).trim().to_string(),
                 None,
             ));
         } else {
