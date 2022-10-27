@@ -94,9 +94,9 @@ impl Default for JobAdvancedSettings {
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum JobSchedule {
-    OnStart,
-    OnPause,
-    OnDelete,
+    OnStart {},
+    OnPause {},
+    OnDelete {},
     Cron { schedule: String },
 }
 impl JobSchedule {
