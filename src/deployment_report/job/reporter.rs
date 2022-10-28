@@ -202,7 +202,7 @@ This most likely an issue with its configuration/code.
 Look at your logs in order to understand what went wrong or increase its max duration timeout
 
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
-                "#, self.job_type, self.max_duraction.as_secs(),  job_failure_message.unwrap_or_default()).trim().to_string(),
+                "#, self.job_type, self.max_duraction.as_secs(), job_failure_message.unwrap_or_default()).trim().to_string(),
                 None,
             ));
         } else {
