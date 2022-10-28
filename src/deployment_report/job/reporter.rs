@@ -78,7 +78,7 @@ impl<T> JobDeploymentReporter<T> {
     }
 
     fn max_duration_human_str(&self) -> String {
-        format!("{0:.2} minutes", self.max_duraction.as_secs_f32() / 60.0)
+        format!("{0:.2} minutes", self.max_duraction.as_secs_f64() / 60.0)
     }
 }
 
