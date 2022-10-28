@@ -18,7 +18,6 @@ use qovery_engine::utilities::to_short_id;
 use retry::delay::Fibonacci;
 use std::borrow::BorrowMut;
 use std::collections::BTreeMap;
-use std::time::Duration;
 use tracing::{span, Level};
 use url::Url;
 use uuid::Uuid;
@@ -1116,10 +1115,10 @@ fn deploy_job_on_aws_eks() {
         //environment.project_long_id = Uuid::default();
         environment.applications = vec![];
         environment.jobs = vec![Job {
-            long_id: Uuid::default(),
+            long_id: Uuid::new_v4(), //Uuid::default(),
             name: "job test #####".to_string(),
             action: Action::Create,
-            schedule: JobSchedule::OnStart, //JobSchedule::Cron("* * * * *".to_string()),
+            schedule: JobSchedule::OnStart {}, //JobSchedule::Cron("* * * * *".to_string()),
             source: JobSource::Image {
                 registry: DockerHub {
                     long_id: Uuid::new_v4(),
@@ -1130,13 +1129,13 @@ fn deploy_job_on_aws_eks() {
                 tag: "bullseye".to_string(),
             },
             max_nb_restart: 2,
-            max_duration_in_sec: Duration::from_secs(30),
+            max_duration_in_sec: 30,
             default_port: Some(8080),
             //command_args: vec![],
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "echo starting; sleep 10; echo started".to_string(),
+                "echo starting; sleep 90; echo started".to_string(),
             ],
             entrypoint: None,
             force_trigger: false,
@@ -1190,7 +1189,9 @@ fn deploy_cronjob_on_aws_eks() {
             long_id: Uuid::default(),
             name: "job test #####||||*_-(".to_string(),
             action: Action::Create,
-            schedule: JobSchedule::Cron("* * * * *".to_string()),
+            schedule: JobSchedule::Cron {
+                schedule: "* * * * *".to_string(),
+            },
             source: JobSource::Image {
                 registry: DockerHub {
                     long_id: Uuid::new_v4(),
@@ -1201,7 +1202,7 @@ fn deploy_cronjob_on_aws_eks() {
                 tag: "bullseye".to_string(),
             },
             max_nb_restart: 2,
-            max_duration_in_sec: Duration::from_secs(30),
+            max_duration_in_sec: 30,
             default_port: Some(8080),
             command_args: vec![
                 "/bin/sh".to_string(),

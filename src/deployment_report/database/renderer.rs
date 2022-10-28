@@ -71,7 +71,7 @@ pub(super) fn render_database_deployment_report(
     deployment_report: &DatabaseDeploymentReport,
 ) -> Result<String, tera::Error> {
     let services_ctx = to_services_render_context(&deployment_report.services, &deployment_report.events);
-    let (pods_starting, pods_terminating, pods_failing) =
+    let (pods_starting, pods_terminating, pods_failing, _) =
         to_pods_render_context(&deployment_report.pods, &deployment_report.events);
     let pvcs_ctx = to_pvc_render_context(&deployment_report.pvcs, &deployment_report.events);
     let render_ctx = DatabaseDeploymentRenderContext {

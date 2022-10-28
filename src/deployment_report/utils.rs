@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::core::v1::{
     ContainerState, ContainerStateTerminated, ContainerStateWaiting, Event, LoadBalancerStatus, PersistentVolumeClaim,
     Pod, PodStatus, Service, ServiceStatus,
@@ -30,6 +31,14 @@ pub struct PodRenderContext {
     pub state: DeploymentState,
     pub message: Option<String>,
     pub restart_count: u32,
+    pub events: Vec<EventRenderContext>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct JobRenderContext {
+    pub name: String,
+    pub state: DeploymentState,
+    pub message: Option<String>,
     pub events: Vec<EventRenderContext>,
 }
 
@@ -170,17 +179,54 @@ pub fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec
     svc_ctx
 }
 
+pub fn to_job_render_context(job: &Job, events: &[Event]) -> JobRenderContext {
+    let job_name = job.metadata.name.as_deref().unwrap_or("");
+    let job_uid = job.metadata.uid.as_deref().unwrap_or("");
+    let state = job
+        .status
+        .as_ref()
+        .and_then(|status| status.failed.as_ref())
+        .map_or(DeploymentState::Ready, |_| DeploymentState::Failing);
+    let message = job
+        .status
+        .as_ref()
+        .and_then(|status| status.conditions.as_ref())
+        .and_then(|conditions| conditions.first())
+        .map(|condition| {
+            format!(
+                "{}: {}",
+                condition.reason.as_deref().unwrap_or(""),
+                condition.message.as_deref().unwrap_or("")
+            )
+        });
+
+    return JobRenderContext {
+        name: job_name.to_string(),
+        state,
+        message,
+        events: get_last_events_for(events.iter(), job_uid, DEFAULT_MAX_EVENTS)
+            .flat_map(to_event_context)
+            .collect(),
+    };
+}
+
 pub fn to_pods_render_context(
     pods: &[Pod],
     events: &[Event],
-) -> (Vec<PodRenderContext>, Vec<PodRenderContext>, Vec<PodRenderContext>) {
+) -> (
+    Vec<PodRenderContext>,
+    Vec<PodRenderContext>,
+    Vec<PodRenderContext>,
+    Vec<PodRenderContext>,
+) {
     if pods.is_empty() {
-        return (vec![], vec![], vec![]);
+        return (vec![], vec![], vec![], vec![]);
     }
 
     let mut pods_failing: Vec<PodRenderContext> = Vec::with_capacity(pods.len());
     let mut pods_starting: Vec<PodRenderContext> = Vec::with_capacity(pods.len());
     let mut pods_terminating: Vec<PodRenderContext> = Vec::with_capacity(pods.len());
+    let mut pods_running: Vec<PodRenderContext> = Vec::with_capacity(pods.len());
 
     for pod in pods {
         let pod_name = pod.metadata.name.as_deref().unwrap_or("");
@@ -222,9 +268,19 @@ pub fn to_pods_render_context(
             });
             continue;
         }
+
+        pods_running.push(PodRenderContext {
+            name: pod_name.to_string(),
+            state: DeploymentState::Starting,
+            message: None,
+            restart_count: pod.restart_count(),
+            events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS)
+                .flat_map(to_event_context)
+                .collect(),
+        });
     }
 
-    (pods_starting, pods_terminating, pods_failing)
+    (pods_starting, pods_terminating, pods_failing, pods_running)
 }
 
 pub fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -> Vec<PvcRenderContext> {

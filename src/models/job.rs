@@ -36,7 +36,7 @@ pub struct Job<T: CloudProvider> {
     pub tag: String,
     pub(super) schedule: JobSchedule,
     pub(super) max_nb_restart: u32,
-    pub(super) max_duration_in_sec: Duration,
+    pub(super) max_duration: Duration,
     pub(super) default_port: Option<u16>, // for probes
     pub(super) command_args: Vec<String>,
     pub(super) entrypoint: Option<String>,
@@ -120,7 +120,7 @@ impl<T: CloudProvider> Job<T> {
             tag,
             schedule,
             max_nb_restart,
-            max_duration_in_sec,
+            max_duration: max_duration_in_sec,
             name,
             command_args,
             entrypoint,
@@ -204,10 +204,10 @@ impl<T: CloudProvider> Job<T> {
                 ram_limit_in_mib: format!("{}Mi", self.ram_limit_in_mib),
                 default_port: self.default_port,
                 max_nb_restart: self.max_nb_restart,
-                max_duration_in_sec: self.max_duration_in_sec.as_secs(),
+                max_duration_in_sec: self.max_duration.as_secs(),
                 cronjob_schedule: match &self.schedule {
-                    JobSchedule::OnStart | JobSchedule::OnPause | JobSchedule::OnDelete => None,
-                    JobSchedule::Cron(schedule) => Some(schedule.to_string()),
+                    JobSchedule::OnStart {} | JobSchedule::OnPause {} | JobSchedule::OnDelete {} => None,
+                    JobSchedule::Cron { schedule } => Some(schedule.to_string()),
                 },
                 advanced_settings: self.advanced_settings.clone(),
             },
@@ -246,7 +246,7 @@ impl<T: CloudProvider> Job<T> {
     }
 
     pub fn is_cron_job(&self) -> bool {
-        matches!(self.schedule, JobSchedule::Cron(_))
+        matches!(self.schedule, JobSchedule::Cron { .. })
     }
 
     pub fn tag_for_mirror(&self) -> String {
@@ -326,7 +326,8 @@ pub trait JobService: Service + DeploymentAction + ToTeraContext {
     }
 
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
-    fn cronjob_schedule(&self) -> Option<&str>;
+    fn job_schedule(&self) -> &JobSchedule;
+    fn max_duration(&self) -> &Duration;
 }
 
 impl<T: CloudProvider> JobService for Job<T>
@@ -354,13 +355,12 @@ where
         self
     }
 
-    fn cronjob_schedule(&self) -> Option<&str> {
-        match &self.schedule {
-            JobSchedule::OnStart => None,
-            JobSchedule::OnPause => None,
-            JobSchedule::OnDelete => None,
-            JobSchedule::Cron(schedule) => Some(schedule),
-        }
+    fn job_schedule(&self) -> &JobSchedule {
+        &self.schedule
+    }
+
+    fn max_duration(&self) -> &Duration {
+        &self.max_duration
     }
 }
 

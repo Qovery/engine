@@ -92,19 +92,21 @@ impl Default for JobAdvancedSettings {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "snake_case")]
 pub enum JobSchedule {
-    OnStart,
-    OnPause,
-    OnDelete,
-    Cron(String),
+    OnStart {},
+    OnPause {},
+    OnDelete {},
+    Cron { schedule: String },
 }
 impl JobSchedule {
     pub fn is_cronjob(&self) -> bool {
-        matches!(self, JobSchedule::Cron(_))
+        matches!(self, JobSchedule::Cron { .. })
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "snake_case")]
 pub enum JobSource {
     Image {
         registry: Registry,
@@ -128,9 +130,9 @@ pub struct Job {
     pub action: Action,
     pub schedule: JobSchedule,
     pub source: JobSource,
-    pub max_nb_restart: u32,           // .spec.backoffLimit
-    pub max_duration_in_sec: Duration, // .spec.activeDeadlineSeconds
-    pub default_port: Option<u16>,     // for probes
+    pub max_nb_restart: u32,       // .spec.backoffLimit
+    pub max_duration_in_sec: u64,  // .spec.activeDeadlineSeconds
+    pub default_port: Option<u16>, // for probes
     pub command_args: Vec<String>,
     pub entrypoint: Option<String>,
     pub force_trigger: bool,
@@ -193,7 +195,7 @@ impl Job {
                         tag_,
                         self.schedule,
                         self.max_nb_restart,
-                        self.max_duration_in_sec,
+                        Duration::from_secs(self.max_duration_in_sec),
                         self.default_port,
                         self.command_args,
                         self.entrypoint,
@@ -218,7 +220,7 @@ impl Job {
                         tag_,
                         self.schedule,
                         self.max_nb_restart,
-                        self.max_duration_in_sec,
+                        Duration::from_secs(self.max_duration_in_sec),
                         self.default_port,
                         self.command_args,
                         self.entrypoint,
@@ -244,7 +246,7 @@ impl Job {
                 tag_,
                 self.schedule,
                 self.max_nb_restart,
-                self.max_duration_in_sec,
+                Duration::from_secs(self.max_duration_in_sec),
                 self.default_port,
                 self.command_args,
                 self.entrypoint,

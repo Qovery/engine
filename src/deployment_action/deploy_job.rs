@@ -28,13 +28,13 @@ where
 
         // Force job to run, if force trigger is requested
         let job_schedule = if self.should_force_trigger() {
-            &JobSchedule::OnStart
+            &JobSchedule::OnStart {}
         } else {
             self.schedule()
         };
 
         match job_schedule {
-            JobSchedule::OnStart | JobSchedule::Cron(_) => {
+            JobSchedule::OnStart {} | JobSchedule::Cron { .. } => {
                 let (pre_run, run, post_run) = run_job(self, target, &event_details);
                 let task = DeploymentTaskImpl {
                     pre_run: &pre_run,
@@ -44,7 +44,7 @@ where
 
                 execute_long_deployment(JobDeploymentReporter::new(self, target, Action::Create), task)
             }
-            JobSchedule::OnPause | JobSchedule::OnDelete => {
+            JobSchedule::OnPause {} | JobSchedule::OnDelete {} => {
                 let job_reporter = JobDeploymentReporter::new(self, target, Action::Create);
                 execute_long_deployment(job_reporter, |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
                     Ok(())
@@ -56,7 +56,7 @@ where
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(self.action().to_environment_step()));
         match self.schedule() {
-            JobSchedule::Cron(_) => {
+            JobSchedule::Cron { .. } => {
                 let (pre_run, run, post_run) = delete_job(self, target, &event_details);
                 let task = DeploymentTaskImpl {
                     pre_run: &pre_run,
@@ -65,7 +65,7 @@ where
                 };
                 execute_long_deployment(JobDeploymentReporter::new(self, target, Action::Pause), task)
             }
-            JobSchedule::OnPause => {
+            JobSchedule::OnPause {} => {
                 let (pre_run, run, post_run) = run_job(self, target, &event_details);
                 let task = DeploymentTaskImpl {
                     pre_run: &pre_run,
@@ -75,7 +75,7 @@ where
 
                 execute_long_deployment(JobDeploymentReporter::new(self, target, Action::Pause), task)
             }
-            JobSchedule::OnStart | JobSchedule::OnDelete => {
+            JobSchedule::OnStart {} | JobSchedule::OnDelete {} => {
                 let job_reporter = JobDeploymentReporter::new(self, target, Action::Pause);
                 execute_long_deployment(job_reporter, |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
                     Ok(())
@@ -87,7 +87,7 @@ where
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
         let event_details = self.get_event_details(Stage::Environment(self.action().to_environment_step()));
         match self.schedule() {
-            JobSchedule::OnDelete => {
+            JobSchedule::OnDelete {} => {
                 let (pre_run, run, post_run) = run_job(self, target, &event_details);
                 let task = DeploymentTaskImpl {
                     pre_run: &pre_run,
@@ -97,7 +97,7 @@ where
 
                 execute_long_deployment(JobDeploymentReporter::new(self, target, Action::Delete), task)
             }
-            JobSchedule::Cron(_) | JobSchedule::OnStart | JobSchedule::OnPause => Ok(()),
+            JobSchedule::Cron { .. } | JobSchedule::OnStart {} | JobSchedule::OnPause {} => Ok(()),
         }?;
 
         let (pre_run, run, post_run) = delete_job(self, target, &event_details);

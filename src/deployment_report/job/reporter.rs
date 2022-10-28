@@ -11,7 +11,9 @@ use kube::api::ListParams;
 use kube::Api;
 
 use crate::deployment_report::job::renderer::render_job_deployment_report;
+use crate::deployment_report::utils::to_job_render_context;
 use crate::errors::Tag::JobFailure;
+use crate::io_models::job::JobSchedule;
 use crate::models::job::JobService;
 use crate::runtime::block_on;
 use itertools::Itertools;
@@ -23,14 +25,14 @@ const MAX_ELASPED_TIME_WITHOUT_REPORT: Duration = Duration::from_secs(60 * 2);
 
 pub(super) enum JobType {
     CronJob(String),
-    Job,
+    Job(Action),
 }
 
 impl Display for JobType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             JobType::CronJob(_) => f.write_str("cron-job"),
-            JobType::Job => f.write_str("job"),
+            JobType::Job(_) => f.write_str("job"),
         }
     }
 }
@@ -38,6 +40,8 @@ impl Display for JobType {
 pub struct JobDeploymentReporter<T> {
     long_id: Uuid,
     job_type: JobType,
+    max_duraction: Duration,
+    action: Action,
     tag: String,
     namespace: String,
     kube_client: kube::Client,
@@ -52,14 +56,18 @@ impl<T> JobDeploymentReporter<T> {
         deployment_target: &DeploymentTarget,
         action: Action,
     ) -> JobDeploymentReporter<T> {
-        let job_type = match job.cronjob_schedule() {
-            None => JobType::Job,
-            Some(schedule) => JobType::CronJob(schedule.to_string()),
+        let job_type = match job.job_schedule() {
+            JobSchedule::OnStart { .. } => JobType::Job(Action::Create),
+            JobSchedule::OnPause { .. } => JobType::Job(Action::Pause),
+            JobSchedule::OnDelete { .. } => JobType::Job(Action::Delete),
+            JobSchedule::Cron { schedule } => JobType::CronJob(schedule.to_string()),
         };
 
         JobDeploymentReporter {
             long_id: *job.long_id(),
             job_type,
+            action,
+            max_duraction: *job.max_duration(),
             tag: job.image_full(),
             namespace: deployment_target.environment.namespace().to_string(),
             kube_client: deployment_target.kube.clone(),
@@ -85,11 +93,22 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
 
     fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
         match &self.job_type {
-            JobType::Job => self
-                .logger
-                .send_progress(format!("🚀 Going to deploy job using tag {}", self.tag)),
+            JobType::Job(trigger_on_action) => {
+                if self.action == *trigger_on_action {
+                    self.logger.send_progress(format!(
+                        "🚀 Deployment of Job at tag {} is starting with a timeout/max duration of {} seconds",
+                        self.tag,
+                        self.max_duraction.as_secs()
+                    ));
+                } else {
+                    self.logger.send_progress(format!(
+                        "🚀 Skipping deployment of Job as it should trigger on {:?}",
+                        trigger_on_action
+                    ));
+                }
+            }
             JobType::CronJob(schedule) => self.logger.send_progress(format!(
-                "🚀 Going to deploy cronjob with schedule `{}` using tag {}",
+                "🚀 Deployment of cronjob with schedule `{}` at tag {} is starting",
                 schedule, self.tag
             )),
         }
@@ -153,16 +172,37 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
                 "🚫 Deployment has been cancelled.".to_string(),
                 None,
             ));
-        } else if error.tag() == &JobFailure {
+            return;
+        }
+
+        // Retrieve last state of the job to display it in the final message.
+        let job_failure_message = match block_on(fetch_job_deployment_report(
+            &self.kube_client,
+            &self.long_id,
+            &self.selector,
+            &self.namespace,
+        )) {
+            Ok(deployment_info) => {
+                if let Some(job) = &deployment_info.job {
+                    let job_ctx = to_job_render_context(job, &deployment_info.events);
+                    job_ctx.message
+                } else {
+                    None
+                }
+            }
+            Err(_) => None,
+        };
+
+        if error.tag() == &JobFailure {
             self.logger.send_error(EngineError::new_engine_error(
                 error.clone(),
                 format!(r#"
-❌ {} failed to be executed in the given time frame.
+❌ {} failed to be executed in the given {} seconds due to `{}`.
 This most likely an issue with its configuration/code.
-Increase max duration timeout or look at your logs in order to understand what went wrong.
+Look at your logs in order to understand what went wrong or increase its max duration timeout
 
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
-                "#, self.job_type).trim().to_string(),
+                "#, self.job_type, self.max_duraction.as_secs(),  job_failure_message.unwrap_or_default()).trim().to_string(),
                 None,
             ));
         } else {
@@ -182,7 +222,7 @@ Increase max duration timeout or look at your logs in order to understand what w
 #[derive(Debug)]
 pub(super) struct JobDeploymentReport {
     pub id: Uuid,
-    pub _job: Option<K8sJob>,
+    pub job: Option<K8sJob>,
     pub pods: Vec<Pod>,
     pub events: Vec<Event>,
 }
@@ -207,7 +247,7 @@ async fn fetch_job_deployment_report(
     Ok(JobDeploymentReport {
         id: *service_id,
         pods: pods.items,
-        _job: jobs.items.into_iter().find_or_first(|_| true),
+        job: jobs.items.into_iter().find_or_first(|_| true),
         events: events.items,
     })
 }
