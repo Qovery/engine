@@ -76,6 +76,10 @@ impl<T> JobDeploymentReporter<T> {
             _phantom: PhantomData,
         }
     }
+
+    fn max_duration_human_str(&self) -> String {
+        format!("{0:.2} minutes", self.max_duraction.as_secs_f64() / 60.0)
+    }
 }
 
 impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
@@ -96,9 +100,9 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
             JobType::Job(trigger_on_action) => {
                 if self.action == *trigger_on_action {
                     self.logger.send_progress(format!(
-                        "🚀 Deployment of Job at tag {} is starting with a timeout/max duration of {} seconds",
+                        "🚀 Deployment of Job at tag {} is starting with a timeout/max duration of {}",
                         self.tag,
-                        self.max_duraction.as_secs()
+                        self.max_duration_human_str()
                     ));
                 } else {
                     self.logger.send_progress(format!(
@@ -197,12 +201,12 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
             self.logger.send_error(EngineError::new_engine_error(
                 error.clone(),
                 format!(r#"
-❌ {} failed to be executed in the given {} seconds due to `{}`.
+❌ {} failed to be executed in the given {} due to `{}`.
 This most likely an issue with its configuration/code.
 Look at your logs in order to understand what went wrong or increase its max duration timeout
 
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/
-                "#, self.job_type, self.max_duraction.as_secs(),  job_failure_message.unwrap_or_default()).trim().to_string(),
+                "#, self.job_type, self.max_duration_human_str(), job_failure_message.unwrap_or_default()).trim().to_string(),
                 None,
             ));
         } else {
