@@ -1135,7 +1135,7 @@ fn deploy_job_on_aws_eks() {
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "echo starting; sleep 90; echo started".to_string(),
+                "echo starting; sleep 10; echo started".to_string(),
             ],
             entrypoint: None,
             force_trigger: false,
