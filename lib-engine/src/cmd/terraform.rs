@@ -682,9 +682,31 @@ fn terraform_plugins_failed_load(
 }
 
 fn terraform_init(root_dir: &str) -> Result<Vec<String>, TerraformError> {
-    let terraform_args = vec!["init", "-no-color"];
+    // issue with provider lock since 0.14 and CI, need to manage terraform lock
     let terraform_provider_lock = format!("{}/.terraform.lock.hcl", &root_dir);
+    // no more architectures have been added because of some not availables (mostly on mac os)
+    let terraform_providers_lock_args = vec!["providers", "lock", "-platform=linux_amd64"];
+    let result = retry::retry(Fixed::from_millis(3000).take(5), || {
+        // terraform init
+        match terraform_exec(root_dir, terraform_providers_lock_args.clone()) {
+            Ok(output) => OperationResult::Ok(output),
+            Err(err) => OperationResult::Retry(err),
+        }
+    });
 
+    match result {
+        Ok(_) => {}
+        Err(Operation { error, .. }) => return Err(error),
+        Err(retry::Error::Internal(e)) => {
+            return Err(TerraformError::new(
+                terraform_providers_lock_args.iter().map(|e| e.to_string()).collect(),
+                "".to_string(),
+                e,
+            ))
+        }
+    };
+
+    let terraform_args = vec!["init", "-no-color"];
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // terraform init
         match terraform_exec(root_dir, terraform_args.clone()) {
