@@ -810,12 +810,12 @@ fn create(
                     ))
                 }
                 Err(e) => {
-                    kubernetes.logger().log(EngineEvent::Error(
-                        e,
-                        Some(EventMessage::new_from_safe(
-                            "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
+                    // Log a warning, this error is not blocking
+                    kubernetes.logger().log(EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new("Error detected, upgrade won't occurs, but standard deployment.".to_string(), Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
                         )),
-                    ));
+                    );
                 }
             },
             Err(_) => kubernetes.logger().log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe("Kubernetes cluster upgrade not required, config file is not found and cluster have certainly never been deployed before".to_string())))
