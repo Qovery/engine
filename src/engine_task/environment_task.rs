@@ -79,13 +79,8 @@ impl EnvironmentTask {
     // FIXME: Remove EngineConfig type, there is no use for it
     // merge it with DeploymentTarget type
     fn infrastructure_context(&self) -> Result<InfrastructureContext, EngineError> {
-        match self
-            .request
+        self.request
             .engine(&self.info_context(), self.request.event_details(), self.logger.clone())
-        {
-            Ok(infra_ctx) => Ok(infra_ctx),
-            Err(err) => Err(err),
-        }
     }
 
     fn _is_canceled(&self) -> bool {
