@@ -1,0 +1,22 @@
+image:
+  region: set-by-engine-code
+  pullPolicy: IfNotPresent
+
+init:
+  image:
+    region: set-by-engine-code
+
+crd:
+  create: false
+
+originalMatchLabels: set-by-engine-code # this is required to know if we need to keep old annotation/labels values or not
+
+env:
+  CLUSTER_NAME: set-by-engine-code # label ENIs
+  MINIMUM_IP_TARGET: 60 # number of total IP addresses that the daemon should attempt to allocate for pod assignment on the node (init phase)
+  WARM_IP_TARGET: 10 # number of free IP addresses that the daemon should attempt to keep available for pod assignment on the node
+  MAX_ENI: 100 # maximum number of ENIs that will be attached to the node (k8s recommend to avoid going over 100)
+
+resources:
+  requests:
+    cpu: 50m
