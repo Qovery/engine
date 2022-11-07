@@ -1,0 +1,9 @@
+nameOverride: set-by-engine-code
+fullnameOverride: set-by-engine-code
+
+enableSpotInterruptionDraining: true
+enableScheduledEventDraining: true
+deleteLocalData: true
+ignoreDaemonSets: true
+podTerminationGracePeriod: 300
+nodeTerminationGracePeriod: 120
