@@ -1,7 +1,7 @@
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartPayload, ChartSetValue, HelmChart, HelmChartNamespaces,
 };
-use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath};
+use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath};
 use crate::cmd::kubectl::{kubectl_delete_crash_looping_pods, kubectl_exec_get_daemonset, kubectl_exec_with_output};
 use crate::errors::{CommandError, ErrorMessageVerbosity};
 use crate::runtime::block_on;
@@ -36,6 +36,12 @@ impl AwsVpcCniChart {
                 )
                 .to_string(),
                 namespace: HelmChartNamespaces::KubeSystem,
+                values_files: vec![HelmChartValuesFilePath::new(
+                    chart_prefix_path,
+                    HelmChartDirectoryLocation::CloudProviderFolder,
+                    AwsVpcCniChart::chart_name(),
+                )
+                .to_string()],
                 values: vec![
                     ChartSetValue {
                         key: "image.region".to_string(),
@@ -44,14 +50,6 @@ impl AwsVpcCniChart {
                     ChartSetValue {
                         key: "init.image.region".to_string(),
                         value: chart_image_region,
-                    },
-                    ChartSetValue {
-                        key: "image.pullPolicy".to_string(),
-                        value: "IfNotPresent".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "crd.create".to_string(),
-                        value: "false".to_string(),
                     },
                     // this is required to know if we need to keep old annotation/labels values or not
                     ChartSetValue {
@@ -62,25 +60,6 @@ impl AwsVpcCniChart {
                     ChartSetValue {
                         key: "env.CLUSTER_NAME".to_string(),
                         value: cluster_name,
-                    },
-                    // number of total IP addresses that the daemon should attempt to allocate for pod assignment on the node (init phase)
-                    ChartSetValue {
-                        key: "env.MINIMUM_IP_TARGET".to_string(),
-                        value: "60".to_string(),
-                    },
-                    // number of free IP addresses that the daemon should attempt to keep available for pod assignment on the node
-                    ChartSetValue {
-                        key: "env.WARM_IP_TARGET".to_string(),
-                        value: "10".to_string(),
-                    },
-                    // maximum number of ENIs that will be attached to the node (k8s recommend to avoid going over 100)
-                    ChartSetValue {
-                        key: "env.MAX_ENI".to_string(),
-                        value: "100".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.requests.cpu".to_string(),
-                        value: "50m".to_string(),
                     },
                 ],
                 ..Default::default()
@@ -329,5 +308,80 @@ pub fn is_cni_old_version_installed(
             e.message_raw(),
             e.env_vars(),
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::aws::kubernetes::helm_charts::aws_vpc_cni_chart::AwsVpcCniChart;
+    use crate::cloud_provider::helm::CommonChart;
+    use crate::cloud_provider::helm_charts::get_helm_values_set_in_code_but_absent_in_values_file;
+    use std::env;
+
+    /// Makes sure chart directory containing all YAML files exists.
+    #[test]
+    fn aws_vpc_cni_chart_directory_exists_test() {
+        // setup:
+        let current_directory = env::current_dir().expect("Impossible to get current directory");
+        let chart_path = format!(
+            "{}/lib/aws/bootstrap/charts/{}/Chart.yaml",
+            current_directory
+                .to_str()
+                .expect("Impossible to convert current directory to string"),
+            AwsVpcCniChart::chart_name(),
+        );
+
+        // execute
+        let values_file = std::fs::File::open(&chart_path);
+
+        // verify:
+        assert!(values_file.is_ok(), "Chart directory should exist: `{}`", chart_path);
+    }
+
+    /// Makes sure chart values file exists.
+    #[test]
+    fn aws_vpc_cni_chart_values_file_exists_test() {
+        // setup:
+        let current_directory = env::current_dir().expect("Impossible to get current directory");
+        let chart_values_path = format!(
+            "{}/lib/aws/bootstrap/chart_values/{}.yaml",
+            current_directory
+                .to_str()
+                .expect("Impossible to convert current directory to string"),
+            AwsVpcCniChart::chart_name(),
+        );
+
+        // execute
+        let values_file = std::fs::File::open(&chart_values_path);
+
+        // verify:
+        assert!(values_file.is_ok(), "Chart values file should exist: `{}`", chart_values_path);
+    }
+
+    /// Make sure rust code doesn't set a value not declared inside values file.
+    /// All values should be declared / set in values file unless it needs to be injected via rust code.
+    #[test]
+    fn aws_vpc_cni_chart_rust_overridden_values_exists_in_values_yaml_test() {
+        // setup:
+        let chart = AwsVpcCniChart::new(
+            "whatever".to_string(),
+            None,
+            "whatever".to_string(),
+            true,
+            "whatever".to_string(),
+        );
+
+        // execute:
+        let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(
+            CommonChart {
+                // just fake to mimic common chart for test
+                chart_info: chart.chart_info,
+                ..Default::default()
+            },
+            format!("/lib/aws/bootstrap/chart_values/{}.yaml", AwsVpcCniChart::chart_name()),
+        );
+
+        // verify:
+        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
     }
 }
