@@ -1,5 +1,7 @@
 use crate::cloud_provider::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart};
-use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
+use crate::cloud_provider::helm_charts::{
+    HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
+};
 use crate::errors::CommandError;
 use crate::runtime::block_on;
 use k8s_openapi::api::rbac::v1::RoleBinding;
@@ -8,6 +10,7 @@ use kube::{Api, Client};
 
 pub struct AwsIamEksUserMapperChart {
     chart_path: HelmChartPath,
+    chart_values_path: HelmChartValuesFilePath,
     chart_image_region: String,
     aws_iam_eks_user_mapper_key: String,
     aws_iam_eks_user_mapper_secret: String,
@@ -32,10 +35,15 @@ impl AwsIamEksUserMapperChart {
                 HelmChartDirectoryLocation::CloudProviderFolder,
                 AwsIamEksUserMapperChart::chart_name(),
             ),
+            chart_values_path: HelmChartValuesFilePath::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CloudProviderFolder,
+                AwsIamEksUserMapperChart::chart_name(),
+            ),
         }
     }
 
-    fn chart_name() -> String {
+    pub fn chart_name() -> String {
         "iam-eks-user-mapper".to_string()
     }
 }
@@ -46,6 +54,7 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
             chart_info: ChartInfo {
                 name: AwsIamEksUserMapperChart::chart_name(),
                 path: self.chart_path.to_string(),
+                values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
                     ChartSetValue {
                         key: "aws.accessKey".to_string(),
@@ -62,23 +71,6 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
                     ChartSetValue {
                         key: "syncIamGroup".to_string(),
                         value: self.aws_iam_user_mapper_group_name.to_string(),
-                    },
-                    // resources limits
-                    ChartSetValue {
-                        key: "resources.limits.cpu".to_string(),
-                        value: "20m".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.requests.cpu".to_string(),
-                        value: "10m".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.limits.memory".to_string(),
-                        value: "32Mi".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.requests.memory".to_string(),
-                        value: "32Mi".to_string(),
                     },
                 ],
                 ..Default::default()
@@ -148,5 +140,81 @@ impl ChartInstallationChecker for AwsIamEksUserMapperChecker {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper_chart::AwsIamEksUserMapperChart;
+    use crate::cloud_provider::helm_charts::{
+        get_helm_values_set_in_code_but_absent_in_values_file, ToCommonHelmChart,
+    };
+    use std::env;
+
+    /// Makes sure chart directory containing all YAML files exists.
+    #[test]
+    fn aws_iam_eks_user_mapper_chart_directory_exists_test() {
+        // setup:
+        let current_directory = env::current_dir().expect("Impossible to get current directory");
+        let chart_path = format!(
+            "{}/lib/aws/bootstrap/charts/{}/Chart.yaml",
+            current_directory
+                .to_str()
+                .expect("Impossible to convert current directory to string"),
+            AwsIamEksUserMapperChart::chart_name(),
+        );
+
+        // execute
+        let values_file = std::fs::File::open(&chart_path);
+
+        // verify:
+        assert!(values_file.is_ok(), "Chart directory should exist: `{}`", chart_path);
+    }
+
+    /// Makes sure chart values file exists.
+    #[test]
+    fn aws_iam_eks_user_mapper_chart_values_file_exists_test() {
+        // setup:
+        let current_directory = env::current_dir().expect("Impossible to get current directory");
+        let chart_values_path = format!(
+            "{}/lib/aws/bootstrap/chart_values/{}.yaml",
+            current_directory
+                .to_str()
+                .expect("Impossible to convert current directory to string"),
+            AwsIamEksUserMapperChart::chart_name(),
+        );
+
+        // execute
+        let values_file = std::fs::File::open(&chart_values_path);
+
+        // verify:
+        assert!(values_file.is_ok(), "Chart values file should exist: `{}`", chart_values_path);
+    }
+
+    /// Make sure rust code deosn't set a value not declared inside values file.
+    /// All values should be declared / set in values file unless it needs to be injected via rust code.
+    #[test]
+    fn rust_overridden_values_exists_in_values_yaml_test() {
+        // setup:
+        let chart = AwsIamEksUserMapperChart::new(
+            None,
+            "whatever".to_string(),
+            "whatever".to_string(),
+            "whatever".to_string(),
+            "whatever".to_string(),
+        )
+        .to_common_helm_chart();
+
+        // execute:
+        let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(
+            chart,
+            format!(
+                "/lib/aws/bootstrap/chart_values/{}.yaml",
+                AwsIamEksUserMapperChart::chart_name()
+            ),
+        );
+
+        // verify:
+        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
     }
 }

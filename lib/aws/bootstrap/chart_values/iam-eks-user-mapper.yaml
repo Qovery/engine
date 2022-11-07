@@ -1,0 +1,14 @@
+aws:
+  accessKey: set-by-engine-code
+  secretKey: set-by-engine-code
+  region: set-by-engine-code
+
+syncIamGroup: set-by-engine-code
+
+resources:
+  limits:
+    cpu: 20m
+    memory: 32Mi
+  requests:
+    cpu: 10m
+    memory: 32Mi
