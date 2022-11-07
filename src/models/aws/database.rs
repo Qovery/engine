@@ -292,6 +292,14 @@ where
             context.insert("database_elasticache_instances_number", &1);
         }
 
+        // Specific for documentdb
+        if T::db_type() == service::DatabaseType::MongoDB {
+            // because of wrong subnet set since the beginning, we're rectifying it here for fresh new database created
+            let docdb_old_subnet_date: DateTime<Utc> = Utc.ymd(2022, 11, 20).and_hms(0, 0, 0);
+            let is_old_docdb_format = self.created_at < docdb_old_subnet_date;
+            context.insert("database_docdb_subnet_use_old_group_name", &is_old_docdb_format);
+        };
+
         // Multi AZ: AWS best practices recommend to use multi AZ for production databases, so we force it
         let aws_azs = kubernetes.aws_zones().unwrap_or_default();
         if aws_azs.len() != 3 {
