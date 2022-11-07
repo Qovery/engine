@@ -126,6 +126,7 @@ pub fn environment_2_app_2_routers_1_psql(
             action: Action::Create,
             long_id: Uuid::new_v4(),
             name: database_name.clone(),
+            created_at: Utc::now(),
             version: "11.8.0".to_string(),
             fqdn_id: fqdn.clone(),
             fqdn: fqdn.clone(),

@@ -208,6 +208,8 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
 #[named]
 #[test]
 fn postgresql_deploy_a_working_environment_and_redeploy() {
+    use chrono::Utc;
+
     let test_name = function_name!();
     engine_run_test(|| {
         init();
@@ -252,6 +254,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             action: Action::Create,
             long_id: Uuid::new_v4(),
             name: database_db_name.clone(),
+            created_at: Utc::now(),
             version: "11.8.0".to_string(),
             fqdn_id: database_host.clone(),
             fqdn: database_host.clone(),
