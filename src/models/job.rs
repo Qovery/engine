@@ -328,6 +328,7 @@ pub trait JobService: Service + DeploymentAction + ToTeraContext {
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
     fn job_schedule(&self) -> &JobSchedule;
     fn max_duration(&self) -> &Duration;
+    fn is_force_trigger(&self) -> bool;
 }
 
 impl<T: CloudProvider> JobService for Job<T>
@@ -361,6 +362,10 @@ where
 
     fn max_duration(&self) -> &Duration {
         &self.max_duration
+    }
+
+    fn is_force_trigger(&self) -> bool {
+        self.force_trigger
     }
 }
 
