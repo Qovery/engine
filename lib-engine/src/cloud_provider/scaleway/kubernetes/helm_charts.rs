@@ -17,6 +17,7 @@ use crate::cloud_provider::helm_charts::core_dns_config_chart::CoreDNSConfigChar
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
 use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiEncryptionType, LokiS3BucketConfiguration};
+use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -231,51 +232,10 @@ pub fn scw_helm_charts(
     )
     .to_common_helm_chart();
 
-    let prometheus_adapter = CommonChart {
-        chart_info: ChartInfo {
-            name: "prometheus-adapter".to_string(),
-            path: chart_path("common/charts/prometheus-adapter"),
-            last_breaking_version_requiring_restart: Some(Version::new(3, 3, 1)),
-            namespace: prometheus_namespace,
-            values: vec![
-                ChartSetValue {
-                    key: "metricsRelistInterval".to_string(),
-                    value: "30s".to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheus.url".to_string(),
-                    value: prometheus_internal_url.clone(),
-                },
-                ChartSetValue {
-                    key: "podDisruptionBudget.enabled".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "podDisruptionBudget.maxUnavailable".to_string(),
-                    value: "1".to_string(),
-                },
-                // resources limits
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "250m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "250m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "384Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "384Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // Prometheus adapter
+    let prometheus_adapter =
+        PrometheusAdapterChart::new(chart_prefix_path, prometheus_internal_url.clone(), prometheus_namespace)
+            .to_common_helm_chart();
 
     // metric-server is built-in Scaleway cluster, no need to manage it
 
