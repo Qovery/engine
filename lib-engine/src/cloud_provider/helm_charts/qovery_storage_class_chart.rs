@@ -47,7 +47,7 @@ impl QoveryStorageClassChart {
         }
     }
 
-    fn chart_name() -> String {
+    pub fn chart_name() -> String {
         "q-storageclass".to_string()
     }
 }

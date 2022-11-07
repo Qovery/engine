@@ -1,13 +1,16 @@
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces,
 };
-use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
+use crate::cloud_provider::helm_charts::{
+    HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
+};
 use crate::errors::CommandError;
 use kube::Client;
 use semver::Version;
 
 pub struct PromtailChart {
     chart_path: HelmChartPath,
+    chart_values_path: HelmChartValuesFilePath,
     loki_kube_dns_name: String,
 }
 
@@ -15,6 +18,11 @@ impl PromtailChart {
     pub fn new(chart_prefix_path: Option<&str>, loki_kube_dns_name: String) -> Self {
         PromtailChart {
             chart_path: HelmChartPath::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CommonFolder,
+                PromtailChart::chart_name(),
+            ),
+            chart_values_path: HelmChartValuesFilePath::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CommonFolder,
                 PromtailChart::chart_name(),
@@ -37,42 +45,11 @@ impl ToCommonHelmChart for PromtailChart {
                 path: self.chart_path.to_string(),
                 // because of priorityClassName, we need to add it to kube-system
                 namespace: HelmChartNamespaces::KubeSystem,
-                values: vec![
-                    ChartSetValue {
-                        key: "config.clients[0].url".to_string(),
-                        value: format!("http://{}/loki/api/v1/push", self.loki_kube_dns_name),
-                    },
-                    // it's mandatory to get this class to ensure paused infra will behave properly on restore
-                    ChartSetValue {
-                        key: "priorityClassName".to_string(),
-                        value: "system-node-critical".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "config.snippets.extraRelabelConfigs[0].action".to_string(),
-                        value: "labelmap".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "config.snippets.extraRelabelConfigs[0].regex".to_string(), // # We need this config in order for the cluster agent to retrieve the log of the service
-                        value: "__meta_kubernetes_pod_label_(appId|qovery_com_service_id|qovery_com_service_type|qovery_com_environment_id)".to_string(),
-                    },
-                    // resources limits
-                    ChartSetValue {
-                        key: "resources.limits.cpu".to_string(),
-                        value: "100m".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.requests.cpu".to_string(),
-                        value: "100m".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.limits.memory".to_string(),
-                        value: "128Mi".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.requests.memory".to_string(),
-                        value: "128Mi".to_string(),
-                    },
-                ],
+                values_files: vec![self.chart_values_path.to_string()],
+                values: vec![ChartSetValue {
+                    key: "config.clients[0].url".to_string(),
+                    value: format!("http://{}/loki/api/v1/push", self.loki_kube_dns_name),
+                }],
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(PromtailChartChecker::new())),
@@ -98,5 +75,71 @@ impl ChartInstallationChecker for PromtailChartChecker {
     fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
         // TODO(ENG-1370): Implement chart install verification
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
+    use crate::cloud_provider::helm_charts::{
+        get_helm_values_set_in_code_but_absent_in_values_file, ToCommonHelmChart,
+    };
+    use std::env;
+
+    /// Makes sure chart directory containing all YAML files exists.
+    #[test]
+    fn promtail_chart_directory_exists_test() {
+        // setup:
+        let current_directory = env::current_dir().expect("Impossible to get current directory");
+        let chart_path = format!(
+            "{}/lib/common/bootstrap/charts/{}/Chart.yaml",
+            current_directory
+                .to_str()
+                .expect("Impossible to convert current directory to string"),
+            PromtailChart::chart_name(),
+        );
+
+        // execute
+        let values_file = std::fs::File::open(&chart_path);
+
+        // verify:
+        assert!(values_file.is_ok(), "Chart directory should exist: `{}`", chart_path);
+    }
+
+    /// Makes sure chart values file exists.
+    #[test]
+    fn promtail_chart_values_file_exists_test() {
+        // setup:
+        let current_directory = env::current_dir().expect("Impossible to get current directory");
+        let chart_values_path = format!(
+            "{}/lib/common/bootstrap/chart_values/{}.yaml",
+            current_directory
+                .to_str()
+                .expect("Impossible to convert current directory to string"),
+            PromtailChart::chart_name(),
+        );
+
+        // execute
+        let values_file = std::fs::File::open(&chart_values_path);
+
+        // verify:
+        assert!(values_file.is_ok(), "Chart values file should exist: `{}`", chart_values_path);
+    }
+
+    /// Make sure rust code doesn't set a value not declared inside values file.
+    /// All values should be declared / set in values file unless it needs to be injected via rust code.
+    #[test]
+    fn rust_overridden_values_exists_in_values_yaml_test() {
+        // setup:
+        let chart = PromtailChart::new(None, "whatever".to_string()).to_common_helm_chart();
+
+        // execute:
+        let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(
+            chart,
+            format!("/lib/common/bootstrap/chart_values/{}.yaml", PromtailChart::chart_name()),
+        );
+
+        // verify:
+        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
     }
 }
