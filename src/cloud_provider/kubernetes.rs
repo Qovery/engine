@@ -651,17 +651,40 @@ where
     P: AsRef<Path>,
 {
     // check master versions
-    let v = match kubectl_exec_version(&kubernetes_config, envs.clone()) {
-        Ok(v) => v,
-        Err(e) => return Err(EngineError::new_cannot_execute_k8s_exec_version(event_details, e)),
-    };
-    let raw_version = format!("{}.{}", v.server_version.major, v.server_version.minor);
-    let masters_version = match VersionsNumber::from_str(raw_version.as_str()) {
-        Ok(vn) => vn,
-        Err(_) => {
-            return Err(EngineError::new_cannot_determine_k8s_master_version(
-                event_details,
+    let version_result = retry::retry(Fixed::from_millis(5 * 1000).take(5), || {
+        let v = match kubectl_exec_version(&kubernetes_config, envs.clone()) {
+            Ok(v) => v,
+            Err(e) => {
+                return OperationResult::Retry(EngineError::new_cannot_execute_k8s_exec_version(
+                    event_details.clone(),
+                    e,
+                ))
+            }
+        };
+        let raw_version = format!("{}.{}", v.server_version.major, v.server_version.minor);
+        match VersionsNumber::from_str(raw_version.as_str()) {
+            Ok(vn) => OperationResult::Ok(vn),
+            Err(_) => OperationResult::Err(EngineError::new_cannot_determine_k8s_master_version(
+                event_details.clone(),
                 raw_version.to_string(),
+            )),
+        }
+    });
+
+    let masters_version = match version_result {
+        Ok(v) => v,
+        Err(Operation { error, .. }) => return Err(error),
+        Err(retry::Error::Internal(e)) => {
+            return Err(EngineError::new_unknown(
+                event_details,
+                "Unable to get cluster version.".to_string(),
+                Some(CommandError::new(
+                    "Unable to get cluster version.".to_string(),
+                    Some(e),
+                    Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+                )),
+                None,
+                None,
             ))
         }
     };
