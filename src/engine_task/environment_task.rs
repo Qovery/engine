@@ -78,14 +78,9 @@ impl EnvironmentTask {
 
     // FIXME: Remove EngineConfig type, there is no use for it
     // merge it with DeploymentTarget type
-    fn infrastructure_context(&self) -> InfrastructureContext {
+    fn infrastructure_context(&self) -> Result<InfrastructureContext, EngineError> {
         self.request
             .engine(&self.info_context(), self.request.event_details(), self.logger.clone())
-            .map_err(|err| {
-                self.logger.log(EngineEvent::Error(err.clone(), None));
-                err
-            })
-            .expect("Can't init engine")
     }
 
     fn _is_canceled(&self) -> bool {
@@ -286,7 +281,13 @@ impl Task for EnvironmentTask {
             ));
         });
 
-        let infra_context = self.infrastructure_context();
+        let infra_context = match self.infrastructure_context() {
+            Ok(infra_ctx) => infra_ctx,
+            Err(err) => {
+                self.logger.log(EngineEvent::Error(err, None));
+                return;
+            }
+        };
         let env_step = self
             .request
             .target_environment

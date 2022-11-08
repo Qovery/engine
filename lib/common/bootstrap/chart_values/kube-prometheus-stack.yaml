@@ -18,12 +18,18 @@ alertmanager:
 
 grafana:
   enabled: false
+  serviceMonitor:
+    enabled: false
 
 kubeControllerManager:
   enabled: false
 
 kubeEtcd:
   enabled: false
+
+kubelet:
+  serviceMonitor:
+    resource: true
 
 kubeScheduler:
   enabled: false
@@ -41,11 +47,23 @@ prometheus:
     retention: 90d
     retentionSize: "40GB"
     walCompression: true
+    externalUrl: set-by-engine-code
     storageSpec:
       volumeClaimTemplate:
         spec:
-          storageClassName: scw-sbv-ssd-0
+          storageClassName: set-by-engine-code
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
               storage: "50Gi"
+
+prometheusOperator:
+  tls:
+    enabled: false
+  admissionWebhooks:
+    enabled: false
+
+prometheus-node-exporter:
+  prometheus:
+    monitor:
+      enabled: false

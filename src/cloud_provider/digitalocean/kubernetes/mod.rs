@@ -498,18 +498,28 @@ impl DOKS {
             ));
         }
 
-        // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/digitalocean/bootstrap/common/charts directory.
-        // this is due to the required dependencies of lib/digitalocean/bootstrap/*.tf files
-        let bootstrap_charts_dir = format!("{}/common/bootstrap/charts", self.context.lib_root_dir());
-        let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
-        if let Err(e) = crate::template::copy_non_template_files(&bootstrap_charts_dir, common_charts_temp_dir.as_str())
-        {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
-                event_details,
-                bootstrap_charts_dir,
-                common_charts_temp_dir,
-                e,
-            ));
+        let dirs_to_be_copied_to = vec![
+            // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/digitalocean/bootstrap/common/charts directory.
+            // this is due to the required dependencies of lib/digitalocean/bootstrap/*.tf files
+            (
+                format!("{}/common/bootstrap/charts", self.context.lib_root_dir()),
+                format!("{}/common/charts", temp_dir.as_str()),
+            ),
+            // copy lib/common/bootstrap/chart_values directory (and sub directory) into the lib/digitalocean/bootstrap/common/chart_values directory.
+            (
+                format!("{}/common/bootstrap/chart_values", self.context.lib_root_dir()),
+                format!("{}/common/chart_values", temp_dir.as_str()),
+            ),
+        ];
+        for (source_dir, target_dir) in dirs_to_be_copied_to {
+            if let Err(e) = crate::template::copy_non_template_files(&source_dir, target_dir.as_str()) {
+                return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                    event_details,
+                    source_dir,
+                    target_dir,
+                    e,
+                ));
+            }
         }
 
         self.logger().log(EngineEvent::Info(

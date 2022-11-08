@@ -9,18 +9,6 @@ data "aws_vpc" "selected" {
   }
 }
 
-data "aws_subnet_ids" "k8s_subnet_ids" {
-  vpc_id = data.aws_vpc.selected.id
-  filter {
-    name = "tag:ClusterId"
-    values = [var.kubernetes_cluster_id]
-  }
-  filter {
-    name = "tag:Service"
-    values = ["RDS"]
-  }
-}
-
 data "aws_security_group" "selected" {
   name = "qovery-ec2-${var.kubernetes_cluster_id}"
   filter {
@@ -64,7 +52,7 @@ resource "aws_db_instance" "postgresql_instance" {
   snapshot_identifier = var.snapshot_identifier
   {%- else %}
   allocated_storage = var.disk_size
-  name = var.database_name
+  db_name = var.database_name
   storage_type = var.storage_type
   username = var.username
   engine_version = var.postgresql_version
@@ -73,7 +61,8 @@ resource "aws_db_instance" "postgresql_instance" {
   {%- endif %}
 
   # Network
-  db_subnet_group_name = data.aws_subnet_ids.k8s_subnet_ids.id
+  # WARNING: this value can't get fetch from data sources and is linked to the bootstrap phase
+  db_subnet_group_name = data.aws_vpc.selected.id
   vpc_security_group_ids = data.aws_security_group.selected.*.id
   publicly_accessible = var.publicly_accessible
   multi_az = var.multi_az
@@ -97,7 +86,7 @@ resource "aws_db_instance" "postgresql_instance" {
   final_snapshot_identifier = local.final_snapshot_name
   lifecycle {
     ignore_changes = [
-     final_snapshot_identifier,
+      final_snapshot_identifier,
     ]
   }
   {%- endif %}

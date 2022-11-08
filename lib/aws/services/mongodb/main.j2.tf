@@ -5,18 +5,6 @@ data "aws_vpc" "selected" {
   }
 }
 
-data "aws_subnet_ids" "k8s_subnet_ids" {
-  vpc_id = data.aws_vpc.selected.id
-  filter {
-    name = "tag:ClusterId"
-    values = [var.kubernetes_cluster_id]
-  }
-  filter {
-    name = "tag:Service"
-    values = ["DocumentDB"]
-  }
-}
-
 data "aws_security_group" "selected" {
   {% if not user_provided_network %}
   filter {
@@ -76,7 +64,12 @@ resource "aws_docdb_cluster" "documentdb_cluster" {
   storage_encrypted = var.encrypt_disk
 
   # Network
-  db_subnet_group_name = data.aws_subnet_ids.k8s_subnet_ids.id
+  availability_zones = var.kubernetes_cluster_az_list
+  {%- if database_docdb_subnet_use_old_group_name %}
+  db_subnet_group_name = data.aws_vpc.selected.id
+  {% else %}
+  db_subnet_group_name = "documentdb-${data.aws_vpc.selected.id}"
+  {% endif %}
   vpc_security_group_ids = data.aws_security_group.selected.*.id
 
   # Maintenance and upgrades

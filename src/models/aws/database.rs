@@ -3,7 +3,7 @@ use crate::cloud_provider::service::{
     ServiceVersionCheckResult,
 };
 use crate::cloud_provider::{service, DeploymentTarget};
-use crate::errors::EngineError;
+use crate::errors::{CommandError, EngineError};
 use crate::events::{EventDetails, Stage};
 use crate::models::aws::database_utils::{
     get_managed_mongodb_version, get_managed_mysql_version, get_managed_postgres_version, get_managed_redis_version,
@@ -13,7 +13,9 @@ use crate::models::database::{Container, Database, DatabaseType, Managed, MongoD
 use crate::io_models::database::DatabaseOptions;
 use crate::models::types::{ToTeraContext, AWS};
 use crate::unit_conversion::cpu_string_to_float;
+use chrono::{DateTime, TimeZone, Utc};
 use tera::Context as TeraContext;
+use url::Url;
 
 /////////////////////////////////////////////////////////////////
 // CONTAINER
@@ -259,7 +261,7 @@ where
         context.insert("namespace", environment.namespace());
 
         let version = self
-            .get_version_aws_managed(event_details)?
+            .get_version_aws_managed(event_details.clone())?
             .matched_version()
             .to_string();
         context.insert("version", &version);
@@ -290,6 +292,31 @@ where
             context.insert("database_elasticache_instances_number", &1);
         }
 
+        // Specific for documentdb
+        if T::db_type() == service::DatabaseType::MongoDB {
+            // because of wrong subnet set since the beginning, we're rectifying it here for fresh new database created
+            let docdb_old_subnet_date: DateTime<Utc> = Utc.ymd(2022, 11, 20).and_hms(0, 0, 0);
+            let is_old_docdb_format = self.created_at < docdb_old_subnet_date;
+            context.insert("database_docdb_subnet_use_old_group_name", &is_old_docdb_format);
+        };
+
+        // Multi AZ: AWS best practices recommend to use multi AZ for production databases, so we force it
+        let aws_azs = kubernetes.aws_zones().unwrap_or_default();
+        if aws_azs.len() != 3 {
+            return Err(EngineError::new_error_do_not_respect_cloud_provider_best_practices(
+                event_details,
+                CommandError::new_from_safe_message(
+                    "AWS best practices recommend to use multi AZ for production databases. Qovery requires it"
+                        .to_string(),
+                ),
+                Some(
+                    Url::parse("https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html")
+                        .expect("bad url format for AWS multi AZ documentation"),
+                ),
+            ));
+        };
+        let aws_az_list = aws_azs.iter().map(|az| format!("\"{}\"", az)).collect::<Vec<String>>(); // terraform pre-formated list
+
         for (k, v) in kubernetes.cloud_provider().tera_context_environment_variables() {
             context.insert(k, v);
         }
@@ -297,6 +324,7 @@ where
         context.insert("user_provided_network", &kubernetes.is_network_managed_by_user());
         context.insert("kubernetes_cluster_id", kubernetes.id());
         context.insert("kubernetes_cluster_name", kubernetes.name());
+        context.insert("kubernetes_cluster_az_list", &aws_az_list);
         context.insert("fqdn_id", self.fqdn_id.as_str());
         context.insert("fqdn", self.fqdn(target, &self.fqdn).as_str());
         context.insert("service_name", self.fqdn_id.as_str());

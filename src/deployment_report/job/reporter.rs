@@ -40,6 +40,7 @@ impl Display for JobType {
 pub struct JobDeploymentReporter<T> {
     long_id: Uuid,
     job_type: JobType,
+    is_force_trigger: bool,
     max_duraction: Duration,
     action: Action,
     tag: String,
@@ -67,6 +68,7 @@ impl<T> JobDeploymentReporter<T> {
             long_id: *job.long_id(),
             job_type,
             action,
+            is_force_trigger: job.is_force_trigger(),
             max_duraction: *job.max_duration(),
             tag: job.image_full(),
             namespace: deployment_target.environment.namespace().to_string(),
@@ -96,6 +98,24 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
     }
 
     fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
+        // If job should be force trigerred, display a specific message saying so
+        if self.is_force_trigger {
+            match &self.job_type {
+                JobType::CronJob(schedule) => self.logger.send_progress(format!(
+                    "🚀 Force trigerring deployment of cronjob with schedule `{}` at tag {} is starting",
+                    schedule, self.tag
+                )),
+                JobType::Job(_) => self.logger.send_progress(format!(
+                    "🚀 Force trigerring deployment of Job at tag {} is starting with a timeout/max duration of {}",
+                    self.tag,
+                    self.max_duration_human_str()
+                )),
+            }
+
+            return;
+        }
+
+        // Normal flow, checking if the job should be trigerred on this event
         match &self.job_type {
             JobType::Job(trigger_on_action) => {
                 if self.action == *trigger_on_action {

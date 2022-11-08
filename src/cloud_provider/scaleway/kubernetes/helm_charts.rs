@@ -8,13 +8,14 @@ use crate::cloud_provider::helm_charts::ToCommonHelmChart;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAppName, QoveryEngine};
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
-use crate::cmd::helm_utils::CRDSUpdate;
+
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 use crate::models::scaleway::{ScwRegion, ScwZone};
 
 use crate::cloud_provider::helm_charts::core_dns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
+use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -264,100 +265,15 @@ pub fn scw_helm_charts(
         },
     };*/
 
-    let kube_prometheus_stack = CommonChart {
-        chart_info: ChartInfo {
-            name: "kube-prometheus-stack".to_string(),
-            path: chart_path("/common/charts/kube-prometheus-stack"),
-            namespace: prometheus_namespace,
-            // high timeout because on bootstrap, it's one of the biggest dependencies and on upgrade, it can takes time
-            // to upgrade because of the CRD and the number of elements it has to deploy
-            timeout_in_seconds: 480,
-            crds_update: Some(CRDSUpdate{
-                path:"https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.56.0/example/prometheus-operator-crd".to_string(),
-                resources:vec![
-                    "monitoring.coreos.com_alertmanagerconfigs.yaml".to_string(),
-                    "monitoring.coreos.com_alertmanagers.yaml".to_string(),
-                    "monitoring.coreos.com_podmonitors.yaml".to_string(),
-                    "monitoring.coreos.com_probes.yaml".to_string(),
-                    "monitoring.coreos.com_prometheuses.yaml".to_string(),
-                    "monitoring.coreos.com_prometheusrules.yaml".to_string(),
-                    "monitoring.coreos.com_servicemonitors.yaml".to_string(),
-                    "monitoring.coreos.com_thanosrulers.yaml".to_string(),
-                ]
-            }),
-            values_files: vec![chart_path("chart_values/kube-prometheus-stack.yaml")],
-            values: vec![
-                ChartSetValue {
-                    key: "installCRDs".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "nameOverride".to_string(),
-                    value: "prometheus-operator".to_string(),
-                },
-                ChartSetValue {
-                    key: "fullnameOverride".to_string(),
-                    value: "prometheus-operator".to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheus.prometheusSpec.externalUrl".to_string(),
-                    value: prometheus_internal_url.clone(),
-                },
-                ChartSetValue {
-                    key: "prometheusOperator.tls.enabled".to_string(),
-                    value: "false".to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheusOperator.admissionWebhooks.enabled".to_string(),
-                    value: "false".to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheus-node-exporter.prometheus.monitor.enabled".to_string(),
-                    value: "false".to_string(),
-                },
-                ChartSetValue {
-                    key: "grafana.serviceMonitor.enabled".to_string(),
-                    value: "false".to_string(),
-                },
-                // Limits prometheus-node-exporter
-                ChartSetValue {
-                    key: "prometheus-node-exporter.resources.limits.cpu".to_string(),
-                    value: "20m".to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheus-node-exporter.resources.requests.cpu".to_string(),
-                    value: "10m".to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheus-node-exporter.resources.limits.memory".to_string(),
-                    value: "32Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheus-node-exporter.resources.requests.memory".to_string(),
-                    value: "32Mi".to_string(),
-                },
-                // resources limits
-                ChartSetValue {
-                    key: "prometheusOperator.resources.limits.cpu".to_string(),
-                    value: "1".to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheusOperator.resources.requests.cpu".to_string(),
-                    value: "500m".to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheusOperator.resources.limits.memory".to_string(),
-                    value: "1Gi".to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheusOperator.resources.requests.memory".to_string(),
-                    value: "1Gi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // Kube prometheus stack
+    let kube_prometheus_stack = KubePrometheusStackChart::new(
+        chart_prefix_path,
+        "scw-sbv-ssd-0".to_string(),
+        prometheus_internal_url.to_string(),
+        prometheus_namespace,
+        true,
+    )
+    .to_common_helm_chart();
 
     let prometheus_adapter = CommonChart {
         chart_info: ChartInfo {

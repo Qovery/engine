@@ -14,6 +14,7 @@ use crate::models::database_utils::{
 };
 use crate::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
 use crate::utilities::to_short_id;
+use chrono::{DateTime, Utc};
 use std::marker::PhantomData;
 use tera::Context as TeraContext;
 use uuid::Uuid;
@@ -83,6 +84,7 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     pub(crate) action: Action,
     pub(crate) name: String,
     pub(crate) version: VersionsNumber,
+    pub(crate) created_at: DateTime<Utc>,
     pub(crate) fqdn: String,
     pub(crate) fqdn_id: String,
     pub(crate) total_cpus: String,
@@ -102,6 +104,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
         action: Action,
         name: &str,
         version: VersionsNumber,
+        created_at: DateTime<Utc>,
         fqdn: &str,
         fqdn_id: &str,
         total_cpus: String,
@@ -131,6 +134,7 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
             long_id,
             name: name.to_string(),
             version,
+            created_at,
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
             total_cpus: T::cpu_validate(total_cpus),

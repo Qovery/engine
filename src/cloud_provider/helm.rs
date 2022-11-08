@@ -80,6 +80,7 @@ pub struct ChartInfo {
     pub timeout_in_seconds: i64,
     pub dry_run: bool,
     pub wait: bool,
+    /// Values used to override values set inside values files.
     pub values: Vec<ChartSetValue>,
     pub values_string: Vec<ChartSetValue>,
     pub values_files: Vec<String>,

@@ -182,6 +182,7 @@ pub enum Tag {
     CloudProviderDeleteLoadBalancer,
     InvalidEnginePayload,
     JobFailure,
+    DoNotRespectCloudProviderBestPractices,
 }
 
 impl From<errors::Tag> for Tag {
@@ -365,6 +366,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::InvalidEnginePayload => Tag::InvalidEnginePayload,
             errors::Tag::JobFailure => Tag::JobFailure,
             errors::Tag::TerraformInvalidCIDRBlock => Tag::TerraformInvalidCIDRBlock,
+            errors::Tag::DoNotRespectCloudProviderBestPractices => Tag::DoNotRespectCloudProviderBestPractices,
         }
     }
 }

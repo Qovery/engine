@@ -64,13 +64,7 @@ impl CoreDNSConfigChart {
                         value: managed_dns_resolvers_terraform_format,
                     },
                 ],
-                values_string: vec![],
-                values_files: vec![],
-                yaml_files_content: vec![],
-                parse_stderr_for_error: false,
-                k8s_selector: None,
-                backup_resources: None,
-                crds_update: None,
+                ..Default::default()
             },
             chart_installation_checker: CoreDNSConfigChartChecker::new(),
         }
