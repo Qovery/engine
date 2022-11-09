@@ -112,8 +112,8 @@ impl<T: CloudProvider> Router<T> {
         let service_id = self
             .routes
             .first()
-            .map(|r| r.service_long_id)
-            .ok_or_else(|| EngineError::new_router_failed_to_deploy(event_details.clone()))?;
+            .ok_or_else(|| EngineError::new_router_failed_to_deploy(event_details.clone()))?
+            .service_long_id;
 
         // Check if the service is an application
         let (service_name, ports) =
