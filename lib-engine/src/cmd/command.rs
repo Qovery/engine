@@ -244,6 +244,7 @@ impl ExecutableCommand for QoveryCommand {
 
         let mut stdout_closed = false;
         let mut stderr_closed = false;
+        let mut last_log = Instant::now();
         while !stdout_closed || !stderr_closed {
             // We should abort and kill the process
             if abort_notifier.should_abort().is_some() {
@@ -262,7 +263,15 @@ impl ExecutableCommand for QoveryCommand {
                 };
 
                 match line {
-                    Err(ref err) if err.kind() == ErrorKind::TimedOut => break,
+                    Err(ref err) if err.kind() == ErrorKind::TimedOut => {
+                        if last_log.elapsed() > Duration::from_secs(120) {
+                            stderr_output(
+                                "Command still running. No output available. Waiting for next line...".to_string(),
+                            );
+                            last_log = Instant::now();
+                        }
+                        break;
+                    }
                     Ok(line) => stdout_output(line),
                     Err(err) => {
                         error!("Error on stdout of cmd {:?}: {:?}", self.command, err);
