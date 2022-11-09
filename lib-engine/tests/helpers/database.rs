@@ -483,6 +483,7 @@ pub fn test_db(
     let database_username = match db_kind {
         DatabaseKind::Redis => match database_mode {
             MANAGED => match version {
+                "7" => "default".to_string(),
                 "6" => "default".to_string(),
                 _ => "superuser".to_string(),
             },

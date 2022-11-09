@@ -284,6 +284,8 @@ where
                 "default.redis5.0"
             } else if self.version.major == "6" {
                 "default.redis6.x"
+            } else if self.version.major == "7" {
+                "default.redis7"
             } else {
                 "redis.unknown"
             };
