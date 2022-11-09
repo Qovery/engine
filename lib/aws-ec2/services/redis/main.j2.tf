@@ -74,6 +74,7 @@ resource "aws_elasticache_cluster" "elasticache_cluster" {
 {%- else %}
 resource "aws_elasticache_replication_group" "elasticache_cluster" {
   replication_group_id          = var.elasticache_identifier
+  engine_version = var.elasticache_version
   description = "Qovery's elasticache"
 
   # Elasticache instance basics
