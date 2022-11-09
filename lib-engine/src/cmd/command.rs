@@ -42,6 +42,8 @@ pub enum CommandKillerTrigger<'a> {
     Cancelable(&'a dyn Fn() -> bool),
 }
 
+const LOGGING_INTERVAL: Duration = Duration::from_secs(120);
+
 impl<'a> CommandKillerTrigger<'a> {
     pub fn should_abort(&self) -> Option<AbortReason> {
         match self {
@@ -264,7 +266,7 @@ impl ExecutableCommand for QoveryCommand {
 
                 match line {
                     Err(ref err) if err.kind() == ErrorKind::TimedOut => {
-                        if last_log.elapsed() > Duration::from_secs(120) {
+                        if last_log.elapsed() > LOGGING_INTERVAL {
                             stderr_output(
                                 "Command still running. No output available. Waiting for next line...".to_string(),
                             );
