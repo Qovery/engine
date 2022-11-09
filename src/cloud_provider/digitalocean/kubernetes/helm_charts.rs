@@ -16,6 +16,7 @@ use crate::errors::CommandError;
 use crate::cloud_provider::helm_charts::core_dns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
+use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiEncryptionType, LokiS3BucketConfiguration};
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -197,88 +198,26 @@ pub fn do_helm_charts(
     // Promtail
     let promtail = PromtailChart::new(chart_prefix_path, loki_kube_dns_name).to_common_helm_chart();
 
-    let loki = CommonChart {
-        chart_info: ChartInfo {
-            name: "loki".to_string(),
-            path: chart_path("common/charts/loki"),
-            namespace: loki_namespace,
-            timeout_in_seconds: 900,
-            values_files: vec![chart_path("chart_values/loki.yaml")],
-            values: vec![
-                ChartSetValue {
-                    key: "config.chunk_store_config.max_look_back_period".to_string(),
-                    value: format!(
-                        "{}w",
-                        chart_config_prerequisites
-                            .cluster_advanced_settings
-                            .loki_log_retention_in_week
-                    ),
-                },
-                ChartSetValue {
-                    key: "config.table_manager.retention_period".to_string(),
-                    value: format!(
-                        "{}w",
-                        chart_config_prerequisites
-                            .cluster_advanced_settings
-                            .loki_log_retention_in_week
-                    ),
-                },
-                ChartSetValue {
-                    key: "config.storage_config.aws.s3forcepathstyle".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "config.storage_config.aws.bucketnames".to_string(),
-                    value: qovery_terraform_config.loki_storage_config_do_space_bucket_name,
-                },
-                ChartSetValue {
-                    key: "config.storage_config.aws.endpoint".to_string(),
-                    value: qovery_terraform_config.loki_storage_config_do_space_host,
-                },
-                ChartSetValue {
-                    key: "config.storage_config.aws.region".to_string(),
-                    value: qovery_terraform_config.loki_storage_config_do_space_region,
-                },
-                ChartSetValue {
-                    key: "config.storage_config.aws.access_key_id".to_string(),
-                    value: qovery_terraform_config.loki_storage_config_do_space_access_id,
-                },
-                ChartSetValue {
-                    key: "config.storage_config.aws.secret_access_key".to_string(),
-                    value: qovery_terraform_config.loki_storage_config_do_space_secret_key,
-                },
-                // DigitalOcean do not support encryption yet
-                // https://docs.digitalocean.com/reference/api/spaces-api/
-                ChartSetValue {
-                    key: "config.storage_config.aws.sse_encryption".to_string(),
-                    value: "false".to_string(),
-                },
-                ChartSetValue {
-                    key: "config.storage_config.aws.insecure".to_string(),
-                    value: "false".to_string(),
-                },
-                // resources limits
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "1".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "300m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "2Gi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "1Gi".to_string(),
-                },
-            ],
+    // Loki
+    let loki = LokiChart::new(
+        chart_prefix_path,
+        LokiEncryptionType::None, // DigitalOcean does not support encryption yet: https://docs.digitalocean.com/reference/api/spaces-api/
+        loki_namespace,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .loki_log_retention_in_week,
+        LokiS3BucketConfiguration {
+            use_path_style: true,
+            insecure: false,
+            bucketname: Some(qovery_terraform_config.loki_storage_config_do_space_bucket_name),
+            endpoint: Some(qovery_terraform_config.loki_storage_config_do_space_host),
+            region: Some(qovery_terraform_config.loki_storage_config_do_space_region),
+            access_key_id: Some(qovery_terraform_config.loki_storage_config_do_space_access_id),
+            secret_access_key: Some(qovery_terraform_config.loki_storage_config_do_space_secret_key),
             ..Default::default()
         },
-        ..Default::default()
-    };
+    )
+    .to_common_helm_chart();
 
     /*
     let old_prometheus_operator = PrometheusOperatorConfigChart {
