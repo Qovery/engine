@@ -611,7 +611,12 @@ impl Helm {
         Ok(())
     }
 
-    pub fn template_validate(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
+    pub fn template_validate(
+        &self,
+        chart: &ChartInfo,
+        envs: &[(&str, &str)],
+        output_render_directory: Option<&str>,
+    ) -> Result<(), HelmError> {
         let mut args_string: Vec<String> = vec![
             "template".to_string(),
             "--validate".to_string(),
@@ -622,8 +627,17 @@ impl Helm {
             chart.get_namespace_string(),
         ];
 
+        if let Some(output_dir) = output_render_directory {
+            args_string.push("--output-dir".to_string());
+            args_string.push(output_dir.to_string());
+        }
+
         for value in &chart.values {
             args_string.push("--set".to_string());
+            args_string.push(format!("{}={}", value.key, value.value));
+        }
+        for value in &chart.values_string {
+            args_string.push("--set-string".to_string());
             args_string.push(format!("{}={}", value.key, value.value));
         }
 
