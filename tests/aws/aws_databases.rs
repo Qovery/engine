@@ -900,6 +900,14 @@ fn private_redis_v5_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore]
 fn private_redis_v6_deploy_a_working_prod_environment() {
     test_redis_configuration("6", function_name!(), MANAGED, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn private_redis_v7_deploy_a_working_prod_environment() {
+    test_redis_configuration("7", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }

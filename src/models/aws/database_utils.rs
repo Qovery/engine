@@ -65,6 +65,7 @@ pub(super) fn get_managed_redis_version(requested_version: String) -> Result<Str
     let mut supported_redis_versions = HashMap::with_capacity(2);
     // https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/supported-engine-versions.html
 
+    supported_redis_versions.insert("7".to_string(), "7.0".to_string());
     supported_redis_versions.insert("6".to_string(), "6.x".to_string());
     supported_redis_versions.insert("5".to_string(), "5.0.6".to_string());
 
@@ -121,6 +122,7 @@ mod tests {
     #[test]
     fn check_redis_version() {
         // managed version
+        assert_eq!(get_managed_redis_version("7".to_string()).unwrap(), "7.0");
         assert_eq!(get_managed_redis_version("6".to_string()).unwrap(), "6.x");
         assert_eq!(get_managed_redis_version("5".to_string()).unwrap(), "5.0.6");
         assert_eq!(
@@ -132,8 +134,9 @@ mod tests {
         );
 
         // self-hosted version
+        assert_eq!(get_self_hosted_redis_version("7".to_string()).unwrap(), "7.0.5");
         assert_eq!(get_self_hosted_redis_version("6".to_string()).unwrap(), "6.2.7");
-        assert_eq!(get_self_hosted_redis_version("6.0".to_string()).unwrap(), "6.0.9");
+        assert_eq!(get_self_hosted_redis_version("6.0".to_string()).unwrap(), "6.0.16");
         assert_eq!(
             get_self_hosted_redis_version("1.0".to_string())
                 .unwrap_err()

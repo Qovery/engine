@@ -74,11 +74,11 @@ pub fn get_self_hosted_redis_version(requested_version: String) -> Result<String
     let mut supported_redis_versions = HashMap::with_capacity(6);
     // https://hub.docker.com/r/bitnami/redis/tags?page=1&ordering=last_updated
 
-    supported_redis_versions.insert("7".to_string(), "7.0.4".to_string());
-    supported_redis_versions.insert("7.0".to_string(), "7.0.4".to_string());
+    supported_redis_versions.insert("7".to_string(), "7.0.5".to_string());
+    supported_redis_versions.insert("7.0".to_string(), "7.0.5".to_string());
     supported_redis_versions.insert("6".to_string(), "6.2.7".to_string());
     supported_redis_versions.insert("6.2".to_string(), "6.2.7".to_string());
-    supported_redis_versions.insert("6.0".to_string(), "6.0.9".to_string());
+    supported_redis_versions.insert("6.0".to_string(), "6.0.16".to_string());
     supported_redis_versions.insert("5".to_string(), "5.0.14".to_string());
     supported_redis_versions.insert("5.0".to_string(), "5.0.14".to_string());
 
