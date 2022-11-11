@@ -59,9 +59,35 @@ resource "aws_s3_bucket" "loki_bucket" {
   tags = merge(
     local.tags_eks,
     {
+      {% if is_delete %}
+      "can_be_deleted_by_owner" = "true"
+      {% endif %}
       "Name" = "Applications logs"
     }
   )
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "loki_lifecycle" {
+  bucket = aws_s3_bucket.loki_bucket.id
+  rule {
+    id = "on_delete_rule"
+
+    expiration {
+      days = 1
+      expired_object_delete_marker = true
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+
+    {% if is_delete %}
+    status = "Enabled"
+    {% else %}
+    status = "Disabled"
+    {% endif %}
+  }
+
 }
 
 resource "aws_s3_bucket_versioning" "loki_bucket_versioning" {

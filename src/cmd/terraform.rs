@@ -966,6 +966,31 @@ pub fn terraform_destroy(root_dir: &str) -> Result<Vec<String>, TerraformError> 
 //     }
 // }
 
+pub fn terraform_remove_resource_from_tf_state(root_dir: &str, resource: &str) -> Result<Vec<String>, TerraformError> {
+    let terraform_args = vec!["state", "rm", resource];
+
+    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
+        // terraform destroy a specific resource
+        match terraform_exec(root_dir, terraform_args.clone()) {
+            Ok(output) => OperationResult::Ok(output),
+            Err(err) => {
+                // Error while trying to run terraform init, retrying...
+                OperationResult::Retry(err)
+            }
+        }
+    });
+
+    match result {
+        Ok(output) => Ok(output),
+        Err(Operation { error, .. }) => Err(error),
+        Err(retry::Error::Internal(e)) => Err(TerraformError::new(
+            terraform_args.iter().map(|e| e.to_string()).collect(),
+            "".to_string(),
+            e,
+        )),
+    }
+}
+
 fn terraform_run(actions: TerraformAction, root_dir: &str, dry_run: bool) -> Result<Vec<String>, TerraformError> {
     let mut output = vec![];
 

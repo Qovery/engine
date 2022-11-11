@@ -26,6 +26,15 @@ resource "aws_security_group" "ec2_instance" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  // cert-manager
+  ingress {
+    description = "HTTP challenge"
+    from_port   = 80
+    protocol    = "tcp"
+    to_port     = 80
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   // kubernetes
   ingress {
     description = "Kubernetes access"

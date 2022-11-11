@@ -1463,7 +1463,8 @@ fn delete(
     };
 
     // generate terraform files and copy them into temp dir
-    let context = tera_context(kubernetes, aws_zones, &node_groups_with_desired_states, options)?;
+    let mut context = tera_context(kubernetes, aws_zones, &node_groups_with_desired_states, options)?;
+    context.insert("is_delete", &true);
 
     if let Err(e) =
         crate::template::generate_and_copy_all_files_into_dir(template_directory, temp_dir.as_str(), context)
@@ -1729,6 +1730,36 @@ fn delete(
         event_details.clone(),
         EventMessage::new_from_safe("Running Terraform destroy".to_string()),
     ));
+
+    kubernetes.logger().log(EngineEvent::Info(
+        event_details.clone(),
+        EventMessage::new_from_safe("Removing S3 logs bucket from tf state".to_string()),
+    ));
+
+    match cmd::terraform::terraform_remove_resource_from_tf_state(temp_dir.as_str(), "aws_s3_bucket.loki_bucket") {
+        Ok(_) => {
+            kubernetes.logger().log(EngineEvent::Info(
+                event_details.clone(),
+                EventMessage::new_from_safe("S3 logs bucket successfully removed from tf state.".to_string()),
+            ));
+            Ok(())
+        }
+        Err(err) => return Err(EngineError::new_terraform_error(event_details, err)),
+    }?;
+
+    match cmd::terraform::terraform_remove_resource_from_tf_state(
+        temp_dir.as_str(),
+        "aws_s3_bucket_lifecycle_configuration.loki_lifecycle",
+    ) {
+        Ok(_) => {
+            kubernetes.logger().log(EngineEvent::Info(
+                event_details.clone(),
+                EventMessage::new_from_safe("S3 logs lifecycle successfully removed from tf state.".to_string()),
+            ));
+            Ok(())
+        }
+        Err(err) => return Err(EngineError::new_terraform_error(event_details, err)),
+    }?;
 
     match cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
         Ok(_) => {

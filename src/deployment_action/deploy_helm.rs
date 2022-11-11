@@ -44,7 +44,7 @@ impl HelmDeployment {
         }
     }
 
-    fn prepare_helm_chart(&self) -> Result<(), EngineError> {
+    pub fn prepare_helm_chart(&self) -> Result<(), EngineError> {
         // Copy the root folder
         generate_and_copy_all_files_into_dir(&self.chart_orginal_dir, &self.helm_chart.path, self.tera_context.clone())
             .map_err(|e| {
@@ -191,7 +191,7 @@ mod tests {
         let helm = Helm::new(kube_config.to_str().unwrap(), &[])?;
 
         // Check that helm can validate our chart
-        helm.template_validate(&chart, &[])?;
+        helm.template_validate(&chart, &[], None)?;
 
         Ok(())
     }
