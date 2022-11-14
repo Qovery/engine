@@ -1726,40 +1726,42 @@ fn delete(
         .logger()
         .log(EngineEvent::Info(event_details.clone(), EventMessage::new_from_safe(message)));
 
+    if kubernetes.kind() != Kind::Ec2 {
+        kubernetes.logger().log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe("Removing S3 logs bucket from tf state".to_string()),
+        ));
+
+        match cmd::terraform::terraform_remove_resource_from_tf_state(temp_dir.as_str(), "aws_s3_bucket.loki_bucket") {
+            Ok(_) => {
+                kubernetes.logger().log(EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe("S3 logs bucket successfully removed from tf state.".to_string()),
+                ));
+                Ok(())
+            }
+            Err(err) => return Err(EngineError::new_terraform_error(event_details, err)),
+        }?;
+
+        match cmd::terraform::terraform_remove_resource_from_tf_state(
+            temp_dir.as_str(),
+            "aws_s3_bucket_lifecycle_configuration.loki_lifecycle",
+        ) {
+            Ok(_) => {
+                kubernetes.logger().log(EngineEvent::Info(
+                    event_details.clone(),
+                    EventMessage::new_from_safe("S3 logs lifecycle successfully removed from tf state.".to_string()),
+                ));
+                Ok(())
+            }
+            Err(err) => return Err(EngineError::new_terraform_error(event_details, err)),
+        }?;
+    }
+
     kubernetes.logger().log(EngineEvent::Info(
         event_details.clone(),
         EventMessage::new_from_safe("Running Terraform destroy".to_string()),
     ));
-
-    kubernetes.logger().log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new_from_safe("Removing S3 logs bucket from tf state".to_string()),
-    ));
-
-    match cmd::terraform::terraform_remove_resource_from_tf_state(temp_dir.as_str(), "aws_s3_bucket.loki_bucket") {
-        Ok(_) => {
-            kubernetes.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe("S3 logs bucket successfully removed from tf state.".to_string()),
-            ));
-            Ok(())
-        }
-        Err(err) => return Err(EngineError::new_terraform_error(event_details, err)),
-    }?;
-
-    match cmd::terraform::terraform_remove_resource_from_tf_state(
-        temp_dir.as_str(),
-        "aws_s3_bucket_lifecycle_configuration.loki_lifecycle",
-    ) {
-        Ok(_) => {
-            kubernetes.logger().log(EngineEvent::Info(
-                event_details.clone(),
-                EventMessage::new_from_safe("S3 logs lifecycle successfully removed from tf state.".to_string()),
-            ));
-            Ok(())
-        }
-        Err(err) => return Err(EngineError::new_terraform_error(event_details, err)),
-    }?;
 
     match cmd::terraform::terraform_init_validate_destroy(temp_dir.as_str(), false) {
         Ok(_) => {
