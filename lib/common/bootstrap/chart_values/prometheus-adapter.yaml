@@ -1,0 +1,17 @@
+metricsRelistInterval: 30s
+
+prometheus:
+  url: set-by-engine-code
+
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 384Mi
+  requests:
+    cpu: 250m
+    memory: 384Mi
+
