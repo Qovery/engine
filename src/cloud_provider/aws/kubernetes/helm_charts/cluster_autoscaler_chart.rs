@@ -154,7 +154,7 @@ mod tests {
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
-            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), KubernetesKind::Eks),
+            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), Some(KubernetesKind::Eks)),
             ClusterAutoscalerChart::chart_name(),
         );
 
@@ -186,7 +186,7 @@ mod tests {
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
-            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), KubernetesKind::Eks),
+            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), Some(KubernetesKind::Eks)),
             ClusterAutoscalerChart::chart_name(),
         );
 
@@ -219,7 +219,10 @@ mod tests {
             common_chart,
             format!(
                 "/lib/{}/bootstrap/chart_values/{}.yaml",
-                get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), KubernetesKind::Eks),
+                get_helm_path_kubernetes_provider_sub_folder_name(
+                    chart.chart_path.helm_path(),
+                    Some(KubernetesKind::Eks)
+                ),
                 ClusterAutoscalerChart::chart_name()
             ),
         );

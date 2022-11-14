@@ -1,9 +1,9 @@
 use crate::cloud_provider::helm::CommonChart;
-use crate::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind};
+use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use std::env;
 use std::fmt::{Display, Formatter};
 
-pub mod core_dns_config_chart;
+pub mod coredns_config_chart;
 pub mod external_dns_chart;
 pub mod kube_prometheus_stack_chart;
 pub mod loki_chart;
@@ -11,6 +11,7 @@ pub mod prometheus_adapter_chart;
 pub mod promtail_chart;
 pub mod qovery_storage_class_chart;
 
+#[derive(Clone)]
 pub struct HelmChartPath {
     path: HelmPath,
 }
@@ -37,6 +38,7 @@ impl Display for HelmChartPath {
     }
 }
 
+#[derive(Clone)]
 pub struct HelmChartValuesFilePath {
     path: HelmPath,
 }
@@ -69,6 +71,7 @@ pub enum HelmPathType {
 }
 
 /// Represents chart directory where chart is defined.
+#[derive(Clone)]
 pub struct HelmPath {
     path: String,
 }
@@ -178,19 +181,21 @@ pub fn get_helm_values_set_in_code_but_absent_in_values_file(
     }
 }
 
+/// Returns helm sub path for a given chart defining if it stands in common VS cloud-provider folder.
 pub fn get_helm_path_kubernetes_provider_sub_folder_name(
     helm_path: &HelmPath,
-    kubernetes_kind: KubernetesKind,
+    kubernetes_kind: Option<KubernetesKind>,
 ) -> String {
     let helm_chart_location = helm_path.to_string();
 
     match &helm_chart_location.contains("/common/") {
         true => "common",
         false => match kubernetes_kind {
-            Kind::Eks => "aws",
-            Kind::Ec2 => "aws-ec2",
-            Kind::Doks => "digitalocean",
-            Kind::ScwKapsule => "scaleway",
+            Some(KubernetesKind::Eks) => "aws",
+            Some(KubernetesKind::Ec2) => "aws-ec2",
+            Some(KubernetesKind::Doks) => "digitalocean",
+            Some(KubernetesKind::ScwKapsule) => "scaleway",
+            None => "common",
         },
     }
     .to_string()
