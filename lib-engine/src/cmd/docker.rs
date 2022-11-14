@@ -710,7 +710,7 @@ mod tests {
             &image,
             &mut |msg| println!("{}", msg),
             &mut |msg| eprintln!("{}", msg),
-            &CommandKiller::from_timeout(Duration::from_secs(1)),
+            &CommandKiller::from_timeout(Duration::from_secs(0)),
         );
         assert!(matches!(ret, Err(DockerError::Timeout { .. })));
     }
