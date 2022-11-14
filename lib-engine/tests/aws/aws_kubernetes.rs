@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::helpers::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
 use crate::helpers::common::ClusterDomain;
-use crate::helpers::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
+use crate::helpers::utilities::{context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger};
 use ::function_name::named;
 
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
@@ -30,7 +30,7 @@ fn create_and_destroy_eks_cluster(
             test_name,
             Kind::Aws,
             KKind::Eks,
-            context(generate_id(), cluster_id),
+            context_for_cluster(generate_id(), cluster_id),
             logger(),
             region.to_aws_format(),
             Some(zones),

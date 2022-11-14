@@ -1,6 +1,6 @@
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::dns::dns_provider_qoverydns;
-use crate::helpers::utilities::{context, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{context_for_cluster, logger, FuncTestsSecrets};
 use chrono::Utc;
 use qovery_engine::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
 use qovery_engine::cloud_provider::aws::{
@@ -79,7 +79,7 @@ fn service_id() -> Uuid {
 }
 
 fn test_kubernetes() -> Box<dyn Kubernetes> {
-    let context = context(org_id(), cluster_id());
+    let context = context_for_cluster(org_id(), cluster_id());
     let long_id = cluster_id();
     Box::new(
         EKS::new(

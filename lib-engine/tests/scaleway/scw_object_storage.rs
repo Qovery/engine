@@ -1,4 +1,4 @@
-use crate::helpers::utilities::{context, generate_id, FuncTestsSecrets};
+use crate::helpers::utilities::{context_for_resource, generate_id, FuncTestsSecrets};
 
 use crate::helpers::scaleway::{SCW_RESOURCE_TTL_IN_SECONDS, SCW_TEST_ZONE};
 use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
@@ -10,7 +10,7 @@ use uuid::Uuid;
 #[test]
 fn test_delete_bucket_hard_delete_strategy() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
@@ -45,7 +45,7 @@ fn test_delete_bucket_hard_delete_strategy() {
 #[test]
 fn test_delete_bucket_empty_strategy() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
 
     let secrets = FuncTestsSecrets::new();
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
@@ -86,7 +86,7 @@ fn test_delete_bucket_empty_strategy() {
 #[test]
 fn test_create_bucket() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
@@ -122,7 +122,7 @@ fn test_create_bucket() {
 #[test]
 fn test_recreate_bucket() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
@@ -164,7 +164,7 @@ fn test_recreate_bucket() {
 #[test]
 fn test_put_file() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
@@ -213,7 +213,7 @@ fn test_put_file() {
 #[test]
 fn test_get_file() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
@@ -264,7 +264,7 @@ fn test_get_file() {
 #[test]
 fn test_ensure_file_is_absent() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let scw_access_key = secrets.SCALEWAY_ACCESS_KEY.unwrap_or_else(|| "undefined".to_string());
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());

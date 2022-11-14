@@ -1,4 +1,4 @@
-use crate::helpers::utilities::{context, generate_id, FuncTestsSecrets};
+use crate::helpers::utilities::{context_for_resource, generate_id, FuncTestsSecrets};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::object_storage::s3::S3;
 use qovery_engine::object_storage::ObjectStorage;
@@ -10,7 +10,7 @@ use uuid::Uuid;
 #[test]
 fn test_delete_bucket() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let id = generate_id();
     let name = format!("test-{}", id);
@@ -53,7 +53,7 @@ fn test_delete_bucket() {
 #[test]
 fn test_create_bucket() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let id = generate_id();
     let name = format!("test-{}", id);
@@ -97,7 +97,7 @@ fn test_create_bucket() {
 #[test]
 fn test_recreate_bucket() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let id = generate_id();
     let name = format!("test-{}", id);
@@ -142,7 +142,7 @@ fn test_recreate_bucket() {
 #[test]
 fn test_put_file() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let id = generate_id();
     let name = format!("test-{}", id);
@@ -193,7 +193,7 @@ fn test_put_file() {
 #[test]
 fn test_get_file() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let id = generate_id();
     let name = format!("test-{}", id);

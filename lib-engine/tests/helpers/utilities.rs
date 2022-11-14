@@ -59,7 +59,7 @@ use tracing_subscriber::EnvFilter;
 use url::Url;
 use uuid::Uuid;
 
-pub fn context(organization_id: Uuid, cluster_id: Uuid) -> Context {
+fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32) -> Context {
     let execution_id = execution_id();
     let home_dir = env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_str().unwrap().to_string());
     let lib_root_dir = env::var("LIB_ROOT_DIR").expect("LIB_ROOT_DIR is mandatory");
@@ -75,7 +75,7 @@ pub fn context(organization_id: Uuid, cluster_id: Uuid) -> Context {
                     let ttl_converted: u32 = ttl.into_string().unwrap().parse().unwrap();
                     Some(ttl_converted)
                 }
-                None => Some(14400),
+                None => Some(ttl),
             }
         },
         forced_upgrade: Option::from(env::var_os("forced_upgrade").is_some()),
@@ -104,6 +104,18 @@ pub fn context(organization_id: Uuid, cluster_id: Uuid) -> Context {
             Transmitter::TaskManager(Uuid::new_v4(), "".to_string()),
         ),
     )
+}
+
+pub fn context_for_cluster(organization_id: Uuid, cluster_id: Uuid) -> Context {
+    context(organization_id, cluster_id, 14400)
+}
+
+pub fn context_for_ec2(organization_id: Uuid, cluster_id: Uuid) -> Context {
+    context(organization_id, cluster_id, 7200)
+}
+
+pub fn context_for_resource(organization_id: Uuid, cluster_id: Uuid) -> Context {
+    context(organization_id, cluster_id, 3600)
 }
 
 pub fn logger() -> Box<dyn Logger> {
