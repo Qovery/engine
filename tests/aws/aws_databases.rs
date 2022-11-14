@@ -2,7 +2,7 @@ use crate::helpers;
 use crate::helpers::aws::{aws_default_infra_config, AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
 use crate::helpers::common::{ClusterDomain, Infrastructure};
 use crate::helpers::database::{test_db, test_pause_managed_db};
-use crate::helpers::utilities::{context, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{context_for_resource, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
 use crate::helpers::utilities::{generate_id, get_svc_name, is_pod_restarted_env};
 use ::function_name::named;
 use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
@@ -42,7 +42,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let cluster_id = secrets
             .AWS_TEST_CLUSTER_LONG_ID
             .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -89,7 +89,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let cluster_id = secrets
             .AWS_TEST_CLUSTER_LONG_ID
             .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -151,7 +151,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let cluster_id = secrets
             .AWS_TEST_CLUSTER_LONG_ID
             .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -222,7 +222,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let cluster_id = secrets
             .AWS_TEST_CLUSTER_LONG_ID
             .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -344,7 +344,7 @@ pub fn test_postgresql_configuration(
     let cluster_id = secrets
         .AWS_TEST_CLUSTER_LONG_ID
         .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
-    let context = context(
+    let context = context_for_resource(
         secrets
             .AWS_TEST_ORGANIZATION_LONG_ID
             .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -385,7 +385,7 @@ pub fn test_postgresql_pause(
     let cluster_id = secrets
         .AWS_TEST_CLUSTER_LONG_ID
         .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
-    let context = context(
+    let context = context_for_resource(
         secrets
             .AWS_TEST_ORGANIZATION_LONG_ID
             .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -589,7 +589,7 @@ pub fn test_mongodb_configuration(
     let cluster_id = secrets
         .AWS_TEST_CLUSTER_LONG_ID
         .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
-    let context = context(
+    let context = context_for_resource(
         secrets
             .AWS_TEST_ORGANIZATION_LONG_ID
             .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -710,7 +710,7 @@ pub fn test_mysql_configuration(
     let cluster_id = secrets
         .AWS_TEST_CLUSTER_LONG_ID
         .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
-    let context = context(
+    let context = context_for_resource(
         secrets
             .AWS_TEST_ORGANIZATION_LONG_ID
             .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -815,7 +815,7 @@ pub fn test_redis_configuration(
     let cluster_id = secrets
         .AWS_TEST_CLUSTER_LONG_ID
         .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
-    let context = context(
+    let context = context_for_resource(
         secrets
             .AWS_TEST_ORGANIZATION_LONG_ID
             .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),

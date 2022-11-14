@@ -1,5 +1,5 @@
 use crate::helpers::scaleway::{SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION};
-use crate::helpers::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger};
+use crate::helpers::utilities::{context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger};
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
@@ -25,7 +25,7 @@ fn create_and_destroy_kapsule_cluster(
             test_name,
             Kind::Scw,
             KKind::ScwKapsule,
-            context(generate_id(), cluster_id),
+            context_for_cluster(generate_id(), cluster_id),
             logger(),
             zone.as_str(),
             None,
