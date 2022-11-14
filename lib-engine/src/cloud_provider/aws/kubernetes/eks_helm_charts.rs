@@ -27,7 +27,7 @@ use crate::cloud_provider::aws::kubernetes::helm_charts::aws_vpc_cni_chart::{
     is_cni_old_version_installed, AwsVpcCniChart,
 };
 use crate::cloud_provider::aws::kubernetes::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
-use crate::cloud_provider::helm_charts::core_dns_config_chart::CoreDNSConfigChart;
+use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
 use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiEncryptionType, LokiS3BucketConfiguration};

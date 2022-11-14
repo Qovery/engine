@@ -11,7 +11,7 @@ use crate::cmd::terraform::TerraformError;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 
-use crate::cloud_provider::helm_charts::core_dns_config_chart::CoreDNSConfigChart;
+use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
