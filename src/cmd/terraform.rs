@@ -719,9 +719,6 @@ fn terraform_init(root_dir: &str) -> Result<Vec<String>, TerraformError> {
         }
     });
 
-    // temprary fix for terraform vault removal
-    let _ = terraform_exec(root_dir, vec!["state", "rm", "vault_generic_secret.cluster-access"]);
-
     match result {
         Ok(output) => Ok(output),
         Err(Operation { error, .. }) => Err(error),
