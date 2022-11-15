@@ -142,7 +142,7 @@ mod tests {
     /// Make sure rust code doesn't set a value not declared inside values file.
     /// All values should be declared / set in values file unless it needs to be injected via rust code.
     #[test]
-    fn rust_overridden_values_exists_in_values_yaml_test() {
+    fn kube_prometheus_stack_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
         let chart = PrometheusAdapterChart::new(None, "whatever".to_string(), HelmChartNamespaces::Prometheus);
         let common_chart = chart.to_common_helm_chart();
