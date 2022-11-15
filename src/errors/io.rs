@@ -177,6 +177,7 @@ pub enum Tag {
     TerraformAccountBlockedByProvider,
     TerraformInstanceVolumeCannotBeReduced,
     TerraformInvalidCIDRBlock,
+    TerraformStateLocked,
     CloudProviderGetLoadBalancer,
     CloudProviderGetLoadBalancerTags,
     CloudProviderDeleteLoadBalancer,
@@ -367,6 +368,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::JobFailure => Tag::JobFailure,
             errors::Tag::TerraformInvalidCIDRBlock => Tag::TerraformInvalidCIDRBlock,
             errors::Tag::DoNotRespectCloudProviderBestPractices => Tag::DoNotRespectCloudProviderBestPractices,
+            errors::Tag::TerraformStateLocked => Tag::TerraformStateLocked,
         }
     }
 }
