@@ -352,7 +352,7 @@ mod tests {
     /// Make sure rust code doesn't set a value not declared inside values file.
     /// All values should be declared / set in values file unless it needs to be injected via rust code.
     #[test]
-    fn rust_overridden_values_exists_in_values_yaml_test() {
+    fn coredns_config_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
         let chart = CoreDNSConfigChart::new(None, vec![], false, "whatever".to_string(), "whatever".to_string());
         let chart_values_file_path = chart._chart_values_path.helm_path().clone();

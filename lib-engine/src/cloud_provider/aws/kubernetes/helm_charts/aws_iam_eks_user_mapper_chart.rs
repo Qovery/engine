@@ -217,7 +217,7 @@ mod tests {
     /// Make sure rust code deosn't set a value not declared inside values file.
     /// All values should be declared / set in values file unless it needs to be injected via rust code.
     #[test]
-    fn rust_overridden_values_exists_in_values_yaml_test() {
+    fn aws_iam_eks_user_mapper_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
         let chart = AwsIamEksUserMapperChart::new(
             None,
