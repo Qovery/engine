@@ -15,6 +15,8 @@ use std::time::Duration;
 // TODO(benjaminch): This chart to be migrated to kube.rs
 pub struct AwsVpcCniChart {
     chart_info: ChartInfo,
+    _chart_path: HelmChartPath,
+    _chart_values_path: HelmChartValuesFilePath,
     chart_installation_checker: AwsVpcCniChartInstallationChecker,
 }
 
@@ -26,22 +28,25 @@ impl AwsVpcCniChart {
         chart_should_support_original_match_labels: bool,
         cluster_name: String,
     ) -> AwsVpcCniChart {
+        let chart_path = HelmChartPath::new(
+            chart_prefix_path,
+            HelmChartDirectoryLocation::CloudProviderFolder,
+            AwsVpcCniChart::chart_name(),
+        );
+        let chart_values_path = HelmChartValuesFilePath::new(
+            chart_prefix_path,
+            HelmChartDirectoryLocation::CloudProviderFolder,
+            AwsVpcCniChart::chart_name(),
+        );
+
         AwsVpcCniChart {
+            _chart_path: chart_path.clone(),
+            _chart_values_path: chart_values_path.clone(),
             chart_info: ChartInfo {
                 name: AwsVpcCniChart::chart_name(),
-                path: HelmChartPath::new(
-                    chart_prefix_path,
-                    HelmChartDirectoryLocation::CloudProviderFolder,
-                    AwsVpcCniChart::chart_name(),
-                )
-                .to_string(),
+                path: chart_path.to_string(),
                 namespace: HelmChartNamespaces::KubeSystem,
-                values_files: vec![HelmChartValuesFilePath::new(
-                    chart_prefix_path,
-                    HelmChartDirectoryLocation::CloudProviderFolder,
-                    AwsVpcCniChart::chart_name(),
-                )
-                .to_string()],
+                values_files: vec![chart_values_path.to_string()],
                 values: vec![
                     ChartSetValue {
                         key: "image.region".to_string(),
@@ -315,19 +320,31 @@ pub fn is_cni_old_version_installed(
 mod tests {
     use crate::cloud_provider::aws::kubernetes::helm_charts::aws_vpc_cni_chart::AwsVpcCniChart;
     use crate::cloud_provider::helm::CommonChart;
-    use crate::cloud_provider::helm_charts::get_helm_values_set_in_code_but_absent_in_values_file;
+    use crate::cloud_provider::helm_charts::{
+        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
+    };
+    use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
     use std::env;
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
     fn aws_vpc_cni_chart_directory_exists_test() {
         // setup:
+        let chart = AwsVpcCniChart::new(
+            "whatever".to_string(),
+            None,
+            "whatever".to_string(),
+            true,
+            "whatever".to_string(),
+        );
+
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
-            "{}/lib/aws/bootstrap/charts/{}/Chart.yaml",
+            "{}/lib/{}/bootstrap/charts/{}/Chart.yaml",
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
+            get_helm_path_kubernetes_provider_sub_folder_name(chart._chart_path.helm_path(), Some(KubernetesKind::Eks)),
             AwsVpcCniChart::chart_name(),
         );
 
@@ -342,12 +359,24 @@ mod tests {
     #[test]
     fn aws_vpc_cni_chart_values_file_exists_test() {
         // setup:
+        let chart = AwsVpcCniChart::new(
+            "whatever".to_string(),
+            None,
+            "whatever".to_string(),
+            true,
+            "whatever".to_string(),
+        );
+
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
-            "{}/lib/aws/bootstrap/chart_values/{}.yaml",
+            "{}/lib/{}/bootstrap/chart_values/{}.yaml",
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                chart._chart_values_path.helm_path(),
+                Some(KubernetesKind::Eks)
+            ),
             AwsVpcCniChart::chart_name(),
         );
 
@@ -378,7 +407,14 @@ mod tests {
                 chart_info: chart.chart_info,
                 ..Default::default()
             },
-            format!("/lib/aws/bootstrap/chart_values/{}.yaml", AwsVpcCniChart::chart_name()),
+            format!(
+                "/lib/{}/bootstrap/chart_values/{}.yaml",
+                get_helm_path_kubernetes_provider_sub_folder_name(
+                    chart._chart_values_path.helm_path(),
+                    Some(KubernetesKind::Eks)
+                ),
+                AwsVpcCniChart::chart_name()
+            ),
         );
 
         // verify:
