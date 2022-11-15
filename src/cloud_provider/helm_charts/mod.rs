@@ -195,7 +195,7 @@ pub fn get_helm_path_kubernetes_provider_sub_folder_name(
             Some(KubernetesKind::Ec2) => "aws-ec2",
             Some(KubernetesKind::Doks) => "digitalocean",
             Some(KubernetesKind::ScwKapsule) => "scaleway",
-            None => "common",
+            None => "undefined-cloud-provider",
         },
     }
     .to_string()
