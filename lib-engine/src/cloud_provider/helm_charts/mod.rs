@@ -9,6 +9,7 @@ pub mod kube_prometheus_stack_chart;
 pub mod loki_chart;
 pub mod prometheus_adapter_chart;
 pub mod promtail_chart;
+pub mod qovery_cert_manager_webhook_chart;
 pub mod qovery_storage_class_chart;
 
 #[derive(Clone)]
