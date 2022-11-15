@@ -165,7 +165,7 @@ mod tests {
         assert!(values_file.is_ok(), "Chart values file should exist: `{}`", chart_values_path);
     }
 
-    /// Make sure rust code deosn't set a value not declared inside values file.
+    /// Make sure rust code doesn't set a value not declared inside values file.
     /// All values should be declared / set in values file unless it needs to be injected via rust code.
     #[test]
     fn rust_overridden_values_exists_in_values_yaml_test() {
@@ -182,7 +182,10 @@ mod tests {
         // execute:
         let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(
             chart,
-            "/lib/common/bootstrap/chart_values/kube-prometheus-stack.yaml".to_string(),
+            format!(
+                "/lib/common/bootstrap/chart_values/{}.yaml",
+                KubePrometheusStackChart::chart_name()
+            ),
         );
 
         // verify:
