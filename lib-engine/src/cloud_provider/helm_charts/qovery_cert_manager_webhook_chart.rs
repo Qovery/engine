@@ -148,7 +148,7 @@ mod tests {
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
-            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), None,),
+            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_values_path.helm_path(), None,),
             QoveryCertManagerWebhookChart::chart_name(),
         );
 
@@ -162,7 +162,7 @@ mod tests {
     /// Make sure rust code doesn't set a value not declared inside values file.
     /// All values should be declared / set in values file unless it needs to be injected via rust code.
     #[test]
-    fn rust_overridden_values_exists_in_values_yaml_test() {
+    fn qovery_cert_manager_webhook_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
         let chart = QoveryCertManagerWebhookChart::new(
             None,
@@ -180,7 +180,7 @@ mod tests {
             common_chart,
             format!(
                 "/lib/{}/bootstrap/chart_values/{}.yaml",
-                get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), None,),
+                get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_values_path.helm_path(), None,),
                 QoveryCertManagerWebhookChart::chart_name()
             ),
         );
