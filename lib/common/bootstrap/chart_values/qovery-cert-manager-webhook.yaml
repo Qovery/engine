@@ -1,0 +1,13 @@
+certManager:
+  namespace: set-by-engine-code
+  serviceAccountName: cert-manager
+
+secret:
+  apiUrl: set-by-engine-code
+  apiKey: set-by-engine-code
+
+resources:
+  limits:
+    memory: 48Mi
+  requests:
+    memory: 48Mi
