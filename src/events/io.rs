@@ -179,6 +179,7 @@ pub enum EnvironmentStep {
     RetrieveClusterConfig,
     RetrieveClusterResources,
     UnderMigration,
+    JobOutput,
 }
 
 impl From<events::EnvironmentStep> for EnvironmentStep {
@@ -206,6 +207,7 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
             events::EnvironmentStep::RetrieveClusterConfig => EnvironmentStep::RetrieveClusterConfig,
             events::EnvironmentStep::RetrieveClusterResources => EnvironmentStep::RetrieveClusterResources,
             events::EnvironmentStep::UnderMigration => EnvironmentStep::UnderMigration,
+            events::EnvironmentStep::JobOutput => EnvironmentStep::JobOutput,
         }
     }
 }

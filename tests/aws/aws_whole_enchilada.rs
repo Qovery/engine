@@ -2,7 +2,9 @@ use crate::helpers;
 use crate::helpers::aws::{AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION};
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
-use crate::helpers::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{
+    context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets,
+};
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::kubernetes::VpcQoveryNetworkMode::WithNatGateways;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
@@ -26,7 +28,7 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
-    let context = context(organization_id, cluster_id);
+    let context = context_for_cluster(organization_id, cluster_id);
 
     let cluster_domain = format!(
         "{}.{}",
@@ -75,7 +77,7 @@ fn create_resize_and_destroy_eks_cluster_with_env_in_eu_west_3() {
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
-    let context = context(organization_id, cluster_id);
+    let context = context_for_cluster(organization_id, cluster_id);
 
     let cluster_domain = format!(
         "{}.{}",
@@ -119,7 +121,7 @@ fn create_pause_and_destroy_eks_cluster_with_env_in_eu_west_3() {
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
-    let context = context(organization_id, cluster_id);
+    let context = context_for_cluster(organization_id, cluster_id);
 
     let cluster_domain = format!(
         "{}.{}",
@@ -166,7 +168,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
 
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(aws_region.to_string().as_str());
-    let context = context(organization_id, cluster_id);
+    let context = context_for_cluster(organization_id, cluster_id);
 
     let cluster_domain = format!(
         "{}.{}",

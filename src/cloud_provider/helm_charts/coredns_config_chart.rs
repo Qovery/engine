@@ -1,7 +1,7 @@
 use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartPayload, ChartSetValue, HelmAction, HelmChart, HelmChartNamespaces,
 };
-use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath};
+use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath};
 use crate::cmd::kubectl::{
     kubectl_delete_crash_looping_pods, kubectl_exec_get_configmap, kubectl_exec_rollout_restart_deployment,
     kubectl_exec_with_output,
@@ -13,9 +13,10 @@ use kube::Client;
 use std::collections::HashMap;
 use std::path::Path;
 
-// TODO(benjaminch): This chart should be factorized accross all providers.
 pub struct CoreDNSConfigChart {
     pub chart_info: ChartInfo,
+    _chart_path: HelmChartPath,
+    _chart_values_path: HelmChartValuesFilePath,
     chart_installation_checker: CoreDNSConfigChartChecker,
 }
 
@@ -27,15 +28,23 @@ impl CoreDNSConfigChart {
         managed_dns_helm_format: String,
         managed_dns_resolvers_terraform_format: String,
     ) -> CoreDNSConfigChart {
+        let chart_path = HelmChartPath::new(
+            chart_prefix_path,
+            HelmChartDirectoryLocation::CommonFolder,
+            format!("{}-config", CoreDNSConfigChart::chart_name()),
+        );
+        let chart_values_path = HelmChartValuesFilePath::new(
+            chart_prefix_path,
+            HelmChartDirectoryLocation::CommonFolder,
+            format!("{}-config", CoreDNSConfigChart::chart_name()),
+        );
+
         CoreDNSConfigChart {
+            _chart_path: chart_path.clone(),
+            _chart_values_path: chart_values_path.clone(),
             chart_info: ChartInfo {
                 name: CoreDNSConfigChart::chart_name(),
-                path: HelmChartPath::new(
-                    chart_prefix_path,
-                    HelmChartDirectoryLocation::CommonFolder,
-                    format!("{}-config", CoreDNSConfigChart::chart_name()),
-                )
-                .to_string(),
+                path: chart_path.to_string(),
                 namespace: HelmChartNamespaces::KubeSystem,
                 custom_namespace: None,
                 action: HelmAction::Deploy,
@@ -46,6 +55,7 @@ impl CoreDNSConfigChart {
                 timeout_in_seconds: 0,
                 dry_run: false,
                 wait: false,
+                values_files: vec![chart_values_path.to_string()],
                 values: vec![
                     ChartSetValue {
                         key: "labels".to_string(),
@@ -281,5 +291,87 @@ impl ChartInstallationChecker for CoreDNSConfigChartChecker {
     fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
         // TODO(ENG-1367): Implement chart install verification
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::helm::CommonChart;
+    use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
+    use crate::cloud_provider::helm_charts::{
+        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
+    };
+    use std::env;
+
+    /// Makes sure chart directory containing all YAML files exists.
+    #[test]
+    fn coredns_config_chart_directory_exists_test() {
+        // setup:
+        let chart = CoreDNSConfigChart::new(None, vec![], false, "whatever".to_string(), "whatever".to_string());
+
+        let current_directory = env::current_dir().expect("Impossible to get current directory");
+        let chart_path = format!(
+            "{}/lib/{}/bootstrap/charts/{}-config/Chart.yaml",
+            current_directory
+                .to_str()
+                .expect("Impossible to convert current directory to string"),
+            get_helm_path_kubernetes_provider_sub_folder_name(chart._chart_path.helm_path(), None,),
+            CoreDNSConfigChart::chart_name(),
+        );
+
+        // execute
+        let values_file = std::fs::File::open(&chart_path);
+
+        // verify:
+        assert!(values_file.is_ok(), "Chart directory should exist: `{}`", chart_path);
+    }
+
+    /// Makes sure chart values file exists.
+    #[test]
+    fn coredns_config_chart_values_file_exists_test() {
+        // setup:
+        let chart = CoreDNSConfigChart::new(None, vec![], false, "whatever".to_string(), "whatever".to_string());
+
+        let current_directory = env::current_dir().expect("Impossible to get current directory");
+        let chart_values_path = format!(
+            "{}/lib/{}/bootstrap/chart_values/{}-config.yaml",
+            current_directory
+                .to_str()
+                .expect("Impossible to convert current directory to string"),
+            get_helm_path_kubernetes_provider_sub_folder_name(chart._chart_values_path.helm_path(), None,),
+            CoreDNSConfigChart::chart_name(),
+        );
+
+        // execute
+        let values_file = std::fs::File::open(&chart_values_path);
+
+        // verify:
+        assert!(values_file.is_ok(), "Chart values file should exist: `{}`", chart_values_path);
+    }
+
+    /// Make sure rust code doesn't set a value not declared inside values file.
+    /// All values should be declared / set in values file unless it needs to be injected via rust code.
+    #[test]
+    fn coredns_config_chart_rust_overridden_values_exists_in_values_yaml_test() {
+        // setup:
+        let chart = CoreDNSConfigChart::new(None, vec![], false, "whatever".to_string(), "whatever".to_string());
+        let chart_values_file_path = chart._chart_values_path.helm_path().clone();
+
+        // execute:
+        let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(
+            CommonChart {
+                // just fake to mimic common chart for test
+                chart_info: chart.chart_info,
+                ..Default::default()
+            },
+            format!(
+                "/lib/{}/bootstrap/chart_values/{}-config.yaml",
+                get_helm_path_kubernetes_provider_sub_folder_name(&chart_values_file_path, None,),
+                CoreDNSConfigChart::chart_name(),
+            ),
+        );
+
+        // verify:
+        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
     }
 }

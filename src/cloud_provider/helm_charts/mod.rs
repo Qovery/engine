@@ -1,16 +1,18 @@
 use crate::cloud_provider::helm::CommonChart;
+use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use std::env;
 use std::fmt::{Display, Formatter};
 
-pub mod cluster_autoscaler_chart;
-pub mod core_dns_config_chart;
+pub mod coredns_config_chart;
 pub mod external_dns_chart;
 pub mod kube_prometheus_stack_chart;
 pub mod loki_chart;
 pub mod prometheus_adapter_chart;
 pub mod promtail_chart;
+pub mod qovery_cert_manager_webhook_chart;
 pub mod qovery_storage_class_chart;
 
+#[derive(Clone)]
 pub struct HelmChartPath {
     path: HelmPath,
 }
@@ -25,6 +27,10 @@ impl HelmChartPath {
             path: HelmPath::new(HelmPathType::Chart, path_prefix, directory_location, chart_name),
         }
     }
+
+    pub fn helm_path(&self) -> &HelmPath {
+        &self.path
+    }
 }
 
 impl Display for HelmChartPath {
@@ -33,6 +39,7 @@ impl Display for HelmChartPath {
     }
 }
 
+#[derive(Clone)]
 pub struct HelmChartValuesFilePath {
     path: HelmPath,
 }
@@ -47,6 +54,10 @@ impl HelmChartValuesFilePath {
             path: HelmPath::new(HelmPathType::ValuesFile, path_prefix, directory_location, chart_name),
         }
     }
+
+    pub fn helm_path(&self) -> &HelmPath {
+        &self.path
+    }
 }
 
 impl Display for HelmChartValuesFilePath {
@@ -55,18 +66,19 @@ impl Display for HelmChartValuesFilePath {
     }
 }
 
-enum HelmPathType {
+pub enum HelmPathType {
     ValuesFile,
     Chart,
 }
 
 /// Represents chart directory where chart is defined.
-struct HelmPath {
+#[derive(Clone)]
+pub struct HelmPath {
     path: String,
 }
 
 impl HelmPath {
-    fn new(
+    pub fn new(
         helm_path_type: HelmPathType,
         path_prefix: Option<&str>,
         directory_location: HelmChartDirectoryLocation,
@@ -168,6 +180,26 @@ pub fn get_helm_values_set_in_code_but_absent_in_values_file(
         true => None,
         false => Some(missing_fields),
     }
+}
+
+/// Returns helm sub path for a given chart defining if it stands in common VS cloud-provider folder.
+pub fn get_helm_path_kubernetes_provider_sub_folder_name(
+    helm_path: &HelmPath,
+    kubernetes_kind: Option<KubernetesKind>,
+) -> String {
+    let helm_chart_location = helm_path.to_string();
+
+    match &helm_chart_location.contains("/common/") {
+        true => "common",
+        false => match kubernetes_kind {
+            Some(KubernetesKind::Eks) => "aws",
+            Some(KubernetesKind::Ec2) => "aws-ec2",
+            Some(KubernetesKind::Doks) => "digitalocean",
+            Some(KubernetesKind::ScwKapsule) => "scaleway",
+            None => "undefined-cloud-provider",
+        },
+    }
+    .to_string()
 }
 
 #[cfg(test)]

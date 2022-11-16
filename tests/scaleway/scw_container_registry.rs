@@ -1,4 +1,4 @@
-use crate::helpers::utilities::{context, FuncTestsSecrets};
+use crate::helpers::utilities::{context_for_resource, FuncTestsSecrets};
 use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::models::scaleway::ScwZone;
 use tracing::debug;
@@ -26,7 +26,7 @@ fn test_delete_image() {
 #[test]
 fn test_get_registry_namespace() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
     let scw_default_project_id = secrets
@@ -75,7 +75,7 @@ fn test_get_registry_namespace() {
 #[test]
 fn test_create_registry_namespace() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
     let scw_default_project_id = secrets
@@ -121,7 +121,7 @@ fn test_create_registry_namespace() {
 #[test]
 fn test_delete_registry_namespace() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
     let scw_default_project_id = secrets
@@ -161,7 +161,7 @@ fn test_delete_registry_namespace() {
 #[test]
 fn test_get_or_create_registry_namespace() {
     // setup:
-    let context = context(Uuid::new_v4(), Uuid::new_v4());
+    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
     let secrets = FuncTestsSecrets::new();
     let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
     let scw_default_project_id = secrets

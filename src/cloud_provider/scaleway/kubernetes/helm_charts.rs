@@ -13,12 +13,13 @@ use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 use crate::models::scaleway::{ScwRegion, ScwZone};
 
-use crate::cloud_provider::helm_charts::core_dns_config_chart::CoreDNSConfigChart;
+use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
 use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiEncryptionType, LokiS3BucketConfiguration};
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
+use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -418,42 +419,9 @@ datasources:
 
     let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
     if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {
-        qovery_cert_manager_webhook = Some(CommonChart {
-            chart_info: ChartInfo {
-                name: "qovery-cert-manager-webhook".to_string(),
-                namespace: HelmChartNamespaces::CertManager,
-                path: chart_path("common/charts/qovery-cert-manager-webhook"),
-                values: vec![
-                    ChartSetValue {
-                        key: "secret.apiKey".to_string(),
-                        value: qovery_dns_config.api_key.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "secret.apiUrl".to_string(),
-                        value: qovery_dns_config.api_url.to_string(), // URL standard port will be omitted from string as standard (80 HTTP & 443 HTTPS)
-                    },
-                    ChartSetValue {
-                        key: "certManager.serviceAccountName".to_string(),
-                        value: "cert-manager".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "certManager.namespace".to_string(),
-                        value: HelmChartNamespaces::CertManager.to_string(),
-                    },
-                    // resources limits
-                    ChartSetValue {
-                        key: "resources.limits.memory".to_string(),
-                        value: "48Mi".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.requests.memory".to_string(),
-                        value: "48Mi".to_string(),
-                    },
-                ],
-                ..Default::default()
-            },
-            ..Default::default()
-        });
+        qovery_cert_manager_webhook = Some(
+            QoveryCertManagerWebhookChart::new(chart_prefix_path, qovery_dns_config.clone()).to_common_helm_chart(),
+        );
     }
 
     let nginx_ingress = CommonChart {

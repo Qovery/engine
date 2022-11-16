@@ -8,7 +8,9 @@ use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::utilities::to_short_id;
 
 use crate::helpers::scaleway::{SCW_KUBERNETES_MAJOR_VERSION, SCW_KUBERNETES_MINOR_VERSION};
-use crate::helpers::utilities::{context, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{
+    context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets,
+};
 
 #[cfg(feature = "test-scw-whole-enchilada")]
 #[named]
@@ -19,7 +21,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
     let secrets = FuncTestsSecrets::new();
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(zone.as_str());
-    let context = context(organization_id, cluster_id);
+    let context = context_for_cluster(organization_id, cluster_id);
     let cluster_domain = format!(
         "{}.{}",
         to_short_id(&cluster_id),
@@ -62,7 +64,7 @@ fn create_pause_and_destroy_kapsule_cluster_with_env_in_par_2() {
     let secrets = FuncTestsSecrets::new();
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(zone.as_str());
-    let context = context(organization_id, cluster_id);
+    let context = context_for_cluster(organization_id, cluster_id);
     let cluster_domain = format!(
         "{}.{}",
         to_short_id(&cluster_id),
@@ -105,7 +107,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_with_env_in_par_2() {
     let secrets = FuncTestsSecrets::new();
     let organization_id = generate_id();
     let cluster_id = generate_cluster_id(zone.as_str());
-    let context = context(organization_id, cluster_id);
+    let context = context_for_cluster(organization_id, cluster_id);
     let cluster_domain = format!(
         "{}.{}",
         to_short_id(&cluster_id),

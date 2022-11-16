@@ -2,7 +2,7 @@ use crate::helpers;
 use crate::helpers::aws::aws_default_infra_config;
 use crate::helpers::common::Infrastructure;
 use crate::helpers::environment::session_is_sticky;
-use crate::helpers::utilities::{context, get_pvc, init, is_pod_restarted_env, kubernetes_config_path};
+use crate::helpers::utilities::{context_for_resource, get_pvc, init, is_pod_restarted_env, kubernetes_config_path};
 use crate::helpers::utilities::{engine_run_test, get_pods, logger, FuncTestsSecrets};
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
@@ -36,7 +36,7 @@ fn aws_test_build_phase() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -74,7 +74,7 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -116,7 +116,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -191,7 +191,7 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -235,7 +235,7 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -296,7 +296,7 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -357,7 +357,7 @@ fn deploy_a_working_environment_with_domain() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -406,7 +406,7 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -473,7 +473,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -544,7 +544,7 @@ fn redeploy_same_app_with_ebs() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -634,7 +634,7 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -701,7 +701,7 @@ fn deploy_ok_fail_fail_ok_environment() {
         // working env
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -780,7 +780,7 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -822,7 +822,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -914,7 +914,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -1001,7 +1001,7 @@ fn deploy_container_with_router_on_aws_eks() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -1097,7 +1097,7 @@ fn deploy_job_on_aws_eks() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
@@ -1111,6 +1111,7 @@ fn deploy_job_on_aws_eks() {
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
+        let json_output = "{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}";
         //environment.long_id = Uuid::default();
         //environment.project_long_id = Uuid::default();
         environment.applications = vec![];
@@ -1129,13 +1130,13 @@ fn deploy_job_on_aws_eks() {
                 tag: "bullseye".to_string(),
             },
             max_nb_restart: 2,
-            max_duration_in_sec: 30,
+            max_duration_in_sec: 40,
             default_port: Some(8080),
             //command_args: vec![],
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "echo starting; sleep 10; echo started".to_string(),
+                format!("echo starting; sleep 10; echo '{}' > /output/qovery-output.json", json_output),
             ],
             entrypoint: None,
             force_trigger: false,
@@ -1170,7 +1171,7 @@ fn deploy_cronjob_on_aws_eks() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),

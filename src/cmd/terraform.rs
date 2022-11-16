@@ -140,6 +140,11 @@ pub enum TerraformError {
         /// raw_message: raw Terraform error message with all details.
         raw_message: String,
     },
+    StateLocked {
+        lock_id: String,
+        /// raw_message: raw Terraform error message with all details.
+        raw_message: String,
+    },
 }
 
 impl TerraformError {
@@ -461,6 +466,23 @@ impl TerraformError {
             };
         }
 
+        if raw_terraform_error_output.contains("Error acquiring the state lock")
+            && raw_terraform_error_output.contains("Lock Info:")
+        {
+            if let Ok(tf_state_lock) = Regex::new(
+                r"ID:\s+(?P<lock_id>\b(?:[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}))",
+            ) {
+                if let Some(cap) = tf_state_lock.captures(raw_terraform_error_output.as_str()) {
+                    if let Some(lock_id) = cap.name("lock_id").map(|e| e.as_str()) {
+                        return TerraformError::StateLocked {
+                            lock_id: lock_id.to_string(),
+                            raw_message: raw_terraform_error_output,
+                        };
+                    }
+                }
+            }
+        }
+
         // This kind of error should be triggered as little as possible, ideally, there is no unknown errors
         // (un-catched) so we can act / report properly to the user.
         TerraformError::Unknown {
@@ -568,6 +590,9 @@ impl TerraformError {
             TerraformError::InvalidCIDRBlock {cidr,..} => {
                 format!("Error, the CIDR block `{}` can't be used.", cidr)
             }
+            TerraformError::StateLocked { lock_id, .. } => {
+                format!("Error, terraform state is locked (lock_id: {})", lock_id)
+            }
         }
     }
 }
@@ -630,6 +655,9 @@ impl Display for TerraformError {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
             TerraformError::InvalidCIDRBlock { raw_message, .. } => {
+                format!("{}\n{}", self.to_safe_message(), raw_message)
+            }
+            TerraformError::StateLocked { raw_message, .. } => {
                 format!("{}\n{}", self.to_safe_message(), raw_message)
             }
         };
@@ -718,9 +746,6 @@ fn terraform_init(root_dir: &str) -> Result<Vec<String>, TerraformError> {
             }
         }
     });
-
-    // temprary fix for terraform vault removal
-    let _ = terraform_exec(root_dir, vec!["state", "rm", "vault_generic_secret.cluster-access"]);
 
     match result {
         Ok(output) => Ok(output),
@@ -1600,5 +1625,41 @@ terraform {
 
         // validate:
         assert_eq!(TerraformError::AccountBlockedByProvider { raw_message }, result);
+    }
+
+    #[test]
+    fn test_terraform_error_state_lock() {
+        // setup:
+        let raw_terraform_error_str = r#"Error: Error acquiring the state lock
+        
+Error message: ConditionalCheckFailedException: The conditional request
+failed
+Lock Info:
+  ID:        ecd9f287-8d29-4331-1683-48028be7aaba
+  Path:      qovery-terrafom-tfstates/z00007219/qovery-terrafom-tfstates.tfstate
+  Operation: OperationTypeApply
+  Who:       likornus@likornus
+  Version:   1.3.3
+  Created:   2022-11-14 13:59:21.540636643 +0000 UTC
+  Info:      
+
+
+Terraform acquires a state lock to protect the state from being written
+by multiple users at the same time. Please resolve the issue above and try
+again. For most commands, you can disable locking with the "-lock=false"
+flag, but this is not recommended."#;
+
+        // execute:
+        let result =
+            TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_terraform_error_str.to_string());
+
+        // validate:
+        assert_eq!(
+            TerraformError::StateLocked {
+                lock_id: "ecd9f287-8d29-4331-1683-48028be7aaba".to_string(),
+                raw_message: raw_terraform_error_str.to_string(),
+            },
+            result
+        );
     }
 }

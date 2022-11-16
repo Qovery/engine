@@ -88,7 +88,8 @@ mod tests {
     use crate::cloud_provider::helm::HelmChartNamespaces;
     use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
     use crate::cloud_provider::helm_charts::{
-        get_helm_values_set_in_code_but_absent_in_values_file, ToCommonHelmChart,
+        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
+        ToCommonHelmChart,
     };
     use std::env;
 
@@ -96,12 +97,15 @@ mod tests {
     #[test]
     fn kube_prometheus_stack_chart_directory_exists_test() {
         // setup:
+        let chart = PrometheusAdapterChart::new(None, "whatever".to_string(), HelmChartNamespaces::Prometheus);
+
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
-            "{}/lib/common/bootstrap/charts/{}/Chart.yaml",
+            "{}/lib/{}/bootstrap/charts/{}/Chart.yaml",
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
+            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), None),
             PrometheusAdapterChart::chart_name(),
         );
 
@@ -116,12 +120,15 @@ mod tests {
     #[test]
     fn kube_prometheus_stack_chart_values_file_exists_test() {
         // setup:
+        let chart = PrometheusAdapterChart::new(None, "whatever".to_string(), HelmChartNamespaces::Prometheus);
+
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
-            "{}/lib/common/bootstrap/chart_values/{}.yaml",
+            "{}/lib/{}/bootstrap/chart_values/{}.yaml",
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
+            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_values_path.helm_path(), None),
             PrometheusAdapterChart::chart_name(),
         );
 
@@ -135,16 +142,17 @@ mod tests {
     /// Make sure rust code doesn't set a value not declared inside values file.
     /// All values should be declared / set in values file unless it needs to be injected via rust code.
     #[test]
-    fn rust_overridden_values_exists_in_values_yaml_test() {
+    fn kube_prometheus_stack_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = PrometheusAdapterChart::new(None, "whatever".to_string(), HelmChartNamespaces::Prometheus)
-            .to_common_helm_chart();
+        let chart = PrometheusAdapterChart::new(None, "whatever".to_string(), HelmChartNamespaces::Prometheus);
+        let common_chart = chart.to_common_helm_chart();
 
         // execute:
         let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(
-            chart,
+            common_chart,
             format!(
-                "/lib/common/bootstrap/chart_values/{}.yaml",
+                "/lib/{}/bootstrap/chart_values/{}.yaml",
+                get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_values_path.helm_path(), None),
                 PrometheusAdapterChart::chart_name()
             ),
         );

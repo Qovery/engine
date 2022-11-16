@@ -676,6 +676,8 @@ pub enum Tag {
     TerraformAlreadyExistingResource,
     /// TerraformInvalidCIDRBlock: represents an error due to an unusable CIDR block already used in the target VPC.
     TerraformInvalidCIDRBlock,
+    /// TerraformStateLocked: represents an error due to Terraform state lock.
+    TerraformStateLocked,
     /// HelmChartsSetupError: represents an error while trying to setup helm charts.
     HelmChartsSetupError,
     /// HelmChartsDeployError: represents an error while trying to deploy helm charts.
@@ -2458,6 +2460,14 @@ impl EngineError {
                 Some(terraform_error.into()),
                 None,
                 Some("The CIDR block is equal to or more specific than one of this VPC's CIDR blocks.".to_string()),
+            ),
+            TerraformError::StateLocked { .. } => EngineError::new(
+                event_details,
+                Tag::TerraformStateLocked,
+                terraform_error.to_safe_message(),
+                Some(terraform_error.into()),
+                None,
+                Some("Your deployment failed because Terraform faced a state lock. Please contact Qovery team to get unlocked.".to_string()),
             ),
         }
     }

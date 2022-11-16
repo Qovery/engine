@@ -1,4 +1,4 @@
-use crate::helpers::utilities::{context, engine_run_test, generate_id, logger};
+use crate::helpers::utilities::{context_for_ec2, engine_run_test, generate_id, logger};
 use ::function_name::named;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 
@@ -29,7 +29,7 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
             test_name,
             Kind::Aws,
             KKind::Ec2,
-            context(generate_id(), cluster_id),
+            context_for_ec2(generate_id(), cluster_id),
             logger(),
             region.to_aws_format(),
             Some(zones),

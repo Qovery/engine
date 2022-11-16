@@ -4,7 +4,7 @@ use crate::helpers::environment::session_is_sticky;
 use crate::helpers::scaleway::scw_default_infra_config;
 use crate::helpers::scaleway::{clean_environments, SCW_TEST_ZONE};
 use crate::helpers::utilities::{
-    context, engine_run_test, get_pods, init, kubernetes_config_path, logger, FuncTestsSecrets,
+    context_for_resource, engine_run_test, get_pods, init, kubernetes_config_path, logger, FuncTestsSecrets,
 };
 use crate::helpers::utilities::{get_pvc, is_pod_restarted_env};
 use ::function_name::named;
@@ -37,7 +37,7 @@ fn scaleway_test_build_phase() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
@@ -76,7 +76,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
@@ -122,7 +122,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
@@ -170,7 +170,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
@@ -254,7 +254,7 @@ fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
@@ -319,7 +319,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
@@ -365,7 +365,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
 
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
@@ -438,7 +438,7 @@ fn deploy_a_working_environment_and_pause_it() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
@@ -511,7 +511,7 @@ fn scaleway_kapsule_redeploy_same_app() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
@@ -614,7 +614,7 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
@@ -687,7 +687,7 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
         // working env
 
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
@@ -771,7 +771,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
         let logger = logger();
 
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
@@ -817,7 +817,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
@@ -914,7 +914,7 @@ fn deploy_container_with_no_router_on_scw() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
@@ -1003,7 +1003,7 @@ fn deploy_container_with_router_on_scw() {
 
         let logger = logger();
         let secrets = FuncTestsSecrets::new();
-        let context = context(
+        let context = context_for_resource(
             secrets
                 .SCALEWAY_TEST_ORGANIZATION_LONG_ID
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),

@@ -1,5 +1,5 @@
 use crate::helpers::utilities::{
-    context, engine_run_test, generate_cluster_id, generate_id, init, logger, FuncTestsSecrets,
+    context_for_ec2, engine_run_test, generate_cluster_id, generate_id, init, logger, FuncTestsSecrets,
 };
 use ::function_name::named;
 use qovery_engine::cloud_provider::aws::AWS;
@@ -238,7 +238,7 @@ fn test_ec2_database(
         let logger = logger();
         let organization_id = generate_id();
         let cluster_id = generate_cluster_id(AWS_TEST_REGION.to_aws_format());
-        let context = context(organization_id, cluster_id);
+        let context = context_for_ec2(organization_id, cluster_id);
 
         // create dedicated EC2 cluster:
         let secrets = FuncTestsSecrets::new();

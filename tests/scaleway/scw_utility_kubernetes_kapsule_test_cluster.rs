@@ -1,5 +1,5 @@
 use crate::helpers::scaleway::scw_default_infra_config;
-use crate::helpers::utilities::{context, engine_run_test, init, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{context_for_cluster, engine_run_test, init, logger, FuncTestsSecrets};
 use ::function_name::named;
 use tracing::{span, Level};
 
@@ -30,7 +30,7 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
             .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
 
         let logger = logger();
-        let context = context(organization_id, cluster_id);
+        let context = context_for_cluster(organization_id, cluster_id);
         let engine = scw_default_infra_config(&context, logger.clone());
         let mut tx = Transaction::new(&engine).unwrap();
 
@@ -70,7 +70,7 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
             .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
 
         let logger = logger();
-        let context = context(organization_id, cluster_id);
+        let context = context_for_cluster(organization_id, cluster_id);
         let engine = scw_default_infra_config(&context, logger.clone());
         let mut tx = Transaction::new(&engine).unwrap();
 

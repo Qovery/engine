@@ -80,20 +80,25 @@ impl ChartInstallationChecker for AwsNodeTermHandlerChecker {
 mod tests {
     use crate::cloud_provider::aws::kubernetes::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
     use crate::cloud_provider::helm_charts::{
-        get_helm_values_set_in_code_but_absent_in_values_file, ToCommonHelmChart,
+        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
+        ToCommonHelmChart,
     };
+    use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
     use std::env;
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
     fn aws_node_term_handler_chart_directory_exists_test() {
         // setup:
+        let chart = AwsNodeTermHandlerChart::new(None);
+
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
-            "{}/lib/aws/bootstrap/charts/aws-node-termination-handler/Chart.yaml",
+            "{}/lib/{}/bootstrap/charts/aws-node-termination-handler/Chart.yaml",
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
+            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), Some(KubernetesKind::Eks)),
         );
 
         // execute
@@ -107,12 +112,18 @@ mod tests {
     #[test]
     fn aws_node_term_handler_chart_values_file_exists_test() {
         // setup:
+        let chart = AwsNodeTermHandlerChart::new(None);
+
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
-            "{}/lib/aws/bootstrap/chart_values/{}.yaml",
+            "{}/lib/{}/bootstrap/chart_values/{}.yaml",
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                chart.chart_values_path.helm_path(),
+                Some(KubernetesKind::Eks)
+            ),
             AwsNodeTermHandlerChart::chart_name(),
         );
 
@@ -128,12 +139,20 @@ mod tests {
     #[test]
     fn aws_node_term_handler_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = AwsNodeTermHandlerChart::new(None).to_common_helm_chart();
+        let chart = AwsNodeTermHandlerChart::new(None);
+        let common_chart = chart.to_common_helm_chart();
 
         // execute:
         let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(
-            chart,
-            format!("/lib/aws/bootstrap/chart_values/{}.yaml", AwsNodeTermHandlerChart::chart_name()),
+            common_chart,
+            format!(
+                "/lib/{}/bootstrap/chart_values/{}.yaml",
+                get_helm_path_kubernetes_provider_sub_folder_name(
+                    chart.chart_values_path.helm_path(),
+                    Some(KubernetesKind::Eks)
+                ),
+                AwsNodeTermHandlerChart::chart_name()
+            ),
         );
 
         // verify:
