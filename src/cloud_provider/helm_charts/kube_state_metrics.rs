@@ -38,7 +38,7 @@ impl ToCommonHelmChart for KubeStateMetricsChart {
             chart_info: ChartInfo {
                 name: KubeStateMetricsChart::chart_name(),
                 namespace: HelmChartNamespaces::Prometheus,
-                last_breaking_version_requiring_restart: Some(Version::new(4, 6, 0)),
+                last_breaking_version_requiring_restart: Some(Version::new(4, 23, 0)),
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 ..Default::default()
@@ -74,7 +74,7 @@ mod tests {
     use crate::cloud_provider::helm_charts::kube_state_metrics::KubeStateMetricsChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
-        ToCommonHelmChart,
+        HelmChartType, ToCommonHelmChart,
     };
     use std::env;
 
@@ -90,7 +90,7 @@ mod tests {
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
-            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), None,),
+            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), HelmChartType::Shared,),
             KubeStateMetricsChart::chart_name(),
         );
 
@@ -113,7 +113,10 @@ mod tests {
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
-            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_values_path.helm_path(), None,),
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                chart.chart_values_path.helm_path(),
+                HelmChartType::Shared,
+            ),
             KubeStateMetricsChart::chart_name(),
         );
 
@@ -137,7 +140,10 @@ mod tests {
             common_chart,
             format!(
                 "/lib/{}/bootstrap/chart_values/{}.yaml",
-                get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_values_path.helm_path(), None,),
+                get_helm_path_kubernetes_provider_sub_folder_name(
+                    chart.chart_values_path.helm_path(),
+                    HelmChartType::Shared,
+                ),
                 KubeStateMetricsChart::chart_name()
             ),
         );
