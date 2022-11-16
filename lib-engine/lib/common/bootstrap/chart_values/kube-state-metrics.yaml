@@ -1,0 +1,11 @@
+prometheus:
+  monitor:
+    enabled: true
+
+resources:
+  limits:
+    cpu: 75m
+    memory: 384Mi
+  requests:
+    cpu: 75m
+    memory: 384Mi
