@@ -127,6 +127,20 @@ impl EventMessage {
         }
     }
 
+    /// Creates e new EventMessage dedicated to transfer data to core
+    ///
+    /// Arguments
+    ///
+    /// * `safe_message`: Event safe message string (from which all unsafe text such as passwords and tokens has been removed).
+    /// * `json_core_data`: The json representation of the data to be transfer to the core
+    pub fn new_for_sending_core_data(safe_message: String, json: String) -> Self {
+        EventMessage {
+            safe_message,
+            full_details: Some(json),
+            env_vars: None,
+        }
+    }
+
     /// Creates e new EventMessage from engine error.
     ///
     /// Arguments
@@ -343,6 +357,9 @@ pub enum EnvironmentStep {
     Deleted,
     /// DeleteError: Terminal error on deleting an environment/service.
     DeletedError,
+    // Transfer data to core
+    /// JobOutput: contains the environment variables to upsert
+    JobOutput,
 }
 
 impl EnvironmentStep {
@@ -386,6 +403,7 @@ impl Display for EnvironmentStep {
                 EnvironmentStep::RetrieveClusterConfig => "retrieve-cluster-config",
                 EnvironmentStep::RetrieveClusterResources => "retrieve-cluster-resources",
                 EnvironmentStep::UnderMigration => "under-migration",
+                EnvironmentStep::JobOutput => "job-output",
             },
         )
     }

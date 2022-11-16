@@ -38,7 +38,7 @@ async-trait = "0.1.57"
 scopeguard = "1.1.0"
 libc = "0.2"
 
-kube = { version = "0.73.1", features = ["default", "runtime", "derive"] }
+kube = { version = "0.73.1", features = ["default", "runtime", "derive", "ws"] }
 k8s-openapi = { version = "0.15.0", default-features = false, features = ["v1_21"] }
 
 # FIXME use https://crates.io/crates/blocking instead of runtime.rs

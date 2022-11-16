@@ -4,6 +4,7 @@ use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, St
 use crate::logger::Logger;
 use std::sync::Arc;
 
+use crate::events::EnvironmentStep::JobOutput;
 #[cfg(feature = "env-logger-check")]
 use std::sync::atomic::AtomicUsize;
 #[cfg(feature = "env-logger-check")]
@@ -99,6 +100,21 @@ impl EnvLogger {
         self.logger
             .log(EngineEvent::Error(err, Some(EventMessage::new_from_safe(msg))));
     }
+
+    pub fn send_core_configuration(&self, safe_message: String, json: String) {
+        #[cfg(feature = "env-logger-check")]
+        {
+            assert!(
+                LoggerState::from_usize(self.state.load(Ordering::Acquire)) == LoggerState::Progress,
+                "cannot send warning while a final state has been reached"
+            );
+        }
+
+        self.logger.log(EngineEvent::Info(
+            EventDetails::clone_changing_stage(self.event_details_progress.clone(), Stage::Environment(JobOutput)),
+            EventMessage::new_for_sending_core_data(safe_message, json),
+        ));
+    }
 }
 
 pub struct EnvProgressLogger<'a> {
@@ -116,6 +132,10 @@ impl<'a> EnvProgressLogger<'a> {
 
     pub fn warning(&self, msg: String) {
         self.logger.send_warning(msg);
+    }
+
+    pub fn core_configuration(&self, msg: String, json: String) {
+        self.logger.send_core_configuration(msg, json)
     }
 }
 
