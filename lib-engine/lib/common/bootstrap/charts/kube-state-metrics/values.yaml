@@ -1,8 +1,9 @@
 # Default values for kube-state-metrics.
 prometheusScrape: true
 image:
-  repository: k8s.gcr.io/kube-state-metrics/kube-state-metrics
-  tag: v2.3.0
+  repository: registry.k8s.io/kube-state-metrics/kube-state-metrics
+  tag: v2.6.0
+  sha: ""
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -28,6 +29,8 @@ service:
   type: ClusterIP
   nodePort: 0
   loadBalancerIP: ""
+  # Only allow access to the loadBalancerIP from these IPs
+  loadBalancerSourceRanges: []
   clusterIP: ""
   annotations: {}
 
@@ -50,6 +53,13 @@ rbac:
   # If set to false - Run without Cluteradmin privs needed - ONLY works if namespace is also set (if useExistingRole is set this name is used as ClusterRole or Role to bind to)
   useClusterRole: true
 
+  # Add permissions for CustomResources' apiGroups in Role/ClusterRole. Should be used in conjunction with Custom Resource State Metrics configuration
+  # Example:
+  # - apiGroups: ["monitoring.coreos.com"]
+  #   resources: ["prometheuses"]
+  #   verbs: ["list", "watch"]
+  extraRules: []
+
 serviceAccount:
   # Specifies whether a ServiceAccount should be created, require rbac true
   create: true
@@ -71,12 +81,33 @@ prometheus:
     namespace: ""
     jobLabel: ""
     interval: ""
+    ## SampleLimit defines per-scrape limit on number of scraped samples that will be accepted.
+    ##
+    sampleLimit: 0
+
+    ## TargetLimit defines a limit on the number of scraped targets that will be accepted.
+    ##
+    targetLimit: 0
+
+    ## Per-scrape limit on number of labels that will be accepted for a sample. Only valid in Prometheus versions 2.27.0 and newer.
+    ##
+    labelLimit: 0
+
+    ## Per-scrape limit on length of labels name that will be accepted for a sample. Only valid in Prometheus versions 2.27.0 and newer.
+    ##
+    labelNameLengthLimit: 0
+
+    ## Per-scrape limit on length of labels value that will be accepted for a sample. Only valid in Prometheus versions 2.27.0 and newer.
+    ##
+    labelValueLengthLimit: 0
     scrapeTimeout: ""
     proxyUrl: ""
     selectorOverride: {}
     honorLabels: false
     metricRelabelings: []
     relabelings: []
+    scheme: ""
+    tlsConfig: {}
 
 ## Specify if a Pod Security Policy for kube-state-metrics must be created
 ## Ref: https://kubernetes.io/docs/concepts/policy/pod-security-policy/
@@ -117,6 +148,13 @@ affinity: {}
 ## Tolerations for pod assignment
 ## Ref: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
 tolerations: []
+
+## Topology spread constraints for pod assignment
+## Ref: https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
+topologySpreadConstraints: []
+
+# Annotations to be added to the deployment/statefulset
+annotations: {}
 
 # Annotations to be added to the pod
 podAnnotations: {}
@@ -167,6 +205,7 @@ collectors:
   - horizontalpodautoscalers
   - ingresses
   - jobs
+  - leases
   - limitranges
   - mutatingwebhookconfigurations
   - namespaces
@@ -193,7 +232,11 @@ kubeconfig:
   # base64 encoded kube-config file
   secret:
 
-# Comma-separated list of namespaces to be enabled for collecting resources. By default all namespaces are collected.
+# Enable only the release namespace for collecting resources. By default all namespaces are collected.
+# If releaseNamespace and namespaces are both set a merged list will be collected.
+releaseNamespace: false
+
+# Comma-separated list(string) or yaml list of namespaces to be enabled for collecting resources. By default all namespaces are collected.
 namespaces: ""
 
 # Comma-separated list of namespaces not to be enabled. If namespaces and namespaces-denylist are both set,
@@ -223,7 +266,42 @@ kubeTargetVersionOverride: ""
 
 # Enable self metrics configuration for service and Service Monitor
 # Default values for telemetry configuration can be overridden
+# If you set telemetryNodePort, you must also set service.type to NodePort
 selfMonitor:
   enabled: false
   # telemetryHost: 0.0.0.0
   # telemetryPort: 8081
+  # telemetryNodePort: 0
+
+# Enable vertical pod autoscaler support for kube-state-metrics
+verticalPodAutoscaler:
+  enabled: false
+  # List of resources that the vertical pod autoscaler can control. Defaults to cpu and memory
+  controlledResources: []
+
+  # Define the max allowed resources for the pod
+  maxAllowed: {}
+  # cpu: 200m
+  # memory: 100Mi
+  # Define the min allowed resources for the pod
+  minAllowed: {}
+  # cpu: 200m
+  # memory: 100Mi
+
+  # updatePolicy:
+    # Specifies whether recommended updates are applied when a Pod is started and whether recommended updates
+    # are applied during the life of a Pod. Possible values are "Off", "Initial", "Recreate", and "Auto".
+    # updateMode: Auto
+
+# volumeMounts are used to add custom volume mounts to deployment.
+# See example below
+volumeMounts: []
+#  - mountPath: /etc/config
+#    name: config-volume
+
+# volumes are used to add custom volumes to deployment
+# See example below
+volumes: []
+#  - configMap:
+#      name: cm-for-volume
+#    name: config-volume
