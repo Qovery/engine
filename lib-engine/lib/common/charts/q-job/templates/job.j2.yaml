@@ -59,6 +59,9 @@ spec:
             - |-
               {{ arg }}
             {%- endfor %}
+          volumeMounts:
+            - name: output
+              mountPath: /output
           env:
             {%- for ev in environment_variables %}
             - name: "{{ ev.key }}"
@@ -73,9 +76,6 @@ spec:
               name: "p{{ service.default_port }}"
               protocol: TCP
           {%- if service.advanced_settings.readiness_probe_type != "NONE" %}
-          volumeMounts:
-            - name: output
-              mountPath: /output
           readinessProbe:
             {%- if service.advanced_settings.readiness_probe_type == "TCP" %}
             tcpSocket:
