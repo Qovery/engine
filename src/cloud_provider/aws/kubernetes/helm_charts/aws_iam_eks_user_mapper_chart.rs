@@ -148,7 +148,7 @@ mod tests {
     use crate::cloud_provider::aws::kubernetes::helm_charts::aws_iam_eks_user_mapper_chart::AwsIamEksUserMapperChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
-        ToCommonHelmChart,
+        HelmChartType, ToCommonHelmChart,
     };
     use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
     use std::env;
@@ -171,7 +171,10 @@ mod tests {
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
-            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), Some(KubernetesKind::Eks)),
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                chart.chart_path.helm_path(),
+                HelmChartType::CloudProviderSpecific(KubernetesKind::Eks)
+            ),
             AwsIamEksUserMapperChart::chart_name(),
         );
 
@@ -202,7 +205,7 @@ mod tests {
                 .expect("Impossible to convert current directory to string"),
             get_helm_path_kubernetes_provider_sub_folder_name(
                 chart.chart_values_path.helm_path(),
-                Some(KubernetesKind::Eks)
+                HelmChartType::CloudProviderSpecific(KubernetesKind::Eks)
             ),
             AwsIamEksUserMapperChart::chart_name(),
         );
@@ -235,7 +238,7 @@ mod tests {
                 "/lib/{}/bootstrap/chart_values/{}.yaml",
                 get_helm_path_kubernetes_provider_sub_folder_name(
                     chart.chart_values_path.helm_path(),
-                    Some(KubernetesKind::Eks)
+                    HelmChartType::CloudProviderSpecific(KubernetesKind::Eks)
                 ),
                 AwsIamEksUserMapperChart::chart_name()
             ),
