@@ -1111,6 +1111,7 @@ fn deploy_job_on_aws_eks() {
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
+        let json_output = "{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}";
         //environment.long_id = Uuid::default();
         //environment.project_long_id = Uuid::default();
         environment.applications = vec![];
@@ -1129,13 +1130,13 @@ fn deploy_job_on_aws_eks() {
                 tag: "bullseye".to_string(),
             },
             max_nb_restart: 2,
-            max_duration_in_sec: 30,
+            max_duration_in_sec: 40,
             default_port: Some(8080),
             //command_args: vec![],
             command_args: vec![
                 "/bin/sh".to_string(),
                 "-c".to_string(),
-                "echo starting; sleep 10; echo started".to_string(),
+                format!("echo starting; sleep 10; echo '{}' > /output/qovery-output.json", json_output),
             ],
             entrypoint: None,
             force_trigger: false,

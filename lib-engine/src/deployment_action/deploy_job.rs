@@ -2,21 +2,30 @@ use super::utils::delete_cached_image;
 use crate::cloud_provider::helm::{ChartInfo, HelmChartNamespaces};
 use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::DeploymentTarget;
+use crate::cmd::kubectl::kubectl_get_job_pod_output;
 use crate::deployment_action::deploy_helm::HelmDeployment;
 use crate::deployment_action::utils::{get_last_deployed_image, mirror_image, KubeObjectKind};
 use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::job::reporter::JobDeploymentReporter;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
-use crate::errors::EngineError;
-use crate::events::{EventDetails, Stage};
+use crate::errors::{EngineError, ErrorMessageVerbosity};
+use crate::events::{EngineEvent, EventDetails, EventMessage, Stage};
 use crate::io_models::job::JobSchedule;
 use crate::models::job::{Job, JobService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::batch::v1::Job as K8sJob;
+use k8s_openapi::api::core::v1::Pod;
+use kube::api::{AttachParams, ListParams, ObjectList};
 use kube::runtime::wait::{await_condition, Condition};
 use kube::Api;
+use retry::delay::Fixed;
+use retry::Error::Operation;
+use retry::{Error, OperationResult};
+use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 impl<T: CloudProvider> DeploymentAction for Job<T>
@@ -181,6 +190,93 @@ where
         // Wait for the job to terminate in order to have his status
         // For cronjob we dont care as we don't control when it is executed
         if !job.schedule().is_cronjob() {
+            // Get kube config file
+            let kubernetes_config_file_path = match target.kubernetes.get_kubeconfig_file_path() {
+                Ok(file_path) => file_path,
+                Err(e) => {
+                    let safe_message = "Error when retrieving the kubeconfig file";
+                    target.kubernetes.logger().log(EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new(
+                            safe_message.to_string(),
+                            Some(e.message(ErrorMessageVerbosity::FullDetails)),
+                        ),
+                    ));
+                    "".to_string()
+                }
+            };
+            let job_pod_selector = format!("job-name={}", job.kube_service_name());
+            let kube_pod_api: Api<Pod> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+
+            // Wait for the pod to be started to get its name
+            let list_job_pods = list_pods_by_selector(kube_pod_api.clone(), &job_pod_selector, event_details)?;
+            let job_pod = list_job_pods.items.get(0).unwrap();
+            let pod_name = job_pod.metadata.name.as_ref().unwrap();
+
+            // Wait for the job container to be terminated
+            _logger.info(format!(
+                "Waiting for the job container {} to terminate...",
+                job.kube_service_name()
+            ));
+            let _ = block_on(async {
+                await_condition(
+                    kube_pod_api.clone(),
+                    pod_name,
+                    is_job_pod_container_terminated(job.kube_service_name().as_str()),
+                )
+                .await
+            });
+
+            // Get JSON output from shared volume
+            let result_json_output = kubectl_get_job_pod_output(
+                kubernetes_config_file_path,
+                target.kubernetes.cloud_provider().credentials_environment_variables(),
+                target.environment.namespace(),
+                pod_name,
+            );
+            match result_json_output {
+                Ok(json) => {
+                    _logger.info(format!("JSON output has been received: {}", json));
+                    let result_serde_json: serde_json::Result<HashMap<String, JobOutputVariable>> =
+                        serde_json::from_str(&json);
+                    match result_serde_json {
+                        Ok(deserialized_json) => _logger.core_configuration(
+                            "Sending job output to create environment variables".to_string(),
+                            serde_json::to_string(&deserialized_json).unwrap(),
+                        ),
+                        Err(_) => _logger.warning("Cannot parse JSON output".to_string()),
+                    }
+                }
+                Err(err) => {
+                    _logger.warning(format!(
+                        "Cannot get JSON job output: {}",
+                        err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
+                    ));
+                }
+            };
+
+            // Write file in shared volume to let the waiting container terminate
+            let exec_result = block_on(async {
+                kube_pod_api
+                    .clone()
+                    .exec(
+                        pod_name,
+                        vec!["touch", "/output/terminate"],
+                        &AttachParams::default().container("qovery-wait-container-output"),
+                    )
+                    .await
+            });
+            match exec_result {
+                Ok(_) => {}
+                Err(_) => {
+                    return Err(EngineError::new_job_error(
+                        event_details.clone(),
+                        format!("Cannot create terminate file inside waiting container for pod {}", pod_name),
+                    ))
+                }
+            }
+
+            // wait for job to finish
             let jobs: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
             let ret = block_on(async { await_condition(jobs, &job.kube_service_name(), is_job_terminated()).await });
             let ret = ret.unwrap();
@@ -307,5 +403,78 @@ fn is_job_terminated() -> impl Condition<K8sJob> {
         JobStatus::Running => false,
         JobStatus::Success => true,
         JobStatus::Failure { .. } => true,
+    }
+}
+
+fn list_pods_by_selector(
+    kube_pod_api: Api<Pod>,
+    job_pod_selector: &str,
+    event_details: &EventDetails,
+) -> Result<ObjectList<Pod>, EngineError> {
+    let list_job_pods_result = retry::retry(Fixed::from_millis(1000).take(5), || {
+        match block_on(async { kube_pod_api.list(&ListParams::default().labels(job_pod_selector)).await }) {
+            Ok(pods_list) => {
+                if pods_list.items.is_empty() {
+                    OperationResult::Retry(EngineError::new_job_error(
+                        event_details.clone(),
+                        format!("No pod found when listing pods having label {}", &job_pod_selector),
+                    ))
+                } else {
+                    OperationResult::Ok(pods_list)
+                }
+            }
+            Err(_) => OperationResult::Retry(EngineError::new_job_error(
+                event_details.clone(),
+                format!("Error when listing pods having label {} through Kube API", &job_pod_selector),
+            )),
+        }
+    });
+    match list_job_pods_result {
+        Ok(pods) => Ok(pods),
+        Err(Operation { error, .. }) => Err(error),
+        Err(Error::Internal(message)) => Err(EngineError::new_job_error(
+            event_details.clone(),
+            format!(
+                "Internal error when listing pods having label {} through Kube API: {}",
+                &job_pod_selector, message
+            ),
+        )),
+    }
+}
+
+fn job_pod_container_status_is_terminated(job_pod: &Option<&Pod>, job_container_name: &str) -> bool {
+    if let Some(pod) = job_pod {
+        if let Some(pod_status) = &pod.status {
+            if let Some(pod_container_statuses) = &pod_status.container_statuses {
+                let job_container_terminated = &pod_container_statuses
+                    .iter()
+                    .filter(|container_status| container_status.name == job_container_name)
+                    .filter_map(|container_status| container_status.borrow().clone().state)
+                    .any(|status| status.terminated.is_some());
+                return *job_container_terminated;
+            }
+        }
+    }
+    false
+}
+
+fn is_job_pod_container_terminated(job_container_name: &str) -> impl Condition<Pod> + '_ {
+    move |job_pod: Option<&Pod>| job_pod_container_status_is_terminated(&job_pod, job_container_name)
+}
+
+// Used to validate the job json output format with serde
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+#[serde(default)]
+struct JobOutputVariable {
+    pub value: String,
+    pub sensitive: bool,
+}
+
+impl Default for JobOutputVariable {
+    fn default() -> Self {
+        JobOutputVariable {
+            value: String::new(),
+            sensitive: true,
+        }
     }
 }
