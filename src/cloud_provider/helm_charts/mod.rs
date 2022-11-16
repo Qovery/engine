@@ -7,6 +7,7 @@ use std::fmt::{Display, Formatter};
 pub mod coredns_config_chart;
 pub mod external_dns_chart;
 pub mod kube_prometheus_stack_chart;
+pub mod kube_state_metrics;
 pub mod loki_chart;
 pub mod metrics_server_chart;
 pub mod prometheus_adapter_chart;
