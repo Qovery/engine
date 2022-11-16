@@ -300,6 +300,7 @@ mod tests {
     use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
+        HelmChartType,
     };
     use std::env;
 
@@ -315,7 +316,7 @@ mod tests {
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
-            get_helm_path_kubernetes_provider_sub_folder_name(chart._chart_path.helm_path(), None,),
+            get_helm_path_kubernetes_provider_sub_folder_name(chart._chart_path.helm_path(), HelmChartType::Shared,),
             CoreDNSConfigChart::chart_name(),
         );
 
@@ -338,7 +339,10 @@ mod tests {
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
-            get_helm_path_kubernetes_provider_sub_folder_name(chart._chart_values_path.helm_path(), None,),
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                chart._chart_values_path.helm_path(),
+                HelmChartType::Shared,
+            ),
             CoreDNSConfigChart::chart_name(),
         );
 
@@ -366,7 +370,7 @@ mod tests {
             },
             format!(
                 "/lib/{}/bootstrap/chart_values/{}-config.yaml",
-                get_helm_path_kubernetes_provider_sub_folder_name(&chart_values_file_path, None,),
+                get_helm_path_kubernetes_provider_sub_folder_name(&chart_values_file_path, HelmChartType::Shared,),
                 CoreDNSConfigChart::chart_name(),
             ),
         );
