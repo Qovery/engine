@@ -182,21 +182,30 @@ pub fn get_helm_values_set_in_code_but_absent_in_values_file(
     }
 }
 
+pub enum HelmChartType {
+    Shared,
+    CloudProviderSpecific(KubernetesKind),
+}
+
 /// Returns helm sub path for a given chart defining if it stands in common VS cloud-provider folder.
-pub fn get_helm_path_kubernetes_provider_sub_folder_name(
-    helm_path: &HelmPath,
-    kubernetes_kind: Option<KubernetesKind>,
-) -> String {
+pub fn get_helm_path_kubernetes_provider_sub_folder_name(helm_path: &HelmPath, chart_type: HelmChartType) -> String {
     let helm_chart_location = helm_path.to_string();
 
-    match &helm_chart_location.contains("/common/") {
-        true => "common",
-        false => match kubernetes_kind {
-            Some(KubernetesKind::Eks) => "aws",
-            Some(KubernetesKind::Ec2) => "aws-ec2",
-            Some(KubernetesKind::Doks) => "digitalocean",
-            Some(KubernetesKind::ScwKapsule) => "scaleway",
-            None => "undefined-cloud-provider",
+    match chart_type {
+        HelmChartType::Shared => {
+            match &helm_chart_location.contains("/common/") {
+                true => "common",
+                false => "undefined-cloud-provider", // There is something weird
+            }
+        }
+        HelmChartType::CloudProviderSpecific(provider_kind) => match &helm_chart_location.contains("/common/") {
+            false => match provider_kind {
+                KubernetesKind::Eks => "aws",
+                KubernetesKind::Ec2 => "aws-ec2",
+                KubernetesKind::Doks => "digitalocean",
+                KubernetesKind::ScwKapsule => "scaleway",
+            },
+            true => "undefined-cloud-provider", // There is something weird
         },
     }
     .to_string()
@@ -204,7 +213,11 @@ pub fn get_helm_path_kubernetes_provider_sub_folder_name(
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::helm_charts::{HelmChartDirectoryLocation, HelmChartPath};
+    use crate::cloud_provider::helm_charts::{
+        get_helm_path_kubernetes_provider_sub_folder_name, HelmChartDirectoryLocation, HelmChartPath, HelmChartType,
+        HelmPath, HelmPathType,
+    };
+    use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 
     #[test]
     fn test_helm_chart_path_to_string() {
@@ -287,6 +300,98 @@ mod tests {
 
             // verify:
             assert_eq!(tc.expected_path, res)
+        }
+    }
+
+    #[test]
+    fn test_get_helm_path_kubernetes_provider_sub_folder_name() {
+        // setup:
+        struct TestCase {
+            helm_path_input: HelmPath,
+            chart_type_input: HelmChartType,
+            expected_sub_folder: String,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                helm_path_input: HelmPath::new(
+                    HelmPathType::Chart,
+                    None,
+                    HelmChartDirectoryLocation::CommonFolder,
+                    "whatever".to_string(),
+                ),
+                chart_type_input: HelmChartType::Shared,
+                expected_sub_folder: "common".to_string(),
+            },
+            TestCase {
+                helm_path_input: HelmPath::new(
+                    HelmPathType::Chart,
+                    None,
+                    HelmChartDirectoryLocation::CloudProviderFolder,
+                    "whatever".to_string(),
+                ),
+                chart_type_input: HelmChartType::CloudProviderSpecific(KubernetesKind::Eks),
+                expected_sub_folder: "aws".to_string(),
+            },
+            TestCase {
+                helm_path_input: HelmPath::new(
+                    HelmPathType::Chart,
+                    None,
+                    HelmChartDirectoryLocation::CloudProviderFolder,
+                    "whatever".to_string(),
+                ),
+                chart_type_input: HelmChartType::CloudProviderSpecific(KubernetesKind::Doks),
+                expected_sub_folder: "digitalocean".to_string(),
+            },
+            TestCase {
+                helm_path_input: HelmPath::new(
+                    HelmPathType::Chart,
+                    None,
+                    HelmChartDirectoryLocation::CloudProviderFolder,
+                    "whatever".to_string(),
+                ),
+                chart_type_input: HelmChartType::CloudProviderSpecific(KubernetesKind::Ec2),
+                expected_sub_folder: "aws-ec2".to_string(),
+            },
+            TestCase {
+                helm_path_input: HelmPath::new(
+                    HelmPathType::Chart,
+                    None,
+                    HelmChartDirectoryLocation::CloudProviderFolder,
+                    "whatever".to_string(),
+                ),
+                chart_type_input: HelmChartType::CloudProviderSpecific(KubernetesKind::ScwKapsule),
+                expected_sub_folder: "scaleway".to_string(),
+            },
+            // Wrongly configured
+            TestCase {
+                helm_path_input: HelmPath::new(
+                    HelmPathType::Chart,
+                    None,
+                    HelmChartDirectoryLocation::CloudProviderFolder,
+                    "whatever".to_string(),
+                ),
+                chart_type_input: HelmChartType::Shared,
+                expected_sub_folder: "undefined-cloud-provider".to_string(),
+            },
+            TestCase {
+                helm_path_input: HelmPath::new(
+                    HelmPathType::Chart,
+                    None,
+                    HelmChartDirectoryLocation::CommonFolder,
+                    "whatever".to_string(),
+                ),
+                chart_type_input: HelmChartType::CloudProviderSpecific(KubernetesKind::ScwKapsule),
+                expected_sub_folder: "undefined-cloud-provider".to_string(),
+            },
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let res = get_helm_path_kubernetes_provider_sub_folder_name(&tc.helm_path_input, tc.chart_type_input);
+
+            // verify:
+            assert_eq!(tc.expected_sub_folder, res);
         }
     }
 }

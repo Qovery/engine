@@ -122,7 +122,7 @@ mod tests {
     use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::{KubePrometheusStackChart, StorageClassName};
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
-        ToCommonHelmChart,
+        HelmChartType, ToCommonHelmChart,
     };
     use std::env;
 
@@ -144,7 +144,7 @@ mod tests {
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
-            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), None),
+            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), HelmChartType::Shared),
             KubePrometheusStackChart::chart_name(),
         );
 
@@ -173,7 +173,10 @@ mod tests {
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
-            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_values_path.helm_path(), None),
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                chart.chart_values_path.helm_path(),
+                HelmChartType::Shared
+            ),
             KubePrometheusStackChart::chart_name(),
         );
 
@@ -203,7 +206,10 @@ mod tests {
             common_chart,
             format!(
                 "/lib/{}/bootstrap/chart_values/{}.yaml",
-                get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_values_path.helm_path(), None),
+                get_helm_path_kubernetes_provider_sub_folder_name(
+                    chart.chart_values_path.helm_path(),
+                    HelmChartType::Shared
+                ),
                 KubePrometheusStackChart::chart_name()
             ),
         );

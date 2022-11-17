@@ -61,7 +61,7 @@ impl ChartInstallationChecker for AwsUiViewChartChecker {
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::aws::kubernetes::helm_charts::aws_ui_view_chart::AwsUiViewChart;
-    use crate::cloud_provider::helm_charts::get_helm_path_kubernetes_provider_sub_folder_name;
+    use crate::cloud_provider::helm_charts::{get_helm_path_kubernetes_provider_sub_folder_name, HelmChartType};
     use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
     use std::env;
 
@@ -77,7 +77,10 @@ mod tests {
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
-            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), Some(KubernetesKind::Eks)),
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                chart.chart_path.helm_path(),
+                HelmChartType::CloudProviderSpecific(KubernetesKind::Eks)
+            ),
             AwsUiViewChart::chart_name(),
         );
 

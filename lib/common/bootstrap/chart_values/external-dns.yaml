@@ -1,0 +1,28 @@
+provider: set-by-engine-code
+cloudflare:
+  apiToken: set-by-engine-code
+  email: set-by-engine-code
+  proxied: set-by-engine-code
+pdns:
+  apiUrl: set-by-engine-code
+  apiPort: set-by-engine-code
+  apiKey: set-by-engine-code
+
+annotationFilter: external-dns.alpha.kubernetes.io/exclude notin (true) # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
+domainFilters: set-by-engine-code
+
+triggerLoopOnEvent: true
+policy: sync
+
+txtOwnerId: set-by-engine-code
+txtPrefix: set-by-engine-code
+
+replicas: 1
+
+resources:
+  limits:
+    cpu: 50m
+    memory: 50Mi
+  requests:
+    cpu: 50m
+    memory: 50Mi
