@@ -1,0 +1,7 @@
+# Declare node hosts
+declare_node_hosts: false
+# List of managed DNS
+managed_dns: []
+# List of resolvers
+managed_dns_resolvers: []
+

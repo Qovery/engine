@@ -4,9 +4,7 @@ metadata:
   name: coredns
   namespace: kube-system
   labels:
-    {{ range .Values.labels }}
-    {{ . }}
-    {{ end }}
+    k8s-app: coredns
 data:
   Corefile: |
     .:53 {

@@ -1,5 +1,3 @@
-# List labels to add to config map
-labels: []
 # Declare node hosts
 declare_node_hosts: false
 # List of managed DNS
