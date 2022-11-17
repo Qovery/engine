@@ -150,10 +150,6 @@ pub fn ec2_aws_helm_charts(
     // CoreDNS config
     let coredns_config = CoreDNSConfigChart::new(
         chart_prefix_path,
-        vec![
-            "eks.amazonaws.com/component: coredns".to_string(),
-            "k8s-app: kube-dns".to_string(),
-        ],
         true,
         chart_config_prerequisites.managed_dns_helm_format.to_string(),
         chart_config_prerequisites

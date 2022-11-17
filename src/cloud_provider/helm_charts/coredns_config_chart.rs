@@ -8,7 +8,6 @@ use crate::cmd::kubectl::{
 };
 use crate::errors::{CommandError, ErrorMessageVerbosity};
 use crate::utilities::calculate_hash;
-use itertools::Itertools;
 use kube::Client;
 use std::collections::HashMap;
 use std::path::Path;
@@ -23,7 +22,6 @@ pub struct CoreDNSConfigChart {
 impl CoreDNSConfigChart {
     pub fn new(
         chart_prefix_path: Option<&str>,
-        custom_labels: Vec<String>,
         declare_hosts: bool,
         managed_dns_helm_format: String,
         managed_dns_resolvers_terraform_format: String,
@@ -35,7 +33,7 @@ impl CoreDNSConfigChart {
         );
         let chart_values_path = HelmChartValuesFilePath::new(
             chart_prefix_path,
-            HelmChartDirectoryLocation::CommonFolder,
+            HelmChartDirectoryLocation::CloudProviderFolder,
             format!("{}-config", CoreDNSConfigChart::chart_name()),
         );
 
@@ -57,10 +55,6 @@ impl CoreDNSConfigChart {
                 wait: false,
                 values_files: vec![chart_values_path.to_string()],
                 values: vec![
-                    ChartSetValue {
-                        key: "labels".to_string(),
-                        value: format!("{{{}}}", custom_labels.iter().join(",")),
-                    },
                     ChartSetValue {
                         key: "declare_node_hosts".to_string(),
                         value: declare_hosts.to_string(),
@@ -302,13 +296,14 @@ mod tests {
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartType,
     };
+    use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
     use std::env;
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
     fn coredns_config_chart_directory_exists_test() {
         // setup:
-        let chart = CoreDNSConfigChart::new(None, vec![], false, "whatever".to_string(), "whatever".to_string());
+        let chart = CoreDNSConfigChart::new(None, false, "whatever".to_string(), "whatever".to_string());
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -331,7 +326,7 @@ mod tests {
     #[test]
     fn coredns_config_chart_values_file_exists_test() {
         // setup:
-        let chart = CoreDNSConfigChart::new(None, vec![], false, "whatever".to_string(), "whatever".to_string());
+        let chart = CoreDNSConfigChart::new(None, false, "whatever".to_string(), "whatever".to_string());
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -341,7 +336,7 @@ mod tests {
                 .expect("Impossible to convert current directory to string"),
             get_helm_path_kubernetes_provider_sub_folder_name(
                 chart._chart_values_path.helm_path(),
-                HelmChartType::Shared,
+                HelmChartType::CloudProviderSpecific(KubernetesKind::Eks),
             ),
             CoreDNSConfigChart::chart_name(),
         );
@@ -358,7 +353,7 @@ mod tests {
     #[test]
     fn coredns_config_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = CoreDNSConfigChart::new(None, vec![], false, "whatever".to_string(), "whatever".to_string());
+        let chart = CoreDNSConfigChart::new(None, false, "whatever".to_string(), "whatever".to_string());
         let chart_values_file_path = chart._chart_values_path.helm_path().clone();
 
         // execute:
@@ -370,7 +365,10 @@ mod tests {
             },
             format!(
                 "/lib/{}/bootstrap/chart_values/{}-config.yaml",
-                get_helm_path_kubernetes_provider_sub_folder_name(&chart_values_file_path, HelmChartType::Shared,),
+                get_helm_path_kubernetes_provider_sub_folder_name(
+                    &chart_values_file_path,
+                    HelmChartType::CloudProviderSpecific(KubernetesKind::Eks),
+                ),
                 CoreDNSConfigChart::chart_name(),
             ),
         );
