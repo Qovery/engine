@@ -1,0 +1,8 @@
+labels:
+  addonmanager.kubernetes.io/mode: EnsureExists
+  k8s.scw.cloud/object: ConfigMap
+  k8s.scw.cloud/system: coredns
+  k8s-app: kube-dns
+declare_node_hosts: set-by-engine-code
+managed_dns: set-by-engine-code
+managed_dns_resolvers: set-by-engine-code
