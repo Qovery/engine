@@ -12,6 +12,7 @@ use kube::Client;
 use std::collections::HashMap;
 use std::path::Path;
 
+// TODO(benjaminch): refactor this chart to have only one in common (issue with labels)
 pub struct CoreDNSConfigChart {
     pub chart_info: ChartInfo,
     _chart_path: HelmChartPath,
@@ -28,7 +29,7 @@ impl CoreDNSConfigChart {
     ) -> CoreDNSConfigChart {
         let chart_path = HelmChartPath::new(
             chart_prefix_path,
-            HelmChartDirectoryLocation::CommonFolder,
+            HelmChartDirectoryLocation::CloudProviderFolder,
             format!("{}-config", CoreDNSConfigChart::chart_name()),
         );
         let chart_values_path = HelmChartValuesFilePath::new(
@@ -311,7 +312,10 @@ mod tests {
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
-            get_helm_path_kubernetes_provider_sub_folder_name(chart._chart_path.helm_path(), HelmChartType::Shared,),
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                chart._chart_path.helm_path(),
+                HelmChartType::CloudProviderSpecific(KubernetesKind::Eks),
+            ),
             CoreDNSConfigChart::chart_name(),
         );
 
