@@ -398,6 +398,18 @@ impl From<ContainerRegistryError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
+            ContainerRegistryError::RepositoryNameNotValid {
+                registry_name,
+                repository_name,
+                broken_rules,
+            } => CommandError::new(
+                format!(
+                    "Container registry error, repository name `{}` is not valid in registry: `{}`.",
+                    repository_name, registry_name
+                ),
+                Some(format!("Broken rules: {:?}", broken_rules)),
+                None,
+            ),
             ContainerRegistryError::Unknown { raw_error_message } => {
                 CommandError::new("Container registry unknown error.".to_string(), Some(raw_error_message), None)
             }
@@ -768,6 +780,8 @@ pub enum Tag {
     ContainerRegistryInvalidInformation,
     /// ContainerRegistryInvalidCredentials: represents an error on container registry, credentials are not valid.
     ContainerRegistryInvalidCredentials,
+    /// ContainerRegistryRepositoryNameInvalid: represents an error on container registry repository name is not valid.
+    ContainerRegistryRepositoryNameInvalid,
     /// ContainerRegistryCannotLinkRegistryToCluster: represents an error on container registry where it cannot be linked to cluster
     ContainerRegistryCannotLinkRegistryToCluster,
     /// ContainerRegistryCannotCreateRegistry: represents an error on container registry where it cannot create a registry.
@@ -2639,6 +2653,14 @@ impl EngineError {
             Some(error.into()),
                                                                                                                                None,
                                                                                                                                None,
+            ),
+            ContainerRegistryError::RepositoryNameNotValid {ref registry_name, ref repository_name, ..} => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryRepositoryNameInvalid,
+                format!("Container registry error, repository name `{}` is not valid in registry: `{}`.", repository_name, registry_name),
+                Some(error.into()),
+                None,
+                None,
             ),
             ContainerRegistryError::Unknown {..} => EngineError::new(event_details, Tag::ContainerRegistryUnknownError, "Container registry unknown error.".to_string(), Some(error.into()),None, None)
         }

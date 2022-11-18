@@ -221,7 +221,7 @@ impl Docker {
         }
 
         // In order to be able to use --cache-from --cache-to for buildkit,
-        // we need to create our specific builder, which is not the default one (aka: the docker one)
+        // we need to create our specific builder, which is not the default one (aka: the docker one).
         let args = vec![
             "buildx",
             "create",
@@ -553,11 +553,14 @@ impl Docker {
         Stderr: FnMut(String),
     {
         info!("Docker push {:?}", image);
-        let image_names = image.image_names();
-        let mut args = vec!["push"];
-        args.extend(image_names.iter().map(|x| x.as_str()));
+        for image_name in image.image_names() {
+            let args = vec!["push", image_name.as_str()];
+            if let Err(e) = docker_exec(&args, &self.get_all_envs(&[]), stdout_output, stderr_output, should_abort) {
+                return Err(e);
+            }
+        }
 
-        docker_exec(&args, &self.get_all_envs(&[]), stdout_output, stderr_output, should_abort)
+        Ok(())
     }
 
     pub fn tag<Stdout, Stderr>(

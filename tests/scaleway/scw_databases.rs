@@ -1,6 +1,6 @@
 use crate::helpers::utilities::{
-    context_for_resource, engine_run_test, generate_id, generate_password, get_pods, get_svc_name, init,
-    is_pod_restarted_env, logger, FuncTestsSecrets,
+    context_for_resource, engine_run_test, generate_password, get_pods, get_svc_name, init, is_pod_restarted_env,
+    logger, FuncTestsSecrets,
 };
 use ::function_name::named;
 use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
@@ -21,7 +21,7 @@ use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
-use qovery_engine::io_models::Action;
+use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::utilities::to_short_id;
 
 /**
@@ -258,11 +258,11 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
-        let app_name = format!("postgresql-app-{}", generate_id());
+        let app_name = format!("pg-app-{}", QoveryIdentifier::new_random().short());
         let database_mode = CONTAINER;
         let database_host = get_svc_name(DatabaseKind::Postgresql, Kind::Scw).to_string();
         let database_port = 5432;
-        let database_db_name = "postgres".to_string();
+        let database_db_name = "pg".to_string();
         let database_username = "superuser".to_string();
         let database_password = generate_password(CONTAINER);
 
@@ -324,7 +324,6 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 app
             })
             .collect::<Vec<qovery_engine::io_models::application::Application>>();
-        environment.routers[0].routes[0].service_long_id = environment.applications[0].long_id;
 
         let environment_to_redeploy = environment.clone();
         let environment_check = environment.clone();

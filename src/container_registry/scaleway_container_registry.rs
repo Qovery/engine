@@ -3,11 +3,12 @@ extern crate scaleway_api_rs;
 use self::scaleway_api_rs::models::scaleway_registry_v1_namespace::Status;
 use crate::build_platform::Image;
 use crate::cmd::docker;
-use crate::container_registry::errors::ContainerRegistryError;
+use crate::container_registry::errors::{ContainerRegistryError, RepositoryNamingRule};
 use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo, Kind};
 use crate::io_models::context::Context;
 use crate::models::scaleway::ScwZone;
 use crate::runtime::block_on;
+use std::collections::HashSet;
 use url::Url;
 use uuid::Uuid;
 
@@ -68,6 +69,25 @@ impl ScalewayCR {
         };
 
         Ok(cr)
+    }
+
+    fn check_repository_naming_rules(name: String) -> Option<HashSet<RepositoryNamingRule>> {
+        let mut broken_rules = HashSet::new();
+
+        if name.len() < 4 {
+            broken_rules.insert(RepositoryNamingRule::MinLengthNotReached { min_length: 4 });
+        }
+        if name.len() > 54 {
+            broken_rules.insert(RepositoryNamingRule::MaxLengthReached { max_length: 54 });
+        }
+        if !name.chars().all(|x| x.is_alphanumeric() || x == '-' || x == '.') {
+            broken_rules.insert(RepositoryNamingRule::AlphaNumericCharsDashesPeriodsOnly);
+        }
+
+        match broken_rules.is_empty() {
+            true => None,
+            false => Some(broken_rules),
+        }
     }
 
     fn get_configuration(&self) -> scaleway_api_rs::apis::configuration::Configuration {
@@ -178,6 +198,14 @@ impl ScalewayCR {
         &self,
         namespace_name: &str,
     ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Namespace, ContainerRegistryError> {
+        if let Some(broken_rules) = ScalewayCR::check_repository_naming_rules(namespace_name.to_string()) {
+            return Err(ContainerRegistryError::RepositoryNameNotValid {
+                registry_name: self.name.to_string(),
+                repository_name: namespace_name.to_string(),
+                broken_rules,
+            });
+        }
+
         // https://developers.scaleway.com/en/products/registry/api/#post-7a8fcc
         match block_on(scaleway_api_rs::apis::namespaces_api::create_namespace(
             &self.get_configuration(),
@@ -290,7 +318,9 @@ impl ContainerRegistry for ScalewayCR {
         name: &str,
         _image_retention_time_in_seconds: u32,
     ) -> Result<(), ContainerRegistryError> {
-        let _ = self.get_or_create_registry_namespace(name)?;
+        if let Err(e) = self.get_or_create_registry_namespace(name) {
+            return Err(e);
+        }
         Ok(())
     }
 
@@ -321,6 +351,90 @@ impl ContainerRegistry for ScalewayCR {
             Ok(true) => true,
             Ok(false) => false,
             Err(_) => false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::container_registry::errors::RepositoryNamingRule;
+    use crate::container_registry::scaleway_container_registry::ScalewayCR;
+    use std::collections::HashSet;
+    use std::iter::FromIterator;
+
+    #[test]
+    fn test_scaleway_container_registry_repository_naming_rules() {
+        // setup:
+        struct TestCase {
+            input: String,
+            expected: Option<HashSet<RepositoryNamingRule>>,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: "abc".to_string(),
+                expected: Some(HashSet::from_iter(vec![RepositoryNamingRule::MinLengthNotReached {
+                    min_length: 4,
+                }])),
+            },
+            TestCase {
+                input: "abcd".to_string(),
+                expected: None,
+            },
+            TestCase {
+                input: "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabc".to_string(),
+                expected: Some(HashSet::from_iter(vec![RepositoryNamingRule::MaxLengthReached {
+                    max_length: 54,
+                }])),
+            },
+            TestCase {
+                input: "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab".to_string(),
+                expected: None,
+            },
+            TestCase {
+                input: "abc_def_ghi_jkl_mno_pqr_stu_vwx_yz".to_string(),
+                expected: Some(HashSet::from_iter(vec![
+                    RepositoryNamingRule::AlphaNumericCharsDashesPeriodsOnly,
+                ])),
+            },
+            TestCase {
+                input: "a_d".to_string(),
+                expected: Some(HashSet::from_iter(vec![
+                    RepositoryNamingRule::AlphaNumericCharsDashesPeriodsOnly,
+                    RepositoryNamingRule::MinLengthNotReached { min_length: 4 },
+                ])),
+            },
+            TestCase {
+                input: "abc_def_ghi_jkl_mno_pqr_stu_vwx_yz@abc_def_ghi_jkl_mno_pqr_stu_vwx_yz".to_string(),
+                expected: Some(HashSet::from_iter(vec![
+                    RepositoryNamingRule::AlphaNumericCharsDashesPeriodsOnly,
+                    RepositoryNamingRule::MaxLengthReached { max_length: 54 },
+                ])),
+            },
+            TestCase {
+                input: "abc-def.ghi-jkl.mno-pqr-stu-vwx-yz".to_string(),
+                expected: None,
+            },
+            TestCase {
+                input: "abc-def.ghi-jkl.mno-123-stu-vwx-yz".to_string(),
+                expected: None,
+            },
+            TestCase {
+                input: "abc-def-ghi-jkl-mno-pqr-stu-vwx-yz".to_string(),
+                expected: None,
+            },
+            TestCase {
+                input: "abc.def.ghi.jkl.mno.pqr.stu.vwx.yz".to_string(),
+                expected: None,
+            },
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let result = ScalewayCR::check_repository_naming_rules(tc.input);
+
+            // verify:
+            assert_eq!(tc.expected, result);
         }
     }
 }

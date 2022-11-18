@@ -217,6 +217,7 @@ impl LocalDocker {
             build.image.name.to_string(),
             vec![LATEST_TAG.to_string()],
         );
+
         let name_with_latest_tag = format!("{}:{}", build.image.full_image_name(), LATEST_TAG);
         let mut build_result = BuildResult::new();
         build_result.build_candidate_image(Some(container_image));
