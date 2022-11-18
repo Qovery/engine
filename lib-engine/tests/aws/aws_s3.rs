@@ -1,242 +1,286 @@
-use crate::helpers::utilities::{context_for_resource, generate_id, FuncTestsSecrets};
+use crate::helpers::utilities::{context_for_resource, engine_run_test, generate_id, init, FuncTestsSecrets};
+use function_name::named;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::object_storage::s3::S3;
 use qovery_engine::object_storage::ObjectStorage;
 use std::str::FromStr;
 use tempfile::NamedTempFile;
+use tracing::{span, Level};
 use uuid::Uuid;
 
-#[cfg(feature = "test-aws-infra")]
+#[cfg(feature = "test-aws-minimal")]
+#[named]
 #[test]
 fn test_delete_bucket() {
-    // setup:
-    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
-    let secrets = FuncTestsSecrets::new();
-    let id = generate_id();
-    let name = format!("test-{}", id);
-    let aws_access_key = secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set");
-    let aws_secret_key = secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set");
-    let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
-    let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
-        .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
 
-    let aws_os = S3::new(
-        context,
-        id.to_string(),
-        name,
-        aws_access_key,
-        aws_secret_key,
-        aws_region.clone(),
-        false,
-        Some(7200),
-    );
+        // setup:
+        let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
+        let secrets = FuncTestsSecrets::new();
+        let id = generate_id();
+        let name = format!("test-{}", id);
+        let aws_access_key = secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set");
+        let aws_secret_key = secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set");
+        let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
+        let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
+            .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
 
-    let bucket_name = format!("qovery-test-bucket-{}", generate_id());
+        let aws_os = S3::new(
+            context,
+            id.to_string(),
+            name,
+            aws_access_key,
+            aws_secret_key,
+            aws_region.clone(),
+            false,
+            Some(7200),
+        );
 
-    aws_os
-        .create_bucket(bucket_name.as_str())
-        .unwrap_or_else(|_| panic!("error while creating S3 bucket in `{}`", aws_region.to_aws_format()));
+        let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
-    // compute:
-    let result = aws_os.delete_bucket(bucket_name.as_str());
+        aws_os
+            .create_bucket(bucket_name.as_str())
+            .unwrap_or_else(|_| panic!("error while creating S3 bucket in `{}`", aws_region.to_aws_format()));
 
-    // validate:
-    assert!(result.is_ok(), "Delete bucket failed in `{}`", aws_region.to_aws_format());
-    assert!(
-        !aws_os.bucket_exists(bucket_name.as_str()),
-        "Delete bucket failed in `{}`, bucket still exists",
-        aws_region.to_aws_format()
-    );
+        // compute:
+        let result = aws_os.delete_bucket(bucket_name.as_str());
+
+        // validate:
+        assert!(result.is_ok(), "Delete bucket failed in `{}`", aws_region.to_aws_format());
+        assert!(
+            !aws_os.bucket_exists(bucket_name.as_str()),
+            "Delete bucket failed in `{}`, bucket still exists",
+            aws_region.to_aws_format()
+        );
+
+        test_name.to_string()
+    })
 }
 
-#[cfg(feature = "test-aws-infra")]
+#[cfg(feature = "test-aws-minimal")]
+#[named]
 #[test]
 fn test_create_bucket() {
-    // setup:
-    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
-    let secrets = FuncTestsSecrets::new();
-    let id = generate_id();
-    let name = format!("test-{}", id);
-    let aws_access_key = secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set");
-    let aws_secret_key = secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set");
-    let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
-    let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
-        .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
 
-    let aws_os = S3::new(
-        context,
-        id.to_string(),
-        name,
-        aws_access_key,
-        aws_secret_key,
-        aws_region.clone(),
-        false,
-        Some(7200),
-    );
+        // setup:
+        let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
+        let secrets = FuncTestsSecrets::new();
+        let id = generate_id();
+        let name = format!("test-{}", id);
+        let aws_access_key = secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set");
+        let aws_secret_key = secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set");
+        let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
+        let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
+            .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
 
-    let bucket_name = format!("qovery-test-bucket-{}", generate_id());
+        let aws_os = S3::new(
+            context,
+            id.to_string(),
+            name,
+            aws_access_key,
+            aws_secret_key,
+            aws_region.clone(),
+            false,
+            Some(7200),
+        );
 
-    // compute:
-    let result = aws_os.create_bucket(bucket_name.as_str());
+        let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
-    // validate:
-    assert!(result.is_ok(), "Create bucket failed in `{}`", aws_region.to_aws_format());
-    assert!(
-        aws_os.bucket_exists(bucket_name.as_str()),
-        "Create bucket failed in `{}`, bucket doesn't exist",
-        aws_region.to_aws_format()
-    );
+        // compute:
+        let result = aws_os.create_bucket(bucket_name.as_str());
 
-    // clean-up:
-    aws_os
-        .delete_bucket(bucket_name.as_str())
-        .unwrap_or_else(|_| panic!("error deleting S3 bucket `{}` in `{}`", bucket_name, aws_region.to_aws_format()));
+        // validate:
+        assert!(result.is_ok(), "Create bucket failed in `{}`", aws_region.to_aws_format());
+        assert!(
+            aws_os.bucket_exists(bucket_name.as_str()),
+            "Create bucket failed in `{}`, bucket doesn't exist",
+            aws_region.to_aws_format()
+        );
+
+        // clean-up:
+        assert!(aws_os.delete_bucket(bucket_name.as_str()).is_ok());
+
+        test_name.to_string()
+    })
 }
 
-#[cfg(feature = "test-aws-infra")]
+#[cfg(feature = "test-aws-minimal")]
+#[named]
 #[test]
 fn test_recreate_bucket() {
-    // setup:
-    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
-    let secrets = FuncTestsSecrets::new();
-    let id = generate_id();
-    let name = format!("test-{}", id);
-    let aws_access_key = secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set");
-    let aws_secret_key = secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set");
-    let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
-    let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
-        .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
 
-    let aws_os = S3::new(
-        context,
-        id.to_string(),
-        name,
-        aws_access_key,
-        aws_secret_key,
-        aws_region,
-        false,
-        Some(7200),
-    );
+        // setup:
+        let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
+        let secrets = FuncTestsSecrets::new();
+        let id = generate_id();
+        let name = format!("test-{}", id);
+        let aws_access_key = secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set");
+        let aws_secret_key = secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set");
+        let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
+        let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
+            .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
 
-    let bucket_name = format!("qovery-test-bucket-{}", generate_id());
+        let aws_os = S3::new(
+            context,
+            id.to_string(),
+            name,
+            aws_access_key,
+            aws_secret_key,
+            aws_region,
+            false,
+            Some(7200),
+        );
 
-    // compute & validate:
-    let create_result = aws_os.create_bucket(bucket_name.as_str());
-    assert!(create_result.is_ok());
-    assert!(aws_os.bucket_exists(bucket_name.as_str()));
+        let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
-    let delete_result = aws_os.delete_bucket(bucket_name.as_str());
-    assert!(delete_result.is_ok());
+        // compute & validate:
+        let create_result = aws_os.create_bucket(bucket_name.as_str());
+        assert!(create_result.is_ok());
+        assert!(aws_os.bucket_exists(bucket_name.as_str()));
 
-    let recreate_result = aws_os.create_bucket(bucket_name.as_str());
-    assert!(recreate_result.is_ok());
-    assert!(aws_os.bucket_exists(bucket_name.as_str()));
+        let delete_result = aws_os.delete_bucket(bucket_name.as_str());
+        assert!(delete_result.is_ok());
 
-    // clean-up:
-    aws_os
-        .delete_bucket(bucket_name.as_str())
-        .unwrap_or_else(|_| panic!("error deleting S3 bucket {}", bucket_name));
+        let recreate_result = aws_os.create_bucket(bucket_name.as_str());
+        assert!(recreate_result.is_ok());
+        assert!(aws_os.bucket_exists(bucket_name.as_str()));
+
+        // clean-up:
+        assert!(aws_os.delete_bucket(bucket_name.as_str()).is_ok());
+
+        test_name.to_string()
+    })
 }
 
-#[cfg(feature = "test-aws-infra")]
+#[cfg(feature = "test-aws-minimal")]
+#[named]
 #[test]
 fn test_put_file() {
-    // setup:
-    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
-    let secrets = FuncTestsSecrets::new();
-    let id = generate_id();
-    let name = format!("test-{}", id);
-    let aws_access_key = secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set");
-    let aws_secret_key = secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set");
-    let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
-    let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
-        .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
 
-    let aws_os = S3::new(
-        context,
-        id.to_string(),
-        name,
-        aws_access_key,
-        aws_secret_key,
-        aws_region,
-        false,
-        Some(7200),
-    );
+        // setup:
+        let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
+        let secrets = FuncTestsSecrets::new();
+        let id = generate_id();
+        let name = format!("test-{}", id);
+        let aws_access_key = secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set");
+        let aws_secret_key = secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set");
+        let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
+        let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
+            .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
 
-    let bucket_name = format!("qovery-test-bucket-{}", generate_id());
-    let object_key = format!("test-object-{}", generate_id());
+        let aws_os = S3::new(
+            context,
+            id.to_string(),
+            name,
+            aws_access_key,
+            aws_secret_key,
+            aws_region,
+            false,
+            Some(7200),
+        );
 
-    aws_os
-        .create_bucket(bucket_name.as_str())
-        .expect("error while creating object-storage bucket");
+        let bucket_name = format!("qovery-test-bucket-{}", generate_id());
+        let object_key = format!("test-object-{}", generate_id());
 
-    let temp_file = NamedTempFile::new().expect("error while creating tempfile");
+        aws_os
+            .create_bucket(bucket_name.as_str())
+            .expect("error while creating object-storage bucket");
 
-    // compute:
-    let result = aws_os.put(
-        bucket_name.as_str(),
-        object_key.as_str(),
-        temp_file.into_temp_path().to_str().unwrap(),
-    );
+        let temp_file = NamedTempFile::new().expect("error while creating tempfile");
 
-    // validate:
-    assert!(result.is_ok());
-    assert!(aws_os.get(bucket_name.as_str(), object_key.as_str(), false).is_ok());
+        // compute:
+        let result = aws_os.put(
+            bucket_name.as_str(),
+            object_key.as_str(),
+            temp_file.into_temp_path().to_str().unwrap(),
+        );
 
-    // clean-up:
-    aws_os
-        .delete_bucket(bucket_name.as_str())
-        .unwrap_or_else(|_| panic!("error deleting S3 bucket {}", bucket_name));
+        // validate:
+        assert!(result.is_ok());
+        assert!(aws_os.get(bucket_name.as_str(), object_key.as_str(), false).is_ok());
+
+        // clean-up:
+        assert!(aws_os.delete_bucket(bucket_name.as_str()).is_ok());
+
+        test_name.to_string()
+    })
 }
 
-#[cfg(feature = "test-aws-infra")]
+#[cfg(feature = "test-aws-minimal")]
+#[named]
 #[test]
 fn test_get_file() {
-    // setup:
-    let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
-    let secrets = FuncTestsSecrets::new();
-    let id = generate_id();
-    let name = format!("test-{}", id);
-    let aws_access_key = secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set");
-    let aws_secret_key = secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set");
-    let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
-    let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
-        .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
 
-    let aws_os = S3::new(
-        context,
-        id.to_string(),
-        name,
-        aws_access_key,
-        aws_secret_key,
-        aws_region,
-        false,
-        Some(7200),
-    );
+        // setup:
+        let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
+        let secrets = FuncTestsSecrets::new();
+        let id = generate_id();
+        let name = format!("test-{}", id);
+        let aws_access_key = secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set");
+        let aws_secret_key = secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set");
+        let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
+        let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
+            .unwrap_or_else(|_| panic!("AWS region `{}` seems not to be valid", aws_region_raw));
 
-    let bucket_name = format!("qovery-test-bucket-{}", generate_id());
-    let object_key = format!("test-object-{}", generate_id());
+        let aws_os = S3::new(
+            context,
+            id.to_string(),
+            name,
+            aws_access_key,
+            aws_secret_key,
+            aws_region,
+            false,
+            Some(7200),
+        );
 
-    aws_os
-        .create_bucket(bucket_name.as_str())
-        .expect("error while creating object-storage bucket");
+        let bucket_name = format!("qovery-test-bucket-{}", generate_id());
+        let object_key = format!("test-object-{}", generate_id());
 
-    let temp_file = NamedTempFile::new().expect("error while creating tempfile");
-    let tempfile_path = temp_file.into_temp_path();
-    let tempfile_path = tempfile_path.to_str().unwrap();
+        aws_os
+            .create_bucket(bucket_name.as_str())
+            .expect("error while creating object-storage bucket");
 
-    aws_os
-        .put(bucket_name.as_str(), object_key.as_str(), tempfile_path)
-        .unwrap_or_else(|_| panic!("error while putting file {} into bucket {}", tempfile_path, bucket_name));
+        let temp_file = NamedTempFile::new().expect("error while creating tempfile");
+        let tempfile_path = temp_file.into_temp_path();
+        let tempfile_path = tempfile_path.to_str().unwrap();
 
-    // compute:
-    let result = aws_os.get(bucket_name.as_str(), object_key.as_str(), false);
+        aws_os
+            .put(bucket_name.as_str(), object_key.as_str(), tempfile_path)
+            .unwrap_or_else(|_| panic!("error while putting file {} into bucket {}", tempfile_path, bucket_name));
 
-    // validate:
-    assert!(result.is_ok());
+        // compute:
+        let result = aws_os.get(bucket_name.as_str(), object_key.as_str(), false);
 
-    // clean-up:
-    aws_os
-        .delete_bucket(bucket_name.as_str())
-        .unwrap_or_else(|_| panic!("error deleting S3 bucket {}", bucket_name));
+        // validate:
+        assert!(result.is_ok());
+
+        // clean-up:
+        assert!(aws_os.delete_bucket(bucket_name.as_str()).is_ok());
+
+        test_name.to_string()
+    })
 }

@@ -8,9 +8,9 @@ use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind};
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::router::{Route, Router};
-use qovery_engine::io_models::Action;
-use qovery_engine::utilities::to_short_id;
+use qovery_engine::io_models::{Action, QoveryIdentifier};
 use std::collections::BTreeMap;
+use tracing::error;
 use url::Url;
 use uuid::Uuid;
 
@@ -20,19 +20,19 @@ pub fn working_environment(
     with_router: bool,
     with_sticky: bool,
 ) -> EnvironmentRequest {
-    let application_id = Uuid::new_v4();
-    let application_name = to_short_id(&application_id);
+    let application_id = QoveryIdentifier::new_random();
+    let application_name = application_id.short().to_string();
     let router_name = "main".to_string();
     let application_domain = format!("{}.{}.{}", application_name, context.cluster_short_id(), test_domain);
     let mut req = EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
-        long_id: application_id,
+        long_id: application_id.to_uuid(),
         name: "env".to_string(),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
         applications: vec![Application {
-            long_id: application_id,
+            long_id: application_id.to_uuid(),
             name: application_name,
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
@@ -80,7 +80,7 @@ pub fn working_environment(
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
-                service_long_id: application_id,
+                service_long_id: application_id.to_uuid(),
             }],
             sticky_sessions_enabled: with_sticky,
         }]
@@ -108,9 +108,9 @@ pub fn environment_2_app_2_routers_1_psql(
     let database_port = 5432;
     let database_username = "superuser".to_string();
     let database_password = generate_password(CONTAINER);
-    let database_name = "postgres".to_string();
+    let database_name = "pg".to_string();
 
-    let suffix = generate_id();
+    let suffix = QoveryIdentifier::new_random().short().to_string();
     let application_id1 = Uuid::new_v4();
     let application_id2 = Uuid::new_v4();
 
@@ -147,7 +147,7 @@ pub fn environment_2_app_2_routers_1_psql(
         applications: vec![
             Application {
                 long_id: application_id1,
-                name: sanitize_name("postgresql", &format!("{}-{}", "postgresql-app1", &suffix)),
+                name: sanitize_name("pg", &format!("{}-{}", "pg-app1", &suffix)),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
@@ -186,7 +186,7 @@ pub fn environment_2_app_2_routers_1_psql(
             },
             Application {
                 long_id: application_id2,
-                name: sanitize_name("postgresql", &format!("{}-{}", "postgresql-app2", &suffix)),
+                name: sanitize_name("pg", &format!("{}-{}", "pg-app2", &suffix)),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 commit_id: "680550d1937b3f90551849c0da8f77c39916913b".to_string(),
                 dockerfile_path: Some("Dockerfile".to_string()),
@@ -439,7 +439,8 @@ pub fn session_is_sticky(url: Url, host: String, max_age: u32) -> bool {
 
     let http_request_result = http_client.get(url.to_string()).header("Host", host.as_str()).send();
 
-    if http_request_result.is_err() {
+    if let Err(e) = http_request_result {
+        error!("Unable to get {} with host '{}': {}", url, host, e);
         return false;
     }
 

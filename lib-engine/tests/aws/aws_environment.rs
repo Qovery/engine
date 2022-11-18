@@ -2,8 +2,10 @@ use crate::helpers;
 use crate::helpers::aws::aws_default_infra_config;
 use crate::helpers::common::Infrastructure;
 use crate::helpers::environment::session_is_sticky;
-use crate::helpers::utilities::{context_for_resource, get_pvc, init, is_pod_restarted_env, kubernetes_config_path};
-use crate::helpers::utilities::{engine_run_test, get_pods, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{
+    context_for_resource, engine_run_test, get_pods, get_pvc, init, is_pod_restarted_env, kubernetes_config_path,
+    logger, FuncTestsSecrets,
+};
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::io_models::application::{Port, Protocol, Storage, StorageType};
@@ -62,7 +64,7 @@ fn aws_test_build_phase() {
     })
 }
 
-#[cfg(feature = "test-aws-minimal")]
+#[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
 fn deploy_a_working_environment_with_no_router_on_aws_eks() {

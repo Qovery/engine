@@ -111,7 +111,7 @@ unit-tests:
 
 all-minimal-tests:
   stage: minimal-tests
-  retry: 0
+  retry: 1
   timeout: 3 hours
   before_script:
     - docker/wait_docker_available.sh
