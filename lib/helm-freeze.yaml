@@ -32,6 +32,7 @@ charts:
     version: 0.3.10
   - name: cluster-autoscaler
     repo_name: cluster-autoscaler
+    dest: aws-bootstrap
     version: 9.13.1
   - name: registry-creds
     repo_name: kir4h

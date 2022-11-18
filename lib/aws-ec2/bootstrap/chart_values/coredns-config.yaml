@@ -1,4 +1,3 @@
-labels: set-by-engine-code
 declare_node_hosts: set-by-engine-code
 managed_dns: set-by-engine-code
 managed_dns_resolvers: set-by-engine-code
