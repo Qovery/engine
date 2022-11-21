@@ -6,3 +6,11 @@ extraArgs:
 
 apiService:
   create: true
+
+resources:
+  limits:
+    cpu: set-by-engine-code
+    memory: set-by-engine-code
+  requests:
+    cpu: set-by-engine-code
+    memory: set-by-engine-code

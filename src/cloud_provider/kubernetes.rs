@@ -1232,6 +1232,7 @@ pub fn validate_k8s_required_cpu_and_burstable(
     })
 }
 
+/// TODO(benjaminch): deprecate this function and use plain KubernetesCpuRessourceUnit
 pub fn convert_k8s_cpu_value_to_f32(value: String) -> Result<f32, CommandError> {
     if value.ends_with('m') {
         let mut value_number_string = value;
