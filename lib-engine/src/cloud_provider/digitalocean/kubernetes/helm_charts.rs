@@ -6,7 +6,7 @@ use crate::cloud_provider::helm::{
     CommonChart, HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
-use crate::cloud_provider::helm_charts::ToCommonHelmChart;
+use crate::cloud_provider::helm_charts::{HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAppName, QoveryEngine};
 
@@ -17,6 +17,7 @@ use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
 use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiEncryptionType, LokiS3BucketConfiguration};
+use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use semver::Version;
@@ -244,33 +245,9 @@ pub fn do_helm_charts(
         PrometheusAdapterChart::new(chart_prefix_path, prometheus_internal_url.clone(), prometheus_namespace)
             .to_common_helm_chart();
 
-    let metrics_server = CommonChart {
-        chart_info: ChartInfo {
-            name: "metrics-server".to_string(),
-            path: chart_path("common/charts/metrics-server"),
-            values_files: vec![chart_path("chart_values/metrics-server.yaml")],
-            values: vec![
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "250m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "250m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "256Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "256Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // Metrics server
+    let metrics_server = MetricsServerChart::new(chart_prefix_path, HelmChartResourcesConstraintType::ChartDefault)
+        .to_common_helm_chart();
 
     let kube_state_metrics = CommonChart {
         chart_info: ChartInfo {

@@ -5,7 +5,7 @@ use crate::cloud_provider::helm::{
     HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
-use crate::cloud_provider::helm_charts::ToCommonHelmChart;
+use crate::cloud_provider::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAppName, QoveryEngine};
 use crate::cmd::terraform::TerraformError;
 use crate::dns_provider::DnsProviderConfiguration;
@@ -13,7 +13,9 @@ use crate::errors::CommandError;
 
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
+use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
+use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::File;
@@ -207,25 +209,17 @@ pub fn ec2_aws_helm_charts(
         );
     }
 
-    let metrics_server = CommonChart {
-        chart_info: ChartInfo {
-            name: "metrics-server".to_string(),
-            path: chart_path("common/charts/metrics-server"),
-            values_files: vec![chart_path("chart_values/metrics-server.yaml")],
-            values: vec![
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "30Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "30Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // Metrics server
+    let metrics_server = MetricsServerChart::new(
+        chart_prefix_path,
+        HelmChartResourcesConstraintType::Constrained(HelmChartResources {
+            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(250),
+            limit_memory: KubernetesMemoryResourceUnit::MebiByte(30),
+            request_cpu: KubernetesCpuResourceUnit::MilliCpu(250),
+            request_memory: KubernetesMemoryResourceUnit::MebiByte(30),
+        }),
+    )
+    .to_common_helm_chart();
 
     let cert_manager = CommonChart {
         chart_info: ChartInfo {

@@ -1,5 +1,6 @@
 use crate::cloud_provider::helm::CommonChart;
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
+use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::env;
 use std::fmt::{Display, Formatter};
 
@@ -7,10 +8,33 @@ pub mod coredns_config_chart;
 pub mod external_dns_chart;
 pub mod kube_prometheus_stack_chart;
 pub mod loki_chart;
+pub mod metrics_server_chart;
 pub mod prometheus_adapter_chart;
 pub mod promtail_chart;
 pub mod qovery_cert_manager_webhook_chart;
 pub mod qovery_storage_class_chart;
+
+pub enum HelmChartResourcesConstraintType {
+    /// Let helm chart defines what it wants
+    ChartDefault,
+    /// Let user define what they want
+    Constrained(HelmChartResources),
+}
+
+/// Represents Helm chart resources such as:
+/// resources:
+//   limits:
+//     cpu: [limit_cpu_m]
+//     memory: [limit_memory_mi]
+//   requests:
+//     cpu: [request_cpu_m]
+//     memory: [request_memory_mi]
+pub struct HelmChartResources {
+    pub limit_cpu: KubernetesCpuResourceUnit,
+    pub limit_memory: KubernetesMemoryResourceUnit,
+    pub request_cpu: KubernetesCpuResourceUnit,
+    pub request_memory: KubernetesMemoryResourceUnit,
+}
 
 #[derive(Clone)]
 pub struct HelmChartPath {
