@@ -69,8 +69,8 @@ fn create_and_destroy_eks_cluster_without_nat_gw_in_eu_west_3() {
 #[cfg(feature = "test-aws-infra")]
 #[named]
 #[test]
-fn create_and_destroy_eks_cluster_with_nat_gw_in_eu_west_3() {
-    let region = "eu-west-3".to_string();
+fn create_and_destroy_eks_cluster_with_nat_gw_in_us_east_2() {
+    let region = "us-east-2".to_string();
     create_and_destroy_eks_cluster(
         region,
         ClusterTestType::Classic,
@@ -82,6 +82,7 @@ fn create_and_destroy_eks_cluster_with_nat_gw_in_eu_west_3() {
 }
 
 #[cfg(feature = "test-aws-infra")]
+#[ignore]
 #[named]
 #[test]
 fn create_and_destroy_eks_cluster_in_us_east_2() {

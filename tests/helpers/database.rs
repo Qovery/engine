@@ -1,4 +1,4 @@
-use crate::helpers::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
+use crate::helpers::aws::{AWS_EC2_TEST_REGION, AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
 use crate::helpers::common::{compute_test_cluster_endpoint, Cluster, ClusterDomain, Infrastructure};
 use crate::helpers::kubernetes::{KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
 use crate::helpers::scaleway::{SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
@@ -25,6 +25,7 @@ use qovery_engine::io_models::context::{CloneForTest, Context};
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 
+use crate::helpers::aws_ec2::AWS_K3S_VERSION;
 use qovery_engine::cloud_provider::service::Service;
 use qovery_engine::deployment_report::logger::EnvLogger;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
@@ -32,7 +33,7 @@ use qovery_engine::events::EnvironmentStep;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::logger::Logger;
-use qovery_engine::transaction::{DeploymentOption, TransactionResult};
+use qovery_engine::transaction::{DeploymentOption, Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -473,10 +474,6 @@ pub fn test_db(
     cluster_domain: ClusterDomain,
     existing_infra_ctx: Option<&InfrastructureContext>,
 ) -> String {
-    init();
-
-    let span = span!(Level::INFO, "test", name = test_name);
-    let _enter = span.enter();
     let context_for_delete = context.clone_not_same_execution_id();
     let provider_kind = kubernetes_kind.get_cloud_provider_kind();
     let app_id = Uuid::new_v4();
@@ -586,10 +583,11 @@ pub fn test_db(
     let ea = environment.clone();
     let ea_delete = environment_delete.clone();
 
-    let (localisation, kubernetes_version) = match provider_kind {
-        Kind::Aws => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
-        Kind::Do => ("".to_string(), "".to_string()),
-        Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
+    let (localisation, kubernetes_version) = match kubernetes_kind {
+        KubernetesKind::Eks => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
+        KubernetesKind::Doks => ("".to_string(), "".to_string()),
+        KubernetesKind::ScwKapsule => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
+        KubernetesKind::Ec2 => (AWS_EC2_TEST_REGION.to_string(), AWS_K3S_VERSION.to_string()),
     };
 
     let computed_infra_ctx: InfrastructureContext;
@@ -744,6 +742,15 @@ pub fn test_db(
 
     let ret = environment_delete.delete_environment(&ea_delete, infra_ctx_for_delete);
     assert!(matches!(ret, TransactionResult::Ok));
+
+    if kubernetes_kind == KubernetesKind::Ec2 {
+        let delete_tx = Transaction::new(infra_ctx_for_delete);
+        assert!(delete_tx.is_ok());
+        if let Ok(mut tx) = delete_tx {
+            assert!(tx.delete_kubernetes().is_ok());
+            assert!(matches!(tx.commit(), TransactionResult::Ok));
+        }
+    }
 
     test_name.to_string()
 }
@@ -909,23 +916,27 @@ pub fn test_pause_managed_db(
             };
 
             match get_svc(context, provider_kind, environment, secrets) {
-                Ok(svc) => assert_eq!(
-                    svc.items
-                        .expect("No items in svc")
-                        .into_iter()
-                        .filter(|svc| svc.metadata.name == database_host && &svc.spec.svc_type == "LoadBalancer")
-                        .count(),
-                    match is_public {
-                        true => 1,
-                        false => 0,
-                    }
-                ),
+                Ok(svc) => {
+                    assert!(svc.items.is_some());
+                    assert_eq!(
+                        svc.items
+                            .expect("No items in svc")
+                            .into_iter()
+                            .filter(|svc| svc.metadata.name == database_host && &svc.spec.svc_type == "LoadBalancer")
+                            .count(),
+                        match is_public {
+                            true => 1,
+                            false => 0,
+                        }
+                    );
+                }
                 Err(_) => panic!(),
             };
         }
         MANAGED => {
             match get_svc(context, provider_kind, environment, secrets) {
                 Ok(svc) => {
+                    assert!(svc.items.is_some());
                     let service = svc
                         .items
                         .expect("No items in svc")
