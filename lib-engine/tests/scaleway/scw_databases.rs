@@ -383,6 +383,11 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
     let environment = database_test_environment(&context);
 
     engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
         test_db(
             context,
             logger(),
@@ -563,6 +568,11 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
     let environment = database_test_environment(&context);
 
     engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
         test_db(
             context,
             logger(),
@@ -663,6 +673,11 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
     let environment = database_test_environment(&context);
 
     engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
         test_db(
             context,
             logger(),
@@ -750,6 +765,11 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
     let environment = database_test_environment(&context);
 
     engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
         test_db(
             context,
             logger(),

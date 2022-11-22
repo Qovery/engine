@@ -48,8 +48,8 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
 #[cfg(feature = "test-aws-ec2-infra")]
 #[named]
 #[test]
-fn create_and_destroy_aws_ec2_k3s_cluster_eu_west_3() {
-    let region = "eu-west-3".to_string();
+fn create_and_destroy_aws_ec2_k3s_cluster_us_east_2() {
+    let region = "us-east-2".to_string();
     create_and_destroy_aws_ec2_k3s_cluster(
         region,
         ClusterTestType::Classic,
