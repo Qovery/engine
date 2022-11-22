@@ -17,15 +17,15 @@ use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::batch::v1::Job as K8sJob;
 use k8s_openapi::api::core::v1::Pod;
-use kube::api::{AttachParams, ListParams, ObjectList};
+use kube::api::{AttachParams, ListParams};
 use kube::runtime::wait::{await_condition, Condition};
 use kube::Api;
-use retry::delay::Fixed;
+use retry::delay::Fibonacci;
 use retry::Error::Operation;
 use retry::{Error, OperationResult};
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 impl<T: CloudProvider> DeploymentAction for Job<T>
@@ -162,7 +162,7 @@ where
         })
     };
 
-    let task = move |_logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, EngineError> {
+    let task = move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, EngineError> {
         let chart = ChartInfo {
             name: job.helm_release_name(),
             path: job.workspace_directory().to_string(),
@@ -208,86 +208,103 @@ where
             let job_pod_selector = format!("job-name={}", job.kube_service_name());
             let kube_pod_api: Api<Pod> = Api::namespaced(target.kube.clone(), target.environment.namespace());
 
-            // Wait for the pod to be started to get its name
-            let list_job_pods = list_pods_by_selector(kube_pod_api.clone(), &job_pod_selector, event_details)?;
-            let job_pod = list_job_pods.items.get(0).unwrap();
-            let pod_name = job_pod.metadata.name.as_ref().unwrap();
+            let job_max_nb_restart = job.max_nb_restart();
+            let mut job_creation_iterations = 0;
+            let mut set_of_pods_already_processed: HashSet<String> = HashSet::new();
 
-            // Wait for the job container to be terminated
-            _logger.info(format!(
-                "Waiting for the job container {} to terminate...",
-                job.kube_service_name()
-            ));
-            let _ = block_on(async {
-                await_condition(
+            loop {
+                // Wait for the pod to be started to get its name
+                let pod_name = get_active_job_pod_by_selector(
                     kube_pod_api.clone(),
-                    pod_name,
+                    &job_pod_selector,
+                    event_details,
+                    &set_of_pods_already_processed,
+                )?;
+                set_of_pods_already_processed.insert(pod_name.clone());
+
+                // Wait for the job container to be terminated
+                logger.info(format!(
+                    "Waiting for the job container {} to be processed...",
+                    job.kube_service_name()
+                ));
+                let _ = block_on(await_condition(
+                    kube_pod_api.clone(),
+                    &pod_name,
                     is_job_pod_container_terminated(job.kube_service_name().as_str()),
-                )
-                .await
-            });
+                ));
 
-            // Get JSON output from shared volume
-            let result_json_output = kubectl_get_job_pod_output(
-                kubernetes_config_file_path,
-                target.kubernetes.cloud_provider().credentials_environment_variables(),
-                target.environment.namespace(),
-                pod_name,
-            );
-            match result_json_output {
-                Ok(json) => {
-                    _logger.info(format!("JSON output has been received: {}", json));
-                    let result_serde_json: serde_json::Result<HashMap<String, JobOutputVariable>> =
-                        serde_json::from_str(&json);
-                    match result_serde_json {
-                        Ok(deserialized_json) => _logger.core_configuration(
-                            "Sending job output to create environment variables".to_string(),
-                            serde_json::to_string(&deserialized_json).unwrap(),
-                        ),
-                        Err(_) => _logger.warning("Cannot parse JSON output".to_string()),
+                // Get JSON output from shared volume
+                let result_json_output = kubectl_get_job_pod_output(
+                    kubernetes_config_file_path.clone(),
+                    target.kubernetes.cloud_provider().credentials_environment_variables(),
+                    target.environment.namespace(),
+                    &pod_name,
+                );
+                match result_json_output {
+                    Ok(json) => {
+                        let result_serde_json: serde_json::Result<HashMap<String, JobOutputVariable>> =
+                            serde_json::from_str(&json);
+                        match result_serde_json {
+                            Ok(deserialized_json_hashmap) => {
+                                let deserialized_json_hashmap_with_uppercase_keys: HashMap<String, JobOutputVariable> =
+                                    deserialized_json_hashmap
+                                        .iter()
+                                        .map(|(key, value)| (key.to_uppercase(), value.clone()))
+                                        .collect();
+                                logger.core_configuration(
+                                    "Job output succeeded. Environment variables will be synchronized.".to_string(),
+                                    serde_json::to_string(&deserialized_json_hashmap_with_uppercase_keys)
+                                        .unwrap_or_else(|_| "{}".to_string()),
+                                )
+                            }
+                            Err(_) => logger.warning("Cannot parse JSON output".to_string()),
+                        }
                     }
-                }
-                Err(err) => {
-                    _logger.warning(format!(
-                        "Cannot get JSON job output: {}",
-                        err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
-                    ));
-                }
-            };
+                    Err(err) => {
+                        logger.warning(format!(
+                            "Cannot get JSON job output: {}",
+                            err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
+                        ));
+                    }
+                };
 
-            // Write file in shared volume to let the waiting container terminate
-            let exec_result = block_on(async {
-                kube_pod_api
-                    .clone()
-                    .exec(
-                        pod_name,
-                        vec!["touch", "/output/terminate"],
-                        &AttachParams::default().container("qovery-wait-container-output"),
-                    )
-                    .await
-            });
-            match exec_result {
-                Ok(_) => {}
-                Err(_) => {
-                    return Err(EngineError::new_job_error(
+                // Write file in shared volume to let the waiting container terminate
+                block_on(kube_pod_api.clone().exec(
+                    &pod_name,
+                    vec!["touch", "/output/terminate"],
+                    &AttachParams::default().container("qovery-wait-container-output"),
+                ))
+                .map_err(|_err| {
+                    EngineError::new_job_error(
                         event_details.clone(),
-                        format!("Cannot create terminate file inside waiting container for pod {}", pod_name),
-                    ))
-                }
-            }
+                        format!("Cannot create terminate file inside waiting container for pod {}", &pod_name),
+                    )
+                })?;
 
-            // wait for job to finish
-            let jobs: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
-            let ret = block_on(async { await_condition(jobs, &job.kube_service_name(), is_job_terminated()).await });
-            let ret = ret.unwrap();
-            match job_status(&ret.as_ref()) {
-                JobStatus::Success => Ok(()),
-                JobStatus::NotRunning | JobStatus::Running => unreachable!(),
-                JobStatus::Failure { reason, message } => {
-                    let msg = format!("Job failed to correctly run due to {} {}", reason, message);
-                    Err(EngineError::new_job_error(event_details.clone(), msg))
+                // wait for job to finish
+                let jobs: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+                let ret =
+                    block_on(await_condition(jobs, &job.kube_service_name(), is_job_terminated())).map_err(|_err| {
+                        EngineError::new_job_error(
+                            event_details.clone(),
+                            format!("Cannot find job for terminated pod {}", &pod_name),
+                        )
+                    })?;
+                let job_status_result = match job_status(&ret.as_ref()) {
+                    JobStatus::Success => return Ok(state),
+                    JobStatus::NotRunning | JobStatus::Running => unreachable!(),
+                    JobStatus::Failure { reason, message } => {
+                        let msg = format!("Job failed to correctly run due to {} {}", reason, message);
+                        Err(EngineError::new_job_error(event_details.clone(), msg))
+                    }
+                };
+
+                // If job has restarted the maximum time, then return the result that should be an Err
+                if job_creation_iterations == job_max_nb_restart {
+                    job_status_result?;
                 }
-            }?;
+                job_creation_iterations += 1;
+            }
         }
 
         Ok(state)
@@ -392,6 +409,7 @@ fn job_status(job: &Option<&K8sJob>) -> JobStatus {
                 };
             }
         }
+        // TODO (mzo) deadline exceeded ?
         return JobStatus::Running;
     }
     JobStatus::NotRunning
@@ -406,31 +424,77 @@ fn is_job_terminated() -> impl Condition<K8sJob> {
     }
 }
 
-fn list_pods_by_selector(
+fn get_active_job_pod_by_selector(
     kube_pod_api: Api<Pod>,
     job_pod_selector: &str,
     event_details: &EventDetails,
-) -> Result<ObjectList<Pod>, EngineError> {
-    let list_job_pods_result = retry::retry(Fixed::from_millis(1000).take(5), || {
-        match block_on(async { kube_pod_api.list(&ListParams::default().labels(job_pod_selector)).await }) {
+    set_of_pods_already_processed: &HashSet<String>,
+) -> Result<String, EngineError> {
+    let list_job_pods_result = retry::retry(Fibonacci::from_millis(1000).take(10), || {
+        // List pods according to job label selector
+        let pods = match block_on(kube_pod_api.list(&ListParams::default().labels(job_pod_selector))) {
             Ok(pods_list) => {
                 if pods_list.items.is_empty() {
-                    OperationResult::Retry(EngineError::new_job_error(
+                    return OperationResult::Retry(EngineError::new_job_error(
                         event_details.clone(),
                         format!("No pod found when listing pods having label {}", &job_pod_selector),
-                    ))
+                    ));
                 } else {
-                    OperationResult::Ok(pods_list)
+                    pods_list
                 }
             }
-            Err(_) => OperationResult::Retry(EngineError::new_job_error(
+            Err(_) => {
+                return OperationResult::Retry(EngineError::new_job_error(
+                    event_details.clone(),
+                    format!("Error when listing pods having label {} through Kube API", &job_pod_selector),
+                ))
+            }
+        };
+        // Retrieve active pods
+        let active_job_pods: Vec<String> = pods
+            .items
+            .iter()
+            .filter_map(|pod| {
+                if let Some(pod_status) = &pod.status {
+                    if let Some(pod_container_statuses) = &pod_status.container_statuses {
+                        let job_container_is_active = &pod_container_statuses
+                            .iter()
+                            .filter_map(|container_status| container_status.borrow().clone().state)
+                            .any(|status| status.running.is_some());
+                        if *job_container_is_active {
+                            return Some(pod.metadata.name.as_ref().unwrap().clone());
+                        }
+                    }
+                }
+                None
+            })
+            .collect();
+
+        // There should never be more than 1 pod in 'Running' status
+        let active_selected_pod_name = match active_job_pods.len() {
+            1 => active_job_pods.get(0).unwrap().to_string(),
+            _ => {
+                return OperationResult::Retry(EngineError::new_job_error(
+                    event_details.clone(),
+                    format!("Cannot find active pod having label {}", &job_pod_selector),
+                ))
+            }
+        };
+
+        // Check that the selected running pod has not already been processed
+        if set_of_pods_already_processed.contains(&active_selected_pod_name) {
+            return OperationResult::Retry(EngineError::new_job_error(
                 event_details.clone(),
-                format!("Error when listing pods having label {} through Kube API", &job_pod_selector),
-            )),
+                format!(
+                    "Selected pod has already been processed. Waiting for the next pod to be created having label {}",
+                    &job_pod_selector
+                ),
+            ));
         }
+        OperationResult::Ok(active_selected_pod_name)
     });
     match list_job_pods_result {
-        Ok(pods) => Ok(pods),
+        Ok(active_pod_name) => Ok(active_pod_name),
         Err(Operation { error, .. }) => Err(error),
         Err(Error::Internal(message)) => Err(EngineError::new_job_error(
             event_details.clone(),

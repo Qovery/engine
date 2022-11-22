@@ -1132,7 +1132,7 @@ fn deploy_job_on_aws_eks() {
                 tag: "bullseye".to_string(),
             },
             max_nb_restart: 2,
-            max_duration_in_sec: 40,
+            max_duration_in_sec: 300,
             default_port: Some(8080),
             //command_args: vec![],
             command_args: vec![
@@ -1204,7 +1204,7 @@ fn deploy_cronjob_on_aws_eks() {
                 image: "library/debian".to_string(),
                 tag: "bullseye".to_string(),
             },
-            max_nb_restart: 2,
+            max_nb_restart: 1,
             max_duration_in_sec: 30,
             default_port: Some(8080),
             command_args: vec![
