@@ -120,6 +120,20 @@ impl Infrastructure for EnvironmentRequest {
     }
 }
 
+pub enum StorageSize {
+    NormalSize,
+    OverSize,
+}
+
+impl StorageSize {
+    pub fn size(&self) -> u32 {
+        match *self {
+            StorageSize::NormalSize => 10,
+            StorageSize::OverSize => 200000,
+        }
+    }
+}
+
 pub fn environment_3_apps_3_databases(
     context: &Context,
     database_instance_type: &str,
@@ -473,6 +487,7 @@ pub fn test_db(
     is_public: bool,
     cluster_domain: ClusterDomain,
     existing_infra_ctx: Option<&InfrastructureContext>,
+    storage_size: StorageSize,
 ) -> String {
     let context_for_delete = context.clone_not_same_execution_id();
     let provider_kind = kubernetes_kind.get_cloud_provider_kind();
@@ -525,7 +540,7 @@ pub fn test_db(
         },
     );
     let database_port = db_infos.db_port;
-    let storage_size = 10;
+    let disk_size = storage_size.size();
     let db_disk_type = db_disk_type(provider_kind.clone(), database_mode.clone());
     let db_instance_type = db_instance_type(provider_kind.clone(), db_kind.clone(), database_mode.clone());
     let db = Database {
@@ -542,7 +557,7 @@ pub fn test_db(
         password: database_password,
         total_cpus: "250m".to_string(),
         total_ram_in_mib: 512, // MySQL requires at least 512Mo in order to boot
-        disk_size_in_gib: storage_size,
+        disk_size_in_gib: disk_size,
         database_instance_type: db_instance_type,
         database_disk_type: db_disk_type,
         encrypt_disk: true,
@@ -638,14 +653,17 @@ pub fn test_db(
     };
 
     let ret = environment.deploy_environment(&ea, infra_ctx);
-    assert!(matches!(ret, TransactionResult::Ok));
+    match storage_size {
+        StorageSize::NormalSize => assert!(matches!(ret, TransactionResult::Ok)),
+        StorageSize::OverSize => assert!(matches!(ret, TransactionResult::Error(..))),
+    }
 
     match database_mode {
         CONTAINER => {
             match get_pvc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
-                    format!("{}Gi", storage_size)
+                    format!("{}Gi", disk_size)
                 ),
                 Err(_) => panic!(),
             };

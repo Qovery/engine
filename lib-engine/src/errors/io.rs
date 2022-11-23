@@ -60,6 +60,8 @@ pub enum Tag {
     K8sNodeIsNotReadyWithTheRequestedVersion,
     K8sNodeIsNotReady,
     K8sErrorCopySecret,
+    K8sCannotGetPVCs,
+    K8sCannotBoundPVC,
     UnsupportedRegion,
     UnsupportedZone,
     CannotFindRequiredBinary,
@@ -371,6 +373,8 @@ impl From<errors::Tag> for Tag {
             errors::Tag::TerraformInvalidCIDRBlock => Tag::TerraformInvalidCIDRBlock,
             errors::Tag::DoNotRespectCloudProviderBestPractices => Tag::DoNotRespectCloudProviderBestPractices,
             errors::Tag::TerraformStateLocked => Tag::TerraformStateLocked,
+            errors::Tag::K8sCannotGetPVCs => Tag::K8sCannotGetPVCs,
+            errors::Tag::K8sCannotBoundPVC => Tag::K8sCannotBoundPVC,
         }
     }
 }

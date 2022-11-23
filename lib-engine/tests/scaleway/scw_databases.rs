@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::helpers;
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::common::Infrastructure;
-use crate::helpers::database::{database_test_environment, test_db};
+use crate::helpers::database::{database_test_environment, test_db, StorageSize};
 use crate::helpers::scaleway::{
     clean_environments, scw_default_infra_config, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
     SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,
@@ -363,6 +363,43 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
     })
 }
 
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn test_oversized_volume() {
+    let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .SCALEWAY_TEST_CLUSTER_LONG_ID
+        .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
+    let context = context_for_resource(
+        secrets
+            .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+            .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+        cluster_id,
+    );
+    let environment = database_test_environment(&context);
+
+    engine_run_test(|| {
+        test_db(
+            context,
+            logger(),
+            environment,
+            secrets,
+            "13",
+            function_name!(),
+            DatabaseKind::Postgresql,
+            KubernetesKind::ScwKapsule,
+            DatabaseMode::CONTAINER,
+            false,
+            ClusterDomain::Default {
+                cluster_id: to_short_id(&cluster_id),
+            },
+            None,
+            StorageSize::OverSize,
+        )
+    })
+}
+
 /**
  **
  ** PostgreSQL tests
@@ -403,6 +440,7 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
                 cluster_id: to_short_id(&cluster_id),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }
@@ -588,6 +626,7 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
                 cluster_id: to_short_id(&cluster_id),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }
@@ -693,6 +732,7 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
                 cluster_id: to_short_id(&cluster_id),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }
@@ -785,6 +825,7 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
                 cluster_id: to_short_id(&cluster_id),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }
