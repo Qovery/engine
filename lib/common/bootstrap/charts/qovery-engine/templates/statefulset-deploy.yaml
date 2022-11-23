@@ -1,6 +1,6 @@
 {{- $kubefullname := include "qovery-engine.fullname" . }}
 apiVersion: apps/v1
-{{ if and .Values.buildContainer.enable .Values.volumes.useNetworkDisks }}
+{{ if and .Values.buildContainer.enabled .Values.volumes.useNetworkDisks }}
 kind: StatefulSet
 {{ else }}
 kind: Deployment
@@ -10,8 +10,8 @@ metadata:
   labels:
     {{- include "qovery-engine.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.autoscaler.min_replicas }}
-  {{ if and .Values.buildContainer.enable .Values.volumes.useNetworkDisks }}
+  replicas: {{ .Values.autoscaler.minReplicas }}
+  {{ if and .Values.buildContainer.enabled .Values.volumes.useNetworkDisks }}
   serviceName: qovery-engine
   {{ end }}
   selector:
@@ -30,7 +30,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{ if and .Values.buildContainer.enable .Values.volumes.useNetworkDisks }}
+      {{ if and .Values.buildContainer.enabled .Values.volumes.useNetworkDisks }}
       serviceAccountName: {{ include "qovery-engine.serviceAccountName" . }}
       {{ end }}
       securityContext:
@@ -68,7 +68,7 @@ spec:
               port: {{ .Values.metrics.port }}
           resources:
             {{- toYaml .Values.engineResources | nindent 12 }}
-{{ if .Values.buildContainer.enable }}
+{{ if .Values.buildContainer.enabled }}
           volumeMounts:
             - name: qovery-workspace
               mountPath: {{ .Values.volumes.qoveryWorkspace.path }}

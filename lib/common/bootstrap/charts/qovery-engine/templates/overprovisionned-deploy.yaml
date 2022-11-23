@@ -1,0 +1,26 @@
+{{- if .Values.overprovisionning.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qovery-engine-overprovisionning
+  labels:
+    app: qovery-engine-overprovisioning
+spec:
+  replicas: {{ .Values.overprovisionning.replicas }}
+  selector:
+    matchLabels:
+      app: qovery-engine-overprovisioning
+  template:
+    metadata:
+      labels:
+        app: qovery-engine-overprovisioning
+    spec:
+      priorityClassName: qovery-engine-overprovisioning
+      containers:
+      - name: qovery-engine-overprovisionning
+        # use engine image to warm up the cache
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        command: ["/bin/sh", "-c", "tail -f /dev/null"]
+        resources:
+        {{- toYaml .Values.engineResources | nindent 10 }}
+{{- end }}

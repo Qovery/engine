@@ -10,8 +10,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: qovery-engine
-  minReplicas: {{ .Values.autoscaler.min_replicas }}
-  maxReplicas: {{ .Values.autoscaler.max_replicas }}
+  minReplicas: {{ .Values.autoscaler.minReplicas }}
+  maxReplicas: {{ .Values.autoscaler.maxReplicas }}
   metrics:
     - type: Pods
       pods:
@@ -19,5 +19,5 @@ spec:
           name: taskmanager_nb_running_tasks
         target:
           type: AverageValue
-          averageValue: 0.5
+          averageValue: {{ .Values.autoscaler.averageValue }}
   {{- end }}
