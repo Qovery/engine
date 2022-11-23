@@ -14,7 +14,7 @@ use crate::helpers;
 use crate::helpers::aws::AWS_EC2_TEST_REGION;
 use crate::helpers::aws_ec2::AWS_K3S_VERSION;
 use crate::helpers::common::{Cluster, ClusterDomain};
-use crate::helpers::database::test_db;
+use crate::helpers::database::{test_db, StorageSize};
 
 // By design, there is only one node instance for EC2 preventing to run in parallel database tests because of port clash.
 // This file aims to create a dedicated EC2 cluster for publicly exposed managed DB tests.
@@ -81,6 +81,7 @@ fn test_ec2_database(
             is_public,
             cluster_domain,
             Some(&infra_ctx),
+            StorageSize::NormalSize,
         )
     })
 }

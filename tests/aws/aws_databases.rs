@@ -1,7 +1,7 @@
 use crate::helpers;
 use crate::helpers::aws::{aws_default_infra_config, AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
 use crate::helpers::common::{ClusterDomain, Infrastructure};
-use crate::helpers::database::{test_db, test_pause_managed_db};
+use crate::helpers::database::{test_db, test_pause_managed_db, StorageSize};
 use crate::helpers::utilities::{context_for_resource, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
 use crate::helpers::utilities::{generate_id, get_svc_name, is_pod_restarted_env};
 use ::function_name::named;
@@ -327,6 +327,43 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
     })
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn test_oversized_volume() {
+    let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .AWS_TEST_CLUSTER_LONG_ID
+        .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
+    let context = context_for_resource(
+        secrets
+            .AWS_TEST_ORGANIZATION_LONG_ID
+            .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+        cluster_id,
+    );
+    let environment = helpers::database::database_test_environment(&context);
+
+    engine_run_test(|| {
+        test_db(
+            context,
+            logger(),
+            environment,
+            secrets,
+            "13",
+            function_name!(),
+            DatabaseKind::Postgresql,
+            KubernetesKind::Eks,
+            DatabaseMode::CONTAINER,
+            false,
+            ClusterDomain::Default {
+                cluster_id: to_short_id(&cluster_id),
+            },
+            None,
+            StorageSize::OverSize,
+        )
+    })
+}
+
 /**
 **
 ** PostgreSQL tests
@@ -374,6 +411,7 @@ pub fn test_postgresql_configuration(
                 cluster_id: cluster_id.to_string(),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }
@@ -623,6 +661,7 @@ pub fn test_mongodb_configuration(
                 cluster_id: cluster_id.to_string(),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }
@@ -749,6 +788,7 @@ pub fn test_mysql_configuration(
                 cluster_id: cluster_id.to_string(),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }
@@ -859,6 +899,7 @@ pub fn test_redis_configuration(
                 cluster_id: cluster_id.to_string(),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }
