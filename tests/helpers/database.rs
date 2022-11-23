@@ -30,7 +30,7 @@ use qovery_engine::deployment_report::logger::EnvLogger;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::events::EnvironmentStep;
 use qovery_engine::io_models::environment::EnvironmentRequest;
-use qovery_engine::io_models::Action;
+use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::logger::Logger;
 use qovery_engine::transaction::{DeploymentOption, TransactionResult};
 use qovery_engine::utilities::to_short_id;
@@ -125,14 +125,14 @@ pub fn environment_3_apps_3_databases(
     database_disk_type: &str,
     provider_kind: Kind,
 ) -> EnvironmentRequest {
-    let app_name_1 = format!("{}-{}", "simple-app-1", generate_id());
-    let app_name_2 = format!("{}-{}", "simple-app-2", generate_id());
-    let app_name_3 = format!("{}-{}", "simple-app-3", generate_id());
+    let app_name_1 = QoveryIdentifier::new_random().short().to_string();
+    let app_name_2 = QoveryIdentifier::new_random().short().to_string();
+    let app_name_3 = QoveryIdentifier::new_random().short().to_string();
 
     // mongoDB management part
     let database_host_mongo = get_svc_name(DatabaseKind::Mongodb, provider_kind.clone()).to_string();
     let database_port_mongo = 27017;
-    let database_db_name_mongo = "my-mongodb".to_string();
+    let database_db_name_mongo = "mongodb".to_string();
     let database_username_mongo = "superuser".to_string();
     let database_password_mongo = generate_password(CONTAINER);
     let database_uri_mongo = format!(
@@ -150,12 +150,12 @@ pub fn environment_3_apps_3_databases(
     let database_port = 5432;
     let database_username = "superuser".to_string();
     let database_password = generate_password(CONTAINER);
-    let database_name = "postgres".to_string();
+    let database_name = "pg".to_string();
 
     // pSQL 2 management part
     let fqdn_2 = format!("{}2", get_svc_name(DatabaseKind::Postgresql, provider_kind));
     let database_username_2 = "superuser2".to_string();
-    let database_name_2 = "postgres2".to_string();
+    let database_name_2 = "pg2".to_string();
 
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),

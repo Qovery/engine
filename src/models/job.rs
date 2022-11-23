@@ -166,6 +166,10 @@ impl<T: CloudProvider> Job<T> {
         self.force_trigger
     }
 
+    pub fn max_nb_restart(&self) -> u32 {
+        self.max_nb_restart
+    }
+
     pub(super) fn default_tera_context(&self, target: &DeploymentTarget) -> JobTeraContext {
         let environment = &target.environment;
         let kubernetes = &target.kubernetes;

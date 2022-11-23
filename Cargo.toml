@@ -89,7 +89,7 @@ aws-smithy-client = "0.47.0"
 digitalocean = "0.1.1"
 
 # Scaleway Deps
-scaleway_api_rs = "0.1.2"
+scaleway_api_rs = "=0.1.2"
 
 [dev-dependencies]
 bstr = "0.2.17"

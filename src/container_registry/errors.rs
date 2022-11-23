@@ -1,4 +1,15 @@
+use std::collections::HashSet;
 use thiserror::Error;
+
+#[derive(Clone, Error, Debug, PartialEq, Eq, Hash)]
+pub enum RepositoryNamingRule {
+    #[error("Max length reached, should be less or equal to {max_length}.")]
+    MaxLengthReached { max_length: usize },
+    #[error("Min length not reached, should be greater or equal to {min_length}.")]
+    MinLengthNotReached { min_length: usize },
+    #[error("Should be alpha numeric characters, dashes and periods.")]
+    AlphaNumericCharsDashesPeriodsOnly,
+}
 
 #[derive(Clone, Error, Debug, PartialEq, Eq)]
 pub enum ContainerRegistryError {
@@ -75,5 +86,12 @@ pub enum ContainerRegistryError {
         registry_name: String,
         repository_name: String,
         raw_error_message: String,
+    },
+
+    #[error("Repository name `{repository_name:?}` in registry `{registry_name:?}  is invalid, following rules are broken: {broken_rules:?}")]
+    RepositoryNameNotValid {
+        registry_name: String,
+        repository_name: String,
+        broken_rules: HashSet<RepositoryNamingRule>,
     },
 }

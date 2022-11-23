@@ -35,6 +35,10 @@ impl QoveryIdentifier {
     pub fn short(&self) -> &str {
         &self.short
     }
+
+    pub fn to_uuid(&self) -> Uuid {
+        self.long_id
+    }
 }
 
 impl Default for QoveryIdentifier {

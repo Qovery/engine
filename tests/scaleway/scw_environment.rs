@@ -63,7 +63,7 @@ fn scaleway_test_build_phase() {
     })
 }
 
-#[cfg(feature = "test-scw-minimal")]
+#[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {

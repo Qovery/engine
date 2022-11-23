@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 use uuid::Uuid;
 
 #[derive(Serialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -58,10 +59,11 @@ pub struct Route {
     pub service_long_id: Uuid,
 }
 
+//
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct CpuLimits {
-    pub cpu_request: String,
-    pub cpu_limit: String,
+    pub cpu_request: String, // TODO(benjaminch): Replace String by KubernetesCpuResourceUnit to leverage conversion and type
+    pub cpu_limit: String, // TODO(benjaminch): Replace String by KubernetesCpuResourceUnit to leverage conversion and type
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
@@ -109,4 +111,110 @@ pub enum KubernetesClusterAction {
     Pause,
     Resume(Option<i32>),
     Delete,
+}
+
+/// Represents Kubernetes CPU resource unit
+/// https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-cpu
+///
+/// TODO(benjaminch): Implement From<String> for KubernetesCpuResourceUnit
+pub enum KubernetesCpuResourceUnit {
+    /// Milli CPU
+    MilliCpu(u32),
+}
+
+impl Display for KubernetesCpuResourceUnit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            match &self {
+                KubernetesCpuResourceUnit::MilliCpu(v) => format!("{}m", v),
+            }
+            .as_str(),
+        )
+    }
+}
+
+/// Represents Kubernetes memory resource unit
+/// https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory
+///
+/// TODO(benjaminch): Implement From<String> for KubernetesMemoryResourceUnit
+pub enum KubernetesMemoryResourceUnit {
+    /// MebiByte: 1 Mebibyte (MiB) = (1024)^2 bytes = 1048576 bytes.
+    MebiByte(u32),
+    /// MegaByte: 1 Megabyte (MB) = (1000)^2 bytes = 1000000 bytes.
+    MegaByte(u32),
+}
+
+impl Display for KubernetesMemoryResourceUnit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            match &self {
+                KubernetesMemoryResourceUnit::MebiByte(v) => format!("{}Mi", v),
+                KubernetesMemoryResourceUnit::MegaByte(v) => format!("{}M", v),
+            }
+            .as_str(),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+
+    #[test]
+    fn test_kubernetes_cpu_resource_unit_to_string() {
+        // setup:
+        struct TestCase<'a> {
+            input: KubernetesCpuResourceUnit,
+            output: &'a str,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: KubernetesCpuResourceUnit::MilliCpu(0),
+                output: "0m",
+            },
+            TestCase {
+                input: KubernetesCpuResourceUnit::MilliCpu(100),
+                output: "100m",
+            },
+        ];
+
+        for tc in test_cases {
+            // execute & verify:
+            assert_eq!(tc.output, tc.input.to_string());
+        }
+    }
+
+    #[test]
+    fn test_kubernetes_memory_resource_unit_to_string() {
+        // setup:
+        struct TestCase<'a> {
+            input: KubernetesMemoryResourceUnit,
+            output: &'a str,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: KubernetesMemoryResourceUnit::MebiByte(0),
+                output: "0Mi",
+            },
+            TestCase {
+                input: KubernetesMemoryResourceUnit::MebiByte(100),
+                output: "100Mi",
+            },
+            TestCase {
+                input: KubernetesMemoryResourceUnit::MegaByte(0),
+                output: "0M",
+            },
+            TestCase {
+                input: KubernetesMemoryResourceUnit::MegaByte(100),
+                output: "100M",
+            },
+        ];
+
+        for tc in test_cases {
+            // execute & verify:
+            assert_eq!(tc.output, tc.input.to_string());
+        }
+    }
 }
