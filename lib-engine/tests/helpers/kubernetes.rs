@@ -108,7 +108,7 @@ pub fn get_cluster_test_kubernetes<'a>(
                     ec2_kubernetes_instance(),
                     logger,
                     ClusterAdvancedSettings {
-                        pleco_resources_ttl: 14400,
+                        pleco_resources_ttl: 7200,
                         ..Default::default()
                     },
                 )
