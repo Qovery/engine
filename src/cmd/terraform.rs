@@ -307,7 +307,7 @@ impl TerraformError {
         // Dependencies issues
         // AWS
         if let Ok(aws_state_expected_re) = Regex::new(
-            r"Error deleting (?P<resource_kind>\w+): DependencyViolation: .+ '(?P<resource_name>.+?)' has dependencies and cannot be deleted",
+            r"Error:? deleting (?P<resource_kind>.+?)( \(.+?\))?: DependencyViolation: .+ '(?P<resource_name>.+?)' has dependencies and cannot be deleted",
         ) {
             if let Some(cap) = aws_state_expected_re.captures(raw_terraform_error_output.as_str()) {
                 if let (Some(resource_kind), Some(resource_name)) = (
@@ -1512,21 +1512,38 @@ terraform {
     #[test]
     fn test_terraform_error_aws_dependency_violation_issue() {
         // setup:
-        let raw_message = r#"Error: Error deleting VPC: DependencyViolation: The vpc 'vpc-0330249c67533e3e7' has dependencies and cannot be deleted.
-            status code: 400, request id: 2be352ce-4b43-4243-ace7-0b9f2ba35734"#;
+        struct TestCase<'a> {
+            input_raw_error: &'a str,
+            expected_terraform_error: TerraformError,
+        }
 
-        // execute:
-        let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), raw_message.to_string());
-
-        // validate:
-        assert_eq!(
-            TerraformError::ResourceDependencyViolation {
+        let test_cases = vec![
+            TestCase {
+            input_raw_error: r#"Error: Error deleting VPC: DependencyViolation: The vpc 'vpc-0330249c67533e3e7' has dependencies and cannot be deleted.
+            status code: 400, request id: 2be352ce-4b43-4243-ace7-0b9f2ba35734"#,
+            expected_terraform_error: TerraformError::ResourceDependencyViolation {
                 resource_name: "vpc-0330249c67533e3e7".to_string(),
                 resource_kind: "VPC".to_string(),
-                raw_message: raw_message.to_string(),
+                raw_message: r#"Error: Error deleting VPC: DependencyViolation: The vpc 'vpc-0330249c67533e3e7' has dependencies and cannot be deleted.
+            status code: 400, request id: 2be352ce-4b43-4243-ace7-0b9f2ba35734"#.to_string(),
             },
-            result
-        );
+                },
+                TestCase {
+                input_raw_error: r#"Error: deleting EC2 Subnet (subnet-081a519e38fca7bbb): DependencyViolation: The subnet 'subnet-081a519e38fca7bbb' has dependencies and cannot be deleted"#,
+                expected_terraform_error: TerraformError::ResourceDependencyViolation {
+                    resource_name: "subnet-081a519e38fca7bbb".to_string(),
+                    resource_kind: "EC2 Subnet".to_string(),
+                    raw_message: r#"Error: deleting EC2 Subnet (subnet-081a519e38fca7bbb): DependencyViolation: The subnet 'subnet-081a519e38fca7bbb' has dependencies and cannot be deleted"#.to_string(),
+                },
+        }];
+
+        for tc in test_cases {
+            // execute:
+            let result = TerraformError::new(vec!["apply".to_string()], "".to_string(), tc.input_raw_error.to_string());
+
+            // validate:
+            assert_eq!(tc.expected_terraform_error, result);
+        }
     }
 
     #[test]
