@@ -25,7 +25,9 @@ use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
 pub const AWS_TEST_REGION: AwsRegion = AwsRegion::EuWest3;
-pub const AWS_EC2_TEST_REGION: AwsRegion = AwsRegion::UsEast2;
+pub const AWS_EC2_MANAGED_TEST_REGION: AwsRegion = AwsRegion::UsEast2;
+pub const AWS_EC2_CONTAINER_TEST_REGION: AwsRegion = AwsRegion::UsWest2;
+pub const AWS_EC2_INSTANCE_TEST_REGION: AwsRegion = AwsRegion::EuWest1;
 pub const AWS_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const AWS_KUBERNETES_MINOR_VERSION: u8 = 22;
 pub const AWS_KUBERNETES_VERSION: &str = formatcp!("{}.{}", AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION);

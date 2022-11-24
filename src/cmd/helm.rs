@@ -736,6 +736,7 @@ mod tests {
     use crate::cloud_provider::helm::{ChartInfo, ChartSetValue};
     use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
     use crate::cmd::helm::{helm_exec_with_output, Helm, HelmError};
+    use crate::deployment_action::deploy_helm::default_helm_timeout;
     use semver::Version;
     use std::sync::{Arc, Barrier};
     use std::thread;
@@ -759,7 +760,7 @@ mod tests {
                 release_name.to_string(),
                 "tests/helm/simple_nginx".to_string(),
                 "default".to_string(),
-                600,
+                default_helm_timeout().as_secs() as i64,
                 vec![],
                 vec![],
                 vec![],
