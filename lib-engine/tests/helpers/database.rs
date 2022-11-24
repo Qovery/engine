@@ -660,15 +660,15 @@ pub fn test_db(
 
     match database_mode {
         CONTAINER => {
-            match get_pvc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
+            match get_pvc(infra_ctx, provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                     format!("{}Gi", disk_size)
                 ),
-                Err(_) => panic!(),
+                Err(e) => panic!("Error: {}", e),
             };
 
-            match get_svc(context, provider_kind, environment, secrets) {
+            match get_svc(infra_ctx, provider_kind, environment, secrets) {
                 Ok(svc) => assert_eq!(
                     svc.items
                         .expect("No items in svc")
@@ -680,11 +680,11 @@ pub fn test_db(
                         false => 0,
                     }
                 ),
-                Err(_) => panic!(),
+                Err(e) => panic!("Error: {}", e),
             };
         }
         MANAGED => {
-            match get_svc(context, provider_kind, environment, secrets) {
+            match get_svc(infra_ctx, provider_kind, environment, secrets) {
                 Ok(svc) => {
                     let service = svc
                         .items
@@ -706,7 +706,7 @@ pub fn test_db(
                         false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
                     }
                 }
-                Err(_) => panic!(),
+                Err(e) => panic!("Error: {}", e),
             };
         }
     }
@@ -925,15 +925,15 @@ pub fn test_pause_managed_db(
 
     match database_mode {
         CONTAINER => {
-            match get_pvc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
+            match get_pvc(infra_ctx, provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                     format!("{}Gi", storage_size)
                 ),
-                Err(_) => panic!(),
+                Err(e) => panic!("Error: {}", e),
             };
 
-            match get_svc(context, provider_kind, environment, secrets) {
+            match get_svc(infra_ctx, provider_kind, environment, secrets) {
                 Ok(svc) => {
                     assert!(svc.items.is_some());
                     assert_eq!(
@@ -948,11 +948,11 @@ pub fn test_pause_managed_db(
                         }
                     );
                 }
-                Err(_) => panic!(),
+                Err(e) => panic!("Error: {}", e),
             };
         }
         MANAGED => {
-            match get_svc(context, provider_kind, environment, secrets) {
+            match get_svc(infra_ctx, provider_kind, environment, secrets) {
                 Ok(svc) => {
                     assert!(svc.items.is_some());
                     let service = svc
@@ -971,7 +971,7 @@ pub fn test_pause_managed_db(
                         false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
                     }
                 }
-                Err(_) => panic!(),
+                Err(e) => panic!("Error: {}", e),
             };
         }
     }
@@ -1180,15 +1180,15 @@ pub fn test_db_on_upgrade(
 
     match database_mode {
         CONTAINER => {
-            match get_pvc(context.clone(), provider_kind.clone(), environment.clone(), secrets.clone()) {
+            match get_pvc(&infra_ctx, provider_kind.clone(), environment.clone(), secrets.clone()) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                     format!("{}Gi", storage_size)
                 ),
-                Err(_) => panic!(),
+                Err(e) => panic!("Error: {}", e),
             };
 
-            match get_svc(context, provider_kind.clone(), environment, secrets) {
+            match get_svc(&infra_ctx, provider_kind.clone(), environment, secrets) {
                 Ok(svc) => assert_eq!(
                     svc.items
                         .expect("No items in svc")
@@ -1200,11 +1200,11 @@ pub fn test_db_on_upgrade(
                         false => 0,
                     }
                 ),
-                Err(_) => panic!(),
+                Err(e) => panic!("Error: {}", e),
             };
         }
         MANAGED => {
-            match get_svc(context, provider_kind.clone(), environment, secrets) {
+            match get_svc(&infra_ctx, provider_kind.clone(), environment, secrets) {
                 Ok(svc) => {
                     let service = svc
                         .items
@@ -1222,7 +1222,7 @@ pub fn test_db_on_upgrade(
                         false => assert!(!annotations.contains_key("external-dns.alpha.kubernetes.io/hostname")),
                     }
                 }
-                Err(_) => panic!(),
+                Err(e) => panic!("Error: {}", e),
             };
         }
     }

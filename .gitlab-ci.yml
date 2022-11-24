@@ -181,8 +181,8 @@ aws-infra:
 
 aws-ec2-infra:
   stage: tests
-  retry: 0
-  timeout: 4 hours
+  retry: 1
+  timeout: 3 hours
   script:
     - ./helper.sh aws_ec2_infra
   dependencies:
@@ -207,7 +207,7 @@ aws-ec2-infra:
 
 aws-managed-services:
   stage: tests
-  retry: 0
+  retry: 1
   timeout: 3 hours
   script:
     - ./helper.sh aws_managed_services
@@ -233,7 +233,7 @@ aws-managed-services:
 
 aws-ec2-managed-services:
   stage: tests
-  retry: 0
+  retry: 1
   timeout: 3 hours
   script:
     - ./helper.sh aws_ec2_managed_services
