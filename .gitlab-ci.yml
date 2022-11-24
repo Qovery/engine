@@ -364,7 +364,7 @@ aws-whole-enchilada:
 
 scw-infra:
   stage: tests
-  retry: 0
+  retry: 1
   timeout: 4 hours
   script:
     - ./helper.sh scw_infra

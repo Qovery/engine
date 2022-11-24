@@ -16,6 +16,7 @@ use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 
 use crate::cmd::command::CommandKiller;
+use crate::deployment_action::deploy_helm::default_helm_timeout;
 use std::{fs, thread};
 use uuid::Uuid;
 
@@ -149,7 +150,7 @@ impl Default for ChartInfo {
             force_upgrade: false,
             recreate_pods: false,
             last_breaking_version_requiring_restart: None,
-            timeout_in_seconds: 600,
+            timeout_in_seconds: default_helm_timeout().as_secs() as i64,
             dry_run: false,
             wait: true,
             values: vec![],

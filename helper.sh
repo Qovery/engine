@@ -562,7 +562,7 @@ aws_self_hosted)
   run_tests test-aws-self-hosted $commit_id 20
   ;;
 aws_ec2_self_hosted)
-  run_tests test-aws-ec2-self-hosted $commit_id 20
+  run_tests test-aws-ec2-self-hosted $commit_id 1
   ;;
 scw_self_hosted)
   run_tests test-scw-self-hosted $commit_id 20
@@ -580,7 +580,7 @@ aws_managed_services)
   run_tests test-aws-managed-services $commit_id 20
   ;;
 aws_ec2_managed_services)
-  run_tests test-aws-ec2-managed-services $commit_id 20
+  run_tests test-aws-ec2-managed-services $commit_id 2
   ;;
 scw_managed_services)
   run_tests test-scw-managed-services $commit_id 20
