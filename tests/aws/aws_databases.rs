@@ -123,7 +123,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
 
         // Check that we have actually 0 pods running for this db
         let app_name = format!("postgresql{}-0", environment.databases[0].name);
-        let ret = get_pods(context, Kind::Aws, environment, app_name.as_str(), secrets);
+        let ret = get_pods(&infra_ctx, Kind::Aws, environment, app_name.as_str(), secrets);
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
@@ -317,7 +317,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let database_name = format!("postgresql{}-0", to_short_id(&environment_check.databases[0].long_id));
-        let (ret, _) = is_pod_restarted_env(context, Kind::Aws, environment_check, database_name.as_str(), secrets);
+        let (ret, _) = is_pod_restarted_env(&infra_ctx, Kind::Aws, environment_check, database_name.as_str(), secrets);
         assert!(ret);
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);

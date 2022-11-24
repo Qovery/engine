@@ -134,7 +134,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         // Check that we have actually 0 pods running for this db
         let app_name = format!("postgresql{}-0", environment.databases[0].name);
         let ret = get_pods(
-            context.clone(),
+            &infra_ctx,
             ProviderKind::Scw,
             environment.clone(),
             app_name.as_str(),
@@ -343,7 +343,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let database_name = format!("postgresql-{}-0", to_short_id(&environment_check.databases[0].long_id));
         let (ret, _) = is_pod_restarted_env(
-            context.clone(),
+            &infra_ctx,
             ProviderKind::Scw,
             environment_check,
             database_name.as_str(),

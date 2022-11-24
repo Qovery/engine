@@ -3,8 +3,7 @@ use crate::helpers::aws::aws_default_infra_config;
 use crate::helpers::common::Infrastructure;
 use crate::helpers::environment::session_is_sticky;
 use crate::helpers::utilities::{
-    context_for_resource, engine_run_test, get_pods, get_pvc, init, is_pod_restarted_env, kubernetes_config_path,
-    logger, FuncTestsSecrets,
+    context_for_resource, engine_run_test, get_pods, get_pvc, init, is_pod_restarted_env, logger, FuncTestsSecrets,
 };
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
@@ -139,13 +138,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = get_pods(
-            context.clone(),
-            Kind::Aws,
-            environment.clone(),
-            selector.as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(&infra_ctx, Kind::Aws, environment.clone(), selector.as_str(), secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -153,13 +146,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
-        let ret = get_pods(
-            context.clone(),
-            Kind::Aws,
-            environment.clone(),
-            selector.as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(&infra_ctx, Kind::Aws, environment.clone(), selector.as_str(), secrets.clone());
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
@@ -169,7 +156,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx_resume);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let ret = get_pods(context, Kind::Aws, environment.clone(), selector.as_str(), secrets);
+        let ret = get_pods(&infra_ctx, Kind::Aws, environment.clone(), selector.as_str(), secrets);
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -517,7 +504,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        match get_pvc(context, Kind::Aws, environment, secrets) {
+        match get_pvc(&infra_ctx, Kind::Aws, environment, secrets) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
@@ -593,7 +580,7 @@ fn redeploy_same_app_with_ebs() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        match get_pvc(context.clone(), Kind::Aws, environment, secrets.clone()) {
+        match get_pvc(&infra_ctx, Kind::Aws, environment, secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
@@ -602,18 +589,13 @@ fn redeploy_same_app_with_ebs() {
         };
 
         let app_name = format!("{}-0", &environment_check1.applications[0].name);
-        let (_, number) = is_pod_restarted_env(
-            context.clone(),
-            Kind::Aws,
-            environment_check1,
-            app_name.as_str(),
-            secrets.clone(),
-        );
+        let (_, number) =
+            is_pod_restarted_env(&infra_ctx, Kind::Aws, environment_check1, app_name.as_str(), secrets.clone());
 
         let ret = environment_redeploy.deploy_environment(&ea2, &infra_ctx_bis);
         assert!(matches!(ret, TransactionResult::Ok));
 
-        let (_, number2) = is_pod_restarted_env(context, Kind::Aws, environment_check2, app_name.as_str(), secrets);
+        let (_, number2) = is_pod_restarted_env(&infra_ctx, Kind::Aws, environment_check2, app_name.as_str(), secrets);
         //nothing change in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
@@ -854,8 +836,8 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         assert!(matches!(ret, TransactionResult::Ok));
 
         // checking cookie is properly set on the app
-        let kubeconfig = kubernetes_config_path(infra_ctx.context().clone(), Kind::Aws, "/tmp", secrets)
-            .expect("cannot get kubeconfig");
+        let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+        assert!(kubeconfig.is_ok());
         let router = environment
             .routers
             .first()
@@ -870,7 +852,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
         // Sticky session is checked on ingress IP or hostname so we are not subjects to long DNS propagation making test less flacky.
         let ingress = retry::retry(Fibonacci::from_millis(15000).take(8), || {
             match qovery_engine::cmd::kubectl::kubectl_exec_get_external_ingress(
-                &kubeconfig,
+                kubeconfig.as_ref().unwrap().as_str(),
                 environment_domain.namespace(),
                 router.sanitized_name().as_str(),
                 infra_ctx.cloud_provider().credentials_environment_variables(),
