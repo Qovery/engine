@@ -23,7 +23,6 @@ use crate::runtime::block_on;
 use crate::utilities::create_kube_client;
 
 pub mod aws;
-pub mod digitalocean;
 pub mod environment;
 pub mod helm;
 pub mod helm_charts;
@@ -68,7 +67,6 @@ pub trait CloudProvider {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     Aws,
-    Do,
     Scw,
 }
 
@@ -78,7 +76,6 @@ impl FromStr for Kind {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_lowercase().as_str() {
             "aws" | "amazon" => Ok(Kind::Aws),
-            "do" | "digitalocean" => Ok(Kind::Do),
             "scw" | "scaleway" => Ok(Kind::Scw),
             _ => Err(()),
         }
@@ -89,7 +86,6 @@ impl Display for Kind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Kind::Aws => "AWS",
-            Kind::Do => "Digital Ocean",
             Kind::Scw => "Scaleway",
         })
     }
@@ -191,13 +187,6 @@ mod tests {
             ("AWS ", Ok(Kind::Aws)),
             ("amaZon", Ok(Kind::Aws)),
             ("amazon_blabla", Err(())),
-            ("do", Ok(Kind::Do)),
-            ("digitalocean", Ok(Kind::Do)),
-            (" do ", Ok(Kind::Do)),
-            (" digitalocean ", Ok(Kind::Do)),
-            ("DO ", Ok(Kind::Do)),
-            ("Do", Ok(Kind::Do)),
-            ("do_blabla", Err(())),
             ("scw", Ok(Kind::Scw)),
             ("scaleway", Ok(Kind::Scw)),
             (" scw ", Ok(Kind::Scw)),

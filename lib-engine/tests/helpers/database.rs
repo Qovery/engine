@@ -600,7 +600,6 @@ pub fn test_db(
 
     let (localisation, kubernetes_version) = match kubernetes_kind {
         KubernetesKind::Eks => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
-        KubernetesKind::Doks => ("".to_string(), "".to_string()),
         KubernetesKind::ScwKapsule => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
         KubernetesKind::Ec2 => (AWS_EC2_TEST_REGION.to_string(), AWS_K3S_VERSION.to_string()),
     };
@@ -634,7 +633,6 @@ pub fn test_db(
                     1,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
                 ),
-                KubernetesKind::Doks => todo!(),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context,
                     logger.clone(),
@@ -740,7 +738,6 @@ pub fn test_db(
                     1,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
                 ),
-                KubernetesKind::Doks => todo!(),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,
                     logger.clone(),
@@ -869,7 +866,6 @@ pub fn test_pause_managed_db(
 
     let (localisation, kubernetes_version) = match provider_kind {
         Kind::Aws => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
-        Kind::Do => ("".to_string(), "".to_string()),
         Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
     };
 
@@ -902,7 +898,6 @@ pub fn test_pause_managed_db(
                     1,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
                 ),
-                KubernetesKind::Doks => todo!(),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context,
                     logger.clone(),
@@ -1005,7 +1000,6 @@ pub fn test_pause_managed_db(
                     1,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
                 ),
-                KubernetesKind::Doks => todo!(),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,
                     logger.clone(),
@@ -1139,7 +1133,6 @@ pub fn test_db_on_upgrade(
 
     let (localisation, kubernetes_version) = match provider_kind {
         Kind::Aws => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
-        Kind::Do => ("".to_string(), "".to_string()),
         Kind::Scw => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
     };
 
@@ -1158,7 +1151,6 @@ pub fn test_db_on_upgrade(
             KUBERNETES_MAX_NODES,
             EngineLocation::ClientSide,
         ),
-        Kind::Do => todo!(),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
             logger.clone(),
@@ -1242,7 +1234,6 @@ pub fn test_db_on_upgrade(
             KUBERNETES_MAX_NODES,
             EngineLocation::ClientSide,
         ),
-        Kind::Do => todo!(),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context_for_delete,
             logger.clone(),

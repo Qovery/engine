@@ -88,10 +88,6 @@ charts:
   - name: prometheus-adapter
     version: 3.3.1
     repo_name: prometheus-community
-  - name: digital-mobius
-    version: 0.1.4
-    repo_name: digital-mobius
-    dest: do-bootstrap
   - name: datadog
     repo_name: datadog
     version: 2.22.17
@@ -119,8 +115,6 @@ repos:
     url: https://qovery.github.io/do-k8s-token-rotate/
   - name: prometheus-community
     url: https://prometheus-community.github.io/helm-charts
-  - name: digital-mobius
-    url: https://qovery.github.io/digital-mobius
   - name: ingress-nginx
     url: https://kubernetes.github.io/ingress-nginx/
   - name: datadog
@@ -135,7 +129,5 @@ destinations:
     path: aws/bootstrap/charts
   - name: aws-ec2-bootstrap
     path: aws-ec2/bootstrap/charts
-  - name: do-bootstrap
-    path: digitalocean/bootstrap/charts
   - name: services
     path: common/services

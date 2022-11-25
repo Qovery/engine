@@ -501,7 +501,6 @@ pub trait KubernetesNode {
 pub enum Kind {
     Eks,
     Ec2,
-    Doks,
     ScwKapsule,
 }
 
@@ -510,7 +509,6 @@ impl Kind {
         match self {
             Kind::Eks => CloudProviderKind::Aws,
             Kind::Ec2 => CloudProviderKind::Aws,
-            Kind::Doks => CloudProviderKind::Do,
             Kind::ScwKapsule => CloudProviderKind::Scw,
         }
     }
@@ -521,7 +519,6 @@ impl Display for Kind {
         f.write_str(match self {
             Kind::Eks => "EKS",
             Kind::Ec2 => "EC2",
-            Kind::Doks => "DOKS",
             Kind::ScwKapsule => "ScwKapsule",
         })
     }
@@ -1825,181 +1822,11 @@ mod tests {
     }
 }
 "#;
-        let kubectl_version_do = r#"
-{
-    "apiVersion": "v1",
-    "items": [
-        {
-            "apiVersion": "v1",
-            "kind": "Node",
-            "metadata": {
-                "annotations": {
-                    "alpha.kubernetes.io/provided-node-ip": "10.1.2.12",
-                    "csi.volume.kubernetes.io/nodeid": "{\"dobs.csi.digitalocean.com\":\"245738308\"}",
-                    "io.cilium.network.ipv4-cilium-host": "10.244.60.81",
-                    "io.cilium.network.ipv4-health-ip": "10.244.60.6",
-                    "io.cilium.network.ipv4-pod-cidr": "10.244.60.0/25",
-                    "node.alpha.kubernetes.io/ttl": "15",
-                    "volumes.kubernetes.io/controller-managed-attach-detach": "true"
-                },
-                "creationTimestamp": "2021-05-12T08:22:46Z",
-                "labels": {
-                    "beta.kubernetes.io/arch": "amd64",
-                    "beta.kubernetes.io/instance-type": "g-16vcpu-64gb",
-                    "beta.kubernetes.io/os": "linux",
-                    "doks.digitalocean.com/node-id": "2407f0b3-de84-4c26-b835-d979e1d5e873",
-                    "doks.digitalocean.com/node-pool": "pool-un5t2n2gp",
-                    "doks.digitalocean.com/node-pool-id": "5a2ea5fb-f826-4df1-b405-8b6f8d594098",
-                    "doks.digitalocean.com/version": "1.18.10-do.2",
-                    "failure-domain.beta.kubernetes.io/region": "nyc3",
-                    "kubernetes.io/arch": "amd64",
-                    "kubernetes.io/hostname": "pool-un5t2n2gp-8b870",
-                    "kubernetes.io/os": "linux",
-                    "node.kubernetes.io/instance-type": "g-16vcpu-64gb",
-                    "region": "nyc3",
-                    "topology.kubernetes.io/region": "nyc3"
-                },
-                "name": "pool-un5t2n2gp-8b870",
-                "resourceVersion": "127317441",
-                "selfLink": "/api/v1/nodes/pool-un5t2n2gp-8b870",
-                "uid": "b75f6082-c597-44fa-ab88-16cf193f639b"
-            },
-            "spec": {
-                "podCIDR": "10.244.60.0/25",
-                "podCIDRs": [
-                    "10.244.60.0/25"
-                ],
-                "providerID": "digitalocean://245738308"
-            },
-            "status": {
-                "addresses": [
-                    {
-                        "address": "pool-un5t2n2gp-8b870",
-                        "type": "Hostname"
-                    },
-                    {
-                        "address": "10.1.2.12",
-                        "type": "InternalIP"
-                    },
-                    {
-                        "address": "167.99.121.123",
-                        "type": "ExternalIP"
-                    }
-                ],
-                "allocatable": {
-                    "cpu": "16",
-                    "ephemeral-storage": "190207346374",
-                    "hugepages-1Gi": "0",
-                    "hugepages-2Mi": "0",
-                    "memory": "59942Mi",
-                    "pods": "110"
-                },
-                "capacity": {
-                    "cpu": "16",
-                    "ephemeral-storage": "206388180Ki",
-                    "hugepages-1Gi": "0",
-                    "hugepages-2Mi": "0",
-                    "memory": "65970528Ki",
-                    "pods": "110"
-                },
-                "conditions": [
-                    {
-                        "lastHeartbeatTime": "2021-05-12T08:22:55Z",
-                        "lastTransitionTime": "2021-05-12T08:22:55Z",
-                        "message": "Cilium is running on this node",
-                        "reason": "CiliumIsUp",
-                        "status": "False",
-                        "type": "NetworkUnavailable"
-                    },
-                    {
-                        "lastHeartbeatTime": "2021-05-13T14:33:56Z",
-                        "lastTransitionTime": "2021-05-12T08:22:45Z",
-                        "message": "kubelet has sufficient memory available",
-                        "reason": "KubeletHasSufficientMemory",
-                        "status": "False",
-                        "type": "MemoryPressure"
-                    },
-                    {
-                        "lastHeartbeatTime": "2021-05-13T14:33:56Z",
-                        "lastTransitionTime": "2021-05-12T08:22:45Z",
-                        "message": "kubelet has no disk pressure",
-                        "reason": "KubeletHasNoDiskPressure",
-                        "status": "False",
-                        "type": "DiskPressure"
-                    },
-                    {
-                        "lastHeartbeatTime": "2021-05-13T14:33:56Z",
-                        "lastTransitionTime": "2021-05-12T08:22:45Z",
-                        "message": "kubelet has sufficient PID available",
-                        "reason": "KubeletHasSufficientPID",
-                        "status": "False",
-                        "type": "PIDPressure"
-                    },
-                    {
-                        "lastHeartbeatTime": "2021-05-13T14:33:56Z",
-                        "lastTransitionTime": "2021-05-12T08:22:56Z",
-                        "message": "kubelet is posting ready status. AppArmor enabled",
-                        "reason": "KubeletReady",
-                        "status": "True",
-                        "type": "Ready"
-                    }
-                ],
-                "daemonEndpoints": {
-                    "kubeletEndpoint": {
-                        "Port": 10250
-                    }
-                },
-                "images": [
-                    {
-                        "names": [
-                            "digitalocean/doks-debug@sha256:d1a215845d868d1d6b2a6a93cb225a892d61e131954d71b5ef45664d77d8d2c7",
-                            "digitalocean/doks-debug:latest"
-                        ],
-                        "sizeBytes": 752144177
-                    }
-                ],
-                "nodeInfo": {
-                    "architecture": "amd64",
-                    "bootID": "917eead4-1db5-4709-9d28-01c3e469131a",
-                    "containerRuntimeVersion": "docker://18.9.9",
-                    "kernelVersion": "4.19.0-11-amd64",
-                    "kubeProxyVersion": "v1.18.10",
-                    "kubeletVersion": "v1.18.10",
-                    "machineID": "503195a66f1a4417bfa02fc696aa3436",
-                    "operatingSystem": "linux",
-                    "osImage": "Debian GNU/Linux 10 (buster)",
-                    "systemUUID": "503195a6-6f1a-4417-bfa0-2fc696aa3436"
-                },
-                "volumesAttached": [
-                    {
-                        "devicePath": "",
-                        "name": "kubernetes.io/csi/dobs.csi.digitalocean.com^ba8713ff-b34a-11eb-9a5b-0a58ac146bd9"
-                    }
-                ],
-                "volumesInUse": [
-                    "kubernetes.io/csi/dobs.csi.digitalocean.com^ba8713ff-b34a-11eb-9a5b-0a58ac146bd9"
-                ]
-            }
-        }
-    ],
-    "kind": "List",
-    "metadata": {
-        "resourceVersion": "",
-        "selfLink": ""
-    }
-}
-"#;
 
-        let validate_providers = vec![
-            KubernetesVersionToCheck {
-                json: kubectl_version_aws,
-                wished_version: VersionsNumber::new("1".to_string(), Some("16".to_string()), None, None),
-            },
-            KubernetesVersionToCheck {
-                json: kubectl_version_do,
-                wished_version: VersionsNumber::new("1".to_string(), Some("18".to_string()), None, None),
-            },
-        ];
+        let validate_providers = vec![KubernetesVersionToCheck {
+            json: kubectl_version_aws,
+            wished_version: VersionsNumber::new("1".to_string(), Some("16".to_string()), None, None),
+        }];
 
         for mut provider in validate_providers {
             let provider_server_version: KubernetesList<KubernetesNode> =

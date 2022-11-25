@@ -4,7 +4,6 @@ pub mod aws_ec2;
 pub mod container;
 pub mod database;
 pub(crate) mod database_utils;
-pub mod digital_ocean;
 pub mod job;
 pub mod router;
 pub mod scaleway;

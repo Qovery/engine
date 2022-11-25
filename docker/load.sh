@@ -62,12 +62,6 @@ function download() { ## Download prerequisites binaries for the engine
   unzip vault.zip
   mv vault $BIN_DEST_FOLDER/vault${VAULT_VERSION}
 
-  # DigitalOcean Doctl
-  echo "Downloading doctl"
-  curl -Lso doctl.tgz https://github.com/digitalocean/doctl/releases/download/v${DOCTL_VERSION}/doctl-${DOCTL_VERSION}-linux-amd64.tar.gz
-  tar -zxf doctl.tgz
-  mv doctl $BIN_DEST_FOLDER/doctl${DOCTL_VERSION}
-
   # Clean
   chmod 755 $BIN_DEST_FOLDER/*
   rm -Rf $TMP_FOLDER
@@ -95,7 +89,6 @@ function install() { ## Make symlinks to install binaries in default PATH
   ln -s $BIN_DIR/terraform${TERRAFORM_VERSION} /usr/bin/terraform
   ln -s $BIN_DIR/kubectl${KUBECTL_VERSION} /usr/bin/kubectl
   ln -s $BIN_DIR/aws-iam-authenticator${AWS_IAM_AUTHENTICATOR_VERSION} /usr/bin/aws-iam-authenticator
-  ln -s $BIN_DIR/doctl${DOCTL_VERSION} /usr/bin/doctl
   ln -s $BIN_DIR/vault${VAULT_VERSION} /usr/bin/vault
 
   # Generate all symlinks at once

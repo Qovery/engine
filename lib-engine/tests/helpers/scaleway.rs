@@ -137,9 +137,9 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             context.clone(),
             *context.cluster_long_id(),
             secrets
-                .DIGITAL_OCEAN_TEST_ORGANIZATION_ID
+                .SCALEWAY_TEST_ORGANIZATION_ID
                 .as_ref()
-                .expect("DIGITAL_OCEAN_TEST_ORGANIZATION_ID is not set")
+                .expect("SCALEWAY_TEST_ORGANIZATION_ID is not set")
                 .as_str(),
             secrets
                 .SCALEWAY_ACCESS_KEY

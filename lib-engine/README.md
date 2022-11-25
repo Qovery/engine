@@ -41,9 +41,9 @@
 </p>
 
 Qovery engine supports a number of different plugins to compose your own deployment flow:
-- **Cloud providers:** [AWS](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/amazon-web-services/), Digital Ocean ([in beta](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/digital-ocean/)), Scaleway ([in beta](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/scaleway/)), Azure ([vote](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/azure/)), GCP ([vote](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/google-cloud-platform/))
+- **Cloud providers:** [AWS](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/amazon-web-services/), Scaleway ([in beta](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/scaleway/)), Azure ([vote](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/azure/)), GCP ([vote](https://hub.qovery.com/docs/using-qovery/configuration/cloud-service-provider/google-cloud-platform/))
 - **Build platforms:** [Qovery CI](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/qovery-ci/), Circle CI ([vote](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/circle-ci/)), Gitlab CI ([vote](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/gitlab-ci/)), GitHub Actions ([vote](https://hub.qovery.com/docs/using-qovery/addon/continuous-integration/github-actions/))
-- **Container registries:** AWS ECR, DockerHub, Digital Ocean CR, ACR, Scaleway Container Registry
+- **Container registries:** AWS ECR, DockerHub, ACR, Scaleway Container Registry
 - **DNS providers:** Cloudflare
 - **Monitoring services:** Datadog ([vote](https://hub.qovery.com/docs/using-qovery/addon/monitoring/datadog/)), Newrelic ([vote](https://hub.qovery.com/docs/using-qovery/addon/monitoring/new-relic/))
 
