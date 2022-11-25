@@ -115,7 +115,6 @@ pub fn get_cluster_test_kubernetes<'a>(
                 .unwrap(),
             )
         }
-        KubernetesKind::Doks => todo!(),
         KubernetesKind::ScwKapsule => Box::new(
             Kapsule::new(
                 context.clone(),
@@ -173,7 +172,6 @@ pub fn cluster_test(
             KUBERNETES_MAX_NODES,
             EngineLocation::ClientSide,
         ),
-        Kind::Do => todo!(),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
             logger.clone(),
@@ -250,7 +248,6 @@ pub fn cluster_test(
                     KUBERNETES_MAX_NODES,
                     EngineLocation::ClientSide,
                 ),
-                Kind::Do => todo!(),
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
                     logger.clone(),
@@ -298,7 +295,6 @@ pub fn cluster_test(
                     max_nodes,
                     EngineLocation::ClientSide,
                 ),
-                Kind::Do => todo!(),
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
                     logger.clone(),
@@ -423,7 +419,6 @@ pub fn get_environment_test_kubernetes(
                 .unwrap(),
             )
         }
-        KubernetesKind::Doks => todo!(),
         KubernetesKind::ScwKapsule => {
             let zone = ScwZone::from_str(localisation).expect("SCW zone not supported");
             Box::new(

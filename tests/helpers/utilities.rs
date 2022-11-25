@@ -26,8 +26,7 @@ use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd;
 use qovery_engine::constants::{
-    AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DIGITAL_OCEAN_SPACES_ACCESS_ID, DIGITAL_OCEAN_SPACES_SECRET_ID,
-    DIGITAL_OCEAN_TOKEN, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
+    AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 use serde::{Deserialize, Serialize};
@@ -134,12 +133,6 @@ pub struct FuncTestsSecrets {
     pub CLOUDFLARE_TOKEN: Option<String>,
     pub CUSTOM_TEST_DOMAIN: Option<String>,
     pub DEFAULT_TEST_DOMAIN: Option<String>,
-    pub DIGITAL_OCEAN_SPACES_ACCESS_ID: Option<String>,
-    pub DIGITAL_OCEAN_SPACES_SECRET_ID: Option<String>,
-    pub DIGITAL_OCEAN_DEFAULT_REGION: Option<String>,
-    pub DIGITAL_OCEAN_TOKEN: Option<String>,
-    pub DIGITAL_OCEAN_TEST_CLUSTER_ID: Option<String>,
-    pub DIGITAL_OCEAN_TEST_ORGANIZATION_ID: Option<String>,
     pub DISCORD_API_URL: Option<String>,
     pub EKS_ACCESS_CIDR_BLOCKS: Option<String>,
     pub GITHUB_ACCESS_TOKEN: Option<String>,
@@ -238,12 +231,6 @@ impl FuncTestsSecrets {
             CLOUDFLARE_TOKEN: None,
             CUSTOM_TEST_DOMAIN: None,
             DEFAULT_TEST_DOMAIN: None,
-            DIGITAL_OCEAN_SPACES_ACCESS_ID: None,
-            DIGITAL_OCEAN_SPACES_SECRET_ID: None,
-            DIGITAL_OCEAN_DEFAULT_REGION: None,
-            DIGITAL_OCEAN_TOKEN: None,
-            DIGITAL_OCEAN_TEST_CLUSTER_ID: None,
-            DIGITAL_OCEAN_TEST_ORGANIZATION_ID: None,
             DISCORD_API_URL: None,
             EKS_ACCESS_CIDR_BLOCKS: None,
             GITHUB_ACCESS_TOKEN: None,
@@ -344,27 +331,6 @@ impl FuncTestsSecrets {
             CLOUDFLARE_TOKEN: Self::select_secret("CLOUDFLARE_TOKEN", secrets.CLOUDFLARE_TOKEN),
             CUSTOM_TEST_DOMAIN: Self::select_secret("CUSTOM_TEST_DOMAIN", secrets.CUSTOM_TEST_DOMAIN),
             DEFAULT_TEST_DOMAIN: Self::select_secret("DEFAULT_TEST_DOMAIN", secrets.DEFAULT_TEST_DOMAIN),
-            DIGITAL_OCEAN_SPACES_ACCESS_ID: Self::select_secret(
-                "DIGITAL_OCEAN_SPACES_ACCESS_ID",
-                secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID,
-            ),
-            DIGITAL_OCEAN_SPACES_SECRET_ID: Self::select_secret(
-                "DIGITAL_OCEAN_SPACES_SECRET_ID",
-                secrets.DIGITAL_OCEAN_SPACES_SECRET_ID,
-            ),
-            DIGITAL_OCEAN_DEFAULT_REGION: Self::select_secret(
-                "DIGITAL_OCEAN_DEFAULT_REGION",
-                secrets.DIGITAL_OCEAN_DEFAULT_REGION,
-            ),
-            DIGITAL_OCEAN_TOKEN: Self::select_secret("DIGITAL_OCEAN_TOKEN", secrets.DIGITAL_OCEAN_TOKEN),
-            DIGITAL_OCEAN_TEST_ORGANIZATION_ID: Self::select_secret(
-                "DIGITAL_OCEAN_TEST_ORGANIZATION_ID",
-                secrets.DIGITAL_OCEAN_TEST_ORGANIZATION_ID,
-            ),
-            DIGITAL_OCEAN_TEST_CLUSTER_ID: Self::select_secret(
-                "DIGITAL_OCEAN_TEST_CLUSTER_ID",
-                secrets.DIGITAL_OCEAN_TEST_CLUSTER_ID,
-            ),
             DISCORD_API_URL: Self::select_secret("DISCORD_API_URL", secrets.DISCORD_API_URL),
             EKS_ACCESS_CIDR_BLOCKS: Self::select_secret("EKS_ACCESS_CIDR_BLOCKS", secrets.EKS_ACCESS_CIDR_BLOCKS),
             GITHUB_ACCESS_TOKEN: Self::select_secret("GITHUB_ACCESS_TOKEN", secrets.GITHUB_ACCESS_TOKEN),
@@ -542,29 +508,6 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
         Kind::Aws => vec![
             (AWS_ACCESS_KEY_ID, secrets.AWS_ACCESS_KEY_ID.as_ref().unwrap().as_str()),
             (AWS_SECRET_ACCESS_KEY, secrets.AWS_SECRET_ACCESS_KEY.as_ref().unwrap().as_str()),
-        ],
-        Kind::Do => vec![
-            (
-                DIGITAL_OCEAN_TOKEN,
-                secrets
-                    .DIGITAL_OCEAN_TOKEN
-                    .as_ref()
-                    .expect("DIGITAL_OCEAN_TOKEN is not set"),
-            ),
-            (
-                DIGITAL_OCEAN_SPACES_ACCESS_ID,
-                secrets
-                    .DIGITAL_OCEAN_SPACES_ACCESS_ID
-                    .as_ref()
-                    .expect("DIGITAL_OCEAN_SPACES_ACCESS_ID is not set"),
-            ),
-            (
-                DIGITAL_OCEAN_SPACES_SECRET_ID,
-                secrets
-                    .DIGITAL_OCEAN_SPACES_SECRET_ID
-                    .as_ref()
-                    .expect("DIGITAL_OCEAN_SPACES_SECRET_ID is not set"),
-            ),
         ],
         Kind::Scw => vec![
             (SCALEWAY_ACCESS_KEY, secrets.SCALEWAY_ACCESS_KEY.as_ref().unwrap().as_str()),
@@ -828,10 +771,6 @@ pub fn db_infos(
 pub fn db_disk_type(provider_kind: Kind, database_mode: DatabaseMode) -> String {
     match provider_kind {
         Kind::Aws => "gp2",
-        Kind::Do => match database_mode {
-            MANAGED => "",
-            DatabaseMode::CONTAINER => "",
-        },
         Kind::Scw => match database_mode {
             MANAGED => SCW_MANAGED_DATABASE_DISK_TYPE,
             DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
@@ -847,10 +786,6 @@ pub fn db_instance_type(provider_kind: Kind, db_kind: DatabaseKind, database_mod
             DatabaseKind::Mysql => "db.t3.micro",
             DatabaseKind::Postgresql => "db.t3.micro",
             DatabaseKind::Redis => "cache.t3.micro",
-        },
-        Kind::Do => match database_mode {
-            MANAGED => "",
-            DatabaseMode::CONTAINER => "",
         },
         Kind::Scw => match database_mode {
             MANAGED => SCW_MANAGED_DATABASE_INSTANCE_TYPE,

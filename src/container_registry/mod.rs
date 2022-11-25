@@ -9,7 +9,6 @@ use crate::events::{EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 use crate::io_models::QoveryIdentifier;
 
-pub mod docr;
 pub mod ecr;
 pub mod errors;
 pub mod scaleway_container_registry;
@@ -71,7 +70,6 @@ pub struct ContainerRegistryInfo {
     pub registry_name: String,
     pub registry_docker_json_config: Option<String>,
     // give it the name of your image, and it returns the full name with prefix if needed
-    // i.e: for DigitalOcean => registry_name/image_name
     // i.e: fo scaleway => image_name/image_name
     // i.e: for AWS => image_name
     pub get_image_name: Box<dyn Fn(&str) -> String>,
@@ -84,6 +82,5 @@ pub struct ContainerRegistryInfo {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     Ecr,
-    Docr,
     ScalewayCr,
 }

@@ -85,9 +85,6 @@ aws-sdk-elasticloadbalancingv2 = "0.17.0"
 aws-types = "0.47.0"
 aws-smithy-client = "0.47.0"
 
-# Digital Ocean Deps
-digitalocean = "0.1.1"
-
 # Scaleway Deps
 scaleway_api_rs = "=0.1.2"
 
