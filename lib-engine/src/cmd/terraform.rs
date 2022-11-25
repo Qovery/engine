@@ -1337,24 +1337,24 @@ terraform {
             },
             TestCase {
                 input_raw_message:
-                    "Error creating EIP: AddressLimitExceeded: The maximum number of addresses has been reached.",
+                "Error creating EIP: AddressLimitExceeded: The maximum number of addresses has been reached.",
                 expected_terraform_error: TerraformError::QuotasExceeded {
                     sub_type: QuotaExceededError::ResourceLimitExceeded {
                         resource_type: "EIP".to_string(),
                         max_resource_count: None,
                     },
                     raw_message:
-                        "Error creating EIP: AddressLimitExceeded: The maximum number of addresses has been reached."
-                            .to_string(),
+                    "Error creating EIP: AddressLimitExceeded: The maximum number of addresses has been reached."
+                        .to_string(),
                 },
             },
             TestCase {
                 input_raw_message:
-                    "Error: error configuring Terraform AWS Provider: error validating provider credentials: error calling sts:GetCallerIdentity: operation error STS: GetCallerIdentity, https response error StatusCode: 403",
+                "Error: error configuring Terraform AWS Provider: error validating provider credentials: error calling sts:GetCallerIdentity: operation error STS: GetCallerIdentity, https response error StatusCode: 403",
                 expected_terraform_error: TerraformError::InvalidCredentials {
                     raw_message:
-                        "Error: error configuring Terraform AWS Provider: error validating provider credentials: error calling sts:GetCallerIdentity: operation error STS: GetCallerIdentity, https response error StatusCode: 403"
-                            .to_string(),
+                    "Error: error configuring Terraform AWS Provider: error validating provider credentials: error calling sts:GetCallerIdentity: operation error STS: GetCallerIdentity, https response error StatusCode: 403"
+                        .to_string(),
                 },
             },
             TestCase {
@@ -1519,23 +1519,23 @@ terraform {
 
         let test_cases = vec![
             TestCase {
-            input_raw_error: r#"Error: Error deleting VPC: DependencyViolation: The vpc 'vpc-0330249c67533e3e7' has dependencies and cannot be deleted.
+                input_raw_error: r#"Error: Error deleting VPC: DependencyViolation: The vpc 'vpc-0330249c67533e3e7' has dependencies and cannot be deleted.
             status code: 400, request id: 2be352ce-4b43-4243-ace7-0b9f2ba35734"#,
-            expected_terraform_error: TerraformError::ResourceDependencyViolation {
-                resource_name: "vpc-0330249c67533e3e7".to_string(),
-                resource_kind: "VPC".to_string(),
-                raw_message: r#"Error: Error deleting VPC: DependencyViolation: The vpc 'vpc-0330249c67533e3e7' has dependencies and cannot be deleted.
+                expected_terraform_error: TerraformError::ResourceDependencyViolation {
+                    resource_name: "vpc-0330249c67533e3e7".to_string(),
+                    resource_kind: "VPC".to_string(),
+                    raw_message: r#"Error: Error deleting VPC: DependencyViolation: The vpc 'vpc-0330249c67533e3e7' has dependencies and cannot be deleted.
             status code: 400, request id: 2be352ce-4b43-4243-ace7-0b9f2ba35734"#.to_string(),
-            },
                 },
-                TestCase {
+            },
+            TestCase {
                 input_raw_error: r#"Error: deleting EC2 Subnet (subnet-081a519e38fca7bbb): DependencyViolation: The subnet 'subnet-081a519e38fca7bbb' has dependencies and cannot be deleted"#,
                 expected_terraform_error: TerraformError::ResourceDependencyViolation {
                     resource_name: "subnet-081a519e38fca7bbb".to_string(),
                     resource_kind: "EC2 Subnet".to_string(),
                     raw_message: r#"Error: deleting EC2 Subnet (subnet-081a519e38fca7bbb): DependencyViolation: The subnet 'subnet-081a519e38fca7bbb' has dependencies and cannot be deleted"#.to_string(),
                 },
-        }];
+            }];
 
         for tc in test_cases {
             // execute:
