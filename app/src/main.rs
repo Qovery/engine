@@ -10,6 +10,7 @@ extern crate core;
 
 use std::fs::File;
 use std::io::{BufRead, BufReader, Error};
+use std::net::TcpStream;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -22,6 +23,8 @@ use std::{fs, io, process};
 use crossbeam_channel::{unbounded, Sender};
 use dirs::home_dir;
 use dotenv::dotenv;
+use retry::delay::Fixed;
+use retry::OperationResult;
 use tracing::error;
 use tracing_subscriber::{fmt::time::ChronoUtc, prelude::*, EnvFilter};
 use url::Url;
@@ -305,8 +308,57 @@ pub fn main() -> io::Result<()> {
 
     webserver::launch(http_listen_on.as_str());
 
+    // ensure docker host is reachable to avoid error like: ERROR: Cannot connect to the Docker daemon at tcp://0.0.0.0:2375. Is the docker daemon running?
+    // docker daemon is slower to start than the engine
+    let disable_check_env_var = "IGNORE_DOCKER_HOST_CHECK";
     match docker_host {
-        Some(ref docker_host) => info!("docker host: {}", docker_host),
+        Some(ref docker_host) => {
+            info!("docker host: {}", docker_host);
+            let ignore_docker_host_check = match env::var(disable_check_env_var) {
+                Ok(x) if x == *"true" => {
+                    info!("ignoring docker host check");
+                    true
+                }
+                _ => false,
+            };
+
+            if docker_host.scheme() == "tcp" && !ignore_docker_host_check {
+                let docker_hostname = docker_host.host_str().unwrap_or("unkown_host");
+                let docker_port = docker_host.port().unwrap_or(2375);
+                let docker_address = format!("{}:{}", docker_hostname, docker_port);
+
+                let result = retry::retry(Fixed::from(Duration::from_secs(2)).take(300), || {
+                    match TcpStream::connect(docker_address.as_str()) {
+                        Ok(_) => OperationResult::Ok(()),
+                        Err(err) => {
+                            info!("waiting for docker host to be reachable: {}", &err);
+                            OperationResult::Retry(format!("docker host not yet reachable...{}", err))
+                        }
+                    }
+                });
+
+                match result {
+                    Err(err) => match err {
+                        retry::Error::Operation {
+                            error: e,
+                            total_delay: _,
+                            tries: _,
+                        } => {
+                            error!(
+                                "docker host is not reachable, disable the check with {} is you need: {}",
+                                disable_check_env_var, e
+                            );
+                            process::exit(1)
+                        }
+                        retry::Error::Internal(err) => {
+                            error!("internal error while checking if docker host is not reachable, disable the check with {} is you need: {}", disable_check_env_var, err);
+                            process::exit(1)
+                        }
+                    },
+                    Ok(_) => info!("docker host is reachable"),
+                }
+            }
+        }
         None => info!("docker host is not set"),
     };
 
