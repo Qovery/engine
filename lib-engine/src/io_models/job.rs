@@ -103,6 +103,10 @@ impl JobSchedule {
     pub fn is_cronjob(&self) -> bool {
         matches!(self, JobSchedule::Cron { .. })
     }
+
+    pub fn is_job(&self) -> bool {
+        !self.is_cronjob()
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]

@@ -10,14 +10,14 @@ use crate::deployment_report::job::reporter::JobDeploymentReporter;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{EngineError, ErrorMessageVerbosity};
-use crate::events::{EngineEvent, EventDetails, EventMessage, Stage};
+use crate::events::{EventDetails, Stage};
 use crate::io_models::job::JobSchedule;
 use crate::models::job::{Job, JobService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
-use k8s_openapi::api::batch::v1::Job as K8sJob;
+use k8s_openapi::api::batch::v1::{CronJob, Job as K8sJob};
 use k8s_openapi::api::core::v1::Pod;
-use kube::api::{AttachParams, ListParams};
+use kube::api::{AttachParams, ListParams, PostParams};
 use kube::runtime::wait::{await_condition, Condition};
 use kube::Api;
 use retry::delay::Fibonacci;
@@ -181,7 +181,7 @@ where
             chart,
         );
 
-        if !job.schedule().is_cronjob() {
+        if job.schedule().is_job() {
             // We first need to delete the old job, because job spec cannot be updated (due to be an immutable resources)
             helm.on_delete(target)?;
         }
@@ -189,22 +189,9 @@ where
 
         // Wait for the job to terminate in order to have his status
         // For cronjob we dont care as we don't control when it is executed
-        if !job.schedule().is_cronjob() {
+        if job.schedule().is_job() {
             // Get kube config file
-            let kubernetes_config_file_path = match target.kubernetes.get_kubeconfig_file_path() {
-                Ok(file_path) => file_path,
-                Err(e) => {
-                    let safe_message = "Error when retrieving the kubeconfig file";
-                    target.kubernetes.logger().log(EngineEvent::Warning(
-                        event_details.clone(),
-                        EventMessage::new(
-                            safe_message.to_string(),
-                            Some(e.message(ErrorMessageVerbosity::FullDetails)),
-                        ),
-                    ));
-                    "".to_string()
-                }
-            };
+            let kubernetes_config_file_path = target.kubernetes.get_kubeconfig_file_path()?;
             let job_pod_selector = format!("job-name={}", job.kube_service_name());
             let kube_pod_api: Api<Pod> = Api::namespaced(target.kube.clone(), target.environment.namespace());
 
@@ -305,6 +292,45 @@ where
                 }
                 job_creation_iterations += 1;
             }
+        }
+
+        // Cronjob have been installed, in order to trigger it, we need to create a job from the cronjob manually.
+        if job.is_cron_job() && job.is_force_trigger() {
+            let k8s_cronjob_api: Api<CronJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+            let k8s_job_api: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+            let cronjob = block_on(k8s_cronjob_api.get(&job.kube_service_name())).map_err(|err| {
+                EngineError::new_job_error(
+                    event_details.clone(),
+                    format!("Cannot get cronjob {}: {}", job.kube_service_name(), err),
+                )
+            })?;
+
+            let mut job_template = cronjob.spec.unwrap().job_template;
+            // For kube to automatically cleanup the job for us
+            job_template.spec.as_mut().unwrap().ttl_seconds_after_finished = Some(10);
+            let job_to_start = K8sJob {
+                metadata: job_template.metadata.unwrap(),
+                spec: job_template.spec,
+                status: None,
+            };
+            block_on(k8s_job_api.create(&PostParams::default(), &job_to_start)).map_err(|err| {
+                EngineError::new_job_error(event_details.clone(), format!("Cannot create job from cronjob: {}", err))
+            })?;
+
+            let job = block_on(await_condition(k8s_job_api, &job.kube_service_name(), is_job_terminated())).map_err(
+                |_err| {
+                    EngineError::new_job_error(event_details.clone(), "Cannot find job for terminated pod".to_string())
+                },
+            )?;
+
+            match job_status(&job.as_ref()) {
+                JobStatus::Success => Ok(()),
+                JobStatus::NotRunning | JobStatus::Running => unreachable!(),
+                JobStatus::Failure { reason, message } => {
+                    let msg = format!("Job failed to correctly run due to {} {}", reason, message);
+                    Err(EngineError::new_job_error(event_details.clone(), msg))
+                }
+            }?;
         }
 
         Ok(state)
