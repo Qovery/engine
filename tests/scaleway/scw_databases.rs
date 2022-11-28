@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::helpers;
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::common::Infrastructure;
-use crate::helpers::database::{database_test_environment, test_db};
+use crate::helpers::database::{database_test_environment, test_db, StorageSize};
 use crate::helpers::scaleway::{
     clean_environments, scw_default_infra_config, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
     SCW_SELF_HOSTED_DATABASE_DISK_TYPE, SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE, SCW_TEST_ZONE,
@@ -134,7 +134,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         // Check that we have actually 0 pods running for this db
         let app_name = format!("postgresql{}-0", environment.databases[0].name);
         let ret = get_pods(
-            context.clone(),
+            &infra_ctx,
             ProviderKind::Scw,
             environment.clone(),
             app_name.as_str(),
@@ -343,7 +343,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let database_name = format!("postgresql-{}-0", to_short_id(&environment_check.databases[0].long_id));
         let (ret, _) = is_pod_restarted_env(
-            context.clone(),
+            &infra_ctx,
             ProviderKind::Scw,
             environment_check,
             database_name.as_str(),
@@ -360,6 +360,43 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         }
 
         test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn test_oversized_volume() {
+    let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .SCALEWAY_TEST_CLUSTER_LONG_ID
+        .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
+    let context = context_for_resource(
+        secrets
+            .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+            .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+        cluster_id,
+    );
+    let environment = database_test_environment(&context);
+
+    engine_run_test(|| {
+        test_db(
+            context,
+            logger(),
+            environment,
+            secrets,
+            "13",
+            function_name!(),
+            DatabaseKind::Postgresql,
+            KubernetesKind::ScwKapsule,
+            DatabaseMode::CONTAINER,
+            false,
+            ClusterDomain::Default {
+                cluster_id: to_short_id(&cluster_id),
+            },
+            None,
+            StorageSize::OverSize,
+        )
     })
 }
 
@@ -383,6 +420,11 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
     let environment = database_test_environment(&context);
 
     engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
         test_db(
             context,
             logger(),
@@ -398,6 +440,7 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
                 cluster_id: to_short_id(&cluster_id),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }
@@ -563,6 +606,11 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
     let environment = database_test_environment(&context);
 
     engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
         test_db(
             context,
             logger(),
@@ -578,6 +626,7 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
                 cluster_id: to_short_id(&cluster_id),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }
@@ -663,6 +712,11 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
     let environment = database_test_environment(&context);
 
     engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
         test_db(
             context,
             logger(),
@@ -678,6 +732,7 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
                 cluster_id: to_short_id(&cluster_id),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }
@@ -750,6 +805,11 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
     let environment = database_test_environment(&context);
 
     engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
         test_db(
             context,
             logger(),
@@ -765,6 +825,7 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
                 cluster_id: to_short_id(&cluster_id),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }

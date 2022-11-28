@@ -3,7 +3,6 @@ extern crate bstr;
 extern crate passwords;
 extern crate scaleway_api_rs;
 
-use bstr::ByteSlice;
 use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
@@ -11,16 +10,11 @@ use dotenv::dotenv;
 use gethostname;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
-use std::io::{Error, ErrorKind, Write};
-use std::path::Path;
+use std::io::{Error, ErrorKind};
 
 use passwords::PasswordGenerator;
-use qovery_engine::cloud_provider::digitalocean::kubernetes::doks_api::get_do_kubeconfig_by_cluster_name;
-use retry::delay::Fibonacci;
-use retry::OperationResult;
+
 use std::env;
-use std::fs;
-use std::str::FromStr;
 use tracing::{info, warn};
 
 use crate::helpers::scaleway::{
@@ -32,18 +26,16 @@ use qovery_engine::build_platform::local_docker::LocalDocker;
 use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd;
 use qovery_engine::constants::{
-    AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, DIGITAL_OCEAN_SPACES_ACCESS_ID, DIGITAL_OCEAN_SPACES_SECRET_ID,
-    DIGITAL_OCEAN_TOKEN, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
+    AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SCALEWAY_ACCESS_KEY, SCALEWAY_DEFAULT_PROJECT_ID, SCALEWAY_SECRET_KEY,
 };
-use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
-use retry::Error::Operation;
+use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 use serde::{Deserialize, Serialize};
 
 extern crate time;
-use qovery_engine::cmd::command::{ExecutableCommand, QoveryCommand};
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
 use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
+use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::errors::CommandError;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use qovery_engine::io_models::context::{Context, Features, Metadata};
@@ -51,8 +43,6 @@ use qovery_engine::io_models::database::DatabaseMode::MANAGED;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
-use qovery_engine::models::scaleway::ScwZone;
-use qovery_engine::runtime::block_on;
 use qovery_engine::utilities::to_short_id;
 use time::Instant;
 use tracing_subscriber::EnvFilter;
@@ -127,6 +117,7 @@ pub fn logger() -> Box<dyn Logger> {
 pub struct FuncTestsSecrets {
     pub AWS_ACCESS_KEY_ID: Option<String>,
     pub AWS_DEFAULT_REGION: Option<String>,
+    pub AWS_EC2_DEFAULT_REGION: Option<String>,
     pub AWS_SECRET_ACCESS_KEY: Option<String>,
     pub AWS_TEST_CLUSTER_ID: Option<String>,
     pub AWS_EC2_TEST_CLUSTER_ID: Option<String>,
@@ -142,12 +133,6 @@ pub struct FuncTestsSecrets {
     pub CLOUDFLARE_TOKEN: Option<String>,
     pub CUSTOM_TEST_DOMAIN: Option<String>,
     pub DEFAULT_TEST_DOMAIN: Option<String>,
-    pub DIGITAL_OCEAN_SPACES_ACCESS_ID: Option<String>,
-    pub DIGITAL_OCEAN_SPACES_SECRET_ID: Option<String>,
-    pub DIGITAL_OCEAN_DEFAULT_REGION: Option<String>,
-    pub DIGITAL_OCEAN_TOKEN: Option<String>,
-    pub DIGITAL_OCEAN_TEST_CLUSTER_ID: Option<String>,
-    pub DIGITAL_OCEAN_TEST_ORGANIZATION_ID: Option<String>,
     pub DISCORD_API_URL: Option<String>,
     pub EKS_ACCESS_CIDR_BLOCKS: Option<String>,
     pub GITHUB_ACCESS_TOKEN: Option<String>,
@@ -230,6 +215,7 @@ impl FuncTestsSecrets {
         let empty_secrets = FuncTestsSecrets {
             AWS_ACCESS_KEY_ID: None,
             AWS_DEFAULT_REGION: None,
+            AWS_EC2_DEFAULT_REGION: None,
             AWS_SECRET_ACCESS_KEY: None,
             AWS_TEST_CLUSTER_ID: None,
             AWS_EC2_TEST_CLUSTER_ID: None,
@@ -245,12 +231,6 @@ impl FuncTestsSecrets {
             CLOUDFLARE_TOKEN: None,
             CUSTOM_TEST_DOMAIN: None,
             DEFAULT_TEST_DOMAIN: None,
-            DIGITAL_OCEAN_SPACES_ACCESS_ID: None,
-            DIGITAL_OCEAN_SPACES_SECRET_ID: None,
-            DIGITAL_OCEAN_DEFAULT_REGION: None,
-            DIGITAL_OCEAN_TOKEN: None,
-            DIGITAL_OCEAN_TEST_CLUSTER_ID: None,
-            DIGITAL_OCEAN_TEST_ORGANIZATION_ID: None,
             DISCORD_API_URL: None,
             EKS_ACCESS_CIDR_BLOCKS: None,
             GITHUB_ACCESS_TOKEN: None,
@@ -323,6 +303,7 @@ impl FuncTestsSecrets {
         FuncTestsSecrets {
             AWS_ACCESS_KEY_ID: Self::select_secret("AWS_ACCESS_KEY_ID", secrets.AWS_ACCESS_KEY_ID),
             AWS_DEFAULT_REGION: Self::select_secret("AWS_DEFAULT_REGION", secrets.AWS_DEFAULT_REGION),
+            AWS_EC2_DEFAULT_REGION: Self::select_secret("AWS_EC2_DEFAULT_REGION", secrets.AWS_EC2_DEFAULT_REGION),
             AWS_SECRET_ACCESS_KEY: Self::select_secret("AWS_SECRET_ACCESS_KEY", secrets.AWS_SECRET_ACCESS_KEY),
             AWS_TEST_ORGANIZATION_ID: Self::select_secret("AWS_TEST_ORGANIZATION_ID", secrets.AWS_TEST_ORGANIZATION_ID),
             AWS_TEST_ORGANIZATION_LONG_ID: Self::select_secret(
@@ -350,27 +331,6 @@ impl FuncTestsSecrets {
             CLOUDFLARE_TOKEN: Self::select_secret("CLOUDFLARE_TOKEN", secrets.CLOUDFLARE_TOKEN),
             CUSTOM_TEST_DOMAIN: Self::select_secret("CUSTOM_TEST_DOMAIN", secrets.CUSTOM_TEST_DOMAIN),
             DEFAULT_TEST_DOMAIN: Self::select_secret("DEFAULT_TEST_DOMAIN", secrets.DEFAULT_TEST_DOMAIN),
-            DIGITAL_OCEAN_SPACES_ACCESS_ID: Self::select_secret(
-                "DIGITAL_OCEAN_SPACES_ACCESS_ID",
-                secrets.DIGITAL_OCEAN_SPACES_ACCESS_ID,
-            ),
-            DIGITAL_OCEAN_SPACES_SECRET_ID: Self::select_secret(
-                "DIGITAL_OCEAN_SPACES_SECRET_ID",
-                secrets.DIGITAL_OCEAN_SPACES_SECRET_ID,
-            ),
-            DIGITAL_OCEAN_DEFAULT_REGION: Self::select_secret(
-                "DIGITAL_OCEAN_DEFAULT_REGION",
-                secrets.DIGITAL_OCEAN_DEFAULT_REGION,
-            ),
-            DIGITAL_OCEAN_TOKEN: Self::select_secret("DIGITAL_OCEAN_TOKEN", secrets.DIGITAL_OCEAN_TOKEN),
-            DIGITAL_OCEAN_TEST_ORGANIZATION_ID: Self::select_secret(
-                "DIGITAL_OCEAN_TEST_ORGANIZATION_ID",
-                secrets.DIGITAL_OCEAN_TEST_ORGANIZATION_ID,
-            ),
-            DIGITAL_OCEAN_TEST_CLUSTER_ID: Self::select_secret(
-                "DIGITAL_OCEAN_TEST_CLUSTER_ID",
-                secrets.DIGITAL_OCEAN_TEST_CLUSTER_ID,
-            ),
             DISCORD_API_URL: Self::select_secret("DISCORD_API_URL", secrets.DISCORD_API_URL),
             EKS_ACCESS_CIDR_BLOCKS: Self::select_secret("EKS_ACCESS_CIDR_BLOCKS", secrets.EKS_ACCESS_CIDR_BLOCKS),
             GITHUB_ACCESS_TOKEN: Self::select_secret("GITHUB_ACCESS_TOKEN", secrets.GITHUB_ACCESS_TOKEN),
@@ -541,196 +501,6 @@ fn curl_path(path: &str) -> bool {
     }
 }
 
-pub fn kubernetes_config_path(
-    context: Context,
-    provider_kind: Kind,
-    workspace_directory: &str,
-    secrets: FuncTestsSecrets,
-) -> Result<String, CommandError> {
-    let kubernetes_config_bucket_name = format!("qovery-kubeconfigs-{}", context.cluster_short_id());
-    let kubernetes_config_object_key = format!("{}.yaml", context.cluster_short_id());
-    let kubernetes_config_file_path =
-        format!("{}/kubernetes_config_{}", workspace_directory, context.cluster_short_id());
-
-    let _ = get_kubernetes_config_file(
-        context,
-        provider_kind,
-        kubernetes_config_bucket_name,
-        kubernetes_config_object_key,
-        kubernetes_config_file_path.clone(),
-        secrets,
-    )?;
-
-    Ok(kubernetes_config_file_path)
-}
-
-fn get_kubernetes_config_file<P>(
-    context: Context,
-    provider_kind: Kind,
-    kubernetes_config_bucket_name: String,
-    kubernetes_config_object_key: String,
-    file_path: P,
-    secrets: FuncTestsSecrets,
-) -> Result<fs::File, CommandError>
-where
-    P: AsRef<Path>,
-{
-    // return the file if it already exists and should use cache
-    if let Ok(f) = fs::File::open(file_path.as_ref()) {
-        return Ok(f);
-    };
-
-    let file_content_result = retry::retry(Fibonacci::from_millis(3000).take(5), || {
-        let file_content = match provider_kind {
-            Kind::Aws => {
-                let access_key_id = secrets.clone().AWS_ACCESS_KEY_ID.unwrap();
-                let secret_access_key = secrets.clone().AWS_SECRET_ACCESS_KEY.unwrap();
-
-                aws_s3_get_object(
-                    access_key_id.as_str(),
-                    secret_access_key.as_str(),
-                    kubernetes_config_bucket_name.as_str(),
-                    kubernetes_config_object_key.as_str(),
-                )
-            }
-            Kind::Do => {
-                let cluster_name = format!("qovery-{}", context.cluster_short_id());
-                let kubeconfig = match get_do_kubeconfig_by_cluster_name(
-                    secrets.clone().DIGITAL_OCEAN_TOKEN.unwrap().as_str(),
-                    cluster_name.as_str(),
-                ) {
-                    Ok(kubeconfig) => kubeconfig,
-                    Err(e) => return OperationResult::Retry(e),
-                };
-
-                match kubeconfig {
-                    None => Err(CommandError::new_from_safe_message("No kubeconfig found".to_string())),
-                    Some(file_content) => {
-                        let _ = "test";
-                        Ok(file_content)
-                    }
-                }
-            }
-            Kind::Scw => {
-                // TODO(benjaminch): refactor all of this properly
-                let zone = ScwZone::from_str(secrets.clone().SCALEWAY_DEFAULT_REGION.unwrap().as_str()).unwrap();
-                let project_id = secrets.clone().SCALEWAY_DEFAULT_PROJECT_ID.unwrap();
-                let secret_access_key = secrets.clone().SCALEWAY_SECRET_KEY.unwrap();
-
-                let configuration = scaleway_api_rs::apis::configuration::Configuration {
-                    api_key: Some(scaleway_api_rs::apis::configuration::ApiKey {
-                        key: secret_access_key,
-                        prefix: None,
-                    }),
-                    ..scaleway_api_rs::apis::configuration::Configuration::default()
-                };
-
-                let clusters_res = block_on(scaleway_api_rs::apis::clusters_api::list_clusters(
-                    &configuration,
-                    zone.region().to_string().as_str(),
-                    None,
-                    Some(project_id.as_str()),
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                ));
-
-                if let Err(e) = clusters_res {
-                    return OperationResult::Retry(CommandError::new(
-                        "Error while trying to get clusters".to_string(),
-                        Some(e.to_string()),
-                        None,
-                    ));
-                }
-
-                let clusters = clusters_res.unwrap();
-
-                if clusters.clusters.is_none() {
-                    return OperationResult::Retry(CommandError::new_from_safe_message(
-                        "Error while trying to get clusters".to_string(),
-                    ));
-                }
-
-                let clusters = clusters.clusters.unwrap();
-                let expected_test_server_tag = format!(
-                    "ClusterId={}",
-                    secrets
-                        .SCALEWAY_TEST_CLUSTER_ID
-                        .as_ref()
-                        .expect("SCALEWAY_TEST_CLUSTER_ID is not set")
-                );
-
-                for cluster in clusters.iter() {
-                    if cluster.tags.is_some() {
-                        for tag in cluster.tags.as_ref().unwrap().iter() {
-                            if tag.as_str() == expected_test_server_tag.as_str() {
-                                return match block_on(scaleway_api_rs::apis::clusters_api::get_cluster_kube_config(
-                                    &configuration,
-                                    zone.region().as_str(),
-                                    cluster.id.as_ref().unwrap().as_str(),
-                                )) {
-                                    Ok(res) => OperationResult::Ok(
-                                        base64::decode(res.content.unwrap())
-                                            .unwrap()
-                                            .to_str()
-                                            .unwrap()
-                                            .to_string(),
-                                    ),
-                                    Err(e) => {
-                                        let message_safe = "Error while trying to get clusters";
-                                        OperationResult::Retry(CommandError::new(
-                                            message_safe.to_string(),
-                                            Some(e.to_string()),
-                                            None,
-                                        ))
-                                    }
-                                };
-                            }
-                        }
-                    }
-                }
-
-                Err(CommandError::new_from_safe_message("Test cluster not found".to_string()))
-            }
-        };
-
-        match file_content {
-            Ok(file_content) => OperationResult::Ok(file_content),
-            Err(err) => OperationResult::Retry(err),
-        }
-    });
-
-    let file_content = match file_content_result {
-        Ok(file_content) => file_content,
-        Err(Operation { error, .. }) => return Err(error),
-        Err(retry::Error::Internal(msg)) => {
-            return Err(CommandError::new_from_safe_message(msg));
-        }
-    };
-
-    let mut kubernetes_config_file = fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(file_path.as_ref())
-        .map_err(|e| CommandError::new("Error opening kubeconfig file.".to_string(), Some(e.to_string()), None))?;
-    kubernetes_config_file
-        .write_all(file_content.as_bytes())
-        .map_err(|_| CommandError::new_from_safe_message("Error while trying to write into file.".to_string()))?;
-
-    // removes warning kubeconfig is (world/group) readable
-    let mut perms = fs::metadata(file_path.as_ref())
-        .map_err(|_| CommandError::new_from_safe_message("Error while trying to get file metadata.".to_string()))?
-        .permissions();
-    perms.set_readonly(false);
-    fs::set_permissions(file_path.as_ref(), perms)
-        .map_err(|_| CommandError::new_from_safe_message("Error while trying to set file permission.".to_string()))?;
-    Ok(kubernetes_config_file)
-}
-
 type KubernetesCredentials<'a> = Vec<(&'a str, &'a str)>;
 
 fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecrets) -> KubernetesCredentials {
@@ -738,29 +508,6 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
         Kind::Aws => vec![
             (AWS_ACCESS_KEY_ID, secrets.AWS_ACCESS_KEY_ID.as_ref().unwrap().as_str()),
             (AWS_SECRET_ACCESS_KEY, secrets.AWS_SECRET_ACCESS_KEY.as_ref().unwrap().as_str()),
-        ],
-        Kind::Do => vec![
-            (
-                DIGITAL_OCEAN_TOKEN,
-                secrets
-                    .DIGITAL_OCEAN_TOKEN
-                    .as_ref()
-                    .expect("DIGITAL_OCEAN_TOKEN is not set"),
-            ),
-            (
-                DIGITAL_OCEAN_SPACES_ACCESS_ID,
-                secrets
-                    .DIGITAL_OCEAN_SPACES_ACCESS_ID
-                    .as_ref()
-                    .expect("DIGITAL_OCEAN_SPACES_ACCESS_ID is not set"),
-            ),
-            (
-                DIGITAL_OCEAN_SPACES_SECRET_ID,
-                secrets
-                    .DIGITAL_OCEAN_SPACES_SECRET_ID
-                    .as_ref()
-                    .expect("DIGITAL_OCEAN_SPACES_SECRET_ID is not set"),
-            ),
         ],
         Kind::Scw => vec![
             (SCALEWAY_ACCESS_KEY, secrets.SCALEWAY_ACCESS_KEY.as_ref().unwrap().as_str()),
@@ -773,37 +520,8 @@ fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecret
     }
 }
 
-fn aws_s3_get_object(
-    access_key_id: &str,
-    secret_access_key: &str,
-    bucket_name: &str,
-    object_key: &str,
-) -> Result<String, CommandError> {
-    let local_path = format!("/tmp/{}", object_key); // FIXME: change hardcoded /tmp/
-
-    // gets an aws s3 object using aws-cli
-    // used as a failover when rusoto_s3 acts up
-    let s3_url = format!("s3://{}/{}", bucket_name, object_key);
-
-    let mut cmd = QoveryCommand::new(
-        "aws",
-        &["s3", "cp", &s3_url, &local_path],
-        &[
-            (AWS_ACCESS_KEY_ID, access_key_id),
-            (AWS_SECRET_ACCESS_KEY, secret_access_key),
-        ],
-    );
-
-    cmd.exec()
-        .map_err(|err| CommandError::new_from_safe_message(format!("{:?}", err)))?;
-    let s = fs::read_to_string(&local_path)
-        .map_err(|_| CommandError::new_from_safe_message("Error while trying to read file to string.".to_string()))?;
-
-    Ok(s)
-}
-
 pub fn is_pod_restarted_env(
-    context: Context,
+    infra_ctx: &InfrastructureContext,
     provider_kind: Kind,
     environment_check: EnvironmentRequest,
     pod_to_check: &str,
@@ -815,9 +533,10 @@ pub fn is_pod_restarted_env(
         to_short_id(&environment_check.long_id),
     );
 
-    let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
+    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+    assert!(kubeconfig.is_ok());
 
-    match kubernetes_config {
+    match kubeconfig {
         Ok(path) => {
             let restarted_database = cmd::kubectl::kubectl_exec_get_number_of_restart(
                 path.as_str(),
@@ -838,7 +557,7 @@ pub fn is_pod_restarted_env(
 }
 
 pub fn get_pods(
-    context: Context,
+    infra_ctx: &InfrastructureContext,
     provider_kind: Kind,
     environment_check: EnvironmentRequest,
     pod_to_check: &str,
@@ -850,10 +569,11 @@ pub fn get_pods(
         to_short_id(&environment_check.long_id),
     );
 
-    let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
+    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+    assert!(kubeconfig.is_ok());
 
     cmd::kubectl::kubectl_exec_get_pods(
-        kubernetes_config.unwrap().as_str(),
+        kubeconfig.unwrap().as_str(),
         Some(namespace_name.as_str()),
         Some(pod_to_check),
         get_cloud_provider_credentials(provider_kind, &secrets),
@@ -896,7 +616,7 @@ pub fn generate_cluster_id(region: &str) -> Uuid {
 }
 
 pub fn get_pvc(
-    context: Context,
+    infra_ctx: &InfrastructureContext,
     provider_kind: Kind,
     environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
@@ -907,9 +627,10 @@ pub fn get_pvc(
         to_short_id(&environment_check.long_id),
     );
 
-    let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
+    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+    assert!(kubeconfig.is_ok());
 
-    match kubernetes_config {
+    match kubeconfig {
         Ok(path) => {
             match kubectl_get_pvc(
                 path.as_str(),
@@ -920,12 +641,12 @@ pub fn get_pvc(
                 Err(e) => Err(e),
             }
         }
-        Err(e) => Err(e),
+        Err(e) => Err(CommandError::new_from_safe_message(e.to_string())),
     }
 }
 
 pub fn get_svc(
-    context: Context,
+    infra_ctx: &InfrastructureContext,
     provider_kind: Kind,
     environment_check: EnvironmentRequest,
     secrets: FuncTestsSecrets,
@@ -936,36 +657,21 @@ pub fn get_svc(
         to_short_id(&environment_check.long_id),
     );
 
-    let kubernetes_config = kubernetes_config_path(context, provider_kind.clone(), "/tmp", secrets.clone());
+    let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+    assert!(kubeconfig.is_ok());
 
-    match kubernetes_config {
+    match kubeconfig {
         Ok(path) => {
             match kubectl_get_svc(
                 path.as_str(),
                 namespace_name.as_str(),
                 get_cloud_provider_credentials(provider_kind, &secrets),
             ) {
-                Ok(pvc) => Ok(pvc),
+                Ok(svc) => Ok(svc),
                 Err(e) => Err(e),
             }
         }
-        Err(e) => Err(e),
-    }
-}
-
-pub fn _db_fqnd(db: Database) -> String {
-    match db.publicly_accessible {
-        true => db.fqdn,
-        false => match db.mode == MANAGED {
-            true => format!("{}-dns", to_short_id(&db.long_id)),
-            false => match db.kind {
-                DatabaseKind::Postgresql => "postgresqlpostgres",
-                DatabaseKind::Mysql => "mysqlmysqldatabase",
-                DatabaseKind::Mongodb => "mongodbmymongodb",
-                DatabaseKind::Redis => "redismyredis-master",
-            }
-            .to_string(),
-        },
+        Err(e) => Err(CommandError::new_from_safe_message(e.to_string())),
     }
 }
 
@@ -1065,10 +771,6 @@ pub fn db_infos(
 pub fn db_disk_type(provider_kind: Kind, database_mode: DatabaseMode) -> String {
     match provider_kind {
         Kind::Aws => "gp2",
-        Kind::Do => match database_mode {
-            MANAGED => "",
-            DatabaseMode::CONTAINER => "",
-        },
         Kind::Scw => match database_mode {
             MANAGED => SCW_MANAGED_DATABASE_DISK_TYPE,
             DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
@@ -1084,10 +786,6 @@ pub fn db_instance_type(provider_kind: Kind, db_kind: DatabaseKind, database_mod
             DatabaseKind::Mysql => "db.t3.micro",
             DatabaseKind::Postgresql => "db.t3.micro",
             DatabaseKind::Redis => "cache.t3.micro",
-        },
-        Kind::Do => match database_mode {
-            MANAGED => "",
-            DatabaseMode::CONTAINER => "",
         },
         Kind::Scw => match database_mode {
             MANAGED => SCW_MANAGED_DATABASE_INSTANCE_TYPE,

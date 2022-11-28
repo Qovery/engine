@@ -447,9 +447,15 @@ pub fn session_is_sticky(url: Url, host: String, max_age: u32) -> bool {
     let http_response = http_request_result.expect("cannot retrieve HTTP request result");
 
     is_ok &= match http_response.headers().get("Set-Cookie") {
-        None => false,
+        None => {
+            error!("Unable to get http response 'Set-Cookie' header");
+            false
+        }
         Some(value) => match value.to_str() {
-            Err(_) => false,
+            Err(_) => {
+                error!("Unable to parse {:?}", value);
+                false
+            }
             Ok(s) => s.contains("INGRESSCOOKIE_QOVERY=") && s.contains(format!("Max-Age={}", max_age).as_str()),
         },
     };

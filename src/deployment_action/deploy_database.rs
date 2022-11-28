@@ -21,6 +21,8 @@ use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use serde::Deserialize;
 
+use crate::cmd::kubectl::kubectl_get_pvc;
+use crate::cmd::structs::PVCItem;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use std::path::PathBuf;
 use std::thread;
@@ -523,6 +525,50 @@ where
 }
 
 // For Container database
+fn is_pvc_bound(
+    target: &DeploymentTarget,
+    event_details: EventDetails,
+    db_sanitized_name: String,
+) -> Result<(), EngineError> {
+    let kubeconfig_path = target.kubernetes.get_kubeconfig_file_path()?;
+    let namespace = target.environment.namespace();
+    let creds = target.kubernetes.cloud_provider().credentials_environment_variables();
+    match kubectl_get_pvc(&kubeconfig_path, namespace, creds.clone()) {
+        Ok(pvcs) => match pvcs.items {
+            None => Err(EngineError::new_k8s_enable_to_get_pvc_for_database(
+                event_details,
+                CommandError::new_from_safe_message("Unable to get pvcs".to_string()),
+            )),
+            Some(pvcs) => {
+                let pvc_name = format!("data-{}-0", db_sanitized_name);
+                let pvc = pvcs
+                    .iter()
+                    .filter(|pvc| pvc.metadata.name == pvc_name)
+                    .collect::<Vec<&PVCItem>>();
+                if pvc.len() != 1 {
+                    return Err(EngineError::new_k8s_enable_to_get_pvc_for_database(
+                        event_details,
+                        CommandError::new_from_safe_message(format!("Unable to get pvc for db {}", db_sanitized_name)),
+                    ));
+                };
+
+                match pvc[0].status.phase.to_lowercase().as_str() {
+                    "bound" => Ok(()),
+                    _ => Err(EngineError::new_k8s_cannot_bound_pvc_for_database(
+                        event_details,
+                        CommandError::new_from_safe_message(format!(
+                            "Can't bound PVC for database {}",
+                            db_sanitized_name
+                        )),
+                        db_sanitized_name.as_str(),
+                    )),
+                }
+            }
+        },
+        Err(e) => Err(EngineError::new_k8s_enable_to_get_pvc_for_database(event_details, e)),
+    }
+}
+
 impl<C: CloudProvider, T: DatabaseType<C, Container>> DeploymentAction for Database<C, Container, T>
 where
     Database<C, Container, T>: ToTeraContext,
@@ -548,7 +594,12 @@ where
                 chart,
             );
 
-            helm.on_create(target)?;
+            if let Err(e) = helm.on_create(target) {
+                return match is_pvc_bound(target, event_details.clone(), self.as_service().sanitized_name()) {
+                    Ok(_) => Err(e),
+                    Err(err) => Err(err),
+                };
+            };
 
             delete_pending_service(
                 target.kubernetes.get_kubeconfig_file_path()?.as_str(),

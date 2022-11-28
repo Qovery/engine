@@ -260,9 +260,6 @@ impl Job {
                 ScwAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
             )?),
-            Kind::Do => {
-                unimplemented!("DO is not implemented")
-            }
         };
 
         Ok(service)

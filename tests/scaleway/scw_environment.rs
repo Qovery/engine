@@ -3,9 +3,7 @@ use crate::helpers::common::Infrastructure;
 use crate::helpers::environment::session_is_sticky;
 use crate::helpers::scaleway::scw_default_infra_config;
 use crate::helpers::scaleway::{clean_environments, SCW_TEST_ZONE};
-use crate::helpers::utilities::{
-    context_for_resource, engine_run_test, get_pods, init, kubernetes_config_path, logger, FuncTestsSecrets,
-};
+use crate::helpers::utilities::{context_for_resource, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
 use crate::helpers::utilities::{get_pvc, is_pod_restarted_env};
 use ::function_name::named;
 use qovery_engine::cloud_provider::Kind;
@@ -189,13 +187,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let ret = get_pods(
-            context.clone(),
-            Kind::Scw,
-            environment.clone(),
-            selector.as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(&infra_ctx, Kind::Scw, environment.clone(), selector.as_str(), secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -203,13 +195,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
-        let ret = get_pods(
-            context.clone(),
-            Kind::Scw,
-            environment.clone(),
-            selector.as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(&infra_ctx, Kind::Scw, environment.clone(), selector.as_str(), secrets.clone());
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
@@ -219,13 +205,7 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
         let result = environment.deploy_environment(&env_action, &infra_ctx_resume);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let ret = get_pods(
-            context.clone(),
-            Kind::Scw,
-            environment.clone(),
-            selector.as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(&infra_ctx, Kind::Scw, environment.clone(), selector.as_str(), secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -407,7 +387,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
         let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        match get_pvc(context.clone(), Kind::Scw, environment.clone(), secrets.clone()) {
+        match get_pvc(&infra_ctx, Kind::Scw, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
@@ -457,13 +437,7 @@ fn deploy_a_working_environment_and_pause_it() {
         let result = environment.deploy_environment(&ea, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let ret = get_pods(
-            context.clone(),
-            Kind::Scw,
-            environment.clone(),
-            selector.as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(&infra_ctx, Kind::Scw, environment.clone(), selector.as_str(), secrets.clone());
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -471,13 +445,7 @@ fn deploy_a_working_environment_and_pause_it() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // Check that we have actually 0 pods running for this app
-        let ret = get_pods(
-            context.clone(),
-            Kind::Scw,
-            environment.clone(),
-            selector.as_str(),
-            secrets.clone(),
-        );
+        let ret = get_pods(&infra_ctx, Kind::Scw, environment.clone(), selector.as_str(), secrets.clone());
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
@@ -487,7 +455,7 @@ fn deploy_a_working_environment_and_pause_it() {
         let result = environment.deploy_environment(&ea, &infra_ctx_resume);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let ret = get_pods(context, Kind::Scw, environment.clone(), selector.as_str(), secrets);
+        let ret = get_pods(&infra_ctx, Kind::Scw, environment.clone(), selector.as_str(), secrets);
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -559,7 +527,7 @@ fn scaleway_kapsule_redeploy_same_app() {
         let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(matches!(result, TransactionResult::Ok));
 
-        match get_pvc(context.clone(), Kind::Scw, environment.clone(), secrets.clone()) {
+        match get_pvc(&infra_ctx, Kind::Scw, environment.clone(), secrets.clone()) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{}Gi", storage_size)
@@ -568,24 +536,14 @@ fn scaleway_kapsule_redeploy_same_app() {
         };
 
         let app_name = format!("{}-0", &environment_check1.applications[0].name);
-        let (_, number) = is_pod_restarted_env(
-            context.clone(),
-            Kind::Scw,
-            environment_check1,
-            app_name.as_str(),
-            secrets.clone(),
-        );
+        let (_, number) =
+            is_pod_restarted_env(&infra_ctx, Kind::Scw, environment_check1, app_name.as_str(), secrets.clone());
 
         let result = environment_redeploy.deploy_environment(&env_action_redeploy, &infra_ctx_bis);
         assert!(matches!(result, TransactionResult::Ok));
 
-        let (_, number2) = is_pod_restarted_env(
-            context.clone(),
-            Kind::Scw,
-            environment_check2,
-            app_name.as_str(),
-            secrets.clone(),
-        );
+        let (_, number2) =
+            is_pod_restarted_env(&infra_ctx, Kind::Scw, environment_check2, app_name.as_str(), secrets.clone());
 
         // nothing changed in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
@@ -805,6 +763,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
+#[ignore] // TODO: fix main ingress to let it handle sticky session
 #[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
@@ -847,8 +806,8 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
         assert!(matches!(result, TransactionResult::Ok));
 
         // checking cookie is properly set on the app
-        let kubeconfig = kubernetes_config_path(infra_ctx.context().clone(), Kind::Scw, "/tmp", secrets.clone())
-            .expect("cannot get kubeconfig");
+        let kubeconfig = infra_ctx.kubernetes().get_kubeconfig_file_path();
+        assert!(kubeconfig.is_ok());
         let router = environment
             .routers
             .first()
@@ -863,7 +822,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
         // Sticky session is checked on ingress IP or hostname so we are not subjects to long DNS propagation making test less flacky.
         let ingress = retry::retry(Fibonacci::from_millis(15000).take(8), || {
             match qovery_engine::cmd::kubectl::kubectl_exec_get_external_ingress(
-                &kubeconfig,
+                kubeconfig.as_ref().unwrap().as_str(),
                 environment_domain.namespace(),
                 router.sanitized_name().as_str(),
                 infra_ctx.cloud_provider().credentials_environment_variables(),

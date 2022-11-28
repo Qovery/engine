@@ -5,7 +5,7 @@ use crate::io_models::Action;
 use crate::models;
 use crate::models::database::{Container, DatabaseError, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis};
 use crate::models::types::CloudProvider as CloudProviderTrait;
-use crate::models::types::{AWSEc2, VersionsNumber, AWS, DO, SCW};
+use crate::models::types::{AWSEc2, VersionsNumber, AWS, SCW};
 use chrono::{DateTime, Utc};
 use core::result::Result;
 use core::result::Result::{Err, Ok};
@@ -407,106 +407,6 @@ impl Database {
                     )?))
                 }
             }
-
-            (CPKind::Do, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
-                let db = models::database::Database::<DO, Container, PostgresSQL>::new(
-                    context,
-                    self.long_id,
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    version,
-                    self.created_at,
-                    self.fqdn.as_str(),
-                    self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    self.database_instance_type.as_str(),
-                    database_options.publicly_accessible,
-                    database_options.port,
-                    database_options,
-                    |transmitter| context.get_event_details(transmitter),
-                )?;
-
-                Ok(Box::new(db))
-            }
-            (CPKind::Do, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
-                let db = models::database::Database::<DO, Container, MySQL>::new(
-                    context,
-                    self.long_id,
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    version,
-                    self.created_at,
-                    self.fqdn.as_str(),
-                    self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    self.database_instance_type.as_str(),
-                    database_options.publicly_accessible,
-                    database_options.port,
-                    database_options,
-                    |transmitter| context.get_event_details(transmitter),
-                )?;
-
-                Ok(Box::new(db))
-            }
-            (CPKind::Do, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
-                let db = models::database::Database::<DO, Container, Redis>::new(
-                    context,
-                    self.long_id,
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    version,
-                    self.created_at,
-                    self.fqdn.as_str(),
-                    self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    self.database_instance_type.as_str(),
-                    database_options.publicly_accessible,
-                    database_options.port,
-                    database_options,
-                    |transmitter| context.get_event_details(transmitter),
-                )?;
-
-                Ok(Box::new(db))
-            }
-            (CPKind::Do, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
-                let db = models::database::Database::<DO, Container, MongoDB>::new(
-                    context,
-                    self.long_id,
-                    self.action.to_service_action(),
-                    self.name.as_str(),
-                    version,
-                    self.created_at,
-                    self.fqdn.as_str(),
-                    self.fqdn_id.as_str(),
-                    self.total_cpus.clone(),
-                    self.total_ram_in_mib,
-                    self.database_instance_type.as_str(),
-                    database_options.publicly_accessible,
-                    database_options.port,
-                    database_options,
-                    |transmitter| context.get_event_details(transmitter),
-                )?;
-
-                Ok(Box::new(db))
-            }
-            (CPKind::Do, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => Err(
-                DatabaseError::UnsupportedManagedMode(service::DatabaseType::PostgreSQL, DO::full_name().to_string()),
-            ),
-            (CPKind::Do, DatabaseKind::Mysql, DatabaseMode::MANAGED) => Err(DatabaseError::UnsupportedManagedMode(
-                service::DatabaseType::MySQL,
-                DO::full_name().to_string(),
-            )),
-            (CPKind::Do, DatabaseKind::Redis, DatabaseMode::MANAGED) => Err(DatabaseError::UnsupportedManagedMode(
-                service::DatabaseType::Redis,
-                DO::full_name().to_string(),
-            )),
-            (CPKind::Do, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => Err(DatabaseError::UnsupportedManagedMode(
-                service::DatabaseType::MongoDB,
-                DO::full_name().to_string(),
-            )),
 
             (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<SCW, Managed, PostgresSQL>::new(

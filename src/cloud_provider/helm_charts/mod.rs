@@ -226,7 +226,6 @@ pub fn get_helm_path_kubernetes_provider_sub_folder_name(helm_path: &HelmPath, c
             false => match provider_kind {
                 KubernetesKind::Eks => "aws",
                 KubernetesKind::Ec2 => "aws-ec2",
-                KubernetesKind::Doks => "digitalocean",
                 KubernetesKind::ScwKapsule => "scaleway",
             },
             true => "undefined-cloud-provider", // There is something weird
@@ -356,16 +355,6 @@ mod tests {
                 ),
                 chart_type_input: HelmChartType::CloudProviderSpecific(KubernetesKind::Eks),
                 expected_sub_folder: "aws".to_string(),
-            },
-            TestCase {
-                helm_path_input: HelmPath::new(
-                    HelmPathType::Chart,
-                    None,
-                    HelmChartDirectoryLocation::CloudProviderFolder,
-                    "whatever".to_string(),
-                ),
-                chart_type_input: HelmChartType::CloudProviderSpecific(KubernetesKind::Doks),
-                expected_sub_folder: "digitalocean".to_string(),
             },
             TestCase {
                 helm_path_input: HelmPath::new(

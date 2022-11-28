@@ -7,7 +7,6 @@ use retry::delay::Fibonacci;
 use retry::OperationResult;
 use serde::de::DeserializeOwned;
 
-use crate::cloud_provider::digitalocean::models::svc::DoLoadBalancer;
 use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::cmd::structs::{
@@ -90,85 +89,6 @@ where
 
     let output_string: String = output_vec.join("");
     Ok(output_string)
-}
-
-pub fn do_kubectl_exec_describe_service<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    service_name: &str,
-    input_envs: Vec<(&str, &str)>,
-) -> Result<DoLoadBalancer, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let mut envs = Vec::with_capacity(input_envs.len() + 1);
-    envs.push((KUBECONFIG, kubernetes_config.as_ref().to_str().unwrap()));
-    envs.extend(input_envs);
-
-    let mut output_vec: Vec<String> = Vec::with_capacity(20);
-    let mut err_output_vec: Vec<String> = Vec::with_capacity(20);
-    let cmd_args = vec!["get", "svc", "-n", namespace, service_name, "-o", "json"];
-    kubectl_exec_with_output(cmd_args.clone(), envs.clone(), &mut |line| output_vec.push(line), &mut |line| {
-        err_output_vec.push(line)
-    })?;
-
-    let output_string: String = output_vec.join("\n");
-    let err_output_string: String = output_vec.join("\n");
-
-    match serde_json::from_str::<DoLoadBalancer>(output_string.as_str()) {
-        Ok(x) => Ok(x),
-        Err(err) => Err(CommandError::new_from_command_line(
-            format!("Error while executing kubectl command: {:?}", err),
-            "kubectl".to_string(),
-            cmd_args.into_iter().map(|a| a.to_string()).collect(),
-            envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
-            Some(output_string.to_string()),
-            Some(err_output_string),
-        )),
-    }
-}
-
-// Get ip external ingress
-pub fn do_kubectl_exec_get_external_ingress_ip<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    selector: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<Option<String>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    match do_kubectl_exec_describe_service(kubernetes_config, namespace, selector, envs) {
-        Ok(result) => {
-            if result.status.load_balancer.ingress.is_empty() {
-                return Ok(None);
-            }
-
-            Ok(Some(result.status.load_balancer.ingress.first().unwrap().ip.clone()))
-        }
-        Err(e) => Err(e),
-    }
-}
-
-pub fn do_kubectl_exec_get_loadbalancer_id<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    service_name: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<Option<String>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    match do_kubectl_exec_describe_service(kubernetes_config, namespace, service_name, envs) {
-        Ok(result) => {
-            if result.status.load_balancer.ingress.is_empty() {
-                return Ok(None);
-            }
-
-            Ok(Some(result.metadata.annotations.kubernetes_digitalocean_com_load_balancer_id))
-        }
-        Err(e) => Err(e),
-    }
 }
 
 pub fn kubectl_exec_get_external_ingress_hostname<P>(

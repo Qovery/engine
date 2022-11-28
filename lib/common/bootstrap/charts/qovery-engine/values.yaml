@@ -1,7 +1,3 @@
-# Default values for qovery-engine.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
-
 image:
   repository: qoveryrd/engine
   pullPolicy: IfNotPresent
@@ -16,8 +12,15 @@ imagePullSecrets: []
 
 autoscaler:
   enabled: false
-  min_replicas: 1
-  max_replicas: 10
+  minReplicas: 1
+  maxReplicas: 10
+  averageValue: 0.5
+
+overprovisionning:
+  enabled: false
+  # specify the number of over provisioned engine pods
+  # Set the number of replicas depending on the node size (to define how many node overprovidsionned you want)
+  replicas: 2
 
 labels:
   app: qovery-engine
@@ -42,7 +45,7 @@ volumes:
     path: /var/lib/docker
 
 buildContainer:
-  enable: true
+  enabled: true
   image: docker
   tag: 20.10.14-dind
 
@@ -57,7 +60,8 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
-podSecurityContext: {}
+podSecurityContext:
+  {}
   # fsGroup: 2000
 
 securityContext:
@@ -71,7 +75,8 @@ securityContext:
 
 engineResources: {}
 
-buildResources: {}
+buildResources:
+  {}
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following

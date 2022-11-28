@@ -623,6 +623,10 @@ pub enum Tag {
     K8sValidateRequiredCPUandBurstableError,
     /// K8sErrorCopySecret: represents an error while copying secret from one namespace to another
     K8sErrorCopySecret,
+    /// K8sCannotGetPVC: represents an error while executing a kubectl command to get PVCs
+    K8sCannotGetPVCs,
+    /// K8sCannotGetPVC: represents an error while trying to create a PVC and it can't be bound
+    K8sCannotBoundPVC,
     /// CannotFindRequiredBinary: represents an error where a required binary is not found on the system.
     CannotFindRequiredBinary,
     /// SubnetsCountShouldBeEven: represents an error where subnets count should be even to have as many public than private subnets.
@@ -2743,6 +2747,40 @@ impl EngineError {
         );
 
         EngineError::new(event_details, Tag::HelmHistoryError, message, Some(raw_error), None, None)
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_enable_to_get_pvc_for_database(event_details: EventDetails, error: CommandError) -> EngineError {
+        EngineError::new(event_details, Tag::K8sCannotGetPVCs, error.to_string(), Some(error), None, None)
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_cannot_bound_pvc_for_database(
+        event_details: EventDetails,
+        error: CommandError,
+        database_name: &str,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::K8sCannotBoundPVC,
+            error.to_string(),
+            Some(error),
+            None,
+            Some(format!(
+                "Database {} can't be bound. Please ensure you set a proper disk size.",
+                database_name
+            )),
+        )
     }
 
     /// Creates new error while trying to get any available VPC.

@@ -1,6 +1,0 @@
-apiVersion: v2
-name: container-registry-secret
-description: A Helm chart for Kubernetes allowing to create global container registry secrets allowing to pull images from private repositories. https://docs.digitalocean.com/products/container-registry/how-to/use-registry-docker-kubernetes/
-type: application
-version: 0.1.0
-appVersion: "0.1.0"

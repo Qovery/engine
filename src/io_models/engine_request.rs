@@ -6,13 +6,10 @@ use crate::build_platform::local_docker::LocalDocker;
 use crate::cloud_provider::aws::kubernetes::{ec2::EC2, eks::EKS};
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::aws::AWS;
-use crate::cloud_provider::digitalocean::kubernetes::DOKS;
-use crate::cloud_provider::digitalocean::DO;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::scaleway::kubernetes::Kapsule;
 use crate::cloud_provider::scaleway::Scaleway;
-use crate::container_registry::docr::DOCR;
 use crate::container_registry::ecr::ECR;
 use crate::container_registry::scaleway_container_registry::ScalewayCR;
 use crate::dns_provider::cloudflare::Cloudflare;
@@ -26,7 +23,6 @@ use crate::io_models::domain::Domain;
 use crate::io_models::environment::EnvironmentRequest;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
-use crate::models::digital_ocean::DoRegion;
 use crate::models::scaleway::ScwZone;
 use crate::{build_platform, cloud_provider, container_registry, dns_provider};
 use derivative::Derivative;
@@ -245,16 +241,6 @@ impl CloudProvider {
                 cluster_kind,
                 terraform_state_credentials,
             ))),
-            cloud_provider::Kind::Do => Some(Box::new(DO::new(
-                context,
-                self.long_id,
-                self.options.token.as_ref()?.as_str(),
-                self.options.spaces_access_id.as_ref()?.as_str(),
-                self.options.spaces_secret_key.as_ref()?.as_str(),
-                region,
-                self.name.as_str(),
-                terraform_state_credentials,
-            ))),
             cloud_provider::Kind::Scw => Some(Box::new(Scaleway::new(
                 context,
                 self.long_id,
@@ -311,23 +297,6 @@ impl Kubernetes {
                 serde_json::from_value::<cloud_provider::aws::kubernetes::Options>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 self.nodes_groups.clone(),
-                logger,
-                self.advanced_settings.clone(),
-            ) {
-                Ok(res) => Ok(Box::new(res)),
-                Err(e) => Err(e),
-            },
-            cloud_provider::kubernetes::Kind::Doks => match DOKS::new(
-                context.clone(),
-                self.long_id,
-                self.name.clone(),
-                self.version.clone(),
-                DoRegion::from_str(self.region.as_str()).unwrap(),
-                cloud_provider,
-                dns_provider,
-                self.nodes_groups.clone(),
-                serde_json::from_value::<cloud_provider::digitalocean::kubernetes::DoksOptions>(self.options.clone())
-                    .expect("What's wronnnnng -- JSON Options for digital ocean DOKS payload is not the expected one"),
                 logger,
                 self.advanced_settings.clone(),
             ) {
@@ -418,16 +387,6 @@ impl ContainerRegistry {
                     self.options.region.as_ref()?.as_str(),
                     logger,
                     tags,
-                )
-                .ok()?,
-            )),
-            container_registry::Kind::Docr => Some(Box::new(
-                DOCR::new(
-                    context,
-                    self.id.as_str(),
-                    self.long_id,
-                    self.name.as_str(),
-                    self.options.token.as_ref()?.as_str(),
                 )
                 .ok()?,
             )),

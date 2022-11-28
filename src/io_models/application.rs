@@ -9,9 +9,8 @@ use crate::models;
 use crate::models::application::{ApplicationError, ApplicationService};
 use crate::models::aws::{AwsAppExtraSettings, AwsStorageType};
 use crate::models::aws_ec2::{AwsEc2AppExtraSettings, AwsEc2StorageType};
-use crate::models::digital_ocean::{DoAppExtraSettings, DoStorageType};
 use crate::models::scaleway::{ScwAppExtraSettings, ScwStorageType};
-use crate::models::types::{AWSEc2, AWS, DO, SCW};
+use crate::models::types::{AWSEc2, AWS, SCW};
 use crate::utilities::to_short_id;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -254,24 +253,6 @@ impl Application {
                     )?))
                 }
             }
-            CPKind::Do => Ok(Box::new(models::application::Application::<DO>::new(
-                context,
-                self.long_id,
-                self.action.to_service_action(),
-                self.name.as_str(),
-                self.ports,
-                self.total_cpus,
-                self.cpu_burst,
-                self.total_ram_in_mib,
-                self.min_instances,
-                self.max_instances,
-                build,
-                self.storage.iter().map(|s| s.to_do_storage()).collect::<Vec<_>>(),
-                environment_variables,
-                self.advanced_settings,
-                DoAppExtraSettings {},
-                |transmitter| context.get_event_details(transmitter),
-            )?)),
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
                 context,
                 self.long_id,
@@ -458,18 +439,6 @@ impl Storage {
                 StorageType::Ssd => AwsEc2StorageType::GP2,
                 StorageType::FastSsd => AwsEc2StorageType::IO1,
             },
-            size_in_gib: self.size_in_gib,
-            mount_point: self.mount_point.clone(),
-            snapshot_retention_in_days: self.snapshot_retention_in_days,
-        }
-    }
-
-    pub fn to_do_storage(&self) -> crate::cloud_provider::models::Storage<DoStorageType> {
-        crate::cloud_provider::models::Storage {
-            id: self.id.clone(),
-            long_id: self.long_id,
-            name: self.name.clone(),
-            storage_type: DoStorageType::Standard,
             size_in_gib: self.size_in_gib,
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,

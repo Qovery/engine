@@ -5,10 +5,9 @@ use crate::io_models::Action;
 use crate::models;
 use crate::models::aws::AwsRouterExtraSettings;
 use crate::models::aws_ec2::AwsEc2RouterExtraSettings;
-use crate::models::digital_ocean::DoRouterExtraSettings;
 use crate::models::router::{RouterAdvancedSettings, RouterError, RouterService};
 use crate::models::scaleway::ScwRouterExtraSettings;
-use crate::models::types::{AWSEc2, AWS, DO, SCW};
+use crate::models::types::{AWSEc2, AWS, SCW};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -104,22 +103,6 @@ impl Router {
                         |transmitter| context.get_event_details(transmitter),
                     )?))
                 }
-            }
-            CPKind::Do => {
-                let router = Box::new(models::router::Router::<DO>::new(
-                    context,
-                    self.long_id,
-                    self.name.as_str(),
-                    self.action.to_service_action(),
-                    self.default_domain.as_str(),
-                    custom_domains,
-                    routes,
-                    self.sticky_sessions_enabled,
-                    DoRouterExtraSettings {},
-                    advanced_settings,
-                    |transmitter| context.get_event_details(transmitter),
-                )?);
-                Ok(router)
             }
             CPKind::Scw => {
                 let router = Box::new(models::router::Router::<SCW>::new(

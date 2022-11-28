@@ -1,440 +1,165 @@
 use crate::helpers::utilities::{
-    context_for_ec2, engine_run_test, generate_cluster_id, generate_id, logger, FuncTestsSecrets,
+    context_for_ec2, engine_run_test, generate_cluster_id, generate_id, init, logger, FuncTestsSecrets,
 };
+use function_name::named;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
-use qovery_engine::engine::InfrastructureContext;
-use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
-use qovery_engine::logger::Logger;
 use qovery_engine::transaction::{Transaction, TransactionResult};
 use qovery_engine::utilities::to_short_id;
+use tracing::{span, Level};
 
 use crate::helpers;
-use crate::helpers::aws::AWS_TEST_REGION;
+use crate::helpers::aws::AWS_EC2_TEST_REGION;
 use crate::helpers::aws_ec2::AWS_K3S_VERSION;
 use crate::helpers::common::{Cluster, ClusterDomain};
-use crate::helpers::database::test_db;
+use crate::helpers::database::{test_db, StorageSize};
 
 // By design, there is only one node instance for EC2 preventing to run in parallel database tests because of port clash.
 // This file aims to create a dedicated EC2 cluster for publicly exposed managed DB tests.
 
-#[derive(Clone)]
-#[allow(dead_code)]
-enum DbVersionsToTest {
-    AllSupported,
-    LatestPublicManaged,
-    LatestPrivateManaged,
-}
-
-#[allow(dead_code)]
-fn test_ec2_postgres(
-    context: Context,
-    logger: Box<dyn Logger>,
-    is_public: bool,
-    database_mode: DatabaseMode,
-    db_versions_to_test: &DbVersionsToTest,
-    secrets: FuncTestsSecrets,
-    cluster_domain: ClusterDomain,
-    infra_ctx: &InfrastructureContext,
-) {
-    let environment = helpers::database::database_test_environment(&context);
-
-    let test_name_accessibility = match is_public {
-        true => "public",
-        false => "private",
-    };
-    let test_name_mode = match database_mode {
-        DatabaseMode::MANAGED => "prod",
-        DatabaseMode::CONTAINER => "dev",
-    };
-
-    let postgres_versions_to_be_tested = match db_versions_to_test {
-        DbVersionsToTest::AllSupported => vec!["14", "13", "12", "11"],
-        DbVersionsToTest::LatestPublicManaged => vec!["14"],
-        DbVersionsToTest::LatestPrivateManaged => vec!["14"],
-    };
-    for postgres_version in postgres_versions_to_be_tested {
-        engine_run_test(|| {
-            test_db(
-                context.clone(),
-                logger.clone(),
-                environment.clone(),
-                secrets.clone(),
-                postgres_version,
-                format!(
-                    "{}_postgresql_v{}_deploy_a_working_{}_environment",
-                    test_name_accessibility, postgres_version, test_name_mode
-                )
-                .as_str(),
-                DatabaseKind::Postgresql,
-                KubernetesKind::Ec2,
-                database_mode.clone(),
-                is_public,
-                cluster_domain.clone(),
-                Some(infra_ctx),
-            )
-        })
-    }
-}
-
-#[allow(dead_code)]
-fn test_ec2_mongo(
-    context: Context,
-    logger: Box<dyn Logger>,
-    is_public: bool,
-    database_mode: DatabaseMode,
-    db_versions_to_test: &DbVersionsToTest,
-    secrets: FuncTestsSecrets,
-    cluster_domain: ClusterDomain,
-    infra_ctx: &InfrastructureContext,
-) {
-    let environment = helpers::database::database_test_environment(&context);
-
-    let test_name_accessibility = match is_public {
-        true => "public",
-        false => "private",
-    };
-    let test_name_mode = match database_mode {
-        DatabaseMode::MANAGED => "prod",
-        DatabaseMode::CONTAINER => "dev",
-    };
-
-    let mongodb_versions_to_be_tested = match db_versions_to_test {
-        DbVersionsToTest::AllSupported => vec!["4.4", "4.2", "4.0"],
-        DbVersionsToTest::LatestPublicManaged => vec![],
-        DbVersionsToTest::LatestPrivateManaged => vec!["4.0"],
-    };
-    for mongodb_version in mongodb_versions_to_be_tested {
-        engine_run_test(|| {
-            test_db(
-                context.clone(),
-                logger.clone(),
-                environment.clone(),
-                secrets.clone(),
-                mongodb_version,
-                format!(
-                    "{}_mongodb_v{}_deploy_a_working_{}_environment",
-                    test_name_accessibility, mongodb_version, test_name_mode
-                )
-                .as_str(),
-                DatabaseKind::Mongodb,
-                KubernetesKind::Ec2,
-                database_mode.clone(),
-                is_public,
-                cluster_domain.clone(),
-                Some(infra_ctx),
-            )
-        })
-    }
-}
-
-#[allow(dead_code)]
-fn test_ec2_mysql(
-    context: Context,
-    logger: Box<dyn Logger>,
-    is_public: bool,
-    database_mode: DatabaseMode,
-    db_versions_to_test: &DbVersionsToTest,
-    secrets: FuncTestsSecrets,
-    cluster_domain: ClusterDomain,
-    infra_ctx: &InfrastructureContext,
-) {
-    let environment = helpers::database::database_test_environment(&context);
-
-    let test_name_accessibility = match is_public {
-        true => "public",
-        false => "private",
-    };
-    let test_name_mode = match database_mode {
-        DatabaseMode::MANAGED => "prod",
-        DatabaseMode::CONTAINER => "dev",
-    };
-
-    let mysql_versions_to_be_tested = match db_versions_to_test {
-        DbVersionsToTest::AllSupported => vec!["8.0", "5.7"],
-        DbVersionsToTest::LatestPublicManaged => vec!["8.0"],
-        DbVersionsToTest::LatestPrivateManaged => vec!["8.0"],
-    };
-    for mysql_version in mysql_versions_to_be_tested {
-        engine_run_test(|| {
-            test_db(
-                context.clone(),
-                logger.clone(),
-                environment.clone(),
-                secrets.clone(),
-                mysql_version,
-                format!(
-                    "{}_mysql_v{}_deploy_a_working_{}_environment",
-                    test_name_accessibility, mysql_version, test_name_mode
-                )
-                .as_str(),
-                DatabaseKind::Mysql,
-                KubernetesKind::Ec2,
-                database_mode.clone(),
-                is_public,
-                cluster_domain.clone(),
-                Some(infra_ctx),
-            )
-        })
-    }
-}
-
-#[allow(dead_code)]
-fn test_ec2_redis(
-    context: Context,
-    logger: Box<dyn Logger>,
-    is_public: bool,
-    database_mode: DatabaseMode,
-    db_versions_to_test: &DbVersionsToTest,
-    secrets: FuncTestsSecrets,
-    cluster_domain: ClusterDomain,
-    infra_ctx: &InfrastructureContext,
-) {
-    let environment = helpers::database::database_test_environment(&context);
-
-    let test_name_accessibility = match is_public {
-        true => "public",
-        false => "private",
-    };
-    let test_name_mode = match database_mode {
-        DatabaseMode::MANAGED => "prod",
-        DatabaseMode::CONTAINER => "dev",
-    };
-
-    let redis_versions_to_be_tested = match db_versions_to_test {
-        DbVersionsToTest::AllSupported => vec!["7", "6", "5"],
-        DbVersionsToTest::LatestPublicManaged => vec![],
-        DbVersionsToTest::LatestPrivateManaged => vec!["6"],
-    };
-    for redis_version in redis_versions_to_be_tested {
-        engine_run_test(|| {
-            test_db(
-                context.clone(),
-                logger.clone(),
-                environment.clone(),
-                secrets.clone(),
-                redis_version,
-                format!(
-                    "{}_redis_v{}_deploy_a_working_{}_environment",
-                    test_name_accessibility, redis_version, test_name_mode
-                )
-                .as_str(),
-                DatabaseKind::Redis,
-                KubernetesKind::Ec2,
-                database_mode.clone(),
-                is_public,
-                cluster_domain.clone(),
-                Some(infra_ctx),
-            )
-        })
-    }
-}
-
 #[allow(dead_code)]
 fn test_ec2_database(
+    test_name: &str,
     database_mode: DatabaseMode,
     database_kind: DatabaseKind,
     is_public: bool,
-    db_versions_to_test: DbVersionsToTest,
+    db_version: &str,
 ) {
-    let logger = logger();
-    let organization_id = generate_id();
-    let cluster_id = generate_cluster_id(AWS_TEST_REGION.to_aws_format());
-    let context = context_for_ec2(organization_id, cluster_id);
+    engine_run_test(|| {
+        init();
 
-    // create dedicated EC2 cluster:
-    let secrets = FuncTestsSecrets::new();
-    let attributed_domain = secrets
-        .DEFAULT_TEST_DOMAIN
-        .as_ref()
-        .expect("DEFAULT_TEST_DOMAIN must be set")
-        .to_string();
-    let cluster_domain = ClusterDomain::QoveryOwnedDomain {
-        cluster_id: to_short_id(&cluster_id),
-        domain: attributed_domain,
-    };
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
 
-    let infra_ctx = AWS::docker_cr_engine(
-        &context,
-        logger.clone(),
-        AWS_TEST_REGION.to_aws_format(),
-        Kind::Ec2,
-        AWS_K3S_VERSION.to_string(),
-        &cluster_domain,
-        None,
-        1,
-        1,
-        EngineLocation::QoverySide,
-    );
+        let logger = logger();
+        let organization_id = generate_id();
+        let cluster_id = generate_cluster_id(AWS_EC2_TEST_REGION.to_aws_format());
+        let context = context_for_ec2(organization_id, cluster_id);
 
-    let mut deploy_tx = Transaction::new(&infra_ctx).unwrap();
-    assert!(deploy_tx.create_kubernetes().is_ok());
-    assert!(matches!(deploy_tx.commit(), TransactionResult::Ok));
+        // create dedicated EC2 cluster:
+        let secrets = FuncTestsSecrets::new();
+        let attributed_domain = secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN must be set")
+            .to_string();
+        let cluster_domain = ClusterDomain::QoveryOwnedDomain {
+            cluster_id: to_short_id(&cluster_id),
+            domain: attributed_domain,
+        };
 
-    match database_kind {
-        DatabaseKind::Postgresql => test_ec2_postgres(
+        let infra_ctx = AWS::docker_cr_engine(
+            &context,
+            logger.clone(),
+            AWS_EC2_TEST_REGION.to_aws_format(),
+            Kind::Ec2,
+            AWS_K3S_VERSION.to_string(),
+            &cluster_domain,
+            None,
+            1,
+            1,
+            EngineLocation::QoverySide,
+        );
+
+        let mut deploy_tx = Transaction::new(&infra_ctx).unwrap();
+        assert!(deploy_tx.create_kubernetes().is_ok());
+        assert!(matches!(deploy_tx.commit(), TransactionResult::Ok));
+        let environment = helpers::database::database_test_environment(&context);
+
+        test_db(
             context,
             logger.clone(),
-            is_public,
-            database_mode,
-            &db_versions_to_test,
+            environment,
             secrets,
-            cluster_domain,
-            &infra_ctx,
-        ),
-        DatabaseKind::Mysql => test_ec2_mysql(
-            context,
-            logger.clone(),
+            db_version,
+            test_name,
+            database_kind,
+            KubernetesKind::Ec2,
+            database_mode.clone(),
             is_public,
-            database_mode,
-            &db_versions_to_test,
-            secrets,
             cluster_domain,
-            &infra_ctx,
-        ),
-        DatabaseKind::Mongodb => test_ec2_mongo(
-            context,
-            logger.clone(),
-            is_public,
-            database_mode,
-            &db_versions_to_test,
-            secrets,
-            cluster_domain,
-            &infra_ctx,
-        ),
-        DatabaseKind::Redis => test_ec2_redis(
-            context,
-            logger.clone(),
-            is_public,
-            database_mode,
-            &db_versions_to_test,
-            secrets,
-            cluster_domain,
-            &infra_ctx,
-        ),
-    };
-
-    // Delete
-    let mut delete_tx = Transaction::new(&infra_ctx).unwrap();
-    assert!(delete_tx.delete_kubernetes().is_ok());
-    assert!(matches!(delete_tx.commit(), TransactionResult::Ok));
+            Some(&infra_ctx),
+            StorageSize::NormalSize,
+        )
+    })
 }
 
 #[cfg(feature = "test-aws-ec2-managed-services")]
+#[named]
 #[test]
 fn test_public_postgres_managed_dbs() {
-    test_ec2_database(
-        DatabaseMode::MANAGED,
-        DatabaseKind::Postgresql,
-        true,
-        DbVersionsToTest::LatestPublicManaged,
-    );
+    test_ec2_database(function_name!(), DatabaseMode::MANAGED, DatabaseKind::Postgresql, true, "13")
 }
 
 #[cfg(feature = "test-aws-ec2-managed-services")]
+#[named]
 #[test]
 fn test_public_mysql_managed_dbs() {
-    test_ec2_database(
-        DatabaseMode::MANAGED,
-        DatabaseKind::Mysql,
-        true,
-        DbVersionsToTest::LatestPublicManaged,
-    );
+    test_ec2_database(function_name!(), DatabaseMode::MANAGED, DatabaseKind::Mysql, true, "8.0")
 }
 
 #[cfg(feature = "test-aws-ec2-managed-services")]
+#[named]
 #[test]
 fn test_private_postgres_managed_dbs() {
-    test_ec2_database(
-        DatabaseMode::MANAGED,
-        DatabaseKind::Postgresql,
-        false,
-        DbVersionsToTest::AllSupported,
-    );
+    test_ec2_database(function_name!(), DatabaseMode::MANAGED, DatabaseKind::Postgresql, false, "13")
 }
 
 #[cfg(feature = "test-aws-ec2-managed-services")]
+#[named]
 #[test]
 fn test_private_mysql_managed_dbs() {
-    test_ec2_database(
-        DatabaseMode::MANAGED,
-        DatabaseKind::Mysql,
-        false,
-        DbVersionsToTest::AllSupported,
-    );
+    test_ec2_database(function_name!(), DatabaseMode::MANAGED, DatabaseKind::Mysql, false, "8.0")
 }
 
 #[cfg(feature = "test-aws-ec2-managed-services")]
+#[named]
 #[test]
 fn test_private_mongodb_managed_dbs() {
-    test_ec2_database(
-        DatabaseMode::MANAGED,
-        DatabaseKind::Mongodb,
-        false,
-        DbVersionsToTest::LatestPrivateManaged,
-    );
+    test_ec2_database(function_name!(), DatabaseMode::MANAGED, DatabaseKind::Mongodb, false, "4.4")
 }
 
 #[cfg(feature = "test-aws-ec2-managed-services")]
+#[named]
 #[test]
 fn test_private_redis_managed_dbs() {
-    test_ec2_database(
-        DatabaseMode::MANAGED,
-        DatabaseKind::Redis,
-        false,
-        DbVersionsToTest::LatestPrivateManaged,
-    );
+    test_ec2_database(function_name!(), DatabaseMode::MANAGED, DatabaseKind::Redis, false, "6")
 }
 
 #[cfg(feature = "test-aws-ec2-self-hosted")]
+// #[named]
 #[test]
 #[ignore = "Public containered DBs are not supported on EC2, it's a known limitation"]
 fn test_public_containered_dbs() {
-    // test_ec2_database(DatabaseMode::CONTAINER, true, DbVersionsToTest::Latest);
+    // test_ec2_database(function_name!(), DatabaseMode::CONTAINER, true, DbVersionsToTest::Latest);
 }
 
 #[cfg(feature = "test-aws-ec2-self-hosted")]
+#[named]
 #[test]
 fn test_private_postgres_containered_dbs() {
-    test_ec2_database(
-        DatabaseMode::CONTAINER,
-        DatabaseKind::Postgresql,
-        false,
-        DbVersionsToTest::AllSupported,
-    );
+    test_ec2_database(function_name!(), DatabaseMode::CONTAINER, DatabaseKind::Postgresql, false, "13")
 }
 
 #[cfg(feature = "test-aws-ec2-self-hosted")]
+#[named]
 #[test]
 fn test_private_mysql_containered_dbs() {
-    test_ec2_database(
-        DatabaseMode::CONTAINER,
-        DatabaseKind::Mysql,
-        false,
-        DbVersionsToTest::AllSupported,
-    );
+    test_ec2_database(function_name!(), DatabaseMode::CONTAINER, DatabaseKind::Mysql, false, "8.0")
 }
 
 #[cfg(feature = "test-aws-ec2-self-hosted")]
+#[named]
 #[test]
 fn test_private_mongodb_containered_dbs() {
-    test_ec2_database(
-        DatabaseMode::CONTAINER,
-        DatabaseKind::Mongodb,
-        false,
-        DbVersionsToTest::AllSupported,
-    );
+    test_ec2_database(function_name!(), DatabaseMode::CONTAINER, DatabaseKind::Mongodb, false, "4.4")
 }
 
 #[cfg(feature = "test-aws-ec2-self-hosted")]
+#[named]
 #[test]
 fn test_private_redis_containered_dbs() {
-    test_ec2_database(
-        DatabaseMode::CONTAINER,
-        DatabaseKind::Redis,
-        false,
-        DbVersionsToTest::AllSupported,
-    );
+    test_ec2_database(function_name!(), DatabaseMode::CONTAINER, DatabaseKind::Redis, false, "6")
 }

@@ -5,7 +5,7 @@ use const_format::formatcp;
 use qovery_engine::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
+use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind};
 use qovery_engine::cloud_provider::models::NodeGroups;
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
@@ -25,8 +25,9 @@ use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
 pub const AWS_TEST_REGION: AwsRegion = AwsRegion::EuWest3;
+pub const AWS_EC2_TEST_REGION: AwsRegion = AwsRegion::UsEast2;
 pub const AWS_KUBERNETES_MAJOR_VERSION: u8 = 1;
-pub const AWS_KUBERNETES_MINOR_VERSION: u8 = 21;
+pub const AWS_KUBERNETES_MINOR_VERSION: u8 = 22;
 pub const AWS_KUBERNETES_VERSION: &str = formatcp!("{}.{}", AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION);
 pub const AWS_DATABASE_INSTANCE_TYPE: &str = "db.t3.micro";
 pub const AWS_DATABASE_DISK_TYPE: &str = "gp2";
@@ -52,6 +53,30 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
         secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
         secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),
         secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
+        logger,
+        hashmap! {},
+    )
+    .unwrap()
+}
+
+pub fn container_registry_ecr_ec2(context: &Context, logger: Box<dyn Logger>) -> ECR {
+    let secrets = FuncTestsSecrets::new();
+    if secrets.AWS_ACCESS_KEY_ID.is_none()
+        || secrets.AWS_SECRET_ACCESS_KEY.is_none()
+        || secrets.AWS_EC2_DEFAULT_REGION.is_none()
+    {
+        error!("Please check your Vault connectivity (token/address) or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_EC2_DEFAULT_REGION environment variables are set");
+        std::process::exit(1)
+    }
+
+    ECR::new(
+        context.clone(),
+        "default-ecr-ec2-registry-Qovery Test",
+        Uuid::new_v4(),
+        "ea69qe62xaw3wjai",
+        secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
+        secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),
+        secrets.AWS_EC2_DEFAULT_REGION.unwrap().as_str(),
         logger,
         hashmap! {},
     )
@@ -89,7 +114,11 @@ impl Cluster<AWS, Options> for AWS {
         engine_location: EngineLocation,
     ) -> InfrastructureContext {
         // use ECR
-        let container_registry = Box::new(container_registry_ecr(context, logger.clone()));
+        let container_registry = match kubernetes_kind {
+            Kind::Eks => Box::new(container_registry_ecr(context, logger.clone())),
+            Kind::Ec2 => Box::new(container_registry_ecr_ec2(context, logger.clone())),
+            _ => panic!("Invalid cluster kind {}", kubernetes_kind),
+        };
 
         // use LocalDocker
         let build_platform = Box::new(build_platform_local_docker(context));
@@ -123,8 +152,16 @@ impl Cluster<AWS, Options> for AWS {
 
     fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind) -> Box<AWS> {
         let secrets = FuncTestsSecrets::new();
-        let aws_region =
-            AwsRegion::from_str(secrets.AWS_DEFAULT_REGION.unwrap().as_str()).expect("AWS region not supported");
+        let aws_region = match kubernetes_kind {
+            Kind::Eks => {
+                AwsRegion::from_str(secrets.AWS_DEFAULT_REGION.unwrap().as_str()).expect("AWS region not supported")
+            }
+            Kind::Ec2 => {
+                AwsRegion::from_str(secrets.AWS_EC2_DEFAULT_REGION.unwrap().as_str()).expect("AWS region not supported")
+            }
+            _ => panic!("Invalid cluster kind {}", kubernetes_kind),
+        };
+
         Box::new(AWS::new(
             context.clone(),
             Uuid::new_v4(),

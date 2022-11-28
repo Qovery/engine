@@ -10,8 +10,7 @@ use crate::models::aws::AwsAppExtraSettings;
 use crate::models::aws_ec2::AwsEc2AppExtraSettings;
 use crate::models::container::{ContainerError, ContainerService};
 use crate::models::scaleway::ScwAppExtraSettings;
-use crate::models::types::CloudProvider as CP;
-use crate::models::types::{AWSEc2, AWS, DO, SCW};
+use crate::models::types::{AWSEc2, AWS, SCW};
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_ecr::EcrClient;
@@ -351,12 +350,6 @@ impl Container {
                         |transmitter| context.get_event_details(transmitter),
                     )?)
                 }
-            }
-            CPKind::Do => {
-                return Err(ContainerError::InvalidConfig(format!(
-                    "Unsupported cloud provider {} for container service",
-                    DO::full_name()
-                )));
             }
             CPKind::Scw => Box::new(models::container::Container::<SCW>::new(
                 context,

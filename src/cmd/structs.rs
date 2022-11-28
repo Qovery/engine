@@ -448,12 +448,20 @@ pub struct PVCItem {
     pub kind: String,
     pub metadata: PVCMetadata,
     pub spec: PVCSpec,
+    pub status: PVCStatus,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PVCMetadata {
     pub resource_version: String,
+    pub name: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PVCStatus {
+    pub phase: String,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -463,6 +471,7 @@ pub struct PVCSpec {
     pub resources: PVCResources,
     pub storage_class_name: String,
     pub volume_mode: String,
+    #[serde(default)]
     pub volume_name: String,
 }
 

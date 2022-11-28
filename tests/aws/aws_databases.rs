@@ -1,7 +1,7 @@
 use crate::helpers;
 use crate::helpers::aws::{aws_default_infra_config, AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
 use crate::helpers::common::{ClusterDomain, Infrastructure};
-use crate::helpers::database::{test_db, test_pause_managed_db};
+use crate::helpers::database::{test_db, test_pause_managed_db, StorageSize};
 use crate::helpers::utilities::{context_for_resource, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
 use crate::helpers::utilities::{generate_id, get_svc_name, is_pod_restarted_env};
 use ::function_name::named;
@@ -123,7 +123,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
 
         // Check that we have actually 0 pods running for this db
         let app_name = format!("postgresql{}-0", environment.databases[0].name);
-        let ret = get_pods(context, Kind::Aws, environment, app_name.as_str(), secrets);
+        let ret = get_pods(&infra_ctx, Kind::Aws, environment, app_name.as_str(), secrets);
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
@@ -317,13 +317,50 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
         // TO CHECK: DATABASE SHOULDN'T BE RESTARTED AFTER A REDEPLOY
         let database_name = format!("postgresql{}-0", to_short_id(&environment_check.databases[0].long_id));
-        let (ret, _) = is_pod_restarted_env(context, Kind::Aws, environment_check, database_name.as_str(), secrets);
+        let (ret, _) = is_pod_restarted_env(&infra_ctx, Kind::Aws, environment_check, database_name.as_str(), secrets);
         assert!(ret);
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);
         assert!(matches!(ret, TransactionResult::Ok | TransactionResult::Error(_)));
 
         test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn test_oversized_volume() {
+    let secrets = FuncTestsSecrets::new();
+    let cluster_id = secrets
+        .AWS_TEST_CLUSTER_LONG_ID
+        .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
+    let context = context_for_resource(
+        secrets
+            .AWS_TEST_ORGANIZATION_LONG_ID
+            .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+        cluster_id,
+    );
+    let environment = helpers::database::database_test_environment(&context);
+
+    engine_run_test(|| {
+        test_db(
+            context,
+            logger(),
+            environment,
+            secrets,
+            "13",
+            function_name!(),
+            DatabaseKind::Postgresql,
+            KubernetesKind::Eks,
+            DatabaseMode::CONTAINER,
+            false,
+            ClusterDomain::Default {
+                cluster_id: to_short_id(&cluster_id),
+            },
+            None,
+            StorageSize::OverSize,
+        )
     })
 }
 
@@ -354,6 +391,11 @@ pub fn test_postgresql_configuration(
     let environment = helpers::database::database_test_environment(&context);
 
     engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
         test_db(
             context,
             logger(),
@@ -369,6 +411,7 @@ pub fn test_postgresql_configuration(
                 cluster_id: cluster_id.to_string(),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }
@@ -598,6 +641,11 @@ pub fn test_mongodb_configuration(
     let environment = helpers::database::database_test_environment(&context);
 
     engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
         test_db(
             context,
             logger(),
@@ -613,6 +661,7 @@ pub fn test_mongodb_configuration(
                 cluster_id: cluster_id.to_string(),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }
@@ -719,6 +768,11 @@ pub fn test_mysql_configuration(
     let environment = helpers::database::database_test_environment(&context);
 
     engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
         test_db(
             context,
             logger(),
@@ -734,6 +788,7 @@ pub fn test_mysql_configuration(
                 cluster_id: cluster_id.to_string(),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }
@@ -824,6 +879,11 @@ pub fn test_redis_configuration(
     let environment = helpers::database::database_test_environment(&context);
 
     engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
         test_db(
             context,
             logger(),
@@ -839,6 +899,7 @@ pub fn test_redis_configuration(
                 cluster_id: cluster_id.to_string(),
             },
             None,
+            StorageSize::NormalSize,
         )
     })
 }

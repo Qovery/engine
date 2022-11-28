@@ -14,7 +14,6 @@ impl From<KindModel> for Kind {
     fn from(kind: KindModel) -> Self {
         match kind {
             KindModel::Aws => Kind::Aws,
-            KindModel::Do => Kind::Do,
             KindModel::Scw => Kind::Scw,
         }
     }
