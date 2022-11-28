@@ -16,19 +16,25 @@ RUN curl -L -o /bin/kubectl https://dl.k8s.io/release/v1.21.0/bin/linux/amd64/ku
 RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | TAG="0.10.7" bash -s -- --to /bin
 RUN curl -s https://raw.githubusercontent.com/rancher/k3d/main/install.sh | TAG="v5.2.2" bash
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
-unzip awscliv2.zip && \
-./aws/install
+    unzip awscliv2.zip && \
+    ./aws/install
+
 # sscache
 RUN sccache_release=$(curl --silent "https://api.github.com/repos/Qovery/sccache-bin/releases/latest" | jq -r .tag_name) && \
     curl -sLo /usr/bin/sccache https://github.com/Qovery/sccache-bin/releases/download/${sccache_release}/sccache && \
     chmod 755 /usr/bin/sccache
 
+# jUnit
 RUN cargo install cargo2junit
 RUN rustup component add rustfmt clippy
 ENV PATH="/root/.cargo/bin/:${PATH}"
 
+# unused dependencies
+RUN cargo install cargo-machete
+
 ENV RUSTC_WRAPPER=/usr/bin/sccache
 
+# Install bin dependencies
 ADD load.sh /
 ADD bin_versions /
 
@@ -41,8 +47,8 @@ RUN echo "disable_checkpoint = true" > ~/.terraform.rc
 ENV DIND_COMMIT ed89041433a031cafc0a0f19cfe573c31688d377
 
 RUN set -eux; \
-	curl -so /usr/local/bin/dind "https://raw.githubusercontent.com/docker/docker/${DIND_COMMIT}/hack/dind"; \
-	chmod +x /usr/local/bin/dind
+    curl -so /usr/local/bin/dind "https://raw.githubusercontent.com/docker/docker/${DIND_COMMIT}/hack/dind"; \
+    chmod +x /usr/local/bin/dind
 ADD dockerd-entrypoint.sh /usr/bin/dockerd-entrypoint.sh
 
 VOLUME /var/lib/docker

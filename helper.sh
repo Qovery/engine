@@ -30,7 +30,9 @@ export RUNNING_ON_CI=0
 export ENGINE_BRANCH=""
 export DEFAULT_ENGINE_IMAGE_NAME="qoveryrd/engine"
 
-## Main functions
+##################
+# Main functions #
+##################
 
 function print_help() {
   echo "Usage: $0 <option>"
@@ -58,7 +60,9 @@ function print_title() {
   echo "###################################################"
 }
 
-## Git functions
+#################
+# Git functions #
+#################
 
 function check_untracked_files() {
   if [ $RUNNING_ON_CI -eq 0 ] ; then
@@ -96,7 +100,9 @@ function generate_image_tag() {
   echo "${gitlab_commit_id:0:7}"
 }
 
-## Build and image functions
+#############################
+# Build and image functions #
+#############################
 
 # shellcheck disable=SC2120
 function build() { ## Build engine app with engine lib
@@ -444,7 +450,7 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
 }
 
 # shellcheck disable=SC2120
-function lint() { ## run linter
+function lint() { ## Run rust linter
   nb_treads=$2
   export RUST_LOG=info
   use_sccache
@@ -457,6 +463,17 @@ function lint() { ## run linter
   export RUSTC_WRAPPER=""
   export RUSTC_WORKSPACE_WRAPPER="sccache"
   cargo clippy --all --all-features --tests --locked -- -D warnings || (echo "Solve your clippy errors to succeed"; exit 1)
+}
+
+function unused_dependencies() { ## Check rust unused dependencies
+  export RUST_LOG=info
+  use_sccache
+
+  set -e
+
+  print_title "CARGO CHECK UNUSED DEPENDENCIES"
+  # https://blog.benj.me/2022/04/27/cargo-machete/
+  find . -name Cargo.toml ! -path '*/.cargo/*' -exec cargo machete {} \;
 }
 
 function await_docker() {
@@ -613,6 +630,9 @@ prepare_tests)
   ;;
 lint)
   lint
+  ;;
+unused_dependencies)
+  unused_dependencies
   ;;
 install_hook)
   install_hook

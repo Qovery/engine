@@ -1,7 +1,7 @@
 # Here is the gitlab CI config for the Qovery Engine
 # You can find the kind of instance you can set per job here: https://www.notion.so/qovery/Gitlab-CI-f50907ac7a6b4990a973222250e92111
 
-image: public.ecr.aws/r3m4q3r9/qovery-ci:5af4dcc
+image: public.ecr.aws/r3m4q3r9/qovery-ci:c4b9c3b
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
@@ -32,6 +32,7 @@ build-and-lint-code:
   retry: 0
   script:
     - ./helper.sh lint
+    - ./helper.sh unused_dependencies
     - ./helper.sh build
   when: always
   tags:

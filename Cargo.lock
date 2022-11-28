@@ -59,20 +59,15 @@ dependencies = [
  "chrono",
  "crossbeam-channel",
  "ctrlc",
- "derivative",
  "dirs",
  "dotenv",
  "lazy_static",
  "nats",
- "openssl",
- "openssl-sys",
  "prometheus",
  "qovery-engine",
  "regex",
  "reqwest",
  "retry",
- "scopeguard",
- "serde",
  "serde_json",
  "tokio",
  "tracing",
@@ -2276,15 +2271,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
-name = "openssl-src"
-version = "111.24.0+1.1.1s"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3498f259dab01178c6228c6b00dcef0ed2a2d5e20d648c017861227773ea4abd"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "openssl-sys"
 version = "0.9.78"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2293,7 +2279,6 @@ dependencies = [
  "autocfg",
  "cc",
  "libc",
- "openssl-src",
  "pkg-config",
  "vcpkg",
 ]
