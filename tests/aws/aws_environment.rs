@@ -1216,3 +1216,75 @@ fn deploy_cronjob_on_aws_eks() {
         "".to_string()
     })
 }
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[test]
+fn deploy_cronjob_force_trigger_on_aws_eks() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = "deploy_cronjob_on_aws_eks");
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = aws_default_infra_config(&context, logger.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        environment.applications = vec![];
+        environment.jobs = vec![Job {
+            long_id: Uuid::new_v4(),
+            name: "job test #####||||*_-(".to_string(),
+            action: Action::Create,
+            schedule: JobSchedule::Cron {
+                schedule: "*/10 * * * *".to_string(),
+            },
+            source: JobSource::Image {
+                registry: DockerHub {
+                    long_id: Uuid::new_v4(),
+                    url: Url::parse("https://docker.io").unwrap(),
+                    credentials: None,
+                },
+                image: "library/debian".to_string(),
+                tag: "bullseye".to_string(),
+            },
+            max_nb_restart: 1,
+            max_duration_in_sec: 30,
+            default_port: Some(8080),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "echo starting; sleep 10; echo started".to_string(),
+            ],
+            entrypoint: None,
+            force_trigger: true,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 100,
+            ram_limit_in_mib: 100,
+            environment_vars: Default::default(),
+            advanced_settings: Default::default(),
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}

@@ -55,6 +55,8 @@ spec:
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
           env:
+            - name: IGNORE_DOCKER_HOST_CHECK
+              value: "{{ if .Values.buildContainer.enabled }}false{{ else }}true{{ end }}"
             {{ range $key, $value := .Values.environmentVariables -}}
             - name: "{{ $key }}"
               valueFrom:
