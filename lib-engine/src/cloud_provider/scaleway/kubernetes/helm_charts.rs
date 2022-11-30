@@ -3,7 +3,7 @@ use crate::cloud_provider::helm::{
     ChartSetValue, ClusterAgentContext, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
-use crate::cloud_provider::helm_charts::ToCommonHelmChart;
+use crate::cloud_provider::helm_charts::{HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAppName, QoveryEngine};
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
@@ -367,7 +367,12 @@ pub fn scw_helm_charts(
     let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
     if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {
         qovery_cert_manager_webhook = Some(
-            QoveryCertManagerWebhookChart::new(chart_prefix_path, qovery_dns_config.clone()).to_common_helm_chart(),
+            QoveryCertManagerWebhookChart::new(
+                chart_prefix_path,
+                qovery_dns_config.clone(),
+                HelmChartResourcesConstraintType::ChartDefault,
+            )
+            .to_common_helm_chart(),
         );
     }
 

@@ -8,6 +8,8 @@ secret:
 
 resources:
   limits:
-    memory: 48Mi
+    cpu: set-by-engine-code
+    memory: set-by-engine-code
   requests:
-    memory: 48Mi
+    cpu: set-by-engine-code
+    memory: set-by-engine-code
