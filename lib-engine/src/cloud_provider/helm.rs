@@ -8,7 +8,6 @@ use crate::cmd::helm_utils::{
 };
 use crate::cmd::kubectl::{kubectl_delete_crash_looping_pods, kubectl_exec_delete_crd, kubectl_exec_get_events};
 use crate::cmd::structs::HelmHistoryRow;
-use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::{CommandError, ErrorMessageVerbosity};
 
 use semver::Version;
@@ -738,75 +737,6 @@ pub fn get_chart_for_cluster_agent(
     }
 
     Ok(cluster_agent)
-}
-
-// Cert manager
-pub fn get_chart_for_cert_manager_config(
-    dns_provider_config: &DnsProviderConfiguration,
-    chart_path: String,
-    lets_encrypt_email_report: String,
-    lets_encrypt_acme_url: String,
-    managed_dns_helm_format: String,
-) -> CommonChart {
-    let mut cert_manager_config = CommonChart {
-        chart_info: ChartInfo {
-            name: "cert-manager-configs".to_string(),
-            path: chart_path,
-            namespace: HelmChartNamespaces::CertManager,
-            // TODO: fix backup apply, it makes the chart deployment failed randomly
-            // backup_resources: Some(vec!["cert".to_string(), "issuer".to_string(), "clusterissuer".to_string()]),
-            values: vec![
-                ChartSetValue {
-                    key: "externalDnsProvider".to_string(),
-                    value: dns_provider_config.get_cert_manager_config_name(),
-                },
-                ChartSetValue {
-                    key: "acme.letsEncrypt.emailReport".to_string(),
-                    value: lets_encrypt_email_report,
-                },
-                ChartSetValue {
-                    key: "acme.letsEncrypt.acmeUrl".to_string(),
-                    value: lets_encrypt_acme_url,
-                },
-                ChartSetValue {
-                    key: "managedDns".to_string(),
-                    value: managed_dns_helm_format,
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
-    // add specific provider config
-    match dns_provider_config {
-        DnsProviderConfiguration::Cloudflare(x) => {
-            cert_manager_config.chart_info.values.push(ChartSetValue {
-                key: "provider.cloudflare.apiToken".to_string(),
-                value: x.cloudflare_api_token.clone(),
-            });
-            cert_manager_config.chart_info.values.push(ChartSetValue {
-                key: "provider.cloudflare.email".to_string(),
-                value: x.cloudflare_email.clone(),
-            })
-        }
-        DnsProviderConfiguration::QoveryDns(q) => {
-            cert_manager_config.chart_info.values_string.push(ChartSetValue {
-                key: "provider.pdns.apiPort".to_string(),
-                value: q.api_url_port.to_string(),
-            });
-            cert_manager_config.chart_info.values.push(ChartSetValue {
-                key: "provider.pdns.apiUrl".to_string(),
-                value: q.api_url_scheme_and_domain.to_string(),
-            });
-            cert_manager_config.chart_info.values.push(ChartSetValue {
-                key: "provider.pdns.apiKey".to_string(),
-                value: q.api_key.clone(),
-            });
-        }
-    };
-
-    cert_manager_config
 }
 
 #[cfg(test)]

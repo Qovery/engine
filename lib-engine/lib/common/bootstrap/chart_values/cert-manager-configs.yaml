@@ -1,0 +1,16 @@
+externalDnsProvider: set-by-engine-code
+managedDns: set-by-engine-code
+
+acme:
+  letsEncrypt:
+    emailReport: set-by-engine-code
+    acmeUrl: set-by-engine-code
+
+provider:
+  cloudflare:
+    apiToken: set-by-engine-code
+    email: set-by-engine-code
+  pdns:
+    apiPort: set-by-engine-code
+    apiUrl: set-by-engine-code
+    apiKey: set-by-engine-code

@@ -49,6 +49,7 @@ use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep,
 use crate::io_models::context::{Context, Features};
 use crate::io_models::domain::{ToHelmString, ToTerraformString};
 use crate::io_models::QoveryIdentifier;
+use crate::models::third_parties::LetsEncryptConfig;
 use crate::object_storage::s3::S3;
 use crate::runtime::block_on;
 use crate::secret_manager::vault::QVaultClient;
@@ -246,14 +247,6 @@ fn check_odd_subnets(
     }
 
     Ok((subnet_block.len() / 2) as usize)
-}
-
-fn lets_encrypt_url(context: &Context) -> String {
-    match context.is_test_cluster() {
-        true => "https://acme-staging-v02.api.letsencrypt.org/directory",
-        false => "https://acme-v02.api.letsencrypt.org/directory",
-    }
-    .to_string()
 }
 
 fn managed_dns_resolvers_terraform_format(dns_provider: &dyn DnsProvider) -> String {
@@ -464,7 +457,10 @@ fn tera_context(
     context.insert("dns_email_report", &options.tls_email_report);
 
     // TLS
-    context.insert("acme_server_url", &lets_encrypt_url(kubernetes.context()));
+    context.insert(
+        "acme_server_url",
+        LetsEncryptConfig::acme_url_for_given_usage(kubernetes.context().is_test_cluster()).as_str(),
+    );
 
     // Vault
     context.insert("vault_auth_method", "none");
@@ -1120,8 +1116,10 @@ fn create(
                     .root_domain()
                     .to_helm_format_string(),
                 external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
-                dns_email_report: options.tls_email_report.clone(),
-                acme_url: lets_encrypt_url(kubernetes.context()),
+                lets_encrypt_config: LetsEncryptConfig::new(
+                    options.tls_email_report.to_string(),
+                    kubernetes.context().is_test_cluster(),
+                ),
                 dns_provider_config: kubernetes.dns_provider().provider_configuration(),
                 disable_pleco: kubernetes.context().disable_pleco(),
                 cluster_advanced_settings: kubernetes.advanced_settings().clone(),
@@ -1164,8 +1162,10 @@ fn create(
                     .root_domain()
                     .to_helm_format_string(),
                 external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
-                dns_email_report: options.tls_email_report.clone(),
-                acme_url: lets_encrypt_url(kubernetes.context()),
+                lets_encrypt_config: LetsEncryptConfig::new(
+                    options.tls_email_report.to_string(),
+                    kubernetes.context().is_test_cluster(),
+                ),
                 dns_provider_config: kubernetes.dns_provider().provider_configuration(),
                 disable_pleco: kubernetes.context().disable_pleco(),
             };
