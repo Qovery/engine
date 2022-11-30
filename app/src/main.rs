@@ -31,6 +31,7 @@ use url::Url;
 use uuid::Uuid;
 
 use qovery_engine::cmd;
+use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine_task::environment_task::EnvironmentTask;
 use qovery_engine::engine_task::infrastructure_task::InfrastructureTask;
 use qovery_engine::engine_task::Task;
@@ -68,6 +69,7 @@ fn to_engine_task(
     workspace_root_dir: &str,
     lib_root_dir: &str,
     docker_tcp_socket: &Option<Url>,
+    docker: Docker,
     task_selector: &TaskSelector,
     logger: Box<dyn Logger>,
 ) -> Result<Box<dyn Task>, EngineError> {
@@ -80,6 +82,7 @@ fn to_engine_task(
                     workspace_root_dir.to_string(),
                     lib_root_dir.to_string(),
                     docker_tcp_socket.clone(),
+                    docker,
                     logger,
                 )))
             }
@@ -90,6 +93,7 @@ fn to_engine_task(
                     workspace_root_dir.to_string(),
                     lib_root_dir.to_string(),
                     docker_tcp_socket.clone(),
+                    docker,
                     logger,
                 )))
             }
@@ -361,6 +365,8 @@ pub fn main() -> io::Result<()> {
         }
         None => info!("docker host is not set"),
     };
+    // FIXME: Remove unwrap/expect
+    let docker = Docker::new(docker_host.clone()).expect("Can't init docker builder");
 
     let mode = if let (Ok(org), Ok(cp), Ok(r)) = (organization, cloud_provider, region) {
         info!("starting in cloud mode");
@@ -395,6 +401,7 @@ pub fn main() -> io::Result<()> {
                     test_cluster,
                     TaskSelector::Infrastructure(""),
                     docker_host,
+                    docker,
                 ),
                 "env" => using_json_path_parameter(
                     Box::new(logger),
@@ -404,6 +411,7 @@ pub fn main() -> io::Result<()> {
                     test_cluster,
                     TaskSelector::Environment(""),
                     docker_host,
+                    docker,
                 ),
                 _ => {
                     println!("Please set DEPLOY_FROM_FILE_KIND environment file to 'infra' or 'env'");
@@ -422,6 +430,7 @@ pub fn main() -> io::Result<()> {
             workspace_root_dir,
             lib_root_dir,
             docker_host,
+            docker,
             mode,
             task_selector,
         ),
@@ -437,6 +446,7 @@ pub fn using_json_path_parameter(
     test_cluster: bool,
     deployment_type: TaskSelector,
     docker_host: Option<Url>,
+    docker: Docker,
 ) -> Result<(), Error> {
     // check if file json config file exist
     if !Path::new(&deploy_from_file).exists() {
@@ -457,7 +467,14 @@ pub fn using_json_path_parameter(
                 })
                 .unwrap();
             req.test_cluster = test_cluster;
-            Box::new(EnvironmentTask::new(req, workspace_root_dir, lib_root_dir, docker_host, logger))
+            Box::new(EnvironmentTask::new(
+                req,
+                workspace_root_dir,
+                lib_root_dir,
+                docker_host,
+                docker,
+                logger,
+            ))
         }
         TaskSelector::Infrastructure(_) => {
             let mut req: InfrastructureEngineRequest = serde_json::from_reader(file)
@@ -472,6 +489,7 @@ pub fn using_json_path_parameter(
                 workspace_root_dir,
                 lib_root_dir,
                 docker_host,
+                docker,
                 logger,
             ))
         }
@@ -495,6 +513,7 @@ fn using_nats_server(
     workspace_root_dir: String,
     lib_root_dir: String,
     docker_host: Option<Url>,
+    docker: Docker,
     mode: Mode,
     task_selector: TaskSelector,
 ) -> Result<(), Error> {
@@ -543,6 +562,7 @@ fn using_nats_server(
             mode.clone(),
             workspace_root_dir.clone(),
             docker_host.clone(),
+            docker.clone(),
             lib_root_dir.clone(),
             engine_name.clone(),
             sig_term_tx.clone(),
@@ -559,6 +579,7 @@ fn using_nats_server(
             mode,
             workspace_root_dir,
             docker_host,
+            docker,
             lib_root_dir,
             engine_name,
             sig_term_tx.clone(),
@@ -593,6 +614,7 @@ fn spawn_task_poller(
     mode: Mode,
     workspace_root_dir: String,
     docker_host: Option<Url>,
+    docker: Docker,
     lib_root_dir: String,
     engine_name: String,
     sig_term_tx: Sender<bool>,
@@ -646,6 +668,7 @@ fn spawn_task_poller(
                 &workspace_root_dir,
                 &lib_root_dir,
                 &docker_host,
+                docker.clone(),
                 &task_selector,
                 logger.clone(),
             ) {

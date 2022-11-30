@@ -44,11 +44,9 @@ impl EnvironmentTask {
         workspace_root_dir: String,
         lib_root_dir: String,
         docker_host: Option<Url>,
+        docker: Docker,
         logger: Box<dyn Logger>,
     ) -> Self {
-        // FIXME: Remove unwrap/expect
-        let docker = Docker::new(docker_host.clone()).expect("Can't init docker builder");
-
         EnvironmentTask {
             workspace_root_dir,
             lib_root_dir,
