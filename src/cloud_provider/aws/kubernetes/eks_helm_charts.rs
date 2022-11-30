@@ -1,8 +1,8 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
-    get_chart_for_cert_manager_config, get_chart_for_cluster_agent, get_chart_for_shell_agent,
-    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, ChartValuesGenerated, ClusterAgentContext,
-    CommonChart, HelmAction, HelmChart, HelmChartNamespaces, ShellAgentContext,
+    get_chart_for_cluster_agent, get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo,
+    ChartSetValue, ChartValuesGenerated, ClusterAgentContext, CommonChart, HelmAction, HelmChart, HelmChartNamespaces,
+    ShellAgentContext,
 };
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::{HelmChartResourcesConstraintType, ToCommonHelmChart};
@@ -27,6 +27,7 @@ use crate::cloud_provider::aws::kubernetes::helm_charts::aws_vpc_cni_chart::{
     is_cni_old_version_installed, AwsVpcCniChart,
 };
 use crate::cloud_provider::aws::kubernetes::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
+use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
@@ -36,6 +37,7 @@ use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
+use crate::models::third_parties::LetsEncryptConfig;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AwsEksQoveryTerraformConfig {
@@ -70,8 +72,7 @@ pub struct EksChartsConfigPrerequisites {
     pub managed_dns_resolvers_terraform_format: String,
     pub managed_dns_root_domain_helm_format: String,
     pub external_dns_provider: String,
-    pub dns_email_report: String,
-    pub acme_url: String,
+    pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
     pub disable_pleco: bool,
     // qovery options form json input
@@ -401,13 +402,14 @@ datasources:
         ..Default::default()
     };
 
-    let cert_manager_config = get_chart_for_cert_manager_config(
+    // Cert Manager Configs
+    let cert_manager_config = CertManagerConfigsChart::new(
+        chart_prefix_path,
+        &chart_config_prerequisites.lets_encrypt_config,
         &chart_config_prerequisites.dns_provider_config,
-        chart_path("common/charts/cert-manager-configs"),
-        chart_config_prerequisites.dns_email_report.clone(),
-        chart_config_prerequisites.acme_url.clone(),
-        chart_config_prerequisites.managed_dns_helm_format.clone(),
-    );
+        chart_config_prerequisites.managed_dns_helm_format.to_string(),
+    )
+    .to_common_helm_chart();
 
     let nginx_ingress = CommonChart {
         chart_info: ChartInfo {
