@@ -2,8 +2,10 @@ use crate::cloud_provider::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces,
 };
 use crate::cloud_provider::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
+    HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
+    HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::dns_provider::qoverydns::QoveryDnsConfig;
 use crate::errors::CommandError;
 use kube::Client;
@@ -12,10 +14,15 @@ pub struct QoveryCertManagerWebhookChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
     qovery_dns_config: QoveryDnsConfig,
+    chart_resources: HelmChartResources,
 }
 
 impl QoveryCertManagerWebhookChart {
-    pub fn new(chart_prefix_path: Option<&str>, qovery_dns_config: QoveryDnsConfig) -> Self {
+    pub fn new(
+        chart_prefix_path: Option<&str>,
+        qovery_dns_config: QoveryDnsConfig,
+        chart_resources: HelmChartResourcesConstraintType,
+    ) -> Self {
         QoveryCertManagerWebhookChart {
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
@@ -27,6 +34,15 @@ impl QoveryCertManagerWebhookChart {
                 HelmChartDirectoryLocation::CommonFolder,
                 QoveryCertManagerWebhookChart::chart_name(),
             ),
+            chart_resources: match chart_resources {
+                HelmChartResourcesConstraintType::Constrained(r) => r,
+                HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
+                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
+                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(96),
+                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
+                    request_memory: KubernetesMemoryResourceUnit::MebiByte(96),
+                },
+            },
             qovery_dns_config,
         }
     }
@@ -56,6 +72,23 @@ impl ToCommonHelmChart for QoveryCertManagerWebhookChart {
                     ChartSetValue {
                         key: "certManager.namespace".to_string(),
                         value: HelmChartNamespaces::CertManager.to_string(),
+                    },
+                    // Resources
+                    ChartSetValue {
+                        key: "resources.limits.cpu".to_string(),
+                        value: self.chart_resources.limit_cpu.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "resources.limits.memory".to_string(),
+                        value: self.chart_resources.limit_memory.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "resources.requests.cpu".to_string(),
+                        value: self.chart_resources.request_cpu.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "resources.requests.memory".to_string(),
+                        value: self.chart_resources.request_memory.to_string(),
                     },
                 ],
                 ..Default::default()
@@ -91,7 +124,7 @@ mod tests {
     use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
-        HelmChartType, ToCommonHelmChart,
+        HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
     };
     use crate::dns_provider::qoverydns::QoveryDnsConfig;
     use std::env;
@@ -109,6 +142,7 @@ mod tests {
                 api_url_scheme_and_domain: "whatever".to_string(),
                 api_url_port: "whatever".to_string(),
             },
+            HelmChartResourcesConstraintType::ChartDefault,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -140,6 +174,7 @@ mod tests {
                 api_url_scheme_and_domain: "whatever".to_string(),
                 api_url_port: "whatever".to_string(),
             },
+            HelmChartResourcesConstraintType::ChartDefault,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -175,6 +210,7 @@ mod tests {
                 api_url_scheme_and_domain: "whatever".to_string(),
                 api_url_port: "whatever".to_string(),
             },
+            HelmChartResourcesConstraintType::ChartDefault,
         );
         let common_chart = chart.to_common_helm_chart();
 

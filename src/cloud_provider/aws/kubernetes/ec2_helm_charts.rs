@@ -205,7 +205,17 @@ pub fn ec2_aws_helm_charts(
     let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
     if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {
         qovery_cert_manager_webhook = Some(
-            QoveryCertManagerWebhookChart::new(chart_prefix_path, qovery_dns_config.clone()).to_common_helm_chart(),
+            QoveryCertManagerWebhookChart::new(
+                chart_prefix_path,
+                qovery_dns_config.clone(),
+                HelmChartResourcesConstraintType::Constrained(HelmChartResources {
+                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
+                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(32),
+                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
+                    request_memory: KubernetesMemoryResourceUnit::MebiByte(32),
+                }),
+            )
+            .to_common_helm_chart(),
         );
     }
 
