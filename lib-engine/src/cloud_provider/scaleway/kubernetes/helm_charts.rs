@@ -1,7 +1,6 @@
 use crate::cloud_provider::helm::{
     get_chart_for_cluster_agent, get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo,
-    ChartSetValue, ChartValuesGenerated, ClusterAgentContext, CommonChart, HelmAction, HelmChart, HelmChartNamespaces,
-    ShellAgentContext,
+    ChartSetValue, ClusterAgentContext, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::ToCommonHelmChart;
@@ -16,6 +15,7 @@ use crate::models::scaleway::{ScwRegion, ScwZone};
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
+use crate::cloud_provider::helm_charts::grafana_chart::{GrafanaAdminUser, GrafanaChart, GrafanaDatasources};
 use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
 use crate::cloud_provider::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiEncryptionType, LokiS3BucketConfiguration};
@@ -237,43 +237,25 @@ pub fn scw_helm_charts(
     // Kube state metrics
     let kube_state_metrics = KubeStateMetricsChart::new(chart_prefix_path).to_common_helm_chart();
 
-    let grafana_datasources = format!(
-        "
-datasources:
-  datasources.yaml:
-    apiVersion: 1
-    datasources:
-      - name: Prometheus
-        type: prometheus
-        url: \"{}:9090\"
-        access: proxy
-        isDefault: true
-      - name: PromLoki
-        type: prometheus
-        url: \"http://{}.{}.svc:3100/loki\"
-        access: proxy
-        isDefault: false
-      - name: Loki
-        type: loki
-        url: \"http://{}.{}.svc:3100\"
-      ",
-        prometheus_internal_url, &loki.chart_info.name, loki_namespace, &loki.chart_info.name, loki_namespace,
-    );
-
-    let grafana = CommonChart {
-        chart_info: ChartInfo {
-            name: "grafana".to_string(),
-            path: chart_path("common/charts/grafana"),
-            namespace: prometheus_namespace,
-            values_files: vec![chart_path("chart_values/grafana.yaml")],
-            yaml_files_content: vec![ChartValuesGenerated {
-                filename: "grafana_generated.yaml".to_string(),
-                yaml_content: grafana_datasources,
-            }],
-            ..Default::default()
+    // Grafana chart
+    let grafana = GrafanaChart::new(
+        chart_prefix_path,
+        GrafanaAdminUser::new(
+            chart_config_prerequisites.infra_options.grafana_admin_user.to_string(),
+            chart_config_prerequisites
+                .infra_options
+                .grafana_admin_password
+                .to_string(),
+        ),
+        GrafanaDatasources {
+            prometheus_internal_url,
+            loki_chart_name: loki.chart_info.name.to_string(),
+            loki_namespace: loki.chart_info.namespace.to_string(),
+            cloudwatch_config: None,
         },
-        ..Default::default()
-    };
+        "scw-sbv-ssd-0".to_string(), // TODO(benjaminch): introduce proper type here
+    )
+    .to_common_helm_chart();
 
     let cert_manager = CommonChart {
         chart_info: ChartInfo {
