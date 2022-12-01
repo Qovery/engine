@@ -30,6 +30,7 @@ use crate::cloud_provider::aws::kubernetes::helm_charts::cluster_autoscaler_char
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
+use crate::cloud_provider::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiEncryptionType, LokiS3BucketConfiguration};
 use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
@@ -246,38 +247,8 @@ pub fn eks_aws_helm_charts(
     let metrics_server = MetricsServerChart::new(chart_prefix_path, HelmChartResourcesConstraintType::ChartDefault)
         .to_common_helm_chart();
 
-    let kube_state_metrics = CommonChart {
-        chart_info: ChartInfo {
-            name: "kube-state-metrics".to_string(),
-            namespace: HelmChartNamespaces::Prometheus,
-            last_breaking_version_requiring_restart: Some(Version::new(4, 6, 0)),
-            path: chart_path("common/charts/kube-state-metrics"),
-            values: vec![
-                ChartSetValue {
-                    key: "prometheus.monitor.enabled".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "75m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "75m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "384Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "384Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // Kube state metrics
+    let kube_state_metrics = KubeStateMetricsChart::new(chart_prefix_path).to_common_helm_chart();
 
     let grafana_datasources = format!(
         "
