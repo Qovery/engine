@@ -188,24 +188,32 @@ pub fn scw_helm_charts(
     .to_common_helm_chart();
 
     // Promtail
-    let promtail = PromtailChart::new(chart_prefix_path, loki_kube_dns_name).to_common_helm_chart();
+    let promtail = match chart_config_prerequisites.ff_log_history_enabled {
+        false => None,
+        true => Some(PromtailChart::new(chart_prefix_path, loki_kube_dns_name).to_common_helm_chart()),
+    };
 
     // Loki
-    let loki = LokiChart::new(
-        chart_prefix_path,
-        LokiEncryptionType::None, // Scaleway does not support encryption yet.
-        loki_namespace,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .loki_log_retention_in_week,
-        LokiS3BucketConfiguration {
-            s3_config: Some(qovery_terraform_config.loki_storage_config_scaleway_s3),
-            use_path_style: true,
-            region: Some(chart_config_prerequisites.zone.region().to_string()),
-            ..Default::default()
-        },
-    )
-    .to_common_helm_chart();
+    let loki = match chart_config_prerequisites.ff_log_history_enabled {
+        false => None,
+        true => Some(
+            LokiChart::new(
+                chart_prefix_path,
+                LokiEncryptionType::None, // Scaleway does not support encryption yet.
+                loki_namespace,
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .loki_log_retention_in_week,
+                LokiS3BucketConfiguration {
+                    s3_config: Some(qovery_terraform_config.loki_storage_config_scaleway_s3),
+                    use_path_style: true,
+                    region: Some(chart_config_prerequisites.zone.region().to_string()),
+                    ..Default::default()
+                },
+            )
+            .to_common_helm_chart(),
+        ),
+    };
 
     /* Example to delete an old chart
     let old_prometheus_operator = PrometheusOperatorConfigChart {
@@ -218,24 +226,36 @@ pub fn scw_helm_charts(
     };*/
 
     // Kube prometheus stack
-    let kube_prometheus_stack = KubePrometheusStackChart::new(
-        chart_prefix_path,
-        "scw-sbv-ssd-0".to_string(),
-        prometheus_internal_url.to_string(),
-        prometheus_namespace,
-        true,
-    )
-    .to_common_helm_chart();
+    let kube_prometheus_stack = match chart_config_prerequisites.ff_metrics_history_enabled {
+        false => None,
+        true => Some(
+            KubePrometheusStackChart::new(
+                chart_prefix_path,
+                "scw-sbv-ssd-0".to_string(),
+                prometheus_internal_url.to_string(),
+                prometheus_namespace,
+                true,
+            )
+            .to_common_helm_chart(),
+        ),
+    };
 
     // Prometheus adapter
-    let prometheus_adapter =
-        PrometheusAdapterChart::new(chart_prefix_path, prometheus_internal_url.clone(), prometheus_namespace)
-            .to_common_helm_chart();
+    let prometheus_adapter = match chart_config_prerequisites.ff_metrics_history_enabled {
+        false => None,
+        true => Some(
+            PrometheusAdapterChart::new(chart_prefix_path, prometheus_internal_url.clone(), prometheus_namespace)
+                .to_common_helm_chart(),
+        ),
+    };
 
     // metric-server is built-in Scaleway cluster, no need to manage it
 
     // Kube state metrics
-    let kube_state_metrics = KubeStateMetricsChart::new(chart_prefix_path).to_common_helm_chart();
+    let kube_state_metrics = match chart_config_prerequisites.ff_metrics_history_enabled {
+        false => None,
+        true => Some(KubeStateMetricsChart::new(chart_prefix_path).to_common_helm_chart()),
+    };
 
     // Grafana chart
     let grafana = GrafanaChart::new(
@@ -249,8 +269,8 @@ pub fn scw_helm_charts(
         ),
         GrafanaDatasources {
             prometheus_internal_url,
-            loki_chart_name: loki.chart_info.name.to_string(),
-            loki_namespace: loki.chart_info.namespace.to_string(),
+            loki_chart_name: LokiChart::chart_name(),
+            loki_namespace: loki_namespace.to_string(),
             cloudwatch_config: None,
         },
         "scw-sbv-ssd-0".to_string(), // TODO(benjaminch): introduce proper type here
@@ -341,32 +361,35 @@ pub fn scw_helm_charts(
         ..Default::default()
     };
 
-    let pleco = CommonChart {
-        chart_info: ChartInfo {
-            name: "pleco".to_string(),
-            path: chart_path("common/charts/pleco"),
-            values_files: vec![chart_path("chart_values/pleco-scw.yaml")],
-            values: vec![
-                ChartSetValue {
-                    key: "environmentVariables.SCW_ACCESS_KEY".to_string(),
-                    value: chart_config_prerequisites.scw_access_key.clone(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.SCW_SECRET_KEY".to_string(),
-                    value: chart_config_prerequisites.scw_secret_key.clone(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.SCW_VOLUME_TIMEOUT".to_string(),
-                    value: 24i32.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.LOG_LEVEL".to_string(),
-                    value: "debug".to_string(),
-                },
-            ],
+    let pleco = match chart_config_prerequisites.disable_pleco {
+        true => None,
+        false => Some(CommonChart {
+            chart_info: ChartInfo {
+                name: "pleco".to_string(),
+                path: chart_path("common/charts/pleco"),
+                values_files: vec![chart_path("chart_values/pleco-scw.yaml")],
+                values: vec![
+                    ChartSetValue {
+                        key: "environmentVariables.SCW_ACCESS_KEY".to_string(),
+                        value: chart_config_prerequisites.scw_access_key.clone(),
+                    },
+                    ChartSetValue {
+                        key: "environmentVariables.SCW_SECRET_KEY".to_string(),
+                        value: chart_config_prerequisites.scw_secret_key.clone(),
+                    },
+                    ChartSetValue {
+                        key: "environmentVariables.SCW_VOLUME_TIMEOUT".to_string(),
+                        value: 24i32.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "environmentVariables.LOG_LEVEL".to_string(),
+                        value: "debug".to_string(),
+                    },
+                ],
+                ..Default::default()
+            },
             ..Default::default()
-        },
-        ..Default::default()
+        }),
     };
 
     let cluster_agent_context = ClusterAgentContext {
@@ -538,24 +561,29 @@ pub fn scw_helm_charts(
         Box::new(qovery_engine),
     ];
 
-    // // observability
-    if chart_config_prerequisites.ff_metrics_history_enabled {
-        level_1.push(Box::new(kube_prometheus_stack));
-        level_2.push(Box::new(prometheus_adapter));
-        level_2.push(Box::new(kube_state_metrics));
+    // observability
+    if let Some(kube_prometheus_stack_chart) = kube_prometheus_stack {
+        level_1.push(Box::new(kube_prometheus_stack_chart));
     }
-    if chart_config_prerequisites.ff_log_history_enabled {
-        level_1.push(Box::new(promtail));
-        level_2.push(Box::new(loki));
+    if let Some(prometheus_adapter_chart) = prometheus_adapter {
+        level_2.push(Box::new(prometheus_adapter_chart));
     }
-
+    if let Some(kube_state_metrics_chart) = kube_state_metrics {
+        level_2.push(Box::new(kube_state_metrics_chart));
+    }
+    if let Some(promtail_chart) = promtail {
+        level_1.push(Box::new(promtail_chart));
+    }
+    if let Some(loki_chart) = loki {
+        level_2.push(Box::new(loki_chart));
+    }
     if chart_config_prerequisites.ff_metrics_history_enabled || chart_config_prerequisites.ff_log_history_enabled {
         level_2.push(Box::new(grafana))
     };
 
     // pleco
-    if !chart_config_prerequisites.disable_pleco {
-        level_6.push(Box::new(pleco));
+    if let Some(pleco_chart) = pleco {
+        level_6.push(Box::new(pleco_chart));
     }
 
     info!("charts configuration preparation finished");
