@@ -1,0 +1,50 @@
+installCRDs: true
+
+startupapicheck:
+  jobAnnotations:
+    helm.sh/hook: post-install,post-upgrade
+  rbac:
+    annotations:
+      helm.sh/hook: post-install,post-upgrade
+  serviceAccount:
+    annotations:
+      helm.sh/hook: post-install,post-upgrade
+
+prometheus:
+  servicemonitor:
+    enabled: set-by-engine-code
+    prometheusInstance: qovery
+
+
+extraArgs:
+  - --dns01-recursive-nameservers-only
+  - --dns01-recursive-nameservers=1.1.1.1:53,8.8.8.8:53
+
+replicaCount: 1
+
+# Chart resources limits
+resources:
+  limits:
+    cpu: set-by-engine-code
+    memory: set-by-engine-code
+  requests:
+    cpu: set-by-engine-code
+    memory: set-by-engine-code
+
+webhook:
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+
+cainjector:
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code

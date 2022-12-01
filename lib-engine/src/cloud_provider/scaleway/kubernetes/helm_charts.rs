@@ -12,6 +12,7 @@ use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 use crate::models::scaleway::{ScwRegion, ScwZone};
 
+use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
@@ -23,7 +24,6 @@ use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdap
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::models::third_parties::LetsEncryptConfig;
-use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::File;
@@ -257,103 +257,15 @@ pub fn scw_helm_charts(
     )
     .to_common_helm_chart();
 
-    let cert_manager = CommonChart {
-        chart_info: ChartInfo {
-            name: "cert-manager".to_string(),
-            path: chart_path("common/charts/cert-manager"),
-            namespace: HelmChartNamespaces::CertManager,
-            last_breaking_version_requiring_restart: Some(Version::new(1, 4, 4)),
-            values: vec![
-                ChartSetValue {
-                    key: "installCRDs".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "startupapicheck.jobAnnotations.helm\\.sh/hook".to_string(),
-                    value: "post-install\\,post-upgrade".to_string(),
-                },
-                ChartSetValue {
-                    key: "startupapicheck.rbac.annotations.helm\\.sh/hook".to_string(),
-                    value: "post-install\\,post-upgrade".to_string(),
-                },
-                ChartSetValue {
-                    key: "startupapicheck.serviceAccount.annotations.helm\\.sh/hook".to_string(),
-                    value: "post-install\\,post-upgrade".to_string(),
-                },
-                ChartSetValue {
-                    key: "replicaCount".to_string(),
-                    value: "1".to_string(),
-                },
-                // https://cert-manager.io/docs/configuration/acme/dns01/#setting-nameservers-for-dns01-self-check
-                ChartSetValue {
-                    key: "extraArgs".to_string(),
-                    value: "{--dns01-recursive-nameservers-only,--dns01-recursive-nameservers=1.1.1.1:53\\,8.8.8.8:53}"
-                        .to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheus.servicemonitor.enabled".to_string(),
-                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheus.servicemonitor.prometheusInstance".to_string(),
-                    value: "qovery".to_string(),
-                },
-                // resources limits
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "1Gi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "1Gi".to_string(),
-                },
-                // Webhooks resources limits
-                ChartSetValue {
-                    key: "webhook.resources.limits.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
-                    key: "webhook.resources.requests.cpu".to_string(),
-                    value: "50m".to_string(),
-                },
-                ChartSetValue {
-                    key: "webhook.resources.limits.memory".to_string(),
-                    value: "128Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "webhook.resources.requests.memory".to_string(),
-                    value: "128Mi".to_string(),
-                },
-                // Cainjector resources limits
-                ChartSetValue {
-                    key: "cainjector.resources.limits.cpu".to_string(),
-                    value: "500m".to_string(),
-                },
-                ChartSetValue {
-                    key: "cainjector.resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
-                    key: "cainjector.resources.limits.memory".to_string(),
-                    value: "1Gi".to_string(),
-                },
-                ChartSetValue {
-                    key: "cainjector.resources.requests.memory".to_string(),
-                    value: "1Gi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // Cert Manager chart
+    let cert_manager = CertManagerChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.ff_metrics_history_enabled,
+        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartResourcesConstraintType::ChartDefault,
+    )
+    .to_common_helm_chart();
 
     // Cert Manager Configs
     let cert_manager_config = CertManagerConfigsChart::new(

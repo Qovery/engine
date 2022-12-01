@@ -4,6 +4,7 @@ use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryR
 use std::env;
 use std::fmt::{Display, Formatter};
 
+pub mod cert_manager_chart;
 pub mod cert_manager_config_chart;
 pub mod coredns_config_chart;
 pub mod external_dns_chart;
