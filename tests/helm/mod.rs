@@ -25,7 +25,7 @@ use qovery_engine::models::application::Application;
 use qovery_engine::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
 use qovery_engine::models::container::Container;
 use qovery_engine::models::database::{Container as ContainerDB, Database, Managed, PostgresSQL};
-use qovery_engine::models::job::Job;
+use qovery_engine::models::job::{ImageSource, Job, RegistryImageSource};
 use qovery_engine::models::router::{Router, RouterAdvancedSettings};
 use qovery_engine::models::types::{VersionsNumber, AWS as AWSType};
 use qovery_engine::utilities::to_short_id;
@@ -440,13 +440,17 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         service_id(),
         "my_job_name".to_string(),
         Action::Create,
-        Registry::DockerHub {
-            long_id: Default::default(),
-            url: Url::parse("https://my_registry_url.com").unwrap(),
-            credentials: None,
+        ImageSource::Registry {
+            source: Box::new(RegistryImageSource {
+                registry: Registry::DockerHub {
+                    long_id: Default::default(),
+                    url: Url::parse("https://my_registry_url.com").unwrap(),
+                    credentials: None,
+                },
+                image: "my_image".to_string(),
+                tag: "my_tag".to_string(),
+            }),
         },
-        "my_image".to_string(),
-        "my_tag".to_string(),
         JobSchedule::Cron {
             schedule: "my_schedule".to_string(),
         },
@@ -466,6 +470,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
             cronjob_concurrency_policy: "my_cronjob_concurrency_policy".to_string(),
             cronjob_failed_jobs_history_limit: 9,
             cronjob_success_jobs_history_limit: 10,
+            build_timeout_max_sec: 30 * 60,
             readiness_probe_type: AdvancedSettingsProbeType::Tcp,
             readiness_probe_http_get_path: "my_useless_readiness_probe_http_get_path".to_string(),
             readiness_probe_initial_delay_seconds: 11,

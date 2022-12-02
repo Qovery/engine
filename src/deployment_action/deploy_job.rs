@@ -12,7 +12,7 @@ use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{EventDetails, Stage};
 use crate::io_models::job::JobSchedule;
-use crate::models::job::{Job, JobService};
+use crate::models::job::{ImageSource, Job, JobService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::batch::v1::{CronJob, Job as K8sJob};
@@ -136,15 +136,21 @@ where
     Job<T>: JobService,
 {
     let pre_run = move |logger: &EnvProgressLogger| -> Result<TaskContext, EngineError> {
-        mirror_image(
-            &job.registry,
-            &job.image,
-            &job.tag,
-            job.tag_for_mirror(),
-            target,
-            logger,
-            event_details.clone(),
-        )?;
+        match &job.image_source {
+            // If image come from a registry, we mirror it to the cluster registry in order to avoid losing access to it due to creds expiration
+            ImageSource::Registry { source } => {
+                mirror_image(
+                    &source.registry,
+                    &source.image,
+                    &source.tag,
+                    source.tag_for_mirror(job.long_id()),
+                    target,
+                    logger,
+                    event_details.clone(),
+                )?;
+            }
+            ImageSource::Build { .. } => {}
+        }
 
         let last_image = block_on(get_last_deployed_image(
             target.kube.clone(),
@@ -338,9 +344,17 @@ where
 
     let post_run = move |logger: &EnvSuccessLogger, state: TaskContext| {
         // Delete previous image from cache to cleanup resources
-        if let Err(err) = delete_cached_image(job.tag_for_mirror(), state.last_deployed_image, false, target, logger) {
-            error!("Failed to delete previous image from cache: {}", err);
-        }
+        match &job.image_source {
+            ImageSource::Registry { source } => {
+                let mirrored_image_tag = source.tag_for_mirror(job.long_id());
+                if let Err(err) =
+                    delete_cached_image(mirrored_image_tag, state.last_deployed_image, false, target, logger)
+                {
+                    error!("Failed to delete previous image from cache: {}", err);
+                }
+            }
+            ImageSource::Build { .. } => {}
+        };
     };
 
     (pre_run, task, post_run)
@@ -400,10 +414,30 @@ where
     };
 
     let post_run = move |logger: &EnvSuccessLogger, state: TaskContext| {
-        // Delete previous image from cache to cleanup resources
-        if let Err(err) = delete_cached_image(job.tag_for_mirror(), state.last_deployed_image, false, target, logger) {
-            error!("Failed to delete previous image from cache: {}", err);
-        }
+        match &job.image_source {
+            // Delete previous image from cache to cleanup resources
+            ImageSource::Registry { source } => {
+                let mirrored_image_tag = source.tag_for_mirror(job.long_id());
+                if let Err(err) =
+                    delete_cached_image(mirrored_image_tag, state.last_deployed_image, false, target, logger)
+                {
+                    let user_msg = format!("Failed to delete previous image from cache: {}", err);
+                    logger.send_success(user_msg);
+                }
+            }
+
+            // Deleting the repository dedicated to this job
+            ImageSource::Build { source } => {
+                logger.send_success("🪓 Terminating container registry of the job".to_string());
+                if let Err(err) = target
+                    .container_registry
+                    .delete_repository(source.image.repository_name())
+                {
+                    let user_msg = format!("❌ Failed to delete container registry of the application: {}", err);
+                    logger.send_success(user_msg);
+                }
+            }
+        };
     };
 
     (pre_run, task, post_run)

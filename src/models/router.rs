@@ -1,3 +1,4 @@
+use crate::build_platform::Build;
 use crate::cloud_provider::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate, Route};
 use crate::cloud_provider::service::{default_tera_context, Action, Service, ServiceType};
 use crate::cloud_provider::utilities::sanitize_name;
@@ -278,6 +279,18 @@ impl<T: CloudProvider> Service for Router<T> {
 
     fn as_service(&self) -> &dyn Service {
         self
+    }
+
+    fn as_service_mut(&mut self) -> &mut dyn Service {
+        self
+    }
+
+    fn build(&self) -> Option<&Build> {
+        None
+    }
+
+    fn build_mut(&mut self) -> Option<&mut Build> {
+        None
     }
 }
 

@@ -171,6 +171,10 @@ impl Image {
         self.name.clone()
     }
 
+    pub fn name_with_tag(&self) -> String {
+        format!("{}:{}", self.name, self.tag)
+    }
+
     pub fn name_without_repository(&self) -> &str {
         self.name
             .strip_prefix(&format!("{}/", self.repository_name()))
