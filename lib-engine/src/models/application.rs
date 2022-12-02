@@ -373,6 +373,26 @@ impl<T: CloudProvider> Service for Application<T> {
     fn as_service(&self) -> &dyn Service {
         self
     }
+
+    fn as_service_mut(&mut self) -> &mut dyn Service {
+        self
+    }
+
+    fn build(&self) -> Option<&Build> {
+        if self.action() == &Action::Create {
+            Some(self.build())
+        } else {
+            None
+        }
+    }
+
+    fn build_mut(&mut self) -> Option<&mut Build> {
+        if self.action() == &Action::Create {
+            Some(self.build_mut())
+        } else {
+            None
+        }
+    }
 }
 
 pub trait ApplicationService: Service + DeploymentAction + ToTeraContext {

@@ -56,8 +56,15 @@ impl Infrastructure for EnvironmentRequest {
             force_push: true,
         };
         let logger = Arc::new(infra_ctx.kubernetes().logger().clone_dyn());
-        let ret = EnvironmentTask::build_and_push_applications(
-            &mut env.applications,
+        let services_to_build: Vec<&mut dyn Service> = env
+            .applications
+            .iter_mut()
+            .map(|app| app.as_service_mut())
+            .chain(env.jobs.iter_mut().map(|job| job.as_service_mut()))
+            .collect();
+
+        let ret = EnvironmentTask::build_and_push_services(
+            services_to_build,
             &deployment_option,
             infra_ctx,
             |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),

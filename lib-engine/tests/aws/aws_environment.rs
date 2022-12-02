@@ -1288,3 +1288,74 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
         "".to_string()
     })
 }
+
+#[cfg(feature = "test-aws-minimal")]
+#[test]
+fn build_and_deploy_job_on_aws_eks() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = "build_and_deploy_job_on_aws_eks");
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let infra_ctx = aws_default_infra_config(&context, logger.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone());
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let json_output = "{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}";
+        environment.applications = vec![];
+        environment.jobs = vec![Job {
+            long_id: Uuid::new_v4(),
+            name: "job test #####".to_string(),
+            action: Action::Create,
+            schedule: JobSchedule::OnStart {},
+            source: JobSource::Docker {
+                git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+                commit_id: "fc575a2f3be0b9100492c8a463bf18134a8698a5".to_string(),
+                dockerfile_path: Some("Dockerfile".to_string()),
+                root_path: String::from("/"),
+                git_credentials: None,
+                branch: "main".to_string(),
+            },
+            max_nb_restart: 2,
+            max_duration_in_sec: 300,
+            default_port: Some(8080),
+            //command_args: vec![],
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                format!("echo starting; sleep 10; echo '{}' > /output/qovery-output.json", json_output),
+            ],
+            entrypoint: None,
+            force_trigger: false,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 100,
+            ram_limit_in_mib: 100,
+            environment_vars: Default::default(),
+            advanced_settings: Default::default(),
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(matches!(ret, TransactionResult::Ok));
+
+        "".to_string()
+    })
+}
