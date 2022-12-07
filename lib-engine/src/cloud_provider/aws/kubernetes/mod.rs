@@ -44,7 +44,7 @@ use crate::cmd::terraform::{
 };
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::dns_provider::DnsProvider;
-use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity, Tag};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::{Context, Features};
 use crate::io_models::domain::{ToHelmString, ToTerraformString};
@@ -56,7 +56,7 @@ use crate::secret_manager::vault::QVaultClient;
 use crate::string::terraform_list_format;
 use crate::{cmd, secret_manager};
 
-use self::eks::select_nodegroups_autoscaling_group_behavior;
+use self::eks::{delete_eks_failed_nodegroups, select_nodegroups_autoscaling_group_behavior};
 
 pub mod ec2;
 mod ec2_helm_charts;
@@ -740,10 +740,15 @@ fn get_nodegroup_autoscaling_config_from_aws(
         // warn: can't filter the state of the autoscaling group with this lib. We should filter on running (and not deleting/creating)
         let eks_node_group = match block_on(eks_client.describe_nodegroup(DescribeNodegroupRequest {
             cluster_name: kubernetes.cluster_name(),
-            nodegroup_name: eks_node_group_name,
+            nodegroup_name: eks_node_group_name.clone(),
         })) {
             Ok(res) => match res.nodegroup {
-                None => return Err(EngineError::new_missing_nodegroup_information_error(event_details)),
+                None => {
+                    return Err(EngineError::new_missing_nodegroup_information_error(
+                        event_details,
+                        eks_node_group_name,
+                    ))
+                }
                 Some(x) => x,
             },
             Err(error) => {
@@ -782,6 +787,38 @@ fn create(
         event_details.clone(),
         EventMessage::new_from_safe("Preparing EKS cluster deployment.".to_string()),
     ));
+
+    // old method with rusoto
+    let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
+    let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
+        Ok(value) => Some(value),
+        Err(_) => None,
+    };
+
+    // aws connection
+    let aws_conn = match kubernetes.cloud_provider().aws_sdk_client() {
+        Some(x) => x,
+        None => return Err(EngineError::new_not_implemented_error(event_details)),
+    };
+
+    // on EKS, we need to check if there is no already deployed failed nodegroups to avoid future quota issues
+    if kubernetes.kind() == Kind::Eks {
+        kubernetes.logger().log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe(
+                "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string(),
+        )));
+        if let Err(e) = block_on(delete_eks_failed_nodegroups(
+            aws_conn.clone(),
+            kubernetes.cluster_name(),
+            event_details.clone(),
+        )) {
+            // only fails if the cluster is not found
+            if e.tag() != &Tag::CannotGetCluster {
+                return Err(e);
+            }
+        }
+    };
 
     // upgrade cluster instead if required
     if !kubernetes.context().is_first_cluster_deployment() {
@@ -836,12 +873,6 @@ fn create(
         }
     }
 
-    let temp_dir = kubernetes.get_temp_dir(event_details.clone())?;
-    let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes) {
-        Ok(value) => Some(value),
-        Err(_) => None,
-    };
-
     let node_groups_with_desired_states = should_update_desired_nodes(
         event_details.clone(),
         kubernetes,
@@ -895,6 +926,21 @@ fn create(
 
     // terraform deployment dedicated to cloud resources
     if let Err(e) = terraform_init_validate_plan_apply(temp_dir.as_str(), kubernetes.context().is_dry_run_deploy()) {
+        // on EKS, clean possible nodegroup deployment failures because of quota issues
+        if kubernetes.kind() == Kind::Eks {
+            kubernetes.logger().log(EngineEvent::Info(
+                event_details.clone(),
+                EventMessage::new_from_safe(
+                    "Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present".to_string()
+                ),
+            ));
+            block_on(delete_eks_failed_nodegroups(
+                aws_conn,
+                kubernetes.cluster_name(),
+                event_details.clone(),
+            ))?;
+        };
+
         return Err(EngineError::new_terraform_error(event_details, e));
     }
 

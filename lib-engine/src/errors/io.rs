@@ -187,6 +187,7 @@ pub enum Tag {
     InvalidEnginePayload,
     JobFailure,
     DoNotRespectCloudProviderBestPractices,
+    CannotListClusters,
 }
 
 impl From<errors::Tag> for Tag {
@@ -375,6 +376,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::TerraformStateLocked => Tag::TerraformStateLocked,
             errors::Tag::K8sCannotGetPVCs => Tag::K8sCannotGetPVCs,
             errors::Tag::K8sCannotBoundPVC => Tag::K8sCannotBoundPVC,
+            errors::Tag::CannotListClusters => Tag::CannotListClusters,
         }
     }
 }
