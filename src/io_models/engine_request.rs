@@ -331,6 +331,7 @@ impl Kubernetes {
                         return Err(EngineError::new_missing_nodegroup_information_error(
                             cloud_provider
                                 .get_event_details(Stage::Infrastructure(InfrastructureStep::RetrieveClusterResources)),
+                            "unknown for EC2 nodegroup".to_string(),
                         ))
                     }
                     false => self.nodes_groups[0].to_ec2_instance(),
