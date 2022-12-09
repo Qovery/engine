@@ -118,6 +118,9 @@ pub struct FuncTestsSecrets {
     pub AWS_ACCESS_KEY_ID: Option<String>,
     pub AWS_DEFAULT_REGION: Option<String>,
     pub AWS_EC2_DEFAULT_REGION: Option<String>,
+    pub AWS_EC2_TEST_MANAGED_REGION: Option<String>,
+    pub AWS_EC2_TEST_CONTAINER_REGION: Option<String>,
+    pub AWS_EC2_TEST_INSTANCE_REGION: Option<String>,
     pub AWS_SECRET_ACCESS_KEY: Option<String>,
     pub AWS_TEST_CLUSTER_ID: Option<String>,
     pub AWS_EC2_TEST_CLUSTER_ID: Option<String>,
@@ -216,6 +219,9 @@ impl FuncTestsSecrets {
             AWS_ACCESS_KEY_ID: None,
             AWS_DEFAULT_REGION: None,
             AWS_EC2_DEFAULT_REGION: None,
+            AWS_EC2_TEST_MANAGED_REGION: None,
+            AWS_EC2_TEST_CONTAINER_REGION: None,
+            AWS_EC2_TEST_INSTANCE_REGION: None,
             AWS_SECRET_ACCESS_KEY: None,
             AWS_TEST_CLUSTER_ID: None,
             AWS_EC2_TEST_CLUSTER_ID: None,
@@ -304,6 +310,18 @@ impl FuncTestsSecrets {
             AWS_ACCESS_KEY_ID: Self::select_secret("AWS_ACCESS_KEY_ID", secrets.AWS_ACCESS_KEY_ID),
             AWS_DEFAULT_REGION: Self::select_secret("AWS_DEFAULT_REGION", secrets.AWS_DEFAULT_REGION),
             AWS_EC2_DEFAULT_REGION: Self::select_secret("AWS_EC2_DEFAULT_REGION", secrets.AWS_EC2_DEFAULT_REGION),
+            AWS_EC2_TEST_MANAGED_REGION: Self::select_secret(
+                "AWS_EC2_TEST_MANAGED_REGION",
+                secrets.AWS_EC2_TEST_MANAGED_REGION,
+            ),
+            AWS_EC2_TEST_CONTAINER_REGION: Self::select_secret(
+                "AWS_EC2_TEST_CONTAINER_REGION",
+                secrets.AWS_EC2_TEST_CONTAINER_REGION,
+            ),
+            AWS_EC2_TEST_INSTANCE_REGION: Self::select_secret(
+                "AWS_EC2_TEST_INSTANCE_REGION",
+                secrets.AWS_EC2_TEST_INSTANCE_REGION,
+            ),
             AWS_SECRET_ACCESS_KEY: Self::select_secret("AWS_SECRET_ACCESS_KEY", secrets.AWS_SECRET_ACCESS_KEY),
             AWS_TEST_ORGANIZATION_ID: Self::select_secret("AWS_TEST_ORGANIZATION_ID", secrets.AWS_TEST_ORGANIZATION_ID),
             AWS_TEST_ORGANIZATION_LONG_ID: Self::select_secret(
