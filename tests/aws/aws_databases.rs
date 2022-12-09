@@ -1,5 +1,7 @@
 use crate::helpers;
-use crate::helpers::aws::{aws_default_infra_config, AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE};
+use crate::helpers::aws::{
+    aws_default_infra_config, AWS_DATABASE_DISK_TYPE, AWS_DATABASE_INSTANCE_TYPE, AWS_TEST_REGION,
+};
 use crate::helpers::common::{ClusterDomain, Infrastructure};
 use crate::helpers::database::{test_db, test_pause_managed_db, StorageSize};
 use crate::helpers::utilities::{context_for_resource, engine_run_test, get_pods, init, logger, FuncTestsSecrets};
@@ -354,6 +356,7 @@ fn test_oversized_volume() {
             DatabaseKind::Postgresql,
             KubernetesKind::Eks,
             DatabaseMode::CONTAINER,
+            AWS_TEST_REGION.to_string(),
             false,
             ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),
@@ -406,6 +409,7 @@ pub fn test_postgresql_configuration(
             DatabaseKind::Postgresql,
             kubernetes_kind,
             database_mode,
+            AWS_TEST_REGION.to_string(),
             is_public,
             ClusterDomain::Default {
                 cluster_id: cluster_id.to_string(),
@@ -656,6 +660,7 @@ pub fn test_mongodb_configuration(
             DatabaseKind::Mongodb,
             kubernetes_kind,
             database_mode,
+            AWS_TEST_REGION.to_string(),
             is_public,
             ClusterDomain::Default {
                 cluster_id: cluster_id.to_string(),
@@ -783,6 +788,7 @@ pub fn test_mysql_configuration(
             DatabaseKind::Mysql,
             kubernetes_kind,
             database_mode,
+            AWS_TEST_REGION.to_string(),
             is_public,
             ClusterDomain::Default {
                 cluster_id: cluster_id.to_string(),
@@ -894,6 +900,7 @@ pub fn test_redis_configuration(
             DatabaseKind::Redis,
             kubernetes_kind,
             database_mode,
+            AWS_TEST_REGION.to_string(),
             is_public,
             ClusterDomain::Default {
                 cluster_id: cluster_id.to_string(),

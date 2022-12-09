@@ -390,6 +390,7 @@ fn test_oversized_volume() {
             DatabaseKind::Postgresql,
             KubernetesKind::ScwKapsule,
             DatabaseMode::CONTAINER,
+            SCW_TEST_ZONE.to_string(),
             false,
             ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),
@@ -435,6 +436,7 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
             DatabaseKind::Postgresql,
             KubernetesKind::ScwKapsule,
             database_mode,
+            SCW_TEST_ZONE.to_string(),
             is_public,
             ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),
@@ -621,6 +623,7 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
             DatabaseKind::Mongodb,
             KubernetesKind::ScwKapsule,
             database_mode,
+            SCW_TEST_ZONE.to_string(),
             is_public,
             ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),
@@ -727,6 +730,7 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
             DatabaseKind::Mysql,
             KubernetesKind::ScwKapsule,
             database_mode,
+            SCW_TEST_ZONE.to_string(),
             is_public,
             ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),
@@ -820,6 +824,7 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
             DatabaseKind::Redis,
             KubernetesKind::ScwKapsule,
             database_mode,
+            SCW_TEST_ZONE.to_string(),
             is_public,
             ClusterDomain::Default {
                 cluster_id: to_short_id(&cluster_id),

@@ -41,7 +41,7 @@ pub trait Cluster<T, U> {
         max_nodes: i32,
         engine_location: EngineLocation,
     ) -> InfrastructureContext;
-    fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind) -> Box<T>;
+    fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind, localisation: &str) -> Box<T>;
     fn kubernetes_nodes(min_nodes: i32, max_nodes: i32) -> Vec<NodeGroups>;
     fn kubernetes_cluster_options(
         secrets: FuncTestsSecrets,

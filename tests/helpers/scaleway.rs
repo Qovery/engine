@@ -105,7 +105,8 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         let build_platform = Box::new(build_platform_local_docker(context));
 
         // use Scaleway
-        let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(Self::cloud_provider(context, kubernetes_kind));
+        let cloud_provider: Arc<Box<dyn CloudProvider>> =
+            Arc::new(Self::cloud_provider(context, kubernetes_kind, localisation));
         let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_qoverydns(context, cluster_domain));
 
         let cluster = get_environment_test_kubernetes(
@@ -131,7 +132,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         )
     }
 
-    fn cloud_provider(context: &Context, _kubernetes_kind: KubernetesKind) -> Box<Scaleway> {
+    fn cloud_provider(context: &Context, _kubernetes_kind: KubernetesKind, _localisation: &str) -> Box<Scaleway> {
         let secrets = FuncTestsSecrets::new();
         Box::new(Scaleway::new(
             context.clone(),
