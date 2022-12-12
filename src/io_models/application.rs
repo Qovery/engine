@@ -4,7 +4,7 @@ use crate::cloud_provider::models::EnvironmentVariable;
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ContainerRegistryInfo;
 use crate::io_models::context::Context;
-use crate::io_models::Action;
+use crate::io_models::{normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action};
 use crate::models;
 use crate::models::application::{ApplicationError, ApplicationService};
 use crate::models::aws::{AwsAppExtraSettings, AwsStorageType};
@@ -15,7 +15,6 @@ use crate::utilities::to_short_id;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
 use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
@@ -290,64 +289,11 @@ impl Application {
     }
 
     pub fn to_build(&self, registry_url: &ContainerRegistryInfo) -> Build {
-        // Retrieve ssh keys from env variables
-        const ENV_GIT_PREFIX: &str = "GIT_SSH_KEY";
-        let env_ssh_keys: Vec<(String, String)> = self
-            .environment_vars
-            .iter()
-            .filter_map(|(name, value)| {
-                if name.starts_with(ENV_GIT_PREFIX) {
-                    Some((name.clone(), value.clone()))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
         // Get passphrase and public key if provided by the user
-        let mut ssh_keys: Vec<SshKey> = Vec::with_capacity(env_ssh_keys.len());
-        for (ssh_key_name, private_key) in env_ssh_keys {
-            let private_key = if let Ok(Ok(private_key)) = base64::decode(private_key).map(String::from_utf8) {
-                private_key
-            } else {
-                error!("Invalid base64 environment variable for {}", ssh_key_name);
-                continue;
-            };
-
-            let passphrase = self
-                .environment_vars
-                .get(&ssh_key_name.replace(ENV_GIT_PREFIX, "GIT_SSH_PASSPHRASE"))
-                .and_then(|val| base64::decode(val).ok())
-                .and_then(|str| String::from_utf8(str).ok());
-
-            let public_key = self
-                .environment_vars
-                .get(&ssh_key_name.replace(ENV_GIT_PREFIX, "GIT_SSH_PUBLIC_KEY"))
-                .and_then(|val| base64::decode(val).ok())
-                .and_then(|str| String::from_utf8(str).ok());
-
-            ssh_keys.push(SshKey {
-                private_key,
-                passphrase,
-                public_key,
-            });
-        }
+        let ssh_keys: Vec<SshKey> = ssh_keys_from_env_vars(&self.environment_vars);
 
         // Convert our root path to an relative path to be able to append them correctly
-        let root_path = if Path::new(&self.root_path).is_absolute() {
-            PathBuf::from(self.root_path.trim_start_matches('/'))
-        } else {
-            PathBuf::from(&self.root_path)
-        };
-        assert!(root_path.is_relative(), "root path is not a relative path");
-
-        let dockerfile_path = self.dockerfile_path.as_ref().map(|path| {
-            if Path::new(&path).is_absolute() {
-                root_path.join(path.trim_start_matches('/'))
-            } else {
-                root_path.join(&path)
-            }
-        });
+        let (root_path, dockerfile_path) = normalize_root_and_dockerfile_path(&self.root_path, &self.dockerfile_path);
 
         //FIXME: Return a result the function
         let url = Url::parse(&self.git_url).unwrap_or_else(|_| Url::parse("https://invalid-git-url.com").unwrap());

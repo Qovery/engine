@@ -1,6 +1,7 @@
 use crate::cloud_provider::aws::kubernetes;
 use crate::cloud_provider::aws::kubernetes::node::AwsInstancesType;
 use crate::cloud_provider::aws::kubernetes::Options;
+use crate::cloud_provider::aws::models::QoveryAwsSdkConfigEks;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{
@@ -12,7 +13,7 @@ use crate::cloud_provider::CloudProvider;
 use crate::cmd::kubectl::{kubectl_exec_scale_replicas, ScalingKind};
 use crate::cmd::terraform::terraform_init_validate_plan_apply;
 use crate::dns_provider::DnsProvider;
-use crate::errors::EngineError;
+use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep};
 use crate::io_models::context::Context;
@@ -20,10 +21,20 @@ use crate::io_models::Action;
 use crate::logger::Logger;
 use crate::object_storage::s3::S3;
 use crate::object_storage::ObjectStorage;
+use async_trait::async_trait;
+use aws_config::SdkConfig;
+use aws_sdk_eks::error::{
+    DeleteNodegroupError, DescribeClusterError, DescribeNodegroupError, ListClustersError, ListNodegroupsError,
+};
+use aws_sdk_eks::output::{
+    DeleteNodegroupOutput, DescribeClusterOutput, DescribeNodegroupOutput, ListClustersOutput, ListNodegroupsOutput,
+};
+use aws_smithy_client::SdkError;
 use function_name::named;
 use std::borrow::Borrow;
 use std::str::FromStr;
 use std::sync::Arc;
+use thiserror::Error;
 use uuid::Uuid;
 
 use super::{get_rusoto_eks_client, should_update_desired_nodes};
@@ -644,14 +655,365 @@ pub fn select_nodegroups_autoscaling_group_behavior(
     }
 }
 
+#[async_trait]
+impl QoveryAwsSdkConfigEks for SdkConfig {
+    async fn list_clusters(&self) -> Result<ListClustersOutput, SdkError<ListClustersError>> {
+        let client = aws_sdk_eks::Client::new(self);
+        client.list_clusters().send().await
+    }
+
+    async fn describe_cluster(
+        &self,
+        cluster_id: String,
+    ) -> Result<DescribeClusterOutput, SdkError<DescribeClusterError>> {
+        let client = aws_sdk_eks::Client::new(self);
+        client.describe_cluster().name(cluster_id).send().await
+    }
+
+    async fn list_all_eks_nodegroups(
+        &self,
+        cluster_name: String,
+    ) -> Result<ListNodegroupsOutput, SdkError<ListNodegroupsError>> {
+        let client = aws_sdk_eks::Client::new(self);
+        client.list_nodegroups().cluster_name(cluster_name).send().await
+    }
+
+    async fn describe_nodegroup(
+        &self,
+        cluster_name: String,
+        nodegroup_id: String,
+    ) -> Result<DescribeNodegroupOutput, SdkError<DescribeNodegroupError>> {
+        let client = aws_sdk_eks::Client::new(self);
+        client
+            .describe_nodegroup()
+            .cluster_name(cluster_name)
+            .nodegroup_name(nodegroup_id)
+            .send()
+            .await
+    }
+
+    async fn describe_nodegroups(
+        &self,
+        cluster_name: String,
+        nodegroups: ListNodegroupsOutput,
+    ) -> Result<Vec<DescribeNodegroupOutput>, SdkError<DescribeNodegroupError>> {
+        let mut nodegroups_descriptions = Vec::new();
+
+        for nodegroup in nodegroups.nodegroups.unwrap_or_default() {
+            let nodegroup_description = self.describe_nodegroup(cluster_name.clone(), nodegroup).await;
+            match nodegroup_description {
+                Ok(x) => nodegroups_descriptions.push(x),
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        }
+
+        Ok(nodegroups_descriptions)
+    }
+
+    async fn delete_nodegroup(
+        &self,
+        cluster_name: String,
+        nodegroup_name: String,
+    ) -> Result<DeleteNodegroupOutput, SdkError<DeleteNodegroupError>> {
+        let client = aws_sdk_eks::Client::new(self);
+        client
+            .delete_nodegroup()
+            .cluster_name(cluster_name)
+            .nodegroup_name(nodegroup_name)
+            .send()
+            .await
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Error)]
+pub enum NodeGroupToRemoveFailure {
+    #[error("No cluster found")]
+    ClusterNotFound,
+    #[error("No nodegroup found for this cluster")]
+    NodeGroupNotFound,
+    #[error("At lease one nodegroup must be active, no one can be deleted")]
+    OneNodeGroupMustBeActiveAtLeast,
+}
+
+pub async fn delete_eks_failed_nodegroups(
+    aws_conn: SdkConfig,
+    cluster_name: String,
+    event_details: EventDetails,
+) -> Result<(), EngineError> {
+    let clusters = match aws_conn.list_clusters().await {
+        Ok(x) => x,
+        Err(e) => {
+            return Err(EngineError::new_cannot_list_clusters_error(
+                event_details.clone(),
+                CommandError::new("Couldn't list clusters from AWS".to_string(), Some(e.to_string()), None),
+            ))
+        }
+    };
+
+    if !clusters
+        .clusters()
+        .unwrap_or_default()
+        .iter()
+        .any(|x| x == &cluster_name)
+    {
+        return Err(EngineError::new_cannot_get_cluster_error(
+            event_details.clone(),
+            CommandError::new_from_safe_message(NodeGroupToRemoveFailure::ClusterNotFound.to_string()),
+        ));
+    };
+
+    let all_cluster_nodegroups = match aws_conn.list_all_eks_nodegroups(cluster_name.clone()).await {
+        Ok(x) => x,
+        Err(e) => {
+            return Err(EngineError::new_nodegroup_list_error(
+                event_details,
+                CommandError::new_from_safe_message(e.to_string()),
+            ))
+        }
+    };
+
+    let all_cluster_nodegroups_described = match aws_conn
+        .describe_nodegroups(cluster_name.clone(), all_cluster_nodegroups)
+        .await
+    {
+        Ok(x) => x,
+        Err(e) => {
+            return Err(EngineError::new_missing_nodegroup_information_error(
+                event_details,
+                e.to_string(),
+            ))
+        }
+    };
+
+    let nodegroups_to_delete = match check_failed_nodegroups_to_remove(all_cluster_nodegroups_described) {
+        Ok(x) => x,
+        Err(e) => return Err(EngineError::new_nodegroup_delete_error(event_details, None, e.to_string())),
+    };
+
+    for nodegroup in nodegroups_to_delete {
+        let nodegroup_name = match nodegroup.nodegroup() {
+            Some(x) => x.nodegroup_name().unwrap_or("unknown_nodegroup_name"),
+            None => {
+                return Err(EngineError::new_missing_nodegroup_information_error(
+                    event_details,
+                    format!("{:?}", nodegroup),
+                ))
+            }
+        };
+
+        if let Err(e) = aws_conn
+            .delete_nodegroup(cluster_name.clone(), nodegroup_name.to_string())
+            .await
+        {
+            return Err(EngineError::new_nodegroup_delete_error(
+                event_details,
+                Some(nodegroup_name.to_string()),
+                e.to_string(),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn check_failed_nodegroups_to_remove(
+    nodegroups: Vec<DescribeNodegroupOutput>,
+) -> Result<Vec<DescribeNodegroupOutput>, NodeGroupToRemoveFailure> {
+    let mut failed_nodegroups_to_remove = Vec::new();
+
+    for nodegroup in nodegroups.iter() {
+        match nodegroup.nodegroup() {
+            Some(ng) => match ng.status() {
+                Some(s) => match s {
+                    aws_sdk_eks::model::NodegroupStatus::CreateFailed => {
+                        failed_nodegroups_to_remove.push(nodegroup.clone())
+                    }
+                    aws_sdk_eks::model::NodegroupStatus::DeleteFailed => {
+                        failed_nodegroups_to_remove.push(nodegroup.clone())
+                    }
+                    _ => {
+                        info!(
+                            "Nodegroup {} is in state {:?}, it will not be deleted",
+                            ng.nodegroup_name().unwrap_or("unknown name"),
+                            s
+                        );
+                        continue;
+                    }
+                },
+                None => continue,
+            },
+            None => return Err(NodeGroupToRemoveFailure::NodeGroupNotFound),
+        }
+    }
+
+    // ensure we don't remove all nodegroups (even failed ones) to avoid blackout
+    if failed_nodegroups_to_remove.len() == nodegroups.len() && !nodegroups.is_empty() {
+        return Err(NodeGroupToRemoveFailure::OneNodeGroupMustBeActiveAtLeast);
+    }
+
+    Ok(failed_nodegroups_to_remove)
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::aws::kubernetes::eks::{select_nodegroups_autoscaling_group_behavior, EKS};
+    use crate::cloud_provider::aws::kubernetes::eks::{
+        select_nodegroups_autoscaling_group_behavior, NodeGroupToRemoveFailure, EKS,
+    };
     use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
     use crate::errors::Tag;
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
+    use aws_sdk_eks::model::{nodegroup, NodegroupStatus};
+    use aws_sdk_eks::output::DescribeNodegroupOutput;
     use uuid::Uuid;
+
+    use super::check_failed_nodegroups_to_remove;
+
+    #[test]
+    fn test_nodegroup_failure_deletion() {
+        let nodegroup_ok = nodegroup::Builder::default()
+            .set_nodegroup_name(Some("nodegroup_ok".to_string()))
+            .set_status(Some(NodegroupStatus::Active))
+            .build();
+        let nodegroup_create_failed = nodegroup::Builder::default()
+            .set_nodegroup_name(Some("nodegroup_create_failed".to_string()))
+            .set_status(Some(NodegroupStatus::CreateFailed))
+            .build();
+
+        // 2 nodegroups, 2 ok => nothing to delete
+        let ngs = vec![
+            DescribeNodegroupOutput::builder()
+                .nodegroup(nodegroup_ok.clone())
+                .build(),
+            DescribeNodegroupOutput::builder()
+                .nodegroup(nodegroup_ok.clone())
+                .build(),
+        ];
+        assert_eq!(check_failed_nodegroups_to_remove(ngs).unwrap().len(), 0);
+
+        // 2 nodegroups, 1 ok, 1 create failed => 1 to delete
+        let ngs = vec![
+            DescribeNodegroupOutput::builder()
+                .nodegroup(nodegroup_ok.clone())
+                .build(),
+            DescribeNodegroupOutput::builder()
+                .nodegroup(nodegroup_create_failed.clone())
+                .build(),
+        ];
+        let failed_ngs = check_failed_nodegroups_to_remove(ngs).unwrap();
+        assert_eq!(failed_ngs.len(), 1);
+        assert_eq!(
+            failed_ngs[0].nodegroup().unwrap().nodegroup_name().unwrap(),
+            "nodegroup_create_failed"
+        );
+
+        // 2 nodegroups, 2 failed => nothing to do, too critical to be deleted. Manual intervention required
+        let ngs = vec![
+            DescribeNodegroupOutput::builder()
+                .nodegroup(nodegroup_create_failed.clone())
+                .build(),
+            DescribeNodegroupOutput::builder()
+                .nodegroup(nodegroup_create_failed.clone())
+                .build(),
+        ];
+        assert_eq!(
+            check_failed_nodegroups_to_remove(ngs).unwrap_err(),
+            NodeGroupToRemoveFailure::OneNodeGroupMustBeActiveAtLeast
+        );
+
+        // 1 nodegroup, 1 failed => nothing to do, too critical to be deleted. Manual intervention required
+        let ngs = vec![DescribeNodegroupOutput::builder()
+            .nodegroup(nodegroup_create_failed.clone())
+            .build()];
+        assert_eq!(
+            check_failed_nodegroups_to_remove(ngs).unwrap_err(),
+            NodeGroupToRemoveFailure::OneNodeGroupMustBeActiveAtLeast
+        );
+
+        // no nodegroups => ok
+        let ngs = vec![];
+        assert_eq!(check_failed_nodegroups_to_remove(ngs).unwrap().len(), 0);
+
+        // x nodegroups, 1 ok, 2 create failed, 1 delete failure, others in other states => 3 to delete
+        let ngs = vec![
+            DescribeNodegroupOutput::builder().nodegroup(nodegroup_ok).build(),
+            DescribeNodegroupOutput::builder()
+                .nodegroup(nodegroup_create_failed)
+                .build(),
+            DescribeNodegroupOutput::builder()
+                .nodegroup(
+                    nodegroup::Builder::default()
+                        .set_nodegroup_name(Some(format!("nodegroup_{:?}", NodegroupStatus::CreateFailed)))
+                        .set_status(Some(NodegroupStatus::CreateFailed))
+                        .build(),
+                )
+                .build(),
+            DescribeNodegroupOutput::builder()
+                .nodegroup(
+                    nodegroup::Builder::default()
+                        .set_nodegroup_name(Some(format!("nodegroup_{:?}", NodegroupStatus::Deleting)))
+                        .set_status(Some(NodegroupStatus::Deleting))
+                        .build(),
+                )
+                .build(),
+            DescribeNodegroupOutput::builder()
+                .nodegroup(
+                    nodegroup::Builder::default()
+                        .set_nodegroup_name(Some(format!("nodegroup_{:?}", NodegroupStatus::Creating)))
+                        .set_status(Some(NodegroupStatus::Creating))
+                        .build(),
+                )
+                .build(),
+            DescribeNodegroupOutput::builder()
+                .nodegroup(
+                    nodegroup::Builder::default()
+                        .set_nodegroup_name(Some(format!("nodegroup_{:?}", NodegroupStatus::Degraded)))
+                        .set_status(Some(NodegroupStatus::Degraded))
+                        .build(),
+                )
+                .build(),
+            DescribeNodegroupOutput::builder()
+                .nodegroup(
+                    nodegroup::Builder::default()
+                        .set_nodegroup_name(Some(format!("nodegroup_{:?}", NodegroupStatus::DeleteFailed)))
+                        .set_status(Some(NodegroupStatus::DeleteFailed))
+                        .build(),
+                )
+                .build(),
+            DescribeNodegroupOutput::builder()
+                .nodegroup(
+                    nodegroup::Builder::default()
+                        .set_nodegroup_name(Some(format!("nodegroup_{:?}", NodegroupStatus::Deleting)))
+                        .set_status(Some(NodegroupStatus::Deleting))
+                        .build(),
+                )
+                .build(),
+            DescribeNodegroupOutput::builder()
+                .nodegroup(
+                    nodegroup::Builder::default()
+                        .set_nodegroup_name(Some(format!("nodegroup_{:?}", NodegroupStatus::Updating)))
+                        .set_status(Some(NodegroupStatus::Updating))
+                        .build(),
+                )
+                .build(),
+        ];
+        let failed_ngs = check_failed_nodegroups_to_remove(ngs).unwrap();
+        assert_eq!(failed_ngs.len(), 3);
+        assert_eq!(
+            failed_ngs[0].nodegroup().unwrap().nodegroup_name().unwrap(),
+            "nodegroup_create_failed"
+        );
+        assert_eq!(
+            failed_ngs[1].nodegroup().unwrap().nodegroup_name().unwrap(),
+            "nodegroup_CreateFailed"
+        );
+        assert_eq!(
+            failed_ngs[2].nodegroup().unwrap().nodegroup_name().unwrap(),
+            "nodegroup_DeleteFailed"
+        );
+    }
 
     #[test]
     fn test_nodegroup_autoscaling_group() {

@@ -9,12 +9,21 @@ use crate::template::generate_and_copy_all_files_into_dir;
 use k8s_openapi::api::core::v1::Pod;
 use kube::api::ListParams;
 use kube::Api;
+use std::env;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tera::Context as TeraContext;
 use tokio::time::Instant;
 
-const DEFAULT_HELM_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+pub fn default_helm_timeout() -> Duration {
+    match env::var("HELM_TIMEOUT_IN_SECS") {
+        Ok(env_var) => match env_var.parse::<u64>() {
+            Ok(timeout) => Duration::from_secs(timeout),
+            Err(_) => Duration::from_secs(10 * 60),
+        },
+        Err(_) => Duration::from_secs(10 * 60),
+    }
+}
 /// Helm Deployment manages Helm + jinja support
 pub struct HelmDeployment {
     event_details: EventDetails,
@@ -115,7 +124,7 @@ impl DeploymentAction for HelmDeployment {
                         break;
                     }
 
-                    if started.elapsed() > DEFAULT_HELM_TIMEOUT {
+                    if started.elapsed() > default_helm_timeout() {
                         break;
                     }
 
@@ -133,7 +142,7 @@ impl DeploymentAction for HelmDeployment {
 mod tests {
     use crate::cloud_provider::helm::ChartInfo;
     use crate::cmd::helm::Helm;
-    use crate::deployment_action::deploy_helm::HelmDeployment;
+    use crate::deployment_action::deploy_helm::{default_helm_timeout, HelmDeployment};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
     use function_name::named;
@@ -165,7 +174,7 @@ mod tests {
             "test_app_helm_deployment".to_string(),
             dest_folder.to_string_lossy().to_string(),
             namespace,
-            600,
+            default_helm_timeout().as_secs() as i64,
             vec![],
             vec![],
             vec![],

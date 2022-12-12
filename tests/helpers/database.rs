@@ -1,4 +1,4 @@
-use crate::helpers::aws::{AWS_EC2_TEST_REGION, AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
+use crate::helpers::aws::{AWS_EC2_INSTANCE_TEST_REGION, AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
 use crate::helpers::common::{compute_test_cluster_endpoint, Cluster, ClusterDomain, Infrastructure};
 use crate::helpers::kubernetes::{KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
 use crate::helpers::scaleway::{SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
@@ -20,7 +20,7 @@ use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::structs::SVCItem;
 
 use qovery_engine::engine::InfrastructureContext;
-use qovery_engine::io_models::application::{Application, GitCredentials, Port, Protocol, Storage, StorageType};
+use qovery_engine::io_models::application::{Application, GitCredentials, Port, Protocol};
 use qovery_engine::io_models::context::{CloneForTest, Context};
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
@@ -56,8 +56,15 @@ impl Infrastructure for EnvironmentRequest {
             force_push: true,
         };
         let logger = Arc::new(infra_ctx.kubernetes().logger().clone_dyn());
-        let ret = EnvironmentTask::build_and_push_applications(
-            &mut env.applications,
+        let services_to_build: Vec<&mut dyn Service> = env
+            .applications
+            .iter_mut()
+            .map(|app| app.as_service_mut())
+            .chain(env.jobs.iter_mut().map(|job| job.as_service_mut()))
+            .collect();
+
+        let ret = EnvironmentTask::build_and_push_services(
+            services_to_build,
             &deployment_option,
             infra_ctx,
             |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
@@ -194,18 +201,7 @@ pub fn environment_3_apps_3_databases(
                     access_token: "xxx".to_string(),
                     expired_at: Utc::now(),
                 }),
-                storage: {
-                    let id = Uuid::new_v4();
-                    vec![Storage {
-                        id: to_short_id(&id),
-                        long_id: id,
-                        name: "photos".to_string(),
-                        storage_type: StorageType::Ssd,
-                        size_in_gib: 10,
-                        mount_point: "/mnt/photos".to_string(),
-                        snapshot_retention_in_days: 0,
-                    }]
-                },
+                storage: vec![],
                 environment_vars: btreemap! {
                      "PG_DBNAME".to_string() => base64::encode(database_name.clone()),
                      "PG_HOST".to_string() => base64::encode(fqdn.clone()),
@@ -225,8 +221,8 @@ pub fn environment_3_apps_3_databases(
                 }],
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 256,
-                min_instances: 2,
-                max_instances: 2,
+                min_instances: 1,
+                max_instances: 1,
                 cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
             },
@@ -264,8 +260,8 @@ pub fn environment_3_apps_3_databases(
                 }],
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 256,
-                min_instances: 2,
-                max_instances: 2,
+                min_instances: 1,
+                max_instances: 1,
                 cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
             },
@@ -305,8 +301,8 @@ pub fn environment_3_apps_3_databases(
                 }],
                 total_cpus: "100m".to_string(),
                 total_ram_in_mib: 256,
-                min_instances: 2,
-                max_instances: 2,
+                min_instances: 1,
+                max_instances: 1,
                 cpu_burst: "100m".to_string(),
                 advanced_settings: Default::default(),
             },
@@ -601,7 +597,7 @@ pub fn test_db(
     let (localisation, kubernetes_version) = match kubernetes_kind {
         KubernetesKind::Eks => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
         KubernetesKind::ScwKapsule => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
-        KubernetesKind::Ec2 => (AWS_EC2_TEST_REGION.to_string(), AWS_K3S_VERSION.to_string()),
+        KubernetesKind::Ec2 => (AWS_EC2_INSTANCE_TEST_REGION.to_string(), AWS_K3S_VERSION.to_string()),
     };
 
     let computed_infra_ctx: InfrastructureContext;

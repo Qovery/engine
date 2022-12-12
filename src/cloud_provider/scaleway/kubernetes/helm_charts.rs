@@ -1,10 +1,9 @@
 use crate::cloud_provider::helm::{
-    get_chart_for_cert_manager_config, get_chart_for_cluster_agent, get_chart_for_shell_agent,
-    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, ChartValuesGenerated, ClusterAgentContext,
-    CommonChart, HelmAction, HelmChart, HelmChartNamespaces, ShellAgentContext,
+    get_chart_for_cluster_agent, get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo,
+    ChartSetValue, ClusterAgentContext, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
-use crate::cloud_provider::helm_charts::ToCommonHelmChart;
+use crate::cloud_provider::helm_charts::{HelmChartResourcesConstraintType, ToCommonHelmChart};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::qovery::{get_qovery_app_version, EngineLocation, QoveryAppName, QoveryEngine};
 use crate::cloud_provider::scaleway::kubernetes::KapsuleOptions;
@@ -13,15 +12,18 @@ use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 use crate::models::scaleway::{ScwRegion, ScwZone};
 
+use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
+use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
+use crate::cloud_provider::helm_charts::grafana_chart::{GrafanaAdminUser, GrafanaChart, GrafanaDatasources};
 use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
 use crate::cloud_provider::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiEncryptionType, LokiS3BucketConfiguration};
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
-use semver::Version;
+use crate::models::third_parties::LetsEncryptConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::File;
@@ -55,8 +57,7 @@ pub struct ChartsConfigPrerequisites {
     pub managed_dns_resolvers_terraform_format: String,
     pub managed_dns_root_domain_helm_format: String,
     pub external_dns_provider: String,
-    pub dns_email_report: String,
-    pub acme_url: String,
+    pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
     pub disable_pleco: bool,
     // qovery options form json input
@@ -85,8 +86,7 @@ impl ChartsConfigPrerequisites {
         managed_dns_resolvers_terraform_format: String,
         managed_dns_root_domain_helm_format: String,
         external_dns_provider: String,
-        dns_email_report: String,
-        acme_url: String,
+        lets_encrypt_config: LetsEncryptConfig,
         dns_provider_config: DnsProviderConfiguration,
         disable_pleco: bool,
         infra_options: KapsuleOptions,
@@ -113,8 +113,7 @@ impl ChartsConfigPrerequisites {
             managed_dns_resolvers_terraform_format,
             managed_dns_root_domain_helm_format,
             external_dns_provider,
-            dns_email_report,
-            acme_url,
+            lets_encrypt_config,
             dns_provider_config,
             disable_pleco,
             infra_options,
@@ -189,24 +188,32 @@ pub fn scw_helm_charts(
     .to_common_helm_chart();
 
     // Promtail
-    let promtail = PromtailChart::new(chart_prefix_path, loki_kube_dns_name).to_common_helm_chart();
+    let promtail = match chart_config_prerequisites.ff_log_history_enabled {
+        false => None,
+        true => Some(PromtailChart::new(chart_prefix_path, loki_kube_dns_name).to_common_helm_chart()),
+    };
 
     // Loki
-    let loki = LokiChart::new(
-        chart_prefix_path,
-        LokiEncryptionType::None, // Scaleway does not support encryption yet.
-        loki_namespace,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .loki_log_retention_in_week,
-        LokiS3BucketConfiguration {
-            s3_config: Some(qovery_terraform_config.loki_storage_config_scaleway_s3),
-            use_path_style: true,
-            region: Some(chart_config_prerequisites.zone.region().to_string()),
-            ..Default::default()
-        },
-    )
-    .to_common_helm_chart();
+    let loki = match chart_config_prerequisites.ff_log_history_enabled {
+        false => None,
+        true => Some(
+            LokiChart::new(
+                chart_prefix_path,
+                LokiEncryptionType::None, // Scaleway does not support encryption yet.
+                loki_namespace,
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .loki_log_retention_in_week,
+                LokiS3BucketConfiguration {
+                    s3_config: Some(qovery_terraform_config.loki_storage_config_scaleway_s3),
+                    use_path_style: true,
+                    region: Some(chart_config_prerequisites.zone.region().to_string()),
+                    ..Default::default()
+                },
+            )
+            .to_common_helm_chart(),
+        ),
+    };
 
     /* Example to delete an old chart
     let old_prometheus_operator = PrometheusOperatorConfigChart {
@@ -219,173 +226,85 @@ pub fn scw_helm_charts(
     };*/
 
     // Kube prometheus stack
-    let kube_prometheus_stack = KubePrometheusStackChart::new(
-        chart_prefix_path,
-        "scw-sbv-ssd-0".to_string(),
-        prometheus_internal_url.to_string(),
-        prometheus_namespace,
-        true,
-    )
-    .to_common_helm_chart();
+    let kube_prometheus_stack = match chart_config_prerequisites.ff_metrics_history_enabled {
+        false => None,
+        true => Some(
+            KubePrometheusStackChart::new(
+                chart_prefix_path,
+                "scw-sbv-ssd-0".to_string(),
+                prometheus_internal_url.to_string(),
+                prometheus_namespace,
+                true,
+            )
+            .to_common_helm_chart(),
+        ),
+    };
 
     // Prometheus adapter
-    let prometheus_adapter =
-        PrometheusAdapterChart::new(chart_prefix_path, prometheus_internal_url.clone(), prometheus_namespace)
-            .to_common_helm_chart();
+    let prometheus_adapter = match chart_config_prerequisites.ff_metrics_history_enabled {
+        false => None,
+        true => Some(
+            PrometheusAdapterChart::new(chart_prefix_path, prometheus_internal_url.clone(), prometheus_namespace)
+                .to_common_helm_chart(),
+        ),
+    };
 
     // metric-server is built-in Scaleway cluster, no need to manage it
 
     // Kube state metrics
-    let kube_state_metrics = KubeStateMetricsChart::new(chart_prefix_path).to_common_helm_chart();
-
-    let grafana_datasources = format!(
-        "
-datasources:
-  datasources.yaml:
-    apiVersion: 1
-    datasources:
-      - name: Prometheus
-        type: prometheus
-        url: \"{}:9090\"
-        access: proxy
-        isDefault: true
-      - name: PromLoki
-        type: prometheus
-        url: \"http://{}.{}.svc:3100/loki\"
-        access: proxy
-        isDefault: false
-      - name: Loki
-        type: loki
-        url: \"http://{}.{}.svc:3100\"
-      ",
-        prometheus_internal_url, &loki.chart_info.name, loki_namespace, &loki.chart_info.name, loki_namespace,
-    );
-
-    let grafana = CommonChart {
-        chart_info: ChartInfo {
-            name: "grafana".to_string(),
-            path: chart_path("common/charts/grafana"),
-            namespace: prometheus_namespace,
-            values_files: vec![chart_path("chart_values/grafana.yaml")],
-            yaml_files_content: vec![ChartValuesGenerated {
-                filename: "grafana_generated.yaml".to_string(),
-                yaml_content: grafana_datasources,
-            }],
-            ..Default::default()
-        },
-        ..Default::default()
+    let kube_state_metrics = match chart_config_prerequisites.ff_metrics_history_enabled {
+        false => None,
+        true => Some(KubeStateMetricsChart::new(chart_prefix_path).to_common_helm_chart()),
     };
 
-    let cert_manager = CommonChart {
-        chart_info: ChartInfo {
-            name: "cert-manager".to_string(),
-            path: chart_path("common/charts/cert-manager"),
-            namespace: HelmChartNamespaces::CertManager,
-            last_breaking_version_requiring_restart: Some(Version::new(1, 4, 4)),
-            values: vec![
-                ChartSetValue {
-                    key: "installCRDs".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "startupapicheck.jobAnnotations.helm\\.sh/hook".to_string(),
-                    value: "post-install\\,post-upgrade".to_string(),
-                },
-                ChartSetValue {
-                    key: "startupapicheck.rbac.annotations.helm\\.sh/hook".to_string(),
-                    value: "post-install\\,post-upgrade".to_string(),
-                },
-                ChartSetValue {
-                    key: "startupapicheck.serviceAccount.annotations.helm\\.sh/hook".to_string(),
-                    value: "post-install\\,post-upgrade".to_string(),
-                },
-                ChartSetValue {
-                    key: "replicaCount".to_string(),
-                    value: "1".to_string(),
-                },
-                // https://cert-manager.io/docs/configuration/acme/dns01/#setting-nameservers-for-dns01-self-check
-                ChartSetValue {
-                    key: "extraArgs".to_string(),
-                    value: "{--dns01-recursive-nameservers-only,--dns01-recursive-nameservers=1.1.1.1:53\\,8.8.8.8:53}"
-                        .to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheus.servicemonitor.enabled".to_string(),
-                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheus.servicemonitor.prometheusInstance".to_string(),
-                    value: "qovery".to_string(),
-                },
-                // resources limits
-                ChartSetValue {
-                    key: "resources.limits.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "1Gi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "1Gi".to_string(),
-                },
-                // Webhooks resources limits
-                ChartSetValue {
-                    key: "webhook.resources.limits.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
-                    key: "webhook.resources.requests.cpu".to_string(),
-                    value: "50m".to_string(),
-                },
-                ChartSetValue {
-                    key: "webhook.resources.limits.memory".to_string(),
-                    value: "128Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "webhook.resources.requests.memory".to_string(),
-                    value: "128Mi".to_string(),
-                },
-                // Cainjector resources limits
-                ChartSetValue {
-                    key: "cainjector.resources.limits.cpu".to_string(),
-                    value: "500m".to_string(),
-                },
-                ChartSetValue {
-                    key: "cainjector.resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
-                    key: "cainjector.resources.limits.memory".to_string(),
-                    value: "1Gi".to_string(),
-                },
-                ChartSetValue {
-                    key: "cainjector.resources.requests.memory".to_string(),
-                    value: "1Gi".to_string(),
-                },
-            ],
-            ..Default::default()
+    // Grafana chart
+    let grafana = GrafanaChart::new(
+        chart_prefix_path,
+        GrafanaAdminUser::new(
+            chart_config_prerequisites.infra_options.grafana_admin_user.to_string(),
+            chart_config_prerequisites
+                .infra_options
+                .grafana_admin_password
+                .to_string(),
+        ),
+        GrafanaDatasources {
+            prometheus_internal_url,
+            loki_chart_name: LokiChart::chart_name(),
+            loki_namespace: loki_namespace.to_string(),
+            cloudwatch_config: None,
         },
-        ..Default::default()
-    };
+        "scw-sbv-ssd-0".to_string(), // TODO(benjaminch): introduce proper type here
+    )
+    .to_common_helm_chart();
 
-    let cert_manager_config = get_chart_for_cert_manager_config(
+    // Cert Manager chart
+    let cert_manager = CertManagerChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.ff_metrics_history_enabled,
+        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartResourcesConstraintType::ChartDefault,
+    )
+    .to_common_helm_chart();
+
+    // Cert Manager Configs
+    let cert_manager_config = CertManagerConfigsChart::new(
+        chart_prefix_path,
+        &chart_config_prerequisites.lets_encrypt_config,
         &chart_config_prerequisites.dns_provider_config,
-        chart_path("common/charts/cert-manager-configs"),
-        chart_config_prerequisites.dns_email_report.clone(),
-        chart_config_prerequisites.acme_url.clone(),
-        chart_config_prerequisites.managed_dns_helm_format.clone(),
-    );
+        chart_config_prerequisites.managed_dns_helm_format.to_string(),
+    )
+    .to_common_helm_chart();
 
     let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
     if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {
         qovery_cert_manager_webhook = Some(
-            QoveryCertManagerWebhookChart::new(chart_prefix_path, qovery_dns_config.clone()).to_common_helm_chart(),
+            QoveryCertManagerWebhookChart::new(
+                chart_prefix_path,
+                qovery_dns_config.clone(),
+                HelmChartResourcesConstraintType::ChartDefault,
+            )
+            .to_common_helm_chart(),
         );
     }
 
@@ -442,32 +361,35 @@ datasources:
         ..Default::default()
     };
 
-    let pleco = CommonChart {
-        chart_info: ChartInfo {
-            name: "pleco".to_string(),
-            path: chart_path("common/charts/pleco"),
-            values_files: vec![chart_path("chart_values/pleco-scw.yaml")],
-            values: vec![
-                ChartSetValue {
-                    key: "environmentVariables.SCW_ACCESS_KEY".to_string(),
-                    value: chart_config_prerequisites.scw_access_key.clone(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.SCW_SECRET_KEY".to_string(),
-                    value: chart_config_prerequisites.scw_secret_key.clone(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.SCW_VOLUME_TIMEOUT".to_string(),
-                    value: 24i32.to_string(),
-                },
-                ChartSetValue {
-                    key: "environmentVariables.LOG_LEVEL".to_string(),
-                    value: "debug".to_string(),
-                },
-            ],
+    let pleco = match chart_config_prerequisites.disable_pleco {
+        true => None,
+        false => Some(CommonChart {
+            chart_info: ChartInfo {
+                name: "pleco".to_string(),
+                path: chart_path("common/charts/pleco"),
+                values_files: vec![chart_path("chart_values/pleco-scw.yaml")],
+                values: vec![
+                    ChartSetValue {
+                        key: "environmentVariables.SCW_ACCESS_KEY".to_string(),
+                        value: chart_config_prerequisites.scw_access_key.clone(),
+                    },
+                    ChartSetValue {
+                        key: "environmentVariables.SCW_SECRET_KEY".to_string(),
+                        value: chart_config_prerequisites.scw_secret_key.clone(),
+                    },
+                    ChartSetValue {
+                        key: "environmentVariables.SCW_VOLUME_TIMEOUT".to_string(),
+                        value: 24i32.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "environmentVariables.LOG_LEVEL".to_string(),
+                        value: "debug".to_string(),
+                    },
+                ],
+                ..Default::default()
+            },
             ..Default::default()
-        },
-        ..Default::default()
+        }),
     };
 
     let cluster_agent_context = ClusterAgentContext {
@@ -639,24 +561,29 @@ datasources:
         Box::new(qovery_engine),
     ];
 
-    // // observability
-    if chart_config_prerequisites.ff_metrics_history_enabled {
-        level_1.push(Box::new(kube_prometheus_stack));
-        level_2.push(Box::new(prometheus_adapter));
-        level_2.push(Box::new(kube_state_metrics));
+    // observability
+    if let Some(kube_prometheus_stack_chart) = kube_prometheus_stack {
+        level_1.push(Box::new(kube_prometheus_stack_chart));
     }
-    if chart_config_prerequisites.ff_log_history_enabled {
-        level_1.push(Box::new(promtail));
-        level_2.push(Box::new(loki));
+    if let Some(prometheus_adapter_chart) = prometheus_adapter {
+        level_2.push(Box::new(prometheus_adapter_chart));
     }
-
+    if let Some(kube_state_metrics_chart) = kube_state_metrics {
+        level_2.push(Box::new(kube_state_metrics_chart));
+    }
+    if let Some(promtail_chart) = promtail {
+        level_1.push(Box::new(promtail_chart));
+    }
+    if let Some(loki_chart) = loki {
+        level_2.push(Box::new(loki_chart));
+    }
     if chart_config_prerequisites.ff_metrics_history_enabled || chart_config_prerequisites.ff_log_history_enabled {
         level_2.push(Box::new(grafana))
     };
 
     // pleco
-    if !chart_config_prerequisites.disable_pleco {
-        level_6.push(Box::new(pleco));
+    if let Some(pleco_chart) = pleco {
+        level_6.push(Box::new(pleco_chart));
     }
 
     info!("charts configuration preparation finished");

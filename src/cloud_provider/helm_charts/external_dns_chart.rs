@@ -60,7 +60,14 @@ impl ToCommonHelmChart for ExternalDNSChart {
                     },
                     ChartSetValue {
                         key: "domainFilters".to_string(),
-                        value: self.managed_dns_domains_root_helm_format.to_string(),
+                        value: self
+                            .managed_dns_domains_root_helm_format
+                            .to_string()
+                            .replace('.', r"\."), // escape . from domains
+                    },
+                    ChartSetValue {
+                        key: "txtOwnerId".to_string(),
+                        value: self.cluster_id.to_string(),
                     },
                     ChartSetValue {
                         key: "txtPrefix".to_string(),

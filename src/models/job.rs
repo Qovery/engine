@@ -1,3 +1,4 @@
+use crate::build_platform::Build;
 use crate::cloud_provider::models::EnvironmentVariable;
 use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
@@ -31,9 +32,7 @@ pub struct Job<T: CloudProvider> {
     pub(super) long_id: Uuid,
     pub(super) name: String,
     pub(super) action: Action,
-    pub registry: Registry,
-    pub image: String,
-    pub tag: String,
+    pub image_source: ImageSource,
     pub(super) schedule: JobSchedule,
     pub(super) max_nb_restart: u32,
     pub(super) max_duration: Duration,
@@ -59,9 +58,7 @@ impl<T: CloudProvider> Job<T> {
         long_id: Uuid,
         name: String,
         action: Action,
-        registry: Registry,
-        image: String,
-        tag: String,
+        image_source: ImageSource,
         schedule: JobSchedule,
         max_nb_restart: u32,
         max_duration_in_sec: Duration,
@@ -115,9 +112,7 @@ impl<T: CloudProvider> Job<T> {
             id: to_short_id(&long_id),
             long_id,
             action,
-            registry,
-            image,
-            tag,
+            image_source,
             schedule,
             max_nb_restart,
             max_duration: max_duration_in_sec,
@@ -158,10 +153,6 @@ impl<T: CloudProvider> Job<T> {
         format!("job-{}", to_short_id(&self.long_id))
     }
 
-    pub fn registry(&self) -> &Registry {
-        &self.registry
-    }
-
     pub fn should_force_trigger(&self) -> bool {
         self.force_trigger
     }
@@ -174,6 +165,21 @@ impl<T: CloudProvider> Job<T> {
         let environment = &target.environment;
         let kubernetes = &target.kubernetes;
         let registry_info = target.container_registry.registry_info();
+        let (image_full, image_tag) = match &self.image_source {
+            ImageSource::Registry { source } => {
+                let image_tag = source.tag_for_mirror(&self.long_id);
+                (
+                    format!(
+                        "{}/{}:{}",
+                        registry_info.endpoint.host_str().unwrap_or_default(),
+                        (registry_info.get_image_name)(models::container::QOVERY_MIRROR_REPOSITORY_NAME),
+                        image_tag
+                    ),
+                    image_tag,
+                )
+            }
+            ImageSource::Build { source } => (source.image.full_image_name_with_tag(), source.image.tag.clone()),
+        };
 
         let ctx = JobTeraContext {
             organization_long_id: environment.organization_long_id,
@@ -192,14 +198,8 @@ impl<T: CloudProvider> Job<T> {
                 long_id: self.long_id,
                 name: self.kube_service_name(),
                 user_unsafe_name: self.name.clone(),
-                // FIXME: We mirror images to cluster private registry
-                image_full: format!(
-                    "{}/{}:{}",
-                    registry_info.endpoint.host_str().unwrap_or_default(),
-                    (registry_info.get_image_name)(models::container::QOVERY_MIRROR_REPOSITORY_NAME),
-                    self.tag_for_mirror()
-                ),
-                image_tag: self.tag_for_mirror(),
+                image_full,
+                image_tag,
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
                 cpu_request_in_milli: format!("{}m", self.cpu_request_in_milli),
@@ -246,17 +246,14 @@ impl<T: CloudProvider> Job<T> {
     }
 
     pub fn image_with_tag(&self) -> String {
-        format!("{}:{}", self.image, self.tag)
+        match &self.image_source {
+            ImageSource::Registry { source: registry } => format!("{}:{}", registry.image, registry.tag),
+            ImageSource::Build { source: build } => build.image.name_without_repository().to_string(),
+        }
     }
 
     pub fn is_cron_job(&self) -> bool {
         matches!(self.schedule, JobSchedule::Cron { .. })
-    }
-
-    pub fn tag_for_mirror(&self) -> String {
-        // A tag name must be valid ASCII and may contain lowercase and uppercase letters, digits, underscores, periods and dashes.
-        // A tag name may not start with a period or a dash and may contain a maximum of 128 characters.
-        cut(format!("{}.{}.{}", self.image.replace('/', "."), self.tag, self.long_id), 128)
     }
 
     pub fn selector(&self) -> String {
@@ -304,6 +301,36 @@ impl<T: CloudProvider> Service for Job<T> {
     fn as_service(&self) -> &dyn Service {
         self
     }
+
+    fn as_service_mut(&mut self) -> &mut dyn Service {
+        self
+    }
+
+    fn build(&self) -> Option<&Build> {
+        match &self.image_source {
+            ImageSource::Registry { .. } => None,
+            ImageSource::Build { source: build } => match &self.schedule {
+                JobSchedule::OnStart { .. } if self.action == Action::Create => Some(build),
+                JobSchedule::OnPause { .. } if self.action == Action::Pause => Some(build),
+                JobSchedule::OnDelete { .. } if self.action == Action::Delete => Some(build),
+                JobSchedule::Cron { .. } => Some(build),
+                _ => None,
+            },
+        }
+    }
+
+    fn build_mut(&mut self) -> Option<&mut Build> {
+        match &mut self.image_source {
+            ImageSource::Registry { .. } => None,
+            ImageSource::Build { source: build } => match &self.schedule {
+                JobSchedule::OnStart { .. } if self.action == Action::Create => Some(build),
+                JobSchedule::OnPause { .. } if self.action == Action::Pause => Some(build),
+                JobSchedule::OnDelete { .. } if self.action == Action::Delete => Some(build),
+                JobSchedule::Cron { .. } => Some(build),
+                _ => None,
+            },
+        }
+    }
 }
 
 impl<T: CloudProvider> ToTeraContext for Job<T> {
@@ -344,12 +371,17 @@ where
     }
 
     fn image_full(&self) -> String {
-        format!(
-            "{}{}:{}",
-            self.registry.url().to_string().trim_start_matches("https://"),
-            self.image,
-            self.tag
-        )
+        match &self.image_source {
+            ImageSource::Registry { source: registry } => {
+                format!(
+                    "{}{}:{}",
+                    registry.registry.url().to_string().trim_start_matches("https://"),
+                    registry.image,
+                    registry.tag
+                )
+            }
+            ImageSource::Build { source: build } => build.image.full_image_name_with_tag(),
+        }
     }
 
     fn kube_service_name(&self) -> String {
@@ -371,6 +403,25 @@ where
     fn is_force_trigger(&self) -> bool {
         self.force_trigger
     }
+}
+
+pub struct RegistryImageSource {
+    pub registry: Registry,
+    pub image: String,
+    pub tag: String,
+}
+
+impl RegistryImageSource {
+    pub fn tag_for_mirror(&self, service_id: &Uuid) -> String {
+        // A tag name must be valid ASCII and may contain lowercase and uppercase letters, digits, underscores, periods and dashes.
+        // A tag name may not start with a period or a dash and may contain a maximum of 128 characters.
+        cut(format!("{}.{}.{}", self.image.replace('/', "."), self.tag, service_id), 128)
+    }
+}
+
+pub enum ImageSource {
+    Registry { source: Box<RegistryImageSource> },
+    Build { source: Box<Build> },
 }
 
 #[derive(Serialize, Debug, Clone)]

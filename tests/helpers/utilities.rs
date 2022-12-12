@@ -593,9 +593,10 @@ pub fn generate_cluster_id(region: &str) -> Uuid {
     let check_if_running_on_gitlab_env_var = "CI_PROJECT_TITLE";
 
     // if running on CI, generate an ID
-    match env::var_os(check_if_running_on_gitlab_env_var) {
-        None => {}
-        Some(_) => return generate_id(),
+    if env::var_os(check_if_running_on_gitlab_env_var).is_some() {
+        let id = generate_id();
+        info!("Generated cluster ID: {}", id);
+        return id;
     };
 
     match gethostname::gethostname().into_string() {

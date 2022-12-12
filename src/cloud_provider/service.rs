@@ -4,6 +4,7 @@ use std::io::BufReader;
 use std::path::Path;
 use std::str::FromStr;
 
+use crate::build_platform::Build;
 use tera::Context as TeraContext;
 use uuid::Uuid;
 
@@ -30,6 +31,9 @@ pub trait Service {
     // used to retrieve logs by using Kubernetes labels (selector)
     fn selector(&self) -> Option<String>;
     fn as_service(&self) -> &dyn Service;
+    fn as_service_mut(&mut self) -> &mut dyn Service;
+    fn build(&self) -> Option<&Build>;
+    fn build_mut(&mut self) -> Option<&mut Build>;
 }
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]

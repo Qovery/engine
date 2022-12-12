@@ -31,6 +31,7 @@ use crate::io_models::domain::ToHelmString;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::models::scaleway::ScwZone;
+use crate::models::third_parties::LetsEncryptConfig;
 use crate::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 use crate::object_storage::ObjectStorage;
 use crate::runtime::block_on;
@@ -940,8 +941,7 @@ impl Kapsule {
             self.managed_dns_resolvers_terraform_format(),
             self.dns_provider.domain().root_domain().to_helm_format_string(),
             self.dns_provider.provider_name().to_string(),
-            self.options.tls_email_report.clone(),
-            self.lets_encrypt_url(),
+            LetsEncryptConfig::new(self.options.tls_email_report.to_string(), self.context.is_test_cluster()),
             self.dns_provider().provider_configuration(),
             self.context.disable_pleco(),
             self.options.clone(),

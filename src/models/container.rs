@@ -1,3 +1,4 @@
+use crate::build_platform::Build;
 use crate::cloud_provider::models::{EnvironmentVariable, Storage, StorageDataTemplate};
 use crate::cloud_provider::service::{Action, Service, ServiceType};
 use crate::cloud_provider::DeploymentTarget;
@@ -306,6 +307,18 @@ impl<T: CloudProvider> Service for Container<T> {
 
     fn as_service(&self) -> &dyn Service {
         self
+    }
+
+    fn as_service_mut(&mut self) -> &mut dyn Service {
+        self
+    }
+
+    fn build(&self) -> Option<&Build> {
+        None
+    }
+
+    fn build_mut(&mut self) -> Option<&mut Build> {
+        None
     }
 }
 

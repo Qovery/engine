@@ -10,7 +10,7 @@ use aws_sdk_elasticloadbalancingv2::model::{LoadBalancer, TagDescription};
 use aws_smithy_client::SdkError;
 use k8s_openapi::api::core::v1::Service;
 
-use super::models::QoveryAwsSdkConfig;
+use super::models::QoveryAwsSdkConfigLoadBalancer;
 
 // fix for NLB not properly removed https://discuss.qovery.com/t/why-provision-nlbs-for-container-databases/1114/10?u=pierre_mavro
 pub fn clean_up_deleted_k8s_nlb(event_details: EventDetails, target: &DeploymentTarget) -> Result<(), EngineError> {
@@ -120,7 +120,7 @@ pub fn find_aws_nlb_to_delete(aws_lbs: Vec<TagDescription>, k8s_lbs: Vec<Service
 }
 
 #[async_trait]
-impl QoveryAwsSdkConfig for SdkConfig {
+impl QoveryAwsSdkConfigLoadBalancer for SdkConfig {
     /// Get/list all load balancers in the account.
     async fn list_all_aws_load_balancers(
         &self,

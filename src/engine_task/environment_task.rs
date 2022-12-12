@@ -17,7 +17,6 @@ use crate::io_models::context::Context;
 use crate::io_models::engine_request::EnvironmentEngineRequest;
 use crate::io_models::Action;
 use crate::logger::Logger;
-use crate::models::application::ApplicationService;
 use crate::transaction::DeploymentOption;
 use chrono::{DateTime, Utc};
 use std::collections::HashSet;
@@ -89,22 +88,21 @@ impl EnvironmentTask {
         EventDetails::clone_changing_stage(self.request.event_details(), Stage::Environment(step))
     }
 
-    pub fn build_and_push_applications(
-        applications: &mut [Box<dyn ApplicationService>],
+    pub fn build_and_push_services(
+        services: Vec<&mut dyn Service>,
         option: &DeploymentOption,
         infra_ctx: &InfrastructureContext,
         mk_logger: impl Fn(&dyn Service) -> EnvLogger,
         should_abort: &dyn Fn() -> bool,
     ) -> Result<(), EngineError> {
         // do the same for applications
-        let mut apps_to_build = applications
-            .iter_mut()
-            // build only applications that are set with Action: Create
-            .filter(|app| *app.action() == service::Action::Create)
+        let services_to_build = services
+            .into_iter()
+            .filter(|srv| srv.build().is_some())
             .collect::<Vec<_>>();
 
         // If nothing to build, do nothing
-        if apps_to_build.is_empty() {
+        if services_to_build.is_empty() {
             return Ok(());
         }
 
@@ -120,21 +118,26 @@ impl EnvironmentTask {
         let cr_registry = infra_ctx.container_registry();
         cr_registry.create_registry().map_err(cr_to_engine_error)?;
 
-        for app in apps_to_build.iter_mut() {
+        for service in services_to_build {
+            let logger = mk_logger(service);
+            let build = match service.build_mut() {
+                Some(build) => build,
+                None => continue, // this case should not happen as we filter on buildable services
+            };
+            let image_name = build.image.full_image_name_with_tag();
+
             // If image already exist in the registry, skip the build
-            if !option.force_build && cr_registry.does_image_exists(&app.get_build().image) {
+            if !option.force_build && cr_registry.does_image_exists(&build.image) {
+                let msg = format!("✅ Container image {} already exists and ready to use", image_name);
+                logger.send_success(msg);
                 continue;
             }
 
             // Be sure that our repository exist before trying to pull/push images from it
-            let logger = mk_logger(app.as_service());
-            logger.send_progress(format!(
-                "🗂️ Provisioning container repository {}",
-                app.get_build().image.repository_name()
-            ));
+            logger.send_progress(format!("🗂️ Provisioning container repository {}", build.image.repository_name()));
             cr_registry
                 .create_repository(
-                    app.get_build().image.repository_name(),
+                    build.image.repository_name(),
                     infra_ctx
                         .kubernetes()
                         .advanced_settings()
@@ -143,13 +146,7 @@ impl EnvironmentTask {
                 .map_err(cr_to_engine_error)?;
 
             // Ok now everything is setup, we can try to build the app
-            let build_result = infra_ctx
-                .build_platform()
-                .build(app.get_build_mut(), &logger, should_abort);
-
-            // logging
-            let image_name = app.get_build().image.full_image_name_with_tag();
-
+            let build_result = infra_ctx.build_platform().build(build, &logger, should_abort);
             match build_result {
                 Ok(_) => {
                     let msg = format!("✅ Container image {} is built and ready to use", &image_name);
@@ -158,14 +155,14 @@ impl EnvironmentTask {
                 }
                 Err(err @ BuildError::Aborted { .. }) => {
                     let msg = format!("🚫 Container image {} build has been canceled", &image_name);
-                    let event_details = app.get_event_details(Stage::Environment(EnvironmentStep::Cancelled));
+                    let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Cancelled));
                     let build_result = build_platform::to_engine_error(event_details, err, msg);
                     logger.send_error(build_result.clone());
                     Err(build_result)
                 }
                 Err(err) => {
                     let msg = format!("❌ Container image {} failed to be build: {}", &image_name, err);
-                    let event_details = app.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
+                    let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
                     let build_result = build_platform::to_engine_error(event_details, err, msg);
                     logger.send_error(build_result.clone());
                     Err(build_result)
@@ -191,8 +188,14 @@ impl EnvironmentTask {
                 }
 
                 let logger = Arc::new(infra_ctx.kubernetes().logger().clone_dyn());
-                Self::build_and_push_applications(
-                    &mut environment.applications,
+                let services_to_build: Vec<&mut dyn Service> = environment
+                    .applications
+                    .iter_mut()
+                    .map(|app| app.as_service_mut())
+                    .chain(environment.jobs.iter_mut().map(|job| job.as_service_mut()))
+                    .collect();
+                Self::build_and_push_services(
+                    services_to_build,
                     &DeploymentOption {
                         force_build: false,
                         force_push: false,
@@ -240,7 +243,8 @@ impl EnvironmentTask {
             .chain(environment.applications.iter().map(|x| x.as_service()))
             .chain(environment.containers.iter().map(|x| x.as_service()))
             .chain(environment.routers.iter().map(|x| x.as_service()))
-            .chain(environment.databases.iter().map(|x| x.as_service()));
+            .chain(environment.databases.iter().map(|x| x.as_service()))
+            .chain(environment.jobs.iter().map(|x| x.as_service()));
 
         for service in services {
             if deployed_services.contains(service.long_id()) {

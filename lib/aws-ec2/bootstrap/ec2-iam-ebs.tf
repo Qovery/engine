@@ -174,6 +174,7 @@ POLICY
 resource "aws_iam_instance_profile" "aws_ebs_csi_driver" {
   name = "qovery-ec2-ebs-${var.kubernetes_cluster_id}"
   role = aws_iam_role.aws_ebs_csi_driver.name
+  tags = local.tags_ec2
 }
 
 resource "aws_iam_role_policy_attachment" "aws_ebs_csi_driver" {

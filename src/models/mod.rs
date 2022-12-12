@@ -7,4 +7,5 @@ pub(crate) mod database_utils;
 pub mod job;
 pub mod router;
 pub mod scaleway;
+pub mod third_parties;
 pub mod types;

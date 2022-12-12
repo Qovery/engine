@@ -1,8 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::{Options, VpcQoveryNetworkMode};
 use crate::cloud_provider::helm::{
-    get_chart_for_cert_manager_config, get_chart_for_cluster_agent, get_chart_for_shell_agent,
-    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, ClusterAgentContext, CommonChart, HelmAction,
-    HelmChart, HelmChartNamespaces, ShellAgentContext,
+    get_chart_for_cluster_agent, get_chart_for_shell_agent, get_engine_helm_action_from_location, ChartInfo,
+    ChartSetValue, ClusterAgentContext, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, ShellAgentContext,
 };
 use crate::cloud_provider::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::cloud_provider::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType, ToCommonHelmChart};
@@ -11,11 +10,14 @@ use crate::cmd::terraform::TerraformError;
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
 
+use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
+use crate::cloud_provider::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::cloud_provider::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::cloud_provider::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::models::third_parties::LetsEncryptConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs::File;
@@ -63,8 +65,7 @@ pub struct Ec2ChartsConfigPrerequisites {
     pub managed_dns_resolvers_terraform_format: String,
     pub managed_dns_root_domain_helm_format: String,
     pub external_dns_provider: String,
-    pub dns_email_report: String,
-    pub acme_url: String,
+    pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
     pub disable_pleco: bool,
     // qovery options form json input
@@ -205,7 +206,17 @@ pub fn ec2_aws_helm_charts(
     let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
     if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {
         qovery_cert_manager_webhook = Some(
-            QoveryCertManagerWebhookChart::new(chart_prefix_path, qovery_dns_config.clone()).to_common_helm_chart(),
+            QoveryCertManagerWebhookChart::new(
+                chart_prefix_path,
+                qovery_dns_config.clone(),
+                HelmChartResourcesConstraintType::Constrained(HelmChartResources {
+                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
+                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(32),
+                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
+                    request_memory: KubernetesMemoryResourceUnit::MebiByte(32),
+                }),
+            )
+            .to_common_helm_chart(),
         );
     }
 
@@ -221,88 +232,39 @@ pub fn ec2_aws_helm_charts(
     )
     .to_common_helm_chart();
 
-    let cert_manager = CommonChart {
-        chart_info: ChartInfo {
-            name: "cert-manager".to_string(),
-            path: chart_path("common/charts/cert-manager"),
-            namespace: HelmChartNamespaces::CertManager,
-            values: vec![
-                ChartSetValue {
-                    key: "installCRDs".to_string(),
-                    value: "true".to_string(),
-                },
-                ChartSetValue {
-                    key: "startupapicheck.jobAnnotations.helm\\.sh/hook".to_string(),
-                    value: "post-install\\,post-upgrade".to_string(),
-                },
-                ChartSetValue {
-                    key: "startupapicheck.rbac.annotations.helm\\.sh/hook".to_string(),
-                    value: "post-install\\,post-upgrade".to_string(),
-                },
-                ChartSetValue {
-                    key: "startupapicheck.serviceAccount.annotations.helm\\.sh/hook".to_string(),
-                    value: "post-install\\,post-upgrade".to_string(),
-                },
-                ChartSetValue {
-                    key: "replicaCount".to_string(),
-                    value: "1".to_string(),
-                },
-                // https://cert-manager.io/docs/configuration/acme/dns01/#setting-nameservers-for-dns01-self-check
-                ChartSetValue {
-                    key: "extraArgs".to_string(),
-                    value: "{--dns01-recursive-nameservers-only,--dns01-recursive-nameservers=1.1.1.1:53\\,8.8.8.8:53}"
-                        .to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheus.servicemonitor.enabled".to_string(),
-                    // Due to cycle, prometheus need tls certificate from cert manager, and enabling this will require
-                    // prometheus to be already installed
-                    value: "false".to_string(),
-                },
-                ChartSetValue {
-                    key: "prometheus.servicemonitor.prometheusInstance".to_string(),
-                    value: "qovery".to_string(),
-                },
-                // resources limits
-                ChartSetValue {
-                    key: "resources.limits.memory".to_string(),
-                    value: "96Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "resources.requests.memory".to_string(),
-                    value: "96Mi".to_string(),
-                },
-                // Webhooks resources limits
-                ChartSetValue {
-                    key: "webhook.resources.limits.memory".to_string(),
-                    value: "64Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "webhook.resources.requests.memory".to_string(),
-                    value: "64Mi".to_string(),
-                },
-                // Cainjector resources limits
-                ChartSetValue {
-                    key: "cainjector.resources.limits.memory".to_string(),
-                    value: "96Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "cainjector.resources.requests.memory".to_string(),
-                    value: "96Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // Cert Manager chart
+    let cert_manager = CertManagerChart::new(
+        chart_prefix_path,
+        false, // Due to cycle, prometheus need tls certificate from cert manager, and enabling this will require prometheus to be already installed
+        HelmChartResourcesConstraintType::Constrained(HelmChartResources {
+            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
+            limit_memory: KubernetesMemoryResourceUnit::MebiByte(96),
+            request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
+            request_memory: KubernetesMemoryResourceUnit::MebiByte(96),
+        }),
+        HelmChartResourcesConstraintType::Constrained(HelmChartResources {
+            request_cpu: KubernetesCpuResourceUnit::MilliCpu(50),
+            request_memory: KubernetesMemoryResourceUnit::MebiByte(64),
+            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
+            limit_memory: KubernetesMemoryResourceUnit::MebiByte(64),
+        }),
+        HelmChartResourcesConstraintType::Constrained(HelmChartResources {
+            request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
+            request_memory: KubernetesMemoryResourceUnit::MebiByte(96),
+            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
+            limit_memory: KubernetesMemoryResourceUnit::MebiByte(96),
+        }),
+    )
+    .to_common_helm_chart();
 
-    let cert_manager_config = get_chart_for_cert_manager_config(
+    // Cert Manager Configs
+    let cert_manager_config = CertManagerConfigsChart::new(
+        chart_prefix_path,
+        &chart_config_prerequisites.lets_encrypt_config,
         &chart_config_prerequisites.dns_provider_config,
-        chart_path("common/charts/cert-manager-configs"),
-        chart_config_prerequisites.dns_email_report.clone(),
-        chart_config_prerequisites.acme_url.clone(),
-        chart_config_prerequisites.managed_dns_helm_format.clone(),
-    );
+        chart_config_prerequisites.managed_dns_helm_format.to_string(),
+    )
+    .to_common_helm_chart();
 
     let nginx_ingress = CommonChart {
         chart_info: ChartInfo {

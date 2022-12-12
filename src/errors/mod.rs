@@ -712,6 +712,8 @@ pub enum Tag {
     UnsupportedVersion,
     /// CannotGetSupportedVersions: represents an error while trying to get supported versions.
     CannotGetSupportedVersions,
+    /// CannotListCluster: represents an error while trying to list clusters on the cloud provider
+    CannotListClusters,
     /// CannotGetCluster: represents an error where we cannot get cluster.
     CannotGetCluster,
     /// OnlyOneClusterExpected: represents an error where only one cluster was expected but several where found
@@ -2862,6 +2864,25 @@ impl EngineError {
         )
     }
 
+    /// Creates new error while trying to get clusters' list.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_cannot_list_clusters_error(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message = "Error, cannot list clusters.";
+
+        EngineError::new(
+            event_details,
+            Tag::CannotListClusters,
+            message.to_string(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
     /// Creates new error while trying to start a client service.
     ///
     /// Arguments:
@@ -3028,17 +3049,13 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `raw_error`: Raw error message.
-    pub fn new_missing_nodegroup_information_error(event_details: EventDetails) -> EngineError {
-        let message = "Error from the cloud provider, missing Kubernetes nodegroup information";
+    pub fn new_missing_nodegroup_information_error(event_details: EventDetails, raw_error: String) -> EngineError {
+        let message = format!(
+            "Error from the cloud provider, missing Kubernetes nodegroup information. {}",
+            raw_error
+        );
 
-        EngineError::new(
-            event_details,
-            Tag::CannotGetNodeGroupInfo,
-            message.to_string(),
-            None,
-            None,
-            None,
-        )
+        EngineError::new(event_details, Tag::CannotGetNodeGroupInfo, message, None, None, None)
     }
 
     /// Can't retrieve Cloud provider node group list
@@ -3058,6 +3075,25 @@ impl EngineError {
             None,
             None,
         )
+    }
+
+    /// Can't delete node group
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `safe_error`: Raw error message.
+    pub fn new_nodegroup_delete_error(
+        event_details: EventDetails,
+        nodegroup_name: Option<String>,
+        safe_error: String,
+    ) -> EngineError {
+        let message = match nodegroup_name {
+            Some(x) => format!("Error, can't delete nodegroup '{}'. {}", x, &safe_error),
+            None => format!("Error, can't delete nodegroup. {}", &safe_error),
+        };
+
+        EngineError::new(event_details, Tag::CannotGetNodeGroupList, message, None, None, None)
     }
 
     /// No cluster found

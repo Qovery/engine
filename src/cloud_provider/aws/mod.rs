@@ -2,6 +2,7 @@ use std::any::Any;
 
 use aws_config::provider_config::ProviderConfig;
 use aws_config::SdkConfig;
+use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::never::NeverConnector;
 use aws_types::os_shim_internal::Env;
@@ -126,6 +127,7 @@ impl CloudProvider for AWS {
                 .configure(
                     ProviderConfig::empty()
                         .with_env(env)
+                        .with_sleep(TokioSleep::new())
                         .with_http_connector(DynConnector::new(NeverConnector::new())),
                 )
                 .load(),

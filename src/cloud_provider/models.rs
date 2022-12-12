@@ -138,10 +138,14 @@ impl Display for KubernetesCpuResourceUnit {
 ///
 /// TODO(benjaminch): Implement From<String> for KubernetesMemoryResourceUnit
 pub enum KubernetesMemoryResourceUnit {
-    /// MebiByte: 1 Mebibyte (MiB) = (1024)^2 bytes = 1048576 bytes.
+    /// MebiByte: 1 Mebibyte (MiB) = (1024)^2 bytes = 1,048,576 bytes.
     MebiByte(u32),
-    /// MegaByte: 1 Megabyte (MB) = (1000)^2 bytes = 1000000 bytes.
+    /// MegaByte: 1 Megabyte (MB) = (1000)^2 bytes = 1,000,000 bytes.
     MegaByte(u32),
+    /// GibiByte: 1 Gibibyte (MiB) = 2^30 bytes bytes = 1,073,741,824 bytes.
+    GibiByte(u32),
+    /// GigaByte: 1 Gigabyte (G) = 10^9 bytes = 1,000,000,000 bytes
+    GigaByte(u32),
 }
 
 impl Display for KubernetesMemoryResourceUnit {
@@ -150,6 +154,8 @@ impl Display for KubernetesMemoryResourceUnit {
             match &self {
                 KubernetesMemoryResourceUnit::MebiByte(v) => format!("{}Mi", v),
                 KubernetesMemoryResourceUnit::MegaByte(v) => format!("{}M", v),
+                KubernetesMemoryResourceUnit::GibiByte(v) => format!("{}Gi", v),
+                KubernetesMemoryResourceUnit::GigaByte(v) => format!("{}G", v),
             }
             .as_str(),
         )
@@ -209,6 +215,22 @@ mod tests {
             TestCase {
                 input: KubernetesMemoryResourceUnit::MegaByte(100),
                 output: "100M",
+            },
+            TestCase {
+                input: KubernetesMemoryResourceUnit::GibiByte(0),
+                output: "0Gi",
+            },
+            TestCase {
+                input: KubernetesMemoryResourceUnit::GibiByte(100),
+                output: "100Gi",
+            },
+            TestCase {
+                input: KubernetesMemoryResourceUnit::GigaByte(0),
+                output: "0G",
+            },
+            TestCase {
+                input: KubernetesMemoryResourceUnit::GigaByte(100),
+                output: "100G",
             },
         ];
 

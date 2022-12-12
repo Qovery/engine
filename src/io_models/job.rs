@@ -1,16 +1,18 @@
+use crate::build_platform::{Build, Credentials, GitRepository, Image, SshKey};
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::{CloudProvider, Kind};
-use crate::container_registry::ContainerRegistry;
+use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo};
 use crate::io_models::application::{to_environment_variable, AdvancedSettingsProbeType, GitCredentials};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
-use crate::io_models::Action;
+use crate::io_models::{normalize_root_and_dockerfile_path, ssh_keys_from_env_vars, Action};
 use crate::models;
 use crate::models::aws::AwsAppExtraSettings;
 use crate::models::aws_ec2::AwsEc2AppExtraSettings;
-use crate::models::job::{JobError, JobService};
+use crate::models::job::{ImageSource, JobError, JobService, RegistryImageSource};
 use crate::models::scaleway::ScwAppExtraSettings;
 use crate::models::types::{AWSEc2, AWS, SCW};
+use crate::utilities::to_short_id;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -32,6 +34,10 @@ pub struct JobAdvancedSettings {
 
     #[serde(alias = "cronjob.success_jobs_history_limit")]
     pub cronjob_success_jobs_history_limit: u32,
+
+    // Build
+    #[serde(alias = "build.timeout_max_sec")]
+    pub build_timeout_max_sec: u32,
 
     // Readiness Probes
     #[serde(alias = "readiness_probe.type")]
@@ -73,6 +79,7 @@ impl Default for JobAdvancedSettings {
             cronjob_concurrency_policy: "Forbid".to_string(),
             cronjob_failed_jobs_history_limit: 1,
             cronjob_success_jobs_history_limit: 1,
+            build_timeout_max_sec: 30 * 60, // 30 minutes
             readiness_probe_type: AdvancedSettingsProbeType::None,
             readiness_probe_http_get_path: "".to_string(),
             readiness_probe_initial_delay_seconds: 0,
@@ -152,25 +159,102 @@ pub struct Job {
 }
 
 impl Job {
+    pub fn to_build(&self, registry_url: &ContainerRegistryInfo) -> Option<Build> {
+        let (git_url, git_credentials, _branch, commit_id, dockerfile_path, root_path) = match &self.source {
+            JobSource::Docker {
+                git_url,
+                git_credentials,
+                branch,
+                commit_id,
+                dockerfile_path,
+                root_path,
+            } => (git_url, git_credentials, branch, commit_id, dockerfile_path, root_path),
+            _ => return None,
+        };
+
+        // Retrieve ssh keys from env variables
+
+        // Get passphrase and public key if provided by the user
+        let ssh_keys: Vec<SshKey> = ssh_keys_from_env_vars(&self.environment_vars);
+
+        // Convert our root path to an relative path to be able to append them correctly
+        let (root_path, dockerfile_path) = normalize_root_and_dockerfile_path(root_path, dockerfile_path);
+
+        let url = Url::parse(git_url).unwrap_or_else(|_| {
+            Url::parse("https://invalid-git-url.com").expect("Error while trying to parse invalid git url")
+        });
+
+        let mut disable_build_cache = false;
+        let mut build = Build {
+            git_repository: GitRepository {
+                url,
+                credentials: git_credentials.as_ref().map(|credentials| Credentials {
+                    login: credentials.login.clone(),
+                    password: credentials.access_token.clone(),
+                }),
+                ssh_keys,
+                commit_id: commit_id.clone(),
+                dockerfile_path,
+                root_path,
+                buildpack_language: None,
+            },
+            image: self.to_image(commit_id.to_string(), registry_url),
+            environment_variables: self
+                .environment_vars
+                .iter()
+                .filter_map(|(k, v)| {
+                    // Remove special vars
+                    let v = String::from_utf8_lossy(&base64::decode(v.as_bytes()).unwrap_or_default()).into_owned();
+                    if k == "QOVERY_DISABLE_BUILD_CACHE" && v.to_lowercase() == "true" {
+                        disable_build_cache = true;
+                        return None;
+                    }
+
+                    Some((k.clone(), v))
+                })
+                .collect::<BTreeMap<_, _>>(),
+            disable_cache: disable_build_cache,
+            timeout: Duration::from_secs(self.advanced_settings.build_timeout_max_sec as u64),
+        };
+
+        build.compute_image_tag();
+        Some(build)
+    }
+
+    fn to_image(&self, commit_id: String, cr_info: &ContainerRegistryInfo) -> Image {
+        Image {
+            application_id: to_short_id(&self.long_id),
+            application_long_id: self.long_id,
+            application_name: self.name.clone(),
+            name: (cr_info.get_image_name)(&self.long_id.to_string()),
+            tag: "".to_string(), // It needs to be compute after creation
+            commit_id,
+            registry_name: cr_info.registry_name.clone(),
+            registry_url: cr_info.endpoint.clone(),
+            registry_docker_json_config: cr_info.registry_docker_json_config.clone(),
+            repository_name: (cr_info.get_repository_name)(&self.long_id.to_string()),
+        }
+    }
+
     pub fn to_job_domain(
         self,
         context: &Context,
         cloud_provider: &dyn CloudProvider,
         default_container_registry: &dyn ContainerRegistry,
     ) -> Result<Box<dyn JobService>, JobError> {
-        let environment_variables = to_environment_variable(self.environment_vars);
+        let image_source = match self.source {
+            JobSource::Docker { .. } => {
+                let build = match self.to_build(default_container_registry.registry_info()) {
+                    Some(build) => Ok(build),
+                    None => Err(JobError::InvalidConfig(
+                        "Cannot convert docker JobSoure to Build source".to_string(),
+                    )),
+                }?;
 
-        // FIXME: Remove this after we support launching job with something else than an already built container
-        let mut registry_ = Registry::DockerHub {
-            long_id: Default::default(),
-            url: Url::parse("https://default.com").unwrap(),
-            credentials: None,
-        };
-        let mut image_ = "".to_string();
-        let mut tag_ = "".to_string();
-
-        match self.source {
-            JobSource::Docker { .. } => {}
+                ImageSource::Build {
+                    source: Box::new(build),
+                }
+            }
             JobSource::Image {
                 mut registry,
                 image,
@@ -180,11 +264,13 @@ impl Job {
                 if registry.id() == default_container_registry.long_id() {
                     registry.set_url(default_container_registry.registry_info().endpoint.clone());
                 }
-                registry_ = registry;
-                image_ = image;
-                tag_ = tag;
+                ImageSource::Registry {
+                    source: Box::new(RegistryImageSource { registry, image, tag }),
+                }
             }
-        }
+        };
+
+        let environment_variables = to_environment_variable(self.environment_vars);
 
         let service: Box<dyn JobService> = match cloud_provider.kind() {
             Kind::Aws => {
@@ -194,9 +280,7 @@ impl Job {
                         self.long_id,
                         self.name,
                         self.action.to_service_action(),
-                        registry_,
-                        image_,
-                        tag_,
+                        image_source,
                         self.schedule,
                         self.max_nb_restart,
                         Duration::from_secs(self.max_duration_in_sec),
@@ -219,9 +303,7 @@ impl Job {
                         self.long_id,
                         self.name,
                         self.action.to_service_action(),
-                        registry_,
-                        image_,
-                        tag_,
+                        image_source,
                         self.schedule,
                         self.max_nb_restart,
                         Duration::from_secs(self.max_duration_in_sec),
@@ -245,9 +327,7 @@ impl Job {
                 self.long_id,
                 self.name,
                 self.action.to_service_action(),
-                registry_,
-                image_,
-                tag_,
+                image_source,
                 self.schedule,
                 self.max_nb_restart,
                 Duration::from_secs(self.max_duration_in_sec),

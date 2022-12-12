@@ -180,7 +180,7 @@ pub async fn get_last_deployed_image(
                     .spec
                     .as_ref()?
                     .containers
-                    .first()?
+                    .last()?
                     .image
                     .as_ref()?
                     .to_string(),
@@ -200,7 +200,7 @@ pub async fn get_last_deployed_image(
                     .spec
                     .as_ref()?
                     .containers
-                    .first()?
+                    .last()? // last because of busybox container that wait on output
                     .image
                     .as_ref()?
                     .to_string(),

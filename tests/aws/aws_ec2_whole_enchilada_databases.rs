@@ -11,7 +11,7 @@ use qovery_engine::utilities::to_short_id;
 use tracing::{span, Level};
 
 use crate::helpers;
-use crate::helpers::aws::AWS_EC2_TEST_REGION;
+use crate::helpers::aws::{AWS_EC2_CONTAINER_TEST_REGION, AWS_EC2_MANAGED_TEST_REGION};
 use crate::helpers::aws_ec2::AWS_K3S_VERSION;
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::database::{test_db, StorageSize};
@@ -35,7 +35,11 @@ fn test_ec2_database(
 
         let logger = logger();
         let organization_id = generate_id();
-        let cluster_id = generate_cluster_id(AWS_EC2_TEST_REGION.to_aws_format());
+        let localisation = match database_mode {
+            DatabaseMode::MANAGED => AWS_EC2_MANAGED_TEST_REGION.to_aws_format(),
+            DatabaseMode::CONTAINER => AWS_EC2_CONTAINER_TEST_REGION.to_aws_format(),
+        };
+        let cluster_id = generate_cluster_id(localisation);
         let context = context_for_ec2(organization_id, cluster_id);
 
         // create dedicated EC2 cluster:
@@ -53,7 +57,7 @@ fn test_ec2_database(
         let infra_ctx = AWS::docker_cr_engine(
             &context,
             logger.clone(),
-            AWS_EC2_TEST_REGION.to_aws_format(),
+            localisation,
             Kind::Ec2,
             AWS_K3S_VERSION.to_string(),
             &cluster_domain,
