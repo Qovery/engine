@@ -73,8 +73,10 @@ pub struct ApplicationAdvancedSettings {
     pub build_timeout_max_sec: u32,
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
     pub network_ingress_proxy_body_size_mb: u32,
-    #[serde(alias = "network.ingress.cors_enable")]
+    #[serde(alias = "network.ingress.enable_cors")]
     pub network_ingress_cors_enable: bool,
+    #[serde(alias = "network.ingress.enable_sticky_session")]
+    pub network_ingress_sticky_session_enable: bool,
     #[serde(alias = "network.ingress.cors_allow_origin")]
     pub network_ingress_cors_allow_origin: String,
     #[serde(alias = "network.ingress.cors_methods")]
@@ -137,6 +139,7 @@ impl Default for ApplicationAdvancedSettings {
             deployment_custom_domain_check_enabled: true,
             network_ingress_proxy_body_size_mb: 100,
             network_ingress_cors_enable: false,
+            network_ingress_sticky_session_enable: false,
             network_ingress_cors_allow_origin: "*".to_string(),
             network_ingress_cors_allow_methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS".to_string(),
             network_ingress_cors_allow_headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization".to_string(),
