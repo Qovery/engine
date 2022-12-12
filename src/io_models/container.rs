@@ -166,9 +166,9 @@ pub struct ContainerAdvancedSettings {
     pub network_ingress_sticky_session_enable: bool,
     #[serde(alias = "network.ingress.cors_allow_origin")]
     pub network_ingress_cors_allow_origin: String,
-    #[serde(alias = "network.ingress.cors_methods")]
+    #[serde(alias = "network.ingress.cors_allow_methods")]
     pub network_ingress_cors_allow_methods: String,
-    #[serde(alias = "network.ingress.cors_allowed_headers")]
+    #[serde(alias = "network.ingress.cors_allow_headers")]
     pub network_ingress_cors_allow_headers: String,
     #[serde(alias = "network.ingress.keepalive_time_seconds")]
     pub network_ingress_keepalive_time_seconds: u32,
