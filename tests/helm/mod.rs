@@ -254,6 +254,7 @@ pub fn test_application(test_kube: &dyn Kubernetes) -> Application<AWSType> {
             build_timeout_max_sec: 2,
             network_ingress_proxy_body_size_mb: 3,
             network_ingress_cors_enable: true,
+            network_ingress_sticky_session_enable: false,
             network_ingress_cors_allow_origin: "my_network_ingress_cors_allow_origin".to_string(),
             network_ingress_cors_allow_methods: "my_network_ingress_cors_allow_methods".to_string(),
             network_ingress_cors_allow_headers: "my_network_ingress_cors_allow_headers".to_string(),
@@ -315,6 +316,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             deployment_custom_domain_check_enabled: true,
             network_ingress_proxy_body_size_mb: 11,
             network_ingress_cors_enable: true,
+            network_ingress_sticky_session_enable: false,
             network_ingress_cors_allow_origin: "my_network_ingress_cors_allow_origin".to_string(),
             network_ingress_cors_allow_methods: "my_network_ingress_cors_allow_methods".to_string(),
             network_ingress_cors_allow_headers: "my_network_ingress_cors_allow_headers".to_string(),
@@ -423,7 +425,6 @@ pub fn test_router(test_kube: &dyn Kubernetes) -> Router<AWSType> {
         "my_default_domain",
         vec![test_custom_domain()],
         vec![test_route()],
-        true,
         AwsRouterExtraSettings {},
         RouterAdvancedSettings {
             custom_domain_check_enabled: true,
