@@ -936,6 +936,7 @@ impl Kapsule {
             self.options.qovery_engine_location.clone(),
             self.context.is_feature_enabled(&Features::LogsHistory),
             self.context.is_feature_enabled(&Features::MetricsHistory),
+            self.context.is_feature_enabled(&Features::Grafana),
             self.dns_provider.domain().root_domain().to_string(),
             self.dns_provider.domain().to_helm_format_string(),
             self.managed_dns_resolvers_terraform_format(),

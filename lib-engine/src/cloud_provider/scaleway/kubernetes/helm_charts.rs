@@ -52,6 +52,7 @@ pub struct ChartsConfigPrerequisites {
     pub qovery_engine_location: EngineLocation,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
+    pub ff_grafana_enabled: bool,
     pub managed_dns_name: String,
     pub managed_dns_helm_format: String,
     pub managed_dns_resolvers_terraform_format: String,
@@ -81,6 +82,7 @@ impl ChartsConfigPrerequisites {
         qovery_engine_location: EngineLocation,
         ff_log_history_enabled: bool,
         ff_metrics_history_enabled: bool,
+        ff_grafana_enabled: bool,
         managed_dns_name: String,
         managed_dns_helm_format: String,
         managed_dns_resolvers_terraform_format: String,
@@ -108,6 +110,7 @@ impl ChartsConfigPrerequisites {
             qovery_engine_location,
             ff_log_history_enabled,
             ff_metrics_history_enabled,
+            ff_grafana_enabled,
             managed_dns_name,
             managed_dns_helm_format,
             managed_dns_resolvers_terraform_format,
@@ -258,24 +261,29 @@ pub fn scw_helm_charts(
     };
 
     // Grafana chart
-    let grafana = GrafanaChart::new(
-        chart_prefix_path,
-        GrafanaAdminUser::new(
-            chart_config_prerequisites.infra_options.grafana_admin_user.to_string(),
-            chart_config_prerequisites
-                .infra_options
-                .grafana_admin_password
-                .to_string(),
+    let grafana = match chart_config_prerequisites.ff_grafana_enabled {
+        false => None,
+        true => Some(
+            GrafanaChart::new(
+                chart_prefix_path,
+                GrafanaAdminUser::new(
+                    chart_config_prerequisites.infra_options.grafana_admin_user.to_string(),
+                    chart_config_prerequisites
+                        .infra_options
+                        .grafana_admin_password
+                        .to_string(),
+                ),
+                GrafanaDatasources {
+                    prometheus_internal_url,
+                    loki_chart_name: LokiChart::chart_name(),
+                    loki_namespace: loki_namespace.to_string(),
+                    cloudwatch_config: None,
+                },
+                "scw-sbv-ssd-0".to_string(), // TODO(benjaminch): introduce proper type here
+            )
+            .to_common_helm_chart(),
         ),
-        GrafanaDatasources {
-            prometheus_internal_url,
-            loki_chart_name: LokiChart::chart_name(),
-            loki_namespace: loki_namespace.to_string(),
-            cloudwatch_config: None,
-        },
-        "scw-sbv-ssd-0".to_string(), // TODO(benjaminch): introduce proper type here
-    )
-    .to_common_helm_chart();
+    };
 
     // Cert Manager chart
     let cert_manager = CertManagerChart::new(
@@ -577,9 +585,9 @@ pub fn scw_helm_charts(
     if let Some(loki_chart) = loki {
         level_2.push(Box::new(loki_chart));
     }
-    if chart_config_prerequisites.ff_metrics_history_enabled || chart_config_prerequisites.ff_log_history_enabled {
-        level_2.push(Box::new(grafana))
-    };
+    if let Some(grafana_chart) = grafana {
+        level_2.push(Box::new(grafana_chart))
+    }
 
     // pleco
     if let Some(pleco_chart) = pleco {
