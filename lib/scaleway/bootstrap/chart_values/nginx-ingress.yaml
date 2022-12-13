@@ -6,13 +6,20 @@ controller:
   ingressClass: nginx-qovery
   extraArgs:
     default-ssl-certificate: "cert-manager/letsencrypt-acme-qovery-cert"
+
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1
+
+  admissionWebhooks:
+    enabled: false
+
   autoscaling:
     enabled: true
+
   publishService:
     enabled: true
+
   service:
     # https://github.com/scaleway/scaleway-cloud-controller-manager/blob/master/docs/loadbalancer-annotations.md
     annotations:
@@ -22,6 +29,23 @@ controller:
       service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
       service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
       service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
-      service.beta.kubernetes.io/scw-loadbalancer-type: "{{ load_balancer_size }}"
-      external-dns.alpha.kubernetes.io/hostname: "{{ wildcard_managed_dns }}"
+      service.beta.kubernetes.io/scw-loadbalancer-type: set-by-engine-code
+      external-dns.alpha.kubernetes.io/hostname: set-by-engine-code
     externalTrafficPolicy: "Local"
+
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+
+defaultBackend:
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code

@@ -17,6 +17,9 @@ controller:
   extraArgs:
     default-ssl-certificate: "cert-manager/letsencrypt-acme-qovery-cert"
 
+  admissionWebhooks:
+    enabled: false
+
   autoscaling:
     enabled: false
 
@@ -25,3 +28,20 @@ controller:
 
   service:
     enabled: false
+
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+
+defaultBackend:
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
