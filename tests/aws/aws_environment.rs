@@ -1050,7 +1050,6 @@ fn deploy_container_with_router_on_aws_eks() {
             action: Action::Create,
             default_domain: "main".to_string(),
             public_port: 443,
-            sticky_sessions_enabled: false,
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),

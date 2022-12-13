@@ -34,7 +34,6 @@ pub struct Router<T: CloudProvider> {
     pub(crate) name: String,
     pub(crate) default_domain: String,
     pub(crate) custom_domains: Vec<CustomDomain>,
-    pub(crate) sticky_sessions_enabled: bool,
     pub(crate) routes: Vec<Route>,
     pub(crate) _extra_settings: T::RouterExtraSettings,
     pub(crate) advanced_settings: RouterAdvancedSettings,
@@ -51,7 +50,6 @@ impl<T: CloudProvider> Router<T> {
         default_domain: &str,
         custom_domains: Vec<CustomDomain>,
         routes: Vec<Route>,
-        sticky_sessions_enabled: bool,
         extra_settings: T::RouterExtraSettings,
         advanced_settings: RouterAdvancedSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
@@ -74,7 +72,6 @@ impl<T: CloudProvider> Router<T> {
             action,
             default_domain: default_domain.to_string(),
             custom_domains,
-            sticky_sessions_enabled,
             routes,
             _extra_settings: extra_settings,
             advanced_settings,
@@ -117,9 +114,13 @@ impl<T: CloudProvider> Router<T> {
             .service_long_id;
 
         // Check if the service is an application
-        let (service_name, ports) =
+        let (service_name, ports, sticky_session_enabled) =
             if let Some(application) = &environment.applications.iter().find(|app| app.long_id() == &service_id) {
-                (application.sanitized_name(), application.public_ports())
+                (
+                    application.sanitized_name(),
+                    application.public_ports(),
+                    application.advanced_settings().network_ingress_sticky_session_enable,
+                )
             } else {
                 let container = environment
                     .containers
@@ -127,7 +128,11 @@ impl<T: CloudProvider> Router<T> {
                     .find(|container| container.long_id() == &service_id)
                     .ok_or_else(|| EngineError::new_router_failed_to_deploy(event_details))?;
 
-                (container.kube_service_name(), container.public_ports())
+                (
+                    container.kube_service_name(),
+                    container.public_ports(),
+                    container.advanced_settings().network_ingress_sticky_session_enable,
+                )
             };
 
         // (custom_domain + default_domain) * (ports + default_port)
@@ -208,7 +213,7 @@ impl<T: CloudProvider> Router<T> {
         context.insert("spec_acme_server", lets_encrypt_url);
 
         // Nginx
-        context.insert("sticky_sessions_enabled", &self.sticky_sessions_enabled);
+        context.insert("sticky_sessions_enabled", &sticky_session_enabled);
 
         // ingress advanced settings
         // 1 app == 1 ingress, we filter only on the app to retrieve advanced settings

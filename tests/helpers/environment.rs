@@ -2,7 +2,7 @@ use crate::helpers::utilities::{generate_id, generate_password, get_svc_name};
 use chrono::Utc;
 use qovery_engine::cloud_provider::utilities::sanitize_name;
 use qovery_engine::cloud_provider::Kind;
-use qovery_engine::io_models::application::{Application, GitCredentials, Port, Protocol};
+use qovery_engine::io_models::application::{Application, ApplicationAdvancedSettings, GitCredentials, Port, Protocol};
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind};
@@ -24,6 +24,11 @@ pub fn working_environment(
     let application_name = application_id.short().to_string();
     let router_name = "main".to_string();
     let application_domain = format!("{}.{}.{}", application_name, context.cluster_short_id(), test_domain);
+    let settings = ApplicationAdvancedSettings {
+        network_ingress_sticky_session_enable: with_sticky,
+        ..Default::default()
+    };
+
     let mut req = EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
         long_id: application_id.to_uuid(),
@@ -62,7 +67,7 @@ pub fn working_environment(
             min_instances: 1,
             max_instances: 1,
             cpu_burst: "100m".to_string(),
-            advanced_settings: Default::default(),
+            advanced_settings: settings,
         }],
         containers: vec![],
         jobs: vec![],
@@ -82,7 +87,6 @@ pub fn working_environment(
                 path: "/".to_string(),
                 service_long_id: application_id.to_uuid(),
             }],
-            sticky_sessions_enabled: with_sticky,
         }]
     }
 
@@ -238,7 +242,6 @@ pub fn environment_2_app_2_routers_1_psql(
                     path: "/".to_string(),
                     service_long_id: application_id1,
                 }],
-                sticky_sessions_enabled: false,
             },
             Router {
                 long_id: Uuid::new_v4(),
@@ -251,7 +254,6 @@ pub fn environment_2_app_2_routers_1_psql(
                     path: "/coco".to_string(),
                     service_long_id: application_id2,
                 }],
-                sticky_sessions_enabled: false,
             },
         ],
     }
@@ -334,7 +336,6 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
                 path: "/".to_string(),
                 service_long_id: application_id,
             }],
-            sticky_sessions_enabled: false,
         }],
         databases: vec![],
     }
@@ -351,6 +352,10 @@ pub fn environment_only_http_server(
     let application_id = Uuid::new_v4();
     let application_name = format!("{}-{}", "mini-http", &suffix);
     let application_domain = format!("{}.{}.{}", application_name, context.cluster_short_id(), test_domain);
+    let settings = ApplicationAdvancedSettings {
+        network_ingress_sticky_session_enable: with_sticky,
+        ..Default::default()
+    };
 
     let mut req = EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
@@ -391,7 +396,7 @@ pub fn environment_only_http_server(
             min_instances: 1,
             max_instances: 1,
             cpu_burst: "100m".to_string(),
-            advanced_settings: Default::default(),
+            advanced_settings: settings,
         }],
         containers: vec![],
         jobs: vec![],
@@ -411,7 +416,6 @@ pub fn environment_only_http_server(
                 path: "/".to_string(),
                 service_long_id: application_id,
             }],
-            sticky_sessions_enabled: with_sticky,
         }]
     }
 
