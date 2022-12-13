@@ -178,6 +178,7 @@ impl Metadata {
 pub enum Features {
     LogsHistory,
     MetricsHistory,
+    Grafana,
 }
 
 // trait used to reimplement clone without same fields

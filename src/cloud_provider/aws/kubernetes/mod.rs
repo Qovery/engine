@@ -1151,6 +1151,7 @@ fn create(
                 qovery_engine_location: options.qovery_engine_location.clone(),
                 ff_log_history_enabled: kubernetes.context().is_feature_enabled(&Features::LogsHistory),
                 ff_metrics_history_enabled: kubernetes.context().is_feature_enabled(&Features::MetricsHistory),
+                ff_grafana_enabled: kubernetes.context().is_feature_enabled(&Features::Grafana),
                 managed_dns_name: kubernetes.dns_provider().domain().to_string(),
                 managed_dns_helm_format: kubernetes.dns_provider().domain().to_helm_format_string(),
                 managed_dns_resolvers_terraform_format: managed_dns_resolvers_terraform_format(
