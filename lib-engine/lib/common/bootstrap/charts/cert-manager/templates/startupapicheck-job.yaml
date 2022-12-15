@@ -3,7 +3,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ include "startupapicheck.fullname" . }}
-  namespace: {{ .Release.Namespace | quote }}
+  namespace: {{ include "cert-manager.namespace" . }}
   labels:
     app: {{ include "startupapicheck.name" . }}
     app.kubernetes.io/name: {{ include "startupapicheck.name" . }}
@@ -42,7 +42,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: {{ .Chart.Name }}
+        - name: {{ .Chart.Name }}-startupapicheck
           {{- with .Values.startupapicheck.image }}
           image: "{{- if .registry -}}{{ .registry }}/{{- end -}}{{ .repository }}{{- if (.digest) -}} @{{ .digest }}{{- else -}}:{{ default $.Chart.AppVersion .tag }} {{- end -}}"
           {{- end }}
