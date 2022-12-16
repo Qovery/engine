@@ -13,7 +13,6 @@ pub mod kube_prometheus_stack_chart;
 pub mod kube_state_metrics;
 pub mod loki_chart;
 pub mod metrics_server_chart;
-pub mod nginx_ingress_chart;
 pub mod prometheus_adapter_chart;
 pub mod promtail_chart;
 pub mod qovery_cert_manager_webhook_chart;

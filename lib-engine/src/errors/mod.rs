@@ -530,8 +530,6 @@ pub enum Tag {
     CannotGetWorkspaceDirectory,
     /// UnsupportedInstanceType: represents an unsupported instance type for the given cloud provider.
     UnsupportedInstanceType,
-    /// UnsupportedLoadBalancerType: represents an unsupported load-balancer type for the given cloud provider.
-    UnsupportedLoadBalancerType,
     /// NotAllowedInstanceType: represents not allowed instance type for a specific kind of cluster
     NotAllowedInstanceType,
     /// UnsupportedClusterKind: represents an unsupported cluster kind by Qovery.
@@ -1214,31 +1212,6 @@ impl EngineError {
             Some(error_message),
             None, // TODO(documentation): Create a page entry to details this error
             Some("Selected instance type is not supported, please check provider's documentation.".to_string()),
-        )
-    }
-
-    /// Creates new error for unsupported load-balancer type.
-    ///
-    /// Cloud provider doesn't support the requested load-balancer type.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `requested_instance_type`: Raw requested load-balancer type string.
-    /// * `error_message`: Raw error message.
-    pub fn new_unsupported_load_balancer_type(
-        event_details: EventDetails,
-        requested_load_balancer_type: &str,
-        error_message: CommandError,
-    ) -> EngineError {
-        let message = format!("`{}` load-balancer type is not supported", requested_load_balancer_type);
-        EngineError::new(
-            event_details,
-            Tag::UnsupportedLoadBalancerType,
-            message,
-            Some(error_message),
-            None, // TODO(documentation): Create a page entry to details this error
-            Some("Selected load-balancer type is not supported, please check provider's documentation.".to_string()),
         )
     }
 
