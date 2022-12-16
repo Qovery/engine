@@ -1,4 +1,4 @@
-use crate::helpers::aws::{AWS_EC2_INSTANCE_TEST_REGION, AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
+use crate::helpers::aws::{AWS_KUBERNETES_VERSION, AWS_TEST_REGION};
 use crate::helpers::common::{compute_test_cluster_endpoint, Cluster, ClusterDomain, Infrastructure};
 use crate::helpers::kubernetes::{KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
 use crate::helpers::scaleway::{SCW_KUBERNETES_VERSION, SCW_TEST_ZONE};
@@ -480,6 +480,7 @@ pub fn test_db(
     db_kind: DatabaseKind,
     kubernetes_kind: KubernetesKind,
     database_mode: DatabaseMode,
+    localisation: String,
     is_public: bool,
     cluster_domain: ClusterDomain,
     existing_infra_ctx: Option<&InfrastructureContext>,
@@ -594,10 +595,10 @@ pub fn test_db(
     let ea = environment.clone();
     let ea_delete = environment_delete.clone();
 
-    let (localisation, kubernetes_version) = match kubernetes_kind {
-        KubernetesKind::Eks => (AWS_TEST_REGION.to_string(), AWS_KUBERNETES_VERSION.to_string()),
-        KubernetesKind::ScwKapsule => (SCW_TEST_ZONE.to_string(), SCW_KUBERNETES_VERSION.to_string()),
-        KubernetesKind::Ec2 => (AWS_EC2_INSTANCE_TEST_REGION.to_string(), AWS_K3S_VERSION.to_string()),
+    let kubernetes_version = match kubernetes_kind {
+        KubernetesKind::Eks => AWS_KUBERNETES_VERSION.to_string(),
+        KubernetesKind::ScwKapsule => SCW_KUBERNETES_VERSION.to_string(),
+        KubernetesKind::Ec2 => AWS_K3S_VERSION.to_string(),
     };
 
     let computed_infra_ctx: InfrastructureContext;

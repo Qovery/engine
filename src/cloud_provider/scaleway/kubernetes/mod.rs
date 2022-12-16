@@ -12,6 +12,7 @@ use crate::cloud_provider::models::{NodeGroups, NodeGroupsFormat};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::cloud_provider::scaleway::kubernetes::helm_charts::{scw_helm_charts, ChartsConfigPrerequisites};
 use crate::cloud_provider::scaleway::kubernetes::node::{ScwInstancesType, ScwNodeGroup};
+use crate::cloud_provider::scaleway::models::ScwLoadBalancerType;
 use crate::cloud_provider::utilities::print_action;
 use crate::cloud_provider::CloudProvider;
 use crate::cmd;
@@ -27,7 +28,6 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
 use crate::io_models::context::{Context, Features};
-use crate::io_models::domain::ToHelmString;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::models::scaleway::ScwZone;
@@ -921,6 +921,20 @@ impl Kapsule {
             ));
         }
 
+        let load_balancer_type = match ScwLoadBalancerType::from_str(&self.advanced_settings.load_balancer_size) {
+            Ok(t) => t,
+            Err(e) => {
+                let err = EngineError::new_unsupported_load_balancer_type(
+                    event_details,
+                    &self.advanced_settings.load_balancer_size,
+                    e,
+                );
+                self.logger().log(EngineEvent::Error(err.clone(), None));
+
+                return Err(err);
+            }
+        };
+
         let charts_prerequisites = ChartsConfigPrerequisites::new(
             self.cloud_provider.organization_id().to_string(),
             self.cloud_provider.organization_long_id(),
@@ -936,13 +950,13 @@ impl Kapsule {
             self.options.qovery_engine_location.clone(),
             self.context.is_feature_enabled(&Features::LogsHistory),
             self.context.is_feature_enabled(&Features::MetricsHistory),
+            self.dns_provider.domain().clone(),
+            self.context.is_feature_enabled(&Features::Grafana),
             self.dns_provider.domain().root_domain().to_string(),
-            self.dns_provider.domain().to_helm_format_string(),
-            self.managed_dns_resolvers_terraform_format(),
-            self.dns_provider.domain().root_domain().to_helm_format_string(),
             self.dns_provider.provider_name().to_string(),
             LetsEncryptConfig::new(self.options.tls_email_report.to_string(), self.context.is_test_cluster()),
             self.dns_provider().provider_configuration(),
+            load_balancer_type,
             self.context.disable_pleco(),
             self.options.clone(),
             self.advanced_settings().clone(),

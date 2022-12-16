@@ -25,9 +25,9 @@ use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
 pub const AWS_TEST_REGION: AwsRegion = AwsRegion::EuWest3;
-pub const AWS_EC2_MANAGED_TEST_REGION: AwsRegion = AwsRegion::UsEast2;
-pub const AWS_EC2_CONTAINER_TEST_REGION: AwsRegion = AwsRegion::UsWest2;
-pub const AWS_EC2_INSTANCE_TEST_REGION: AwsRegion = AwsRegion::EuWest1;
+pub const AWS_EC2_TEST_MANAGED_REGION: AwsRegion = AwsRegion::UsEast2;
+pub const AWS_EC2_TEST_CONTAINER_REGION: AwsRegion = AwsRegion::UsWest2;
+pub const AWS_EC2_TEST_INSTANCE_REGION: AwsRegion = AwsRegion::EuWest1;
 pub const AWS_KUBERNETES_MAJOR_VERSION: u8 = 1;
 pub const AWS_KUBERNETES_MINOR_VERSION: u8 = 22;
 pub const AWS_KUBERNETES_VERSION: &str = formatcp!("{}.{}", AWS_KUBERNETES_MAJOR_VERSION, AWS_KUBERNETES_MINOR_VERSION);
@@ -61,24 +61,38 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
     .unwrap()
 }
 
-pub fn container_registry_ecr_ec2(context: &Context, logger: Box<dyn Logger>) -> ECR {
+pub fn container_registry_ecr_ec2(context: &Context, logger: Box<dyn Logger>, localisation: &str) -> ECR {
     let secrets = FuncTestsSecrets::new();
-    if secrets.AWS_ACCESS_KEY_ID.is_none()
-        || secrets.AWS_SECRET_ACCESS_KEY.is_none()
-        || secrets.AWS_EC2_DEFAULT_REGION.is_none()
-    {
-        error!("Please check your Vault connectivity (token/address) or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_EC2_DEFAULT_REGION environment variables are set");
+    if secrets.AWS_ACCESS_KEY_ID.is_none() || secrets.AWS_SECRET_ACCESS_KEY.is_none() {
+        error!("Please check your Vault connectivity (token/address) or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY environment variables are set");
         std::process::exit(1)
     }
 
+    let region = match localisation {
+        "us-east-2" => secrets.AWS_EC2_TEST_MANAGED_REGION,
+        "us-west-2" => secrets.AWS_EC2_TEST_CONTAINER_REGION,
+        "eu-west-1" => secrets.AWS_EC2_TEST_INSTANCE_REGION,
+        _ => {
+            error!("Unknown region for EC2 tests. Please check AWS_EC2_MANAGED_TEST_REGION/AWS_EC2_CONTAINER_TEST_REGION/AWS_EC2_INSTANCE_TEST_REGION environment variables are set");
+            std::process::exit(1);
+        }
+    };
+
+    if region.is_none() {
+        error!("No region for EC2 tests");
+        std::process::exit(1);
+    }
+
+    let region = region.expect("No region found for EC2 tests");
+
     ECR::new(
         context.clone(),
-        "default-ecr-ec2-registry-Qovery Test",
+        format!("default-ecr-ec2-registry-{}-Qovery Test", region).as_str(),
         Uuid::new_v4(),
         "ea69qe62xaw3wjai",
         secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
         secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),
-        secrets.AWS_EC2_DEFAULT_REGION.unwrap().as_str(),
+        region.as_str(),
         logger,
         hashmap! {},
     )
@@ -118,7 +132,7 @@ impl Cluster<AWS, Options> for AWS {
         // use ECR
         let container_registry = match kubernetes_kind {
             Kind::Eks => Box::new(container_registry_ecr(context, logger.clone())),
-            Kind::Ec2 => Box::new(container_registry_ecr_ec2(context, logger.clone())),
+            Kind::Ec2 => Box::new(container_registry_ecr_ec2(context, logger.clone(), localisation)),
             _ => panic!("Invalid cluster kind {}", kubernetes_kind),
         };
 
@@ -126,7 +140,8 @@ impl Cluster<AWS, Options> for AWS {
         let build_platform = Box::new(build_platform_local_docker(context));
 
         // use AWS
-        let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(AWS::cloud_provider(context, kubernetes_kind));
+        let cloud_provider: Arc<Box<dyn CloudProvider>> =
+            Arc::new(AWS::cloud_provider(context, kubernetes_kind, localisation));
         let dns_provider = Arc::new(dns_provider_qoverydns(context, cluster_domain));
 
         let kubernetes = get_environment_test_kubernetes(
@@ -152,16 +167,28 @@ impl Cluster<AWS, Options> for AWS {
         )
     }
 
-    fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind) -> Box<AWS> {
+    fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind, localisation: &str) -> Box<AWS> {
         let secrets = FuncTestsSecrets::new();
-        let aws_region = match kubernetes_kind {
-            Kind::Eks => {
+        let aws_region = match localisation {
+            "EuWest3" => {
                 AwsRegion::from_str(secrets.AWS_DEFAULT_REGION.unwrap().as_str()).expect("AWS region not supported")
             }
-            Kind::Ec2 => {
-                AwsRegion::from_str(secrets.AWS_EC2_DEFAULT_REGION.unwrap().as_str()).expect("AWS region not supported")
+            "UsEast2" => AwsRegion::from_str(secrets.AWS_EC2_TEST_MANAGED_REGION.unwrap().as_str())
+                .expect("AWS region not supported"),
+            "UsWest2" => AwsRegion::from_str(secrets.AWS_EC2_TEST_CONTAINER_REGION.unwrap().as_str())
+                .expect("AWS region not supported"),
+            "EuWest1" => AwsRegion::from_str(secrets.AWS_EC2_TEST_INSTANCE_REGION.unwrap().as_str())
+                .expect("AWS region not supported"),
+            "eu-west-3" => {
+                AwsRegion::from_str(secrets.AWS_DEFAULT_REGION.unwrap().as_str()).expect("AWS region not supported")
             }
-            _ => panic!("Invalid cluster kind {}", kubernetes_kind),
+            "us-east-2" => AwsRegion::from_str(secrets.AWS_EC2_TEST_MANAGED_REGION.unwrap().as_str())
+                .expect("AWS region not supported"),
+            "us-west-2" => AwsRegion::from_str(secrets.AWS_EC2_TEST_CONTAINER_REGION.unwrap().as_str())
+                .expect("AWS region not supported"),
+            "eu-west-1" => AwsRegion::from_str(secrets.AWS_EC2_TEST_INSTANCE_REGION.unwrap().as_str())
+                .expect("AWS region not supported"),
+            _ => panic!("Invalid cluster localisation {}", localisation),
         };
 
         Box::new(AWS::new(

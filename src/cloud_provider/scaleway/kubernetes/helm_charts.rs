@@ -20,9 +20,12 @@ use crate::cloud_provider::helm_charts::grafana_chart::{GrafanaAdminUser, Grafan
 use crate::cloud_provider::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
 use crate::cloud_provider::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::cloud_provider::helm_charts::loki_chart::{LokiChart, LokiEncryptionType, LokiS3BucketConfiguration};
+use crate::cloud_provider::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::cloud_provider::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::cloud_provider::helm_charts::promtail_chart::PromtailChart;
 use crate::cloud_provider::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
+use crate::cloud_provider::scaleway::models::ScwLoadBalancerType;
+use crate::io_models::domain::{Domain, ToHelmString};
 use crate::models::third_parties::LetsEncryptConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -52,13 +55,13 @@ pub struct ChartsConfigPrerequisites {
     pub qovery_engine_location: EngineLocation,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
-    pub managed_dns_name: String,
-    pub managed_dns_helm_format: String,
+    pub ff_grafana_enabled: bool,
+    pub managed_dns_domain: Domain,
     pub managed_dns_resolvers_terraform_format: String,
-    pub managed_dns_root_domain_helm_format: String,
     pub external_dns_provider: String,
     pub lets_encrypt_config: LetsEncryptConfig,
     pub dns_provider_config: DnsProviderConfiguration,
+    pub load_balancer_type: ScwLoadBalancerType,
     pub disable_pleco: bool,
     // qovery options form json input
     pub infra_options: KapsuleOptions,
@@ -81,13 +84,13 @@ impl ChartsConfigPrerequisites {
         qovery_engine_location: EngineLocation,
         ff_log_history_enabled: bool,
         ff_metrics_history_enabled: bool,
-        managed_dns_name: String,
-        managed_dns_helm_format: String,
+        managed_dns_domain: Domain,
+        ff_grafana_enabled: bool,
         managed_dns_resolvers_terraform_format: String,
-        managed_dns_root_domain_helm_format: String,
         external_dns_provider: String,
         lets_encrypt_config: LetsEncryptConfig,
         dns_provider_config: DnsProviderConfiguration,
+        load_balancer_type: ScwLoadBalancerType,
         disable_pleco: bool,
         infra_options: KapsuleOptions,
         cluster_advanced_settings: ClusterAdvancedSettings,
@@ -108,13 +111,13 @@ impl ChartsConfigPrerequisites {
             qovery_engine_location,
             ff_log_history_enabled,
             ff_metrics_history_enabled,
-            managed_dns_name,
-            managed_dns_helm_format,
+            ff_grafana_enabled,
+            managed_dns_domain,
             managed_dns_resolvers_terraform_format,
-            managed_dns_root_domain_helm_format,
             external_dns_provider,
             lets_encrypt_config,
             dns_provider_config,
+            load_balancer_type,
             disable_pleco,
             infra_options,
             cluster_advanced_settings,
@@ -169,7 +172,7 @@ pub fn scw_helm_charts(
     let coredns_config = CoreDNSConfigChart::new(
         chart_prefix_path,
         false,
-        chart_config_prerequisites.managed_dns_helm_format.to_string(),
+        chart_config_prerequisites.managed_dns_domain.to_helm_format_string(),
         chart_config_prerequisites
             .managed_dns_resolvers_terraform_format
             .to_string(),
@@ -180,8 +183,9 @@ pub fn scw_helm_charts(
         chart_prefix_path,
         chart_config_prerequisites.dns_provider_config.clone(),
         chart_config_prerequisites
-            .managed_dns_root_domain_helm_format
-            .to_string(),
+            .managed_dns_domain
+            .root_domain()
+            .to_helm_format_string(),
         false,
         chart_config_prerequisites.cluster_id.to_string(),
     )
@@ -258,24 +262,29 @@ pub fn scw_helm_charts(
     };
 
     // Grafana chart
-    let grafana = GrafanaChart::new(
-        chart_prefix_path,
-        GrafanaAdminUser::new(
-            chart_config_prerequisites.infra_options.grafana_admin_user.to_string(),
-            chart_config_prerequisites
-                .infra_options
-                .grafana_admin_password
-                .to_string(),
+    let grafana = match chart_config_prerequisites.ff_grafana_enabled {
+        false => None,
+        true => Some(
+            GrafanaChart::new(
+                chart_prefix_path,
+                GrafanaAdminUser::new(
+                    chart_config_prerequisites.infra_options.grafana_admin_user.to_string(),
+                    chart_config_prerequisites
+                        .infra_options
+                        .grafana_admin_password
+                        .to_string(),
+                ),
+                GrafanaDatasources {
+                    prometheus_internal_url,
+                    loki_chart_name: LokiChart::chart_name(),
+                    loki_namespace: loki_namespace.to_string(),
+                    cloudwatch_config: None,
+                },
+                "scw-sbv-ssd-0".to_string(), // TODO(benjaminch): introduce proper type here
+            )
+            .to_common_helm_chart(),
         ),
-        GrafanaDatasources {
-            prometheus_internal_url,
-            loki_chart_name: LokiChart::chart_name(),
-            loki_namespace: loki_namespace.to_string(),
-            cloudwatch_config: None,
-        },
-        "scw-sbv-ssd-0".to_string(), // TODO(benjaminch): introduce proper type here
-    )
-    .to_common_helm_chart();
+    };
 
     // Cert Manager chart
     let cert_manager = CertManagerChart::new(
@@ -292,7 +301,7 @@ pub fn scw_helm_charts(
         chart_prefix_path,
         &chart_config_prerequisites.lets_encrypt_config,
         &chart_config_prerequisites.dns_provider_config,
-        chart_config_prerequisites.managed_dns_helm_format.to_string(),
+        chart_config_prerequisites.managed_dns_domain.to_helm_format_string(),
     )
     .to_common_helm_chart();
 
@@ -308,58 +317,15 @@ pub fn scw_helm_charts(
         );
     }
 
-    let nginx_ingress = CommonChart {
-        chart_info: ChartInfo {
-            name: "nginx-ingress".to_string(),
-            path: chart_path("common/charts/ingress-nginx"),
-            namespace: HelmChartNamespaces::NginxIngress,
-            // Because of NLB, svc can take some time to start
-            timeout_in_seconds: 300,
-            values_files: vec![chart_path("chart_values/nginx-ingress.yaml")],
-            values: vec![
-                ChartSetValue {
-                    key: "controller.admissionWebhooks.enabled".to_string(),
-                    value: "false".to_string(),
-                },
-                // Controller resources limits
-                ChartSetValue {
-                    key: "controller.resources.limits.cpu".to_string(),
-                    value: "200m".to_string(),
-                },
-                ChartSetValue {
-                    key: "controller.resources.requests.cpu".to_string(),
-                    value: "100m".to_string(),
-                },
-                ChartSetValue {
-                    key: "controller.resources.limits.memory".to_string(),
-                    value: "768Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "controller.resources.requests.memory".to_string(),
-                    value: "768Mi".to_string(),
-                },
-                // Default backend resources limits
-                ChartSetValue {
-                    key: "defaultBackend.resources.limits.cpu".to_string(),
-                    value: "20m".to_string(),
-                },
-                ChartSetValue {
-                    key: "defaultBackend.resources.requests.cpu".to_string(),
-                    value: "10m".to_string(),
-                },
-                ChartSetValue {
-                    key: "defaultBackend.resources.limits.memory".to_string(),
-                    value: "32Mi".to_string(),
-                },
-                ChartSetValue {
-                    key: "defaultBackend.resources.requests.memory".to_string(),
-                    value: "32Mi".to_string(),
-                },
-            ],
-            ..Default::default()
-        },
-        ..Default::default()
-    };
+    // Nginx Ingress
+    let nginx_ingress = NginxIngressChart::new(
+        chart_prefix_path,
+        Some(chart_config_prerequisites.managed_dns_domain.clone()),
+        Some(Box::new(chart_config_prerequisites.load_balancer_type.clone())),
+        HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartResourcesConstraintType::ChartDefault,
+    )
+    .to_common_helm_chart();
 
     let pleco = match chart_config_prerequisites.disable_pleco {
         true => None,
@@ -577,9 +543,9 @@ pub fn scw_helm_charts(
     if let Some(loki_chart) = loki {
         level_2.push(Box::new(loki_chart));
     }
-    if chart_config_prerequisites.ff_metrics_history_enabled || chart_config_prerequisites.ff_log_history_enabled {
-        level_2.push(Box::new(grafana))
-    };
+    if let Some(grafana_chart) = grafana {
+        level_2.push(Box::new(grafana_chart))
+    }
 
     // pleco
     if let Some(pleco_chart) = pleco {

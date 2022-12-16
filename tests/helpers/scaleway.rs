@@ -22,7 +22,6 @@ use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::Logger;
 use qovery_engine::models::scaleway::ScwZone;
-use qovery_engine::object_storage::scaleway_object_storage::{BucketDeleteStrategy, ScalewayOS};
 
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::dns::dns_provider_qoverydns;
@@ -37,7 +36,7 @@ pub const SCW_MANAGED_DATABASE_INSTANCE_TYPE: &str = "db-dev-s";
 pub const SCW_MANAGED_DATABASE_DISK_TYPE: &str = "bssd";
 pub const SCW_SELF_HOSTED_DATABASE_INSTANCE_TYPE: &str = "";
 pub const SCW_SELF_HOSTED_DATABASE_DISK_TYPE: &str = "scw-sbv-ssd-0";
-pub const SCW_RESOURCE_TTL_IN_SECONDS: i32 = 14400;
+pub const SCW_BUCKET_TTL_IN_SECONDS: i32 = 3600;
 
 pub fn container_registry_scw(context: &Context) -> ScalewayCR {
     let secrets = FuncTestsSecrets::new();
@@ -105,7 +104,8 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         let build_platform = Box::new(build_platform_local_docker(context));
 
         // use Scaleway
-        let cloud_provider: Arc<Box<dyn CloudProvider>> = Arc::new(Self::cloud_provider(context, kubernetes_kind));
+        let cloud_provider: Arc<Box<dyn CloudProvider>> =
+            Arc::new(Self::cloud_provider(context, kubernetes_kind, localisation));
         let dns_provider: Arc<Box<dyn DnsProvider>> = Arc::new(dns_provider_qoverydns(context, cluster_domain));
 
         let cluster = get_environment_test_kubernetes(
@@ -131,7 +131,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         )
     }
 
-    fn cloud_provider(context: &Context, _kubernetes_kind: KubernetesKind) -> Box<Scaleway> {
+    fn cloud_provider(context: &Context, _kubernetes_kind: KubernetesKind, _localisation: &str) -> Box<Scaleway> {
         let secrets = FuncTestsSecrets::new();
         Box::new(Scaleway::new(
             context.clone(),
@@ -219,27 +219,6 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
                 .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),
         )
     }
-}
-
-pub fn _scw_object_storage(context: Context, region: ScwZone) -> ScalewayOS {
-    let secrets = FuncTestsSecrets::new();
-    let random_id = generate_id();
-
-    ScalewayOS::new(
-        context,
-        format!("qovery-test-object-storage-{}", random_id),
-        format!("Qovery Test Object-Storage {}", random_id),
-        secrets
-            .SCALEWAY_ACCESS_KEY
-            .expect("SCALEWAY_ACCESS_KEY is not set in secrets"),
-        secrets
-            .SCALEWAY_SECRET_KEY
-            .expect("SCALEWAY_SECRET_KEY is not set in secrets"),
-        region,
-        BucketDeleteStrategy::Empty, // do not delete bucket due to deletion 24h delay
-        false,
-        Some(SCW_RESOURCE_TTL_IN_SECONDS),
-    )
 }
 
 pub fn clean_environments(

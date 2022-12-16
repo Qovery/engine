@@ -162,6 +162,11 @@ impl Display for KubernetesMemoryResourceUnit {
     }
 }
 
+pub trait IngressLoadBalancerType {
+    fn annotation_key(&self) -> String;
+    fn annotation_value(&self) -> String;
+}
+
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};

@@ -88,13 +88,13 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
             long_id,
             "my_cluster_name",
             "my_cluster_version",
-            AwsRegion::UsEast1,
+            AwsRegion::UsEast2,
             vec![
-                AwsZones::UsEast1A.to_string(),
-                AwsZones::UsEast1B.to_string(),
-                AwsZones::UsEast1C.to_string(),
+                AwsZones::UsEast2A.to_string(),
+                AwsZones::UsEast2B.to_string(),
+                AwsZones::UsEast2C.to_string(),
             ],
-            Arc::new(AWS::cloud_provider(&context, Eks)),
+            Arc::new(AWS::cloud_provider(&context, Eks, "us-east-2")),
             Arc::new(dns_provider_qoverydns(
                 &context,
                 &ClusterDomain::Default {
@@ -128,8 +128,6 @@ fn create_fake_kubeconfig(kube: &dyn Kubernetes, test_env: &Environment) {
     let local_kubeconfig = format!("{}/qovery-kubeconfigs-{}/{}.yaml", temp_dir, short_id, short_id);
     let _ = fs::copy(kubeconfig_path(), &local_kubeconfig)
         .unwrap_or_else(|e| panic!("Unable to create file {}: {}", &local_kubeconfig, e));
-    // let _ =
-    //     File::create(&kubeconfig_path).unwrap_or_else(|e| panic!("Unable to create file {}: {}", &kubeconfig_path, e));
 }
 
 fn test_environment(kube: &dyn Kubernetes) -> Environment {

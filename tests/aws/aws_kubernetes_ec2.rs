@@ -2,7 +2,7 @@ use crate::helpers::utilities::{context_for_ec2, engine_run_test, generate_id, l
 use ::function_name::named;
 use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
 
-use crate::helpers::aws::{AWS_EC2_INSTANCE_TEST_REGION, K3S_KUBERNETES_MAJOR_VERSION, K3S_KUBERNETES_MINOR_VERSION};
+use crate::helpers::aws::{AWS_EC2_TEST_INSTANCE_REGION, K3S_KUBERNETES_MAJOR_VERSION, K3S_KUBERNETES_MINOR_VERSION};
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
 use crate::helpers::utilities::generate_cluster_id;
@@ -19,7 +19,7 @@ fn create_and_destroy_aws_ec2_k3s_cluster(
     test_name: &str,
 ) {
     engine_run_test(|| -> String {
-        let localisation = AWS_EC2_INSTANCE_TEST_REGION;
+        let localisation = AWS_EC2_TEST_INSTANCE_REGION;
         let zones = localisation.get_zones();
         let cluster_id = generate_cluster_id(localisation.to_aws_format());
         cluster_test(

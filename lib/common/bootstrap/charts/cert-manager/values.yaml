@@ -2,11 +2,20 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 global:
-  ## Reference to one or more secrets to be used when pulling images
-  ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
-  ##
+  # Reference to one or more secrets to be used when pulling images
+  # ref: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
   imagePullSecrets: []
   # - name: "image-pull-secret"
+
+  # Labels to apply to all resources
+  # Please note that this does not add labels to the resources created dynamically by the controllers.
+  # For these resources, you have to add the labels in the template in the cert-manager custom resource:
+  # eg. podTemplate/ ingressTemplate in ACMEChallengeSolverHTTP01Ingress
+  #    ref: https://cert-manager.io/docs/reference/api-docs/#acme.cert-manager.io/v1.ACMEChallengeSolverHTTP01Ingress
+  # eg. secretTemplate in CertificateSpec
+  #    ref: https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.CertificateSpec
+  commonLabels: {}
+  # team_name: dev
 
   # Optional priority class to be used for the cert-manager pods
   priorityClassName: ""
@@ -23,7 +32,7 @@ global:
   logLevel: 2
 
   leaderElection:
-    # Override the namespace used to store the ConfigMap for leader election
+    # Override the namespace used for the leader election lease
     namespace: "kube-system"
 
     # The duration that non-leader candidates will wait after observing a
@@ -74,6 +83,11 @@ image:
 # used. This namespace will not be automatically created by the Helm chart.
 clusterResourceNamespace: ""
 
+# This namespace allows you to define where the services will be installed into
+# if not set then they will use the namespace of the release
+# This is helpful when installing cert manager as a chart dependency (sub chart)
+namespace: ""
+
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
@@ -86,6 +100,9 @@ serviceAccount:
   # Optional additional labels to add to the controller's ServiceAccount
   # labels: {}
   automountServiceAccountToken: true
+
+# Automounting API credentials for a particular pod
+# automountServiceAccountToken: true
 
 # Additional command line flags to pass to cert-manager controller binary.
 # To see all available flags run docker run quay.io/jetstack/cert-manager-controller:<version> --help
@@ -108,25 +125,16 @@ resources: {}
 # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
 securityContext:
   runAsNonRoot: true
-# legacy securityContext parameter format: if enabled is set to true, only fsGroup and runAsUser are supported
-# securityContext:
-#   enabled: false
-#   fsGroup: 1001
-#   runAsUser: 1001
-# to support additional securityContext parameters, omit the `enabled` parameter and simply specify the parameters
-# you want to set, e.g.
-# securityContext:
-#   fsGroup: 1000
-#   runAsUser: 1000
-#   runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
 
 # Container Security Context to be set on the controller component container
 # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
 containerSecurityContext:
   allowPrivilegeEscalation: false
-  # capabilities:
-  #   drop:
-  #   - ALL
+  capabilities:
+    drop:
+    - ALL
   # readOnlyRootFilesystem: true
   # runAsNonRoot: true
 
@@ -178,6 +186,7 @@ prometheus:
     interval: 60s
     scrapeTimeout: 30s
     labels: {}
+    annotations: {}
     honorLabels: false
 
 # Use these variables to configure the HTTP_PROXY environment variables
@@ -206,6 +215,18 @@ affinity: {}
 #     value: master
 #     effect: NoSchedule
 tolerations: []
+
+# expects input structure as per specification https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#topologyspreadconstraint-v1-core
+# for example:
+#   topologySpreadConstraints:
+#   - maxSkew: 2
+#     topologyKey: topology.kubernetes.io/zone
+#     whenUnsatisfiable: ScheduleAnyway
+#     labelSelector:
+#       matchLabels:
+#         app.kubernetes.io/instance: cert-manager
+#         app.kubernetes.io/component: controller
+topologySpreadConstraints: []
 
 webhook:
   replicaCount: 1
@@ -238,14 +259,16 @@ webhook:
   # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
   securityContext:
     runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
 
   # Container Security Context to be set on the webhook component container
   # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
   containerSecurityContext:
     allowPrivilegeEscalation: false
-    # capabilities:
-    #   drop:
-    #   - ALL
+    capabilities:
+      drop:
+      - ALL
     # readOnlyRootFilesystem: true
     # runAsNonRoot: true
 
@@ -298,6 +321,8 @@ webhook:
 
   tolerations: []
 
+  topologySpreadConstraints: []
+
   # Optional additional labels to add to the Webhook Pods
   podLabels: {}
 
@@ -332,6 +357,9 @@ webhook:
     # Automount API credentials for a Service Account.
     automountServiceAccountToken: true
 
+  # Automounting API credentials for a particular pod
+  # automountServiceAccountToken: true
+
   # The port that the webhook should listen on for requests.
   # In GKE private clusters, by default kubernetes apiservers are allowed to
   # talk to the cluster nodes only on 443 and 10250. so configuring
@@ -361,6 +389,27 @@ webhook:
   url: {}
     # host:
 
+  # Enables default network policies for webhooks.
+  networkPolicy:
+    enabled: false
+    ingress:
+    - from:
+      - ipBlock:
+          cidr: 0.0.0.0/0
+    egress:
+    - ports:
+      - port: 80
+        protocol: TCP
+      - port: 443
+        protocol: TCP
+      - port: 53
+        protocol: TCP
+      - port: 53
+        protocol: UDP
+      to:
+      - ipBlock:
+          cidr: 0.0.0.0/0
+
 cainjector:
   enabled: true
   replicaCount: 1
@@ -375,14 +424,16 @@ cainjector:
   # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
   securityContext:
     runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
 
   # Container Security Context to be set on the cainjector component container
   # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
   containerSecurityContext:
     allowPrivilegeEscalation: false
-    # capabilities:
-    #   drop:
-    #   - ALL
+    capabilities:
+      drop:
+      - ALL
     # readOnlyRootFilesystem: true
     # runAsNonRoot: true
 
@@ -410,6 +461,8 @@ cainjector:
   affinity: {}
 
   tolerations: []
+
+  topologySpreadConstraints: []
 
   # Optional additional labels to add to the CA Injector Pods
   podLabels: {}
@@ -442,6 +495,9 @@ cainjector:
     # labels: {}
     automountServiceAccountToken: true
 
+  # Automounting API credentials for a particular pod
+  # automountServiceAccountToken: true
+
 # This startupapicheck is a Helm post-install hook that waits for the webhook
 # endpoints to become available.
 # The check is implemented using a Kubernetes Job- if you are injecting mesh
@@ -456,14 +512,16 @@ startupapicheck:
   # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
   securityContext:
     runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
 
   # Container Security Context to be set on the controller component container
   # ref: https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
   containerSecurityContext:
     allowPrivilegeEscalation: false
-    # capabilities:
-    #   drop:
-    #   - ALL
+    capabilities:
+      drop:
+      - ALL
     # readOnlyRootFilesystem: true
     # runAsNonRoot: true
 
@@ -491,7 +549,8 @@ startupapicheck:
     #   cpu: 10m
     #   memory: 32Mi
 
-  nodeSelector: {}
+  nodeSelector:
+    kubernetes.io/os: linux
 
   affinity: {}
 

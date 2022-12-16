@@ -24,6 +24,7 @@ use crate::cloud_provider::aws::kubernetes::ec2_helm_charts::{
 use crate::cloud_provider::aws::kubernetes::eks_helm_charts::{eks_aws_helm_charts, EksChartsConfigPrerequisites};
 use crate::cloud_provider::aws::kubernetes::roles::get_default_roles_to_create;
 use crate::cloud_provider::aws::kubernetes::vault::{ClusterSecretsAws, ClusterSecretsIoAws};
+use crate::cloud_provider::aws::models::AwsLoadBalancerType;
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZones};
 use crate::cloud_provider::helm::{deploy_charts_levels, ChartInfo};
 use crate::cloud_provider::kubernetes::{
@@ -47,7 +48,7 @@ use crate::dns_provider::DnsProvider;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity, Tag};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::io_models::context::{Context, Features};
-use crate::io_models::domain::{ToHelmString, ToTerraformString};
+use crate::io_models::domain::ToTerraformString;
 use crate::io_models::QoveryIdentifier;
 use crate::models::third_parties::LetsEncryptConfig;
 use crate::object_storage::s3::S3;
@@ -1151,22 +1152,18 @@ fn create(
                 qovery_engine_location: options.qovery_engine_location.clone(),
                 ff_log_history_enabled: kubernetes.context().is_feature_enabled(&Features::LogsHistory),
                 ff_metrics_history_enabled: kubernetes.context().is_feature_enabled(&Features::MetricsHistory),
-                managed_dns_name: kubernetes.dns_provider().domain().to_string(),
-                managed_dns_helm_format: kubernetes.dns_provider().domain().to_helm_format_string(),
+                managed_dns_domain: kubernetes.dns_provider().domain().clone(),
+                ff_grafana_enabled: kubernetes.context().is_feature_enabled(&Features::Grafana),
                 managed_dns_resolvers_terraform_format: managed_dns_resolvers_terraform_format(
                     kubernetes.dns_provider(),
                 ),
-                managed_dns_root_domain_helm_format: kubernetes
-                    .dns_provider()
-                    .domain()
-                    .root_domain()
-                    .to_helm_format_string(),
                 external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
                 lets_encrypt_config: LetsEncryptConfig::new(
                     options.tls_email_report.to_string(),
                     kubernetes.context().is_test_cluster(),
                 ),
                 dns_provider_config: kubernetes.dns_provider().provider_configuration(),
+                load_balancer_type: AwsLoadBalancerType::Nlb,
                 disable_pleco: kubernetes.context().disable_pleco(),
                 cluster_advanced_settings: kubernetes.advanced_settings().clone(),
             };
@@ -1196,17 +1193,10 @@ fn create(
                 qovery_engine_location: options.qovery_engine_location.clone(),
                 ff_log_history_enabled: kubernetes.context().is_feature_enabled(&Features::LogsHistory),
                 ff_metrics_history_enabled: kubernetes.context().is_feature_enabled(&Features::MetricsHistory),
-                managed_dns_name: kubernetes.dns_provider().domain().to_string(),
-                managed_dns_name_wildcarded: kubernetes.dns_provider().domain().wildcarded().to_string(),
-                managed_dns_helm_format: kubernetes.dns_provider().domain().to_helm_format_string(),
+                managed_dns_domain: kubernetes.dns_provider().domain().clone(),
                 managed_dns_resolvers_terraform_format: managed_dns_resolvers_terraform_format(
                     kubernetes.dns_provider(),
                 ),
-                managed_dns_root_domain_helm_format: kubernetes
-                    .dns_provider()
-                    .domain()
-                    .root_domain()
-                    .to_helm_format_string(),
                 external_dns_provider: kubernetes.dns_provider().provider_name().to_string(),
                 lets_encrypt_config: LetsEncryptConfig::new(
                     options.tls_email_report.to_string(),

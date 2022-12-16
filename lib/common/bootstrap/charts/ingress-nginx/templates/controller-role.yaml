@@ -58,6 +58,11 @@ rules:
       - get
       - list
       - watch
+  # TODO(Jintao Zhang)
+  # Once we release a new version of the controller,
+  # we will be able to remove the configmap related permissions
+  # We have used the Lease API for selection
+  # ref: https://github.com/kubernetes/ingress-nginx/pull/8921
   - apiGroups:
       - ""
     resources:
@@ -71,6 +76,21 @@ rules:
       - ""
     resources:
       - configmaps
+    verbs:
+      - create
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    resourceNames:
+      - {{ .Values.controller.electionID }}
+    verbs:
+      - get
+      - update
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
     verbs:
       - create
   - apiGroups:
