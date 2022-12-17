@@ -299,7 +299,7 @@ impl Display for RegionAndZoneErrors {
 impl AwsZones {
     pub fn from_string(zone: String) -> Result<AwsZones, RegionAndZoneErrors> {
         // create tmp region from zone and get zone name (one letter)
-        let sanitized_zone_name = zone.to_lowercase().replace('-', "").replace('_', "");
+        let sanitized_zone_name = zone.to_lowercase().replace(['-', '_'], "");
         let mut sanitized_region = sanitized_zone_name.clone();
         sanitized_region.pop();
 

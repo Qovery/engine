@@ -111,12 +111,12 @@ impl ClusterSecretsAws {
     pub fn new_from_cluster_secrets_io(
         cluster_secret: ClusterSecretsIoAws,
         event_details: EventDetails,
-    ) -> Result<ClusterSecretsAws, EngineError> {
+    ) -> Result<ClusterSecretsAws, Box<EngineError>> {
         let test_cluster =
             match cluster_secret.test_cluster.as_str() {
                 "true" => true,
                 "false" => false,
-                _ => return Err(EngineError::new_error_when_create_cluster_secrets(
+                _ => return Err(Box::new(EngineError::new_error_when_create_cluster_secrets(
                     event_details,
                     CommandError::new(
                         "Qovery error when manipulating ClusterSecrets".to_string(),
@@ -126,7 +126,7 @@ impl ClusterSecretsAws {
                         ),
                         None,
                     ),
-                )),
+                ))),
             };
 
         Ok(Self::new(
@@ -150,15 +150,15 @@ impl ClusterSecretsAws {
         cluster_id: &str,
         is_test_cluster: bool,
         event_details: EventDetails,
-    ) -> Result<ClusterSecretsAws, EngineError> {
+    ) -> Result<ClusterSecretsAws, Box<EngineError>> {
         let mount = vault::get_vault_mount_name(is_test_cluster);
 
         match qvault_client.get_secret(mount.as_str(), cluster_id) {
             Ok(x) => Ok(x),
-            Err(e) => Err(EngineError::new_vault_secret_could_not_be_retrieved(
+            Err(e) => Err(Box::new(EngineError::new_vault_secret_could_not_be_retrieved(
                 event_details,
                 CommandError::new("Vault secret couldn't be retrieved".to_string(), Some(format!("{}", e)), None),
-            )),
+            ))),
         }
     }
 
@@ -167,7 +167,7 @@ impl ClusterSecretsAws {
         qvault_client: &QVaultClient,
         ignore_kubeconfig_compare: bool,
         event_details: EventDetails,
-    ) -> Result<Option<SecretVersionMetadata>, EngineError> {
+    ) -> Result<Option<SecretVersionMetadata>, Box<EngineError>> {
         // check if secret already exists and has the same content to avoid to create a new version
         match Self::get_secret(
             qvault_client,
@@ -193,30 +193,34 @@ impl ClusterSecretsAws {
 
         match qvault_client.crate_update_secret(self.vault_mount_name.as_str(), self.cluster_id.as_str(), self) {
             Ok(x) => Ok(Some(x)),
-            Err(e) => Err(EngineError::new_vault_secret_could_not_be_created_or_updated(
+            Err(e) => Err(Box::new(EngineError::new_vault_secret_could_not_be_created_or_updated(
                 event_details,
                 CommandError::new(
                     "Vault secret couldn't be created or updated".to_string(),
                     Some(format!("{:?}", e)),
                     None,
                 ),
-            )),
+            ))),
         }
     }
 
     // required for tests
     #[allow(dead_code)]
-    pub fn delete_secret(&self, qvault_client: &QVaultClient, event_details: EventDetails) -> Result<(), EngineError> {
+    pub fn delete_secret(
+        &self,
+        qvault_client: &QVaultClient,
+        event_details: EventDetails,
+    ) -> Result<(), Box<EngineError>> {
         match qvault_client.delete_secret(self.vault_mount_name.as_str(), self.cluster_id.as_str()) {
             Ok(_) => Ok(()),
-            Err(e) => Err(EngineError::new_vault_secret_could_not_be_created_or_updated(
+            Err(e) => Err(Box::new(EngineError::new_vault_secret_could_not_be_created_or_updated(
                 event_details,
                 CommandError::new(
                     "Vault secret couldn't be created or updated".to_string(),
                     Some(format!("{:?}", e)),
                     None,
                 ),
-            )),
+            ))),
         }
     }
 }

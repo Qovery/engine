@@ -7,7 +7,7 @@ use crate::models::types::{ToTeraContext, SCW};
 use tera::Context as TeraContext;
 
 impl ToTeraContext for Container<SCW> {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         let mut context = self.default_tera_context(target);
 
         let storages = self

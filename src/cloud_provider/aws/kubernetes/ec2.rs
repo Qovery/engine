@@ -57,7 +57,7 @@ impl EC2 {
         instance: InstanceEc2,
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
-    ) -> Result<Self, EngineError> {
+    ) -> Result<Self, Box<EngineError>> {
         let event_details = kubernetes::event_details(&**cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws-ec2/bootstrap", context.lib_root_dir());
 
@@ -68,12 +68,12 @@ impl EC2 {
                 let err = EngineError::new_unsupported_instance_type(event_details, instance.instance_type.as_str(), e);
                 logger.log(EngineEvent::Error(err.clone(), None));
 
-                return Err(err);
+                return Err(Box::new(err));
             }
             Ok(instance_type) => {
                 if !EC2::is_instance_allowed(instance_type.clone()) {
                     let err = EngineError::new_not_allowed_instance_type(event_details, instance_type.as_str());
-                    return Err(err);
+                    return Err(Box::new(err));
                 }
             }
         }
@@ -175,7 +175,7 @@ impl Kubernetes for EC2 {
         &self.s3
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), Box<EngineError>> {
         Ok(())
     }
 
@@ -184,7 +184,7 @@ impl Kubernetes for EC2 {
     }
 
     #[named]
-    fn on_create(&self) -> Result<(), EngineError> {
+    fn on_create(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
         print_action(
             self.cloud_provider_name(),
@@ -207,7 +207,7 @@ impl Kubernetes for EC2 {
     }
 
     #[named]
-    fn on_create_error(&self) -> Result<(), EngineError> {
+    fn on_create_error(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
         print_action(
             self.cloud_provider_name(),
@@ -220,13 +220,13 @@ impl Kubernetes for EC2 {
         send_progress_on_long_task(self, Action::Create, || kubernetes::create_error(self))
     }
 
-    fn upgrade_with_status(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
+    fn upgrade_with_status(&self, _kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
         // TODO
         Ok(())
     }
 
     #[named]
-    fn on_upgrade(&self) -> Result<(), EngineError> {
+    fn on_upgrade(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
         print_action(
             self.cloud_provider_name(),
@@ -240,7 +240,7 @@ impl Kubernetes for EC2 {
     }
 
     #[named]
-    fn on_upgrade_error(&self) -> Result<(), EngineError> {
+    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
         print_action(
             self.cloud_provider_name(),
@@ -254,7 +254,7 @@ impl Kubernetes for EC2 {
     }
 
     #[named]
-    fn on_pause(&self) -> Result<(), EngineError> {
+    fn on_pause(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
         print_action(
             self.cloud_provider_name(),
@@ -270,7 +270,7 @@ impl Kubernetes for EC2 {
     }
 
     #[named]
-    fn on_pause_error(&self) -> Result<(), EngineError> {
+    fn on_pause_error(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
         print_action(
             self.cloud_provider_name(),
@@ -284,7 +284,7 @@ impl Kubernetes for EC2 {
     }
 
     #[named]
-    fn on_delete(&self) -> Result<(), EngineError> {
+    fn on_delete(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
         print_action(
             self.cloud_provider_name(),
@@ -306,7 +306,7 @@ impl Kubernetes for EC2 {
     }
 
     #[named]
-    fn on_delete_error(&self) -> Result<(), EngineError> {
+    fn on_delete_error(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
         print_action(
             self.cloud_provider_name(),

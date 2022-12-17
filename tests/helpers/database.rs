@@ -88,7 +88,7 @@ impl Infrastructure for EnvironmentRequest {
         let ret = EnvironmentTask::deploy_environment(env, infra_ctx, &|| false);
         match ret {
             Ok(_) => TransactionResult::Ok,
-            Err(err) => TransactionResult::Error(Box::new(err)),
+            Err(err) => TransactionResult::Error(err),
         }
     }
 
@@ -105,7 +105,7 @@ impl Infrastructure for EnvironmentRequest {
         let ret = EnvironmentTask::deploy_environment(env, infra_ctx, &|| false);
         match ret {
             Ok(_) => TransactionResult::Ok,
-            Err(err) => TransactionResult::Error(Box::new(err)),
+            Err(err) => TransactionResult::Error(err),
         }
     }
 
@@ -122,7 +122,7 @@ impl Infrastructure for EnvironmentRequest {
         let ret = EnvironmentTask::deploy_environment(env, infra_ctx, &|| false);
         match ret {
             Ok(_) => TransactionResult::Ok,
-            Err(err) => TransactionResult::Error(Box::new(err)),
+            Err(err) => TransactionResult::Error(err),
         }
     }
 }

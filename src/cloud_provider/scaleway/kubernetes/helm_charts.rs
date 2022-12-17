@@ -134,7 +134,7 @@ pub fn scw_helm_charts(
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     info!("preparing chart configuration to be deployed");
 
-    let content_file = match File::open(&qovery_terraform_config_file) {
+    let content_file = match File::open(qovery_terraform_config_file) {
         Ok(x) => x,
         Err(e) => {
             return Err(CommandError::new(

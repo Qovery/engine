@@ -144,7 +144,7 @@ impl PauseServiceAction {
         }
     }
 
-    pub fn unpause_if_needed(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    pub fn unpause_if_needed(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let fut = unpause_service_if_needed(
             &target.kube,
             target.environment.namespace(),
@@ -159,13 +159,13 @@ impl PauseServiceAction {
             // error during scaling
             Ok(Err(kube_err)) => {
                 let command_error = CommandError::new_from_safe_message(kube_err.to_string());
-                return Err(EngineError::new_k8s_scale_replicas(
+                return Err(Box::new(EngineError::new_k8s_scale_replicas(
                     self.event_details.clone(),
                     self.selector.clone(),
                     target.environment.namespace().to_string(),
                     0,
                     command_error,
-                ));
+                )));
             }
             // timeout
             Err(_) => {
@@ -173,13 +173,13 @@ impl PauseServiceAction {
                     "Timout of {}s exceeded while un-pausing service",
                     self.timeout.as_secs()
                 ));
-                return Err(EngineError::new_k8s_scale_replicas(
+                return Err(Box::new(EngineError::new_k8s_scale_replicas(
                     self.event_details.clone(),
                     self.selector.clone(),
                     target.environment.namespace().to_string(),
                     0,
                     command_error,
-                ));
+                )));
             }
         }
 
@@ -188,11 +188,11 @@ impl PauseServiceAction {
 }
 
 impl DeploymentAction for PauseServiceAction {
-    fn on_create(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         Ok(())
     }
 
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let fut = pause_service(
             &target.kube,
             target.environment.namespace(),
@@ -212,13 +212,13 @@ impl DeploymentAction for PauseServiceAction {
             // error during scaling
             Ok(Err(kube_err)) => {
                 let command_error = CommandError::new_from_safe_message(kube_err.to_string());
-                return Err(EngineError::new_k8s_scale_replicas(
+                return Err(Box::new(EngineError::new_k8s_scale_replicas(
                     self.event_details.clone(),
                     self.selector.clone(),
                     target.environment.namespace().to_string(),
                     0,
                     command_error,
-                ));
+                )));
             }
             // timeout
             Err(_) => {
@@ -226,20 +226,20 @@ impl DeploymentAction for PauseServiceAction {
                     "Timout of {}s exceeded while scaling down service",
                     self.timeout.as_secs()
                 ));
-                return Err(EngineError::new_k8s_scale_replicas(
+                return Err(Box::new(EngineError::new_k8s_scale_replicas(
                     self.event_details.clone(),
                     self.selector.clone(),
                     target.environment.namespace().to_string(),
                     0,
                     command_error,
-                ));
+                )));
             }
         }
 
         Ok(())
     }
 
-    fn on_delete(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         Ok(())
     }
 }

@@ -41,18 +41,18 @@ impl QVaultClient {
         block_on(kv2::delete_metadata(&self.connection, mount, secret_name))
     }
 
-    fn get_env_var(env_var: &str, event_details: EventDetails) -> Result<String, EngineError> {
-        match env::var_os(&env_var) {
+    fn get_env_var(env_var: &str, event_details: EventDetails) -> Result<String, Box<EngineError>> {
+        match env::var_os(env_var) {
             Some(x) => Ok(x.into_string().unwrap_or_else(|_| {
                 panic!(
                     "environment variable should have been found but not able to get it: {}",
                     &env_var
                 )
             })),
-            None => Err(EngineError::new_missing_required_env_variable(
+            None => Err(Box::new(EngineError::new_missing_required_env_variable(
                 event_details,
                 env_var.to_string(),
-            )),
+            ))),
         }
     }
 
@@ -70,7 +70,7 @@ impl QVaultClient {
         auth_type
     }
 
-    pub fn new(event_details: EventDetails) -> Result<QVaultClient, EngineError> {
+    pub fn new(event_details: EventDetails) -> Result<QVaultClient, Box<EngineError>> {
         let event_details = EventDetails::clone_changing_transmitter(
             event_details,
             Transmitter::TaskManager(Uuid::new_v4(), "vault".to_string()),
@@ -99,7 +99,7 @@ impl QVaultClient {
                             )),
                             None,
                         );
-                        return Err(EngineError::new_vault_connection_error(event_details, cmd_error));
+                        return Err(Box::new(EngineError::new_vault_connection_error(event_details, cmd_error)));
                     }
                 }
             }
@@ -123,7 +123,7 @@ impl QVaultClient {
                             )),
                             None,
                         );
-                        return Err(EngineError::new_vault_connection_error(event_details, cmd_error));
+                        return Err(Box::new(EngineError::new_vault_connection_error(event_details, cmd_error)));
                     }
                 };
 
@@ -138,7 +138,7 @@ impl QVaultClient {
                     Some("can't contact Vault server with the given connections details".to_string()),
                     None,
                 );
-                return Err(EngineError::new_vault_connection_error(event_details, cmd_error));
+                return Err(Box::new(EngineError::new_vault_connection_error(event_details, cmd_error)));
             }
         };
 

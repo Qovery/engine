@@ -199,7 +199,7 @@ pub trait HelmChart: Send {
         // Cleaning any existing crash looping pod for this helm chart
         if let Some(selector) = self.get_selector() {
             kubectl_delete_crash_looping_pods(
-                &kubernetes_config,
+                kubernetes_config,
                 Some(self.get_chart_info().get_namespace_string().as_str()),
                 Some(selector.as_str()),
                 envs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect(),
@@ -433,7 +433,7 @@ pub fn deploy_charts_levels(
 ) -> Result<(), CommandError> {
     // first show diff
     let envs_ref: Vec<(&str, &str)> = envs.iter().map(|(x, y)| (x.as_str(), y.as_str())).collect();
-    let helm = Helm::new(&kubernetes_config, &envs_ref).map_err(to_command_error)?;
+    let helm = Helm::new(kubernetes_config, &envs_ref).map_err(to_command_error)?;
 
     for level in charts {
         // Show diff for all chart in this state

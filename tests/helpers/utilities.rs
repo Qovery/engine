@@ -296,7 +296,7 @@ impl FuncTestsSecrets {
     }
 
     fn select_secret<T: for<'a> TryFrom<&'a str>>(name: &str, vault_fallback: Option<T>) -> Option<T> {
-        match env::var(&name) {
+        match env::var(name) {
             Ok(x) => T::try_from(x.as_str()).ok(),
             Err(_) if vault_fallback.is_some() => vault_fallback,
             Err(_) => None,
@@ -599,11 +599,7 @@ pub fn get_pods(
 }
 
 pub fn execution_id() -> String {
-    Utc::now()
-        .to_rfc3339()
-        .replace(':', "-")
-        .replace('.', "-")
-        .replace('+', "-")
+    Utc::now().to_rfc3339().replace([':', '.', '+'], "-")
 }
 
 // avoid test collisions

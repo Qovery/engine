@@ -23,8 +23,8 @@ impl<T: CloudProvider> DeploymentAction for Application<T>
 where
     Application<T>: ToTeraContext,
 {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
-        let long_task = |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        let long_task = |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
             let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
             // If the service have been paused, we must ensure we un-pause it first as hpa will not kick in
             let _ = PauseServiceAction::new(
@@ -69,10 +69,10 @@ where
         execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Create), long_task)
     }
 
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         execute_long_deployment(
             ApplicationDeploymentReporter::new(self, target, Action::Pause),
-            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+            |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 let pause_service = PauseServiceAction::new(
                     self.selector(),
                     self.is_stateful(),
@@ -84,7 +84,7 @@ where
         )
     }
 
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         execute_long_deployment(
             ApplicationDeploymentReporter::new(self, target, Action::Delete),
@@ -116,11 +116,11 @@ where
                         &self.selector(),
                         target.environment.namespace(),
                     )) {
-                        return Err(EngineError::new_k8s_cannot_delete_pvcs(
+                        return Err(Box::new(EngineError::new_k8s_cannot_delete_pvcs(
                             event_details.clone(),
                             self.selector(),
                             CommandError::new_from_safe_message(err.to_string()),
-                        ));
+                        )));
                     }
                 }
 
@@ -136,7 +136,7 @@ where
                         user_msg,
                         None,
                     );
-                    return Err(user_error);
+                    return Err(Box::new(user_error));
                 }
 
                 Ok(())

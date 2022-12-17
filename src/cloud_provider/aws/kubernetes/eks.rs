@@ -73,7 +73,7 @@ impl EKS {
         nodes_groups: Vec<NodeGroups>,
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
-    ) -> Result<Self, EngineError> {
+    ) -> Result<Self, Box<EngineError>> {
         let event_details = kubernetes::event_details(&**cloud_provider, long_id, name.to_string(), &context);
         let template_directory = format!("{}/aws/bootstrap", context.lib_root_dir());
 
@@ -81,8 +81,8 @@ impl EKS {
 
         // ensure config is ok
         if let Err(e) = EKS::validate_node_groups(nodes_groups.clone(), &event_details) {
-            logger.log(EngineEvent::Error(e.clone(), None));
-            return Err(e);
+            logger.log(EngineEvent::Error(*e.clone(), None));
+            return Err(Box::new(*e));
         };
 
         let s3 = kubernetes::s3(&context, &region, &**cloud_provider, advanced_settings.pleco_resources_ttl);
@@ -110,7 +110,7 @@ impl EKS {
     pub fn validate_node_groups(
         nodes_groups: Vec<NodeGroups>,
         event_details: &EventDetails,
-    ) -> Result<(), EngineError> {
+    ) -> Result<(), Box<EngineError>> {
         for node_group in &nodes_groups {
             match AwsInstancesType::from_str(node_group.instance_type.as_str()) {
                 Ok(x) => {
@@ -119,7 +119,7 @@ impl EKS {
                             event_details.clone(),
                             node_group.instance_type.as_str(),
                         );
-                        return Err(err);
+                        return Err(Box::new(err));
                     }
                 }
                 Err(e) => {
@@ -128,7 +128,7 @@ impl EKS {
                         node_group.instance_type.as_str(),
                         e,
                     );
-                    return Err(err);
+                    return Err(Box::new(err));
                 }
             }
         }
@@ -143,7 +143,7 @@ impl EKS {
         &self,
         event_details: EventDetails,
         replicas_count: u32,
-    ) -> Result<(), EngineError> {
+    ) -> Result<(), Box<EngineError>> {
         let autoscaler_new_state = match replicas_count {
             0 => "disable",
             _ => "enable",
@@ -164,13 +164,13 @@ impl EKS {
             replicas_count,
         )
         .map_err(|e| {
-            EngineError::new_k8s_scale_replicas(
+            Box::new(EngineError::new_k8s_scale_replicas(
                 event_details.clone(),
                 selector.to_string(),
                 namespace.to_string(),
                 replicas_count,
                 e,
-            )
+            ))
         })?;
 
         Ok(())
@@ -238,7 +238,7 @@ impl Kubernetes for EKS {
         &self.s3
     }
 
-    fn is_valid(&self) -> Result<(), EngineError> {
+    fn is_valid(&self) -> Result<(), Box<EngineError>> {
         Ok(())
     }
 
@@ -247,7 +247,7 @@ impl Kubernetes for EKS {
     }
 
     #[named]
-    fn on_create(&self) -> Result<(), EngineError> {
+    fn on_create(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         print_action(
             self.cloud_provider_name(),
@@ -270,7 +270,7 @@ impl Kubernetes for EKS {
     }
 
     #[named]
-    fn on_create_error(&self) -> Result<(), EngineError> {
+    fn on_create_error(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Create));
         print_action(
             self.cloud_provider_name(),
@@ -283,7 +283,7 @@ impl Kubernetes for EKS {
         send_progress_on_long_task(self, Action::Create, || kubernetes::create_error(self))
     }
 
-    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError> {
+    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
 
         self.logger().log(EngineEvent::Info(
@@ -336,12 +336,12 @@ impl Kubernetes for EKS {
                     temp_dir.as_str(),
                     context.clone(),
                 ) {
-                    return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                    return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                         event_details,
                         self.template_directory.to_string(),
                         temp_dir,
                         e,
-                    ));
+                    )));
                 }
 
                 let common_charts_temp_dir = format!("{}/common/charts", temp_dir.as_str());
@@ -350,12 +350,12 @@ impl Kubernetes for EKS {
                     common_bootstrap_charts.as_str(),
                     common_charts_temp_dir.as_str(),
                 ) {
-                    return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+                    return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                         event_details,
                         common_bootstrap_charts,
                         common_charts_temp_dir,
                         e,
-                    ));
+                    )));
                 }
 
                 self.logger().log(EngineEvent::Info(
@@ -373,7 +373,7 @@ impl Kubernetes for EKS {
                         ));
                     }
                     Err(e) => {
-                        return Err(EngineError::new_terraform_error(event_details, e));
+                        return Err(Box::new(EngineError::new_terraform_error(event_details, e)));
                     }
                 }
             }
@@ -416,12 +416,12 @@ impl Kubernetes for EKS {
             temp_dir.as_str(),
             context.clone(),
         ) {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 self.template_directory.to_string(),
                 temp_dir,
                 e,
-            ));
+            )));
         }
 
         // copy lib/common/bootstrap/charts directory (and sub directory) into the lib/aws/bootstrap/common/charts directory.
@@ -431,12 +431,12 @@ impl Kubernetes for EKS {
         if let Err(e) =
             crate::template::copy_non_template_files(common_bootstrap_charts.as_str(), common_charts_temp_dir.as_str())
         {
-            return Err(EngineError::new_cannot_copy_files_from_one_directory_to_another(
+            return Err(Box::new(EngineError::new_cannot_copy_files_from_one_directory_to_another(
                 event_details,
                 common_bootstrap_charts,
                 common_charts_temp_dir,
                 e,
-            ));
+            )));
         }
 
         self.logger().log(EngineEvent::Info(
@@ -451,7 +451,7 @@ impl Kubernetes for EKS {
             self.cloud_provider().credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
         ) {
-            self.logger().log(EngineEvent::Error(e.clone(), None));
+            self.logger().log(EngineEvent::Error(*e.clone(), None));
             return Err(e);
         }
 
@@ -459,7 +459,7 @@ impl Kubernetes for EKS {
             self.cloud_provider().credentials_environment_variables(),
             Infrastructure(InfrastructureStep::Upgrade),
         ) {
-            self.logger().log(EngineEvent::Error(e.clone(), None));
+            self.logger().log(EngineEvent::Error(*e.clone(), None));
             return Err(e);
         }
 
@@ -483,7 +483,7 @@ impl Kubernetes for EKS {
     }
 
     #[named]
-    fn on_upgrade(&self) -> Result<(), EngineError> {
+    fn on_upgrade(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         print_action(
             self.cloud_provider_name(),
@@ -497,7 +497,7 @@ impl Kubernetes for EKS {
     }
 
     #[named]
-    fn on_upgrade_error(&self) -> Result<(), EngineError> {
+    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         print_action(
             self.cloud_provider_name(),
@@ -511,7 +511,7 @@ impl Kubernetes for EKS {
     }
 
     #[named]
-    fn on_pause(&self) -> Result<(), EngineError> {
+    fn on_pause(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         print_action(
             self.cloud_provider_name(),
@@ -533,7 +533,7 @@ impl Kubernetes for EKS {
     }
 
     #[named]
-    fn on_pause_error(&self) -> Result<(), EngineError> {
+    fn on_pause_error(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Pause));
         print_action(
             self.cloud_provider_name(),
@@ -547,7 +547,7 @@ impl Kubernetes for EKS {
     }
 
     #[named]
-    fn on_delete(&self) -> Result<(), EngineError> {
+    fn on_delete(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         print_action(
             self.cloud_provider_name(),
@@ -569,7 +569,7 @@ impl Kubernetes for EKS {
     }
 
     #[named]
-    fn on_delete_error(&self) -> Result<(), EngineError> {
+    fn on_delete_error(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Delete));
         print_action(
             self.cloud_provider_name(),
@@ -741,14 +741,14 @@ pub async fn delete_eks_failed_nodegroups(
     aws_conn: SdkConfig,
     cluster_name: String,
     event_details: EventDetails,
-) -> Result<(), EngineError> {
+) -> Result<(), Box<EngineError>> {
     let clusters = match aws_conn.list_clusters().await {
         Ok(x) => x,
         Err(e) => {
-            return Err(EngineError::new_cannot_list_clusters_error(
+            return Err(Box::new(EngineError::new_cannot_list_clusters_error(
                 event_details.clone(),
                 CommandError::new("Couldn't list clusters from AWS".to_string(), Some(e.to_string()), None),
-            ))
+            )))
         }
     };
 
@@ -758,19 +758,19 @@ pub async fn delete_eks_failed_nodegroups(
         .iter()
         .any(|x| x == &cluster_name)
     {
-        return Err(EngineError::new_cannot_get_cluster_error(
+        return Err(Box::new(EngineError::new_cannot_get_cluster_error(
             event_details.clone(),
             CommandError::new_from_safe_message(NodeGroupToRemoveFailure::ClusterNotFound.to_string()),
-        ));
+        )));
     };
 
     let all_cluster_nodegroups = match aws_conn.list_all_eks_nodegroups(cluster_name.clone()).await {
         Ok(x) => x,
         Err(e) => {
-            return Err(EngineError::new_nodegroup_list_error(
+            return Err(Box::new(EngineError::new_nodegroup_list_error(
                 event_details,
                 CommandError::new_from_safe_message(e.to_string()),
-            ))
+            )))
         }
     };
 
@@ -780,26 +780,32 @@ pub async fn delete_eks_failed_nodegroups(
     {
         Ok(x) => x,
         Err(e) => {
-            return Err(EngineError::new_missing_nodegroup_information_error(
+            return Err(Box::new(EngineError::new_missing_nodegroup_information_error(
                 event_details,
                 e.to_string(),
-            ))
+            )))
         }
     };
 
     let nodegroups_to_delete = match check_failed_nodegroups_to_remove(all_cluster_nodegroups_described) {
         Ok(x) => x,
-        Err(e) => return Err(EngineError::new_nodegroup_delete_error(event_details, None, e.to_string())),
+        Err(e) => {
+            return Err(Box::new(EngineError::new_nodegroup_delete_error(
+                event_details,
+                None,
+                e.to_string(),
+            )))
+        }
     };
 
     for nodegroup in nodegroups_to_delete {
         let nodegroup_name = match nodegroup.nodegroup() {
             Some(x) => x.nodegroup_name().unwrap_or("unknown_nodegroup_name"),
             None => {
-                return Err(EngineError::new_missing_nodegroup_information_error(
+                return Err(Box::new(EngineError::new_missing_nodegroup_information_error(
                     event_details,
                     format!("{:?}", nodegroup),
-                ))
+                )))
             }
         };
 
@@ -807,11 +813,11 @@ pub async fn delete_eks_failed_nodegroups(
             .delete_nodegroup(cluster_name.clone(), nodegroup_name.to_string())
             .await
         {
-            return Err(EngineError::new_nodegroup_delete_error(
+            return Err(Box::new(EngineError::new_nodegroup_delete_error(
                 event_details,
                 Some(nodegroup_name.to_string()),
                 e.to_string(),
-            ));
+            )));
         }
     }
 

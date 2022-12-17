@@ -90,7 +90,7 @@ pub fn eks_aws_helm_charts(
     kubernetes_config: &Path,
     envs: &[(String, String)],
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
-    let content_file = match File::open(&qovery_terraform_config_file) {
+    let content_file = match File::open(qovery_terraform_config_file) {
         Ok(x) => x,
         Err(e) => {
             return Err(CommandError::new(

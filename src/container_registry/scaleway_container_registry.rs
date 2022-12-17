@@ -318,9 +318,7 @@ impl ContainerRegistry for ScalewayCR {
         name: &str,
         _image_retention_time_in_seconds: u32,
     ) -> Result<(), ContainerRegistryError> {
-        if let Err(e) = self.get_or_create_registry_namespace(name) {
-            return Err(e);
-        }
+        self.get_or_create_registry_namespace(name)?;
         Ok(())
     }
 

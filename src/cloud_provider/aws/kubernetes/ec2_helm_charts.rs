@@ -75,7 +75,7 @@ pub struct Ec2ChartsConfigPrerequisites {
 pub fn get_aws_ec2_qovery_terraform_config(
     qovery_terraform_config_file: &str,
 ) -> Result<AwsEc2QoveryTerraformConfig, TerraformError> {
-    let content_file = match File::open(&qovery_terraform_config_file) {
+    let content_file = match File::open(qovery_terraform_config_file) {
         Ok(x) => x,
         Err(e) => {
             return Err(TerraformError::ConfigFileNotFound {

@@ -53,7 +53,7 @@ impl HelmDeployment {
         }
     }
 
-    pub fn prepare_helm_chart(&self) -> Result<(), EngineError> {
+    pub fn prepare_helm_chart(&self) -> Result<(), Box<EngineError>> {
         // Copy the root folder
         generate_and_copy_all_files_into_dir(&self.chart_orginal_dir, &self.helm_chart.path, self.tera_context.clone())
             .map_err(|e| {
@@ -89,7 +89,7 @@ impl HelmDeployment {
 }
 
 impl DeploymentAction for HelmDeployment {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         self.prepare_helm_chart()?;
 
         // print diff in logs
@@ -99,14 +99,14 @@ impl DeploymentAction for HelmDeployment {
         target
             .helm
             .upgrade(&self.helm_chart, &[], &CommandKiller::from_cancelable(target.should_abort))
-            .map_err(|e| EngineError::new_helm_error(self.event_details.clone(), e))
+            .map_err(|e| Box::new(EngineError::new_helm_error(self.event_details.clone(), e)))
     }
 
-    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         Ok(())
     }
 
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         target
             .helm
             .uninstall(&self.helm_chart, &[])

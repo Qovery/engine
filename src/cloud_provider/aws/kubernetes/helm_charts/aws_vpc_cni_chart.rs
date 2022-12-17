@@ -121,7 +121,7 @@ impl HelmChart for AwsVpcCniChart {
         // Cleaning any existing crash looping pod for this helm chart
         if let Some(selector) = self.get_selector() {
             kubectl_delete_crash_looping_pods(
-                &kubernetes_config,
+                kubernetes_config,
                 Some(chart_infos.get_namespace_string().as_str()),
                 Some(selector.as_str()),
                 environment_variables.clone(),

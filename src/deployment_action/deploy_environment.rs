@@ -22,7 +22,7 @@ impl<'a> EnvironmentDeployment<'a> {
         infra_ctx: &'a InfrastructureContext,
         environment: &'a Environment,
         should_abort: &'a dyn Fn() -> bool,
-    ) -> Result<EnvironmentDeployment<'a>, EngineError> {
+    ) -> Result<EnvironmentDeployment<'a>, Box<EngineError>> {
         let deployment_target = DeploymentTarget::new(infra_ctx, environment, should_abort)?;
         Ok(EnvironmentDeployment {
             deployed_services: HashSet::with_capacity(Self::services_iter(environment).count()),
@@ -69,17 +69,17 @@ impl<'a> EnvironmentDeployment<'a> {
     fn should_abort_wrapper<'b>(
         target: &'b DeploymentTarget,
         event_details: &'b EventDetails,
-    ) -> impl Fn() -> Result<(), EngineError> + 'b {
+    ) -> impl Fn() -> Result<(), Box<EngineError>> + 'b {
         move || {
             if (target.should_abort)() {
-                Err(EngineError::new_task_cancellation_requested(event_details.clone()))
+                Err(Box::new(EngineError::new_task_cancellation_requested(event_details.clone())))
             } else {
                 Ok(())
             }
         }
     }
 
-    pub fn on_create(&mut self) -> Result<(), EngineError> {
+    pub fn on_create(&mut self) -> Result<(), Box<EngineError>> {
         let target = &self.deployment_target;
         let event_details = self
             .deployment_target
@@ -113,7 +113,7 @@ impl<'a> EnvironmentDeployment<'a> {
         Ok(())
     }
 
-    pub fn on_pause(&mut self) -> Result<(), EngineError> {
+    pub fn on_pause(&mut self) -> Result<(), Box<EngineError>> {
         let event_details = self
             .deployment_target
             .environment
@@ -142,7 +142,7 @@ impl<'a> EnvironmentDeployment<'a> {
         Ok(())
     }
 
-    pub fn on_delete(&mut self) -> Result<(), EngineError> {
+    pub fn on_delete(&mut self) -> Result<(), Box<EngineError>> {
         let target = &self.deployment_target;
         let environment = &target.environment;
         let event_details = self

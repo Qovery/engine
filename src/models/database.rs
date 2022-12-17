@@ -248,7 +248,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         &self,
         target: &DeploymentTarget,
         options: &DatabaseOptions,
-    ) -> Result<TeraContext, EngineError> {
+    ) -> Result<TeraContext, Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
@@ -294,7 +294,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         Ok(context)
     }
 
-    fn get_version(&self, event_details: EventDetails) -> Result<ServiceVersionCheckResult, EngineError> {
+    fn get_version(&self, event_details: EventDetails) -> Result<ServiceVersionCheckResult, Box<EngineError>> {
         let fn_version = match T::db_type() {
             service::DatabaseType::PostgreSQL => get_self_hosted_postgres_version,
             service::DatabaseType::MongoDB => get_self_hosted_mongodb_version,

@@ -100,7 +100,7 @@ impl HelmChart for CoreDNSConfigChart {
         // Cleaning any existing crash looping pod for this helm chart
         if let Some(selector) = self.get_selector() {
             kubectl_delete_crash_looping_pods(
-                &kubernetes_config,
+                kubernetes_config,
                 Some(chart_infos.get_namespace_string().as_str()),
                 Some(selector.as_str()),
                 environment_variables.clone(),
@@ -109,7 +109,7 @@ impl HelmChart for CoreDNSConfigChart {
 
         // calculate current configmap checksum
         let current_configmap_hash = match kubectl_exec_get_configmap(
-            &kubernetes_config,
+            kubernetes_config,
             &self.chart_info.get_namespace_string(),
             &self.chart_info.name,
             environment_variables.clone(),
@@ -239,7 +239,7 @@ impl HelmChart for CoreDNSConfigChart {
             },
         };
         let current_configmap_checksum = match kubectl_exec_get_configmap(
-            &kubernetes_config,
+            kubernetes_config,
             &self.chart_info.get_namespace_string(),
             &self.chart_info.name,
             environment_variables.clone(),
