@@ -334,7 +334,7 @@ impl<T: CloudProvider> Service for Job<T> {
 }
 
 impl<T: CloudProvider> ToTeraContext for Job<T> {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         Ok(TeraContext::from_serialize(self.default_tera_context(target)).unwrap_or_default())
     }
 }

@@ -555,9 +555,7 @@ impl Docker {
         info!("Docker push {:?}", image);
         for image_name in image.image_names() {
             let args = vec!["push", image_name.as_str()];
-            if let Err(e) = docker_exec(&args, &self.get_all_envs(&[]), stdout_output, stderr_output, should_abort) {
-                return Err(e);
-            }
+            docker_exec(&args, &self.get_all_envs(&[]), stdout_output, stderr_output, should_abort)?
         }
 
         Ok(())

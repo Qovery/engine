@@ -140,7 +140,7 @@ impl Task for InfrastructureTask {
         {
             Ok(engine) => engine,
             Err(err) => {
-                self.send_infrastructure_progress(self.logger.clone(), Some(err));
+                self.send_infrastructure_progress(self.logger.clone(), Some(*err));
                 return;
             }
         };
@@ -149,6 +149,7 @@ impl Task for InfrastructureTask {
         let mut tx = match Transaction::new(&engine) {
             Ok(transaction) => transaction,
             Err(err) => {
+                let err = *err;
                 let engine_error = match err {
                     EngineConfigError::BuildPlatformNotValid(engine_error) => engine_error,
                     EngineConfigError::CloudProviderNotValid(engine_error) => engine_error,

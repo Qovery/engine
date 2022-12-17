@@ -13,7 +13,10 @@ use k8s_openapi::api::core::v1::Service;
 use super::models::QoveryAwsSdkConfigLoadBalancer;
 
 // fix for NLB not properly removed https://discuss.qovery.com/t/why-provision-nlbs-for-container-databases/1114/10?u=pierre_mavro
-pub fn clean_up_deleted_k8s_nlb(event_details: EventDetails, target: &DeploymentTarget) -> Result<(), EngineError> {
+pub fn clean_up_deleted_k8s_nlb(
+    event_details: EventDetails,
+    target: &DeploymentTarget,
+) -> Result<(), Box<EngineError>> {
     let conn = match target.cloud_provider.aws_sdk_client() {
         Some(x) => x,
         None => return Ok(()),

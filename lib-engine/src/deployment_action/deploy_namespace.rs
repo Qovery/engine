@@ -18,7 +18,7 @@ pub struct NamespaceDeployment {
 }
 
 impl DeploymentAction for NamespaceDeployment {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let mut namespace_labels: Option<BTreeMap<String, String>> = None;
         if let Some(resource_expiration) = &self.resource_expiration {
             namespace_labels = Some(BTreeMap::from([(
@@ -73,11 +73,11 @@ impl DeploymentAction for NamespaceDeployment {
         Ok(())
     }
 
-    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, _target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         Ok(())
     }
 
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         block_on(async {
             let api: Api<Namespace> = Api::all(target.kube.clone());
             if api.get(target.environment.namespace()).await.is_ok() {

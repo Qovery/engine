@@ -51,7 +51,7 @@ pub trait CloudProvider {
     fn region(&self) -> String;
     fn aws_sdk_client(&self) -> Option<SdkConfig>;
     fn token(&self) -> &str;
-    fn is_valid(&self) -> Result<(), EngineError>;
+    fn is_valid(&self) -> Result<(), Box<EngineError>>;
     fn zones(&self) -> &Vec<String>;
     /// environment variables containing credentials
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)>;
@@ -129,7 +129,7 @@ impl<'a> DeploymentTarget<'a> {
         infra_ctx: &'a InfrastructureContext,
         environment: &'a Environment,
         should_abort: &'a dyn Fn() -> bool,
-    ) -> Result<DeploymentTarget<'a>, EngineError> {
+    ) -> Result<DeploymentTarget<'a>, Box<EngineError>> {
         let event_details = environment.event_details();
         let kubernetes = infra_ctx.kubernetes();
         let kubeconfig_path = kubernetes.get_kubeconfig_file_path().unwrap_or_default();

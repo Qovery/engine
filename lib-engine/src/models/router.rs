@@ -88,7 +88,7 @@ impl<T: CloudProvider> Router<T> {
         &self.workspace_directory
     }
 
-    pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError>
+    pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>>
     where
         Self: Service,
     {

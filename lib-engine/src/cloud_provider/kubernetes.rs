@@ -69,9 +69,9 @@ pub trait Kubernetes {
     fn dns_provider(&self) -> &dyn DnsProvider;
     fn logger(&self) -> &dyn Logger;
     fn config_file_store(&self) -> &dyn ObjectStorage;
-    fn is_valid(&self) -> Result<(), EngineError>;
+    fn is_valid(&self) -> Result<(), Box<EngineError>>;
     fn is_network_managed_by_user(&self) -> bool;
-    fn kube_client(&self) -> Result<kube::Client, EngineError> {
+    fn kube_client(&self) -> Result<kube::Client, Box<EngineError>> {
         // FIXME: Create only 1 kube client per Kubernetes object instead every time this function is called
         let kubeconfig_path = self.get_kubeconfig_file_path().unwrap_or_default();
         let kube_credentials: Vec<(String, String)> = self
@@ -82,10 +82,10 @@ pub trait Kubernetes {
             .collect();
 
         block_on(create_kube_client(kubeconfig_path, kube_credentials.as_slice())).map_err(|err| {
-            EngineError::new_cannot_connect_to_k8s_cluster(
+            Box::new(EngineError::new_cannot_connect_to_k8s_cluster(
                 self.get_event_details(Infrastructure(InfrastructureStep::RetrieveClusterResources)),
                 err,
-            )
+            ))
         })
     }
 
@@ -105,25 +105,25 @@ pub trait Kubernetes {
         format!("{}.yaml", self.id())
     }
 
-    fn put_kubeconfig_file_to_object_storage(&self, file_path: &str) -> Result<(), EngineError> {
+    fn put_kubeconfig_file_to_object_storage(&self, file_path: &str) -> Result<(), Box<EngineError>> {
         if let Err(e) = self.config_file_store().put(
             self.get_bucket_name().as_str(),
             self.get_kubeconfig_filename().as_str(),
             file_path,
         ) {
             let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-            return Err(EngineError::new_object_storage_error(event_details, e));
+            return Err(Box::new(EngineError::new_object_storage_error(event_details, e)));
         };
         Ok(())
     }
 
-    fn ensure_kubeconfig_is_not_in_object_storage(&self) -> Result<(), EngineError> {
+    fn ensure_kubeconfig_is_not_in_object_storage(&self) -> Result<(), Box<EngineError>> {
         if let Err(e) = self
             .config_file_store()
             .ensure_file_is_absent(self.get_bucket_name().as_str(), self.get_kubeconfig_filename().as_str())
         {
             let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
-            return Err(EngineError::new_object_storage_error(event_details, e));
+            return Err(Box::new(EngineError::new_object_storage_error(event_details, e)));
         };
         Ok(())
     }
@@ -132,7 +132,7 @@ pub trait Kubernetes {
         format!("qovery-kubeconfigs-{}", self.id())
     }
 
-    fn kubeconfig_local_file_path(&self) -> Result<String, EngineError> {
+    fn kubeconfig_local_file_path(&self) -> Result<String, Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let bucket_name = self.get_bucket_name();
         let object_key = self.get_kubeconfig_filename();
@@ -143,7 +143,7 @@ pub trait Kubernetes {
         }
     }
 
-    fn get_kubeconfig_file(&self) -> Result<(String, File), EngineError> {
+    fn get_kubeconfig_file(&self) -> Result<(String, File), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let object_key = self.get_kubeconfig_filename();
         let bucket_name = self.get_bucket_name();
@@ -202,7 +202,7 @@ pub trait Kubernetes {
                     // If existing cluster, it should be a warning.
                     if self.context().is_first_cluster_deployment() {
                         // if cluster first deployment, this case if normal, hence we do not log anything to end user
-                        return Err(error);
+                        return Err(Box::new(error));
                     }
 
                     // It's not cluster first deployment
@@ -215,17 +215,17 @@ pub trait Kubernetes {
                         ),
                     ));
 
-                    return Err(error);
+                    return Err(Box::new(error));
                 }
                 Err(retry::Error::Internal(msg)) => {
-                    return Err(EngineError::new_cannot_retrieve_cluster_config_file(
+                    return Err(Box::new(EngineError::new_cannot_retrieve_cluster_config_file(
                         self.get_event_details(stage),
                         CommandError::new(
                             "Cannot retrieve kubeconfig from previous installation.".to_string(),
                             Some(msg),
                             None,
                         ),
-                    ));
+                    )));
                 }
             },
         };
@@ -238,18 +238,18 @@ pub trait Kubernetes {
                     CommandError::new("Error getting file metadata.".to_string(), Some(err.to_string()), None),
                 );
                 self.logger().log(EngineEvent::Error(error.clone(), None));
-                return Err(error);
+                return Err(Box::new(error));
             }
         };
 
         // security: ensure size match with a kubeconfig file (< 16k)
         let max_size = 16 * 1024;
         if metadata.len() > max_size {
-            return Err(EngineError::new_kubeconfig_size_security_check_error(
+            return Err(Box::new(EngineError::new_kubeconfig_size_security_check_error(
                 event_details,
                 metadata.len(),
                 max_size,
-            ));
+            )));
         };
 
         let mut permissions = metadata.permissions();
@@ -260,26 +260,31 @@ pub trait Kubernetes {
                 CommandError::new("Error getting file permissions.".to_string(), Some(err.to_string()), None),
             );
             self.logger().log(EngineEvent::Error(error.clone(), None));
-            return Err(error);
+            return Err(Box::new(error));
         }
 
         Ok((string_path, file))
     }
 
-    fn get_kubeconfig_file_path(&self) -> Result<String, EngineError> {
+    fn get_kubeconfig_file_path(&self) -> Result<String, Box<EngineError>> {
         let (path, _) = self.get_kubeconfig_file()?;
         Ok(path)
     }
 
-    fn delete_local_kubeconfig_terraform(&self) -> Result<(), EngineError> {
+    fn delete_local_kubeconfig_terraform(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let file = self.kubeconfig_local_file_path()?;
 
-        delete_file_if_exists(file.as_str())
-            .map_err(|e| EngineError::new_delete_local_kubeconfig_file_error(event_details, file.as_str(), e))
+        delete_file_if_exists(file.as_str()).map_err(|e| {
+            Box::new(EngineError::new_delete_local_kubeconfig_file_error(
+                event_details,
+                file.as_str(),
+                e,
+            ))
+        })
     }
 
-    fn delete_local_kubeconfig_object_storage_folder(&self) -> Result<(), EngineError> {
+    fn delete_local_kubeconfig_object_storage_folder(&self) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
         let file = format!(
             "{}/{}/{}",
@@ -288,11 +293,16 @@ pub trait Kubernetes {
             self.get_kubeconfig_filename()
         );
 
-        delete_file_if_exists(file.as_str())
-            .map_err(|e| EngineError::new_delete_local_kubeconfig_file_error(event_details, file.as_str(), e))
+        delete_file_if_exists(file.as_str()).map_err(|e| {
+            Box::new(EngineError::new_delete_local_kubeconfig_file_error(
+                event_details,
+                file.as_str(),
+                e,
+            ))
+        })
     }
 
-    fn resources(&self, _environment: &Environment) -> Result<Resources, EngineError> {
+    fn resources(&self, _environment: &Environment) -> Result<Resources, Box<EngineError>> {
         let kubernetes_config_file_path = self.get_kubeconfig_file_path()?;
         let stage = Infrastructure(InfrastructureStep::RetrieveClusterResources);
 
@@ -306,7 +316,7 @@ pub trait Kubernetes {
 
                 self.logger().log(EngineEvent::Error(error.clone(), None));
 
-                return Err(error);
+                return Err(Box::new(error));
             }
         };
 
@@ -333,10 +343,10 @@ pub trait Kubernetes {
         Ok(resources)
     }
 
-    fn on_create(&self) -> Result<(), EngineError>;
-    fn on_create_error(&self) -> Result<(), EngineError>;
+    fn on_create(&self) -> Result<(), Box<EngineError>>;
+    fn on_create_error(&self) -> Result<(), Box<EngineError>>;
 
-    fn upgrade(&self) -> Result<(), EngineError> {
+    fn upgrade(&self) -> Result<(), Box<EngineError>> {
         // since we doesn't handle upgrade for Ec2 and getting version for them make engine bug, only check upgrade for other kinds.
         if self.kind() != Kind::Ec2 {
             let event_details = self.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
@@ -408,24 +418,24 @@ pub trait Kubernetes {
             check_workers_pause(&kubeconfig, self.cloud_provider().credentials_environment_variables())
         })
     }
-    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), EngineError>;
-    fn on_upgrade(&self) -> Result<(), EngineError>;
-    fn on_upgrade_error(&self) -> Result<(), EngineError>;
-    fn on_pause(&self) -> Result<(), EngineError>;
-    fn on_pause_error(&self) -> Result<(), EngineError>;
-    fn on_delete(&self) -> Result<(), EngineError>;
-    fn on_delete_error(&self) -> Result<(), EngineError>;
-    fn get_temp_dir(&self, event_details: EventDetails) -> Result<String, EngineError> {
+    fn upgrade_with_status(&self, kubernetes_upgrade_status: KubernetesUpgradeStatus) -> Result<(), Box<EngineError>>;
+    fn on_upgrade(&self) -> Result<(), Box<EngineError>>;
+    fn on_upgrade_error(&self) -> Result<(), Box<EngineError>>;
+    fn on_pause(&self) -> Result<(), Box<EngineError>>;
+    fn on_pause_error(&self) -> Result<(), Box<EngineError>>;
+    fn on_delete(&self) -> Result<(), Box<EngineError>>;
+    fn on_delete_error(&self) -> Result<(), Box<EngineError>>;
+    fn get_temp_dir(&self, event_details: EventDetails) -> Result<String, Box<EngineError>> {
         workspace_directory(
             self.context().workspace_root_dir(),
             self.context().execution_id(),
             format!("bootstrap/{}", self.id()),
         )
         .map_err(|err| {
-            EngineError::new_cannot_get_workspace_directory(
+            Box::new(EngineError::new_cannot_get_workspace_directory(
                 event_details,
                 CommandError::new("Error creating workspace directory.".to_string(), Some(err.to_string()), None),
-            )
+            ))
         })
     }
 
@@ -436,7 +446,7 @@ pub trait Kubernetes {
         restarted_min_count: Option<usize>,
         envs: Vec<(&str, &str)>,
         stage: Stage,
-    ) -> Result<(), EngineError> {
+    ) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(stage);
 
         match self.get_kubeconfig_file() {
@@ -456,16 +466,16 @@ pub trait Kubernetes {
                             pod.metadata.name.as_str(),
                             envs.clone(),
                         ) {
-                            return Err(EngineError::new_k8s_cannot_delete_pod(
+                            return Err(Box::new(EngineError::new_k8s_cannot_delete_pod(
                                 event_details,
                                 pod.metadata.name.to_string(),
                                 e,
-                            ));
+                            )));
                         }
                     }
                 }
                 Err(e) => {
-                    return Err(EngineError::new_k8s_cannot_get_crash_looping_pods(event_details, e));
+                    return Err(Box::new(EngineError::new_k8s_cannot_get_crash_looping_pods(event_details, e)));
                 }
             },
         };
@@ -473,14 +483,14 @@ pub trait Kubernetes {
         Ok(())
     }
 
-    fn delete_completed_jobs(&self, envs: Vec<(&str, &str)>, stage: Stage) -> Result<(), EngineError> {
+    fn delete_completed_jobs(&self, envs: Vec<(&str, &str)>, stage: Stage) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(stage);
 
         match self.get_kubeconfig_file() {
             Err(e) => return Err(e),
             Ok((config_path, _)) => {
-                if let Err(e) = kubectl_delete_completed_jobs(&config_path, envs) {
-                    return Err(EngineError::new_k8s_cannot_delete_completed_jobs(event_details, e));
+                if let Err(e) = kubectl_delete_completed_jobs(config_path, envs) {
+                    return Err(Box::new(EngineError::new_k8s_cannot_delete_completed_jobs(event_details, e)));
                 };
             }
         }
@@ -540,7 +550,7 @@ pub fn uninstall_cert_manager<P>(
     envs: Vec<(&str, &str)>,
     event_details: EventDetails,
     logger: &dyn Logger,
-) -> Result<(), EngineError>
+) -> Result<(), Box<EngineError>>
 where
     P: AsRef<Path>,
 {
@@ -643,7 +653,7 @@ pub fn is_kubernetes_upgrade_required<P>(
     envs: Vec<(&str, &str)>,
     event_details: EventDetails,
     logger: &dyn Logger,
-) -> Result<KubernetesUpgradeStatus, EngineError>
+) -> Result<KubernetesUpgradeStatus, Box<EngineError>>
 where
     P: AsRef<Path>,
 {
@@ -670,9 +680,9 @@ where
 
     let masters_version = match version_result {
         Ok(v) => v,
-        Err(Operation { error, .. }) => return Err(error),
+        Err(Operation { error, .. }) => return Err(Box::new(error)),
         Err(retry::Error::Internal(e)) => {
-            return Err(EngineError::new_unknown(
+            return Err(Box::new(EngineError::new_unknown(
                 event_details,
                 "Unable to get cluster version.".to_string(),
                 Some(CommandError::new(
@@ -682,7 +692,7 @@ where
                 )),
                 None,
                 None,
-            ))
+            )))
         }
     };
 
@@ -690,7 +700,7 @@ where
     let mut workers_version: Vec<VersionsNumber> = vec![];
     let nodes = match kubectl_exec_get_node(kubernetes_config, envs) {
         Ok(n) => n,
-        Err(e) => return Err(EngineError::new_cannot_get_cluster_nodes(event_details, e)),
+        Err(e) => return Err(Box::new(EngineError::new_cannot_get_cluster_nodes(event_details, e))),
     };
 
     for node in nodes.items {
@@ -698,10 +708,10 @@ where
         match VersionsNumber::from_str(node.status.node_info.kubelet_version.as_str()) {
             Ok(vn) => workers_version.push(vn),
             Err(_) => {
-                return Err(EngineError::new_cannot_determine_k8s_kubelet_worker_version(
+                return Err(Box::new(EngineError::new_cannot_determine_k8s_kubelet_worker_version(
                     event_details,
                     node.status.node_info.kubelet_version.to_string(),
-                ))
+                )))
             }
         }
 
@@ -709,10 +719,10 @@ where
         match VersionsNumber::from_str(node.status.node_info.kube_proxy_version.as_str()) {
             Ok(vn) => workers_version.push(vn),
             Err(_) => {
-                return Err(EngineError::new_cannot_determine_k8s_kube_proxy_version(
+                return Err(Box::new(EngineError::new_cannot_determine_k8s_kube_proxy_version(
                     event_details,
                     node.status.node_info.kube_proxy_version.to_string(),
-                ))
+                )))
             }
         }
     }
@@ -724,7 +734,7 @@ pub fn is_kubernetes_upgradable<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
     event_details: EventDetails,
-) -> Result<(), EngineError>
+) -> Result<(), Box<EngineError>>
 where
     P: AsRef<Path>,
 {
@@ -734,16 +744,19 @@ where
             true => {
                 for pdb in pdbs.items.unwrap() {
                     if pdb.status.current_healthy < pdb.status.desired_healthy {
-                        return Err(EngineError::new_k8s_pod_disruption_budget_invalid_state(
+                        return Err(Box::new(EngineError::new_k8s_pod_disruption_budget_invalid_state(
                             event_details,
                             pdb.metadata.name,
-                        ));
+                        )));
                     }
                 }
                 Ok(())
             }
         },
-        Err(err) => Err(EngineError::new_k8s_cannot_retrieve_pods_disruption_budget(event_details, err)),
+        Err(err) => Err(Box::new(EngineError::new_k8s_cannot_retrieve_pods_disruption_budget(
+            event_details,
+            err,
+        ))),
     }
 }
 
@@ -870,7 +883,7 @@ fn check_kubernetes_upgrade_status(
     deployed_workers_version: Vec<VersionsNumber>,
     event_details: EventDetails,
     logger: &dyn Logger,
-) -> Result<KubernetesUpgradeStatus, EngineError> {
+) -> Result<KubernetesUpgradeStatus, Box<EngineError>> {
     let mut total_workers = 0;
     let mut non_up_to_date_workers = 0;
     let mut required_upgrade_on = None;
@@ -880,11 +893,11 @@ fn check_kubernetes_upgrade_status(
     let wished_version = match VersionsNumber::from_str(requested_version) {
         Ok(v) => v,
         Err(e) => {
-            return Err(EngineError::new_cannot_determine_k8s_requested_upgrade_version(
+            return Err(Box::new(EngineError::new_cannot_determine_k8s_requested_upgrade_version(
                 event_details,
                 requested_version.to_string(),
                 Some(e),
-            ));
+            )));
         }
     };
 
@@ -902,14 +915,14 @@ fn check_kubernetes_upgrade_status(
             }
         }
         Err(e) => {
-            return Err(
+            return Err(Box::new(
                 EngineError::new_k8s_version_upgrade_deployed_vs_requested_versions_inconsistency(
                     event_details,
                     deployed_masters_version,
                     wished_version,
                     e,
                 ),
-            )
+            ))
         }
     };
 
@@ -952,14 +965,14 @@ fn check_kubernetes_upgrade_status(
                 non_up_to_date_workers += 1;
             }
             Err(e) => {
-                return Err(
+                return Err(Box::new(
                     EngineError::new_k8s_version_upgrade_deployed_vs_requested_versions_inconsistency(
                         event_details,
                         node,
                         wished_version,
                         e,
                     ),
-                )
+                ))
             }
         }
     }

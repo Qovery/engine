@@ -295,18 +295,14 @@ impl Cluster<AWS, Options> for AWS {
                 .EKS_ACCESS_CIDR_BLOCKS
                 .as_ref()
                 .unwrap()
-                .replace('\"', "")
-                .replace('[', "")
-                .replace(']', "")
+                .replace(['\"', '[', ']'], "")
                 .split(',')
                 .map(|c| c.to_string())
                 .collect(),
             ec2_access_cidr_blocks: secrets
                 .EKS_ACCESS_CIDR_BLOCKS // FIXME ? use an EC2_ACCESS_CIDR_BLOCKS?
                 .unwrap()
-                .replace('\"', "")
-                .replace('[', "")
-                .replace(']', "")
+                .replace(['\"', '[', ']'], "")
                 .split(',')
                 .map(|c| c.to_string())
                 .collect(),

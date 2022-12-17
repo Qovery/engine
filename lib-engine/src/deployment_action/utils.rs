@@ -49,7 +49,7 @@ pub fn mirror_image(
     target: &DeploymentTarget,
     logger: &EnvProgressLogger,
     event_details: EventDetails,
-) -> Result<(), EngineError> {
+) -> Result<(), Box<EngineError>> {
     // We need to login to the registry to get access to the image
     let url = registry.get_url_with_credentials();
     if url.password().is_some() {
@@ -65,7 +65,7 @@ pub fn mirror_image(
                 format!("❌ Failed to login to registry {}", url.host_str().unwrap_or_default()),
                 None,
             );
-            return Err(user_err);
+            return Err(Box::new(user_err));
         }
     }
 
@@ -102,7 +102,7 @@ pub fn mirror_image(
             None,
         );
 
-        return Err(user_err);
+        return Err(Box::new(user_err));
     }
     Ok(())
 }

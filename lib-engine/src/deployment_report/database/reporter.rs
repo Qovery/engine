@@ -195,7 +195,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
     }
     fn deployment_terminated(
         &self,
-        result: &Result<Self::DeploymentResult, EngineError>,
+        result: &Result<Self::DeploymentResult, Box<EngineError>>,
         _: &mut Self::DeploymentState,
     ) {
         let error = match result {
@@ -214,7 +214,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
 
         if error.tag().is_cancel() {
             self.logger.send_error(EngineError::new_engine_error(
-                error.clone(),
+                *error.clone(),
                 r#"
                 🚫 Deployment has been cancelled. Database has been rollback to previous version if rollout was on-going
                 "#
@@ -225,9 +225,9 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             return;
         }
 
-        self.logger.send_error(error.clone());
+        self.logger.send_error(*error.clone());
         self.logger.send_error(EngineError::new_engine_error(
-            error.clone(),
+            *error.clone(),
             r#"
 ❌ Deployment of database failed ! Look at the report above and to understand why.
 ⛑ Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/

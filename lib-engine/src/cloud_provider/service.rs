@@ -139,7 +139,7 @@ pub struct DatabaseTerraformConfig {
 pub fn get_database_terraform_config(
     database_terraform_config_file: &str,
 ) -> Result<DatabaseTerraformConfig, TerraformError> {
-    let file_content = match File::open(&database_terraform_config_file) {
+    let file_content = match File::open(database_terraform_config_file) {
         Ok(f) => f,
         Err(e) => {
             return Err(TerraformError::ConfigFileNotFound {
@@ -191,7 +191,7 @@ pub fn check_service_version<C: CloudProvider, M: DatabaseMode, T: models::datab
     result: Result<String, CommandError>,
     service: &Database<C, M, T>,
     event_details: EventDetails,
-) -> Result<ServiceVersionCheckResult, EngineError>
+) -> Result<ServiceVersionCheckResult, Box<EngineError>>
 where
 {
     let srv_version = service.version.to_string();
@@ -229,7 +229,7 @@ where
         Err(_err) => {
             let error =
                 EngineError::new_unsupported_version_error(event_details, service.service_type().name(), srv_version);
-            Err(error)
+            Err(Box::new(error))
         }
     }
 }
@@ -251,7 +251,7 @@ pub fn delete_pending_service<P>(
     selector: &str,
     envs: Vec<(&str, &str)>,
     event_details: EventDetails,
-) -> Result<(), EngineError>
+) -> Result<(), Box<EngineError>>
 where
     P: AsRef<Path>,
 {
@@ -265,13 +265,13 @@ where
                         pod.metadata.name.as_str(),
                         envs.clone(),
                     ) {
-                        return Err(EngineError::new_k8s_service_issue(event_details, e));
+                        return Err(Box::new(EngineError::new_k8s_service_issue(event_details, e)));
                     }
                 }
             }
 
             Ok(())
         }
-        Err(e) => Err(EngineError::new_k8s_service_issue(event_details, e)),
+        Err(e) => Err(Box::new(EngineError::new_k8s_service_issue(event_details, e))),
     }
 }

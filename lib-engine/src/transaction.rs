@@ -8,10 +8,10 @@ pub struct Transaction<'a> {
 }
 
 impl<'a> Transaction<'a> {
-    pub fn new(engine: &'a InfrastructureContext) -> Result<Self, EngineConfigError> {
+    pub fn new(engine: &'a InfrastructureContext) -> Result<Self, Box<EngineConfigError>> {
         engine.is_valid()?;
         if let Err(e) = engine.kubernetes().is_valid() {
-            return Err(EngineConfigError::KubernetesNotValid(e));
+            return Err(Box::new(EngineConfigError::KubernetesNotValid(*e)));
         }
 
         Ok(Transaction::<'a> {
@@ -21,17 +21,17 @@ impl<'a> Transaction<'a> {
         })
     }
 
-    pub fn create_kubernetes(&mut self) -> Result<(), EngineError> {
+    pub fn create_kubernetes(&mut self) -> Result<(), Box<EngineError>> {
         self.steps.push(Step::CreateKubernetes);
         Ok(())
     }
 
-    pub fn pause_kubernetes(&mut self) -> Result<(), EngineError> {
+    pub fn pause_kubernetes(&mut self) -> Result<(), Box<EngineError>> {
         self.steps.push(Step::PauseKubernetes);
         Ok(())
     }
 
-    pub fn delete_kubernetes(&mut self) -> Result<(), EngineError> {
+    pub fn delete_kubernetes(&mut self) -> Result<(), Box<EngineError>> {
         self.steps.push(Step::DeleteKubernetes);
         Ok(())
     }
@@ -42,19 +42,19 @@ impl<'a> Transaction<'a> {
                 Step::CreateKubernetes => {
                     // revert kubernetes creation
                     if let Err(err) = self.engine.kubernetes().on_create_error() {
-                        return Err(RollbackError::CommitError(Box::new(err)));
+                        return Err(RollbackError::CommitError(err));
                     };
                 }
                 Step::DeleteKubernetes => {
                     // revert kubernetes deletion
                     if let Err(err) = self.engine.kubernetes().on_delete_error() {
-                        return Err(RollbackError::CommitError(Box::new(err)));
+                        return Err(RollbackError::CommitError(err));
                     };
                 }
                 Step::PauseKubernetes => {
                     // revert pause
                     if let Err(err) = self.engine.kubernetes().on_pause_error() {
-                        return Err(RollbackError::CommitError(Box::new(err)));
+                        return Err(RollbackError::CommitError(err));
                     };
                 }
             }
@@ -105,19 +105,19 @@ impl<'a> Transaction<'a> {
         TransactionResult::Ok
     }
 
-    fn commit_infrastructure(&self, result: Result<(), EngineError>) -> TransactionResult {
+    fn commit_infrastructure(&self, result: Result<(), Box<EngineError>>) -> TransactionResult {
         match result {
             Err(err) => {
                 warn!("infrastructure ROLLBACK STARTED! an error occurred {:?}", err);
                 match self.rollback() {
                     Ok(_) => {
                         // an error occurred on infrastructure deployment BUT rolledback is OK
-                        TransactionResult::Error(Box::new(err))
+                        TransactionResult::Error(err)
                     }
                     Err(e) => {
                         // an error occurred on infrastructure deployment AND rolledback is KO
                         error!("infrastructure ROLLBACK FAILED! fatal error: {:?}", e);
-                        TransactionResult::Error(Box::new(err))
+                        TransactionResult::Error(err)
                     }
                 }
             }

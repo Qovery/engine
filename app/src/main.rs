@@ -72,7 +72,7 @@ fn to_engine_task(
     docker: Docker,
     task_selector: &TaskSelector,
     logger: Box<dyn Logger>,
-) -> Result<Box<dyn Task>, EngineError> {
+) -> Result<Box<dyn Task>, Box<EngineError>> {
     let mk_task = || -> Result<Box<dyn Task>, serde_json::Error> {
         match task_selector {
             TaskSelector::Infrastructure(_) => {
@@ -107,7 +107,7 @@ fn to_engine_task(
             error!("receiving request but JSON decoding error occurred: {:?}", err);
             let subject_info = SubjectInfo::try_parse(msg.subject);
 
-            Err(EngineError::new_invalid_engine_api_input_cannot_be_deserialized(
+            Err(Box::new(EngineError::new_invalid_engine_api_input_cannot_be_deserialized(
                 match subject_info {
                     Some(info) => EventDetails::new(
                         match info.cloud_provider {
@@ -142,7 +142,7 @@ fn to_engine_task(
                     ),
                 },
                 err,
-            ))
+            )))
         }
     }
 }
@@ -677,7 +677,7 @@ fn spawn_task_poller(
                     let err_message = "Cannot converts Nats message payload to an engine task";
                     error!("{}: {}", err_message, err.to_string());
                     logger.log(EngineEvent::Error(
-                        err.clone(),
+                        *err.clone(),
                         Some(EventMessage::new_from_safe(format!("{}.", err_message))),
                     ));
                     continue;

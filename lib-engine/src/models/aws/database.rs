@@ -234,7 +234,10 @@ impl<T: DatabaseType<AWS, Managed>> Database<AWS, Managed, T>
 where
     Database<AWS, Managed, T>: Service,
 {
-    fn get_version_aws_managed(&self, event_details: EventDetails) -> Result<ServiceVersionCheckResult, EngineError> {
+    fn get_version_aws_managed(
+        &self,
+        event_details: EventDetails,
+    ) -> Result<ServiceVersionCheckResult, Box<EngineError>> {
         let fn_version = match T::db_type() {
             service::DatabaseType::PostgreSQL => get_managed_postgres_version,
             service::DatabaseType::MongoDB => get_managed_mongodb_version,
@@ -249,7 +252,7 @@ where
         &self,
         target: &DeploymentTarget,
         options: &DatabaseOptions,
-    ) -> Result<TeraContext, EngineError> {
+    ) -> Result<TeraContext, Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(self.action.to_environment_step()));
         let kubernetes = target.kubernetes;
         let environment = target.environment;
@@ -305,7 +308,7 @@ where
         // Multi AZ: AWS best practices recommend to use multi AZ for production databases, so we force it
         let aws_azs = kubernetes.aws_zones().unwrap_or_default();
         if aws_azs.len() != 3 {
-            return Err(EngineError::new_error_do_not_respect_cloud_provider_best_practices(
+            return Err(Box::new(EngineError::new_error_do_not_respect_cloud_provider_best_practices(
                 event_details,
                 CommandError::new_from_safe_message(
                     "AWS best practices recommend to use multi AZ for production databases. Qovery requires it"
@@ -315,7 +318,7 @@ where
                     Url::parse("https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.MultiAZ.html")
                         .expect("bad url format for AWS multi AZ documentation"),
                 ),
-            ));
+            )));
         };
         let aws_az_list = aws_azs.iter().map(|az| format!("\"{}\"", az)).collect::<Vec<String>>(); // terraform pre-formated list
 
@@ -365,7 +368,7 @@ impl ToTeraContext for Database<AWS, Managed, PostgresSQL>
 where
     PostgresSQL: DatabaseType<AWS, Managed>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_aws_managed(target, &self.options)
     }
 }
@@ -374,7 +377,7 @@ impl ToTeraContext for Database<AWS, Container, PostgresSQL>
 where
     PostgresSQL: DatabaseType<AWS, Container>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_container(target, &self.options)
     }
 }
@@ -385,7 +388,7 @@ impl ToTeraContext for Database<AWS, Managed, MySQL>
 where
     MySQL: DatabaseType<AWS, Managed>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_aws_managed(target, &self.options)
     }
 }
@@ -394,7 +397,7 @@ impl ToTeraContext for Database<AWS, Container, MySQL>
 where
     MySQL: DatabaseType<AWS, Container>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_container(target, &self.options)
     }
 }
@@ -405,7 +408,7 @@ impl ToTeraContext for Database<AWS, Managed, MongoDB>
 where
     MongoDB: DatabaseType<AWS, Managed>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_aws_managed(target, &self.options)
     }
 }
@@ -414,7 +417,7 @@ impl ToTeraContext for Database<AWS, Container, MongoDB>
 where
     MongoDB: DatabaseType<AWS, Container>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_container(target, &self.options)
     }
 }
@@ -425,7 +428,7 @@ impl ToTeraContext for Database<AWS, Managed, Redis>
 where
     Redis: DatabaseType<AWS, Managed>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_aws_managed(target, &self.options)
     }
 }
@@ -434,7 +437,7 @@ impl ToTeraContext for Database<AWS, Container, Redis>
 where
     Redis: DatabaseType<AWS, Container>,
 {
-    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, EngineError> {
+    fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_container(target, &self.options)
     }
 }

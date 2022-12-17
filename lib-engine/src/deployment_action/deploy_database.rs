@@ -253,7 +253,7 @@ fn on_create_managed_impl<C: CloudProvider, T: DatabaseType<C, Managed>>(
     db: &Database<C, Managed, T>,
     event_details: EventDetails,
     target: &DeploymentTarget,
-) -> Result<(), EngineError>
+) -> Result<(), Box<EngineError>>
 where
     Database<C, Managed, T>: DatabaseService,
 {
@@ -367,7 +367,7 @@ where
     match ret {
         Ok(_) => Ok(()),
         // timeout
-        Err(None) => Err(EngineError::new_database_failed_to_start_after_several_retries(
+        Err(None) => Err(Box::new(EngineError::new_database_failed_to_start_after_several_retries(
             event_details,
             db.id.to_string(),
             db.db_type().to_string(),
@@ -375,14 +375,14 @@ where
                 "Timeout reached waiting for the database to be in {} state",
                 DB_READY_STATE
             ))),
-        )),
+        ))),
         // Error ;'(
-        Err(Some((cmd_err, msg))) => Err(EngineError::new_database_failed_to_start_after_several_retries(
+        Err(Some((cmd_err, msg))) => Err(Box::new(EngineError::new_database_failed_to_start_after_several_retries(
             event_details,
             db.id.to_string(),
             db.db_type().to_string(),
             Some(CommandError::new_from_legacy_command_error(cmd_err, Some(msg))),
-        )),
+        ))),
     }
 }
 
@@ -391,10 +391,10 @@ impl<C: CloudProvider, T: DatabaseType<C, Managed>> DeploymentAction for Databas
 where
     Database<C, Managed, T>: ToTeraContext,
 {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        let pre_run = |_: &EnvProgressLogger| -> Result<(), EngineError> { Ok(()) };
-        let run = |_logger: &EnvProgressLogger, _: ()| -> Result<(), EngineError> {
+        let pre_run = |_: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Ok(()) };
+        let run = |_logger: &EnvProgressLogger, _: ()| -> Result<(), Box<EngineError>> {
             on_create_managed_impl(self, event_details.clone(), target)
         };
         let post_run = |logger: &EnvSuccessLogger, _: ()| {
@@ -419,11 +419,11 @@ where
         )
     }
 
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
         execute_long_deployment(
             DatabaseDeploymentReporter::new(self, target, Action::Pause),
-            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+            |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 // We don't manage PAUSE for managed database elsewhere than for AWS
                 if target.kubernetes.cloud_provider().kind() != Aws {
                     return Ok(());
@@ -462,28 +462,28 @@ where
                 match ret {
                     Ok(_) => Ok(()),
                     // timeout
-                    Err(None) => Err(EngineError::new_cannot_pause_managed_database(
+                    Err(None) => Err(Box::new(EngineError::new_cannot_pause_managed_database(
                         event_details.clone(),
                         CommandError::new_from_safe_message(format!(
                             "Timeout reached waiting for the database to be in {} state",
                             DB_STOPPED_STATE
                         )),
-                    )),
+                    ))),
                     // Error ;'(
-                    Err(Some((cmd_err, msg))) => Err(EngineError::new_cannot_pause_managed_database(
+                    Err(Some((cmd_err, msg))) => Err(Box::new(EngineError::new_cannot_pause_managed_database(
                         event_details.clone(),
                         CommandError::new_from_legacy_command_error(cmd_err, Some(msg)),
-                    )),
+                    ))),
                 }
             },
         )
     }
 
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         execute_long_deployment(
             DatabaseDeploymentReporter::new(self, target, Action::Delete),
-            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+            |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 // First we must ensure the DB is created and in a ready state
                 // because if not, the deletion is going to fail (i.e: cannot snapshot paused db)
                 on_create_managed_impl(self, event_details.clone(), target)?;
@@ -529,16 +529,16 @@ fn is_pvc_bound(
     target: &DeploymentTarget,
     event_details: EventDetails,
     db_sanitized_name: String,
-) -> Result<(), EngineError> {
+) -> Result<(), Box<EngineError>> {
     let kubeconfig_path = target.kubernetes.get_kubeconfig_file_path()?;
     let namespace = target.environment.namespace();
     let creds = target.kubernetes.cloud_provider().credentials_environment_variables();
-    match kubectl_get_pvc(&kubeconfig_path, namespace, creds.clone()) {
+    match kubectl_get_pvc(kubeconfig_path, namespace, creds.clone()) {
         Ok(pvcs) => match pvcs.items {
-            None => Err(EngineError::new_k8s_enable_to_get_pvc_for_database(
+            None => Err(Box::new(EngineError::new_k8s_enable_to_get_pvc_for_database(
                 event_details,
                 CommandError::new_from_safe_message("Unable to get pvcs".to_string()),
-            )),
+            ))),
             Some(pvcs) => {
                 let pvc_name = format!("data-{}-0", db_sanitized_name);
                 let pvc = pvcs
@@ -546,26 +546,26 @@ fn is_pvc_bound(
                     .filter(|pvc| pvc.metadata.name == pvc_name)
                     .collect::<Vec<&PVCItem>>();
                 if pvc.len() != 1 {
-                    return Err(EngineError::new_k8s_enable_to_get_pvc_for_database(
+                    return Err(Box::new(EngineError::new_k8s_enable_to_get_pvc_for_database(
                         event_details,
                         CommandError::new_from_safe_message(format!("Unable to get pvc for db {}", db_sanitized_name)),
-                    ));
+                    )));
                 };
 
                 match pvc[0].status.phase.to_lowercase().as_str() {
                     "bound" => Ok(()),
-                    _ => Err(EngineError::new_k8s_cannot_bound_pvc_for_database(
+                    _ => Err(Box::new(EngineError::new_k8s_cannot_bound_pvc_for_database(
                         event_details,
                         CommandError::new_from_safe_message(format!(
                             "Can't bound PVC for database {}",
                             db_sanitized_name
                         )),
                         db_sanitized_name.as_str(),
-                    )),
+                    ))),
                 }
             }
         },
-        Err(e) => Err(EngineError::new_k8s_enable_to_get_pvc_for_database(event_details, e)),
+        Err(e) => Err(Box::new(EngineError::new_k8s_enable_to_get_pvc_for_database(event_details, e))),
     }
 }
 
@@ -573,10 +573,10 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> DeploymentAction for Datab
 where
     Database<C, Container, T>: ToTeraContext,
 {
-    fn on_create(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
-        let pre_run = |_: &EnvProgressLogger| -> Result<(), EngineError> { Ok(()) };
-        let run = |_logger: &EnvProgressLogger, _: ()| -> Result<(), EngineError> {
+        let pre_run = |_: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Ok(()) };
+        let run = |_logger: &EnvProgressLogger, _: ()| -> Result<(), Box<EngineError>> {
             let chart = ChartInfo {
                 name: self.helm_release_name(),
                 path: self.workspace_directory().to_string(),
@@ -635,10 +635,10 @@ where
         )
     }
 
-    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_pause(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         execute_long_deployment(
             DatabaseDeploymentReporter::new(self, target, Action::Pause),
-            |_logger: &EnvProgressLogger| -> Result<(), EngineError> {
+            |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 let pause_service = PauseServiceAction::new(
                     self.selector(),
                     true,
@@ -650,7 +650,7 @@ where
         )
     }
 
-    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), EngineError> {
+    fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
         execute_long_deployment(
             DatabaseDeploymentReporter::new(self, target, Action::Delete),
@@ -680,11 +680,11 @@ where
                     &format!("app={}", self.sanitized_name()), //FIXME: legacy labels ;(
                     target.environment.namespace(),
                 )) {
-                    return Err(EngineError::new_k8s_cannot_delete_pvcs(
+                    return Err(Box::new(EngineError::new_k8s_cannot_delete_pvcs(
                         event_details.clone(),
                         self.selector(),
                         CommandError::new_from_safe_message(err.to_string()),
-                    ));
+                    )));
                 }
 
                 Ok(())

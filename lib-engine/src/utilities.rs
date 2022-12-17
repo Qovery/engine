@@ -97,14 +97,14 @@ mod tests_utilities {
     #[test]
     fn test_get_image_tag() {
         let image_tag = compute_image_tag(
-            &"/".to_string(),
+            "/".to_string(),
             &Some("Dockerfile".to_string()),
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
 
         let image_tag_2 = compute_image_tag(
-            &"/".to_string(),
+            "/".to_string(),
             &Some("Dockerfile.qovery".to_string()),
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
@@ -113,7 +113,7 @@ mod tests_utilities {
         assert_ne!(image_tag, image_tag_2);
 
         let image_tag_3 = compute_image_tag(
-            &"/xxx".to_string(),
+            "/xxx".to_string(),
             &Some("Dockerfile.qovery".to_string()),
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
@@ -122,7 +122,7 @@ mod tests_utilities {
         assert_ne!(image_tag, image_tag_3);
 
         let image_tag_3_2 = compute_image_tag(
-            &"/xxx".to_string(),
+            "/xxx".to_string(),
             &Some("Dockerfile.qovery".to_string()),
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
@@ -131,7 +131,7 @@ mod tests_utilities {
         assert_eq!(image_tag_3, image_tag_3_2);
 
         let image_tag_4 = compute_image_tag(
-            &"/".to_string(),
+            "/".to_string(),
             &None as &Option<&str>,
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
@@ -141,7 +141,7 @@ mod tests_utilities {
         env_vars_5.insert("toto".to_string(), "key".to_string());
 
         let image_tag_5 = compute_image_tag(
-            &"/".to_string(),
+            "/".to_string(),
             &None as &Option<&str>,
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",

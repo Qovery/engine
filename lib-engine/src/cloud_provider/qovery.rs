@@ -61,7 +61,7 @@ pub fn get_qovery_app_version<T: DeserializeOwned>(
 
     let message_safe = format!("Error while trying to get `{}` version.", app_type);
 
-    match reqwest::blocking::Client::new().get(&url).headers(headers).send() {
+    match reqwest::blocking::Client::new().get(url).headers(headers).send() {
         Ok(x) => match x.json::<T>() {
             Ok(qa) => Ok(qa),
             Err(e) => Err(CommandError::new(message_safe, Some(e.to_string()), None)),
